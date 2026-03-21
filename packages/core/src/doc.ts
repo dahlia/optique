@@ -372,30 +372,133 @@ export function formatDocPage(
       `maxWidth must be a finite integer, got ${options.maxWidth}.`,
     );
   }
-  // Validate maxWidth against the minimum feasible layout.  Entries with a
-  // description column need termIndent + 4 (1 term + 2 gap + 1 desc);
-  // bare-term entries need termIndent + 1 (just 1 term char).
+  // Validate maxWidth against the minimum feasible layout.  The minimum
+  // depends on which page features are active:
+  //  - Entries with a description column need enough space for term +
+  //    gap + description, plus any showDefault/showChoices prefixes.
+  //  - Bare-term entries need termIndent + 1 (just 1 term char).
+  //  - "Usage: " + programName + " " → maxWidth >= 8 + programName.length.
+  //  - Examples:/Author:/Bugs: labels are 9/7/5 chars on their own lines.
   if (options.maxWidth != null) {
     const hasEntries = page.sections.some((s) => s.entries.length > 0);
     const hasContent = (msg: unknown): msg is readonly unknown[] =>
       Array.isArray(msg) && msg.length > 0;
+    // The formatter renders showDefault/showChoices whenever
+    // entry.default/choices is non-null (even for empty arrays), so
+    // the validation must match: use `!= null` rather than checking
+    // array length, to avoid missing entries like `default: []`.
     const needsDescColumn = hasEntries &&
       page.sections.some((s) =>
         s.entries.some((e) =>
           hasContent(e.description) ||
-          (options.showDefault && hasContent(e.default)) ||
-          (options.showChoices && hasContent(e.choices))
+          (options.showDefault && e.default != null) ||
+          (options.showChoices && e.choices != null)
         )
       );
-    const minWidth = needsDescColumn
-      ? termIndent + 4
+    // Compute minimum description column width for showDefault/showChoices.
+    // When the rendered content is non-empty, only the prefix (or
+    // prefix + label for choices) must fit on one line; the suffix
+    // trails the content's last line.  When the content is empty
+    // (e.g., default: []), prefix + suffix land on the same line, so
+    // the suffix must be included in the minimum.
+    let minDescWidth = 1;
+    if (needsDescColumn) {
+      if (
+        options.showDefault &&
+        page.sections.some((s) => s.entries.some((e) => e.default != null))
+      ) {
+        const prefix = typeof options.showDefault === "object"
+          ? options.showDefault.prefix ?? " ["
+          : " [";
+        const suffix = typeof options.showDefault === "object"
+          ? options.showDefault.suffix ?? "]"
+          : "]";
+        const hasEmptyDefault = page.sections.some((s) =>
+          s.entries.some((e) =>
+            e.default != null && Array.isArray(e.default) &&
+            e.default.length === 0
+          )
+        );
+        minDescWidth = Math.max(
+          minDescWidth,
+          hasEmptyDefault ? prefix.length + suffix.length : prefix.length,
+        );
+      }
+      if (
+        options.showChoices &&
+        page.sections.some((s) => s.entries.some((e) => e.choices != null))
+      ) {
+        const prefix = typeof options.showChoices === "object"
+          ? options.showChoices.prefix ?? " ("
+          : " (";
+        const suffix = typeof options.showChoices === "object"
+          ? options.showChoices.suffix ?? ")"
+          : ")";
+        const label = typeof options.showChoices === "object"
+          ? options.showChoices.label ?? "choices: "
+          : "choices: ";
+        const hasEmptyChoices = page.sections.some((s) =>
+          s.entries.some((e) =>
+            e.choices != null && Array.isArray(e.choices) &&
+            e.choices.length === 0
+          )
+        );
+        minDescWidth = Math.max(
+          minDescWidth,
+          hasEmptyChoices
+            ? prefix.length + label.length + suffix.length
+            : prefix.length + label.length,
+        );
+      }
+    }
+    // Entry minimum: the layout needs enough space for the term column,
+    // the 2-char gap, and at least minDescWidth for the description.
+    // Two layout modes yield different minimums:
+    //  - Split layout (small maxWidth): descColumnWidth = ceil(a/2),
+    //    requires a >= max(2, 2*minDescWidth - 1).
+    //  - Fixed-term layout: descColumnWidth = maxWidth - termIndent -
+    //    termWidth - 2, requires maxWidth >= termIndent + termWidth + 2 +
+    //    minDescWidth.
+    // The cheaper layout determines the true minimum.  A second check
+    // below catches values in the gap between the two valid ranges.
+    const splitEntryMin = termIndent + 2 + Math.max(2, 2 * minDescWidth - 1);
+    const fixedEntryMin = termIndent + 2 + termWidth + minDescWidth;
+    const entryMin = needsDescColumn
+      ? Math.min(splitEntryMin, fixedEntryMin)
       : hasEntries
       ? termIndent + 1
       : 1;
+    // "Usage: " (7 chars) + programName + " " is the minimum first line.
+    const usageMin = page.usage != null ? 8 + programName.length : 1;
+    // Examples/Author/Bugs have fixed-width label lines that cannot be
+    // wrapped.  The content is indented by 2 chars (needing maxWidth >= 3),
+    // but the label width is always the binding constraint.
+    let sectionMin = 1;
+    if (page.examples != null) sectionMin = Math.max(sectionMin, 9);
+    if (page.author != null) sectionMin = Math.max(sectionMin, 7);
+    if (page.bugs != null) sectionMin = Math.max(sectionMin, 5);
+    const minWidth = Math.max(entryMin, usageMin, sectionMin);
     if (options.maxWidth < minWidth) {
       throw new RangeError(
         `maxWidth must be at least ${minWidth}, got ${options.maxWidth}.`,
       );
+    }
+    // Second check: even if maxWidth passes the formula-based minimum,
+    // the actual layout may use the full termWidth, giving a description
+    // column of only maxWidth - termIndent - termWidth - 2 chars.  When
+    // this is smaller than minDescWidth, the fixed prefixes overflow.
+    if (needsDescColumn && minDescWidth > 1) {
+      const avail = options.maxWidth - termIndent - 2;
+      const effTW = avail >= termWidth + 1
+        ? termWidth
+        : Math.max(1, Math.floor(avail / 2));
+      const descW = avail - effTW;
+      if (descW < minDescWidth) {
+        const needed = termIndent + termWidth + 2 + minDescWidth;
+        throw new RangeError(
+          `maxWidth must be at least ${needed}, got ${options.maxWidth}.`,
+        );
+      }
     }
   }
   // When maxWidth constrains the layout, shrink the term column so that

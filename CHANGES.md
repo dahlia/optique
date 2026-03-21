@@ -650,6 +650,14 @@ To be released.
     version must be an integer between 1 and 8, and duplicates are
     automatically removed.  [[#357], [#675]]
 
+ -  Fixed `formatDocPage()` fixed-prefix sections exceeding `maxWidth`.
+    The `Usage:` label, `Examples:`/`Author:`/`Bugs:` section labels, and
+    `showDefault`/`showChoices` description prefixes were not covered by
+    the minimum `maxWidth` validation, allowing the formatter to silently
+    emit lines wider than requested.  `formatDocPage()` now raises the
+    minimum `maxWidth` to account for all fixed-width labels actually in
+    use.  [[#672], [#677]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -827,10 +835,12 @@ To be released.
 [#668]: https://github.com/dahlia/optique/pull/668
 [#669]: https://github.com/dahlia/optique/pull/669
 [#670]: https://github.com/dahlia/optique/pull/670
+[#672]: https://github.com/dahlia/optique/issues/672
 [#673]: https://github.com/dahlia/optique/pull/673
 [#674]: https://github.com/dahlia/optique/pull/674
 [#675]: https://github.com/dahlia/optique/pull/675
 [#676]: https://github.com/dahlia/optique/pull/676
+[#677]: https://github.com/dahlia/optique/pull/677
 
 ### @optique/config
 
