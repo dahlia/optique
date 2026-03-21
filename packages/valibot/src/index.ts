@@ -71,20 +71,28 @@ interface ValibotSchemaInternal {
 }
 
 /**
- * Checks whether a schema is a bare synchronous `v.string()` (no pipe,
- * not async), possibly wrapped in `v.optional()`/`v.nullable()`/`v.nullish()`.
+ * Checks whether a schema synchronously accepts every possible string input.
+ * This includes:
+ * - Bare `v.string()` (no pipe or pipe with only non-validation actions)
+ * - Any wrapper with a `wrapped` field pointing to a catch-all string
+ *   (e.g., `v.optional()`, `v.nullable()`, `v.nonOptional()`, etc.)
  */
 function isCatchAllStringSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
 ): boolean {
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return false;
-  if (s.type === "string" && !s.pipe) return true;
-  // Unwrap optional/nullable/nullish wrappers
-  if (
-    (s.type === "optional" || s.type === "nullable" || s.type === "nullish") &&
-    s.wrapped
-  ) {
+  if (s.type === "string") {
+    // Bare v.string() or piped string with only non-validation actions
+    // (transforms, trim, toLowerCase, etc. never reject input)
+    if (!s.pipe) return true;
+    return s.pipe.every((action) =>
+      (action as { kind?: string }).kind !== "validation"
+    );
+  }
+  // Unwrap any schema with a wrapped field (optional, nullable, nullish,
+  // nonOptional, exactOptional, etc.)
+  if (s.wrapped) {
     return isCatchAllStringSchema(s.wrapped);
   }
   return false;
@@ -100,41 +108,50 @@ function isCatchAllStringSchema(
  * Known limitations:
  * - `v.lazy()` schemas are not inspected because the getter depends on
  *   actual parse input, making static analysis unreliable.
- * - Union catch-all detection does not account for transforms that change
- *   the value type; a `v.string()` arm is always considered a catch-all.
+ * - After a `v.transform()` in a pipeline, the union catch-all string
+ *   arm optimization is disabled because we cannot determine whether
+ *   the transform preserves the string type.  This may cause false
+ *   positives for string-preserving transforms (e.g., `s => s.trim()`
+ *   via `v.transform()`).  Use Valibot's built-in `v.trim()` action
+ *   instead, which is recognized as non-rejecting.
+ *
+ * @param afterTransform When true, the schema appears after a
+ *   `v.transform()` in a pipeline, so its input type is unknown.
+ *   Union catch-all string arm optimizations are disabled.
  */
 function containsAsyncSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+  afterTransform = false,
 ): boolean {
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return true;
 
   // Unwrap optional/nullable/nullish wrappers
-  if (s.wrapped) return containsAsyncSchema(s.wrapped);
+  if (s.wrapped) return containsAsyncSchema(s.wrapped, afterTransform);
 
   // Check intersect options — all arms must match, so async arms are always
   // reachable and must be rejected.
-  // For union/variant options — safe when a catch-all synchronous string arm
-  // exists, because it will accept any string input and short-circuit before
-  // async arms run.
+  // For union/variant options — safe when NOT after a transform AND a
+  // catch-all synchronous string arm exists, because it will accept any
+  // string input and short-circuit before async arms run.
   if (s.options && Array.isArray(s.options)) {
     const isUnionLike = s.type === "union" || s.type === "variant";
-    if (isUnionLike) {
+    if (isUnionLike && !afterTransform) {
       const hasCatchAllStringArm = s.options.some((opt) =>
         typeof opt === "object" && opt != null && isCatchAllStringSchema(opt)
       );
       if (!hasCatchAllStringArm) {
         for (const option of s.options) {
           if (typeof option === "object" && option != null) {
-            if (containsAsyncSchema(option)) return true;
+            if (containsAsyncSchema(option, afterTransform)) return true;
           }
         }
       }
     } else {
-      // intersect: all arms must match
+      // intersect, or union after transform: recurse into all arms
       for (const option of s.options) {
         if (typeof option === "object" && option != null) {
-          if (containsAsyncSchema(option)) return true;
+          if (containsAsyncSchema(option, afterTransform)) return true;
         }
       }
     }
@@ -142,13 +159,18 @@ function containsAsyncSchema(
 
   // Check pipeline actions (may themselves be schemas, e.g., v.transform)
   if (s.pipe && Array.isArray(s.pipe)) {
+    let seenTransform = afterTransform;
     for (const action of s.pipe) {
       if ((action as { async?: boolean }).async) return true;
+      if ((action as { type?: string }).type === "transform") {
+        seenTransform = true;
+      }
       // Pipeline actions with kind "schema" are nested schemas
       if (
         (action as { kind?: string }).kind === "schema" &&
         containsAsyncSchema(
           action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+          seenTransform,
         )
       ) {
         return true;

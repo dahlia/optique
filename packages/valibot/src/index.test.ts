@@ -743,21 +743,37 @@ describe("valibot()", () => {
       assert.ok(result.success);
     });
 
-    it("should not reject union after string-preserving transform", () => {
+    it("should not reject union with piped non-validation string arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
-      // trim() preserves string type, so v.string() arm still catches all
-      const asyncSchema = v.pipe(
-        v.string(),
-        v.transform((s: string) => s.trim()),
-        v.union([v.string(), asyncInner] as never),
-      );
+      // v.pipe(v.string(), v.trim()) uses built-in trim action (not a
+      // transform), so it's recognized as a catch-all string arm.
+      const asyncSchema = v.union([
+        v.pipe(v.string(), v.trim()),
+        asyncInner,
+      ] as never);
       const parser = valibot(asyncSchema as never);
       const result = parser.parse("hello");
       assert.ok(result.success);
+    });
+
+    it("should reject union after type-changing transform", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // After JSON.parse, input type is unknown — v.string() no longer
+      // catches all values, so async arm can be reached.
+      const asyncSchema = v.pipe(
+        v.string(),
+        v.transform(JSON.parse),
+        v.union([v.string(), asyncInner] as never),
+      );
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
     });
 
     it("should throw TypeError for async schema inside intersect()", () => {
