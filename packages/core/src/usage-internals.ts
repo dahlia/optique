@@ -5,7 +5,7 @@
  * without notice.  Import them only from within the `@optique/core` package
  * sources; do not re-export them from any public subpath.
  */
-import type { Usage } from "./usage.ts";
+import { isSuggestionHidden, type Usage } from "./usage.ts";
 
 /**
  * Collects option names and command names that are valid as the *immediate*
@@ -31,14 +31,18 @@ export function collectLeadingCandidates(
 
   for (const term of terms) {
     if (term.type === "option") {
-      for (const name of term.names) {
-        optionNames.add(name);
+      if (!isSuggestionHidden(term.hidden)) {
+        for (const name of term.names) {
+          optionNames.add(name);
+        }
       }
       return false;
     }
 
     if (term.type === "command") {
-      commandNames.add(term.name);
+      if (!isSuggestionHidden(term.hidden)) {
+        commandNames.add(term.name);
+      }
       return false;
     }
 
