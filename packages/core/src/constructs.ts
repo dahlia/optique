@@ -61,6 +61,38 @@ const inheritParentAnnotationsKey = Symbol.for(
 );
 
 /**
+ * Returns the field state with parent annotations inherited, respecting
+ * the parser's {@link inheritParentAnnotationsKey} flag.  This is the
+ * same logic as {@link createFieldStateGetter} inside `object()` but
+ * without the per-state cache, for use in module-level helpers like
+ * {@link pendingDependencyDefaults}.
+ * @internal
+ */
+function getAnnotatedFieldState(
+  parentState: unknown,
+  field: string | symbol,
+  parser: Parser<Mode, unknown, unknown>,
+): unknown {
+  const sourceState = parentState != null &&
+      typeof parentState === "object" &&
+      field in parentState
+    ? (parentState as Record<string | symbol, unknown>)[field]
+    : parser.initialState;
+  if (sourceState == null || typeof sourceState !== "object") {
+    return sourceState;
+  }
+  const annotations = getAnnotations(parentState);
+  if (
+    annotations === undefined || getAnnotations(sourceState) === annotations
+  ) {
+    return sourceState;
+  }
+  return Reflect.get(parser, inheritParentAnnotationsKey) === true
+    ? injectAnnotations(sourceState, annotations)
+    : inheritAnnotations(parentState, sourceState);
+}
+
+/**
  * Helper type to combine modes from a tuple of parsers.
  * Returns "async" if any parser is async, otherwise "sync".
  * @internal
@@ -3097,7 +3129,6 @@ function* pendingDependencyDefaults(
 ): Generator<
   { readonly parser: Parser<Mode, unknown, unknown>; readonly state: unknown }
 > {
-  const parentAnnotations = getAnnotations(context.state);
   for (const [field, fieldParser] of parserPairs) {
     const fieldState = context.state != null &&
         typeof context.state === "object" &&
@@ -3109,20 +3140,19 @@ function* pendingDependencyDefaults(
       // If the field has a non-null state but the parser wraps a dependency
       // source, it might be a bindEnv/bindConfig wrapper state where the CLI
       // option was not provided.  Pre-complete it so the dependency value is
-      // registered for derived parsers.  Inherit parent annotations so that
-      // config/env contexts can find their data.
+      // registered for derived parsers.  Use getAnnotatedFieldState() so
+      // that annotation inheritance respects inheritParentAnnotationsKey,
+      // matching the behavior of object() Phase 1.
       if (
         !Array.isArray(fieldState) &&
         !isDependencySourceState(fieldState) &&
         (isWrappedDependencySource(fieldParser) ||
           isPendingDependencySourceState(fieldParser.initialState))
       ) {
-        const annotatedState = parentAnnotations &&
-            typeof fieldState === "object" &&
-            getAnnotations(fieldState) !== parentAnnotations
-          ? inheritAnnotations(context.state, fieldState)
-          : fieldState;
-        yield { parser: fieldParser, state: annotatedState };
+        yield {
+          parser: fieldParser,
+          state: getAnnotatedFieldState(context.state, field, fieldParser),
+        };
       }
       continue;
     }
