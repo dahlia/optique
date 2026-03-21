@@ -2014,6 +2014,38 @@ describe("formatDocPage", () => {
       assertLinesWithinMaxWidth(result, 7);
     });
 
+    it("should use fixed-term minimum when termWidth is small", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "X" },
+            description: [{ type: "text", text: "d" }],
+            choices: valueSet(["a"]),
+          }],
+        }],
+      };
+      // termWidth=1: fixedEntryMin = 2+2+1+11 = 16, splitEntryMin = 2+2+21 = 25
+      // min(16, 25) = 16
+      assert.throws(
+        () =>
+          formatDocPage("app", page, {
+            maxWidth: 15,
+            showChoices: true,
+            termWidth: 1,
+          }),
+        {
+          name: "RangeError",
+          message: "maxWidth must be at least 16, got 15.",
+        },
+      );
+      const result = formatDocPage("app", page, {
+        maxWidth: 16,
+        showChoices: true,
+        termWidth: 1,
+      });
+      assertLinesWithinMaxWidth(result, 16);
+    });
+
     it("should use max of all applicable minimums", () => {
       const page: DocPage = {
         usage: [{ type: "argument", metavar: "FILE" }],

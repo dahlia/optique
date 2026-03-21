@@ -428,16 +428,18 @@ export function formatDocPage(
     }
     // Entry minimum: the layout needs enough space for the term column,
     // the 2-char gap, and at least minDescWidth for the description.
-    // When maxWidth is small enough, the formatter splits the available
-    // space evenly between term and description columns, yielding
-    // descColumnWidth = ceil(a/2) where a = maxWidth - termIndent - 2.
-    // When maxWidth is large enough to keep the configured termWidth,
-    // descColumnWidth = maxWidth - termIndent - termWidth - 2.  Because
-    // this function is non-monotonic (it drops at the transition point),
-    // we compute the actual descColumnWidth for the given maxWidth and
-    // validate it directly.
+    // Two layout modes yield different minimums:
+    //  - Split layout (small maxWidth): descColumnWidth = ceil(a/2),
+    //    requires a >= max(2, 2*minDescWidth - 1).
+    //  - Fixed-term layout: descColumnWidth = maxWidth - termIndent -
+    //    termWidth - 2, requires maxWidth >= termIndent + termWidth + 2 +
+    //    minDescWidth.
+    // The cheaper layout determines the true minimum.  A second check
+    // below catches values in the gap between the two valid ranges.
+    const splitEntryMin = termIndent + 2 + Math.max(2, 2 * minDescWidth - 1);
+    const fixedEntryMin = termIndent + 2 + termWidth + minDescWidth;
     const entryMin = needsDescColumn
-      ? termIndent + Math.max(4, 2 * minDescWidth + 1)
+      ? Math.min(splitEntryMin, fixedEntryMin)
       : hasEntries
       ? termIndent + 1
       : 1;
