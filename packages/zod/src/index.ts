@@ -230,7 +230,9 @@ function inferChoices(
     return undefined;
   }
 
-  // z.nativeEnum(MyEnum) → _def.values is an object
+  // z.nativeEnum(MyEnum) → _def.values is an object.
+  // Only expose choices when every member value is a string; numeric enums
+  // have reverse-mapped names that safeParse() would reject from CLI input.
   if (typeName === "ZodNativeEnum" || typeName === "nativeEnum") {
     const values = def.values;
     if (
@@ -240,11 +242,15 @@ function inferChoices(
       for (
         const val of Object.values(values as Record<string, string | number>)
       ) {
-        if (typeof val === "string" || typeof val === "number") {
-          const str = String(val);
-          if (!result.includes(str)) {
-            result.push(str);
+        if (typeof val === "string") {
+          if (!result.includes(val)) {
+            result.push(val);
           }
+        } else {
+          // Numeric member found — bail out entirely because the parser
+          // validates via safeParse() which expects the actual number, not
+          // its string representation.
+          return undefined;
         }
       }
       return result.length > 0 ? result : undefined;
@@ -255,17 +261,19 @@ function inferChoices(
   // z.literal("x"):
   //   Zod v3: _def.value is the literal value
   //   Zod v4: _def.values is [value]
+  // Only string literals are exposed; numeric literals would fail
+  // safeParse() when given as CLI strings.
   if (typeName === "ZodLiteral" || typeName === "literal") {
     const value = def.value;
-    if (typeof value === "string" || typeof value === "number") {
-      return [String(value)];
+    if (typeof value === "string") {
+      return [value];
     }
     const values = def.values;
     if (Array.isArray(values)) {
       const result: string[] = [];
       for (const v of values) {
-        if (typeof v === "string" || typeof v === "number") {
-          result.push(String(v));
+        if (typeof v === "string") {
+          result.push(v);
         } else {
           return undefined;
         }

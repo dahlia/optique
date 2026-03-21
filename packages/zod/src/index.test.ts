@@ -590,9 +590,10 @@ describe("zod()", () => {
       assert.deepEqual(parser.choices, ["production"]);
     });
 
-    it("should expose choices for z.literal() with number", () => {
+    it("should not expose choices for z.literal() with number", () => {
       const parser = zod(z.literal(42));
-      assert.deepEqual(parser.choices, ["42"]);
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
     });
 
     it("should expose choices for z.union() of literals", () => {
@@ -602,6 +603,12 @@ describe("zod()", () => {
 
     it("should not expose choices for z.union() with non-literal member", () => {
       const parser = zod(z.union([z.literal("auto"), z.coerce.number()]));
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
+    });
+
+    it("should not expose choices for z.union() of numeric literals", () => {
+      const parser = zod(z.union([z.literal(1), z.literal(2)]));
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
     });

@@ -580,9 +580,10 @@ describe("valibot()", () => {
       assert.deepEqual(parser.choices, ["production"]);
     });
 
-    it("should expose choices for v.literal() with number", () => {
+    it("should not expose choices for v.literal() with number", () => {
       const parser = valibot(v.literal(42));
-      assert.deepEqual(parser.choices, ["42"]);
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
     });
 
     it("should expose choices for v.union() of literals", () => {
@@ -595,6 +596,14 @@ describe("valibot()", () => {
     it("should not expose choices for v.union() with non-literal member", () => {
       const parser = valibot(
         v.union([v.literal("auto"), v.string()]),
+      );
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
+    });
+
+    it("should not expose choices for v.union() of numeric literals", () => {
+      const parser = valibot(
+        v.union([v.literal(1), v.literal(2)]),
       );
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);

@@ -189,14 +189,16 @@ function inferChoices(
   const schemaType = internalSchema.type;
   if (!schemaType) return undefined;
 
-  // v.picklist(["a", "b"]) → .options is primitive array
+  // v.picklist(["a", "b"]) → .options is primitive array.
+  // Only string picklists are exposed; numeric values would fail
+  // safeParse() when given as CLI strings.
   if (schemaType === "picklist") {
     const options = internalSchema.options;
     if (Array.isArray(options)) {
       const result: string[] = [];
       for (const opt of options) {
-        if (typeof opt === "string" || typeof opt === "number") {
-          result.push(String(opt));
+        if (typeof opt === "string") {
+          result.push(opt);
         } else {
           return undefined;
         }
@@ -207,10 +209,12 @@ function inferChoices(
   }
 
   // v.literal("x") → .literal
+  // Only string literals are exposed; numeric literals would fail
+  // safeParse() when given as CLI strings.
   if (schemaType === "literal") {
     const value = internalSchema.literal;
-    if (typeof value === "string" || typeof value === "number") {
-      return [String(value)];
+    if (typeof value === "string") {
+      return [value];
     }
     return undefined;
   }
