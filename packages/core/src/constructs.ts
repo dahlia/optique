@@ -3096,6 +3096,7 @@ function* pendingDependencyDefaults(
 ): Generator<
   { readonly parser: Parser<Mode, unknown, unknown>; readonly state: unknown }
 > {
+  const parentAnnotations = getAnnotations(context.state);
   for (const [field, fieldParser] of parserPairs) {
     const fieldState = context.state != null &&
         typeof context.state === "object" &&
@@ -3103,7 +3104,24 @@ function* pendingDependencyDefaults(
       ? (context.state as Record<string | symbol, unknown>)[field]
       : undefined;
 
-    if (fieldState != null) continue;
+    if (fieldState != null) {
+      // If the field has a non-null state but the parser wraps a dependency
+      // source, it might be a bindEnv/bindConfig wrapper state where the CLI
+      // option was not provided.  Pre-complete it so the dependency value is
+      // registered for derived parsers.  Inherit parent annotations so that
+      // config/env contexts can find their data.
+      if (
+        !Array.isArray(fieldState) && isWrappedDependencySource(fieldParser)
+      ) {
+        const annotatedState = parentAnnotations &&
+            typeof fieldState === "object" &&
+            getAnnotations(fieldState) !== parentAnnotations
+          ? inheritAnnotations(context.state, fieldState)
+          : fieldState;
+        yield { parser: fieldParser, state: annotatedState };
+      }
+      continue;
+    }
 
     if (isPendingDependencySourceState(fieldParser.initialState)) {
       yield { parser: fieldParser, state: fieldParser.initialState };
@@ -3963,6 +3981,28 @@ export function object<
               } else {
                 preCompletedState[fieldKey] = fieldState;
               }
+            } // Case 4: state is non-null/non-array, but parser wraps a dependency
+            // source.  This happens with bindEnv/bindConfig wrapping an option
+            // with a dependency source when the CLI option was not provided.
+            // The wrapper absorbs the inner parse failure and produces its own
+            // state, so Cases 1-3 don't match.  Calling complete() lets the
+            // wrapper resolve the env/config value and return a
+            // DependencySourceState.
+            // Use getFieldState() instead of raw fieldState so that annotations
+            // are inherited from the parent state.
+            else if (
+              fieldState != null &&
+              !Array.isArray(fieldState) &&
+              isWrappedDependencySource(fieldParser)
+            ) {
+              const annotatedFieldState = getFieldState(field, fieldParser);
+              const completed = fieldParser.complete(annotatedFieldState);
+              if (isDependencySourceState(completed)) {
+                preCompletedState[fieldKey] = completed;
+                preCompletedKeys.add(fieldKey);
+              } else {
+                preCompletedState[fieldKey] = annotatedFieldState;
+              }
             } else {
               preCompletedState[fieldKey] = getFieldState(
                 field,
@@ -4074,6 +4114,22 @@ export function object<
                 preCompletedKeys.add(fieldKey);
               } else {
                 preCompletedState[fieldKey] = fieldState;
+              }
+            } // Case 4: non-null/non-array state, parser wraps a dependency source
+            // (e.g., bindEnv/bindConfig wrapping an option with dependency source)
+            // Use getFieldState() so annotations are inherited from parent.
+            else if (
+              fieldState != null &&
+              !Array.isArray(fieldState) &&
+              isWrappedDependencySource(fieldParser)
+            ) {
+              const annotatedFieldState = getFieldState(field, fieldParser);
+              const completed = await fieldParser.complete(annotatedFieldState);
+              if (isDependencySourceState(completed)) {
+                preCompletedState[fieldKey] = completed;
+                preCompletedKeys.add(fieldKey);
+              } else {
+                preCompletedState[fieldKey] = annotatedFieldState;
               }
             } else {
               preCompletedState[fieldKey] = getFieldState(
