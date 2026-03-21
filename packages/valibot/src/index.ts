@@ -71,17 +71,20 @@ interface ValibotSchemaInternal {
 }
 
 /**
- * Checks whether a schema synchronously accepts every possible string input.
+ * Checks whether a schema synchronously accepts every possible input value.
  * This includes:
+ * - `v.unknown()`, `v.any()` (accept everything)
  * - Bare `v.string()` (no pipe or pipe with only non-validation actions)
- * - Any wrapper with a `wrapped` field pointing to a catch-all string
+ * - Any wrapper with a `wrapped` field pointing to a catch-all schema
  *   (e.g., `v.optional()`, `v.nullable()`, `v.nonOptional()`, etc.)
  */
-function isCatchAllStringSchema(
+function isCatchAllSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
 ): boolean {
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return false;
+  // v.unknown() and v.any() accept every value
+  if (s.type === "unknown" || s.type === "any") return true;
   if (s.type === "string") {
     // Bare v.string() or piped string with only non-validation actions
     // (transforms, trim, toLowerCase, etc. never reject input)
@@ -93,7 +96,7 @@ function isCatchAllStringSchema(
   // Unwrap any schema with a wrapped field (optional, nullable, nullish,
   // nonOptional, exactOptional, etc.)
   if (s.wrapped) {
-    return isCatchAllStringSchema(s.wrapped);
+    return isCatchAllSchema(s.wrapped);
   }
   return false;
 }
@@ -138,7 +141,7 @@ function containsAsyncSchema(
     const isUnionLike = s.type === "union" || s.type === "variant";
     if (isUnionLike && !afterTransform) {
       const hasCatchAllStringArm = s.options.some((opt) =>
-        typeof opt === "object" && opt != null && isCatchAllStringSchema(opt)
+        typeof opt === "object" && opt != null && isCatchAllSchema(opt)
       );
       if (!hasCatchAllStringArm) {
         for (const option of s.options) {
@@ -178,29 +181,32 @@ function containsAsyncSchema(
     }
   }
 
+  // Container members always receive transformed values (the container itself
+  // consumes the outer input), so propagate afterTransform = true to disable
+  // the union catch-all optimization inside nested schemas.
   // Check object entries
   if (s.entries) {
     for (const entry of Object.values(s.entries)) {
-      if (containsAsyncSchema(entry)) return true;
+      if (containsAsyncSchema(entry, true)) return true;
     }
   }
 
   // Check array item
-  if (s.item && containsAsyncSchema(s.item)) return true;
+  if (s.item && containsAsyncSchema(s.item, true)) return true;
 
   // Check tuple items
   if (s.items && Array.isArray(s.items)) {
     for (const item of s.items) {
-      if (containsAsyncSchema(item)) return true;
+      if (containsAsyncSchema(item, true)) return true;
     }
   }
 
   // Check record/map key and value
-  if (s.key && containsAsyncSchema(s.key)) return true;
-  if (s.value && containsAsyncSchema(s.value)) return true;
+  if (s.key && containsAsyncSchema(s.key, true)) return true;
+  if (s.value && containsAsyncSchema(s.value, true)) return true;
 
   // Check objectWithRest/tupleWithRest rest schema
-  if (s.rest && containsAsyncSchema(s.rest)) return true;
+  if (s.rest && containsAsyncSchema(s.rest, true)) return true;
 
   // Check v.promise() inner schema (stored in the overloaded `message` field)
   if (s.type === "promise") {
@@ -212,6 +218,7 @@ function containsAsyncSchema(
       if (
         containsAsyncSchema(
           promiseInner as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+          true,
         )
       ) {
         return true;
