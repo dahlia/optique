@@ -699,7 +699,7 @@ describe("property-based tests", () => {
   });
 
   it("deduplicateSuggestions should merge file suggestions preferring includeHidden: true", () => {
-    const suggestions: Suggestion[] = [
+    const suggestions: readonly Suggestion[] = [
       { kind: "file", type: "file", pattern: "x", includeHidden: false },
       { kind: "file", type: "file", pattern: "x", includeHidden: true },
     ];
@@ -714,7 +714,7 @@ describe("property-based tests", () => {
   });
 
   it("deduplicateSuggestions should merge file suggestions preferring includeHidden: true (reverse order)", () => {
-    const suggestions: Suggestion[] = [
+    const suggestions: readonly Suggestion[] = [
       { kind: "file", type: "file", pattern: "x", includeHidden: true },
       { kind: "file", type: "file", pattern: "x", includeHidden: false },
     ];
@@ -729,25 +729,27 @@ describe("property-based tests", () => {
   });
 
   it("deduplicateSuggestions should still collapse identical file suggestions with same includeHidden", () => {
-    const suggestions: Suggestion[] = [
+    const suggestions: readonly Suggestion[] = [
       { kind: "file", type: "file", pattern: "x", includeHidden: true },
       { kind: "file", type: "file", pattern: "x", includeHidden: true },
     ];
     const result = deduplicateSuggestions(suggestions);
     assert.equal(result.length, 1);
+    assert.deepEqual(result, [suggestions[0]]);
   });
 
   it("deduplicateSuggestions should treat undefined and false includeHidden as equivalent", () => {
-    const suggestions: Suggestion[] = [
+    const suggestions: readonly Suggestion[] = [
       { kind: "file", type: "file", pattern: "x" },
       { kind: "file", type: "file", pattern: "x", includeHidden: false },
     ];
     const result = deduplicateSuggestions(suggestions);
     assert.equal(result.length, 1);
+    assert.deepEqual(result, [suggestions[0]]);
   });
 
   it("deduplicateSuggestions should upgrade undefined includeHidden to true when merging", () => {
-    const suggestions: Suggestion[] = [
+    const suggestions: readonly Suggestion[] = [
       { kind: "file", type: "file", pattern: "x" },
       { kind: "file", type: "file", pattern: "x", includeHidden: true },
     ];
