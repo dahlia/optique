@@ -152,14 +152,19 @@ function inferMetavar(
   }
 
   // 7. Check for union
-  if (schemaType === "union" || schemaType === "variant") {
+  if (schemaType === "union") {
     if (inferChoices(schema) != null) {
       return "CHOICE";
     }
     return "VALUE";
   }
 
-  // 8. Handle optional/nullable wrappers by unwrapping
+  // 8. Check for variant (discriminated union — not suitable for choices)
+  if (schemaType === "variant") {
+    return "VALUE";
+  }
+
+  // 9. Handle optional/nullable wrappers by unwrapping
   if (
     schemaType === "optional" || schemaType === "nullable" ||
     schemaType === "nullish"
@@ -170,7 +175,7 @@ function inferMetavar(
     }
   }
 
-  // 9. Fallback for unknown types
+  // 10. Fallback for unknown types
   return "VALUE";
 }
 
