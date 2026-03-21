@@ -49,6 +49,10 @@ interface ValibotSchemaInternal {
   readonly type?: string;
   readonly pipe?: readonly ValibotPipelineActionInternal[];
   readonly wrapped?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
+  readonly options?:
+    | readonly (string | number)[]
+    | readonly v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>[];
+  readonly literal?: string | number | boolean | symbol | bigint;
 }
 
 /**
@@ -141,11 +145,17 @@ function inferMetavar(
 
   // 6. Check for literal
   if (schemaType === "literal") {
+    if (inferChoices(schema) != null) {
+      return "CHOICE";
+    }
     return "VALUE";
   }
 
   // 7. Check for union
   if (schemaType === "union" || schemaType === "variant") {
+    if (inferChoices(schema) != null) {
+      return "CHOICE";
+    }
     return "VALUE";
   }
 
@@ -162,6 +172,80 @@ function inferMetavar(
 
   // 9. Fallback for unknown types
   return "VALUE";
+}
+
+/**
+ * Extracts valid choices from a Valibot schema that represents a fixed set of
+ * values (picklist, literal, or union of literals).
+ *
+ * @param schema A Valibot schema to analyze.
+ * @returns An array of string representations of valid choices, or `undefined`
+ *          if the schema does not represent a fixed set of values.
+ */
+function inferChoices(
+  schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+): readonly string[] | undefined {
+  const internalSchema = schema as ValibotSchemaInternal;
+  const schemaType = internalSchema.type;
+  if (!schemaType) return undefined;
+
+  // v.picklist(["a", "b"]) → .options is primitive array
+  if (schemaType === "picklist") {
+    const options = internalSchema.options;
+    if (Array.isArray(options)) {
+      const result: string[] = [];
+      for (const opt of options) {
+        if (typeof opt === "string" || typeof opt === "number") {
+          result.push(String(opt));
+        } else {
+          return undefined;
+        }
+      }
+      return result.length > 0 ? result : undefined;
+    }
+    return undefined;
+  }
+
+  // v.literal("x") → .literal
+  if (schemaType === "literal") {
+    const value = internalSchema.literal;
+    if (typeof value === "string" || typeof value === "number") {
+      return [String(value)];
+    }
+    return undefined;
+  }
+
+  // v.union([...]) → .options is array of schemas
+  if (schemaType === "union") {
+    const options = internalSchema.options;
+    if (!Array.isArray(options)) return undefined;
+    const allChoices: string[] = [];
+    for (const opt of options) {
+      if (typeof opt === "object" && opt != null && "type" in opt) {
+        const sub = inferChoices(
+          opt as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+        );
+        if (sub == null) return undefined;
+        allChoices.push(...sub);
+      } else {
+        return undefined;
+      }
+    }
+    return allChoices.length > 0 ? allChoices : undefined;
+  }
+
+  // Optional/nullable/nullish wrappers → unwrap
+  if (
+    schemaType === "optional" || schemaType === "nullable" ||
+    schemaType === "nullish"
+  ) {
+    const wrapped = internalSchema.wrapped;
+    if (wrapped) {
+      return inferChoices(wrapped);
+    }
+  }
+
+  return undefined;
 }
 
 /**
@@ -247,9 +331,22 @@ export function valibot<T>(
   schema: v.BaseSchema<unknown, T, v.BaseIssue<unknown>>,
   options: ValibotParserOptions = {},
 ): ValueParser<"sync", T> {
-  return {
+  const choices = inferChoices(schema);
+  const parser: ValueParser<"sync", T> = {
     $mode: "sync",
     metavar: options.metavar ?? inferMetavar(schema),
+    ...(choices != null && choices.length > 0
+      ? {
+        choices: Object.freeze(choices) as readonly T[],
+        *suggest(prefix: string) {
+          for (const c of choices) {
+            if (c.startsWith(prefix)) {
+              yield { kind: "literal" as const, text: c };
+            }
+          }
+        },
+      }
+      : {}),
 
     parse(input: string): ValueParserResult<T> {
       const result = safeParse(schema, input);
@@ -280,4 +377,5 @@ export function valibot<T>(
       return String(value);
     },
   };
+  return parser;
 }

@@ -234,9 +234,9 @@ describe("valibot()", () => {
         assert.equal(parser.metavar, "VALUE");
       });
 
-      it("should infer VALUE for v.literal()", () => {
+      it("should infer CHOICE for v.literal()", () => {
         const parser = valibot(v.literal("production"));
-        assert.equal(parser.metavar, "VALUE");
+        assert.equal(parser.metavar, "CHOICE");
       });
     });
 
@@ -553,6 +553,90 @@ describe("valibot()", () => {
 
       const invalidResult = parser.parse("ftp://example.com");
       assert.ok(!invalidResult.success);
+    });
+  });
+
+  describe("choices and suggest", () => {
+    it("should expose choices for v.picklist()", () => {
+      const parser = valibot(v.picklist(["debug", "info", "warn", "error"]));
+      assert.deepEqual(parser.choices, ["debug", "info", "warn", "error"]);
+    });
+
+    it("should provide suggest() for v.picklist()", () => {
+      const parser = valibot(v.picklist(["debug", "info", "warn", "error"]));
+      assert.ok(parser.suggest != null);
+      const suggestions = [...parser.suggest!("d")];
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "debug" }]);
+    });
+
+    it("should suggest all choices for empty prefix", () => {
+      const parser = valibot(v.picklist(["debug", "info", "warn", "error"]));
+      const suggestions = [...parser.suggest!("")];
+      assert.equal(suggestions.length, 4);
+    });
+
+    it("should expose choices for v.literal()", () => {
+      const parser = valibot(v.literal("production"));
+      assert.deepEqual(parser.choices, ["production"]);
+    });
+
+    it("should expose choices for v.literal() with number", () => {
+      const parser = valibot(v.literal(42));
+      assert.deepEqual(parser.choices, ["42"]);
+    });
+
+    it("should expose choices for v.union() of literals", () => {
+      const parser = valibot(
+        v.union([v.literal("dev"), v.literal("prod")]),
+      );
+      assert.deepEqual(parser.choices, ["dev", "prod"]);
+    });
+
+    it("should not expose choices for v.union() with non-literal member", () => {
+      const parser = valibot(
+        v.union([v.literal("auto"), v.string()]),
+      );
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
+    });
+
+    it("should preserve choices through v.optional()", () => {
+      const parser = valibot(
+        v.optional(v.picklist(["a", "b"])),
+      );
+      assert.deepEqual(parser.choices, ["a", "b"]);
+    });
+
+    it("should preserve choices through v.nullable()", () => {
+      const parser = valibot(
+        v.nullable(v.picklist(["a", "b"])),
+      );
+      assert.deepEqual(parser.choices, ["a", "b"]);
+    });
+
+    it("should preserve choices through v.nullish()", () => {
+      const parser = valibot(
+        v.nullish(v.picklist(["a", "b"])),
+      );
+      assert.deepEqual(parser.choices, ["a", "b"]);
+    });
+
+    it("should not expose choices for v.string()", () => {
+      const parser = valibot(v.string());
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
+    });
+
+    it("should infer CHOICE metavar for v.literal()", () => {
+      const parser = valibot(v.literal("production"));
+      assert.equal(parser.metavar, "CHOICE");
+    });
+
+    it("should infer CHOICE metavar for v.union() of literals", () => {
+      const parser = valibot(
+        v.union([v.literal("dev"), v.literal("prod")]),
+      );
+      assert.equal(parser.metavar, "CHOICE");
     });
   });
 });
