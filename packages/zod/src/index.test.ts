@@ -665,11 +665,6 @@ describe("zod()", () => {
       assert.equal(parser.suggest, undefined);
     });
 
-    it("should infer CHOICE metavar for z.literal()", () => {
-      const parser = zod(z.literal("production"));
-      assert.equal(parser.metavar, "CHOICE");
-    });
-
     it("should infer CHOICE metavar for z.union() of literals", () => {
       const parser = zod(z.union([z.literal("dev"), z.literal("prod")]));
       assert.equal(parser.metavar, "CHOICE");

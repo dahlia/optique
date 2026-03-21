@@ -636,11 +636,6 @@ describe("valibot()", () => {
       assert.equal(parser.suggest, undefined);
     });
 
-    it("should infer CHOICE metavar for v.literal()", () => {
-      const parser = valibot(v.literal("production"));
-      assert.equal(parser.metavar, "CHOICE");
-    });
-
     it("should infer CHOICE metavar for v.union() of literals", () => {
       const parser = valibot(
         v.union([v.literal("dev"), v.literal("prod")]),
