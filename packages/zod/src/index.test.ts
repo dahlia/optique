@@ -693,4 +693,21 @@ describe("zod()", () => {
       assert.equal(parser.metavar, "CHOICE");
     });
   });
+
+  describe("async schema rejection", () => {
+    it("should throw TypeError for async refinements", () => {
+      // deno-lint-ignore require-await
+      const asyncSchema = z.string().refine(async (value) => value === "ok");
+      const parser = zod(asyncSchema as never);
+      assert.throws(
+        () => parser.parse("ok"),
+        {
+          name: "TypeError",
+          message:
+            "Async Zod schemas (e.g., async refinements) are not supported " +
+            "by zod(). Use synchronous schemas instead.",
+        },
+      );
+    });
+  });
 });

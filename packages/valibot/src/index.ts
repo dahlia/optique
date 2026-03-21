@@ -338,12 +338,20 @@ function inferChoices(
  * ```
  *
  * @throws {TypeError} If the resolved `metavar` is an empty string.
+ * @throws {TypeError} If the schema contains async validations that cannot be
+ *   executed synchronously.
  * @since 0.7.0
  */
 export function valibot<T>(
   schema: v.BaseSchema<unknown, T, v.BaseIssue<unknown>>,
   options: ValibotParserOptions = {},
 ): ValueParser<"sync", T> {
+  if ((schema as { async?: boolean }).async) {
+    throw new TypeError(
+      "Async Valibot schemas (e.g., async validations) are not " +
+        "supported by valibot(). Use synchronous schemas instead.",
+    );
+  }
   const choices = inferChoices(schema);
   const metavar = options.metavar ?? inferMetavar(schema);
   ensureNonEmptyString(metavar);

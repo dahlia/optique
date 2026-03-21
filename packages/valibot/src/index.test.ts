@@ -664,4 +664,22 @@ describe("valibot()", () => {
       assert.equal(parser.metavar, "CHOICE");
     });
   });
+
+  describe("async schema rejection", () => {
+    it("should throw TypeError for async validations", () => {
+      const asyncSchema = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      assert.throws(
+        () => valibot(asyncSchema as never),
+        {
+          name: "TypeError",
+          message: "Async Valibot schemas (e.g., async validations) are not " +
+            "supported by valibot(). Use synchronous schemas instead.",
+        },
+      );
+    });
+  });
 });

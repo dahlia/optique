@@ -400,6 +400,8 @@ function inferChoices(
  * ```
  *
  * @throws {TypeError} If the resolved `metavar` is an empty string.
+ * @throws {TypeError} If the schema contains async refinements or other async
+ *   operations that cannot be executed synchronously.
  * @since 0.7.0
  */
 export function zod<T>(
@@ -429,7 +431,21 @@ export function zod<T>(
       : {}),
 
     parse(input: string): ValueParserResult<T> {
-      const result = schema.safeParse(input);
+      let result;
+      try {
+        result = schema.safeParse(input);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          /[Pp]romise|async/i.test(error.message)
+        ) {
+          throw new TypeError(
+            "Async Zod schemas (e.g., async refinements) are not supported " +
+              "by zod(). Use synchronous schemas instead.",
+          );
+        }
+        throw error;
+      }
 
       if (result.success) {
         return { success: true, value: result.data };
