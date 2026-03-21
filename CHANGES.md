@@ -167,6 +167,12 @@ To be released.
     The method now uses `Intl.Locale.toString()` instead of `baseName` to
     preserve the full locale identifier.  [[#317], [#565]]
 
+ -  Fixed `url()` parser's `suggest()` emitting `://` for non-hierarchical URL
+    schemes like `mailto:` and `urn:`.  Suggestions now use `:` for
+    non-hierarchical schemes and `://` only for special schemes (`http`,
+    `https`, `ftp`, `ws`, `wss`, `file`) as defined by the WHATWG URL Standard.
+    [[#342], [#678]]
+
  -  Extended `hidden` visibility controls from `boolean` to
     `boolean | "usage" | "doc" | "help"` across primitive parsers:
     `option()`, `flag()`, `argument()`, `command()`, and `passThrough()`.
@@ -722,6 +728,7 @@ To be released.
 [#337]: https://github.com/dahlia/optique/issues/337
 [#338]: https://github.com/dahlia/optique/issues/338
 [#341]: https://github.com/dahlia/optique/issues/341
+[#342]: https://github.com/dahlia/optique/issues/342
 [#344]: https://github.com/dahlia/optique/issues/344
 [#345]: https://github.com/dahlia/optique/issues/345
 [#348]: https://github.com/dahlia/optique/issues/348
@@ -841,6 +848,7 @@ To be released.
 [#675]: https://github.com/dahlia/optique/pull/675
 [#676]: https://github.com/dahlia/optique/pull/676
 [#677]: https://github.com/dahlia/optique/pull/677
+[#678]: https://github.com/dahlia/optique/pull/678
 
 ### @optique/config
 
