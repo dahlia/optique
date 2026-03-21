@@ -67,6 +67,7 @@ interface ValibotSchemaInternal {
   >[];
   readonly key?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
   readonly value?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
+  readonly rest?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
 }
 
 /**
@@ -130,6 +131,9 @@ function containsAsyncSchema(
   // Check record/map key and value
   if (s.key && containsAsyncSchema(s.key)) return true;
   if (s.value && containsAsyncSchema(s.value)) return true;
+
+  // Check objectWithRest/tupleWithRest rest schema
+  if (s.rest && containsAsyncSchema(s.rest)) return true;
 
   return false;
 }

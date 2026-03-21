@@ -66,12 +66,17 @@ interface ZodSchemaInternal {
  *
  * - **Zod v4** throws a dedicated `$ZodAsyncError` class.
  * - **Zod v3** (3.25+) throws a plain `Error` whose message starts with
- *   `"Async refinement encountered during synchronous parse operation"`.
+ *   `"Async refinement encountered during synchronous parse operation"` for
+ *   async refinements, or `"Asynchronous transform encountered during
+ *   synchronous parse operation"` for async transforms.
  */
 function isZodAsyncError(error: Error): boolean {
   return error.constructor.name === "$ZodAsyncError" ||
     error.message.startsWith(
       "Async refinement encountered during synchronous parse operation",
+    ) ||
+    error.message.startsWith(
+      "Asynchronous transform encountered during synchronous parse operation",
     );
 }
 

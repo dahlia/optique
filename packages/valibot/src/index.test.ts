@@ -754,5 +754,25 @@ describe("valibot()", () => {
       );
       assert.throws(() => valibot(asyncSchema as never), expectedError);
     });
+
+    it("should throw TypeError for async rest schema in objectWithRest", () => {
+      const asyncRest = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const asyncSchema = v.objectWithRest({}, asyncRest as never);
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
+
+    it("should throw TypeError for async rest schema in tupleWithRest", () => {
+      const asyncRest = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const asyncSchema = v.tupleWithRest([], asyncRest as never);
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
   });
 });
