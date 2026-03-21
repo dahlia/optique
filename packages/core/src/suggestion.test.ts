@@ -698,6 +698,34 @@ describe("property-based tests", () => {
     );
   });
 
+  it("deduplicateSuggestions should not collapse file suggestions differing in includeHidden", () => {
+    const suggestions: Suggestion[] = [
+      { kind: "file", type: "file", pattern: "x", includeHidden: false },
+      { kind: "file", type: "file", pattern: "x", includeHidden: true },
+    ];
+    const result = deduplicateSuggestions(suggestions);
+    assert.equal(result.length, 2);
+    assert.deepEqual(result, suggestions);
+  });
+
+  it("deduplicateSuggestions should still collapse identical file suggestions with same includeHidden", () => {
+    const suggestions: Suggestion[] = [
+      { kind: "file", type: "file", pattern: "x", includeHidden: true },
+      { kind: "file", type: "file", pattern: "x", includeHidden: true },
+    ];
+    const result = deduplicateSuggestions(suggestions);
+    assert.equal(result.length, 1);
+  });
+
+  it("deduplicateSuggestions should treat undefined and false includeHidden as equivalent", () => {
+    const suggestions: Suggestion[] = [
+      { kind: "file", type: "file", pattern: "x" },
+      { kind: "file", type: "file", pattern: "x", includeHidden: false },
+    ];
+    const result = deduplicateSuggestions(suggestions);
+    assert.equal(result.length, 1);
+  });
+
   it("deduplicateSuggestions should be idempotent and stable", () => {
     const literalSuggestionArbitrary = safeStringArbitrary.map(
       (text: string): Suggestion => ({ kind: "literal", text }),
@@ -717,6 +745,7 @@ describe("property-based tests", () => {
         ),
         { nil: undefined },
       ),
+      includeHidden: fc.option(fc.boolean(), { nil: undefined }),
     }) as fc.Arbitrary<Suggestion>;
 
     const suggestionsArbitrary = fc.array(
@@ -730,7 +759,7 @@ describe("property-based tests", () => {
       }
       return `__FILE__:${suggestion.type}:${
         suggestion.extensions?.join(",") ?? ""
-      }:${suggestion.pattern ?? ""}`;
+      }:${suggestion.pattern ?? ""}:${suggestion.includeHidden === true}`;
     };
 
     fc.assert(

@@ -320,7 +320,7 @@ export function createErrorWithSuggestions(
  *
  * For literal suggestions, the text itself is used as the key.
  * For file suggestions, a composite key is created from the type,
- * extensions, and pattern.
+ * extensions, pattern, and includeHidden.
  *
  * @param suggestion The suggestion to create a key for
  * @returns A string key that uniquely identifies this suggestion
@@ -333,7 +333,7 @@ function getSuggestionKey(suggestion: Suggestion): string {
   // File suggestion: create a composite key
   return `__FILE__:${suggestion.type}:${
     suggestion.extensions?.join(",") ?? ""
-  }:${suggestion.pattern ?? ""}`;
+  }:${suggestion.pattern ?? ""}:${suggestion.includeHidden === true}`;
 }
 
 /**
@@ -341,7 +341,7 @@ function getSuggestionKey(suggestion: Suggestion): string {
  *
  * Suggestions are considered duplicates if they have the same key:
  * - Literal suggestions: same text
- * - File suggestions: same type, extensions, and pattern
+ * - File suggestions: same type, extensions, pattern, and includeHidden
  *
  * The first occurrence of each unique suggestion is kept.
  *
