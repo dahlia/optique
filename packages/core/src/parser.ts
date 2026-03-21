@@ -5,7 +5,7 @@ import {
   type DocPage,
   type DocSection,
 } from "./doc.ts";
-import { type Message, message } from "./message.ts";
+import { cloneMessage, type Message, message } from "./message.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import {
   cloneUsage,
@@ -1101,9 +1101,9 @@ function buildDocPage(
   return {
     usage,
     sections,
-    ...(brief != null && { brief: structuredClone(brief) }),
-    ...(description != null && { description: structuredClone(description) }),
-    ...(footer != null && { footer: structuredClone(footer) }),
+    ...(brief != null && { brief: cloneMessage(brief) }),
+    ...(description != null && { description: cloneMessage(description) }),
+    ...(footer != null && { footer: cloneMessage(footer) }),
   };
 }
 

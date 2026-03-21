@@ -2663,4 +2663,19 @@ describe("cloneDocEntry", () => {
       "original",
     );
   });
+
+  it("should clone an entry whose description contains a URL term", () => {
+    const entry: DocEntry = {
+      term: { type: "argument", metavar: "FILE" },
+      description: [
+        { type: "text", text: "See " },
+        { type: "url", url: new URL("https://example.com") },
+      ],
+    };
+    const cloned = cloneDocEntry(entry);
+    assert.deepEqual(cloned, entry);
+    assert.notEqual(cloned, entry);
+    assert.notEqual(cloned.description, entry.description);
+    assert.notEqual(cloned.description![1], entry.description![1]);
+  });
 });

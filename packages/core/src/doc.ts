@@ -1,4 +1,5 @@
 import {
+  cloneMessage,
   formatMessage,
   type Message,
   type MessageFormatOptions,
@@ -135,13 +136,13 @@ export function cloneDocEntry(entry: DocEntry): DocEntry {
   return {
     term: cloneUsageTerm(entry.term),
     ...(entry.description != null && {
-      description: structuredClone(entry.description),
+      description: cloneMessage(entry.description),
     }),
     ...(entry.default != null && {
-      default: structuredClone(entry.default),
+      default: cloneMessage(entry.default),
     }),
     ...(entry.choices != null && {
-      choices: structuredClone(entry.choices),
+      choices: cloneMessage(entry.choices),
     }),
   };
 }

@@ -757,7 +757,17 @@ To be released.
  -  Fixed `getDocPage()` exposing parser-owned usage terms and doc fragments
     by reference.  Mutating the returned `DocPage` or the `defaultUsageLine`
     argument in a command's `usageLine` callback no longer corrupts the
-    parser definition.  [[#500]]
+    parser definition.  [[#500], [#697]]
+
+ -  Added deep-clone utilities for parser structures:
+
+     -  `cloneUsageTerm()` and `cloneUsage()` in `@optique/core/usage`
+     -  `cloneDocEntry()` in `@optique/core/doc`
+     -  `cloneMessageTerm()` and `cloneMessage()` in `@optique/core/message`
+
+    These are used internally by `getDocPage()` to isolate returned pages
+    from parser-owned state, and are also available as public APIs.
+    [[#500], [#697]]
 
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
@@ -973,6 +983,7 @@ To be released.
 [#694]: https://github.com/dahlia/optique/pull/694
 [#695]: https://github.com/dahlia/optique/pull/695
 [#696]: https://github.com/dahlia/optique/pull/696
+[#697]: https://github.com/dahlia/optique/pull/697
 
 ### @optique/config
 
