@@ -85,14 +85,20 @@ describe("or", () => {
   it("should throw TypeError when called with no parsers", () => {
     assert.throws(
       () => (or as (...args: unknown[]) => unknown)(),
-      TypeError,
+      {
+        name: "TypeError",
+        message: "or() requires at least one parser argument.",
+      },
     );
   });
 
   it("should throw TypeError when called with only options", () => {
     assert.throws(
       () => (or as (...args: unknown[]) => unknown)({}),
-      TypeError,
+      {
+        name: "TypeError",
+        message: "or() requires at least one parser argument.",
+      },
     );
   });
 
@@ -383,7 +389,10 @@ describe("or", () => {
     assert.throws(
       // @ts-expect-error - or() requires at least one parser argument.
       () => or(),
-      TypeError,
+      {
+        name: "TypeError",
+        message: "or() requires at least one parser argument.",
+      },
     );
   });
 
@@ -875,14 +884,20 @@ describe("longestMatch()", () => {
   it("should throw TypeError when called with no parsers", () => {
     assert.throws(
       () => (longestMatch as (...args: unknown[]) => unknown)(),
-      TypeError,
+      {
+        name: "TypeError",
+        message: "longestMatch() requires at least one parser argument.",
+      },
     );
   });
 
   it("should throw TypeError when called with only options", () => {
     assert.throws(
       () => (longestMatch as (...args: unknown[]) => unknown)({}),
-      TypeError,
+      {
+        name: "TypeError",
+        message: "longestMatch() requires at least one parser argument.",
+      },
     );
   });
 
@@ -1061,7 +1076,10 @@ describe("longestMatch()", () => {
     assert.throws(
       // @ts-expect-error - longestMatch() requires at least one parser argument.
       () => longestMatch(),
-      TypeError,
+      {
+        name: "TypeError",
+        message: "longestMatch() requires at least one parser argument.",
+      },
     );
   });
 
@@ -3103,28 +3121,40 @@ describe("merge", () => {
   it("should throw TypeError when called with no parsers", () => {
     assert.throws(
       () => (merge as (...args: unknown[]) => unknown)(),
-      TypeError,
+      {
+        name: "TypeError",
+        message: "merge() requires at least one parser argument.",
+      },
     );
   });
 
   it("should throw TypeError when called with only a label", () => {
     assert.throws(
       () => (merge as (...args: unknown[]) => unknown)("label"),
-      TypeError,
+      {
+        name: "TypeError",
+        message: "merge() requires at least one parser argument.",
+      },
     );
   });
 
   it("should throw TypeError when called with only options", () => {
     assert.throws(
       () => (merge as (...args: unknown[]) => unknown)({}),
-      TypeError,
+      {
+        name: "TypeError",
+        message: "merge() requires at least one parser argument.",
+      },
     );
   });
 
   it("should throw TypeError when called with label and options but no parsers", () => {
     assert.throws(
       () => (merge as (...args: unknown[]) => unknown)("label", {}),
-      TypeError,
+      {
+        name: "TypeError",
+        message: "merge() requires at least one parser argument.",
+      },
     );
   });
 
@@ -3394,7 +3424,10 @@ describe("merge", () => {
     assert.throws(
       // @ts-expect-error - merge() requires at least one parser argument.
       () => merge(),
-      TypeError,
+      {
+        name: "TypeError",
+        message: "merge() requires at least one parser argument.",
+      },
     );
   });
 
@@ -5027,7 +5060,10 @@ describe("concat", () => {
   it("should throw TypeError when called with no parsers", () => {
     assert.throws(
       () => (concat as (...args: unknown[]) => unknown)(),
-      TypeError,
+      {
+        name: "TypeError",
+        message: "concat() requires at least one parser argument.",
+      },
     );
   });
 
@@ -5103,7 +5139,10 @@ describe("concat", () => {
     assert.throws(
       // @ts-expect-error - concat() requires at least one parser argument.
       () => concat(),
-      TypeError,
+      {
+        name: "TypeError",
+        message: "concat() requires at least one parser argument.",
+      },
     );
   });
 
@@ -10218,7 +10257,10 @@ describe("branch coverage: constructs.ts edge cases", () => {
 
     assert.throws(
       () => (concat as unknown as (...parsers: unknown[]) => unknown)(),
-      TypeError,
+      {
+        name: "TypeError",
+        message: "concat() requires at least one parser argument.",
+      },
     );
   });
 
