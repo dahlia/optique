@@ -45,6 +45,12 @@ interface ZodDefinitionInternal {
   readonly type?: string;
   readonly checks?: readonly ZodCheckInternal[];
   readonly innerType?: z.Schema<unknown>;
+  readonly values?:
+    | readonly (string | number | boolean | symbol | bigint)[]
+    | Record<string, string | number>;
+  readonly value?: string | number | boolean | symbol | bigint;
+  readonly entries?: Record<string, string | number>;
+  readonly options?: readonly z.Schema<unknown>[];
 }
 
 interface ZodSchemaInternal {
@@ -152,15 +158,23 @@ function inferMetavar(schema: z.Schema<unknown>): NonEmptyString {
     return "CHOICE";
   }
 
-  // 6. Check for union or literal
-  if (
-    typeName === "ZodUnion" || typeName === "union" ||
-    typeName === "ZodLiteral" || typeName === "literal"
-  ) {
+  // 6. Check for literal
+  if (typeName === "ZodLiteral" || typeName === "literal") {
+    if (inferChoices(schema) != null) {
+      return "CHOICE";
+    }
     return "VALUE";
   }
 
-  // 7. Handle optional/nullable wrappers by unwrapping
+  // 7. Check for union
+  if (typeName === "ZodUnion" || typeName === "union") {
+    if (inferChoices(schema) != null) {
+      return "CHOICE";
+    }
+    return "VALUE";
+  }
+
+  // 8. Handle optional/nullable wrappers by unwrapping
   if (
     typeName === "ZodOptional" || typeName === "optional" ||
     typeName === "ZodNullable" || typeName === "nullable"
@@ -172,7 +186,7 @@ function inferMetavar(schema: z.Schema<unknown>): NonEmptyString {
     return "VALUE";
   }
 
-  // 8. Handle default wrapper by unwrapping
+  // 9. Handle default wrapper by unwrapping
   if (typeName === "ZodDefault" || typeName === "default") {
     const innerType = def.innerType;
     if (innerType != null) {
@@ -181,8 +195,113 @@ function inferMetavar(schema: z.Schema<unknown>): NonEmptyString {
     return "VALUE";
   }
 
-  // 9. Fallback for unknown types
+  // 10. Fallback for unknown types
   return "VALUE";
+}
+
+/**
+ * Extracts valid choices from a Zod schema that represents a fixed set of
+ * values (enum, literal, or union of literals).
+ *
+ * @param schema A Zod schema to analyze.
+ * @returns An array of string representations of valid choices, or `undefined`
+ *          if the schema does not represent a fixed set of values.
+ */
+function inferChoices(
+  schema: z.Schema<unknown>,
+): readonly string[] | undefined {
+  const def = (schema as ZodSchemaInternal)._def;
+  if (!def) return undefined;
+
+  const typeName = def.typeName || def.type;
+
+  // z.enum(["a", "b"]):
+  //   Zod v3: _def.values is string[]
+  //   Zod v4: _def.entries is Record<string, string>
+  if (typeName === "ZodEnum" || typeName === "enum") {
+    const values = def.values;
+    if (Array.isArray(values)) {
+      return values.map(String);
+    }
+    const entries = def.entries;
+    if (entries != null && typeof entries === "object") {
+      return Object.values(entries).map(String);
+    }
+    return undefined;
+  }
+
+  // z.nativeEnum(MyEnum) → _def.values is an object
+  if (typeName === "ZodNativeEnum" || typeName === "nativeEnum") {
+    const values = def.values;
+    if (
+      values != null && typeof values === "object" && !Array.isArray(values)
+    ) {
+      const result: string[] = [];
+      for (
+        const val of Object.values(values as Record<string, string | number>)
+      ) {
+        if (typeof val === "string" || typeof val === "number") {
+          const str = String(val);
+          if (!result.includes(str)) {
+            result.push(str);
+          }
+        }
+      }
+      return result.length > 0 ? result : undefined;
+    }
+    return undefined;
+  }
+
+  // z.literal("x"):
+  //   Zod v3: _def.value is the literal value
+  //   Zod v4: _def.values is [value]
+  if (typeName === "ZodLiteral" || typeName === "literal") {
+    const value = def.value;
+    if (typeof value === "string" || typeof value === "number") {
+      return [String(value)];
+    }
+    const values = def.values;
+    if (Array.isArray(values)) {
+      const result: string[] = [];
+      for (const v of values) {
+        if (typeof v === "string" || typeof v === "number") {
+          result.push(String(v));
+        } else {
+          return undefined;
+        }
+      }
+      return result.length > 0 ? result : undefined;
+    }
+    return undefined;
+  }
+
+  // z.union([...]) → _def.options is array of schemas
+  if (typeName === "ZodUnion" || typeName === "union") {
+    const options = def.options;
+    if (!Array.isArray(options)) return undefined;
+    const allChoices: string[] = [];
+    for (const opt of options) {
+      const sub = inferChoices(opt);
+      if (sub == null) return undefined;
+      allChoices.push(...sub);
+    }
+    return allChoices.length > 0 ? allChoices : undefined;
+  }
+
+  // Optional/nullable/default wrappers → unwrap
+  if (
+    typeName === "ZodOptional" || typeName === "optional" ||
+    typeName === "ZodNullable" || typeName === "nullable" ||
+    typeName === "ZodDefault" || typeName === "default"
+  ) {
+    const innerType = def.innerType;
+    if (innerType != null) {
+      return inferChoices(innerType);
+    }
+    return undefined;
+  }
+
+  return undefined;
 }
 
 /**
@@ -259,9 +378,22 @@ export function zod<T>(
   schema: z.Schema<T>,
   options: ZodParserOptions = {},
 ): ValueParser<"sync", T> {
-  return {
+  const choices = inferChoices(schema);
+  const parser: ValueParser<"sync", T> = {
     $mode: "sync",
     metavar: options.metavar ?? inferMetavar(schema),
+    ...(choices != null && choices.length > 0
+      ? {
+        choices: Object.freeze(choices) as readonly T[],
+        *suggest(prefix: string) {
+          for (const c of choices) {
+            if (c.startsWith(prefix)) {
+              yield { kind: "literal" as const, text: c };
+            }
+          }
+        },
+      }
+      : {}),
 
     parse(input: string): ValueParserResult<T> {
       const result = schema.safeParse(input);
@@ -303,4 +435,5 @@ export function zod<T>(
       return String(value);
     },
   };
+  return parser;
 }
