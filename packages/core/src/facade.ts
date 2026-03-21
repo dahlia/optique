@@ -2234,6 +2234,45 @@ export function runParser<
     // The first --completion match is the meta option; everything after it
     // (including the shell name) is opaque completion payload and must not
     // be re-interpreted as another meta option.
+    // Exception: if a help or version option/command appears *before* the
+    // completion option, skip the early return and let the combined parser
+    // handle precedence — but only with args truncated at the completion
+    // option position so payload tokens stay opaque.
+    //
+    // This uses a naive token scan (matching raw argv strings against known
+    // meta option names).  The combined parser's lenient help/version parsers
+    // use the same naive approach: they scan the parse buffer for meta flag
+    // names and match regardless of whether a token is actually an option
+    // value.  So this early-return check is consistent with what the combined
+    // parser would do — both treat any token matching a meta flag name as
+    // that meta flag.
+    // Check whether any help/version meta entry (option or command form)
+    // appears in args before a given index.  Command-form entries are only
+    // checked at args[0] since commands are always the first token.
+    const hasMetaEntryBefore = (endIndex: number): boolean => {
+      const argsBefore = args.slice(0, endIndex);
+      if (
+        helpOptionConfig &&
+        helpOptionNames.some((n) => argsBefore.includes(n))
+      ) return true;
+      if (
+        versionOptionConfig &&
+        versionOptionNames.some((n) => argsBefore.includes(n))
+      ) return true;
+      if (endIndex > 0) {
+        if (
+          helpCommandConfig &&
+          helpCommandNames.includes(args[0])
+        ) return true;
+        if (
+          versionCommandConfig &&
+          versionCommandNames.includes(args[0])
+        ) return true;
+      }
+      return false;
+    };
+
+    let completionOptionIndex = -1;
     if (completionOptionConfig) {
       // Only scan args before the options terminator; reuse the index
       // already computed for the hasHelpOption check above.
@@ -2248,6 +2287,10 @@ export function runParser<
           arg.startsWith(n + "=")
         );
         if (equalsMatch) {
+          if (hasMetaEntryBefore(i)) {
+            completionOptionIndex = i;
+            break; // Fall through with truncated args
+          }
           const shell = arg.slice(equalsMatch.length + 1);
           const completionArgs = args.slice(i + 1);
           return handleCompletion<
@@ -2276,6 +2319,10 @@ export function runParser<
         // Check for "--completion <shell>" format (separate arg)
         const exactMatch = completionOptionNames.includes(arg);
         if (exactMatch) {
+          if (hasMetaEntryBefore(i)) {
+            completionOptionIndex = i;
+            break; // Fall through with truncated args
+          }
           const shell = i + 1 < args.length ? args[i + 1] : "";
           const completionArgs = i + 1 < args.length ? args.slice(i + 2) : [];
           return handleCompletion<
@@ -2301,6 +2348,14 @@ export function runParser<
           ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
         }
       }
+    }
+
+    // When help/version precedes --completion, truncate args so the combined
+    // parser and classifyResult only see tokens before the completion option.
+    // This keeps completion payload opaque — e.g., --version after
+    // --completion is not re-interpreted as a meta flag.
+    if (completionOptionIndex >= 0) {
+      args = args.slice(0, completionOptionIndex);
     }
   }
 

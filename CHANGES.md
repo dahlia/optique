@@ -704,6 +704,13 @@ To be released.
     `runWithSync()`.  Tokens after `--` are now correctly treated as positional
     data and no longer trigger meta-option early-exit paths.  [[#228], [#686]]
 
+ -  Fixed `--completion` option bypassing `--help`/`--version` precedence in
+    `runParser()`.  When `--help` or `--version` appears *before* the
+    `--completion` option (e.g., `--help --completion bash`), the help or
+    version path now correctly takes precedence.  Tokens *after* `--completion`
+    remain opaque completion payload and are not re-interpreted as meta flags.
+    [[#229], [#689]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -734,6 +741,7 @@ To be released.
 [#224]: https://github.com/dahlia/optique/issues/224
 [#225]: https://github.com/dahlia/optique/issues/225
 [#228]: https://github.com/dahlia/optique/issues/228
+[#229]: https://github.com/dahlia/optique/issues/229
 [#235]: https://github.com/dahlia/optique/issues/235
 [#240]: https://github.com/dahlia/optique/issues/240
 [#241]: https://github.com/dahlia/optique/issues/241
@@ -901,6 +909,7 @@ To be released.
 [#684]: https://github.com/dahlia/optique/issues/684
 [#685]: https://github.com/dahlia/optique/pull/685
 [#686]: https://github.com/dahlia/optique/pull/686
+[#689]: https://github.com/dahlia/optique/pull/689
 
 ### @optique/config
 
