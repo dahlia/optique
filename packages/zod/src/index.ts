@@ -88,7 +88,7 @@ function inferMetavar(schema: z.Schema<unknown>): NonEmptyString {
   }
 
   // Get type name from either typeName property (Zod v4) or def.type (Zod v3)
-  const typeName = def.typeName || def.type;
+  const typeName = def.typeName ?? def.type;
 
   // 1. Check for string refinements first (highest priority)
   if (typeName === "ZodString" || typeName === "string") {
@@ -215,7 +215,7 @@ function inferChoices(
   const def = (schema as ZodSchemaInternal)._def;
   if (!def) return undefined;
 
-  const typeName = def.typeName || def.type;
+  const typeName = def.typeName ?? def.type;
 
   // z.enum(["a", "b"]) or z.nativeEnum(StringEnum):
   //   Zod v3: _def.values is string[] for z.enum()
