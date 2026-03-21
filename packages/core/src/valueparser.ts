@@ -1374,7 +1374,7 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
               { type: "text", text: "URL protocol " },
               { type: "value", value: url.protocol },
               { type: "text", text: " is not allowed. Allowed protocols: " },
-              ...valueSet(allowedProtocols),
+              ...valueSet(allowedProtocols, { locale: "en-US" }),
               { type: "text", text: "." },
             ] as Message,
         };
@@ -3369,7 +3369,7 @@ export function email(
                 { type: "text", text: "Email domain " },
                 { type: "value", value: domain },
                 { type: "text", text: " is not allowed. Allowed domains: " },
-                ...valueSet(allowedDomains),
+                ...valueSet(allowedDomains, { locale: "en-US" }),
                 { type: "text", text: "." },
               ] as Message;
               return { success: false, error: msg };
@@ -3411,7 +3411,7 @@ export function email(
               { type: "text", text: "Email domain " },
               { type: "value", value: domain },
               { type: "text", text: " is not allowed. Allowed domains: " },
-              ...valueSet(allowedDomains),
+              ...valueSet(allowedDomains, { locale: "en-US" }),
               { type: "text", text: "." },
             ] as Message;
             return { success: false, error: msg };
@@ -4647,7 +4647,7 @@ export function domain(
             { type: "text", text: "Top-level domain " },
             { type: "value", value: tld },
             { type: "text", text: " is not allowed. Allowed TLDs: " },
-            ...valueSet(allowedTlds),
+            ...valueSet(allowedTlds, { locale: "en-US" }),
             { type: "text", text: "." },
           ] as Message;
           return { success: false, error: msg };
