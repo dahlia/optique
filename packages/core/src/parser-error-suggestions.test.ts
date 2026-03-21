@@ -298,6 +298,128 @@ describe("Parser error suggestions", () => {
     });
   });
 
+  describe("hidden options/commands in suggestions", () => {
+    it("should not suggest hidden: true options", () => {
+      const parser = or(
+        option("--secret", string(), { hidden: true }),
+        option("--verbose", string()),
+      );
+      const context: ParserContext<typeof parser.initialState> = {
+        buffer: ["--secert"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const errorMsg = formatMessage(result.error, {
+          quotes: false,
+          colors: false,
+        });
+        assert.doesNotMatch(errorMsg, /--secret/);
+        assert.doesNotMatch(errorMsg, /Did you mean/);
+      }
+    });
+
+    it("should not suggest hidden: true commands", () => {
+      const parser = or(
+        command("secret", object({}), { hidden: true }),
+        command("public", object({})),
+      );
+      const context: ParserContext<typeof parser.initialState> = {
+        buffer: ["secert"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const errorMsg = formatMessage(result.error, {
+          quotes: false,
+          colors: false,
+        });
+        assert.doesNotMatch(errorMsg, /secret/);
+        assert.doesNotMatch(errorMsg, /Did you mean/);
+      }
+    });
+
+    it("should still suggest hidden: 'help' options", () => {
+      const parser = or(
+        option("--secret", string(), { hidden: "help" }),
+        option("--verbose", string()),
+      );
+      const context: ParserContext<typeof parser.initialState> = {
+        buffer: ["--secert"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const errorMsg = formatMessage(result.error, {
+          quotes: false,
+          colors: false,
+        });
+        assert.match(errorMsg, /Did you mean/);
+        assert.match(errorMsg, /--secret/);
+      }
+    });
+
+    it("should still suggest hidden: 'usage' commands", () => {
+      const parser = or(
+        command("secret", object({}), { hidden: "usage" }),
+        command("public", object({})),
+      );
+      const context: ParserContext<typeof parser.initialState> = {
+        buffer: ["secert"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const errorMsg = formatMessage(result.error, {
+          quotes: false,
+          colors: false,
+        });
+        assert.match(errorMsg, /Did you mean/);
+        assert.match(errorMsg, /secret/);
+      }
+    });
+
+    it("should not suggest hidden: true commands via longestMatch()", () => {
+      const parser = longestMatch(
+        command("secret", object({}), { hidden: true }),
+        command("public", object({})),
+      );
+      const context: ParserContext<typeof parser.initialState> = {
+        buffer: ["secert"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const errorMsg = formatMessage(result.error, {
+          quotes: false,
+          colors: false,
+        });
+        assert.doesNotMatch(errorMsg, /secret/);
+        assert.doesNotMatch(errorMsg, /Did you mean/);
+      }
+    });
+  });
+
   describe("complex scenarios", () => {
     it("should suggest both options and commands", () => {
       const addCmd = command("add", object({}));

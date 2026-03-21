@@ -173,6 +173,11 @@ To be released.
     `https`, `ftp`, `ws`, `wss`, `file`) as defined by the WHATWG URL Standard.
     [[#342], [#678]]
 
+ -  Fixed `hidden: true` commands and options leaking through “Did you
+    mean?” typo suggestions.  The `collectLeadingCandidates()` function
+    now respects `isSuggestionHidden()` when collecting candidates.
+    [[#516], [#690]]
+
  -  Extended `hidden` visibility controls from `boolean` to
     `boolean | "usage" | "doc" | "help"` across primitive parsers:
     `option()`, `flag()`, `argument()`, `command()`, and `passThrough()`.
@@ -834,6 +839,7 @@ To be released.
 [#508]: https://github.com/dahlia/optique/issues/508
 [#512]: https://github.com/dahlia/optique/pull/512
 [#513]: https://github.com/dahlia/optique/issues/513
+[#516]: https://github.com/dahlia/optique/issues/516
 [#520]: https://github.com/dahlia/optique/pull/520
 [#522]: https://github.com/dahlia/optique/pull/522
 [#523]: https://github.com/dahlia/optique/pull/523
@@ -927,6 +933,7 @@ To be released.
 [#686]: https://github.com/dahlia/optique/pull/686
 [#687]: https://github.com/dahlia/optique/pull/687
 [#689]: https://github.com/dahlia/optique/pull/689
+[#690]: https://github.com/dahlia/optique/pull/690
 
 ### @optique/config
 
