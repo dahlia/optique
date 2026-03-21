@@ -377,8 +377,8 @@ export function formatDocPage(
   //  - Entries with a description column need enough space for term +
   //    gap + description, plus any showDefault/showChoices prefixes.
   //  - Bare-term entries need termIndent + 1 (just 1 term char).
-  //  - "Usage: " label is 7 chars wide, so maxWidth >= 8.
-  //  - Examples/Author/Bugs sections indent content by 2, so maxWidth >= 3.
+  //  - "Usage: " + programName + " " → maxWidth >= 8 + programName.length.
+  //  - Examples:/Author:/Bugs: labels are 9/7/5 chars on their own lines.
   if (options.maxWidth != null) {
     const hasEntries = page.sections.some((s) => s.entries.length > 0);
     const hasContent = (msg: unknown): msg is readonly unknown[] =>

@@ -1974,7 +1974,10 @@ describe("formatDocPage", () => {
             maxWidth: 6,
             showDefault: true,
           }),
-        { name: "RangeError" },
+        {
+          name: "RangeError",
+          message: "maxWidth must be at least 7, got 6.",
+        },
       );
       const choicesPage: DocPage = {
         sections: [{
@@ -1991,7 +1994,10 @@ describe("formatDocPage", () => {
             maxWidth: 6,
             showChoices: true,
           }),
-        { name: "RangeError" },
+        {
+          name: "RangeError",
+          message: "maxWidth must be at least 25, got 6.",
+        },
       );
     });
 
