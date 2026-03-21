@@ -174,9 +174,8 @@ To be released.
     [[#342], [#678]]
 
  -  Fixed `hidden: true` commands and options leaking through “Did you
-    mean?” typo suggestions.  The `collectLeadingCandidates()` function
-    now respects `isSuggestionHidden()` when collecting candidates.
-    [[#516], [#690]]
+    mean?” typo suggestions.  Fully hidden terms are now excluded from
+    typo-suggestion candidates.  [[#516], [#690]]
 
  -  Extended `hidden` visibility controls from `boolean` to
     `boolean | "usage" | "doc" | "help"` across primitive parsers:
