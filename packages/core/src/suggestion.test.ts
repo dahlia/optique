@@ -837,7 +837,7 @@ describe("property-based tests", () => {
                 s.includeHidden === true,
             );
             if (anyHidden) {
-              assert.equal(suggestion.includeHidden, true);
+              assert.ok(suggestion.includeHidden);
             }
           }
         },
