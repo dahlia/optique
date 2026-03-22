@@ -77,6 +77,11 @@ const age = zod(z.coerce.number().int().min(0));
 const num = zod(z.number());  // [!code error]
 ~~~~
 
+> [!NOTE]
+> `z.coerce.boolean()` is handled specially: instead of JavaScript truthiness
+> semantics, Optique accepts CLI-friendly literals (`true`/`false`, `1`/`0`,
+> `yes`/`no`, `on`/`off`, case-insensitive).
+
 
 Transformations
 ---------------

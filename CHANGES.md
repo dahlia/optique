@@ -1705,6 +1705,14 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     A new `format` option in `ZodParserOptions` allows custom formatting.
     [[#285], [#706]]
 
+ -  `zod()` now uses CLI-friendly Boolean parsing for `z.boolean()` and
+    `z.coerce.boolean()` schemas instead of JavaScript truthiness semantics.
+    Accepted literals (case-insensitive): `true`/`false`, `1`/`0`, `yes`/`no`,
+    `on`/`off`.  Boolean schemas also expose `choices` and `suggest()` for
+    shell completion.  [[#295]]
+
+[#295]: https://github.com/dahlia/optique/issues/295
+
 
 Version 0.10.7
 --------------
