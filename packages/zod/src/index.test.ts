@@ -384,6 +384,16 @@ describe("zod()", () => {
       assert.equal(parser.format(["a", "b", "c"]), "a,b,c");
     });
 
+    it("should format arrays of objects as JSON", () => {
+      const parser = zod(
+        z.string().transform((s) => s.split(",").map((x) => ({ v: x }))),
+      );
+      assert.equal(
+        parser.format([{ v: "a" }, { v: "b" }]),
+        '[{"v":"a"},{"v":"b"}]',
+      );
+    });
+
     it("should not throw for non-JSON-serializable objects", () => {
       const parser = zod(
         z.string().transform((s) => ({ id: BigInt(s) })),
