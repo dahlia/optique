@@ -358,12 +358,84 @@ describe("zod()", () => {
       assert.equal(parser.format(false), "false");
     });
 
-    it("should format date values", () => {
+    it("should format date values as ISO strings", () => {
       const parser = zod(z.string().transform((s) => new Date(s)));
-      // Use a mid-year date so that local-time rendering cannot roll the year backward in any timezone.
       const date = new Date("2025-06-15T00:00:00.000Z");
-      const formatted = parser.format(date);
-      assert.ok(formatted.includes("2025"));
+      assert.equal(parser.format(date), "2025-06-15T00:00:00.000Z");
+    });
+
+    it("should not throw for invalid date values", () => {
+      const parser = zod(z.string().transform((s) => new Date(s)));
+      const invalid = new Date("bad");
+      assert.equal(parser.format(invalid), "Invalid Date");
+    });
+
+    it("should format object values as JSON", () => {
+      const parser = zod(
+        z.string().transform((s) => ({ raw: s })),
+      );
+      assert.equal(parser.format({ raw: "hello" }), '{"raw":"hello"}');
+    });
+
+    it("should format array values as comma-separated string", () => {
+      const parser = zod(
+        z.string().transform((s) => s.split(",")),
+      );
+      assert.equal(parser.format(["a", "b", "c"]), "a,b,c");
+    });
+
+    it("should preserve array formatting even with [object Object] element", () => {
+      const parser = zod(
+        z.string().transform((s) => s.split(",")),
+      );
+      assert.equal(
+        parser.format(["a", "[object Object]", "c"]),
+        "a,[object Object],c",
+      );
+    });
+
+    it("should format arrays of objects via String()", () => {
+      const parser = zod(
+        z.string().transform((s) => s.split(",").map((x) => ({ v: x }))),
+      );
+      assert.equal(
+        parser.format([{ v: "a" }, { v: "b" }]),
+        "[object Object],[object Object]",
+      );
+    });
+
+    it("should not throw for non-JSON-serializable objects", () => {
+      const parser = zod(
+        z.string().transform((s) => ({ id: BigInt(s) })),
+      );
+      assert.equal(parser.format({ id: 1n }), "[object Object]");
+    });
+
+    it("should not throw for cyclic objects", () => {
+      const parser = zod(
+        z.string().transform((s) => ({ raw: s })),
+      );
+      const cyclic: { raw: string; self?: unknown } = { raw: "hello" };
+      cyclic.self = cyclic;
+      assert.equal(parser.format(cyclic), "[object Object]");
+    });
+
+    it("should handle objects with toJSON returning undefined", () => {
+      const parser = zod(
+        z.string().transform(() => ({ toJSON: () => undefined })),
+      );
+      assert.equal(
+        parser.format({ toJSON: () => undefined }),
+        "[object Object]",
+      );
+    });
+
+    it("should use custom format function from options", () => {
+      const parser = zod(
+        z.string().transform((s) => ({ raw: s })),
+        { format: (v) => v.raw },
+      );
+      assert.equal(parser.format({ raw: "hello" }), "hello");
     });
   });
 

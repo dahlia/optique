@@ -1661,12 +1661,21 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     async validations were silently skipped by the synchronous `safeParse()`
     call.  [[#462], [#701]]
 
+ -  `valibot()` now formats transformed non-primitive values intelligently
+    instead of producing `[object Object]`.  `Date` values use `.toISOString()`
+    for stable output.  Plain objects use `JSON.stringify()`, while arrays
+    use `String()` to preserve round-trip compatibility for common transforms.
+    A new `format` option in `ValibotParserOptions` allows custom formatting.
+    [[#285], [#706]]
+
 [#281]: https://github.com/dahlia/optique/issues/281
+[#285]: https://github.com/dahlia/optique/issues/285
 [#460]: https://github.com/dahlia/optique/issues/460
 [#462]: https://github.com/dahlia/optique/issues/462
 [#688]: https://github.com/dahlia/optique/pull/688
 [#691]: https://github.com/dahlia/optique/pull/691
 [#701]: https://github.com/dahlia/optique/pull/701
+[#706]: https://github.com/dahlia/optique/pull/706
 
 ### @optique/zod
 
@@ -1688,6 +1697,13 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
  -  `zod()` now throws a `TypeError` when an async Zod schema (e.g., async
     refinements) is used.  Previously, the raw Zod error was propagated
     unhandled.  [[#462], [#701]]
+
+ -  `zod()` now formats transformed non-primitive values intelligently
+    instead of producing `[object Object]`.  `Date` values use `.toISOString()`
+    for stable output.  Plain objects use `JSON.stringify()`, while arrays
+    use `String()` to preserve round-trip compatibility for common transforms.
+    A new `format` option in `ZodParserOptions` allows custom formatting.
+    [[#285], [#706]]
 
 
 Version 0.10.7
