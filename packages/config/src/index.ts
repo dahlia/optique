@@ -321,9 +321,17 @@ function createSanitizedNonPlainView<T extends object>(
           break;
         }
       }
-      // Use the proxy's receiver for Reflect.get so that accessor-returned
-      // callbacks bound to `this` remain bound to the sanitizing proxy.
-      const result = Reflect.get(target, key, receiver);
+      const result = callMethodOnSanitizedTarget(
+        {
+          apply: (thisArg: unknown) =>
+            Reflect.get(target, key, thisArg ?? target),
+        },
+        receiver,
+        target,
+        [],
+        stripDeferredPromptValues,
+        seen,
+      );
       if (typeof result === "function") {
         if (/^class[\s{]/.test(Function.prototype.toString.call(result))) {
           return result;
@@ -481,21 +489,27 @@ function stripDeferredPromptValues<T>(
     }
     if ("value" in descriptor) {
       const fnVal = descriptor.value;
-      const fnProto = typeof fnVal === "function"
-        ? (fnVal as { prototype?: unknown }).prototype
-        : undefined;
-      const isBoundOrConstructable = typeof fnVal === "function" &&
-        ((fnProto != null && typeof fnProto === "object") ||
+      const isClassOrBound = typeof fnVal === "function" &&
+        (/^class[\s{]/.test(Function.prototype.toString.call(fnVal)) ||
           fnVal.name.startsWith("bound "));
-      if (typeof fnVal === "function" && !isBoundOrConstructable) {
+      if (typeof fnVal === "function" && !isClassOrBound) {
         // See: https://github.com/dahlia/optique/issues/407
         const fn = descriptor.value as {
           apply(thisArg: unknown, args: unknown[]): unknown;
         };
-        descriptor.value = function (
+        const wrapper = function (
           this: unknown,
           ...args: unknown[]
         ) {
+          if (new.target) {
+            return Reflect.construct(
+              fn as (...a: unknown[]) => unknown,
+              args,
+              new.target === wrapper
+                ? fn as (...a: unknown[]) => unknown
+                : new.target,
+            );
+          }
           const result = fn.apply(this, args);
           if (result instanceof Promise) {
             return (result as Promise<unknown>).then(
@@ -504,6 +518,14 @@ function stripDeferredPromptValues<T>(
           }
           return sanitizeReturnForPhaseTwo(result, seen);
         };
+        for (const fk of Reflect.ownKeys(fn as object)) {
+          const fd = Object.getOwnPropertyDescriptor(fn, fk);
+          if (fd == null) continue;
+          try {
+            Object.defineProperty(wrapper, fk, fd);
+          } catch { /* best-effort */ }
+        }
+        descriptor.value = wrapper;
       } else {
         descriptor.value = stripDeferredPromptValues(
           descriptor.value,

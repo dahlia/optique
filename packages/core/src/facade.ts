@@ -151,6 +151,7 @@ function createMapCloneLike(
 function stripPlaceholderValues<T>(
   value: T,
   seen = new WeakMap<object, unknown>(),
+  alwaysProxyNonPlain = false,
 ): T {
   if (isPlaceholderValue(value)) {
     return undefined as T;
@@ -163,46 +164,48 @@ function stripPlaceholderValues<T>(
     return cached as T;
   }
   if (Array.isArray(value)) {
-    if (!containsPlaceholderValues(value)) {
+    if (!alwaysProxyNonPlain && !containsPlaceholderValues(value)) {
       return value;
     }
     const clone = createArrayCloneLike(value);
     seen.set(value, clone);
     for (let i = 0; i < value.length; i++) {
-      clone[i] = stripPlaceholderValues(value[i], seen);
+      clone[i] = stripPlaceholderValues(value[i], seen, alwaysProxyNonPlain);
     }
     copySanitizedOwnProperties(value, clone, seen);
     return clone as T;
   }
   if (value instanceof Set) {
-    if (!containsPlaceholderValues(value)) {
+    if (!alwaysProxyNonPlain && !containsPlaceholderValues(value)) {
       return value;
     }
     const clone = createSetCloneLike(value);
     seen.set(value, clone);
     for (const entryValue of value) {
-      clone.add(stripPlaceholderValues(entryValue, seen));
+      clone.add(
+        stripPlaceholderValues(entryValue, seen, alwaysProxyNonPlain),
+      );
     }
     copySanitizedOwnProperties(value, clone, seen);
     return clone as T;
   }
   if (value instanceof Map) {
-    if (!containsPlaceholderValues(value)) {
+    if (!alwaysProxyNonPlain && !containsPlaceholderValues(value)) {
       return value;
     }
     const clone = createMapCloneLike(value);
     seen.set(value, clone);
     for (const [key, entryValue] of value) {
       clone.set(
-        stripPlaceholderValues(key, seen),
-        stripPlaceholderValues(entryValue, seen),
+        stripPlaceholderValues(key, seen, alwaysProxyNonPlain),
+        stripPlaceholderValues(entryValue, seen, alwaysProxyNonPlain),
       );
     }
     copySanitizedOwnProperties(value, clone, seen);
     return clone as T;
   }
   if (!isPlainObject(value)) {
-    if (!containsPlaceholderValues(value)) {
+    if (!alwaysProxyNonPlain && !containsPlaceholderValues(value)) {
       return value;
     }
     return createSanitizedNonPlainView(value, seen) as T;
@@ -221,28 +224,33 @@ function stripPlaceholderValues<T>(
       continue;
     }
     if ("value" in descriptor) {
-      // Constructable functions (classes, traditional constructors, and
-      // bound constructors) are left unwrapped to preserve static-method
-      // `this` binding, private static field access, and constructor
-      // identity.  Non-constructable functions (arrow functions, method
-      // shorthand) are wrapped so that closures capturing placeholder
+      // Class constructors and bound functions are left unwrapped to
+      // preserve static-method `this` binding and constructor identity.
+      // All other functions (including function expressions with
+      // `.prototype`) are wrapped so that closures capturing placeholder
       // values have their return values sanitized.
       // See: https://github.com/dahlia/optique/issues/407
       const fnVal = descriptor.value;
-      const fnProto = typeof fnVal === "function"
-        ? (fnVal as { prototype?: unknown }).prototype
-        : undefined;
-      const isBoundOrConstructable = typeof fnVal === "function" &&
-        ((fnProto != null && typeof fnProto === "object") ||
+      const isClassOrBound = typeof fnVal === "function" &&
+        (/^class[\s{]/.test(Function.prototype.toString.call(fnVal)) ||
           fnVal.name.startsWith("bound "));
-      if (typeof fnVal === "function" && !isBoundOrConstructable) {
+      if (typeof fnVal === "function" && !isClassOrBound) {
         const fn = descriptor.value as {
           apply(thisArg: unknown, args: unknown[]): unknown;
         };
-        descriptor.value = function (
+        const wrapper = function (
           this: unknown,
           ...args: unknown[]
         ) {
+          if (new.target) {
+            return Reflect.construct(
+              fn as (...a: unknown[]) => unknown,
+              args,
+              new.target === wrapper
+                ? fn as (...a: unknown[]) => unknown
+                : new.target,
+            );
+          }
           const result = fn.apply(this, args);
           if (result instanceof Promise) {
             return (result as Promise<unknown>).then(
@@ -251,6 +259,16 @@ function stripPlaceholderValues<T>(
           }
           return sanitizeForPhaseTwo(result, seen);
         };
+        // Copy own properties (.prototype, .name, .length, statics)
+        // from the original so instanceof and identity checks work.
+        for (const fk of Reflect.ownKeys(fn as object)) {
+          const fd = Object.getOwnPropertyDescriptor(fn, fk);
+          if (fd == null) continue;
+          try {
+            Object.defineProperty(wrapper, fk, fd);
+          } catch { /* best-effort */ }
+        }
+        descriptor.value = wrapper;
       } else {
         descriptor.value = stripPlaceholderValues(
           descriptor.value,
@@ -514,12 +532,22 @@ function createSanitizedNonPlainView<T extends object>(
       // The synthetic function uses `thisArg` as the Reflect.get receiver:
       //  - Normal path: target (with own properties temporarily sanitized)
       //  - Frozen/sealed fallback: the caller's receiver, preserving
-      // Use the proxy's receiver for Reflect.get so that accessor-returned
-      // callbacks bound to `this` remain bound to the sanitizing proxy
-      // rather than the raw target.  Private field access in getters will
-      // throw TypeError with this receiver (a known limitation; use methods
-      // via callMethodOnSanitizedTarget instead for private field access).
-      const result = Reflect.get(target, key, receiver);
+      // Invoke the getter via callMethodOnSanitizedTarget so that own
+      // properties are temporarily sanitized and the getter runs with the
+      // real target as receiver (allowing private field access).  The
+      // frozen/sealed fallback uses the caller's receiver to preserve
+      // standard Reflect.get semantics.
+      const result = callMethodOnSanitizedTarget(
+        {
+          apply: (thisArg: unknown) =>
+            Reflect.get(target, key, thisArg ?? target),
+        },
+        receiver,
+        target,
+        [],
+        stripPlaceholderValues,
+        seen,
+      );
       if (typeof result === "function") {
         // Class constructors are returned unwrapped since the wrapper
         // would break new.target and prototype chain semantics.
@@ -616,7 +644,7 @@ function sanitizeForPhaseTwo(
   ) {
     return createSanitizedNonPlainView(value, seen);
   }
-  return stripPlaceholderValues(value, seen);
+  return stripPlaceholderValues(value, seen, true);
 }
 
 function prepareParsedForContexts(
@@ -635,10 +663,29 @@ function prepareParsedForContexts(
     parsed instanceof Set ||
     parsed instanceof Map
   ) {
-    if (!containsPlaceholderValues(parsed)) {
+    // Check if the collection contains any non-plain object elements that
+    // might hide placeholders in private fields.  If so, force-proxy all
+    // nested non-plain objects.  Otherwise, use the normal fast path that
+    // preserves identity for clean collections.
+    const entries = Array.isArray(parsed)
+      ? parsed
+      : parsed instanceof Set
+      ? [...parsed]
+      : [...parsed.values()];
+    const hasNonPlainElements = entries.some(
+      (item) =>
+        item != null &&
+        typeof item === "object" &&
+        !isPlainObject(item as object),
+    );
+    if (!hasNonPlainElements && !containsPlaceholderValues(parsed)) {
       return parsed;
     }
-    return stripPlaceholderValues(parsed);
+    return stripPlaceholderValues(
+      parsed,
+      new WeakMap(),
+      hasNonPlainElements,
+    );
   }
 
   if (isPlainObject(parsed)) {
@@ -657,13 +704,17 @@ function prepareParsedForContexts(
         desc == null || !("value" in desc) ||
         typeof desc.value !== "function"
       ) return false;
-      const proto = (desc.value as { prototype?: unknown }).prototype;
-      return proto == null || typeof proto !== "object";
+      // Only class constructors and bound functions are non-wrappable.
+      return !(
+        /^class[\s{]/.test(
+          Function.prototype.toString.call(desc.value),
+        ) || desc.value.name.startsWith("bound ")
+      );
     });
     if (!hasWrappableFunctions && !containsPlaceholderValues(parsed)) {
       return parsed;
     }
-    return stripPlaceholderValues(parsed);
+    return stripPlaceholderValues(parsed, new WeakMap(), true);
   }
 
   // Always create the sanitized proxy view for non-plain objects, even when
