@@ -1,5 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { mkdtemp } from "node:fs/promises";
 import { parse, suggestSync } from "@optique/core/parser";
 import { object } from "@optique/core/constructs";
 import { runParser } from "@optique/core/facade";
@@ -690,10 +693,10 @@ describe("createSink()", () => {
   });
 
   it("should create file sink for file output", async () => {
-    const path = `${import.meta.dirname}/../../../tmp/test-sink.log`;
+    const dir = await mkdtemp(join(tmpdir(), "optique-test-"));
     const sink = await createSink({
       type: "file",
-      path,
+      path: join(dir, "test-sink.log"),
     });
     assert.equal(typeof sink, "function");
   });
