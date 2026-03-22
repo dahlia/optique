@@ -321,21 +321,9 @@ function createSanitizedNonPlainView<T extends object>(
           break;
         }
       }
-      // Invoke the getter on the real target with temporarily sanitized
-      // own properties via callMethodOnSanitizedTarget().  This ensures
-      // computed getters read sanitized public fields while still being
-      // able to access private fields.
-      const result = callMethodOnSanitizedTarget(
-        {
-          apply: (thisArg: unknown) =>
-            Reflect.get(target, key, thisArg ?? target),
-        },
-        receiver,
-        target,
-        [],
-        stripDeferredPromptValues,
-        seen,
-      );
+      // Use the proxy's receiver for Reflect.get so that accessor-returned
+      // callbacks bound to `this` remain bound to the sanitizing proxy.
+      const result = Reflect.get(target, key, receiver);
       if (typeof result === "function") {
         if (/^class[\s{]/.test(Function.prototype.toString.call(result))) {
           return result;
@@ -492,11 +480,14 @@ function stripDeferredPromptValues<T>(
       continue;
     }
     if ("value" in descriptor) {
-      const fnProto = typeof descriptor.value === "function"
-        ? (descriptor.value as { prototype?: unknown }).prototype
+      const fnVal = descriptor.value;
+      const fnProto = typeof fnVal === "function"
+        ? (fnVal as { prototype?: unknown }).prototype
         : undefined;
-      const isConstructable = fnProto != null && typeof fnProto === "object";
-      if (typeof descriptor.value === "function" && !isConstructable) {
+      const isBoundOrConstructable = typeof fnVal === "function" &&
+        ((fnProto != null && typeof fnProto === "object") ||
+          fnVal.name.startsWith("bound "));
+      if (typeof fnVal === "function" && !isBoundOrConstructable) {
         // See: https://github.com/dahlia/optique/issues/407
         const fn = descriptor.value as {
           apply(thisArg: unknown, args: unknown[]): unknown;
