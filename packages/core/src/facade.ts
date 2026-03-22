@@ -224,17 +224,20 @@ function stripPlaceholderValues<T>(
       continue;
     }
     if ("value" in descriptor) {
-      // Class constructors and bound functions are left unwrapped to
-      // preserve static-method `this` binding and constructor identity.
-      // All other functions (including function expressions with
-      // `.prototype`) are wrapped so that closures capturing placeholder
-      // values have their return values sanitized.
+      // Constructable functions (classes, traditional constructors, bound
+      // constructors) are left unwrapped to preserve static-method `this`
+      // binding and constructor identity.  Non-constructable functions
+      // (arrow functions, method shorthand) are wrapped so that closures
+      // capturing placeholder values have their return values sanitized.
       // See: https://github.com/dahlia/optique/issues/407
       const fnVal = descriptor.value;
-      const isClassOrBound = typeof fnVal === "function" &&
-        (/^class[\s{]/.test(Function.prototype.toString.call(fnVal)) ||
+      const fnProto = typeof fnVal === "function"
+        ? (fnVal as { prototype?: unknown }).prototype
+        : undefined;
+      const isConstructable = typeof fnVal === "function" &&
+        ((fnProto != null && typeof fnProto === "object") ||
           fnVal.name.startsWith("bound "));
-      if (typeof fnVal === "function" && !isClassOrBound) {
+      if (typeof fnVal === "function" && !isConstructable) {
         const fn = descriptor.value as {
           apply(thisArg: unknown, args: unknown[]): unknown;
         };
@@ -646,18 +649,29 @@ function sanitizeForPhaseTwo(
   ) {
     return createSanitizedNonPlainView(value, seen);
   }
-  // For collections, recursively sanitize each element so that nested
-  // non-plain objects are proxied even when containsPlaceholderValues()
-  // cannot detect their hidden placeholders.
+  // For collections, only clone when they contain visible placeholders
+  // or non-plain elements that might hide them.  Clean collections
+  // preserve identity so methods like `getItems() { return this.items }`
+  // maintain `parsed.getItems() === parsed.items`.
   if (Array.isArray(value)) {
+    const hasNonPlain = value.some(
+      (item) =>
+        item != null && typeof item === "object" &&
+        !isPlainObject(item as object),
+    );
+    if (!hasNonPlain && !containsPlaceholderValues(value)) {
+      return value;
+    }
     const clone = createArrayCloneLike(value);
     seen.set(value, clone);
     for (let i = 0; i < value.length; i++) {
       clone[i] = sanitizeForPhaseTwo(value[i], seen);
     }
+    copySanitizedOwnProperties(value, clone, seen);
     return clone;
   }
   if (value instanceof Set) {
+    if (!containsPlaceholderValues(value)) return value;
     const clone = createSetCloneLike(value);
     seen.set(value, clone);
     for (const item of value) {
@@ -666,6 +680,7 @@ function sanitizeForPhaseTwo(
     return clone;
   }
   if (value instanceof Map) {
+    if (!containsPlaceholderValues(value)) return value;
     const clone = createMapCloneLike(value);
     seen.set(value, clone);
     for (const [k, v] of value) {
@@ -726,6 +741,7 @@ function prepareParsedForContexts(
           ? createSanitizedNonPlainView(item as object, seen)
           : item;
       }
+      copySanitizedOwnProperties(parsed, clone, seen);
       return clone as typeof parsed;
     }
     return stripPlaceholderValues(

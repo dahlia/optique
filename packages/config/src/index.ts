@@ -411,6 +411,46 @@ function sanitizeReturnForPhaseTwo(
   ) {
     return createSanitizedNonPlainView(value, seen);
   }
+  // Recurse into collections so nested non-plain objects are proxied.
+  if (Array.isArray(value)) {
+    if (
+      !containsPlaceholderValues(value) && !value.some(
+        (item) =>
+          item != null && typeof item === "object" &&
+          !isPlainObject(item as object),
+      )
+    ) {
+      return value;
+    }
+    const clone: unknown[] = new Array(value.length);
+    seen.set(value, clone);
+    for (let i = 0; i < value.length; i++) {
+      clone[i] = sanitizeReturnForPhaseTwo(value[i], seen);
+    }
+    copySanitizedOwnProperties(value, clone, seen);
+    return clone;
+  }
+  if (value instanceof Set) {
+    if (!containsPlaceholderValues(value)) return value;
+    const clone = new Set<unknown>();
+    seen.set(value, clone);
+    for (const item of value) {
+      clone.add(sanitizeReturnForPhaseTwo(item, seen));
+    }
+    return clone;
+  }
+  if (value instanceof Map) {
+    if (!containsPlaceholderValues(value)) return value;
+    const clone = new Map<unknown, unknown>();
+    seen.set(value, clone);
+    for (const [k, v] of value) {
+      clone.set(
+        sanitizeReturnForPhaseTwo(k, seen),
+        sanitizeReturnForPhaseTwo(v, seen),
+      );
+    }
+    return clone;
+  }
   return stripDeferredPromptValues(value, seen);
 }
 
@@ -489,10 +529,13 @@ function stripDeferredPromptValues<T>(
     }
     if ("value" in descriptor) {
       const fnVal = descriptor.value;
-      const isClassOrBound = typeof fnVal === "function" &&
-        (/^class[\s{]/.test(Function.prototype.toString.call(fnVal)) ||
+      const fnProto = typeof fnVal === "function"
+        ? (fnVal as { prototype?: unknown }).prototype
+        : undefined;
+      const isConstructable = typeof fnVal === "function" &&
+        ((fnProto != null && typeof fnProto === "object") ||
           fnVal.name.startsWith("bound "));
-      if (typeof fnVal === "function" && !isClassOrBound) {
+      if (typeof fnVal === "function" && !isConstructable) {
         // See: https://github.com/dahlia/optique/issues/407
         const fn = descriptor.value as {
           apply(thisArg: unknown, args: unknown[]): unknown;
