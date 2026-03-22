@@ -243,13 +243,20 @@ function stripPlaceholderValues<T>(
           }
           return stripPlaceholderValues(result, seen);
         };
-        // Preserve the prototype so `instanceof` works through the
-        // wrapper.
-        Object.defineProperty(descriptor.value, "prototype", {
-          value: fn.prototype,
-          writable: true,
-          configurable: false,
-        });
+        // Copy own properties (static members, .name, .length, .prototype)
+        // from the original function to the wrapper so that callers
+        // inspecting static fields, .name, or .length see the original
+        // values, and instanceof works through the wrapper.
+        for (const fk of Reflect.ownKeys(fn)) {
+          const fd = Object.getOwnPropertyDescriptor(fn, fk);
+          if (fd == null) continue;
+          try {
+            Object.defineProperty(descriptor.value, fk, fd);
+          } catch {
+            // Some built-in function properties (e.g. arguments, caller)
+            // may not be configurable on the wrapper; best-effort copy.
+          }
+        }
       } else {
         descriptor.value = stripPlaceholderValues(
           descriptor.value,
@@ -505,18 +512,19 @@ function createSanitizedNonPlainView<T extends object>(
           break;
         }
       }
-      // Try with the proxy as receiver first so that computed getters
-      // (e.g. `get hasSecret() { return this.secret != null }`) read
-      // sanitized public properties through the proxy's get trap.  If
-      // the getter accesses private fields, the proxy receiver causes a
-      // TypeError — fall back to the real target as receiver so the
-      // getter can access private fields directly.
-      let result: unknown;
-      try {
-        result = Reflect.get(target, key, proxy);
-      } catch {
-        result = Reflect.get(target, key, target);
-      }
+      // Invoke the getter on the real target with temporarily sanitized
+      // own properties via callMethodOnSanitizedTarget().  This ensures
+      // computed getters (e.g. `get hasSecret() { return this.secret != null }`)
+      // read sanitized public fields while still being able to access
+      // private fields (which require the real instance as `this`).
+      const result = callMethodOnSanitizedTarget(
+        { apply: (_: unknown) => Reflect.get(target, key, target) },
+        proxy,
+        target,
+        [],
+        stripPlaceholderValues,
+        seen,
+      );
       if (typeof result === "function") {
         // Class constructors are returned unwrapped since the wrapper
         // would break new.target and prototype chain semantics.

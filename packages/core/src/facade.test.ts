@@ -10483,6 +10483,100 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.ok(!observedHasSecret);
   });
 
+  it("getter accessing both public placeholder and private field sees sanitized state", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/407
+    // A getter like `get isReady() { return this.secret != null || this.#token != null }`
+    // must read sanitized public fields (secret → undefined) and still access
+    // private fields (#token) — all in a single invocation without retry.
+    class MixedAccess {
+      secret: unknown;
+      #token: string;
+      constructor(secret: unknown, token: string) {
+        this.secret = secret;
+        this.#token = token;
+      }
+      get isReady(): boolean {
+        return this.secret != null || this.#token != null;
+      }
+    }
+
+    let observedIsReady: boolean | undefined;
+
+    const contextKey = Symbol.for("@test/mixed-getter");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        observedIsReady = (parsed as MixedAccess).isReady;
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (_value) => new MixedAccess({ [testPlaceholderKey]: true }, "real-token"),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    // secret is a placeholder → sanitized to undefined → (undefined != null) is false.
+    // #token is "real-token" → (#token != null) is true.
+    // So isReady should be true (false || true).
+    assert.ok(observedIsReady);
+  });
+
+  it("constructor wrapper preserves static members", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/407
+    // When a constructor function on a sanitized plain object is wrapped,
+    // its static members (.name, .length, own static fields) must be
+    // preserved on the wrapper.
+    class Ctor {
+      static defaultValue = "default";
+      value: string;
+      constructor(value: string) {
+        this.value = value;
+      }
+    }
+
+    let observedName: string | undefined;
+    let observedDefault: string | undefined;
+
+    const contextKey = Symbol.for("@test/static-members");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        const p = parsed as { Ctor: typeof Ctor };
+        observedName = p.Ctor.name;
+        observedDefault = p.Ctor.defaultValue;
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (_value) => ({
+        Ctor,
+        deferred: { [testPlaceholderKey]: true },
+      }),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.equal(observedName, "Ctor");
+    assert.equal(observedDefault, "default");
+  });
+
   it("frozen object with accessor-backed placeholder is sanitized", async () => {
     // Regression test for https://github.com/dahlia/optique/issues/407
     // Frozen/sealed objects with accessor properties must have their getter

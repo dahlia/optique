@@ -321,16 +321,18 @@ function createSanitizedNonPlainView<T extends object>(
           break;
         }
       }
-      // Try with the proxy as receiver first so that computed getters
-      // read sanitized public properties through the proxy's get trap.
-      // If the getter accesses private fields, the proxy receiver causes
-      // a TypeError — fall back to the real target as receiver.
-      let result: unknown;
-      try {
-        result = Reflect.get(target, key, proxy);
-      } catch {
-        result = Reflect.get(target, key, target);
-      }
+      // Invoke the getter on the real target with temporarily sanitized
+      // own properties via callMethodOnSanitizedTarget().  This ensures
+      // computed getters read sanitized public fields while still being
+      // able to access private fields.
+      const result = callMethodOnSanitizedTarget(
+        { apply: (_: unknown) => Reflect.get(target, key, target) },
+        proxy,
+        target,
+        [],
+        stripDeferredPromptValues,
+        seen,
+      );
       if (typeof result === "function") {
         if (/^class[\s{]/.test(Function.prototype.toString.call(result))) {
           return result;
@@ -492,11 +494,15 @@ function stripDeferredPromptValues<T>(
           }
           return stripDeferredPromptValues(result, seen);
         };
-        Object.defineProperty(descriptor.value, "prototype", {
-          value: fn.prototype,
-          writable: true,
-          configurable: false,
-        });
+        for (const fk of Reflect.ownKeys(fn)) {
+          const fd = Object.getOwnPropertyDescriptor(fn, fk);
+          if (fd == null) continue;
+          try {
+            Object.defineProperty(descriptor.value, fk, fd);
+          } catch {
+            // Best-effort copy for non-configurable built-in properties.
+          }
+        }
       } else {
         descriptor.value = stripDeferredPromptValues(
           descriptor.value,
