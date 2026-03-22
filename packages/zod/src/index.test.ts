@@ -1119,17 +1119,51 @@ describe("zod()", () => {
       assert.ok(!invalid.success);
     });
 
-    it("should not run refinements for rejected boolean literals", () => {
-      let refineCalled = false;
+    it("should not pass invalid raw input to refinements", () => {
+      const refineArgs: unknown[] = [];
       const parser = zod(
         z.coerce.boolean().refine((v) => {
-          refineCalled = true;
+          refineArgs.push(v);
           return v === true;
         }),
       );
-      refineCalled = false;
+      refineArgs.length = 0;
       parser.parse("maybe");
-      assert.ok(!refineCalled);
+      // The lazy async probe runs safeParse(true) once; the raw
+      // invalid literal is never passed to the schema.
+      assert.deepEqual(refineArgs, [true]);
+
+      // Subsequent invalid inputs reuse the cached check.
+      parser.parse("nope");
+      assert.deepEqual(refineArgs, [true]);
+    });
+
+    it("should let z.boolean().catch() handle invalid literals", () => {
+      const parser = zod(z.boolean().catch(false));
+      const result = parser.parse("maybe");
+      assert.ok(result.success);
+      assert.equal(result.value, false);
+    });
+
+    it("should throw TypeError for Promise-returning boolean refinements", () => {
+      const promiseSchema = z.coerce.boolean().refine(
+        () => Promise.resolve(true),
+      );
+      const parser = zod(promiseSchema as never);
+      assert.throws(
+        () => parser.parse("maybe"),
+        { name: "TypeError" },
+      );
+    });
+
+    it("should throw TypeError for async boolean transforms on invalid input", () => {
+      // deno-lint-ignore require-await
+      const asyncTransform = z.coerce.boolean().transform(async (v) => !v);
+      const parser = zod(asyncTransform as never);
+      assert.throws(
+        () => parser.parse("maybe"),
+        { name: "TypeError" },
+      );
     });
   });
 
