@@ -60,6 +60,7 @@ interface ZodDefinitionInternal {
   readonly checks?: readonly ZodCheckInternal[];
   readonly innerType?: z.Schema<unknown>;
   readonly schema?: z.Schema<unknown>;
+  readonly in?: z.Schema<unknown>;
   readonly effect?: { readonly type?: string };
   readonly values?:
     | readonly (string | number | boolean | symbol | bigint)[]
@@ -147,11 +148,13 @@ function analyzeBooleanInner(
     };
   }
 
-  // optional/nullable/default preserve choice exposure
+  // Wrappers that preserve the input domain — choices stay valid
   if (
     typeName === "ZodOptional" || typeName === "optional" ||
     typeName === "ZodNullable" || typeName === "nullable" ||
-    typeName === "ZodDefault" || typeName === "default"
+    typeName === "ZodDefault" || typeName === "default" ||
+    typeName === "ZodReadonly" || typeName === "readonly" ||
+    typeName === "prefault" || typeName === "nonoptional"
   ) {
     const innerType = def.innerType;
     if (innerType != null) {
@@ -189,8 +192,25 @@ function analyzeBooleanInner(
     }
   }
 
-  // pipeline — suppress choices
-  if (typeName === "ZodPipeline" || typeName === "pipeline") {
+  // Zod v4 pipe (transform/pipe/preprocess) — check the input side.
+  // Preprocess pipes transform the raw string, so they must not be
+  // treated as boolean.  Transform/pipe schemas receive the already-
+  // parsed boolean, so the input side determines boolean detection.
+  if (typeName === "pipe" || typeName === "ZodPipeline") {
+    // Zod v4 pipe: _def.in / _def.out
+    const inSchema = def.in;
+    if (inSchema != null) {
+      return analyzeBooleanInner(inSchema, false);
+    }
+    // Zod v3 pipeline: _def.innerType
+    const innerType = def.innerType;
+    if (innerType != null) {
+      return analyzeBooleanInner(innerType, false);
+    }
+  }
+
+  // Zod v3 pipeline fallback (typeName === "pipeline")
+  if (typeName === "pipeline") {
     const innerType = def.innerType;
     if (innerType != null) {
       return analyzeBooleanInner(innerType, false);
@@ -584,6 +604,23 @@ export function zod<T>(
   const metavar = options.metavar ?? inferMetavar(schema);
   ensureNonEmptyString(metavar);
 
+  // Detect async schemas at construction time so that all parse()
+  // calls fail consistently, regardless of input.  For boolean schemas,
+  // probe with `true` which is always a valid boolean value.
+  if (boolInfo.isBoolean) {
+    try {
+      schema.safeParse(true);
+    } catch (error) {
+      if (error instanceof Error && isZodAsyncError(error)) {
+        throw new TypeError(
+          "Async Zod schemas (e.g., async refinements) are not supported " +
+            "by zod(). Use synchronous schemas instead.",
+        );
+      }
+      throw error;
+    }
+  }
+
   function doSafeParse(
     input: unknown,
     rawInput: string,
@@ -637,56 +674,31 @@ export function zod<T>(
   /**
    * Handles a failed boolean literal pre-conversion, respecting custom
    * `zodError` overrides when provided.  For function-style overrides,
-   * passes the raw input through `safeParse()` to obtain a real
-   * `ZodError`; if `safeParse()` succeeds (coerced boolean case),
-   * constructs a synthetic error with a compatible shape so the
-   * callback is always invoked.
+   * constructs a synthetic error with a compatible ZodError shape so
+   * the callback is always invoked without running user refinements.
    *
-   * Also re-throws async schema errors so that unsupported schemas are
-   * detected consistently regardless of the input value.
+   * Async schemas are detected at construction time, so this function
+   * never needs to probe `safeParse()`.
    */
   function handleBooleanLiteralError(
     boolResult: ValueParserResult<boolean>,
     rawInput: string,
   ): ValueParserResult<T> {
-    // Always probe safeParse() with the raw input so that async
-    // schema errors are detected even for invalid boolean literals.
-    // For non-coerced z.boolean(), this also provides a real ZodError
-    // for function-style zodError callbacks.
-    let probeResult;
-    try {
-      probeResult = schema.safeParse(rawInput);
-    } catch (error) {
-      if (error instanceof Error && isZodAsyncError(error)) {
-        throw new TypeError(
-          "Async Zod schemas (e.g., async refinements) are not supported " +
-            "by zod(). Use synchronous schemas instead.",
-        );
-      }
-      throw error;
-    }
-
     if (options.errors?.zodError) {
       if (typeof options.errors.zodError !== "function") {
         return { success: false, error: options.errors.zodError };
       }
-      // For non-coerced z.boolean(), safeParse(string) gives a real
-      // ZodError we can forward.  For z.coerce.boolean(), safeParse
-      // succeeds (JS truthiness), so we construct a synthetic error
-      // with a compatible shape so the callback is always invoked.
-      const zodError = probeResult && !probeResult.success
-        ? probeResult.error
-        : Object.assign(
-          new Error(`Invalid Boolean value: ${rawInput}`),
-          {
-            issues: [{
-              code: "custom" as const,
-              message: `Invalid Boolean value: ${rawInput}`,
-              path: [] as PropertyKey[],
-            }],
-            name: "ZodError",
-          },
-        ) as unknown as z.ZodError;
+      const zodError = Object.assign(
+        new Error(`Invalid Boolean value: ${rawInput}`),
+        {
+          issues: [{
+            code: "custom" as const,
+            message: `Invalid Boolean value: ${rawInput}`,
+            path: [] as PropertyKey[],
+          }],
+          name: "ZodError",
+        },
+      ) as unknown as z.ZodError;
       return {
         success: false,
         error: options.errors.zodError(zodError, rawInput),
