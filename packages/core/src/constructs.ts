@@ -18,7 +18,6 @@ import {
 import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import {
-  deduplicateDocEntries,
   deduplicateDocFragments,
   type DocEntry,
   type DocFragment,
@@ -2410,44 +2409,19 @@ export function or(
         footer = docFragments.footer;
         fragments = docFragments.fragments;
       }
-      // Only deduplicate when showing all branches (state unavailable).
-      // When a single branch is matched, pass its fragments through as-is
-      // so that intentional duplicate surface syntax (e.g., via
-      // allowDuplicates) is preserved.
-      if (state.kind === "unavailable" || state.state == null) {
-        const rawEntries: DocEntry[] = [];
-        const titledSectionMap = new Map<string, DocEntry[]>();
-        const titledSectionOrder: string[] = [];
-        for (const fragment of fragments) {
-          if (fragment.type === "entry") {
-            rawEntries.push(fragment);
-            continue;
-          }
-          if (fragment.title == null) {
-            rawEntries.push(...fragment.entries);
-          } else {
-            let sectionEntries = titledSectionMap.get(fragment.title);
-            if (sectionEntries == null) {
-              sectionEntries = [];
-              titledSectionMap.set(fragment.title, sectionEntries);
-              titledSectionOrder.push(fragment.title);
-            }
-            sectionEntries.push(...fragment.entries);
-          }
-        }
-        const entries = deduplicateDocEntries(rawEntries);
-        const sections = titledSectionOrder.map((title) => ({
-          title,
-          entries: deduplicateDocEntries(titledSectionMap.get(title)!),
-        }));
-        fragments = [
-          ...sections.map<DocFragment>((s) => ({ ...s, type: "section" })),
-          { type: "section", entries },
-        ];
-      } else {
+      // When a single branch matched successfully, pass its fragments
+      // through as-is so that intentional duplicate surface syntax (e.g.,
+      // via allowDuplicates) is preserved and the original fragment layout
+      // (e.g., from conditional().getDocFragments()) is not rewritten.
+      // In all other cases (all branches shown, or selected branch failed),
+      // deduplicate and wrap into sections.
+      const matchedSuccessfully = state.kind === "available" &&
+        state.state != null && state.state[1].success;
+      if (!matchedSuccessfully) {
+        const deduped = deduplicateDocFragments(fragments);
         const entries: DocEntry[] = [];
         const sections: DocSection[] = [];
-        for (const fragment of fragments) {
+        for (const fragment of deduped) {
           if (fragment.type === "entry") {
             entries.push(fragment);
             continue;
