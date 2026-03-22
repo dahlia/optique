@@ -57,6 +57,7 @@ interface ZodCheckInternal {
 interface ZodDefinitionInternal {
   readonly typeName?: string;
   readonly type?: string;
+  readonly coerce?: boolean;
   readonly checks?: readonly ZodCheckInternal[];
   readonly innerType?: z.Schema<unknown>;
   readonly schema?: z.Schema<unknown>;
@@ -111,6 +112,14 @@ interface BooleanSchemaInfo {
   readonly isBoolean: boolean;
   /** Whether it is safe to expose `choices` and `suggest()`. */
   readonly exposeChoices: boolean;
+  /**
+   * Whether the innermost boolean schema uses coercion.  When `true`,
+   * `safeParse(rawString)` always succeeds (JS truthiness) and runs
+   * all refinements/transforms, so probing is unsafe.  When `false`,
+   * `safeParse(rawString)` fails at the type check level before any
+   * user code executes, making it safe to probe for a real `ZodError`.
+   */
+  readonly isCoerced: boolean;
 }
 
 /**
@@ -122,7 +131,11 @@ interface BooleanSchemaInfo {
 function analyzeBooleanSchema(
   schema: z.Schema<unknown>,
 ): BooleanSchemaInfo {
-  return analyzeBooleanInner(schema, true);
+  const result = analyzeBooleanInner(schema, true);
+  if (!result.isBoolean) {
+    return { isBoolean: false, exposeChoices: false, isCoerced: false };
+  }
+  return result;
 }
 
 function analyzeBooleanInner(
@@ -130,7 +143,7 @@ function analyzeBooleanInner(
   canExposeChoices: boolean,
 ): BooleanSchemaInfo {
   const def = (schema as ZodSchemaInternal)._def;
-  if (!def) return { isBoolean: false, exposeChoices: false };
+  if (!def) return { isBoolean: false, exposeChoices: false, isCoerced: false };
   const typeName = def.typeName ?? def.type;
 
   if (typeName === "ZodBoolean" || typeName === "boolean") {
@@ -145,6 +158,7 @@ function analyzeBooleanInner(
     return {
       isBoolean: true,
       exposeChoices: canExposeChoices && !hasCustomChecks,
+      isCoerced: def.coerce === true,
     };
   }
 
@@ -168,7 +182,7 @@ function analyzeBooleanInner(
   // not interfere.  (Zod v3 only; Zod v4 uses pipe for preprocess.)
   if (typeName === "ZodEffects" || typeName === "effects") {
     if (def.effect?.type === "preprocess") {
-      return { isBoolean: false, exposeChoices: false };
+      return { isBoolean: false, exposeChoices: false, isCoerced: false };
     }
     const innerSchema = def.schema;
     if (innerSchema != null) {
@@ -217,7 +231,7 @@ function analyzeBooleanInner(
     }
   }
 
-  return { isBoolean: false, exposeChoices: false };
+  return { isBoolean: false, exposeChoices: false, isCoerced: false };
 }
 
 /**
@@ -604,23 +618,6 @@ export function zod<T>(
   const metavar = options.metavar ?? inferMetavar(schema);
   ensureNonEmptyString(metavar);
 
-  // Detect async schemas at construction time so that all parse()
-  // calls fail consistently, regardless of input.  For boolean schemas,
-  // probe with `true` which is always a valid boolean value.
-  if (boolInfo.isBoolean) {
-    try {
-      schema.safeParse(true);
-    } catch (error) {
-      if (error instanceof Error && isZodAsyncError(error)) {
-        throw new TypeError(
-          "Async Zod schemas (e.g., async refinements) are not supported " +
-            "by zod(). Use synchronous schemas instead.",
-        );
-      }
-      throw error;
-    }
-  }
-
   function doSafeParse(
     input: unknown,
     rawInput: string,
@@ -673,12 +670,16 @@ export function zod<T>(
 
   /**
    * Handles a failed boolean literal pre-conversion, respecting custom
-   * `zodError` overrides when provided.  For function-style overrides,
-   * constructs a synthetic error with a compatible ZodError shape so
-   * the callback is always invoked without running user refinements.
+   * `zodError` overrides when provided.
    *
-   * Async schemas are detected at construction time, so this function
-   * never needs to probe `safeParse()`.
+   * For function-style callbacks, the strategy depends on coercion mode:
+   *
+   *  -  *Non-coerced* (`z.boolean()`): `safeParse(rawInput)` is called
+   *     to obtain a real `ZodError`.  This is safe because the type
+   *     check rejects the string before any refinements execute.
+   *  -  *Coerced* (`z.coerce.boolean()`): probing is unsafe (coercion
+   *     succeeds and runs refinements), so a synthetic error with a
+   *     compatible ZodError shape is used instead.
    */
   function handleBooleanLiteralError(
     boolResult: ValueParserResult<boolean>,
@@ -688,6 +689,14 @@ export function zod<T>(
       if (typeof options.errors.zodError !== "function") {
         return { success: false, error: options.errors.zodError };
       }
+      // For non-coerced schemas, safely obtain a real ZodError.
+      // safeParse(string) fails at the type level before any
+      // refinements or transforms execute.
+      if (!boolInfo.isCoerced) {
+        return doSafeParse(rawInput, rawInput);
+      }
+      // For coerced schemas, probing would succeed (JS truthiness)
+      // and run user refinements, so construct a synthetic error.
       const zodError = Object.assign(
         new Error(`Invalid Boolean value: ${rawInput}`),
         {
