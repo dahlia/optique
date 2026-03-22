@@ -98,7 +98,7 @@ function isCatchAllSchema(
     return s.pipe.slice(1).every((action) => {
       const a = action as { kind?: string; type?: string };
       return a.kind !== "validation" && a.kind !== "schema" &&
-        a.type !== "raw_transform";
+        a.type !== "raw_transform" && a.type !== "transform";
     });
   }
   // String-based catch-alls only valid before transforms
@@ -107,7 +107,7 @@ function isCatchAllSchema(
     return s.pipe.slice(1).every((action) => {
       const a = action as { kind?: string; type?: string };
       return a.kind !== "validation" && a.kind !== "schema" &&
-        a.type !== "raw_transform";
+        a.type !== "raw_transform" && a.type !== "transform";
     });
   }
   // Unwrap any schema with a wrapped field (optional, nullable, nullish,
@@ -229,9 +229,22 @@ function containsAsyncSchema(
     if (s.rest && containsAsyncSchema(s.rest, visited, true)) return true;
   }
 
-  // NOTE: v.lazy() schemas are NOT inspected.  Executing the getter
-  // during construction would change observable behavior for stateful or
-  // input-dependent getters, which is a behavioral regression.
+  // Best-effort check for v.lazy(): call the getter with no arguments.
+  // Constant getters (the common case) return the inner schema for async
+  // inspection.  Input-dependent or stateful getters may throw, which is
+  // safely ignored.  Recursive schemas are handled by the visited map.
+  if (
+    typeof (schema as unknown as { getter?: unknown }).getter === "function"
+  ) {
+    try {
+      const inner = (schema as unknown as {
+        getter: () => v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
+      }).getter();
+      if (containsAsyncSchema(inner, visited, afterTransform)) return true;
+    } catch {
+      // Input-dependent getter — cannot determine async status statically.
+    }
+  }
 
   return false;
 }

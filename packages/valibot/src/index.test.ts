@@ -901,5 +901,20 @@ describe("valibot()", () => {
       ] as never);
       assert.throws(() => valibot(asyncSchema as never), expectedError);
     });
+
+    it("should throw TypeError for constant async lazy()", () => {
+      const asyncSchema = v.lazy((): v.BaseSchema<
+        unknown,
+        unknown,
+        v.BaseIssue<unknown>
+      > =>
+        v.pipeAsync(
+          v.string(),
+          // deno-lint-ignore require-await
+          v.checkAsync(async (val) => val === "ok", "not ok"),
+        ) as never
+      );
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
   });
 });
