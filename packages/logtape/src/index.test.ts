@@ -693,9 +693,10 @@ describe("createSink()", () => {
         new URL("../deno.json", import.meta.url),
         "utf-8",
       ),
-    );
+    ) as Record<string, unknown>;
+    const imports = denoJson.imports as Record<string, unknown> | undefined;
     assert.ok(
-      denoJson.imports?.["@logtape/file"],
+      imports?.["@logtape/file"],
       "deno.json must declare @logtape/file in imports for Deno to resolve " +
         "the dynamic import in createSink()",
     );
