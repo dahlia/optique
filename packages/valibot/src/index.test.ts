@@ -664,4 +664,242 @@ describe("valibot()", () => {
       assert.equal(parser.metavar, "CHOICE");
     });
   });
+
+  describe("async schema rejection", () => {
+    const expectedError = {
+      name: "TypeError",
+      message: "Async Valibot schemas (e.g., async validations) are not " +
+        "supported by valibot(). Use synchronous schemas instead.",
+    };
+
+    it("should throw TypeError for async validations", () => {
+      const asyncSchema = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
+
+    it("should throw TypeError for async schema inside optional()", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const asyncSchema = v.optional(asyncInner as never);
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
+
+    it("should throw TypeError for async schema inside nullable()", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const asyncSchema = v.nullable(asyncInner as never);
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
+
+    it("should not reject unions with a catch-all sync string arm", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // Union with a bare v.string() arm is safe because CLI input is
+      // always a string, so the sync arm matches first.
+      const asyncSchema = v.union([v.string(), asyncInner] as never);
+      const parser = valibot(asyncSchema as never);
+      const result = parser.parse("hello");
+      assert.ok(result.success);
+    });
+
+    it("should throw TypeError for union without catch-all sync arm", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // v.literal("a") only matches "a", so non-"a" inputs reach the
+      // async arm — this must be rejected.
+      const asyncSchema = v.union([v.literal("a"), asyncInner] as never);
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
+
+    it("should not reject unions with wrapped catch-all string arm", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // v.optional(v.string()) is still a catch-all for string input
+      const asyncSchema = v.union([
+        v.optional(v.string()),
+        asyncInner,
+      ] as never);
+      const parser = valibot(asyncSchema as never);
+      const result = parser.parse("hello");
+      assert.ok(result.success);
+    });
+
+    it("should not reject union with piped non-rejecting string arm", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // v.pipe(v.string(), v.trim()) normalizes but never rejects
+      const asyncSchema = v.union([
+        v.pipe(v.string(), v.trim()),
+        asyncInner,
+      ] as never);
+      const parser = valibot(asyncSchema as never);
+      const result = parser.parse("hello");
+      assert.ok(result.success);
+    });
+
+    it("should not reject union with v.unknown() arm after transform", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // v.unknown() accepts every value, so async arm is unreachable
+      // even after a type-changing transform.
+      const asyncSchema = v.pipe(
+        v.string(),
+        v.transform(JSON.parse),
+        v.union([v.unknown(), asyncInner] as never),
+      );
+      const parser = valibot(asyncSchema as never);
+      const result = parser.parse('"hello"');
+      assert.ok(result.success);
+    });
+
+    it("should reject union with string arm after transform", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // After a transform, string catch-all is no longer trusted since
+      // we cannot determine the output type statically.
+      const asyncSchema = v.pipe(
+        v.string(),
+        v.transform((s: string) => s.trim()),
+        v.union([v.string(), asyncInner] as never),
+      );
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
+
+    it("should throw TypeError for async schema inside intersect()", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const asyncSchema = v.intersect([v.string(), asyncInner] as never);
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
+
+    it("should not reject async entries in direct containers", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // Direct containers are unreachable from string input — the outer
+      // type check (object/array/tuple) rejects the string first.
+      const objParser = valibot(v.object({ a: asyncInner } as never));
+      assert.ok(!objParser.parse("hello").success);
+      const arrParser = valibot(v.array(asyncInner as never));
+      assert.ok(!arrParser.parse("hello").success);
+      const tupParser = valibot(v.tuple([asyncInner] as never));
+      assert.ok(!tupParser.parse("hello").success);
+    });
+
+    it("should not reject async rest/promise in direct containers", () => {
+      const asyncRest = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // Direct containers are unreachable from string input.
+      const owrParser = valibot(
+        v.objectWithRest({}, asyncRest as never),
+      );
+      assert.ok(!owrParser.parse("hello").success);
+      const twrParser = valibot(v.tupleWithRest([], asyncRest as never));
+      assert.ok(!twrParser.parse("hello").success);
+      const promParser = valibot(v.promise(asyncRest as never));
+      assert.ok(!promParser.parse("hello").success);
+    });
+
+    it("should reject async entries after transform in pipe", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // After JSON.parse, the object schema's entries become reachable.
+      const asyncSchema = v.pipe(
+        v.string(),
+        v.transform(JSON.parse),
+        v.object({ a: asyncInner } as never),
+      );
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
+
+    it("should reject async union arm after transform", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // After JSON.parse, v.string() is no longer a catch-all since
+      // the value may not be a string.
+      const asyncSchema = v.pipe(
+        v.string(),
+        v.transform(JSON.parse),
+        v.union([v.string(), asyncInner] as never),
+      );
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
+
+    it("should not reject union with v.unknown() after transform", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // v.unknown() is type-agnostic, so it's still catch-all after
+      // transforms.
+      const asyncSchema = v.pipe(
+        v.string(),
+        v.transform(JSON.parse),
+        v.union([v.unknown(), asyncInner] as never),
+      );
+      const parser = valibot(asyncSchema as never);
+      const result = parser.parse('"hello"');
+      assert.ok(result.success);
+    });
+
+    it("should detect async in shared schema reused after transform", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // Shared schema node used in both a direct (unreachable) position
+      // and a post-transform (reachable) position.  The second visit
+      // must not be skipped by the cycle detector.
+      const shared = v.object({ a: asyncInner } as never);
+      const asyncSchema = v.union([
+        shared,
+        v.pipe(v.string(), v.transform(JSON.parse), shared),
+      ] as never);
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
+  });
 });

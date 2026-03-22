@@ -1642,10 +1642,17 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     a `TypeError` for empty strings.  Previously, an empty `metavar` would
     silently produce malformed help output.  [[#460], [#691]]
 
+ -  `valibot()` now throws a `TypeError` at construction time when given an
+    async schema (e.g., `v.pipeAsync()` with `v.checkAsync()`).  Previously,
+    async validations were silently skipped by the synchronous `safeParse()`
+    call.  [[#462], [#701]]
+
 [#281]: https://github.com/dahlia/optique/issues/281
 [#460]: https://github.com/dahlia/optique/issues/460
+[#462]: https://github.com/dahlia/optique/issues/462
 [#688]: https://github.com/dahlia/optique/pull/688
 [#691]: https://github.com/dahlia/optique/pull/691
+[#701]: https://github.com/dahlia/optique/pull/701
 
 ### @optique/zod
 
@@ -1663,6 +1670,10 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
  -  `zod()` now validates the `metavar` option at runtime and throws
     a `TypeError` for empty strings.  Previously, an empty `metavar` would
     silently produce malformed help output.  [[#460], [#691]]
+
+ -  `zod()` now throws a `TypeError` when an async Zod schema (e.g., async
+    refinements) is used.  Previously, the raw Zod error was propagated
+    unhandled.  [[#462], [#701]]
 
 
 Version 0.10.7

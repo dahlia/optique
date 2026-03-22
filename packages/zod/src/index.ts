@@ -62,6 +62,32 @@ interface ZodSchemaInternal {
 }
 
 /**
+ * Checks whether the given error is a Zod async-parse error.
+ *
+ * - **Zod v4** throws a dedicated `$ZodAsyncError` class.
+ * - **Zod v3** (3.25+) throws a plain `Error` whose message starts with
+ *   `"Async refinement encountered during synchronous parse operation"` for
+ *   async refinements, or `"Asynchronous transform encountered during
+ *   synchronous parse operation"` for async transforms.
+ */
+function isZodAsyncError(error: Error): boolean {
+  // Zod v4: dedicated error class
+  if (error.constructor.name === "$ZodAsyncError") return true;
+  // Zod v3: exact error messages (not prefix-matched, to avoid masking
+  // user errors that happen to start with similar text)
+  if (
+    error.message ===
+      "Async refinement encountered during synchronous parse operation. Use .parseAsync instead." ||
+    error.message ===
+      "Asynchronous transform encountered during synchronous parse operation. Use .parseAsync instead." ||
+    error.message === "Synchronous parse encountered promise."
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Infers an appropriate metavar string from a Zod schema.
  *
  * This function analyzes the Zod schema's internal structure to determine
@@ -400,6 +426,8 @@ function inferChoices(
  * ```
  *
  * @throws {TypeError} If the resolved `metavar` is an empty string.
+ * @throws {TypeError} If the schema contains async refinements or other async
+ *   operations that cannot be executed synchronously.
  * @since 0.7.0
  */
 export function zod<T>(
@@ -429,7 +457,18 @@ export function zod<T>(
       : {}),
 
     parse(input: string): ValueParserResult<T> {
-      const result = schema.safeParse(input);
+      let result;
+      try {
+        result = schema.safeParse(input);
+      } catch (error) {
+        if (error instanceof Error && isZodAsyncError(error)) {
+          throw new TypeError(
+            "Async Zod schemas (e.g., async refinements) are not supported " +
+              "by zod(). Use synchronous schemas instead.",
+          );
+        }
+        throw error;
+      }
 
       if (result.success) {
         return { success: true, value: result.data };
