@@ -10438,6 +10438,159 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(observedToken, undefined);
   });
 
+  it("frozen object with accessor-backed placeholder is sanitized", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/407
+    // Frozen/sealed objects with accessor properties must have their getter
+    // return values stripped so placeholder values don't leak.
+    class FrozenWithGetter {
+      #secret: unknown;
+      name: string;
+      constructor(name: string, secret: unknown) {
+        this.name = name;
+        this.#secret = secret;
+      }
+      get secret(): unknown {
+        return this.#secret;
+      }
+    }
+
+    let observedName: string | undefined;
+    let observedSecret: unknown = "not-set";
+
+    const contextKey = Symbol.for("@test/frozen-accessor-placeholder");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        const f = parsed as FrozenWithGetter;
+        observedName = f.name;
+        observedSecret = f.secret;
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (value) =>
+        Object.freeze(
+          new FrozenWithGetter(value.name, { [testPlaceholderKey]: true }),
+        ),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.equal(observedName, "test");
+    assert.equal(observedSecret, undefined);
+  });
+
+  it("constructor-valued property on plain object is not wrapped", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/407
+    // When a plain parsed object has a constructor-valued property alongside
+    // placeholder values, the constructor must not be wrapped — wrapping
+    // would break new.target, prototype, and instanceof semantics.
+    class Ctor {
+      value: string;
+      constructor(value: string) {
+        this.value = value;
+      }
+    }
+
+    let observedInstance: unknown = "not-set";
+
+    const contextKey = Symbol.for("@test/constructor-not-wrapped");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        const p = parsed as { Ctor: typeof Ctor };
+        observedInstance = new p.Ctor("hello");
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (_value) => ({
+        Ctor,
+        deferred: { [testPlaceholderKey]: true },
+      }),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.ok(observedInstance instanceof Ctor);
+    assert.equal((observedInstance as Ctor).value, "hello");
+  });
+
+  it("frozen clone preserves property descriptor flags", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/407
+    // When cloning a frozen/sealed non-plain object, descriptor flags like
+    // enumerable and configurable must be preserved on the sanitized view.
+    let observedEnumerable: boolean | undefined;
+    let observedKeys: string[] | undefined;
+
+    const contextKey = Symbol.for("@test/frozen-descriptor-flags");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        const desc = Object.getOwnPropertyDescriptor(parsed, "hidden");
+        observedEnumerable = desc?.enumerable;
+        observedKeys = Object.keys(parsed as object);
+        return {};
+      },
+    };
+
+    const obj = Object.create(null) as Record<string, unknown>;
+    Object.defineProperty(obj, "visible", {
+      value: "yes",
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(obj, "hidden", {
+      value: "no",
+      enumerable: false,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(obj, "deferred", {
+      value: { [testPlaceholderKey]: true },
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (_value) => obj,
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    // The "hidden" property should remain non-enumerable.
+    assert.equal(observedEnumerable, false);
+    // Object.keys should not include "hidden".
+    assert.ok(observedKeys != null);
+    assert.ok(!observedKeys!.includes("hidden"));
+    assert.ok(observedKeys!.includes("visible"));
+  });
+
   it("wrapped prototype method has stable identity", async () => {
     // Regression test for https://github.com/dahlia/optique/issues/307
     // parsed.method === parsed.method must hold so that consumers can

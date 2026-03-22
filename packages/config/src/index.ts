@@ -256,42 +256,6 @@ function createSanitizedNonPlainView<T extends object>(
   value: T,
   seen: WeakMap<object, unknown>,
 ): T {
-  // For frozen/sealed objects, the Proxy invariant prevents wrapping non-
-  // configurable non-writable function properties.  Instead, create a
-  // shallow clone with writable method wrappers that strip deferred values
-  // from return values while invoking the original method on the real target
-  // (preserving private field access).
-  // See: https://github.com/dahlia/optique/issues/407
-  if (Object.isFrozen(value) || Object.isSealed(value)) {
-    const clone = Object.create(
-      Object.getPrototypeOf(value),
-    ) as Record<PropertyKey, unknown>;
-    seen.set(value, clone);
-    for (const key of Reflect.ownKeys(value)) {
-      const desc = Object.getOwnPropertyDescriptor(value, key);
-      if (desc == null) continue;
-      if ("value" in desc && typeof desc.value === "function") {
-        const fn = desc.value as {
-          apply(thisArg: unknown, args: unknown[]): unknown;
-        };
-        clone[key] = function (this: unknown, ...args: unknown[]) {
-          const result = fn.apply(value, args);
-          if (result instanceof Promise) {
-            return (result as Promise<unknown>).then(
-              (v) => stripDeferredPromptValues(v, seen),
-            );
-          }
-          return stripDeferredPromptValues(result, seen);
-        };
-      } else if ("value" in desc) {
-        clone[key] = stripDeferredPromptValues(desc.value, seen);
-      } else {
-        Object.defineProperty(clone, key, desc);
-      }
-    }
-    return clone as T;
-  }
-
   // NOTE: Methods are invoked on the original target with temporarily
   // sanitized own properties via callMethodOnSanitizedTarget().  This
   // allows private field access (which requires the real instance as
@@ -498,10 +462,16 @@ function stripDeferredPromptValues<T>(
       continue;
     }
     if ("value" in descriptor) {
-      if (typeof descriptor.value === "function") {
+      if (
+        typeof descriptor.value === "function" &&
+        !/^class[\s{]/.test(
+          Function.prototype.toString.call(descriptor.value),
+        )
+      ) {
         // Wrap function-valued properties so that closures capturing
         // deferred prompt values return sanitized results when called by
-        // phase-two contexts.
+        // phase-two contexts.  Skip constructors — wrapping them would
+        // break new.target, prototype chains, and instanceof semantics.
         // See: https://github.com/dahlia/optique/issues/407
         const fn = descriptor.value as {
           apply(thisArg: unknown, args: unknown[]): unknown;

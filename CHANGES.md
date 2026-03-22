@@ -510,9 +510,8 @@ To be released.
     or method closures.  Non-plain objects are now always proxied during
     phase two (regardless of own-property detection), getter invocations
     use the real instance as receiver (fixing `TypeError` for private field
-    access), frozen/sealed objects use a method-wrapping clone, and function-
-    valued properties on plain objects are wrapped to strip placeholder
-    values from return values.  [[#407]]
+    access), and non-constructor function-valued properties on plain objects
+    are wrapped to strip placeholder values from return values.  [[#407]]
 
  -  Fixed `integer({ type: "bigint" })`, `port({ type: "bigint" })`, and
     `portRange({ type: "bigint" })` to reject empty strings, whitespace,
