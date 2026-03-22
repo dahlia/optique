@@ -469,31 +469,27 @@ function stripDeferredPromptValues<T>(
         )
       ) {
         const fn = descriptor.value;
-        // deno-lint-ignore prefer-const
-        let fnProxy: typeof fn;
-        fnProxy = new Proxy(fn, {
-          get(target, prop, receiver) {
-            const val = Reflect.get(target, prop, receiver);
-            return val === target ? receiver : val;
-          },
-          apply(target, thisArg, args) {
-            const result = Reflect.apply(target, thisArg, args);
-            if (result instanceof Promise) {
-              return (result as Promise<unknown>).then(
-                (v) => stripDeferredPromptValues(v, seen),
-              );
-            }
-            return stripDeferredPromptValues(result, seen);
-          },
-          construct(target, args, newTarget) {
-            return Reflect.construct(
-              target,
-              args,
-              newTarget === fnProxy ? target : newTarget,
-            );
-          },
-        });
-        descriptor.value = fnProxy;
+        const cached = seen.get(fn);
+        if (cached !== undefined) {
+          descriptor.value = cached;
+        } else {
+          const fnProxy = new Proxy(fn, {
+            apply(target, thisArg, args) {
+              const result = Reflect.apply(target, thisArg, args);
+              if (result instanceof Promise) {
+                return (result as Promise<unknown>).then(
+                  (v) => stripDeferredPromptValues(v, seen),
+                );
+              }
+              return stripDeferredPromptValues(result, seen);
+            },
+            construct(target, args, newTarget) {
+              return Reflect.construct(target, args, newTarget);
+            },
+          });
+          seen.set(fn, fnProxy);
+          descriptor.value = fnProxy;
+        }
       } else {
         descriptor.value = stripDeferredPromptValues(
           descriptor.value,

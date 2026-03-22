@@ -242,38 +242,29 @@ function stripPlaceholderValues<T>(
         )
       ) {
         const fn = descriptor.value;
-        // Use a let so the construct trap can map new.target back
-        // from the proxy to the original function.
-        // deno-lint-ignore prefer-const
-        let fnProxy: typeof fn;
-        fnProxy = new Proxy(fn, {
-          get(target, prop, receiver) {
-            const val = Reflect.get(target, prop, receiver);
-            return val === target ? receiver : val;
-          },
-          apply(target, thisArg, args) {
-            const result = Reflect.apply(target, thisArg, args);
-            // Share the outer seen map so aliased objects (e.g.,
-            // parsed.nested === parsed.getNested()) preserve identity.
-            if (result instanceof Promise) {
-              return (result as Promise<unknown>).then(
-                (v) => stripPlaceholderValues(v, seen),
-              );
-            }
-            return stripPlaceholderValues(result, seen);
-          },
-          construct(target, args, newTarget) {
-            // Map new.target from proxy → original so constructor
-            // guards like `new.target === FnCtor` see the expected
-            // function, not the wrapper.
-            return Reflect.construct(
-              target,
-              args,
-              newTarget === fnProxy ? target : newTarget,
-            );
-          },
-        });
-        descriptor.value = fnProxy;
+        // Reuse cached proxy for aliased functions (a: fn, b: fn)
+        // so identity checks like parsed.a === parsed.b hold.
+        const cached = seen.get(fn);
+        if (cached !== undefined) {
+          descriptor.value = cached;
+        } else {
+          const fnProxy = new Proxy(fn, {
+            apply(target, thisArg, args) {
+              const result = Reflect.apply(target, thisArg, args);
+              if (result instanceof Promise) {
+                return (result as Promise<unknown>).then(
+                  (v) => stripPlaceholderValues(v, seen),
+                );
+              }
+              return stripPlaceholderValues(result, seen);
+            },
+            construct(target, args, newTarget) {
+              return Reflect.construct(target, args, newTarget);
+            },
+          });
+          seen.set(fn, fnProxy);
+          descriptor.value = fnProxy;
+        }
       } else {
         descriptor.value = stripPlaceholderValues(
           descriptor.value,
