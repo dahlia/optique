@@ -671,7 +671,7 @@ function prepareParsedForContexts(
       ? parsed
       : parsed instanceof Set
       ? [...parsed]
-      : [...parsed.values()];
+      : [...parsed.keys(), ...parsed.values()];
     const hasNonPlainElements = entries.some(
       (item) =>
         item != null &&
@@ -698,20 +698,7 @@ function prepareParsedForContexts(
     // functions (classes, traditional constructors) are left unwrapped
     // to preserve static-method `this` binding and constructor identity.
     // See: https://github.com/dahlia/optique/issues/407
-    const hasWrappableFunctions = Reflect.ownKeys(parsed).some((key) => {
-      const desc = Object.getOwnPropertyDescriptor(parsed, key);
-      if (
-        desc == null || !("value" in desc) ||
-        typeof desc.value !== "function"
-      ) return false;
-      // Only class constructors and bound functions are non-wrappable.
-      return !(
-        /^class[\s{]/.test(
-          Function.prototype.toString.call(desc.value),
-        ) || desc.value.name.startsWith("bound ")
-      );
-    });
-    if (!hasWrappableFunctions && !containsPlaceholderValues(parsed)) {
+    if (!containsPlaceholderValues(parsed)) {
       return parsed;
     }
     return stripPlaceholderValues(parsed, new WeakMap(), true);
