@@ -2415,13 +2415,14 @@ export function or(
       // so that intentional duplicate surface syntax (e.g., via
       // allowDuplicates) is preserved.
       if (state.kind === "unavailable" || state.state == null) {
-        const rawEntries: DocEntry[] = fragments.filter((f) =>
-          f.type === "entry"
-        );
+        const rawEntries: DocEntry[] = [];
         const titledSectionMap = new Map<string, DocEntry[]>();
         const titledSectionOrder: string[] = [];
         for (const fragment of fragments) {
-          if (fragment.type !== "section") continue;
+          if (fragment.type === "entry") {
+            rawEntries.push(fragment);
+            continue;
+          }
           if (fragment.title == null) {
             rawEntries.push(...fragment.entries);
           } else {
@@ -2444,10 +2445,13 @@ export function or(
           { type: "section", entries },
         ];
       } else {
-        const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
+        const entries: DocEntry[] = [];
         const sections: DocSection[] = [];
         for (const fragment of fragments) {
-          if (fragment.type !== "section") continue;
+          if (fragment.type === "entry") {
+            entries.push(fragment);
+            continue;
+          }
           if (fragment.title == null) {
             entries.push(...fragment.entries);
           } else {
