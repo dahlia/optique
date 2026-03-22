@@ -457,6 +457,35 @@ describe("or", () => {
       assert.ok(sections.length > 0);
     });
 
+    it("should not deduplicate matched branch fragments", () => {
+      // When a branch is selected, its own fragments should be preserved
+      // as-is, even if they contain duplicate surface syntax (e.g., via
+      // allowDuplicates).
+      const branch = object({
+        a: option("-v", "--verbose"),
+        b: option("-v", "--verbose"),
+      }, { allowDuplicates: true });
+      const orParser = or(branch, option("--other"));
+
+      // Simulate state where first branch matched
+      const result = parseSync(orParser, ["-v"]);
+      assert.ok(result.success);
+
+      // Get doc page for the matched state
+      const page = getDocPage(orParser, ["-v"]);
+      assert.ok(page);
+      const allEntries = page.sections.flatMap((s) => s.entries);
+      const verboseEntries = allEntries.filter((e) =>
+        e.term.type === "option" &&
+        e.term.names.some((n) => n === "--verbose")
+      );
+      assert.equal(
+        verboseEntries.length,
+        2,
+        "matched branch should preserve its own duplicate entries",
+      );
+    });
+
     it("should use unavailable inner state when selected parser failed", () => {
       const parser1 = option("-a", "--apple");
       const parser2 = option("-b", "--banana");

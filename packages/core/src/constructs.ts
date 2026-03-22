@@ -2410,38 +2410,60 @@ export function or(
         footer = docFragments.footer;
         fragments = docFragments.fragments;
       }
-      const rawEntries: DocEntry[] = fragments.filter((f) =>
-        f.type === "entry"
-      );
-      const titledSectionMap = new Map<string, DocEntry[]>();
-      const titledSectionOrder: string[] = [];
-      for (const fragment of fragments) {
-        if (fragment.type !== "section") continue;
-        if (fragment.title == null) {
-          rawEntries.push(...fragment.entries);
-        } else {
-          let sectionEntries = titledSectionMap.get(fragment.title);
-          if (sectionEntries == null) {
-            sectionEntries = [];
-            titledSectionMap.set(fragment.title, sectionEntries);
-            titledSectionOrder.push(fragment.title);
+      // Only deduplicate when showing all branches (state unavailable).
+      // When a single branch is matched, pass its fragments through as-is
+      // so that intentional duplicate surface syntax (e.g., via
+      // allowDuplicates) is preserved.
+      if (state.kind === "unavailable" || state.state == null) {
+        const rawEntries: DocEntry[] = fragments.filter((f) =>
+          f.type === "entry"
+        );
+        const titledSectionMap = new Map<string, DocEntry[]>();
+        const titledSectionOrder: string[] = [];
+        for (const fragment of fragments) {
+          if (fragment.type !== "section") continue;
+          if (fragment.title == null) {
+            rawEntries.push(...fragment.entries);
+          } else {
+            let sectionEntries = titledSectionMap.get(fragment.title);
+            if (sectionEntries == null) {
+              sectionEntries = [];
+              titledSectionMap.set(fragment.title, sectionEntries);
+              titledSectionOrder.push(fragment.title);
+            }
+            sectionEntries.push(...fragment.entries);
           }
-          sectionEntries.push(...fragment.entries);
         }
+        const entries = deduplicateDocEntries(rawEntries);
+        const sections = titledSectionOrder.map((title) => ({
+          title,
+          entries: deduplicateDocEntries(titledSectionMap.get(title)!),
+        }));
+        fragments = [
+          ...sections.map<DocFragment>((s) => ({ ...s, type: "section" })),
+          { type: "section", entries },
+        ];
+      } else {
+        const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
+        const sections: DocSection[] = [];
+        for (const fragment of fragments) {
+          if (fragment.type !== "section") continue;
+          if (fragment.title == null) {
+            entries.push(...fragment.entries);
+          } else {
+            sections.push(fragment);
+          }
+        }
+        fragments = [
+          ...sections.map<DocFragment>((s) => ({ ...s, type: "section" })),
+          { type: "section", entries },
+        ];
       }
-      const entries = deduplicateDocEntries(rawEntries);
-      const sections = titledSectionOrder.map((title) => ({
-        title,
-        entries: deduplicateDocEntries(titledSectionMap.get(title)!),
-      }));
       return {
         brief,
         description,
         footer,
-        fragments: [
-          ...sections.map<DocFragment>((s) => ({ ...s, type: "section" })),
-          { type: "section", entries },
-        ],
+        fragments,
       };
     },
   };
@@ -2888,11 +2910,13 @@ export function longestMatch(
       let footer: Message | undefined;
       let fragments: readonly DocFragment[];
 
+      let shouldDeduplicate: boolean;
       if (state.kind === "unavailable" || state.state == null) {
         // When state is unavailable or null, show all parser options
         fragments = parsers.flatMap((p) =>
           p.getDocFragments({ kind: "unavailable" }).fragments
         );
+        shouldDeduplicate = true;
       } else {
         const [i, result] = state.state;
         if (result.success) {
@@ -2903,17 +2927,21 @@ export function longestMatch(
           description = docResult.description;
           footer = docResult.footer;
           fragments = docResult.fragments;
+          shouldDeduplicate = false;
         } else {
           fragments = parsers.flatMap((p) =>
             p.getDocFragments({ kind: "unavailable" }).fragments
           );
+          shouldDeduplicate = true;
         }
       }
 
       return {
         brief,
         description,
-        fragments: deduplicateDocFragments(fragments),
+        fragments: shouldDeduplicate
+          ? deduplicateDocFragments(fragments)
+          : fragments,
         footer,
       };
     },
