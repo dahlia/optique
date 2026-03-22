@@ -382,6 +382,13 @@ describe("valibot()", () => {
       assert.equal(parser.format(["a", "b", "c"]), '["a","b","c"]');
     });
 
+    it("should not throw for non-JSON-serializable objects", () => {
+      const parser = valibot(
+        v.pipe(v.string(), v.transform((s) => ({ id: BigInt(s) }))),
+      );
+      assert.equal(parser.format({ id: 1n }), "[object Object]");
+    });
+
     it("should use custom format function from options", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform((s) => ({ raw: s }))),

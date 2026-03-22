@@ -692,10 +692,13 @@ export function valibot<T>(
           : value.toISOString();
       }
       if (typeof value !== "object" || value === null) return String(value);
-      if (Array.isArray(value)) return JSON.stringify(value);
       const str = String(value);
-      if (str !== "[object Object]") return str;
-      return JSON.stringify(value);
+      if (!Array.isArray(value) && str !== "[object Object]") return str;
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return str;
+      }
     },
   };
   return parser;
