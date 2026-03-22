@@ -123,12 +123,15 @@ function isCatchAllSchema(
  */
 function containsAsyncSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  visited: WeakSet<object> = new WeakSet(),
+  visited: WeakMap<object, boolean> = new WeakMap(),
   checkContainers = false,
 ): boolean {
-  // Cycle detection: skip schemas already being inspected (recursive lazy)
-  if (visited.has(schema)) return false;
-  visited.add(schema);
+  // Cycle detection: skip schemas already inspected at the same or deeper
+  // level.  A schema visited with checkContainers=true subsumes a later
+  // visit with checkContainers=false, but not vice versa.
+  const prev = visited.get(schema);
+  if (prev !== undefined && (prev || !checkContainers)) return false;
+  visited.set(schema, (prev ?? false) || checkContainers);
 
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return true;
