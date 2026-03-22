@@ -116,7 +116,8 @@ describe("or", () => {
 
   it("should throw TypeError when a non-parser object is passed", () => {
     assert.throws(
-      () => or({} as never, option("-a")),
+      // @ts-expect-error - {} is not a valid Parser.
+      () => or({}, option("-a")),
       {
         name: "TypeError",
         message: "or() argument at index 0 is not a valid Parser.",
@@ -1218,7 +1219,8 @@ describe("longestMatch()", () => {
 
   it("should throw TypeError when a non-parser object is passed", () => {
     assert.throws(
-      () => longestMatch({} as never, command("a", constant("a"))),
+      // @ts-expect-error - {} is not a valid Parser.
+      () => longestMatch({}, command("a", constant("a"))),
       {
         name: "TypeError",
         message: "longestMatch() argument at index 0 is not a valid Parser.",
@@ -3673,7 +3675,8 @@ describe("merge", () => {
 
   it("should throw TypeError when a non-parser object is passed", () => {
     assert.throws(
-      () => merge({} as never, object({ a: option("-a") }) as never),
+      // @ts-expect-error - {} is not a valid Parser.
+      () => merge({}, object({ a: option("-a") })),
       {
         name: "TypeError",
         message: "merge() argument at index 0 is not a valid Parser.",
@@ -3683,7 +3686,8 @@ describe("merge", () => {
 
   it("should throw TypeError for non-parser among valid parsers", () => {
     assert.throws(
-      () => merge(object({ a: option("-a") }), 42 as never),
+      // @ts-expect-error - 42 is not a valid Parser.
+      () => merge(object({ a: option("-a") }), 42),
       {
         name: "TypeError",
         message: "merge() argument at index 1 is not a valid Parser.",
@@ -3693,7 +3697,8 @@ describe("merge", () => {
 
   it("should throw TypeError for non-parser with label", () => {
     assert.throws(
-      () => merge("label", 42 as never),
+      // @ts-expect-error - 42 is not a valid Parser.
+      () => merge("label", 42),
       {
         name: "TypeError",
         message: "merge() argument at index 0 is not a valid Parser.",
@@ -3703,7 +3708,8 @@ describe("merge", () => {
 
   it("should throw TypeError when null is passed as a parser", () => {
     assert.throws(
-      () => merge(null as never),
+      // @ts-expect-error - null is not a valid Parser.
+      () => merge(null),
       {
         name: "TypeError",
         message: "merge() argument at index 0 is not a valid Parser.",
