@@ -480,10 +480,10 @@ function stripDeferredPromptValues<T>(
             const result = Reflect.apply(target, thisArg, args);
             if (result instanceof Promise) {
               return (result as Promise<unknown>).then(
-                (v) => stripDeferredPromptValues(v),
+                (v) => stripDeferredPromptValues(v, seen),
               );
             }
-            return stripDeferredPromptValues(result);
+            return stripDeferredPromptValues(result, seen);
           },
           construct(target, args, newTarget) {
             return Reflect.construct(

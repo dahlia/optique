@@ -253,12 +253,14 @@ function stripPlaceholderValues<T>(
           },
           apply(target, thisArg, args) {
             const result = Reflect.apply(target, thisArg, args);
+            // Share the outer seen map so aliased objects (e.g.,
+            // parsed.nested === parsed.getNested()) preserve identity.
             if (result instanceof Promise) {
               return (result as Promise<unknown>).then(
-                (v) => stripPlaceholderValues(v),
+                (v) => stripPlaceholderValues(v, seen),
               );
             }
-            return stripPlaceholderValues(result);
+            return stripPlaceholderValues(result, seen);
           },
           construct(target, args, newTarget) {
             // Map new.target from proxy → original so constructor
