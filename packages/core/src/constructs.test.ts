@@ -763,6 +763,33 @@ describe("or", () => {
         "flag and option with same name but different metavar should remain separate",
       );
     });
+
+    it("should not collapse positional arguments with same metavar", () => {
+      // Positional arguments are distinguished by position, not metavar.
+      // Since DocEntry lacks position info, arguments are never
+      // deduplicated — even when they come from alternative branches.
+      const orParser = or(
+        tuple([argument(string()), argument(string())]),
+        argument(string()),
+      );
+
+      const fragments = orParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const allEntries = sections.flatMap((s) => s.entries);
+      const argEntries = allEntries.filter((e) => e.term.type === "argument");
+      // 2 from the first branch + 1 from the second: all 3 are kept
+      assert.equal(
+        argEntries.length,
+        3,
+        "positional arguments should never be collapsed",
+      );
+    });
+
     it("should deduplicate entries across same-titled sections", () => {
       const orParser = or(
         object("Alpha", { x: option("--x") }),

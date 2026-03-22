@@ -142,6 +142,10 @@ function getDocEntryKey(entry: DocEntry): string {
  * syntax (same term type and identifying names).  When duplicates exist,
  * the first occurrence is kept and later ones are discarded.
  *
+ * Positional argument entries are never deduplicated because they are
+ * distinguished by position, not by metavar, and {@link DocEntry} does
+ * not carry position information.
+ *
  * @param entries The entries to deduplicate.
  * @returns A new array with duplicates removed, preserving insertion order.
  * @since 1.0.0
@@ -149,16 +153,20 @@ function getDocEntryKey(entry: DocEntry): string {
 export function deduplicateDocEntries(
   entries: readonly DocEntry[],
 ): DocEntry[] {
-  const seen = new Map<string, DocEntry>();
-  const order: string[] = [];
+  const seen = new Set<string>();
+  const result: DocEntry[] = [];
   for (const entry of entries) {
+    if (entry.term.type === "argument") {
+      result.push(entry);
+      continue;
+    }
     const key = getDocEntryKey(entry);
     if (!seen.has(key)) {
-      seen.set(key, entry);
-      order.push(key);
+      seen.add(key);
+      result.push(entry);
     }
   }
-  return order.map((key) => seen.get(key)!);
+  return result;
 }
 
 /**
@@ -185,14 +193,22 @@ export function deduplicateDocFragments(
   const slots: (DocFragment | string)[] = [];
   for (const fragment of fragments) {
     if (fragment.type === "entry") {
-      const key = getDocEntryKey(fragment);
-      if (!untitledSeen.has(key)) {
-        untitledSeen.add(key);
+      if (fragment.term.type === "argument") {
         slots.push(fragment);
+      } else {
+        const key = getDocEntryKey(fragment);
+        if (!untitledSeen.has(key)) {
+          untitledSeen.add(key);
+          slots.push(fragment);
+        }
       }
     } else if (fragment.title == null) {
       const dedupedEntries: DocEntry[] = [];
       for (const entry of fragment.entries) {
+        if (entry.term.type === "argument") {
+          dedupedEntries.push(entry);
+          continue;
+        }
         const key = getDocEntryKey(entry);
         if (!untitledSeen.has(key)) {
           untitledSeen.add(key);
