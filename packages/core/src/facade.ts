@@ -228,10 +228,12 @@ function stripPlaceholderValues<T>(
       continue;
     }
     if ("value" in descriptor) {
-      // Function-valued properties are wrapped so that closures capturing
-      // placeholder values have their return values sanitized.  Class
-      // constructors are left unwrapped to preserve static-method `this`
-      // binding (especially private static fields).
+      // Function-valued properties are wrapped via Proxy so that closures
+      // capturing placeholder values have their return values sanitized.
+      // Using a Proxy preserves the original function's observable shape
+      // (.prototype presence, own properties, prototype chain, name,
+      // length) without manual copying.  Class constructors are left
+      // unwrapped to preserve static-method `this` binding.
       // See: https://github.com/dahlia/optique/issues/407
       if (
         typeof descriptor.value === "function" &&
@@ -239,62 +241,37 @@ function stripPlaceholderValues<T>(
           Function.prototype.toString.call(descriptor.value),
         )
       ) {
-        const fn = descriptor.value as {
-          apply(thisArg: unknown, args: unknown[]): unknown;
-        };
-        const wrapper = function (
-          this: unknown,
-          ...args: unknown[]
-        ) {
-          if (new.target) {
-            return Reflect.construct(
-              fn as (...a: unknown[]) => unknown,
-              args,
-              new.target === wrapper
-                ? fn as (...a: unknown[]) => unknown
-                : new.target,
-            );
-          }
-          const result = fn.apply(this, args);
-          // Use a fresh seen map per call so mutable return values
-          // are re-sanitized correctly on each invocation.
-          if (result instanceof Promise) {
-            return (result as Promise<unknown>).then(
-              (v) => stripPlaceholderValues(v),
-            );
-          }
-          return stripPlaceholderValues(result);
-        };
-        // Preserve the original function's prototype chain so that
-        // inherited statics (e.g., from class Child extends Base)
-        // remain accessible through the wrapper.
-        Object.setPrototypeOf(wrapper, Object.getPrototypeOf(fn));
-        for (const fk of Reflect.ownKeys(fn as object)) {
-          const fd = Object.getOwnPropertyDescriptor(fn, fk);
-          if (fd == null) continue;
-          try {
-            // Rewrite self-references (e.g. fn.self = fn) to point at
-            // the wrapper so identity checks stay consistent.
-            if ("value" in fd && fd.value === fn) {
-              Object.defineProperty(wrapper, fk, {
-                ...fd,
-                value: wrapper,
-              });
-            } else {
-              Object.defineProperty(wrapper, fk, fd);
+        const fn = descriptor.value;
+        // Use a let so the construct trap can map new.target back
+        // from the proxy to the original function.
+        // deno-lint-ignore prefer-const
+        let fnProxy: typeof fn;
+        fnProxy = new Proxy(fn, {
+          get(target, prop, receiver) {
+            const val = Reflect.get(target, prop, receiver);
+            return val === target ? receiver : val;
+          },
+          apply(target, thisArg, args) {
+            const result = Reflect.apply(target, thisArg, args);
+            if (result instanceof Promise) {
+              return (result as Promise<unknown>).then(
+                (v) => stripPlaceholderValues(v),
+              );
             }
-          } catch { /* best-effort */ }
-        }
-        // If the original doesn't have .prototype (bound/arrow functions),
-        // set the wrapper's .prototype to undefined so instanceof checks
-        // don't use the wrapper's synthetic prototype.  Use assignment
-        // rather than delete because .prototype is non-configurable.
-        if (
-          !Object.prototype.hasOwnProperty.call(fn, "prototype")
-        ) {
-          wrapper.prototype = undefined;
-        }
-        descriptor.value = wrapper;
+            return stripPlaceholderValues(result);
+          },
+          construct(target, args, newTarget) {
+            // Map new.target from proxy → original so constructor
+            // guards like `new.target === FnCtor` see the expected
+            // function, not the wrapper.
+            return Reflect.construct(
+              target,
+              args,
+              newTarget === fnProxy ? target : newTarget,
+            );
+          },
+        });
+        descriptor.value = fnProxy;
       } else {
         descriptor.value = stripPlaceholderValues(
           descriptor.value,

@@ -468,51 +468,32 @@ function stripDeferredPromptValues<T>(
           Function.prototype.toString.call(descriptor.value),
         )
       ) {
-        const fn = descriptor.value as {
-          apply(thisArg: unknown, args: unknown[]): unknown;
-        };
-        const wrapper = function (
-          this: unknown,
-          ...args: unknown[]
-        ) {
-          if (new.target) {
-            return Reflect.construct(
-              fn as (...a: unknown[]) => unknown,
-              args,
-              new.target === wrapper
-                ? fn as (...a: unknown[]) => unknown
-                : new.target,
-            );
-          }
-          const result = fn.apply(this, args);
-          if (result instanceof Promise) {
-            return (result as Promise<unknown>).then(
-              (v) => stripDeferredPromptValues(v),
-            );
-          }
-          return stripDeferredPromptValues(result);
-        };
-        Object.setPrototypeOf(wrapper, Object.getPrototypeOf(fn));
-        for (const fk of Reflect.ownKeys(fn as object)) {
-          const fd = Object.getOwnPropertyDescriptor(fn, fk);
-          if (fd == null) continue;
-          try {
-            if ("value" in fd && fd.value === fn) {
-              Object.defineProperty(wrapper, fk, {
-                ...fd,
-                value: wrapper,
-              });
-            } else {
-              Object.defineProperty(wrapper, fk, fd);
+        const fn = descriptor.value;
+        // deno-lint-ignore prefer-const
+        let fnProxy: typeof fn;
+        fnProxy = new Proxy(fn, {
+          get(target, prop, receiver) {
+            const val = Reflect.get(target, prop, receiver);
+            return val === target ? receiver : val;
+          },
+          apply(target, thisArg, args) {
+            const result = Reflect.apply(target, thisArg, args);
+            if (result instanceof Promise) {
+              return (result as Promise<unknown>).then(
+                (v) => stripDeferredPromptValues(v),
+              );
             }
-          } catch { /* best-effort */ }
-        }
-        if (
-          !Object.prototype.hasOwnProperty.call(fn, "prototype")
-        ) {
-          wrapper.prototype = undefined;
-        }
-        descriptor.value = wrapper;
+            return stripDeferredPromptValues(result);
+          },
+          construct(target, args, newTarget) {
+            return Reflect.construct(
+              target,
+              args,
+              newTarget === fnProxy ? target : newTarget,
+            );
+          },
+        });
+        descriptor.value = fnProxy;
       } else {
         descriptor.value = stripDeferredPromptValues(
           descriptor.value,
