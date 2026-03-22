@@ -462,7 +462,12 @@ function stripDeferredPromptValues<T>(
       continue;
     }
     if ("value" in descriptor) {
-      if (typeof descriptor.value === "function") {
+      if (
+        typeof descriptor.value === "function" &&
+        !/^class[\s{]/.test(
+          Function.prototype.toString.call(descriptor.value),
+        )
+      ) {
         const fn = descriptor.value as {
           apply(thisArg: unknown, args: unknown[]): unknown;
         };
@@ -492,7 +497,14 @@ function stripDeferredPromptValues<T>(
           const fd = Object.getOwnPropertyDescriptor(fn, fk);
           if (fd == null) continue;
           try {
-            Object.defineProperty(wrapper, fk, fd);
+            if ("value" in fd && fd.value === fn) {
+              Object.defineProperty(wrapper, fk, {
+                ...fd,
+                value: wrapper,
+              });
+            } else {
+              Object.defineProperty(wrapper, fk, fd);
+            }
           } catch { /* best-effort */ }
         }
         if (

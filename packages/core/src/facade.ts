@@ -228,14 +228,17 @@ function stripPlaceholderValues<T>(
       continue;
     }
     if ("value" in descriptor) {
-      // All function-valued properties are wrapped so that closures
-      // capturing placeholder values have their return values sanitized.
-      // The wrapper delegates `new` via Reflect.construct and copies
-      // all own properties (.prototype, .name, .length, statics) from
-      // the original, making it transparent for construction,
-      // instanceof, and static method access.
+      // Function-valued properties are wrapped so that closures capturing
+      // placeholder values have their return values sanitized.  Class
+      // constructors are left unwrapped to preserve static-method `this`
+      // binding (especially private static fields).
       // See: https://github.com/dahlia/optique/issues/407
-      if (typeof descriptor.value === "function") {
+      if (
+        typeof descriptor.value === "function" &&
+        !/^class[\s{]/.test(
+          Function.prototype.toString.call(descriptor.value),
+        )
+      ) {
         const fn = descriptor.value as {
           apply(thisArg: unknown, args: unknown[]): unknown;
         };
@@ -270,7 +273,16 @@ function stripPlaceholderValues<T>(
           const fd = Object.getOwnPropertyDescriptor(fn, fk);
           if (fd == null) continue;
           try {
-            Object.defineProperty(wrapper, fk, fd);
+            // Rewrite self-references (e.g. fn.self = fn) to point at
+            // the wrapper so identity checks stay consistent.
+            if ("value" in fd && fd.value === fn) {
+              Object.defineProperty(wrapper, fk, {
+                ...fd,
+                value: wrapper,
+              });
+            } else {
+              Object.defineProperty(wrapper, fk, fd);
+            }
           } catch { /* best-effort */ }
         }
         // If the original doesn't have .prototype (bound/arrow functions),
