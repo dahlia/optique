@@ -78,30 +78,22 @@ interface ValibotSchemaInternal {
  * - Any wrapper with a `wrapped` field pointing to a catch-all schema
  *   (e.g., `v.optional()`, `v.nullable()`, `v.nonOptional()`, etc.)
  *
- * Piped string schemas (e.g., `v.pipe(v.string(), v.trim())`) are NOT
- * considered catch-all because pipes can contain transforms that change
- * the value type followed by schemas that reject, so the arm may not
- * actually accept all inputs.
- *
- * @param includeString When true, also recognize bare `v.string()` (without
- *   pipe) as a catch-all.  Set to false after transforms where the value type
- *   is no longer guaranteed to be a string.
+ * Piped schemas are NOT considered catch-all because pipes can contain
+ * transforms that change the value type followed by schemas that reject.
  */
 function isCatchAllSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  includeString = true,
 ): boolean {
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return false;
   // Bare v.unknown() and v.any() without pipe accept every value
   if ((s.type === "unknown" || s.type === "any") && !s.pipe) return true;
-  // Bare v.string() without pipe accepts every string (only valid when
-  // the input is still known to be a string, i.e., before transforms)
-  if (includeString && s.type === "string" && !s.pipe) return true;
+  // Bare v.string() without pipe accepts every string
+  if (s.type === "string" && !s.pipe) return true;
   // Unwrap any schema with a wrapped field (optional, nullable, nullish,
   // nonOptional, exactOptional, etc.)
   if (s.wrapped) {
-    return isCatchAllSchema(s.wrapped, includeString);
+    return isCatchAllSchema(s.wrapped);
   }
   return false;
 }
@@ -116,44 +108,35 @@ function isCatchAllSchema(
  * Known limitations:
  * - `v.lazy()` schemas are not inspected because the getter depends on
  *   actual parse input, making static analysis unreliable.
- * - After a `v.transform()` in a pipeline, only type-agnostic catch-all
- *   arms (`v.unknown()`, `v.any()`) disable async checking in unions.
- *   String catch-alls are not reliable since the transform may change
- *   the value type.
- *
- * @param afterTransform When true, the schema appears after a
- *   `v.transform()` in a pipeline, so its input type is unknown.
- *   Union catch-all string arm optimizations are disabled.
+ * - After a `v.transform()`, the value type may change, but this check
+ *   cannot determine the output type.  A bare `v.string()` arm in a
+ *   union is still treated as a catch-all even after a type-changing
+ *   transform.  Use `v.unknown()` or `v.any()` as the catch-all arm
+ *   when the union follows a transform that may produce non-string values.
  */
 function containsAsyncSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  afterTransform = false,
 ): boolean {
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return true;
 
   // Unwrap optional/nullable/nullish wrappers
-  if (s.wrapped) return containsAsyncSchema(s.wrapped, afterTransform);
+  if (s.wrapped) return containsAsyncSchema(s.wrapped);
 
   // Check intersect options — all arms must match, so async arms are always
   // reachable and must be rejected.
-  // For union/variant — a type-agnostic catch-all arm (v.unknown(), v.any())
-  // makes async arms unreachable regardless of transforms.  A string-based
-  // catch-all (bare v.string()) only applies before transforms since the
-  // input type is still known to be a string.
+  // For union/variant — a catch-all arm (bare v.string(), v.unknown(), or
+  // v.any()) makes async arms unreachable from synchronous parsing.
   if (s.options && Array.isArray(s.options)) {
     const isUnionLike = s.type === "union" || s.type === "variant";
     if (isUnionLike) {
-      // After a transform, only type-agnostic catch-alls (unknown/any)
-      // are reliable; string catch-alls only work on raw CLI input.
       const hasCatchAll = s.options.some((opt) =>
-        typeof opt === "object" && opt != null &&
-        isCatchAllSchema(opt, /* includeString */ !afterTransform)
+        typeof opt === "object" && opt != null && isCatchAllSchema(opt)
       );
       if (!hasCatchAll) {
         for (const option of s.options) {
           if (typeof option === "object" && option != null) {
-            if (containsAsyncSchema(option, afterTransform)) return true;
+            if (containsAsyncSchema(option)) return true;
           }
         }
       }
@@ -161,7 +144,7 @@ function containsAsyncSchema(
       // intersect: all arms must match
       for (const option of s.options) {
         if (typeof option === "object" && option != null) {
-          if (containsAsyncSchema(option, afterTransform)) return true;
+          if (containsAsyncSchema(option)) return true;
         }
       }
     }
@@ -169,18 +152,13 @@ function containsAsyncSchema(
 
   // Check pipeline actions (may themselves be schemas, e.g., v.transform)
   if (s.pipe && Array.isArray(s.pipe)) {
-    let seenTransform = afterTransform;
     for (const action of s.pipe) {
       if ((action as { async?: boolean }).async) return true;
-      if ((action as { type?: string }).type === "transform") {
-        seenTransform = true;
-      }
       // Pipeline actions with kind "schema" are nested schemas
       if (
         (action as { kind?: string }).kind === "schema" &&
         containsAsyncSchema(
           action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-          seenTransform,
         )
       ) {
         return true;
@@ -188,32 +166,29 @@ function containsAsyncSchema(
     }
   }
 
-  // Container members always receive transformed values (the container itself
-  // consumes the outer input), so propagate afterTransform = true to disable
-  // the union catch-all optimization inside nested schemas.
   // Check object entries
   if (s.entries) {
     for (const entry of Object.values(s.entries)) {
-      if (containsAsyncSchema(entry, true)) return true;
+      if (containsAsyncSchema(entry)) return true;
     }
   }
 
   // Check array item
-  if (s.item && containsAsyncSchema(s.item, true)) return true;
+  if (s.item && containsAsyncSchema(s.item)) return true;
 
   // Check tuple items
   if (s.items && Array.isArray(s.items)) {
     for (const item of s.items) {
-      if (containsAsyncSchema(item, true)) return true;
+      if (containsAsyncSchema(item)) return true;
     }
   }
 
   // Check record/map key and value
-  if (s.key && containsAsyncSchema(s.key, true)) return true;
-  if (s.value && containsAsyncSchema(s.value, true)) return true;
+  if (s.key && containsAsyncSchema(s.key)) return true;
+  if (s.value && containsAsyncSchema(s.value)) return true;
 
   // Check objectWithRest/tupleWithRest rest schema
-  if (s.rest && containsAsyncSchema(s.rest, true)) return true;
+  if (s.rest && containsAsyncSchema(s.rest)) return true;
 
   // Check v.promise() inner schema (stored in the overloaded `message` field)
   if (s.type === "promise") {
@@ -225,7 +200,6 @@ function containsAsyncSchema(
       if (
         containsAsyncSchema(
           promiseInner as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-          true,
         )
       ) {
         return true;
