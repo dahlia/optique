@@ -126,12 +126,17 @@ function isCatchAllSchema(
  */
 function containsAsyncSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+  visited: WeakSet<object> = new WeakSet(),
 ): boolean {
+  // Cycle detection: skip schemas already being inspected (recursive lazy)
+  if (visited.has(schema)) return false;
+  visited.add(schema);
+
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return true;
 
   // Unwrap optional/nullable/nullish wrappers
-  if (s.wrapped) return containsAsyncSchema(s.wrapped);
+  if (s.wrapped) return containsAsyncSchema(s.wrapped, visited);
 
   // Check intersect options — all arms must match, so async arms are always
   // reachable and must be rejected.
@@ -146,7 +151,7 @@ function containsAsyncSchema(
       if (!hasCatchAll) {
         for (const option of s.options) {
           if (typeof option === "object" && option != null) {
-            if (containsAsyncSchema(option)) return true;
+            if (containsAsyncSchema(option, visited)) return true;
           }
         }
       }
@@ -154,7 +159,7 @@ function containsAsyncSchema(
       // intersect: all arms must match
       for (const option of s.options) {
         if (typeof option === "object" && option != null) {
-          if (containsAsyncSchema(option)) return true;
+          if (containsAsyncSchema(option, visited)) return true;
         }
       }
     }
@@ -169,6 +174,7 @@ function containsAsyncSchema(
         (action as { kind?: string }).kind === "schema" &&
         containsAsyncSchema(
           action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+          visited,
         )
       ) {
         return true;
@@ -179,26 +185,26 @@ function containsAsyncSchema(
   // Check object entries
   if (s.entries) {
     for (const entry of Object.values(s.entries)) {
-      if (containsAsyncSchema(entry)) return true;
+      if (containsAsyncSchema(entry, visited)) return true;
     }
   }
 
   // Check array item
-  if (s.item && containsAsyncSchema(s.item)) return true;
+  if (s.item && containsAsyncSchema(s.item, visited)) return true;
 
   // Check tuple items
   if (s.items && Array.isArray(s.items)) {
     for (const item of s.items) {
-      if (containsAsyncSchema(item)) return true;
+      if (containsAsyncSchema(item, visited)) return true;
     }
   }
 
   // Check record/map key and value
-  if (s.key && containsAsyncSchema(s.key)) return true;
-  if (s.value && containsAsyncSchema(s.value)) return true;
+  if (s.key && containsAsyncSchema(s.key, visited)) return true;
+  if (s.value && containsAsyncSchema(s.value, visited)) return true;
 
   // Check objectWithRest/tupleWithRest rest schema
-  if (s.rest && containsAsyncSchema(s.rest)) return true;
+  if (s.rest && containsAsyncSchema(s.rest, visited)) return true;
 
   // Check v.promise() inner schema (stored in the overloaded `message` field)
   if (s.type === "promise") {
@@ -210,6 +216,7 @@ function containsAsyncSchema(
       if (
         containsAsyncSchema(
           promiseInner as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+          visited,
         )
       ) {
         return true;
@@ -223,7 +230,7 @@ function containsAsyncSchema(
   if (typeof s.getter === "function") {
     try {
       const inner = s.getter();
-      if (containsAsyncSchema(inner)) return true;
+      if (containsAsyncSchema(inner, visited)) return true;
     } catch {
       // Input-dependent getter — cannot determine async status statically.
     }
