@@ -59,6 +59,7 @@ interface ZodDefinitionInternal {
   readonly type?: string;
   readonly checks?: readonly ZodCheckInternal[];
   readonly innerType?: z.Schema<unknown>;
+  readonly schema?: z.Schema<unknown>;
   readonly values?:
     | readonly (string | number | boolean | symbol | bigint)[]
     | Record<string, string | number>;
@@ -103,24 +104,93 @@ function isZodAsyncError(error: Error): boolean {
 const BOOL_TRUE_LITERALS = ["true", "1", "yes", "on"] as const;
 const BOOL_FALSE_LITERALS = ["false", "0", "no", "off"] as const;
 
+interface BooleanSchemaInfo {
+  /** Whether the schema is a boolean type (possibly wrapped). */
+  readonly isBoolean: boolean;
+  /** Whether it is safe to expose `choices` and `suggest()`. */
+  readonly exposeChoices: boolean;
+}
+
 /**
- * Checks whether the given Zod schema represents a boolean type,
- * unwrapping optional/nullable/default wrappers as needed.
+ * Analyzes whether the given Zod schema represents a boolean type,
+ * unwrapping all known Zod wrappers.  Also determines whether it is
+ * safe to expose `choices` and `suggest()` — wrappers that can narrow
+ * the accepted domain (effects, catch) suppress choice exposure.
  */
-function isBooleanSchema(schema: z.Schema<unknown>): boolean {
+function analyzeBooleanSchema(
+  schema: z.Schema<unknown>,
+): BooleanSchemaInfo {
+  return analyzeBooleanInner(schema, true);
+}
+
+function analyzeBooleanInner(
+  schema: z.Schema<unknown>,
+  canExposeChoices: boolean,
+): BooleanSchemaInfo {
   const def = (schema as ZodSchemaInternal)._def;
-  if (!def) return false;
+  if (!def) return { isBoolean: false, exposeChoices: false };
   const typeName = def.typeName ?? def.type;
-  if (typeName === "ZodBoolean" || typeName === "boolean") return true;
+
+  if (typeName === "ZodBoolean" || typeName === "boolean") {
+    // Zod v4 inlines refinements as checks on the schema itself.
+    // When custom checks are present, the accepted domain may be
+    // narrowed, so suppress choices.
+    const hasCustomChecks = Array.isArray(def.checks) &&
+      def.checks.some((c) =>
+        c.kind === "custom" ||
+        (c as unknown as { type?: string }).type === "custom"
+      );
+    return {
+      isBoolean: true,
+      exposeChoices: canExposeChoices && !hasCustomChecks,
+    };
+  }
+
+  // optional/nullable/default preserve choice exposure
   if (
     typeName === "ZodOptional" || typeName === "optional" ||
     typeName === "ZodNullable" || typeName === "nullable" ||
     typeName === "ZodDefault" || typeName === "default"
   ) {
     const innerType = def.innerType;
-    if (innerType != null) return isBooleanSchema(innerType);
+    if (innerType != null) {
+      return analyzeBooleanInner(innerType, canExposeChoices);
+    }
   }
-  return false;
+
+  // effects (refine/transform/preprocess) — suppress choices
+  if (typeName === "ZodEffects" || typeName === "effects") {
+    const innerSchema = def.schema;
+    if (innerSchema != null) {
+      return analyzeBooleanInner(innerSchema, false);
+    }
+  }
+
+  // catch — suppress choices
+  if (typeName === "ZodCatch" || typeName === "catch") {
+    const innerType = def.innerType;
+    if (innerType != null) {
+      return analyzeBooleanInner(innerType, false);
+    }
+  }
+
+  // branded — suppress choices (refinements may be involved)
+  if (typeName === "ZodBranded" || typeName === "branded") {
+    const innerType = def.innerType;
+    if (innerType != null) {
+      return analyzeBooleanInner(innerType, false);
+    }
+  }
+
+  // pipeline — suppress choices
+  if (typeName === "ZodPipeline" || typeName === "pipeline") {
+    const innerType = def.innerType;
+    if (innerType != null) {
+      return analyzeBooleanInner(innerType, false);
+    }
+  }
+
+  return { isBoolean: false, exposeChoices: false };
 }
 
 /**
@@ -503,7 +573,7 @@ export function zod<T>(
   options: ZodParserOptions<T> = {},
 ): ValueParser<"sync", T> {
   const choices = inferChoices(schema);
-  const isBoolean = isBooleanSchema(schema);
+  const boolInfo = analyzeBooleanSchema(schema);
   const metavar = options.metavar ?? inferMetavar(schema);
   ensureNonEmptyString(metavar);
 
@@ -557,10 +627,46 @@ export function zod<T>(
     };
   }
 
+  /**
+   * Handles a failed boolean literal pre-conversion, respecting custom
+   * `zodError` overrides when provided.  For function-style overrides,
+   * passes the raw input through `safeParse()` to obtain a real
+   * `ZodError`; if `safeParse()` succeeds (coerced boolean case), falls
+   * back to the built-in literal error.
+   */
+  function handleBooleanLiteralError(
+    boolResult: ValueParserResult<boolean>,
+    rawInput: string,
+  ): ValueParserResult<T> {
+    if (options.errors?.zodError) {
+      if (typeof options.errors.zodError !== "function") {
+        return { success: false, error: options.errors.zodError };
+      }
+      // Try to get a real ZodError for the callback.
+      // For non-coerced z.boolean(), safeParse(string) fails with a
+      // ZodError we can forward.  For z.coerce.boolean(), safeParse
+      // would succeed (JS truthiness), so we fall back to the built-in
+      // error in that case.
+      let result;
+      try {
+        result = schema.safeParse(rawInput);
+      } catch {
+        // Ignore errors (e.g., async schemas)
+      }
+      if (result && !result.success) {
+        return {
+          success: false,
+          error: options.errors.zodError(result.error, rawInput),
+        };
+      }
+    }
+    return boolResult as ValueParserResult<T>;
+  }
+
   const parser: ValueParser<"sync", T> = {
     $mode: "sync",
     metavar,
-    ...(isBoolean
+    ...(boolInfo.exposeChoices
       ? {
         choices: Object.freeze([true, false]) as readonly T[],
         suggest(prefix: string) {
@@ -591,10 +697,10 @@ export function zod<T>(
       : {}),
 
     parse(input: string): ValueParserResult<T> {
-      if (isBoolean) {
+      if (boolInfo.isBoolean) {
         const boolResult = preConvertBoolean(input);
         if (!boolResult.success) {
-          return boolResult as ValueParserResult<T>;
+          return handleBooleanLiteralError(boolResult, input);
         }
         return doSafeParse(boolResult.value, input);
       }

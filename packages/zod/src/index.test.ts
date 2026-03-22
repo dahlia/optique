@@ -926,10 +926,10 @@ describe("zod()", () => {
       assert.ok(falseResult.success);
       assert.equal(falseResult.value, false);
 
-      // catch() falls back to default for invalid input
-      const catchResult = parser.parse("maybe");
-      assert.ok(catchResult.success);
-      assert.equal(catchResult.value, false);
+      // Invalid boolean literals are still rejected at the
+      // pre-conversion layer, before Zod's catch() can fire.
+      const invalidResult = parser.parse("maybe");
+      assert.ok(!invalidResult.success);
     });
 
     it("should not expose choices for refined boolean schemas", () => {
