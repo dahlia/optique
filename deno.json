@@ -5,7 +5,8 @@
   ],
   "imports": {
     "@inquirer/prompts": "npm:@inquirer/prompts@^8.3.0",
-    "@logtape/logtape": "jsr:@logtape/logtape@^1.2.2",
+    "@logtape/file": "jsr:@logtape/file@^2.0.4",
+    "@logtape/logtape": "jsr:@logtape/logtape@^2.0.4",
     "@standard-schema/spec": "npm:@standard-schema/spec@^1.1.0",
     "@std/fs": "jsr:@std/fs@^1.0.19",
     "@std/path": "jsr:@std/path@^1.1.1",

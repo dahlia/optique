@@ -1,5 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { mkdtemp } from "node:fs/promises";
 import { parse, suggestSync } from "@optique/core/parser";
 import { object } from "@optique/core/constructs";
 import { runParser } from "@optique/core/facade";
@@ -689,14 +692,30 @@ describe("createSink()", () => {
     assert.equal(typeof sink, "function");
   });
 
-  it("should throw helpful error when file sink package is missing", async () => {
+  it("should create file sink for file output", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "optique-test-"));
+    const sink = await createSink({
+      type: "file",
+      path: join(dir, "test-sink.log"),
+    });
+    assert.equal(typeof sink, "function");
+  });
+
+  it("should propagate getFileSink() errors as-is", async () => {
+    // When @logtape/file is installed but getFileSink() throws (e.g., the
+    // target directory does not exist), the original error must propagate
+    // without being rewritten as "File sink requires @logtape/file package".
     await assert.rejects(
-      () => createSink({ type: "file", path: "/tmp/optique.log" }),
+      () =>
+        createSink({
+          type: "file",
+          path: "/nonexistent/deeply/nested/path/test.log",
+        }),
       (error) => {
         assert.ok(error instanceof Error);
-        assert.match(
+        assert.doesNotMatch(
           error.message,
-          /File sink requires @logtape\/file package\./,
+          /File sink requires @logtape\/file package/,
         );
         return true;
       },

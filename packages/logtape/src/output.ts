@@ -258,7 +258,11 @@ export function createConsoleSink(options: ConsoleSinkOptions = {}): Sink {
  * @param output The log output destination.
  * @param consoleSinkOptions Options for console sink (only used when output is console).
  * @returns A promise that resolves to a {@link Sink}.
- * @throws {Error} If file output is requested but `@logtape/file` is not installed.
+ * @throws {Error} If file output is requested but `@logtape/file` is not
+ *   installed.
+ * @throws If `@logtape/file` is installed but `getFileSink(output.path)` fails
+ *   at runtime (e.g., the target directory does not exist), the original error
+ *   propagates as-is.
  *
  * @example Console output
  * ```typescript
@@ -284,10 +288,9 @@ export async function createSink(
     return createConsoleSink(consoleSinkOptions);
   }
 
-  // Dynamic import for optional @logtape/file dependency
+  let getFileSink: (path: string) => Sink;
   try {
-    const { getFileSink } = await import("@logtape/file");
-    return getFileSink(output.path);
+    ({ getFileSink } = await import("@logtape/file"));
   } catch (e) {
     throw new Error(
       `File sink requires @logtape/file package. Install it with:\n` +
@@ -297,4 +300,5 @@ export async function createSink(
         `Original error: ${e}`,
     );
   }
+  return getFileSink(output.path);
 }
