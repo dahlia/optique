@@ -401,6 +401,15 @@ describe("zod()", () => {
       assert.equal(parser.format({ id: 1n }), "[object Object]");
     });
 
+    it("should not throw for cyclic objects", () => {
+      const parser = zod(
+        z.string().transform((s) => ({ raw: s })),
+      );
+      const cyclic: { raw: string; self?: unknown } = { raw: "hello" };
+      cyclic.self = cyclic;
+      assert.equal(parser.format(cyclic), "[object Object]");
+    });
+
     it("should handle objects with toJSON returning undefined", () => {
       const parser = zod(
         z.string().transform(() => ({ toJSON: () => undefined })),

@@ -1656,7 +1656,8 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
  -  `valibot()` now formats transformed non-primitive values intelligently
     instead of producing `[object Object]`.  `Date` values use `.toISOString()`
-    for stable output, and plain objects/arrays use `JSON.stringify()`.
+    for stable output.  Plain objects use `JSON.stringify()`, while arrays
+    use `String()` to preserve round-trip compatibility for common transforms.
     A new `format` option in `ValibotParserOptions` allows custom formatting.
     [[#285], [#706]]
 
@@ -1692,7 +1693,8 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
  -  `zod()` now formats transformed non-primitive values intelligently
     instead of producing `[object Object]`.  `Date` values use `.toISOString()`
-    for stable output, and plain objects/arrays use `JSON.stringify()`.
+    for stable output.  Plain objects use `JSON.stringify()`, while arrays
+    use `String()` to preserve round-trip compatibility for common transforms.
     A new `format` option in `ZodParserOptions` allows custom formatting.
     [[#285], [#706]]
 

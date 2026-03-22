@@ -402,6 +402,15 @@ describe("valibot()", () => {
       assert.equal(parser.format({ id: 1n }), "[object Object]");
     });
 
+    it("should not throw for cyclic objects", () => {
+      const parser = valibot(
+        v.pipe(v.string(), v.transform((s) => ({ raw: s }))),
+      );
+      const cyclic: { raw: string; self?: unknown } = { raw: "hello" };
+      cyclic.self = cyclic;
+      assert.equal(parser.format(cyclic), "[object Object]");
+    });
+
     it("should handle objects with toJSON returning undefined", () => {
       const parser = valibot(
         v.pipe(
