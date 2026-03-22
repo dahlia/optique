@@ -234,7 +234,10 @@ export function createConsoleSink(options: ConsoleSinkOptions = {}): Sink {
     const formattedMessage = messageParts.join("");
 
     // Format the log line
-    const timestamp = new Date(record.timestamp ?? Date.now()).toISOString();
+    const ts = record.timestamp;
+    const timestamp = new Date(
+      ts != null && !Number.isNaN(ts) ? ts : Date.now(),
+    ).toISOString();
     const category = record.category.join(".");
     const level = record.level.toUpperCase().padEnd(7);
     const line = `${timestamp} [${level}] ${category}: ${formattedMessage}`;

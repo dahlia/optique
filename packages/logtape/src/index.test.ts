@@ -670,6 +670,33 @@ describe("createConsoleSink()", () => {
     );
   });
 
+  it("should fall back to current time for NaN timestamp", () => {
+    const sink = createConsoleSink({ stream: "stdout" });
+    const originalLog = console.log;
+    const lines: string[] = [];
+    console.log = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    try {
+      sink({
+        category: ["test"],
+        level: "info",
+        message: ["hello"],
+        rawMessage: "hello",
+        properties: {},
+        timestamp: NaN,
+      });
+    } finally {
+      console.log = originalLog;
+    }
+    assert.equal(lines.length, 1);
+    // Should not throw RangeError; should produce a valid ISO timestamp
+    assert.match(
+      lines[0],
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[INFO\s*\] test: hello$/,
+    );
+  });
+
   it("should route by stream resolver", () => {
     const sink = createConsoleSink({
       streamResolver: (level) => level === "error" ? "stderr" : "stdout",
