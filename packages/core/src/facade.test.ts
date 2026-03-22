@@ -10278,6 +10278,166 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(observedGreeting, "hello world");
   });
 
+  // Regression tests for https://github.com/dahlia/optique/issues/407
+  // These tests verify that phase-two sanitization correctly handles
+  // placeholder values hidden in private fields and method-only wrappers.
+  it("private-field-only placeholder is sanitized via proxy in phase-two", async () => {
+    // When map() transforms an object containing a placeholder into a class
+    // instance that stores the placeholder in a private field, the proxy
+    // must intercept getter/method access and strip the sentinel from
+    // return values.
+    class PrivateResult {
+      #apiKey: unknown;
+      name: string;
+      constructor(name: string, apiKey: unknown) {
+        this.name = name;
+        this.#apiKey = apiKey;
+      }
+      getApiKey(): unknown {
+        return this.#apiKey;
+      }
+    }
+
+    let observedName: string | undefined;
+    let observedApiKey: unknown = "not-set";
+
+    const contextKey = Symbol.for("@test/private-field-only-proxy");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        const p = parsed as PrivateResult;
+        observedName = p.name;
+        observedApiKey = p.getApiKey();
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (value) =>
+        new PrivateResult(
+          value.name,
+          { [testPlaceholderKey]: true },
+        ),
+    );
+
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.ok(result instanceof PrivateResult);
+    assert.equal(observedName, "test");
+    // The private-field value is a placeholder; the proxy must strip it.
+    assert.equal(observedApiKey, undefined);
+  });
+
+  it("method-only wrapper DTO strips placeholder from closure-captured value", async () => {
+    // When map() produces a plain object with a method that captures
+    // a placeholder value from the parser's output in its closure, the
+    // sanitizer must wrap function-valued properties so that method return
+    // values are stripped of placeholders.
+    let observedResult: unknown = "not-set";
+
+    const contextKey = Symbol.for("@test/method-only-wrapper-closure");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        if (
+          typeof parsed === "object" &&
+          parsed != null &&
+          "toConfigInput" in parsed
+        ) {
+          observedResult = (parsed as { toConfigInput(): unknown })
+            .toConfigInput();
+        }
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (value) => ({
+        name: value.name,
+        deferred: { [testPlaceholderKey]: true },
+        toConfigInput() {
+          // The placeholder is both in an own property (deferred) and
+          // captured in this closure.  The sanitizer must wrap this method.
+          return { apiKey: { [testPlaceholderKey]: true } };
+        },
+      }),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    // The method returns an object containing a placeholder. The sanitizer
+    // wraps function-valued properties and strips placeholder values from
+    // return values.
+    assert.ok(observedResult != null && typeof observedResult === "object");
+    assert.equal(
+      (observedResult as { apiKey: unknown }).apiKey,
+      undefined,
+    );
+  });
+
+  it("getter accessing private placeholder field works via proxy in phase-two", async () => {
+    // Class instance where placeholder is stored in a private field
+    // and exposed via a getter. The proxy must invoke the getter on the
+    // real target (not the proxy) to avoid TypeError for private fields.
+    class Config {
+      #token: unknown;
+      name: string;
+      constructor(name: string, token: unknown) {
+        this.name = name;
+        this.#token = token;
+      }
+      get token(): unknown {
+        return this.#token;
+      }
+    }
+
+    let observedName: string | undefined;
+    let observedToken: unknown = "not-set";
+
+    const contextKey = Symbol.for("@test/getter-private-placeholder");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        const c = parsed as Config;
+        observedName = c.name;
+        observedToken = c.token;
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (value) => new Config(value.name, { [testPlaceholderKey]: true }),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.equal(observedName, "test");
+    // The getter accesses a private field containing a placeholder.
+    // The proxy invokes the getter on the real target and strips the result.
+    assert.equal(observedToken, undefined);
+  });
+
   it("wrapped prototype method has stable identity", async () => {
     // Regression test for https://github.com/dahlia/optique/issues/307
     // parsed.method === parsed.method must hold so that consumers can

@@ -13,6 +13,7 @@ import {
   transformsDependencyValueMarker,
   wrappedDependencySourceMarker,
 } from "@optique/core/dependency";
+import { isPlaceholderValue, placeholder } from "@optique/core/context";
 import {
   envVar,
   formatMessage,
@@ -1752,6 +1753,45 @@ describe("map", () => {
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value, "ecila"); // "ALICE" -> "alice" -> "ecila"
+    }
+  });
+
+  // Regression test for https://github.com/dahlia/optique/issues/407
+  it("should pass through when entire value is a placeholder", () => {
+    const placeholderObj = { [placeholder]: true } as unknown as string;
+    const innerParser = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: undefined as unknown,
+      parse() {
+        return {
+          success: true as const,
+          next: {
+            buffer: [] as readonly string[],
+            state: undefined as unknown,
+            optionsTerminated: false,
+            usage: [],
+          },
+          consumed: [] as readonly string[],
+        };
+      },
+      complete(_state: unknown) {
+        return { success: true as const, value: placeholderObj };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const mappedParser = map(innerParser, (v) => v.toUpperCase());
+    const result = mappedParser.complete(innerParser.initialState);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.ok(isPlaceholderValue(result.value));
     }
   });
 });
