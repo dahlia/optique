@@ -702,6 +702,42 @@ describe("createSink()", () => {
       },
     );
   });
+
+  it("should propagate factory errors from getFileSink()", async () => {
+    const factoryError = new Error("boom: /tmp/test.log");
+    await assert.rejects(
+      () =>
+        createSink(
+          { type: "file", path: "/tmp/test.log" },
+          {},
+          () =>
+            Promise.resolve({
+              getFileSink: () => {
+                throw factoryError;
+              },
+            }),
+        ),
+      (error) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error, factoryError);
+        assert.equal(error.message, "boom: /tmp/test.log");
+        return true;
+      },
+    );
+  });
+
+  it("should use getFileSink() from imported module", async () => {
+    const fakeSink = () => {};
+    const sink = await createSink(
+      { type: "file", path: "/tmp/test.log" },
+      {},
+      () =>
+        Promise.resolve({
+          getFileSink: () => fakeSink,
+        }),
+    );
+    assert.equal(sink, fakeSink);
+  });
 });
 
 describe("createLoggingConfig()", () => {

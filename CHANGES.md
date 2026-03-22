@@ -1292,12 +1292,20 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
 ### @optique/logtape
 
+ -  Fixed `createSink()` misreporting `getFileSink()` factory errors as
+    missing `@logtape/file` package.  Previously, any error thrown after the
+    dynamic import (e.g., file permission errors) was caught and rewritten
+    as an installation hint.  Now only actual import failures produce the
+    installation message; factory errors propagate as-is.  [[#299], [#702]]
+
  -  Fixed `logOutput()` to request hidden-file completion for dot-prefixed
     paths.  Previously, tab-completion for paths like `.` or `src/.` would
     not suggest hidden files or directories.  [[#292], [#699]]
 
 [#292]: https://github.com/dahlia/optique/issues/292
+[#299]: https://github.com/dahlia/optique/issues/299
 [#699]: https://github.com/dahlia/optique/pull/699
+[#702]: https://github.com/dahlia/optique/pull/702
 
 ### @optique/temporal
 
