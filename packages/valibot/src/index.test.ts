@@ -821,20 +821,6 @@ describe("valibot()", () => {
       assert.ok(!tupParser.parse("hello").success);
     });
 
-    it("should throw TypeError for async entries inside piped containers", () => {
-      const asyncInner = v.pipeAsync(
-        v.string(),
-        // deno-lint-ignore require-await
-        v.checkAsync(async (val) => val === "ok", "not ok"),
-      );
-      const asyncSchema = v.pipe(
-        v.string(),
-        v.transform(JSON.parse),
-        v.object({ a: asyncInner } as never),
-      );
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
-    });
-
     it("should not reject async rest/promise in direct containers", () => {
       const asyncRest = v.pipeAsync(
         v.string(),

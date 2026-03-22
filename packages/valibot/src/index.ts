@@ -108,21 +108,6 @@ function isCatchAllSchema(
 }
 
 /**
- * Checks whether a schema's pipe contains a transform or rawTransform action.
- * Used to detect nested pipe schemas that change the value type.
- */
-function pipeContainsTransform(
-  schema: unknown,
-): boolean {
-  const pipe = (schema as ValibotSchemaInternal).pipe;
-  if (!pipe || !Array.isArray(pipe)) return false;
-  return pipe.some((action) => {
-    const t = (action as { type?: string }).type;
-    return t === "transform" || t === "raw_transform";
-  });
-}
-
-/**
  * Recursively checks whether a Valibot schema contains any async parts
  * (e.g., `pipeAsync`, `checkAsync`).  Wrapper schemas such as `optional()`,
  * `nullable()`, `nullish()`, and `union()` keep `async === false` on the
@@ -132,31 +117,26 @@ function pipeContainsTransform(
  * Known limitations:
  * - `v.lazy()` schemas are not inspected because the getter depends on
  *   actual parse input, making static analysis unreliable.
- * - After a `v.transform()`, the value type may change, but this check
- *   cannot determine the output type.  A bare `v.string()` arm in a
- *   union is still treated as a catch-all even after a type-changing
- *   transform.  Use `v.unknown()` or `v.any()` as the catch-all arm
- *   when the union follows a transform that may produce non-string values.
+ * - Async schemas nested inside container members (object entries, array
+ *   items, tuple items, etc.) are not detected.  At the top level, CLI
+ *   input is always a string, so container type checks reject before
+ *   visiting members.  After transforms, the value type is unknown and
+ *   container members may become reachable, but we cannot distinguish
+ *   type-preserving transforms from type-changing ones at construction
+ *   time.
  */
 function containsAsyncSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  visited: WeakMap<object, boolean> = new WeakMap(),
-  checkContainers = false,
+  visited: WeakSet<object> = new WeakSet(),
 ): boolean {
-  // Cycle detection: skip schemas already inspected at the same or deeper
-  // level.  A schema visited with checkContainers=true subsumes a later
-  // visit with checkContainers=false, but not vice versa.
-  const prev = visited.get(schema);
-  if (prev !== undefined && (prev || !checkContainers)) return false;
-  visited.set(schema, (prev ?? false) || checkContainers);
+  if (visited.has(schema)) return false;
+  visited.add(schema);
 
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return true;
 
   // Unwrap optional/nullable/nullish wrappers
-  if (s.wrapped) {
-    return containsAsyncSchema(s.wrapped, visited, checkContainers);
-  }
+  if (s.wrapped) return containsAsyncSchema(s.wrapped, visited);
 
   // Check intersect options — all arms must match, so async arms are always
   // reachable and must be rejected.
@@ -168,106 +148,30 @@ function containsAsyncSchema(
     if (isUnionLike) {
       for (const option of s.options) {
         if (typeof option !== "object" || option == null) continue;
-        // Once a catch-all arm is found, all later arms are unreachable
         if (isCatchAllSchema(option)) break;
-        if (containsAsyncSchema(option, visited, checkContainers)) {
-          return true;
-        }
+        if (containsAsyncSchema(option, visited)) return true;
       }
     } else {
-      // intersect: all arms must match
       for (const option of s.options) {
         if (typeof option === "object" && option != null) {
-          if (containsAsyncSchema(option, visited, checkContainers)) {
-            return true;
-          }
+          if (containsAsyncSchema(option, visited)) return true;
         }
       }
     }
   }
 
-  // Check pipeline actions (may themselves be schemas, e.g., v.transform).
-  // After a transform action, the value type may have changed, so container
-  // members inside subsequent schema actions become reachable.  Before any
-  // transform, the input is still a string and container schemas will reject.
+  // Check pipeline actions for async flags and nested schemas
   if (s.pipe && Array.isArray(s.pipe)) {
-    let seenTransform = checkContainers;
     for (const action of s.pipe) {
       if ((action as { async?: boolean }).async) return true;
-      const aType = (action as { type?: string }).type;
-      if (aType === "transform" || aType === "raw_transform") {
-        seenTransform = true;
-      }
-      if ((action as { kind?: string }).kind === "schema") {
-        if (
-          containsAsyncSchema(
-            action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-            visited,
-            seenTransform,
-          )
-        ) {
-          return true;
-        }
-        // A nested pipe schema may contain transforms that change the
-        // value type for subsequent steps in the outer pipe.
-        if (!seenTransform && pipeContainsTransform(action)) {
-          seenTransform = true;
-        }
-      }
-    }
-  }
-
-  // Container members (entries, item, items, key, value, rest, promise inner)
-  // are only checked when the container itself is reachable.  At the top
-  // level, CLI input is always a string, so container schemas (object, array,
-  // tuple, etc.) reject it at the type check before visiting members.
-  // Inside pipelines, transforms may produce values that match the container
-  // type, so members become reachable.
-  if (checkContainers) {
-    if (s.entries) {
-      for (const entry of Object.values(s.entries)) {
-        if (containsAsyncSchema(entry, visited, true)) return true;
-      }
-    }
-
-    if (s.item && containsAsyncSchema(s.item, visited, true)) return true;
-
-    if (s.items && Array.isArray(s.items)) {
-      for (const item of s.items) {
-        if (containsAsyncSchema(item, visited, true)) return true;
-      }
-    }
-
-    if (
-      s.key && typeof s.key === "object" &&
-      containsAsyncSchema(s.key, visited, true)
-    ) {
-      return true;
-    }
-    if (s.value && containsAsyncSchema(s.value, visited, true)) return true;
-
-    if (s.rest && containsAsyncSchema(s.rest, visited, true)) return true;
-
-    if (s.type === "promise") {
-      const promiseInner =
-        (schema as unknown as Record<string, unknown>).message;
       if (
-        typeof promiseInner === "object" && promiseInner != null &&
-        "kind" in promiseInner
+        (action as { kind?: string }).kind === "schema" &&
+        containsAsyncSchema(
+          action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+          visited,
+        )
       ) {
-        if (
-          containsAsyncSchema(
-            promiseInner as v.BaseSchema<
-              unknown,
-              unknown,
-              v.BaseIssue<unknown>
-            >,
-            visited,
-            true,
-          )
-        ) {
-          return true;
-        }
+        return true;
       }
     }
   }
