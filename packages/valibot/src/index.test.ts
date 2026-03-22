@@ -805,37 +805,23 @@ describe("valibot()", () => {
       assert.throws(() => valibot(asyncSchema as never), expectedError);
     });
 
-    it("should throw TypeError for async schema inside object entries", () => {
+    it("should not reject async entries in direct containers", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
-      const asyncSchema = v.object({ a: asyncInner } as never);
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
+      // Direct containers are unreachable from string input — the outer
+      // type check (object/array/tuple) rejects the string first.
+      const objParser = valibot(v.object({ a: asyncInner } as never));
+      assert.ok(!objParser.parse("hello").success);
+      const arrParser = valibot(v.array(asyncInner as never));
+      assert.ok(!arrParser.parse("hello").success);
+      const tupParser = valibot(v.tuple([asyncInner] as never));
+      assert.ok(!tupParser.parse("hello").success);
     });
 
-    it("should throw TypeError for async schema inside array item", () => {
-      const asyncInner = v.pipeAsync(
-        v.string(),
-        // deno-lint-ignore require-await
-        v.checkAsync(async (val) => val === "ok", "not ok"),
-      );
-      const asyncSchema = v.array(asyncInner as never);
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
-    });
-
-    it("should throw TypeError for async schema inside tuple items", () => {
-      const asyncInner = v.pipeAsync(
-        v.string(),
-        // deno-lint-ignore require-await
-        v.checkAsync(async (val) => val === "ok", "not ok"),
-      );
-      const asyncSchema = v.tuple([asyncInner] as never);
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
-    });
-
-    it("should throw TypeError for async schema inside pipe transform", () => {
+    it("should throw TypeError for async entries inside piped containers", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
         // deno-lint-ignore require-await
@@ -849,34 +835,21 @@ describe("valibot()", () => {
       assert.throws(() => valibot(asyncSchema as never), expectedError);
     });
 
-    it("should throw TypeError for async rest schema in objectWithRest", () => {
+    it("should not reject async rest/promise in direct containers", () => {
       const asyncRest = v.pipeAsync(
         v.string(),
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
-      const asyncSchema = v.objectWithRest({}, asyncRest as never);
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
-    });
-
-    it("should throw TypeError for async rest schema in tupleWithRest", () => {
-      const asyncRest = v.pipeAsync(
-        v.string(),
-        // deno-lint-ignore require-await
-        v.checkAsync(async (val) => val === "ok", "not ok"),
+      // Direct containers are unreachable from string input.
+      const owrParser = valibot(
+        v.objectWithRest({}, asyncRest as never),
       );
-      const asyncSchema = v.tupleWithRest([], asyncRest as never);
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
-    });
-
-    it("should throw TypeError for async schema inside promise()", () => {
-      const asyncInner = v.pipeAsync(
-        v.string(),
-        // deno-lint-ignore require-await
-        v.checkAsync(async (val) => val === "ok", "not ok"),
-      );
-      const asyncSchema = v.promise(asyncInner as never);
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
+      assert.ok(!owrParser.parse("hello").success);
+      const twrParser = valibot(v.tupleWithRest([], asyncRest as never));
+      assert.ok(!twrParser.parse("hello").success);
+      const promParser = valibot(v.promise(asyncRest as never));
+      assert.ok(!promParser.parse("hello").success);
     });
   });
 });

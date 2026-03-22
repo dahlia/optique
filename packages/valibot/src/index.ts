@@ -124,6 +124,7 @@ function isCatchAllSchema(
 function containsAsyncSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
   visited: WeakSet<object> = new WeakSet(),
+  checkContainers = false,
 ): boolean {
   // Cycle detection: skip schemas already being inspected (recursive lazy)
   if (visited.has(schema)) return false;
@@ -133,7 +134,9 @@ function containsAsyncSchema(
   if (s.async) return true;
 
   // Unwrap optional/nullable/nullish wrappers
-  if (s.wrapped) return containsAsyncSchema(s.wrapped, visited);
+  if (s.wrapped) {
+    return containsAsyncSchema(s.wrapped, visited, checkContainers);
+  }
 
   // Check intersect options — all arms must match, so async arms are always
   // reachable and must be rejected.
@@ -148,7 +151,9 @@ function containsAsyncSchema(
       if (!hasCatchAll) {
         for (const option of s.options) {
           if (typeof option === "object" && option != null) {
-            if (containsAsyncSchema(option, visited)) return true;
+            if (containsAsyncSchema(option, visited, checkContainers)) {
+              return true;
+            }
           }
         }
       }
@@ -156,22 +161,26 @@ function containsAsyncSchema(
       // intersect: all arms must match
       for (const option of s.options) {
         if (typeof option === "object" && option != null) {
-          if (containsAsyncSchema(option, visited)) return true;
+          if (containsAsyncSchema(option, visited, checkContainers)) {
+            return true;
+          }
         }
       }
     }
   }
 
-  // Check pipeline actions (may themselves be schemas, e.g., v.transform)
+  // Check pipeline actions (may themselves be schemas, e.g., v.transform).
+  // Schema-typed pipeline actions are reachable (the pipeline feeds
+  // transformed values into them), so enable container checks.
   if (s.pipe && Array.isArray(s.pipe)) {
     for (const action of s.pipe) {
       if ((action as { async?: boolean }).async) return true;
-      // Pipeline actions with kind "schema" are nested schemas
       if (
         (action as { kind?: string }).kind === "schema" &&
         containsAsyncSchema(
           action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
           visited,
+          true,
         )
       ) {
         return true;
@@ -179,49 +188,57 @@ function containsAsyncSchema(
     }
   }
 
-  // Check object entries
-  if (s.entries) {
-    for (const entry of Object.values(s.entries)) {
-      if (containsAsyncSchema(entry, visited)) return true;
+  // Container members (entries, item, items, key, value, rest, promise inner)
+  // are only checked when the container itself is reachable.  At the top
+  // level, CLI input is always a string, so container schemas (object, array,
+  // tuple, etc.) reject it at the type check before visiting members.
+  // Inside pipelines, transforms may produce values that match the container
+  // type, so members become reachable.
+  if (checkContainers) {
+    if (s.entries) {
+      for (const entry of Object.values(s.entries)) {
+        if (containsAsyncSchema(entry, visited, true)) return true;
+      }
     }
-  }
 
-  // Check array item
-  if (s.item && containsAsyncSchema(s.item, visited)) return true;
+    if (s.item && containsAsyncSchema(s.item, visited, true)) return true;
 
-  // Check tuple items
-  if (s.items && Array.isArray(s.items)) {
-    for (const item of s.items) {
-      if (containsAsyncSchema(item, visited)) return true;
+    if (s.items && Array.isArray(s.items)) {
+      for (const item of s.items) {
+        if (containsAsyncSchema(item, visited, true)) return true;
+      }
     }
-  }
 
-  // Check record/map key and value (guard typeof: v.variant() stores a
-  // plain string discriminator in `key`, not a schema object)
-  if (
-    s.key && typeof s.key === "object" && containsAsyncSchema(s.key, visited)
-  ) {
-    return true;
-  }
-  if (s.value && containsAsyncSchema(s.value, visited)) return true;
-
-  // Check objectWithRest/tupleWithRest rest schema
-  if (s.rest && containsAsyncSchema(s.rest, visited)) return true;
-
-  // Check v.promise() inner schema (stored in the overloaded `message` field)
-  if (s.type === "promise") {
-    const promiseInner = (schema as unknown as Record<string, unknown>).message;
     if (
-      typeof promiseInner === "object" && promiseInner != null &&
-      "kind" in promiseInner
+      s.key && typeof s.key === "object" &&
+      containsAsyncSchema(s.key, visited, true)
     ) {
+      return true;
+    }
+    if (s.value && containsAsyncSchema(s.value, visited, true)) return true;
+
+    if (s.rest && containsAsyncSchema(s.rest, visited, true)) return true;
+
+    if (s.type === "promise") {
+      const promiseInner =
+        (schema as unknown as Record<string, unknown>).message;
       if (
-        containsAsyncSchema(
-          promiseInner as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-          visited,
-        )
+        typeof promiseInner === "object" && promiseInner != null &&
+        "kind" in promiseInner
       ) {
-        return true;
+        if (
+          containsAsyncSchema(
+            promiseInner as v.BaseSchema<
+              unknown,
+              unknown,
+              v.BaseIssue<unknown>
+            >,
+            visited,
+            true,
+          )
+        ) {
+          return true;
+        }
       }
     }
   }
