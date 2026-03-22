@@ -52,6 +52,7 @@ import {
 import { string } from "./valueparser.ts";
 import { type Annotations, injectAnnotations } from "./annotations.ts";
 import {
+  containsPlaceholderValues,
   isPlaceholderValue,
   type ParserValuePlaceholder,
   type SourceContext,
@@ -73,26 +74,6 @@ function shouldSkipCollectionOwnKey(
       (typeof key === "string" &&
         Number.isInteger(Number(key)) &&
         String(Number(key)) === key);
-  }
-  return false;
-}
-
-function containsPlaceholderValuesInOwnProperties(
-  value: object,
-  seen: WeakSet<object>,
-): boolean {
-  for (const key of Reflect.ownKeys(value)) {
-    if (shouldSkipCollectionOwnKey(value, key)) {
-      continue;
-    }
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (
-      descriptor != null &&
-      "value" in descriptor &&
-      containsPlaceholderValues(descriptor.value, seen)
-    ) {
-      return true;
-    }
   }
   return false;
 }
@@ -167,53 +148,6 @@ function createMapCloneLike(
   }
 }
 
-function containsPlaceholderValues(
-  value: unknown,
-  seen = new WeakSet<object>(),
-): boolean {
-  // FIXME: This only inspects own data properties, so placeholder values
-  // hidden behind private fields or method-only wrapper DTOs are missed. See:
-  // https://github.com/dahlia/optique/issues/307
-  if (isPlaceholderValue(value)) {
-    return true;
-  }
-  if (value == null || typeof value !== "object") {
-    return false;
-  }
-  if (seen.has(value)) {
-    return false;
-  }
-  seen.add(value);
-  if (Array.isArray(value)) {
-    if (
-      value.some((item) => containsPlaceholderValues(item, seen))
-    ) {
-      return true;
-    }
-    return containsPlaceholderValuesInOwnProperties(value, seen);
-  }
-  if (value instanceof Set) {
-    for (const entryValue of value) {
-      if (containsPlaceholderValues(entryValue, seen)) {
-        return true;
-      }
-    }
-    return containsPlaceholderValuesInOwnProperties(value, seen);
-  }
-  if (value instanceof Map) {
-    for (const [key, entryValue] of value) {
-      if (
-        containsPlaceholderValues(key, seen) ||
-        containsPlaceholderValues(entryValue, seen)
-      ) {
-        return true;
-      }
-    }
-    return containsPlaceholderValuesInOwnProperties(value, seen);
-  }
-  return containsPlaceholderValuesInOwnProperties(value, seen);
-}
-
 function stripPlaceholderValues<T>(
   value: T,
   seen = new WeakMap<object, unknown>(),
@@ -283,10 +217,32 @@ function stripPlaceholderValues<T>(
       continue;
     }
     if ("value" in descriptor) {
-      descriptor.value = stripPlaceholderValues(
-        descriptor.value,
-        seen,
-      );
+      if (typeof descriptor.value === "function") {
+        // Wrap function-valued properties so that closures capturing
+        // placeholder values return sanitized results when called by
+        // phase-two contexts.
+        // See: https://github.com/dahlia/optique/issues/407
+        const fn = descriptor.value as {
+          apply(thisArg: unknown, args: unknown[]): unknown;
+        };
+        descriptor.value = function (
+          this: unknown,
+          ...args: unknown[]
+        ) {
+          const result = fn.apply(this, args);
+          if (result instanceof Promise) {
+            return (result as Promise<unknown>).then(
+              (v) => stripPlaceholderValues(v, seen),
+            );
+          }
+          return stripPlaceholderValues(result, seen);
+        };
+      } else {
+        descriptor.value = stripPlaceholderValues(
+          descriptor.value,
+          seen,
+        );
+      }
     }
     Object.defineProperty(clone, key, descriptor);
   }
@@ -459,18 +415,53 @@ function createSanitizedNonPlainView<T extends object>(
   value: T,
   seen: WeakMap<object, unknown>,
 ): T {
+  // For frozen/sealed objects, the Proxy invariant prevents wrapping non-
+  // configurable non-writable function properties.  Instead, create a
+  // shallow clone with writable method wrappers that strip placeholder values
+  // from return values while invoking the original method on the real target
+  // (preserving private field access).
+  // See: https://github.com/dahlia/optique/issues/407
+  if (Object.isFrozen(value) || Object.isSealed(value)) {
+    const clone = Object.create(
+      Object.getPrototypeOf(value),
+    ) as Record<PropertyKey, unknown>;
+    seen.set(value, clone);
+    for (const key of Reflect.ownKeys(value)) {
+      const desc = Object.getOwnPropertyDescriptor(value, key);
+      if (desc == null) continue;
+      if ("value" in desc && typeof desc.value === "function") {
+        const fn = desc.value as {
+          apply(thisArg: unknown, args: unknown[]): unknown;
+        };
+        clone[key] = function (this: unknown, ...args: unknown[]) {
+          const result = fn.apply(value, args);
+          if (result instanceof Promise) {
+            return (result as Promise<unknown>).then(
+              (v) => stripPlaceholderValues(v, seen),
+            );
+          }
+          return stripPlaceholderValues(result, seen);
+        };
+      } else if ("value" in desc) {
+        clone[key] = stripPlaceholderValues(desc.value, seen);
+      } else {
+        Object.defineProperty(clone, key, desc);
+      }
+    }
+    return clone as T;
+  }
+
   // NOTE: Methods are invoked on the original target with temporarily
   // sanitized own properties via callMethodOnSanitizedTarget().  This
   // allows private field access (which requires the real instance as
   // receiver) while ensuring public placeholder-value fields are scrubbed.
-  // If the target is frozen/sealed, methods fall back to the proxy path.
   // See: https://github.com/dahlia/optique/issues/307
   const methodCache = new Map<
     PropertyKey,
     { fn: unknown; wrapper: (...args: unknown[]) => unknown }
   >();
   const proxy: T = new Proxy(value, {
-    get(target, key, receiver) {
+    get(target, key, _receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (descriptor != null && "value" in descriptor) {
         // Non-configurable non-writable properties must return the exact
@@ -537,7 +528,11 @@ function createSanitizedNonPlainView<T extends object>(
           break;
         }
       }
-      const result = Reflect.get(target, key, receiver);
+      // Use `target` as receiver instead of the proxy so that prototype
+      // getters invoking `this.#field` receive the real instance rather than
+      // the proxy, which would throw a TypeError for private field access.
+      // Return values are still stripped via stripPlaceholderValues().
+      const result = Reflect.get(target, key, target);
       if (typeof result === "function") {
         // Class constructors are returned unwrapped since the wrapper
         // would break new.target and prototype chain semantics.
@@ -629,10 +624,10 @@ function prepareParsedForContexts(
     return stripPlaceholderValues(parsed);
   }
 
-  if (!containsPlaceholderValues(parsed)) {
-    return parsed;
-  }
-
+  // Always create the sanitized proxy view for non-plain objects, even when
+  // containsPlaceholderValues() doesn't detect any.  Placeholder values may
+  // be hidden in private fields or behind method return values where own-
+  // property inspection cannot reach them.
   return createSanitizedNonPlainView(
     parsed,
     new WeakMap<object, unknown>(),

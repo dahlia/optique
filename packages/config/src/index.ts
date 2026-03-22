@@ -18,7 +18,10 @@ import type {
 } from "@optique/core/context";
 import type { Parser, ParserResult, Result } from "@optique/core/parser";
 import { annotationKey, getAnnotations } from "@optique/core/annotations";
-import { isPlaceholderValue } from "@optique/core/context";
+import {
+  containsPlaceholderValues,
+  isPlaceholderValue,
+} from "@optique/core/context";
 import { message } from "@optique/core/message";
 import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
 
@@ -88,26 +91,6 @@ function shouldSkipCollectionOwnKey(
   return false;
 }
 
-function containsDeferredPromptValuesInOwnProperties(
-  value: object,
-  seen: WeakSet<object>,
-): boolean {
-  for (const key of Reflect.ownKeys(value)) {
-    if (shouldSkipCollectionOwnKey(value, key)) {
-      continue;
-    }
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (
-      descriptor != null &&
-      "value" in descriptor &&
-      containsDeferredPromptValues(descriptor.value, seen)
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function copySanitizedOwnProperties(
   source: object,
   target: object,
@@ -126,51 +109,6 @@ function copySanitizedOwnProperties(
     }
     Object.defineProperty(target, key, descriptor);
   }
-}
-
-function containsDeferredPromptValues(
-  value: unknown,
-  seen = new WeakSet<object>(),
-): boolean {
-  // FIXME: This only inspects own data properties, so deferred prompt values
-  // hidden behind private fields or method-only wrapper DTOs are missed.
-  // See: https://github.com/dahlia/optique/issues/307
-  if (isDeferredPromptValue(value)) {
-    return true;
-  }
-  if (value == null || typeof value !== "object") {
-    return false;
-  }
-  if (seen.has(value)) {
-    return false;
-  }
-  seen.add(value);
-  if (Array.isArray(value)) {
-    if (value.some((item) => containsDeferredPromptValues(item, seen))) {
-      return true;
-    }
-    return containsDeferredPromptValuesInOwnProperties(value, seen);
-  }
-  if (value instanceof Set) {
-    for (const entryValue of value) {
-      if (containsDeferredPromptValues(entryValue, seen)) {
-        return true;
-      }
-    }
-    return containsDeferredPromptValuesInOwnProperties(value, seen);
-  }
-  if (value instanceof Map) {
-    for (const [key, entryValue] of value) {
-      if (
-        containsDeferredPromptValues(key, seen) ||
-        containsDeferredPromptValues(entryValue, seen)
-      ) {
-        return true;
-      }
-    }
-    return containsDeferredPromptValuesInOwnProperties(value, seen);
-  }
-  return containsDeferredPromptValuesInOwnProperties(value, seen);
 }
 
 const SANITIZE_FAILED: unique symbol = Symbol("sanitizeFailed");
@@ -318,18 +256,53 @@ function createSanitizedNonPlainView<T extends object>(
   value: T,
   seen: WeakMap<object, unknown>,
 ): T {
+  // For frozen/sealed objects, the Proxy invariant prevents wrapping non-
+  // configurable non-writable function properties.  Instead, create a
+  // shallow clone with writable method wrappers that strip deferred values
+  // from return values while invoking the original method on the real target
+  // (preserving private field access).
+  // See: https://github.com/dahlia/optique/issues/407
+  if (Object.isFrozen(value) || Object.isSealed(value)) {
+    const clone = Object.create(
+      Object.getPrototypeOf(value),
+    ) as Record<PropertyKey, unknown>;
+    seen.set(value, clone);
+    for (const key of Reflect.ownKeys(value)) {
+      const desc = Object.getOwnPropertyDescriptor(value, key);
+      if (desc == null) continue;
+      if ("value" in desc && typeof desc.value === "function") {
+        const fn = desc.value as {
+          apply(thisArg: unknown, args: unknown[]): unknown;
+        };
+        clone[key] = function (this: unknown, ...args: unknown[]) {
+          const result = fn.apply(value, args);
+          if (result instanceof Promise) {
+            return (result as Promise<unknown>).then(
+              (v) => stripDeferredPromptValues(v, seen),
+            );
+          }
+          return stripDeferredPromptValues(result, seen);
+        };
+      } else if ("value" in desc) {
+        clone[key] = stripDeferredPromptValues(desc.value, seen);
+      } else {
+        Object.defineProperty(clone, key, desc);
+      }
+    }
+    return clone as T;
+  }
+
   // NOTE: Methods are invoked on the original target with temporarily
   // sanitized own properties via callMethodOnSanitizedTarget().  This
   // allows private field access (which requires the real instance as
   // receiver) while ensuring public deferred-value fields are scrubbed.
-  // If the target is frozen/sealed, methods fall back to the proxy path.
   // See: https://github.com/dahlia/optique/issues/307
   const methodCache = new Map<
     PropertyKey,
     { fn: unknown; wrapper: (...args: unknown[]) => unknown }
   >();
   const proxy: T = new Proxy(value, {
-    get(target, key, receiver) {
+    get(target, key, _receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (descriptor != null && "value" in descriptor) {
         // Non-configurable non-writable properties must return the exact
@@ -384,7 +357,11 @@ function createSanitizedNonPlainView<T extends object>(
           break;
         }
       }
-      const result = Reflect.get(target, key, receiver);
+      // Use `target` as receiver instead of the proxy so that prototype
+      // getters invoking `this.#field` receive the real instance rather than
+      // the proxy, which would throw a TypeError for private field access.
+      // Return values are still stripped via stripDeferredPromptValues().
+      const result = Reflect.get(target, key, target);
       if (typeof result === "function") {
         if (/^class[\s{]/.test(Function.prototype.toString.call(result))) {
           return result;
@@ -463,7 +440,7 @@ function stripDeferredPromptValues<T>(
     return cached as T;
   }
   if (Array.isArray(value)) {
-    if (!containsDeferredPromptValues(value)) {
+    if (!containsPlaceholderValues(value)) {
       return value;
     }
     const clone: unknown[] = new Array(value.length);
@@ -475,7 +452,7 @@ function stripDeferredPromptValues<T>(
     return clone as T;
   }
   if (value instanceof Set) {
-    if (!containsDeferredPromptValues(value)) {
+    if (!containsPlaceholderValues(value)) {
       return value;
     }
     const clone = new Set<unknown>();
@@ -487,7 +464,7 @@ function stripDeferredPromptValues<T>(
     return clone as T;
   }
   if (value instanceof Map) {
-    if (!containsDeferredPromptValues(value)) {
+    if (!containsPlaceholderValues(value)) {
       return value;
     }
     const clone = new Map<unknown, unknown>();
@@ -502,11 +479,13 @@ function stripDeferredPromptValues<T>(
     return clone as T;
   }
   if (!isPlainObject(value)) {
-    return containsDeferredPromptValues(value)
-      ? createSanitizedNonPlainView(value, seen) as T
-      : value;
+    // Always create the sanitized proxy view for non-plain objects, even when
+    // containsPlaceholderValues() doesn't detect any.  Placeholder values may
+    // be hidden in private fields or behind method return values where own-
+    // property inspection cannot reach them.
+    return createSanitizedNonPlainView(value, seen) as T;
   }
-  if (!containsDeferredPromptValues(value)) {
+  if (!containsPlaceholderValues(value)) {
     return value;
   }
   const clone: Record<PropertyKey, unknown> = Object.create(
@@ -519,10 +498,32 @@ function stripDeferredPromptValues<T>(
       continue;
     }
     if ("value" in descriptor) {
-      descriptor.value = stripDeferredPromptValues(
-        descriptor.value,
-        seen,
-      );
+      if (typeof descriptor.value === "function") {
+        // Wrap function-valued properties so that closures capturing
+        // deferred prompt values return sanitized results when called by
+        // phase-two contexts.
+        // See: https://github.com/dahlia/optique/issues/407
+        const fn = descriptor.value as {
+          apply(thisArg: unknown, args: unknown[]): unknown;
+        };
+        descriptor.value = function (
+          this: unknown,
+          ...args: unknown[]
+        ) {
+          const result = fn.apply(this, args);
+          if (result instanceof Promise) {
+            return (result as Promise<unknown>).then(
+              (v) => stripDeferredPromptValues(v, seen),
+            );
+          }
+          return stripDeferredPromptValues(result, seen);
+        };
+      } else {
+        descriptor.value = stripDeferredPromptValues(
+          descriptor.value,
+          seen,
+        );
+      }
     }
     Object.defineProperty(clone, key, descriptor);
   }

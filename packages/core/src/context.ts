@@ -252,6 +252,96 @@ export function isPlaceholderValue(value: unknown): boolean {
     placeholder in value;
 }
 
+function containsPlaceholderValuesInOwnProperties(
+  value: object,
+  seen: WeakSet<object>,
+): boolean {
+  for (const key of Reflect.ownKeys(value)) {
+    if (shouldSkipCollectionOwnKey(value, key)) {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (
+      descriptor != null &&
+      "value" in descriptor &&
+      containsPlaceholderValues(descriptor.value, seen)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function shouldSkipCollectionOwnKey(
+  value: object,
+  key: PropertyKey,
+): boolean {
+  if (Array.isArray(value)) {
+    return key === "length" ||
+      (typeof key === "string" &&
+        Number.isInteger(Number(key)) &&
+        String(Number(key)) === key);
+  }
+  return false;
+}
+
+/**
+ * Tests whether a value recursively contains any placeholder values in its
+ * own data properties, array elements, Set entries, or Map entries.
+ *
+ * Unlike {@link isPlaceholderValue}, which only checks whether the value
+ * itself is a placeholder, this function traverses the structure of the
+ * value to detect placeholders nested inside objects, arrays, Sets, and Maps.
+ *
+ * @param value The value to test.
+ * @param seen A set of already-visited objects (for cycle detection).
+ * @returns `true` if the value contains any placeholder values.
+ * @since 1.0.0
+ */
+export function containsPlaceholderValues(
+  value: unknown,
+  seen: WeakSet<object> = new WeakSet<object>(),
+): boolean {
+  if (isPlaceholderValue(value)) {
+    return true;
+  }
+  if (value == null || typeof value !== "object") {
+    return false;
+  }
+  if (seen.has(value)) {
+    return false;
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    if (
+      value.some((item) => containsPlaceholderValues(item, seen))
+    ) {
+      return true;
+    }
+    return containsPlaceholderValuesInOwnProperties(value, seen);
+  }
+  if (value instanceof Set) {
+    for (const entryValue of value) {
+      if (containsPlaceholderValues(entryValue, seen)) {
+        return true;
+      }
+    }
+    return containsPlaceholderValuesInOwnProperties(value, seen);
+  }
+  if (value instanceof Map) {
+    for (const [key, entryValue] of value) {
+      if (
+        containsPlaceholderValues(key, seen) ||
+        containsPlaceholderValues(entryValue, seen)
+      ) {
+        return true;
+      }
+    }
+    return containsPlaceholderValuesInOwnProperties(value, seen);
+  }
+  return containsPlaceholderValuesInOwnProperties(value, seen);
+}
+
 /**
  * Checks whether a context is static (returns annotations without needing
  * parsed results).
