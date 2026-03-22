@@ -363,6 +363,21 @@ describe("logOutput()", () => {
         s.kind === "file" && s.type === "file" && !s.includeHidden
       ),
     );
+    const dotdotSuggestions = suggestSync(parser, ["--log-output", ".."]);
+    assert.ok(
+      dotdotSuggestions.some((s) =>
+        s.kind === "file" && s.type === "file" && !s.includeHidden
+      ),
+    );
+    const nestedDotdotSuggestions = suggestSync(parser, [
+      "--log-output",
+      "src/..",
+    ]);
+    assert.ok(
+      nestedDotdotSuggestions.some((s) =>
+        s.kind === "file" && s.type === "file" && !s.includeHidden
+      ),
+    );
   });
 
   it("should format default console output in help text", () => {

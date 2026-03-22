@@ -132,7 +132,8 @@ function logOutputValueParser(
         kind: "file",
         type: "file",
         pattern: prefix,
-        includeHidden: basename(prefix).startsWith("."),
+        includeHidden: basename(prefix).startsWith(".") &&
+          basename(prefix) !== "..",
       };
     },
   };
