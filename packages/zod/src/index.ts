@@ -3,7 +3,7 @@ import type {
   ValueParser,
   ValueParserResult,
 } from "@optique/core/valueparser";
-import { type Message, message } from "@optique/core/message";
+import { type Message, message, valueSet } from "@optique/core/message";
 import { ensureNonEmptyString } from "@optique/core/nonempty";
 import type { z } from "zod";
 
@@ -98,6 +98,61 @@ function isZodAsyncError(error: Error): boolean {
     return true;
   }
   return false;
+}
+
+const BOOL_TRUE_LITERALS = ["true", "1", "yes", "on"] as const;
+const BOOL_FALSE_LITERALS = ["false", "0", "no", "off"] as const;
+
+/**
+ * Checks whether the given Zod schema represents a boolean type,
+ * unwrapping optional/nullable/default wrappers as needed.
+ */
+function isBooleanSchema(schema: z.Schema<unknown>): boolean {
+  const def = (schema as ZodSchemaInternal)._def;
+  if (!def) return false;
+  const typeName = def.typeName ?? def.type;
+  if (typeName === "ZodBoolean" || typeName === "boolean") return true;
+  if (
+    typeName === "ZodOptional" || typeName === "optional" ||
+    typeName === "ZodNullable" || typeName === "nullable" ||
+    typeName === "ZodDefault" || typeName === "default"
+  ) {
+    const innerType = def.innerType;
+    if (innerType != null) return isBooleanSchema(innerType);
+  }
+  return false;
+}
+
+/**
+ * Pre-converts a CLI string input to an actual boolean value using
+ * CLI-friendly literals (true/false, 1/0, yes/no, on/off).
+ */
+function preConvertBoolean(
+  input: string,
+): ValueParserResult<boolean> {
+  const normalized = input.trim().toLowerCase();
+  if (
+    BOOL_TRUE_LITERALS.includes(
+      normalized as (typeof BOOL_TRUE_LITERALS)[number],
+    )
+  ) {
+    return { success: true, value: true };
+  }
+  if (
+    BOOL_FALSE_LITERALS.includes(
+      normalized as (typeof BOOL_FALSE_LITERALS)[number],
+    )
+  ) {
+    return { success: true, value: false };
+  }
+  return {
+    success: false,
+    error: message`Invalid Boolean value: ${input}. Expected one of ${
+      valueSet([...BOOL_TRUE_LITERALS, ...BOOL_FALSE_LITERALS], {
+        locale: "en-US",
+      })
+    }.`,
+  };
 }
 
 /**
@@ -448,12 +503,78 @@ export function zod<T>(
   options: ZodParserOptions<T> = {},
 ): ValueParser<"sync", T> {
   const choices = inferChoices(schema);
+  const isBoolean = isBooleanSchema(schema);
   const metavar = options.metavar ?? inferMetavar(schema);
   ensureNonEmptyString(metavar);
+
+  function doSafeParse(
+    input: unknown,
+    rawInput: string,
+  ): ValueParserResult<T> {
+    let result;
+    try {
+      result = schema.safeParse(input);
+    } catch (error) {
+      if (error instanceof Error && isZodAsyncError(error)) {
+        throw new TypeError(
+          "Async Zod schemas (e.g., async refinements) are not supported " +
+            "by zod(). Use synchronous schemas instead.",
+        );
+      }
+      throw error;
+    }
+
+    if (result.success) {
+      return { success: true, value: result.data };
+    }
+
+    // 1. Custom error message
+    if (options.errors?.zodError) {
+      return {
+        success: false,
+        error: typeof options.errors.zodError === "function"
+          ? options.errors.zodError(result.error, rawInput)
+          : options.errors.zodError,
+      };
+    }
+
+    // 2. Zod v4 prettifyError (if available)
+    const zodModule = schema as ZodSchemaInternal;
+    if (typeof zodModule.constructor?.prettifyError === "function") {
+      try {
+        const pretty = zodModule.constructor.prettifyError(result.error);
+        return { success: false, error: message`${pretty}` };
+      } catch {
+        // Fall through to default error handling
+      }
+    }
+
+    // 3. Default: use first error message
+    const firstError = result.error.issues[0];
+    return {
+      success: false,
+      error: message`${firstError?.message ?? "Validation failed"}`,
+    };
+  }
+
   const parser: ValueParser<"sync", T> = {
     $mode: "sync",
     metavar,
-    ...(choices != null && choices.length > 0
+    ...(isBoolean
+      ? {
+        choices: Object.freeze([true, false]) as readonly T[],
+        suggest(prefix: string) {
+          const allLiterals = [
+            ...BOOL_TRUE_LITERALS,
+            ...BOOL_FALSE_LITERALS,
+          ];
+          const normalizedPrefix = prefix.toLowerCase();
+          return allLiterals
+            .filter((lit) => lit.startsWith(normalizedPrefix))
+            .map((lit) => ({ kind: "literal" as const, text: lit }));
+        },
+      }
+      : choices != null && choices.length > 0
       ? {
         // Safe cast: inferChoices() only extracts values from schemas
         // that accept string input and return it as-is (enum, literal,
@@ -470,50 +591,14 @@ export function zod<T>(
       : {}),
 
     parse(input: string): ValueParserResult<T> {
-      let result;
-      try {
-        result = schema.safeParse(input);
-      } catch (error) {
-        if (error instanceof Error && isZodAsyncError(error)) {
-          throw new TypeError(
-            "Async Zod schemas (e.g., async refinements) are not supported " +
-              "by zod(). Use synchronous schemas instead.",
-          );
+      if (isBoolean) {
+        const boolResult = preConvertBoolean(input);
+        if (!boolResult.success) {
+          return boolResult as ValueParserResult<T>;
         }
-        throw error;
+        return doSafeParse(boolResult.value, input);
       }
-
-      if (result.success) {
-        return { success: true, value: result.data };
-      }
-
-      // 1. Custom error message
-      if (options.errors?.zodError) {
-        return {
-          success: false,
-          error: typeof options.errors.zodError === "function"
-            ? options.errors.zodError(result.error, input)
-            : options.errors.zodError,
-        };
-      }
-
-      // 2. Zod v4 prettifyError (if available)
-      const zodModule = schema as ZodSchemaInternal;
-      if (typeof zodModule.constructor?.prettifyError === "function") {
-        try {
-          const pretty = zodModule.constructor.prettifyError(result.error);
-          return { success: false, error: message`${pretty}` };
-        } catch {
-          // Fall through to default error handling
-        }
-      }
-
-      // 3. Default: use first error message
-      const firstError = result.error.issues[0];
-      return {
-        success: false,
-        error: message`${firstError?.message ?? "Validation failed"}`,
-      };
+      return doSafeParse(input, input);
     },
 
     format(value: T): string {
