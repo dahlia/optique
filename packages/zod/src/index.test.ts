@@ -384,13 +384,23 @@ describe("zod()", () => {
       assert.equal(parser.format(["a", "b", "c"]), "a,b,c");
     });
 
-    it("should format arrays of objects as JSON", () => {
+    it("should preserve array formatting even with [object Object] element", () => {
+      const parser = zod(
+        z.string().transform((s) => s.split(",")),
+      );
+      assert.equal(
+        parser.format(["a", "[object Object]", "c"]),
+        "a,[object Object],c",
+      );
+    });
+
+    it("should format arrays of objects via String()", () => {
       const parser = zod(
         z.string().transform((s) => s.split(",").map((x) => ({ v: x }))),
       );
       assert.equal(
         parser.format([{ v: "a" }, { v: "b" }]),
-        '[{"v":"a"},{"v":"b"}]',
+        "[object Object],[object Object]",
       );
     });
 
