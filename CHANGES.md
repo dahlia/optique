@@ -119,6 +119,9 @@ To be released.
     `Usage: myapp config ...` without changing parse behavior or
     completion behavior.  [[#139]]
 
+ -  Fixed `or()` and `longestMatch()` duplicating visible terms in
+    documentation when branches share the same surface syntax.  [[#432], [#698]]
+
  -  Fixed sync completion paths in `runParser()`, `runParserSync()`, and
     `runWithSync()` silently returning `Promise` objects when a completion
     callback (`onShow` or `onError`) returns a `Promise`.  These paths now
@@ -871,6 +874,7 @@ To be released.
 [#403]: https://github.com/dahlia/optique/issues/403
 [#425]: https://github.com/dahlia/optique/issues/425
 [#429]: https://github.com/dahlia/optique/issues/429
+[#432]: https://github.com/dahlia/optique/issues/432
 [#439]: https://github.com/dahlia/optique/issues/439
 [#469]: https://github.com/dahlia/optique/issues/469
 [#471]: https://github.com/dahlia/optique/issues/471
@@ -985,6 +989,7 @@ To be released.
 [#695]: https://github.com/dahlia/optique/pull/695
 [#696]: https://github.com/dahlia/optique/pull/696
 [#697]: https://github.com/dahlia/optique/pull/697
+[#698]: https://github.com/dahlia/optique/pull/698
 
 ### @optique/config
 

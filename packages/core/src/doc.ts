@@ -123,6 +123,76 @@ export interface DocFragments {
   readonly footer?: Message;
 }
 
+function getDocEntryKey(entry: DocEntry): string {
+  const term = entry.term;
+  switch (term.type) {
+    case "command":
+      return `command:${term.name}`;
+    case "option":
+      return `option:${[...term.names].sort().join(",")}`;
+    case "argument":
+      return `argument:${term.metavar}`;
+    default:
+      return JSON.stringify(term);
+  }
+}
+
+/**
+ * Removes duplicate {@link DocEntry} values that share the same surface
+ * syntax (same term type and identifying names).  When duplicates exist,
+ * the first occurrence is kept and later ones are discarded.
+ *
+ * @param entries The entries to deduplicate.
+ * @returns A new array with duplicates removed, preserving insertion order.
+ * @since 1.0.0
+ */
+export function deduplicateDocEntries(
+  entries: readonly DocEntry[],
+): DocEntry[] {
+  const seen = new Map<string, DocEntry>();
+  const order: string[] = [];
+  for (const entry of entries) {
+    const key = getDocEntryKey(entry);
+    if (!seen.has(key)) {
+      seen.set(key, entry);
+      order.push(key);
+    }
+  }
+  return order.map((key) => seen.get(key)!);
+}
+
+/**
+ * Removes duplicate entries from a list of {@link DocFragment} values.
+ * Entry-type fragments are deduplicated by their surface syntax key.
+ * Section-type fragments have their entries deduplicated internally.
+ *
+ * @param fragments The fragments to deduplicate.
+ * @returns A new array with duplicate entries removed.
+ * @since 1.0.0
+ */
+export function deduplicateDocFragments(
+  fragments: readonly DocFragment[],
+): DocFragment[] {
+  const seen = new Set<string>();
+  const result: DocFragment[] = [];
+  for (const fragment of fragments) {
+    if (fragment.type === "entry") {
+      const key = getDocEntryKey(fragment);
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(fragment);
+      }
+    } else {
+      result.push({
+        ...fragment,
+        type: "section",
+        entries: deduplicateDocEntries(fragment.entries),
+      });
+    }
+  }
+  return result;
+}
+
 /**
  * Creates a deep clone of a {@link DocEntry}.  The `term` is cloned via
  * {@link cloneUsageTerm}, and `description`, `default`, and `choices`

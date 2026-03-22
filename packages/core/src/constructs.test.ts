@@ -596,6 +596,123 @@ describe("or", () => {
       ) as (DocFragment & { type: "section" })[];
       assert.ok(sections.length > 0);
     });
+
+    it("should deduplicate entries with same command name", () => {
+      const orParser = or(
+        command("dup", object({})),
+        command("dup", argument(string())),
+      );
+
+      const fragments = orParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const allEntries = sections.flatMap((s) => s.entries);
+      const dupEntries = allEntries.filter((e) =>
+        e.term.type === "command" && e.term.name === "dup"
+      );
+      assert.equal(
+        dupEntries.length,
+        1,
+        "duplicate command entries should be collapsed into one",
+      );
+    });
+
+    it("should deduplicate entries with same option names", () => {
+      const orParser = or(
+        option("--x", string()),
+        option("--x", string()),
+      );
+
+      const fragments = orParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const allEntries = sections.flatMap((s) => s.entries);
+      const xEntries = allEntries.filter((e) =>
+        e.term.type === "option" &&
+        e.term.names.some((n) => n === "--x")
+      );
+      assert.equal(
+        xEntries.length,
+        1,
+        "duplicate option entries should be collapsed into one",
+      );
+    });
+
+    it("should deduplicate entries with same flag names", () => {
+      const orParser = or(
+        flag("--verbose"),
+        flag("--verbose"),
+      );
+
+      const fragments = orParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const allEntries = sections.flatMap((s) => s.entries);
+      const verboseEntries = allEntries.filter((e) =>
+        e.term.type === "option" &&
+        e.term.names.some((n) => n === "--verbose")
+      );
+      assert.equal(
+        verboseEntries.length,
+        1,
+        "duplicate flag entries should be collapsed into one",
+      );
+    });
+
+    it("should keep first occurrence when descriptions differ", () => {
+      const orParser = or(
+        option("--x", string(), { description: message`First description.` }),
+        option("--x", string(), { description: message`Second description.` }),
+      );
+
+      const fragments = orParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const allEntries = sections.flatMap((s) => s.entries);
+      const xEntry = allEntries.find((e) =>
+        e.term.type === "option" &&
+        e.term.names.some((n) => n === "--x")
+      );
+      assert.ok(xEntry);
+      assert.ok(xEntry.description);
+      assert.equal(
+        formatMessage(xEntry.description),
+        "First description.",
+      );
+    });
+
+    it("should not collapse entries with different names", () => {
+      const orParser = or(
+        option("--x", string()),
+        option("--y", string()),
+      );
+
+      const fragments = orParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const allEntries = sections.flatMap((s) => s.entries);
+      assert.equal(allEntries.length, 2);
+    });
   });
 });
 
@@ -1503,6 +1620,61 @@ describe("longestMatch()", () => {
 
     assert.ok(sections.some((s) => s.title === "Alpha"));
     assert.ok(sections.some((s) => s.title === "Beta"));
+  });
+
+  it("should deduplicate entries with same option names", () => {
+    const parser = longestMatch(
+      option("--x", string()),
+      option("--x", string()),
+    );
+
+    const fragments = parser.getDocFragments({ kind: "unavailable" });
+    const entries = fragments.fragments.filter((f) =>
+      f.type === "entry"
+    ) as (DocFragment & { type: "entry" })[];
+    const sections = fragments.fragments.filter((f) =>
+      f.type === "section"
+    ) as (DocFragment & { type: "section" })[];
+    const allEntries = [
+      ...entries,
+      ...sections.flatMap((s) => s.entries),
+    ];
+    const xEntries = allEntries.filter((e) =>
+      e.term.type === "option" &&
+      e.term.names.some((n) => n === "--x")
+    );
+    assert.equal(
+      xEntries.length,
+      1,
+      "duplicate option entries should be collapsed into one",
+    );
+  });
+
+  it("should deduplicate entries with same command name", () => {
+    const parser = longestMatch(
+      command("build", object({})),
+      command("build", argument(string())),
+    );
+
+    const fragments = parser.getDocFragments({ kind: "unavailable" });
+    const entries = fragments.fragments.filter((f) =>
+      f.type === "entry"
+    ) as (DocFragment & { type: "entry" })[];
+    const sections = fragments.fragments.filter((f) =>
+      f.type === "section"
+    ) as (DocFragment & { type: "section" })[];
+    const allEntries = [
+      ...entries,
+      ...sections.flatMap((s) => s.entries),
+    ];
+    const buildEntries = allEntries.filter((e) =>
+      e.term.type === "command" && e.term.name === "build"
+    );
+    assert.equal(
+      buildEntries.length,
+      1,
+      "duplicate command entries should be collapsed into one",
+    );
   });
 
   it("should handle priority correctly", () => {

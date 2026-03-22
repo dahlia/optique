@@ -17,7 +17,13 @@ import {
 } from "./annotations.ts";
 import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
-import type { DocEntry, DocFragment, DocSection } from "./doc.ts";
+import {
+  deduplicateDocEntries,
+  deduplicateDocFragments,
+  type DocEntry,
+  type DocFragment,
+  type DocSection,
+} from "./doc.ts";
 import {
   type Message,
   message,
@@ -2404,16 +2410,22 @@ export function or(
         footer = docFragments.footer;
         fragments = docFragments.fragments;
       }
-      const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
+      const rawEntries: DocEntry[] = fragments.filter((f) =>
+        f.type === "entry"
+      );
       const sections: DocSection[] = [];
       for (const fragment of fragments) {
         if (fragment.type !== "section") continue;
         if (fragment.title == null) {
-          entries.push(...fragment.entries);
+          rawEntries.push(...fragment.entries);
         } else {
-          sections.push(fragment);
+          sections.push({
+            ...fragment,
+            entries: deduplicateDocEntries(fragment.entries),
+          });
         }
       }
+      const entries = deduplicateDocEntries(rawEntries);
       return {
         brief,
         description,
@@ -2890,7 +2902,12 @@ export function longestMatch(
         }
       }
 
-      return { brief, description, fragments, footer };
+      return {
+        brief,
+        description,
+        fragments: deduplicateDocFragments(fragments),
+        footer,
+      };
     },
   };
 }
