@@ -129,7 +129,7 @@ function getDocEntryKey(entry: DocEntry): string {
     case "command":
       return `command:${term.name}`;
     case "option":
-      return `option:${[...term.names].sort().join(",")}`;
+      return `option:${[...term.names].sort().join(",")}:${term.metavar ?? ""}`;
     case "argument":
       return `argument:${term.metavar}`;
     default:
@@ -183,11 +183,21 @@ export function deduplicateDocFragments(
         result.push(fragment);
       }
     } else {
-      result.push({
-        ...fragment,
-        type: "section",
-        entries: deduplicateDocEntries(fragment.entries),
-      });
+      const dedupedEntries: DocEntry[] = [];
+      for (const entry of fragment.entries) {
+        const key = getDocEntryKey(entry);
+        if (!seen.has(key)) {
+          seen.add(key);
+          dedupedEntries.push(entry);
+        }
+      }
+      if (dedupedEntries.length > 0) {
+        result.push({
+          ...fragment,
+          type: "section",
+          entries: dedupedEntries,
+        });
+      }
     }
   }
   return result;

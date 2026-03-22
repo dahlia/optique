@@ -713,6 +713,56 @@ describe("or", () => {
       const allEntries = sections.flatMap((s) => s.entries);
       assert.equal(allEntries.length, 2);
     });
+
+    it("should not collapse options with same names but different metavar", () => {
+      const orParser = or(
+        option("--x", string()),
+        option("--x", integer()),
+      );
+
+      const fragments = orParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const allEntries = sections.flatMap((s) => s.entries);
+      const xEntries = allEntries.filter((e) =>
+        e.term.type === "option" &&
+        e.term.names.some((n) => n === "--x")
+      );
+      assert.equal(
+        xEntries.length,
+        2,
+        "options with different metavars should remain separate",
+      );
+    });
+
+    it("should not collapse flag vs option with same name", () => {
+      const orParser = or(
+        flag("--x"),
+        option("--x", string()),
+      );
+
+      const fragments = orParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const allEntries = sections.flatMap((s) => s.entries);
+      const xEntries = allEntries.filter((e) =>
+        e.term.type === "option" &&
+        e.term.names.some((n) => n === "--x")
+      );
+      assert.equal(
+        xEntries.length,
+        2,
+        "flag and option with same name but different metavar should remain separate",
+      );
+    });
   });
 });
 
@@ -1674,6 +1724,34 @@ describe("longestMatch()", () => {
       buildEntries.length,
       1,
       "duplicate command entries should be collapsed into one",
+    );
+  });
+
+  it("should deduplicate entries across object-wrapped branches", () => {
+    const parser = longestMatch(
+      object({ x: option("--x", string()) }),
+      object({ x: option("--x", string()) }),
+    );
+
+    const fragments = parser.getDocFragments({ kind: "unavailable" });
+    const entries = fragments.fragments.filter((f) =>
+      f.type === "entry"
+    ) as (DocFragment & { type: "entry" })[];
+    const sections = fragments.fragments.filter((f) =>
+      f.type === "section"
+    ) as (DocFragment & { type: "section" })[];
+    const allEntries = [
+      ...entries,
+      ...sections.flatMap((s) => s.entries),
+    ];
+    const xEntries = allEntries.filter((e) =>
+      e.term.type === "option" &&
+      e.term.names.some((n) => n === "--x")
+    );
+    assert.equal(
+      xEntries.length,
+      1,
+      "duplicate entries across object-wrapped branches should be collapsed",
     );
   });
 
