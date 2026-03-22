@@ -2656,8 +2656,8 @@ describe("cloneDocEntry", () => {
       description: [{ type: "text", text: "original" }],
     };
     const cloned = cloneDocEntry(entry);
-    (cloned.description as unknown as Record<string, unknown>[])[0].text =
-      "mutated";
+    // @ts-expect-error -- intentionally mutating readonly field to test isolation
+    cloned.description[0].text = "mutated";
     assert.equal(
       (entry.description![0] as { type: "text"; text: string }).text,
       "original",

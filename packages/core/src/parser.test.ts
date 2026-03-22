@@ -2736,11 +2736,12 @@ describe("getDocPage reference isolation", () => {
 
     const page1 = getDocPageSync(parser as Parser<"sync", unknown, unknown>);
     assert.ok(page1);
+    assert.ok(page1.usage);
+    assert.ok(page1.usage.length > 1);
+    assert.equal(page1.usage[1].type, "ellipsis");
 
     // Mutate the returned page's usage
-    if (page1.usage != null && page1.usage.length > 1) {
-      (page1.usage[1] as Record<string, unknown>).type = "MUTATED";
-    }
+    (page1.usage[1] as Record<string, unknown>).type = "MUTATED";
 
     // The shared array should not be corrupted
     assert.equal(sharedUsage[0].type, "ellipsis");
