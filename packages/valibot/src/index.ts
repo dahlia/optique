@@ -91,10 +91,12 @@ function isCatchAllSchema(
     if (!s.pipe) return true;
     // A piped schema is still catch-all if every action after the base
     // schema (first element) is a non-rejecting transformation (trim,
-    // toLowerCase, etc.) and not a validation or nested schema.
+    // toLowerCase, etc.) — not a validation, nested schema, or
+    // rawTransform (which can add issues).
     return s.pipe.slice(1).every((action) => {
-      const a = action as { kind?: string };
-      return a.kind !== "validation" && a.kind !== "schema";
+      const a = action as { kind?: string; type?: string };
+      return a.kind !== "validation" && a.kind !== "schema" &&
+        a.type !== "raw_transform";
     });
   }
   // Unwrap any schema with a wrapped field (optional, nullable, nullish,
@@ -143,21 +145,18 @@ function containsAsyncSchema(
 
   // Check intersect options — all arms must match, so async arms are always
   // reachable and must be rejected.
-  // For union/variant — a catch-all arm (bare v.string(), v.unknown(), or
-  // v.any()) makes async arms unreachable from synchronous parsing.
+  // For union/variant — Valibot evaluates arms left-to-right.  A catch-all
+  // arm makes all *subsequent* arms unreachable, so we only suppress async
+  // checking once a catch-all is found scanning in order.
   if (s.options && Array.isArray(s.options)) {
     const isUnionLike = s.type === "union" || s.type === "variant";
     if (isUnionLike) {
-      const hasCatchAll = s.options.some((opt) =>
-        typeof opt === "object" && opt != null && isCatchAllSchema(opt)
-      );
-      if (!hasCatchAll) {
-        for (const option of s.options) {
-          if (typeof option === "object" && option != null) {
-            if (containsAsyncSchema(option, visited, checkContainers)) {
-              return true;
-            }
-          }
+      for (const option of s.options) {
+        if (typeof option !== "object" || option == null) continue;
+        // Once a catch-all arm is found, all later arms are unreachable
+        if (isCatchAllSchema(option)) break;
+        if (containsAsyncSchema(option, visited, checkContainers)) {
+          return true;
         }
       }
     } else {
