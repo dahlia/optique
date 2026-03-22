@@ -360,13 +360,13 @@ describe("logOutput()", () => {
     const normalSuggestions = suggestSync(parser, ["--log-output", "src"]);
     assert.ok(
       normalSuggestions.some((s) =>
-        s.kind === "file" && s.type === "file" && !s.includeHidden
+        s.kind === "file" && s.type === "file" && s.includeHidden === false
       ),
     );
     const dotdotSuggestions = suggestSync(parser, ["--log-output", ".."]);
     assert.ok(
       dotdotSuggestions.some((s) =>
-        s.kind === "file" && s.type === "file" && !s.includeHidden
+        s.kind === "file" && s.type === "file" && s.includeHidden === false
       ),
     );
     const nestedDotdotSuggestions = suggestSync(parser, [
@@ -375,7 +375,16 @@ describe("logOutput()", () => {
     ]);
     assert.ok(
       nestedDotdotSuggestions.some((s) =>
-        s.kind === "file" && s.type === "file" && !s.includeHidden
+        s.kind === "file" && s.type === "file" && s.includeHidden === false
+      ),
+    );
+    const parentDirSuggestions = suggestSync(parser, [
+      "--log-output",
+      "../",
+    ]);
+    assert.ok(
+      parentDirSuggestions.some((s) =>
+        s.kind === "file" && s.type === "file" && s.includeHidden === false
       ),
     );
   });
