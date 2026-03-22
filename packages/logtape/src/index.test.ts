@@ -689,34 +689,30 @@ describe("createSink()", () => {
     assert.equal(typeof sink, "function");
   });
 
-  it("should throw helpful error when file sink package is missing", async () => {
-    await assert.rejects(
-      () => createSink({ type: "file", path: "/tmp/optique.log" }),
-      (error) => {
-        assert.ok(error instanceof Error);
-        assert.match(
-          error.message,
-          /File sink requires @logtape\/file package\./,
-        );
-        return true;
-      },
-    );
+  it("should create file sink for file output", async () => {
+    const path = `${import.meta.dirname}/../../../tmp/test-sink.log`;
+    const sink = await createSink({
+      type: "file",
+      path,
+    });
+    assert.equal(typeof sink, "function");
   });
 
-  it("should not catch errors from file sink as missing package", async () => {
-    // When @logtape/file is missing, the error message should mention
-    // the package installation instructions, not a factory error.
-    // This test verifies that the try/catch only guards the import,
-    // not the factory call (the structural fix for the bug).
+  it("should propagate getFileSink() errors as-is", async () => {
+    // When @logtape/file is installed but getFileSink() throws (e.g., the
+    // target directory does not exist), the original error must propagate
+    // without being rewritten as "File sink requires @logtape/file package".
     await assert.rejects(
-      () => createSink({ type: "file", path: "/tmp/optique.log" }),
+      () =>
+        createSink({
+          type: "file",
+          path: "/nonexistent/deeply/nested/path/test.log",
+        }),
       (error) => {
         assert.ok(error instanceof Error);
-        // The error should mention @logtape/file since the package
-        // is genuinely missing in the test environment:
-        assert.match(
+        assert.doesNotMatch(
           error.message,
-          /File sink requires @logtape\/file package\./,
+          /File sink requires @logtape\/file package/,
         );
         return true;
       },

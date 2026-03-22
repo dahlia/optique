@@ -260,6 +260,9 @@ export function createConsoleSink(options: ConsoleSinkOptions = {}): Sink {
  * @returns A promise that resolves to a {@link Sink}.
  * @throws {Error} If file output is requested but `@logtape/file` is not
  *   installed.
+ * @throws If `@logtape/file` is installed but `getFileSink(output.path)` fails
+ *   at runtime (e.g., the target directory does not exist), the original error
+ *   propagates as-is.
  *
  * @example Console output
  * ```typescript

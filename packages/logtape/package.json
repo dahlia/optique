@@ -65,6 +65,7 @@
     "@optique/core": "workspace:"
   },
   "devDependencies": {
+    "@logtape/file": "catalog:",
     "@logtape/logtape": "catalog:",
     "@types/node": "catalog:",
     "tsdown": "catalog:",
