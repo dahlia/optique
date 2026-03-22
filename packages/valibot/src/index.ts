@@ -108,6 +108,21 @@ function isCatchAllSchema(
 }
 
 /**
+ * Checks whether a schema's pipe contains a transform or rawTransform action.
+ * Used to detect nested pipe schemas that change the value type.
+ */
+function pipeContainsTransform(
+  schema: unknown,
+): boolean {
+  const pipe = (schema as ValibotSchemaInternal).pipe;
+  if (!pipe || !Array.isArray(pipe)) return false;
+  return pipe.some((action) => {
+    const t = (action as { type?: string }).type;
+    return t === "transform" || t === "raw_transform";
+  });
+}
+
+/**
  * Recursively checks whether a Valibot schema contains any async parts
  * (e.g., `pipeAsync`, `checkAsync`).  Wrapper schemas such as `optional()`,
  * `nullable()`, `nullish()`, and `union()` keep `async === false` on the
@@ -183,15 +198,21 @@ function containsAsyncSchema(
       if (aType === "transform" || aType === "raw_transform") {
         seenTransform = true;
       }
-      if (
-        (action as { kind?: string }).kind === "schema" &&
-        containsAsyncSchema(
-          action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-          visited,
-          seenTransform,
-        )
-      ) {
-        return true;
+      if ((action as { kind?: string }).kind === "schema") {
+        if (
+          containsAsyncSchema(
+            action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+            visited,
+            seenTransform,
+          )
+        ) {
+          return true;
+        }
+        // A nested pipe schema may contain transforms that change the
+        // value type for subsequent steps in the outer pipe.
+        if (!seenTransform && pipeContainsTransform(action)) {
+          seenTransform = true;
+        }
       }
     }
   }
