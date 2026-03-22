@@ -636,6 +636,8 @@ function sanitizeForPhaseTwo(
   if (cached !== undefined) {
     return cached;
   }
+  // Non-plain objects are always proxied — they may hide placeholders in
+  // private fields or behind method return values.
   if (
     !isPlainObject(value) &&
     !Array.isArray(value) &&
@@ -643,6 +645,36 @@ function sanitizeForPhaseTwo(
     !(value instanceof Map)
   ) {
     return createSanitizedNonPlainView(value, seen);
+  }
+  // For collections, recursively sanitize each element so that nested
+  // non-plain objects are proxied even when containsPlaceholderValues()
+  // cannot detect their hidden placeholders.
+  if (Array.isArray(value)) {
+    const clone = createArrayCloneLike(value);
+    seen.set(value, clone);
+    for (let i = 0; i < value.length; i++) {
+      clone[i] = sanitizeForPhaseTwo(value[i], seen);
+    }
+    return clone;
+  }
+  if (value instanceof Set) {
+    const clone = createSetCloneLike(value);
+    seen.set(value, clone);
+    for (const item of value) {
+      clone.add(sanitizeForPhaseTwo(item, seen));
+    }
+    return clone;
+  }
+  if (value instanceof Map) {
+    const clone = createMapCloneLike(value);
+    seen.set(value, clone);
+    for (const [k, v] of value) {
+      clone.set(
+        sanitizeForPhaseTwo(k, seen),
+        sanitizeForPhaseTwo(v, seen),
+      );
+    }
+    return clone;
   }
   return stripPlaceholderValues(value, seen, true);
 }
@@ -658,21 +690,22 @@ function prepareParsedForContexts(
     return undefined;
   }
 
-  if (
-    Array.isArray(parsed) ||
-    parsed instanceof Set ||
-    parsed instanceof Map
-  ) {
-    // Check if the collection contains any non-plain object elements that
-    // might hide placeholders in private fields.  If so, force-proxy all
-    // nested non-plain objects.  Otherwise, use the normal fast path that
-    // preserves identity for clean collections.
-    const entries = Array.isArray(parsed)
-      ? parsed
-      : parsed instanceof Set
-      ? [...parsed]
-      : [...parsed.keys(), ...parsed.values()];
-    const hasNonPlainElements = entries.some(
+  if (parsed instanceof Set || parsed instanceof Map) {
+    // Set/Map identity semantics depend on object identity for has()/get()
+    // lookups.  Proxying entries would break `set.has(original)` and
+    // `map.get(original)`, so only strip visible own-property placeholders.
+    // Non-plain entries with hidden placeholders in private fields are a
+    // known limitation at the top level for Set/Map.
+    if (!containsPlaceholderValues(parsed)) {
+      return parsed;
+    }
+    return stripPlaceholderValues(parsed);
+  }
+
+  if (Array.isArray(parsed)) {
+    // Arrays don't have identity-based lookup, so non-plain elements can
+    // be safely proxied.
+    const hasNonPlainElements = parsed.some(
       (item) =>
         item != null &&
         typeof item === "object" &&
@@ -682,49 +715,16 @@ function prepareParsedForContexts(
       if (!hasNonPlainElements) {
         return parsed;
       }
-      // The collection itself has no visible placeholders, but it contains
-      // non-plain elements that might hide them in private fields.  Clone
-      // the collection and proxy only the non-plain entries — clean plain
-      // values pass through unchanged to preserve identity.
+      // Clone the array and proxy only non-plain entries.
       const seen = new WeakMap<object, unknown>();
-      if (Array.isArray(parsed)) {
-        const clone = createArrayCloneLike(parsed);
-        seen.set(parsed, clone);
-        for (let i = 0; i < parsed.length; i++) {
-          const item = parsed[i];
-          clone[i] = item != null && typeof item === "object" &&
-              !isPlainObject(item as object)
-            ? createSanitizedNonPlainView(item as object, seen)
-            : item;
-        }
-        return clone as typeof parsed;
-      }
-      if (parsed instanceof Set) {
-        const clone = createSetCloneLike(parsed);
-        seen.set(parsed, clone);
-        for (const item of parsed) {
-          clone.add(
-            item != null && typeof item === "object" &&
-              !isPlainObject(item as object)
-              ? createSanitizedNonPlainView(item as object, seen)
-              : item,
-          );
-        }
-        return clone as typeof parsed;
-      }
-      // Map
-      const clone = createMapCloneLike(parsed);
+      const clone = createArrayCloneLike(parsed);
       seen.set(parsed, clone);
-      for (const [key, val] of parsed) {
-        const k = key != null && typeof key === "object" &&
-            !isPlainObject(key as object)
-          ? createSanitizedNonPlainView(key as object, seen)
-          : key;
-        const v = val != null && typeof val === "object" &&
-            !isPlainObject(val as object)
-          ? createSanitizedNonPlainView(val as object, seen)
-          : val;
-        clone.set(k, v);
+      for (let i = 0; i < parsed.length; i++) {
+        const item = parsed[i];
+        clone[i] = item != null && typeof item === "object" &&
+            !isPlainObject(item as object)
+          ? createSanitizedNonPlainView(item as object, seen)
+          : item;
       }
       return clone as typeof parsed;
     }
