@@ -173,31 +173,56 @@ export function deduplicateDocEntries(
 export function deduplicateDocFragments(
   fragments: readonly DocFragment[],
 ): DocFragment[] {
-  const seen = new Set<string>();
-  const result: DocFragment[] = [];
+  // Untitled entries/sections share a global dedup scope.
+  // Titled sections are grouped by title and deduplicated within each group,
+  // but entries in differently-titled sections remain independent.
+  // Titled sections are emitted at the position of their first occurrence
+  // to preserve the original ordering.
+  const untitledSeen = new Set<string>();
+  const titledSectionMap = new Map<string, DocEntry[]>();
+  // Each element is either a concrete DocFragment or a title placeholder
+  // for a titled section whose entries are still being collected.
+  const slots: (DocFragment | string)[] = [];
   for (const fragment of fragments) {
     if (fragment.type === "entry") {
       const key = getDocEntryKey(fragment);
-      if (!seen.has(key)) {
-        seen.add(key);
-        result.push(fragment);
+      if (!untitledSeen.has(key)) {
+        untitledSeen.add(key);
+        slots.push(fragment);
       }
-    } else {
+    } else if (fragment.title == null) {
       const dedupedEntries: DocEntry[] = [];
       for (const entry of fragment.entries) {
         const key = getDocEntryKey(entry);
-        if (!seen.has(key)) {
-          seen.add(key);
+        if (!untitledSeen.has(key)) {
+          untitledSeen.add(key);
           dedupedEntries.push(entry);
         }
       }
       if (dedupedEntries.length > 0) {
-        result.push({
+        slots.push({
           ...fragment,
           type: "section",
           entries: dedupedEntries,
         });
       }
+    } else {
+      if (!titledSectionMap.has(fragment.title)) {
+        titledSectionMap.set(fragment.title, []);
+        slots.push(fragment.title);
+      }
+      titledSectionMap.get(fragment.title)!.push(...fragment.entries);
+    }
+  }
+  const result: DocFragment[] = [];
+  for (const slot of slots) {
+    if (typeof slot === "string") {
+      const entries = deduplicateDocEntries(titledSectionMap.get(slot)!);
+      if (entries.length > 0) {
+        result.push({ type: "section", title: slot, entries });
+      }
+    } else {
+      result.push(slot);
     }
   }
   return result;

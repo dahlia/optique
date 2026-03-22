@@ -2413,19 +2413,27 @@ export function or(
       const rawEntries: DocEntry[] = fragments.filter((f) =>
         f.type === "entry"
       );
-      const sections: DocSection[] = [];
+      const titledSectionMap = new Map<string, DocEntry[]>();
+      const titledSectionOrder: string[] = [];
       for (const fragment of fragments) {
         if (fragment.type !== "section") continue;
         if (fragment.title == null) {
           rawEntries.push(...fragment.entries);
         } else {
-          sections.push({
-            ...fragment,
-            entries: deduplicateDocEntries(fragment.entries),
-          });
+          let sectionEntries = titledSectionMap.get(fragment.title);
+          if (sectionEntries == null) {
+            sectionEntries = [];
+            titledSectionMap.set(fragment.title, sectionEntries);
+            titledSectionOrder.push(fragment.title);
+          }
+          sectionEntries.push(...fragment.entries);
         }
       }
       const entries = deduplicateDocEntries(rawEntries);
+      const sections = titledSectionOrder.map((title) => ({
+        title,
+        entries: deduplicateDocEntries(titledSectionMap.get(title)!),
+      }));
       return {
         brief,
         description,

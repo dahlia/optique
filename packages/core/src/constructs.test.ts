@@ -763,6 +763,47 @@ describe("or", () => {
         "flag and option with same name but different metavar should remain separate",
       );
     });
+    it("should deduplicate entries across same-titled sections", () => {
+      const orParser = or(
+        object("Alpha", { x: option("--x") }),
+        object("Alpha", { x: option("--x") }),
+      );
+
+      // Test at getDocFragments level
+      const fragments = orParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const alphaSections = sections.filter((s) => s.title === "Alpha");
+      const allAlphaEntries = alphaSections.flatMap((s) => s.entries);
+      const xEntries = allAlphaEntries.filter((e) =>
+        e.term.type === "option" &&
+        e.term.names.some((n) => n === "--x")
+      );
+      assert.equal(
+        xEntries.length,
+        1,
+        "entries in same-titled sections should be deduplicated",
+      );
+
+      // Also verify via getDocPage (which calls buildDocPage that
+      // merges same-titled sections)
+      const page = getDocPage(orParser);
+      assert.ok(page);
+      const alphaPage = page.sections.filter((s) => s.title === "Alpha");
+      const pageXEntries = alphaPage.flatMap((s) => s.entries).filter((e) =>
+        e.term.type === "option" &&
+        e.term.names.some((n) => n === "--x")
+      );
+      assert.equal(
+        pageXEntries.length,
+        1,
+        "entries in same-titled sections should remain deduplicated after buildDocPage",
+      );
+    });
   });
 });
 
@@ -1752,6 +1793,60 @@ describe("longestMatch()", () => {
       xEntries.length,
       1,
       "duplicate entries across object-wrapped branches should be collapsed",
+    );
+  });
+
+  it("should keep entries in different titled sections independent", () => {
+    const parser = longestMatch(
+      object("Alpha", { x: option("--x") }),
+      object("Beta", { x: option("--x") }),
+    );
+
+    const fragments = parser.getDocFragments({ kind: "unavailable" });
+    const sections = fragments.fragments.filter((f) =>
+      f.type === "section"
+    ) as (DocFragment & { type: "section" })[];
+
+    const alpha = sections.find((s) => s.title === "Alpha");
+    const beta = sections.find((s) => s.title === "Beta");
+    assert.ok(alpha, "Alpha section should exist");
+    assert.ok(beta, "Beta section should exist");
+    assert.ok(
+      alpha.entries.some((e) =>
+        e.term.type === "option" &&
+        e.term.names.some((n) => n === "--x")
+      ),
+      "Alpha should contain --x",
+    );
+    assert.ok(
+      beta.entries.some((e) =>
+        e.term.type === "option" &&
+        e.term.names.some((n) => n === "--x")
+      ),
+      "Beta should also contain --x",
+    );
+  });
+
+  it("should deduplicate entries across same-titled sections", () => {
+    const parser = longestMatch(
+      object("Alpha", { x: option("--x") }),
+      object("Alpha", { x: option("--x") }),
+    );
+
+    const fragments = parser.getDocFragments({ kind: "unavailable" });
+    const sections = fragments.fragments.filter((f) =>
+      f.type === "section"
+    ) as (DocFragment & { type: "section" })[];
+    const alphaSections = sections.filter((s) => s.title === "Alpha");
+    const allAlphaEntries = alphaSections.flatMap((s) => s.entries);
+    const xEntries = allAlphaEntries.filter((e) =>
+      e.term.type === "option" &&
+      e.term.names.some((n) => n === "--x")
+    );
+    assert.equal(
+      xEntries.length,
+      1,
+      "same-titled sections should be merged and deduplicated",
     );
   });
 
