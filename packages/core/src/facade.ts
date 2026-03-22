@@ -269,12 +269,14 @@ function stripPlaceholderValues<T>(
             Object.defineProperty(wrapper, fk, fd);
           } catch { /* best-effort */ }
         }
+        // If the original doesn't have .prototype (bound/arrow functions),
+        // set the wrapper's .prototype to undefined so instanceof checks
+        // don't use the wrapper's synthetic prototype.  Use assignment
+        // rather than delete because .prototype is non-configurable.
         if (
           !Object.prototype.hasOwnProperty.call(fn, "prototype")
         ) {
-          try {
-            delete (wrapper as { prototype?: unknown }).prototype;
-          } catch { /* best-effort */ }
+          wrapper.prototype = undefined;
         }
         descriptor.value = wrapper;
       } else {
@@ -533,19 +535,13 @@ function createSanitizedNonPlainView<T extends object>(
         }
       }
       // Invoke the getter via callMethodOnSanitizedTarget so that own
-      // properties are temporarily sanitized.  The synthetic function maps
-      // thisArg back to the original receiver so standard Reflect.get
-      // receiver semantics are preserved.  Private field access through
-      // the proxy receiver throws TypeError which propagates to the
-      // caller — use methods for private field access instead.
+      // properties are temporarily sanitized.  The getter runs with the
+      // real target as receiver (allowing private field access).  In the
+      // frozen/sealed fallback, the caller's receiver is used instead.
       const result = callMethodOnSanitizedTarget(
         {
           apply: (thisArg: unknown) =>
-            Reflect.get(
-              target,
-              key,
-              thisArg === target ? receiver : (thisArg ?? target),
-            ),
+            Reflect.get(target, key, thisArg ?? target),
         },
         receiver,
         target,

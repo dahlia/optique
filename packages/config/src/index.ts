@@ -324,11 +324,7 @@ function createSanitizedNonPlainView<T extends object>(
       const result = callMethodOnSanitizedTarget(
         {
           apply: (thisArg: unknown) =>
-            Reflect.get(
-              target,
-              key,
-              thisArg === target ? receiver : (thisArg ?? target),
-            ),
+            Reflect.get(target, key, thisArg ?? target),
         },
         receiver,
         target,
@@ -511,9 +507,7 @@ function stripDeferredPromptValues<T>(
         if (
           !Object.prototype.hasOwnProperty.call(fn, "prototype")
         ) {
-          try {
-            delete (wrapper as { prototype?: unknown }).prototype;
-          } catch { /* best-effort */ }
+          wrapper.prototype = undefined;
         }
         descriptor.value = wrapper;
       } else {
