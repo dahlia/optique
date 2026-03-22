@@ -84,6 +84,8 @@ const SAFE_TRANSFORMATION_TYPES: ReadonlySet<string> = new Set([
   "normalize",
   "to_min_value",
   "to_max_value",
+  "trim_start",
+  "trim_end",
 ]);
 
 /**
@@ -106,8 +108,13 @@ function isCatchAllSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
   afterTransform = false,
 ): boolean {
-  const s = schema as ValibotSchemaInternal & { async?: boolean };
+  const s = schema as ValibotSchemaInternal & {
+    async?: boolean;
+    fallback?: unknown;
+  };
   if (s.async) return false;
+  // v.fallback() always succeeds (returns fallback value on failure)
+  if (s.fallback !== undefined) return true;
   // v.unknown() and v.any() accept every value of any type
   if (s.type === "unknown" || s.type === "any") {
     if (!s.pipe) return true;
