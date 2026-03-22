@@ -4695,6 +4695,18 @@ describe("hidden option", () => {
       );
     });
 
+    it("should throw TypeError for bare prefix option names", () => {
+      for (const bare of ["--", "-", "/", "+"]) {
+        assert.throws(
+          () => option(bare as OptionName, string()),
+          {
+            name: "TypeError",
+            message: /Option name must start with/,
+          },
+        );
+      }
+    });
+
     it("should throw TypeError when no option names are provided", () => {
       assert.throws(
         () => option(string()),
@@ -4822,6 +4834,18 @@ describe("hidden option", () => {
           message: /Flag name must start with/,
         },
       );
+    });
+
+    it("should throw TypeError for bare prefix flag names", () => {
+      for (const bare of ["--", "-", "/", "+"]) {
+        assert.throws(
+          () => flag(bare as OptionName),
+          {
+            name: "TypeError",
+            message: /Flag name must start with/,
+          },
+        );
+      }
     });
 
     it("should throw TypeError when no flag names are provided", () => {

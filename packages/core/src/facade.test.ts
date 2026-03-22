@@ -1008,7 +1008,7 @@ describe("runParser", () => {
         {
           name: "TypeError",
           message:
-            'Help option name must start with "--", "-", "/", or "+": "help".',
+            'Help option name must start with "--", "-", "/", or "+", followed by at least one character: "help".',
         },
       );
     });
@@ -1145,7 +1145,7 @@ describe("runParser", () => {
         {
           name: "TypeError",
           message:
-            'Version option name must start with "--", "-", "/", or "+": "version".',
+            'Version option name must start with "--", "-", "/", or "+", followed by at least one character: "version".',
         },
       );
     });
@@ -1229,7 +1229,7 @@ describe("runParser", () => {
         {
           name: "TypeError",
           message:
-            'Completion option name must start with "--", "-", "/", or "+": "completion".',
+            'Completion option name must start with "--", "-", "/", or "+", followed by at least one character: "completion".',
         },
       );
     });
