@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import { option } from "@optique/core/primitives";
 import { optional } from "@optique/core/modifiers";
+import { ensureNonEmptyString } from "@optique/core/nonempty";
 import type {
   NonEmptyString,
   ValueParser,
@@ -97,13 +98,16 @@ export interface LogOutputOptions {
  *
  * @param options Configuration options for the parser.
  * @returns A {@link ValueParser} that produces a {@link LogOutput}.
+ * @throws {TypeError} If `options.metavar` is an empty string.
  */
 function logOutputValueParser(
   options: LogOutputOptions = {},
 ): ValueParser<"sync", LogOutput> {
+  const metavar = options.metavar ?? "FILE";
+  ensureNonEmptyString(metavar);
   return {
     $mode: "sync",
-    metavar: options.metavar ?? "FILE",
+    metavar,
     parse(input: string): ValueParserResult<LogOutput> {
       if (input === "-") {
         return { success: true, value: { type: "console" } };
@@ -148,6 +152,7 @@ function logOutputValueParser(
  *
  * @param options Configuration options for the log output parser.
  * @returns A {@link Parser} that produces a {@link LogOutput} or `undefined`.
+ * @throws {TypeError} If `options.metavar` is an empty string.
  *
  * @example Basic usage
  * ```typescript

@@ -1329,16 +1329,23 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
  -  `ConsoleSinkOptions.stream` now also accepts `null`, which is treated
     the same as `undefined` (defaults to `"stderr"`).  [[#379], [#707]]
 
+ -  Fixed `logOutput()` not validating empty runtime `metavar` values.
+    Previously, passing an empty string as `metavar` would silently produce
+    malformed help output.  Now it throws `TypeError` like all other value
+    parsers.  [[#459], [#708]]
+
 [#292]: https://github.com/dahlia/optique/issues/292
 [#299]: https://github.com/dahlia/optique/issues/299
 [#311]: https://github.com/dahlia/optique/issues/311
 [#329]: https://github.com/dahlia/optique/issues/329
 [#379]: https://github.com/dahlia/optique/issues/379
+[#459]: https://github.com/dahlia/optique/issues/459
 [#699]: https://github.com/dahlia/optique/pull/699
 [#702]: https://github.com/dahlia/optique/pull/702
 [#703]: https://github.com/dahlia/optique/pull/703
 [#705]: https://github.com/dahlia/optique/pull/705
 [#707]: https://github.com/dahlia/optique/pull/707
+[#708]: https://github.com/dahlia/optique/pull/708
 
 ### @optique/temporal
 
