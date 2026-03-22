@@ -29,9 +29,10 @@ export type LogOutput =
 export interface ConsoleSinkOptions {
   /**
    * The stream to write to. Either `"stdout"` or `"stderr"`.
+   * If `null` or `undefined`, defaults to `"stderr"`.
    * @default `"stderr"`
    */
-  readonly stream?: "stdout" | "stderr";
+  readonly stream?: "stdout" | "stderr" | null;
 
   /**
    * A function that determines which stream to use based on the log level.
@@ -191,6 +192,10 @@ export function logOutput(
  *
  * @param options Configuration options for the console sink.
  * @returns A {@link Sink} function.
+ * @throws {TypeError} If `options.stream` is not `"stdout"` or `"stderr"`
+ *   when `streamResolver` is not provided.
+ * @throws {TypeError} If `streamResolver` returns a value other than
+ *   `"stdout"` or `"stderr"`.
  *
  * @example Static stream selection
  * ```typescript
@@ -212,13 +217,40 @@ export function logOutput(
  * @since 0.8.0
  */
 export function createConsoleSink(options: ConsoleSinkOptions = {}): Sink {
-  const defaultStream = options.stream ?? "stderr";
   const streamResolver = options.streamResolver;
+  const defaultStream = options.stream ?? "stderr";
+
+  const invalidStreamError = (value: unknown): TypeError => {
+    let repr: string;
+    if (typeof value === "string") {
+      repr = JSON.stringify(value);
+    } else if (value === null || typeof value !== "object") {
+      repr = String(value);
+    } else {
+      try {
+        repr = JSON.stringify(value) ?? String(value);
+      } catch {
+        repr = String(value);
+      }
+    }
+    return new TypeError(
+      `Invalid stream: expected "stdout" or "stderr", got ${repr}.`,
+    );
+  };
+
+  if (
+    !streamResolver && defaultStream !== "stdout" && defaultStream !== "stderr"
+  ) {
+    throw invalidStreamError(defaultStream);
+  }
 
   return (record: LogRecord): void => {
     const stream = streamResolver
       ? streamResolver(record.level)
       : defaultStream;
+    if (stream !== "stdout" && stream !== "stderr") {
+      throw invalidStreamError(stream);
+    }
 
     // Format the message
     const messageParts: string[] = [];

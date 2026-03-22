@@ -743,6 +743,84 @@ describe("createConsoleSink()", () => {
       /^1970-01-01T00:00:00\.000Z \[INFO\s*\] app: ok$/,
     );
   });
+
+  it("should throw TypeError for invalid static stream option", () => {
+    assert.throws(
+      () => createConsoleSink({ stream: "stdrr" as never }),
+      {
+        name: "TypeError",
+        message: 'Invalid stream: expected "stdout" or "stderr", got "stdrr".',
+      },
+    );
+  });
+
+  it("should treat null stream as default stderr", () => {
+    const sink = createConsoleSink({ stream: null });
+    const originalError = console.error;
+    const lines: string[] = [];
+    console.error = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    try {
+      sink({
+        category: ["test"],
+        level: "info",
+        message: ["hello"],
+        rawMessage: "hello",
+        properties: {},
+        timestamp: 1,
+      });
+    } finally {
+      console.error = originalError;
+    }
+    assert.equal(lines.length, 1);
+  });
+
+  it("should ignore invalid stream when streamResolver is provided", () => {
+    const sink = createConsoleSink({
+      stream: "stdrr" as never,
+      streamResolver: () => "stdout",
+    });
+    const originalLog = console.log;
+    const lines: string[] = [];
+    console.log = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    try {
+      sink({
+        category: ["test"],
+        level: "info",
+        message: ["hello"],
+        rawMessage: "hello",
+        properties: {},
+        timestamp: 1,
+      });
+    } finally {
+      console.log = originalLog;
+    }
+    assert.equal(lines.length, 1);
+  });
+
+  it("should throw TypeError for invalid streamResolver return value", () => {
+    const sink = createConsoleSink({
+      streamResolver: (() => "stdrr") as never,
+    });
+    assert.throws(
+      () =>
+        sink({
+          category: ["test"],
+          level: "info",
+          message: ["hello"],
+          rawMessage: "hello",
+          properties: {},
+          timestamp: 1,
+        }),
+      {
+        name: "TypeError",
+        message: 'Invalid stream: expected "stdout" or "stderr", got "stdrr".',
+      },
+    );
+  });
 });
 
 describe("createSink()", () => {
