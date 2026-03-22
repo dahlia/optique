@@ -29,9 +29,10 @@ export type LogOutput =
 export interface ConsoleSinkOptions {
   /**
    * The stream to write to. Either `"stdout"` or `"stderr"`.
+   * If `null` or `undefined`, defaults to `"stderr"`.
    * @default `"stderr"`
    */
-  readonly stream?: "stdout" | "stderr";
+  readonly stream?: "stdout" | "stderr" | null;
 
   /**
    * A function that determines which stream to use based on the log level.
@@ -191,6 +192,10 @@ export function logOutput(
  *
  * @param options Configuration options for the console sink.
  * @returns A {@link Sink} function.
+ * @throws {TypeError} If `options.stream` is not `"stdout"` or `"stderr"`
+ *   when `streamResolver` is not provided.
+ * @throws {TypeError} If `streamResolver` returns a value other than
+ *   `"stdout"` or `"stderr"`.
  *
  * @example Static stream selection
  * ```typescript

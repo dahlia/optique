@@ -1321,8 +1321,13 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     absent.  [[#311], [#705]]
 
  -  Fixed `createConsoleSink()` silently treating invalid `stream` and
-    `streamResolver` return values as stdout.  Invalid values now throw
-    a `TypeError`.  [[#379], [#707]]
+    `streamResolver` return values as stdout.  Invalid static `stream`
+    values now throw `TypeError` when `streamResolver` is not provided,
+    and invalid `streamResolver` return values throw `TypeError` at log
+    time.  [[#379], [#707]]
+
+ -  `ConsoleSinkOptions.stream` now also accepts `null`, which is treated
+    the same as `undefined` (defaults to `"stderr"`).  [[#379], [#707]]
 
 [#292]: https://github.com/dahlia/optique/issues/292
 [#299]: https://github.com/dahlia/optique/issues/299

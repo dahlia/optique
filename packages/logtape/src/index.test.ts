@@ -747,8 +747,33 @@ describe("createConsoleSink()", () => {
   it("should throw TypeError for invalid static stream option", () => {
     assert.throws(
       () => createConsoleSink({ stream: "stdrr" as never }),
-      TypeError,
+      {
+        name: "TypeError",
+        message: 'Invalid stream: expected "stdout" or "stderr", got "stdrr".',
+      },
     );
+  });
+
+  it("should treat null stream as default stderr", () => {
+    const sink = createConsoleSink({ stream: null });
+    const originalError = console.error;
+    const lines: string[] = [];
+    console.error = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    try {
+      sink({
+        category: ["test"],
+        level: "info",
+        message: ["hello"],
+        rawMessage: "hello",
+        properties: {},
+        timestamp: 1,
+      });
+    } finally {
+      console.error = originalError;
+    }
+    assert.equal(lines.length, 1);
   });
 
   it("should ignore invalid stream when streamResolver is provided", () => {
@@ -790,7 +815,10 @@ describe("createConsoleSink()", () => {
           properties: {},
           timestamp: 1,
         }),
-      TypeError,
+      {
+        name: "TypeError",
+        message: 'Invalid stream: expected "stdout" or "stderr", got "stdrr".',
+      },
     );
   });
 });
