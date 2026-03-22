@@ -360,6 +360,14 @@ describe("valibot()", () => {
       assert.equal(parser.format(date), "2025-06-15T00:00:00.000Z");
     });
 
+    it("should not throw for invalid date values", () => {
+      const parser = valibot(
+        v.pipe(v.string(), v.transform((s) => new Date(s))),
+      );
+      const invalid = new Date("bad");
+      assert.equal(parser.format(invalid), "Invalid Date");
+    });
+
     it("should format object values as JSON", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform((s) => ({ raw: s }))),

@@ -686,7 +686,11 @@ export function valibot<T>(
 
     format(value: T): string {
       if (options.format) return options.format(value);
-      if (value instanceof Date) return value.toISOString();
+      if (value instanceof Date) {
+        return Number.isNaN(value.getTime())
+          ? String(value)
+          : value.toISOString();
+      }
       if (typeof value !== "object" || value === null) return String(value);
       if (Array.isArray(value)) return JSON.stringify(value);
       const str = String(value);

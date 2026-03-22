@@ -364,6 +364,12 @@ describe("zod()", () => {
       assert.equal(parser.format(date), "2025-06-15T00:00:00.000Z");
     });
 
+    it("should not throw for invalid date values", () => {
+      const parser = zod(z.string().transform((s) => new Date(s)));
+      const invalid = new Date("bad");
+      assert.equal(parser.format(invalid), "Invalid Date");
+    });
+
     it("should format object values as JSON", () => {
       const parser = zod(
         z.string().transform((s) => ({ raw: s })),
