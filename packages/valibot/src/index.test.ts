@@ -352,14 +352,34 @@ describe("valibot()", () => {
       assert.equal(parser.format(false), "false");
     });
 
-    it("should format date values", () => {
+    it("should format date values as ISO strings", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform((s) => new Date(s))),
       );
-      // Use a mid-year date so that local-time rendering cannot roll the year backward in any timezone.
       const date = new Date("2025-06-15T00:00:00.000Z");
-      const formatted = parser.format(date);
-      assert.ok(formatted.includes("2025"));
+      assert.equal(parser.format(date), "2025-06-15T00:00:00.000Z");
+    });
+
+    it("should format object values as JSON", () => {
+      const parser = valibot(
+        v.pipe(v.string(), v.transform((s) => ({ raw: s }))),
+      );
+      assert.equal(parser.format({ raw: "hello" }), '{"raw":"hello"}');
+    });
+
+    it("should format array values as JSON", () => {
+      const parser = valibot(
+        v.pipe(v.string(), v.transform((s) => s.split(","))),
+      );
+      assert.equal(parser.format(["a", "b", "c"]), '["a","b","c"]');
+    });
+
+    it("should use custom format function from options", () => {
+      const parser = valibot(
+        v.pipe(v.string(), v.transform((s) => ({ raw: s }))),
+        { format: (val) => val.raw },
+      );
+      assert.equal(parser.format({ raw: "hello" }), "hello");
     });
   });
 

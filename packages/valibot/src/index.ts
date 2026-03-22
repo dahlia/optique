@@ -12,7 +12,7 @@ import { safeParse } from "valibot";
  * Options for creating a Valibot value parser.
  * @since 0.7.0
  */
-export interface ValibotParserOptions {
+export interface ValibotParserOptions<T = unknown> {
   /**
    * The metavariable name for this parser. This is used in help messages to
    * indicate what kind of value this parser expects. Usually a single
@@ -20,6 +20,18 @@ export interface ValibotParserOptions {
    * @default `"VALUE"`
    */
   readonly metavar?: NonEmptyString;
+
+  /**
+   * Custom formatter for displaying parsed values in help messages.
+   * When not provided, the default formatter is used, which handles
+   * primitives via `String()`, `Date` via `.toISOString()`, and objects
+   * via `JSON.stringify()`.
+   *
+   * @param value The parsed value to format.
+   * @returns A string representation of the value.
+   * @since 1.0.0
+   */
+  readonly format?: (value: T) => string;
 
   /**
    * Custom error messages for Valibot validation failures.
@@ -617,7 +629,7 @@ function inferChoices(
  */
 export function valibot<T>(
   schema: v.BaseSchema<unknown, T, v.BaseIssue<unknown>>,
-  options: ValibotParserOptions = {},
+  options: ValibotParserOptions<T> = {},
 ): ValueParser<"sync", T> {
   if (containsAsyncSchema(schema)) {
     throw new TypeError(
@@ -673,7 +685,13 @@ export function valibot<T>(
     },
 
     format(value: T): string {
-      return String(value);
+      if (options.format) return options.format(value);
+      if (value instanceof Date) return value.toISOString();
+      if (typeof value !== "object" || value === null) return String(value);
+      if (Array.isArray(value)) return JSON.stringify(value);
+      const str = String(value);
+      if (str !== "[object Object]") return str;
+      return JSON.stringify(value);
     },
   };
   return parser;

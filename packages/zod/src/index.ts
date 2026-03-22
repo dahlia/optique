@@ -11,7 +11,7 @@ import type { z } from "zod";
  * Options for creating a Zod value parser.
  * @since 0.7.0
  */
-export interface ZodParserOptions {
+export interface ZodParserOptions<T = unknown> {
   /**
    * The metavariable name for this parser. This is used in help messages to
    * indicate what kind of value this parser expects. Usually a single
@@ -19,6 +19,18 @@ export interface ZodParserOptions {
    * @default `"VALUE"`
    */
   readonly metavar?: NonEmptyString;
+
+  /**
+   * Custom formatter for displaying parsed values in help messages.
+   * When not provided, the default formatter is used, which handles
+   * primitives via `String()`, `Date` via `.toISOString()`, and objects
+   * via `JSON.stringify()`.
+   *
+   * @param value The parsed value to format.
+   * @returns A string representation of the value.
+   * @since 1.0.0
+   */
+  readonly format?: (value: T) => string;
 
   /**
    * Custom error messages for Zod validation failures.
@@ -432,7 +444,7 @@ function inferChoices(
  */
 export function zod<T>(
   schema: z.Schema<T>,
-  options: ZodParserOptions = {},
+  options: ZodParserOptions<T> = {},
 ): ValueParser<"sync", T> {
   const choices = inferChoices(schema);
   const metavar = options.metavar ?? inferMetavar(schema);
@@ -504,7 +516,13 @@ export function zod<T>(
     },
 
     format(value: T): string {
-      return String(value);
+      if (options.format) return options.format(value);
+      if (value instanceof Date) return value.toISOString();
+      if (typeof value !== "object" || value === null) return String(value);
+      if (Array.isArray(value)) return JSON.stringify(value);
+      const str = String(value);
+      if (str !== "[object Object]") return str;
+      return JSON.stringify(value);
     },
   };
   return parser;
