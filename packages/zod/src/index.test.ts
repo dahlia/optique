@@ -391,6 +391,16 @@ describe("zod()", () => {
       assert.equal(parser.format({ id: 1n }), "[object Object]");
     });
 
+    it("should handle objects with toJSON returning undefined", () => {
+      const parser = zod(
+        z.string().transform(() => ({ toJSON: () => undefined })),
+      );
+      assert.equal(
+        parser.format({ toJSON: () => undefined }),
+        "[object Object]",
+      );
+    });
+
     it("should use custom format function from options", () => {
       const parser = zod(
         z.string().transform((s) => ({ raw: s })),

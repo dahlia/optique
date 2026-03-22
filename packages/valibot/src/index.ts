@@ -695,7 +695,7 @@ export function valibot<T>(
       const str = String(value);
       if (str !== "[object Object]") return str;
       try {
-        return JSON.stringify(value);
+        return JSON.stringify(value) ?? str;
       } catch {
         return str;
       }

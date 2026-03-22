@@ -389,6 +389,19 @@ describe("valibot()", () => {
       assert.equal(parser.format({ id: 1n }), "[object Object]");
     });
 
+    it("should handle objects with toJSON returning undefined", () => {
+      const parser = valibot(
+        v.pipe(
+          v.string(),
+          v.transform(() => ({ toJSON: () => undefined })),
+        ),
+      );
+      assert.equal(
+        parser.format({ toJSON: () => undefined }),
+        "[object Object]",
+      );
+    });
+
     it("should use custom format function from options", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform((s) => ({ raw: s }))),
