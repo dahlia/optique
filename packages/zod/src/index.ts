@@ -5,7 +5,7 @@ import type {
 } from "@optique/core/valueparser";
 import { type Message, message, valueSet } from "@optique/core/message";
 import { ensureNonEmptyString } from "@optique/core/nonempty";
-import type { z } from "zod";
+import { type z, ZodError } from "zod";
 
 /**
  * Options for creating a Zod value parser.
@@ -264,6 +264,50 @@ function preConvertBoolean(
       })
     }.`,
   };
+}
+
+/**
+ * Detects whether a Zod schema contains async refinements or transforms
+ * by inspecting the internal check/effect structure without executing
+ * user code.  Handles both Zod v3 (ZodEffects) and Zod v4 (inline checks
+ * and pipe wrappers).
+ */
+function hasAsyncChecks(schema: z.Schema<unknown>): boolean {
+  const def = (schema as ZodSchemaInternal)._def;
+  if (!def) return false;
+
+  // Zod v4: inline checks on the schema itself (e.g., .refine(async ...))
+  if (Array.isArray(def.checks)) {
+    for (const check of def.checks) {
+      const fn =
+        (check as unknown as { def?: { fn?: (...args: never) => unknown } })
+          .def?.fn;
+      if (
+        typeof fn === "function" && fn.constructor.name === "AsyncFunction"
+      ) {
+        return true;
+      }
+    }
+  }
+
+  // Zod v3: ZodEffects with async refinement or transform
+  if (def.effect != null) {
+    const effect = def.effect as Record<string, unknown>;
+    const fn = (effect.refinement ?? effect.transform) as
+      | ((...args: never) => unknown)
+      | undefined;
+    if (
+      typeof fn === "function" && fn.constructor.name === "AsyncFunction"
+    ) {
+      return true;
+    }
+  }
+
+  // Recurse into wrappers that may contain the async check
+  const inner = def.innerType ?? def.schema ?? def.in;
+  if (inner != null) return hasAsyncChecks(inner);
+
+  return false;
 }
 
 /**
@@ -678,13 +722,22 @@ export function zod<T>(
    *     to obtain a real `ZodError`.  This is safe because the type
    *     check rejects the string before any refinements execute.
    *  -  *Coerced* (`z.coerce.boolean()`): probing is unsafe (coercion
-   *     succeeds and runs refinements), so a synthetic error with a
-   *     compatible ZodError shape is used instead.
+   *     succeeds and runs refinements), so a real `ZodError` is
+   *     constructed directly using the imported `ZodError` class.
    */
   function handleBooleanLiteralError(
     boolResult: ValueParserResult<boolean>,
     rawInput: string,
   ): ValueParserResult<T> {
+    // Detect async schemas statically so that unsupported schemas
+    // are rejected consistently regardless of input value.
+    if (hasAsyncChecks(schema)) {
+      throw new TypeError(
+        "Async Zod schemas (e.g., async refinements) are not supported " +
+          "by zod(). Use synchronous schemas instead.",
+      );
+    }
+
     if (options.errors?.zodError) {
       if (typeof options.errors.zodError !== "function") {
         return { success: false, error: options.errors.zodError };
@@ -695,19 +748,14 @@ export function zod<T>(
       if (!boolInfo.isCoerced) {
         return doSafeParse(rawInput, rawInput);
       }
-      // For coerced schemas, probing would succeed (JS truthiness)
-      // and run user refinements, so construct a synthetic error.
-      const zodError = Object.assign(
-        new Error(`Invalid Boolean value: ${rawInput}`),
-        {
-          issues: [{
-            code: "custom" as const,
-            message: `Invalid Boolean value: ${rawInput}`,
-            path: [] as PropertyKey[],
-          }],
-          name: "ZodError",
-        },
-      ) as unknown as z.ZodError;
+      // For coerced schemas, construct a real ZodError without
+      // probing safeParse() (which would succeed under JS truthiness
+      // and execute user refinements).
+      const zodError = new ZodError([{
+        code: "custom",
+        message: `Invalid Boolean value: ${rawInput}`,
+        path: [],
+      }]);
       return {
         success: false,
         error: options.errors.zodError(zodError, rawInput),
