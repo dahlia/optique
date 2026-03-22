@@ -766,6 +766,154 @@ describe("zod()", () => {
     });
   });
 
+  describe("boolean parsing", () => {
+    it("should parse true literals with z.coerce.boolean()", () => {
+      const parser = zod(z.coerce.boolean());
+      for (const input of ["true", "1", "yes", "on"]) {
+        const result = parser.parse(input);
+        assert.ok(result.success, `Expected "${input}" to parse as true`);
+        assert.equal(result.value, true);
+      }
+    });
+
+    it("should parse false literals with z.coerce.boolean()", () => {
+      const parser = zod(z.coerce.boolean());
+      for (const input of ["false", "0", "no", "off"]) {
+        const result = parser.parse(input);
+        assert.ok(result.success, `Expected "${input}" to parse as false`);
+        assert.equal(result.value, false);
+      }
+    });
+
+    it("should be case-insensitive", () => {
+      const parser = zod(z.coerce.boolean());
+      for (
+        const input of [
+          "True",
+          "TRUE",
+          "False",
+          "FALSE",
+          "Yes",
+          "YES",
+          "No",
+          "NO",
+          "On",
+          "ON",
+          "Off",
+          "OFF",
+        ]
+      ) {
+        const result = parser.parse(input);
+        assert.ok(result.success, `Expected "${input}" to parse successfully`);
+      }
+    });
+
+    it("should trim whitespace", () => {
+      const parser = zod(z.coerce.boolean());
+      const trueResult = parser.parse("  true  ");
+      assert.ok(trueResult.success);
+      assert.equal(trueResult.value, true);
+
+      const falseResult = parser.parse("\tfalse\n");
+      assert.ok(falseResult.success);
+      assert.equal(falseResult.value, false);
+    });
+
+    it("should reject invalid strings", () => {
+      const parser = zod(z.coerce.boolean());
+      for (const input of ["maybe", "2", "random", "nope", ""]) {
+        const result = parser.parse(input);
+        assert.ok(!result.success, `Expected "${input}" to be rejected`);
+      }
+    });
+
+    it("should work with z.boolean() (non-coerced)", () => {
+      const parser = zod(z.boolean());
+      const trueResult = parser.parse("true");
+      assert.ok(trueResult.success);
+      assert.equal(trueResult.value, true);
+
+      const falseResult = parser.parse("false");
+      assert.ok(falseResult.success);
+      assert.equal(falseResult.value, false);
+    });
+
+    it("should work with z.coerce.boolean().optional()", () => {
+      const parser = zod(z.coerce.boolean().optional());
+      const result = parser.parse("true");
+      assert.ok(result.success);
+      assert.equal(result.value, true);
+
+      const falseResult = parser.parse("off");
+      assert.ok(falseResult.success);
+      assert.equal(falseResult.value, false);
+    });
+
+    it("should work with z.coerce.boolean().nullable()", () => {
+      const parser = zod(z.coerce.boolean().nullable());
+      const result = parser.parse("yes");
+      assert.ok(result.success);
+      assert.equal(result.value, true);
+    });
+
+    it("should work with z.coerce.boolean().default(false)", () => {
+      const parser = zod(z.coerce.boolean().default(false));
+      const result = parser.parse("on");
+      assert.ok(result.success);
+      assert.equal(result.value, true);
+    });
+
+    it("should preserve Zod refinements", () => {
+      const parser = zod(z.coerce.boolean().refine((v) => v === true));
+      const trueResult = parser.parse("true");
+      assert.ok(trueResult.success);
+      assert.equal(trueResult.value, true);
+
+      const falseResult = parser.parse("false");
+      assert.ok(!falseResult.success);
+    });
+
+    it("should expose choices for boolean schemas", () => {
+      const parser = zod(z.coerce.boolean());
+      assert.deepEqual(parser.choices, [true, false]);
+    });
+
+    it("should provide suggest() for boolean schemas", () => {
+      const parser = zod(z.coerce.boolean());
+      assert.ok(parser.suggest != null);
+      const suggestions = [...parser.suggest!("t")];
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "true" }]);
+    });
+
+    it("should suggest all literals for empty prefix", () => {
+      const parser = zod(z.coerce.boolean());
+      const suggestions = [...parser.suggest!("")];
+      assert.deepEqual(suggestions, [
+        { kind: "literal", text: "true" },
+        { kind: "literal", text: "1" },
+        { kind: "literal", text: "yes" },
+        { kind: "literal", text: "on" },
+        { kind: "literal", text: "false" },
+        { kind: "literal", text: "0" },
+        { kind: "literal", text: "no" },
+        { kind: "literal", text: "off" },
+      ]);
+    });
+
+    it("should respect custom zodError for refinement failures", () => {
+      const parser = zod(z.coerce.boolean().refine((v) => v === true), {
+        errors: {
+          zodError: message`Only true is accepted.`,
+        },
+      });
+      const result = parser.parse("false");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Only true is accepted." },
+      ]);
+    });
+  });
+
   describe("async schema rejection", () => {
     it("should throw TypeError for async refinements", () => {
       // deno-lint-ignore require-await
