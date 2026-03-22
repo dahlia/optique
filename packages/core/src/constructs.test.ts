@@ -82,6 +82,28 @@ function asyncStringValue(): ValueParser<"async", string> {
 }
 
 describe("or", () => {
+  it("should throw TypeError when called with no parsers", () => {
+    assert.throws(
+      // @ts-expect-error - or() requires at least one parser argument.
+      () => or(),
+      {
+        name: "TypeError",
+        message: "or() requires at least one parser argument.",
+      },
+    );
+  });
+
+  it("should throw TypeError when called with only options", () => {
+    assert.throws(
+      // @ts-expect-error - or() requires at least one parser argument.
+      () => or({}),
+      {
+        name: "TypeError",
+        message: "or() requires at least one parser argument.",
+      },
+    );
+  });
+
   it("should try parsers in order", () => {
     const parser1 = option("-a");
     const parser2 = option("-b");
@@ -365,10 +387,15 @@ describe("or", () => {
     void _tooMany;
   });
 
-  it("should report type-level arity error for zero parsers", () => {
-    // @ts-expect-error - or() requires at least one parser argument.
-    const _noParsers = or();
-    void _noParsers;
+  it("should throw TypeError for zero parsers", () => {
+    assert.throws(
+      // @ts-expect-error - or() requires at least one parser argument.
+      () => or(),
+      {
+        name: "TypeError",
+        message: "or() requires at least one parser argument.",
+      },
+    );
   });
 
   it("should accept spread parser arrays without tuple length information", () => {
@@ -856,6 +883,28 @@ describe("or() error customization", () => {
 });
 
 describe("longestMatch()", () => {
+  it("should throw TypeError when called with no parsers", () => {
+    assert.throws(
+      // @ts-expect-error - longestMatch() requires at least one parser argument.
+      () => longestMatch(),
+      {
+        name: "TypeError",
+        message: "longestMatch() requires at least one parser argument.",
+      },
+    );
+  });
+
+  it("should throw TypeError when called with only options", () => {
+    assert.throws(
+      // @ts-expect-error - longestMatch() requires at least one parser argument.
+      () => longestMatch({}),
+      {
+        name: "TypeError",
+        message: "longestMatch() requires at least one parser argument.",
+      },
+    );
+  });
+
   it("should preserve inferred unions with up to fifteen parsers", () => {
     const parser = longestMatch(
       command("c1", constant("v1" as const)),
@@ -1027,10 +1076,15 @@ describe("longestMatch()", () => {
     void _tooMany;
   });
 
-  it("should report type-level arity error for zero parsers", () => {
-    // @ts-expect-error - longestMatch() requires at least one parser argument.
-    const _noParsers = longestMatch();
-    void _noParsers;
+  it("should throw TypeError for zero parsers", () => {
+    assert.throws(
+      // @ts-expect-error - longestMatch() requires at least one parser argument.
+      () => longestMatch(),
+      {
+        name: "TypeError",
+        message: "longestMatch() requires at least one parser argument.",
+      },
+    );
   });
 
   it("should accept spread parser arrays without tuple length information", () => {
@@ -3068,6 +3122,50 @@ describe("tuple() - duplicate option detection", () => {
 });
 
 describe("merge", () => {
+  it("should throw TypeError when called with no parsers", () => {
+    assert.throws(
+      // @ts-expect-error - merge() requires at least one parser argument.
+      () => merge(),
+      {
+        name: "TypeError",
+        message: "merge() requires at least one parser argument.",
+      },
+    );
+  });
+
+  it("should throw TypeError when called with only a label", () => {
+    assert.throws(
+      // @ts-expect-error - merge() requires at least one parser argument.
+      () => merge("label"),
+      {
+        name: "TypeError",
+        message: "merge() requires at least one parser argument.",
+      },
+    );
+  });
+
+  it("should throw TypeError when called with only options", () => {
+    assert.throws(
+      // @ts-expect-error - merge() requires at least one parser argument.
+      () => merge({}),
+      {
+        name: "TypeError",
+        message: "merge() requires at least one parser argument.",
+      },
+    );
+  });
+
+  it("should throw TypeError when called with label and options but no parsers", () => {
+    assert.throws(
+      // @ts-expect-error - merge() requires at least one parser argument.
+      () => merge("label", {}),
+      {
+        name: "TypeError",
+        message: "merge() requires at least one parser argument.",
+      },
+    );
+  });
+
   it("should preserve inferred object types with up to fifteen parsers", () => {
     const parser = merge(
       object({ k1: constant("v1" as const) }),
@@ -3330,10 +3428,15 @@ describe("merge", () => {
     void _tooMany;
   });
 
-  it("should report type-level arity error for zero parsers", () => {
-    // @ts-expect-error - merge() requires at least one parser argument.
-    const _noParsers = merge();
-    void _noParsers;
+  it("should throw TypeError for zero parsers", () => {
+    assert.throws(
+      // @ts-expect-error - merge() requires at least one parser argument.
+      () => merge(),
+      {
+        name: "TypeError",
+        message: "merge() requires at least one parser argument.",
+      },
+    );
   });
 
   it("should accept spread parser arrays without tuple length information", () => {
@@ -4962,6 +5065,17 @@ describe("merge() - duplicate option detection", () => {
 });
 
 describe("concat", () => {
+  it("should throw TypeError when called with no parsers", () => {
+    assert.throws(
+      // @ts-expect-error - concat() requires at least one parser argument.
+      () => concat(),
+      {
+        name: "TypeError",
+        message: "concat() requires at least one parser argument.",
+      },
+    );
+  });
+
   it("should preserve inferred tuple flattening up to fifteen parsers", () => {
     const parser = concat(
       tuple([constant("v1" as const)]),
@@ -5030,10 +5144,15 @@ describe("concat", () => {
     void _tooMany;
   });
 
-  it("should report type-level arity error for zero tuple parsers", () => {
-    // @ts-expect-error - concat() requires at least one parser argument.
-    const _noParsers = concat();
-    void _noParsers;
+  it("should throw TypeError for zero tuple parsers", () => {
+    assert.throws(
+      // @ts-expect-error - concat() requires at least one parser argument.
+      () => concat(),
+      {
+        name: "TypeError",
+        message: "concat() requires at least one parser argument.",
+      },
+    );
   });
 
   it("should accept spread parser arrays without tuple length information", () => {
@@ -10145,10 +10264,14 @@ describe("branch coverage: constructs.ts edge cases", () => {
       assert.deepEqual(asyncCompleted.value, ["scalar-async", undefined]);
     }
 
-    const emptyConcat = (concat as unknown as (...parsers: unknown[]) => {
-      readonly priority: number;
-    })();
-    assert.equal(emptyConcat.priority, 0);
+    assert.throws(
+      // @ts-expect-error - concat() requires at least one parser argument.
+      () => concat(),
+      {
+        name: "TypeError",
+        message: "concat() requires at least one parser argument.",
+      },
+    );
   });
 
   it("group() hidden suggest also works for async parser", async () => {

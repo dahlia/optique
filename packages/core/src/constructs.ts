@@ -2008,6 +2008,7 @@ export function or<
  * @param options Custom error message options.
  * @return A {@link Parser} that tries to parse using the provided parsers
  *         in order, returning the result of the first successful parser.
+ * @throws {TypeError} If no parser arguments are provided.
  * @since 0.5.0
  */
 export function or<
@@ -2045,6 +2046,7 @@ export function or<
  * @param options Custom error message options.
  * @return A {@link Parser} that tries to parse using the provided parsers
  *         in order, returning the result of the first successful parser.
+ * @throws {TypeError} If no parser arguments are provided.
  * @since 0.5.0
  */
 export function or<
@@ -2077,6 +2079,7 @@ export function or<
  * @param rest Parsers to try, followed by {@link OrOptions} for error
  *             customization.
  * @returns A parser that succeeds if any of the input parsers succeed.
+ * @throws {TypeError} If no parser arguments are provided.
  * @since 0.5.0
  */
 export function or<
@@ -2095,6 +2098,7 @@ export function or<
  * Creates a parser that tries each parser in sequence until one succeeds.
  * @param parsers Parsers to try in order.
  * @returns A parser that succeeds if any of the input parsers succeed.
+ * @throws {TypeError} If no parser arguments are provided.
  * @since 0.5.0
  */
 export function or<
@@ -2128,6 +2132,10 @@ export function or(
     // No options provided
     parsers = args as Parser<Mode, unknown, unknown>[];
     options = undefined;
+  }
+
+  if (parsers.length < 1) {
+    throw new TypeError("or() requires at least one parser argument.");
   }
 
   // Analyze context once for error message generation
@@ -2562,6 +2570,7 @@ export function longestMatch<
  * @param rest Parsers to compare, followed by error customization options.
  * @returns A parser that yields the best successful branch result.
  * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @throws {TypeError} If no parser arguments are provided.
  * @since 0.5.0
  */
 export function longestMatch<
@@ -2583,6 +2592,7 @@ export function longestMatch<
  * @param rest Parsers to compare, followed by error customization options.
  * @returns A parser that yields the best successful branch result.
  * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @throws {TypeError} If no parser arguments are provided.
  * @since 0.5.0
  */
 export function longestMatch<
@@ -2680,6 +2690,12 @@ export function longestMatch(
     // No options provided
     parsers = args as Parser<Mode, unknown, unknown>[];
     options = undefined;
+  }
+
+  if (parsers.length < 1) {
+    throw new TypeError(
+      "longestMatch() requires at least one parser argument.",
+    );
   }
 
   // Analyze context once for error message generation
@@ -5232,6 +5248,7 @@ type MergeReturnType<TParsers extends MergeParsers> = Parser<
  * @param rest Parsers to merge, followed by merge options.
  * @returns A parser that merges parsed object fields from all parsers.
  * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @throws {TypeError} If no parser arguments are provided.
  * @since 0.7.0
  */
 export function merge<const TParsers extends MergeParsers>(
@@ -5250,6 +5267,7 @@ export function merge<const TParsers extends MergeParsers>(
  * @param parsers Parsers to merge in declaration order.
  * @returns A parser that merges parsed object fields from all parsers.
  * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @throws {TypeError} If no parser arguments are provided.
  * @since 0.4.0
  */
 export function merge<const TParsers extends MergeParsers>(
@@ -5267,6 +5285,7 @@ export function merge<const TParsers extends MergeParsers>(
  * @param rest Parsers to merge, followed by merge options.
  * @returns A parser that merges parsed object fields from all parsers.
  * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @throws {TypeError} If no parser arguments are provided.
  * @since 0.7.0
  */
 export function merge<const TParsers extends MergeParsers>(
@@ -5285,6 +5304,7 @@ export function merge<const TParsers extends MergeParsers>(
  * @param parsers Parsers to merge in declaration order.
  * @returns A parser that merges parsed object fields from all parsers.
  * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @throws {TypeError} If no parser arguments are provided.
  * @since 0.1.0
  */
 export function merge<const TParsers extends MergeParsers>(
@@ -5317,6 +5337,10 @@ export function merge(
     Record<string | symbol, unknown>,
     Record<string | symbol, unknown>
   >[];
+
+  if (rawParsers.length < 1) {
+    throw new TypeError("merge() requires at least one parser argument.");
+  }
 
   // Compute combined mode: if any parser is async, the result is async
   const combinedMode: Mode = rawParsers.some((p) => p.$mode === "async")
@@ -6227,6 +6251,7 @@ function tryParseSuggestList(
  * @param parsers Tuple parsers to concatenate.
  * @returns A parser with flattened tuple values from all parsers.
  * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @throws {TypeError} If no parser arguments are provided.
  * @since 0.2.0
  */
 export function concat<const TParsers extends ConcatParsers>(
@@ -6240,6 +6265,10 @@ export function concat<const TParsers extends ConcatParsers>(
 export function concat(
   ...parsers: Parser<Mode, readonly unknown[], unknown>[]
 ): Parser<Mode, readonly unknown[], readonly unknown[]> {
+  if (parsers.length < 1) {
+    throw new TypeError("concat() requires at least one parser argument.");
+  }
+
   // Compute combined mode: if any parser is async, the result is async
   const combinedMode: Mode = parsers.some((p) => p.$mode === "async")
     ? "async"

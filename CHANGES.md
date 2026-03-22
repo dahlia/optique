@@ -77,6 +77,12 @@ To be released.
     at compile time with actionable messages that recommend nested
     composition.  [[#144], [#145]]
 
+ -  Added runtime validation to `or()`, `longestMatch()`, `merge()`, and
+    `concat()`: these combinators now throw `TypeError` at construction time
+    when called with zero parser arguments.  Previously they relied only on
+    compile-time arity guards, so JavaScript callers could create parsers with
+    inconsistent behavior.  [[#403], [#696]]
+
  -  Added the `@optique/core/mode-dispatch` subpath export so sibling
     packages can share internal sync/async dispatch helpers without
     duplicating them.  [[#157]]
@@ -846,6 +852,7 @@ To be released.
 [#389]: https://github.com/dahlia/optique/issues/389
 [#395]: https://github.com/dahlia/optique/issues/395
 [#396]: https://github.com/dahlia/optique/issues/396
+[#403]: https://github.com/dahlia/optique/issues/403
 [#425]: https://github.com/dahlia/optique/issues/425
 [#429]: https://github.com/dahlia/optique/issues/429
 [#439]: https://github.com/dahlia/optique/issues/439
@@ -959,6 +966,7 @@ To be released.
 [#693]: https://github.com/dahlia/optique/pull/693
 [#694]: https://github.com/dahlia/optique/pull/694
 [#695]: https://github.com/dahlia/optique/pull/695
+[#696]: https://github.com/dahlia/optique/pull/696
 
 ### @optique/config
 
