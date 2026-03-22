@@ -900,6 +900,55 @@ describe("zod()", () => {
       ]);
     });
 
+    it("should work with z.coerce.boolean().refine() (ZodEffects)", () => {
+      const parser = zod(
+        z.coerce.boolean().refine((v) => typeof v === "boolean"),
+      );
+      const trueResult = parser.parse("true");
+      assert.ok(trueResult.success);
+      assert.equal(trueResult.value, true);
+
+      const falseResult = parser.parse("false");
+      assert.ok(falseResult.success);
+      assert.equal(falseResult.value, false);
+
+      const invalidResult = parser.parse("maybe");
+      assert.ok(!invalidResult.success);
+    });
+
+    it("should work with z.coerce.boolean().catch(false) (ZodCatch)", () => {
+      const parser = zod(z.coerce.boolean().catch(false));
+      const trueResult = parser.parse("true");
+      assert.ok(trueResult.success);
+      assert.equal(trueResult.value, true);
+
+      const falseResult = parser.parse("false");
+      assert.ok(falseResult.success);
+      assert.equal(falseResult.value, false);
+
+      // catch() falls back to default for invalid input
+      const catchResult = parser.parse("maybe");
+      assert.ok(catchResult.success);
+      assert.equal(catchResult.value, false);
+    });
+
+    it("should not expose choices for refined boolean schemas", () => {
+      const parser = zod(z.coerce.boolean().refine((v) => v === true));
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
+    });
+
+    it("should not expose choices for catch-wrapped boolean schemas", () => {
+      const parser = zod(z.coerce.boolean().catch(false));
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
+    });
+
+    it("should still expose choices for optional boolean schemas", () => {
+      const parser = zod(z.coerce.boolean().optional());
+      assert.deepEqual(parser.choices, [true, false]);
+    });
+
     it("should respect custom zodError for refinement failures", () => {
       const parser = zod(z.coerce.boolean().refine((v) => v === true), {
         errors: {
@@ -910,6 +959,34 @@ describe("zod()", () => {
       assert.ok(!result.success);
       assert.deepEqual(result.error, [
         { type: "text", text: "Only true is accepted." },
+      ]);
+    });
+
+    it("should respect custom static zodError for invalid boolean literals", () => {
+      const parser = zod(z.coerce.boolean(), {
+        errors: {
+          zodError: message`Please enter true or false.`,
+        },
+      });
+      const result = parser.parse("maybe");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Please enter true or false." },
+      ]);
+    });
+
+    it("should respect custom function zodError for invalid boolean literals", () => {
+      const parser = zod(z.boolean(), {
+        errors: {
+          zodError: (_error, input) => message`Not a boolean: ${input}.`,
+        },
+      });
+      const result = parser.parse("nope");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Not a boolean: " },
+        { type: "value", value: "nope" },
+        { type: "text", text: "." },
       ]);
     });
   });
