@@ -446,8 +446,10 @@ describe("logOutput()", () => {
   it("should throw TypeError for empty metavar", () => {
     assert.throws(
       () => logOutput({ metavar: "" as never }),
-      TypeError,
-      "Expected a non-empty string.",
+      {
+        name: "TypeError",
+        message: "Expected a non-empty string.",
+      },
     );
   });
 });
