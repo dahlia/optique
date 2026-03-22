@@ -23,9 +23,9 @@ export interface ZodParserOptions<T = unknown> {
   /**
    * Custom formatter for displaying parsed values in help messages.
    * When not provided, the default formatter is used: primitives use
-   * `String()`, valid `Date` values use `.toISOString()`, and objects
-   * with a custom `toString()` use `String()` with `JSON.stringify()`
-   * as a fallback for plain objects.
+   * `String()`, valid `Date` values use `.toISOString()`, and plain
+   * objects use `JSON.stringify()`.  All other objects (arrays, class
+   * instances, etc.) use `String()`.
    *
    * @param value The parsed value to format.
    * @returns A string representation of the value.
@@ -525,13 +525,15 @@ export function zod<T>(
       }
       if (typeof value !== "object" || value === null) return String(value);
       if (Array.isArray(value)) return String(value);
-      const str = String(value);
-      if (str !== "[object Object]") return str;
-      try {
-        return JSON.stringify(value) ?? str;
-      } catch {
-        return str;
+      const proto = Object.getPrototypeOf(value);
+      if (proto === Object.prototype || proto === null) {
+        try {
+          return JSON.stringify(value) ?? String(value);
+        } catch {
+          // Falls through to String(value) below
+        }
       }
+      return String(value);
     },
   };
   return parser;
