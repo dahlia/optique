@@ -126,7 +126,7 @@ export interface DocFragments {
 /**
  * Creates a deep clone of a {@link DocEntry}.  The `term` is cloned via
  * {@link cloneUsageTerm}, and `description`, `default`, and `choices`
- * messages are cloned via `structuredClone`.
+ * messages are cloned via {@link cloneMessage}.
  *
  * @param entry The documentation entry to clone.
  * @returns A structurally equal but referentially distinct copy.
