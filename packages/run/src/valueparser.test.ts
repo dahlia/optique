@@ -1193,6 +1193,22 @@ describe("path", () => {
       const regular = Array.from(parser.suggest!("src/config"))[0];
       assert.equal(regular.kind, "file");
       assert.equal(regular.kind === "file" && regular.includeHidden, false);
+
+      const dotdot = Array.from(parser.suggest!(".."))[0];
+      assert.equal(dotdot.kind, "file");
+      assert.ok(!(dotdot.kind === "file" && dotdot.includeHidden));
+
+      const nestedDotdot = Array.from(parser.suggest!("src/.."))[0];
+      assert.equal(nestedDotdot.kind, "file");
+      assert.ok(
+        !(nestedDotdot.kind === "file" && nestedDotdot.includeHidden),
+      );
+
+      const dotdotSlash = Array.from(parser.suggest!("../"))[0];
+      assert.equal(dotdotSlash.kind, "file");
+      assert.ok(
+        !(dotdotSlash.kind === "file" && dotdotSlash.includeHidden),
+      );
     });
   });
 

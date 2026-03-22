@@ -338,6 +338,57 @@ describe("logOutput()", () => {
     );
   });
 
+  it("should request hidden-file completion for dot-prefixed paths", () => {
+    const parser = object({
+      output: logOutput(),
+    });
+    const dotSuggestions = suggestSync(parser, ["--log-output", "."]);
+    assert.ok(
+      dotSuggestions.some((s) =>
+        s.kind === "file" && s.type === "file" && s.includeHidden === true
+      ),
+    );
+    const nestedDotSuggestions = suggestSync(parser, [
+      "--log-output",
+      "src/.",
+    ]);
+    assert.ok(
+      nestedDotSuggestions.some((s) =>
+        s.kind === "file" && s.type === "file" && s.includeHidden === true
+      ),
+    );
+    const normalSuggestions = suggestSync(parser, ["--log-output", "src"]);
+    assert.ok(
+      normalSuggestions.some((s) =>
+        s.kind === "file" && s.type === "file" && s.includeHidden === false
+      ),
+    );
+    const dotdotSuggestions = suggestSync(parser, ["--log-output", ".."]);
+    assert.ok(
+      dotdotSuggestions.some((s) =>
+        s.kind === "file" && s.type === "file" && s.includeHidden === false
+      ),
+    );
+    const nestedDotdotSuggestions = suggestSync(parser, [
+      "--log-output",
+      "src/..",
+    ]);
+    assert.ok(
+      nestedDotdotSuggestions.some((s) =>
+        s.kind === "file" && s.type === "file" && s.includeHidden === false
+      ),
+    );
+    const parentDirSuggestions = suggestSync(parser, [
+      "--log-output",
+      "../",
+    ]);
+    assert.ok(
+      parentDirSuggestions.some((s) =>
+        s.kind === "file" && s.type === "file" && s.includeHidden === false
+      ),
+    );
+  });
+
   it("should format default console output in help text", () => {
     const parser = object({
       output: withDefault(logOutput(), { type: "console" }),

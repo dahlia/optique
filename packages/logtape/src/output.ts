@@ -1,3 +1,4 @@
+import { basename } from "node:path";
 import { option } from "@optique/core/primitives";
 import { optional } from "@optique/core/modifiers";
 import type {
@@ -127,7 +128,13 @@ function logOutputValueParser(
         yield { kind: "literal", text: "-" };
       }
       // Also suggest file completion
-      yield { kind: "file", type: "file", pattern: prefix };
+      yield {
+        kind: "file",
+        type: "file",
+        pattern: prefix,
+        includeHidden: basename(prefix).startsWith(".") &&
+          basename(prefix) !== "..",
+      };
     },
   };
 }

@@ -1290,6 +1290,15 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#621]: https://github.com/dahlia/optique/pull/621
 [#625]: https://github.com/dahlia/optique/pull/625
 
+### @optique/logtape
+
+ -  Fixed `logOutput()` to request hidden-file completion for dot-prefixed
+    paths.  Previously, tab-completion for paths like `.` or `src/.` would
+    not suggest hidden files or directories.  [[#292], [#699]]
+
+[#292]: https://github.com/dahlia/optique/issues/292
+[#699]: https://github.com/dahlia/optique/pull/699
+
 ### @optique/temporal
 
  -  Temporal parsers now throw a `TypeError` when `globalThis.Temporal` is
