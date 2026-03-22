@@ -10281,17 +10281,17 @@ describe("branch coverage: facade.ts edge cases", () => {
   // Regression tests for https://github.com/dahlia/optique/issues/407
   // These tests verify that phase-two sanitization correctly handles
   // placeholder values hidden in private fields and method-only wrappers.
-  it("private-field-only placeholder is sanitized via proxy in phase-two", async () => {
-    // When map() transforms an object containing a placeholder into a class
-    // instance that stores the placeholder in a private field, the proxy
-    // must intercept getter/method access and strip the sentinel from
-    // return values.
+  it("non-plain object with visible placeholder is sanitized via proxy in phase-two", async () => {
+    // When a non-plain object has a placeholder value in an own data
+    // property, it is proxied and methods/getters return sanitized values.
     class PrivateResult {
       #apiKey: unknown;
       name: string;
+      deferred: unknown;
       constructor(name: string, apiKey: unknown) {
         this.name = name;
         this.#apiKey = apiKey;
+        this.deferred = apiKey; // also store in own property for detection
       }
       getApiKey(): unknown {
         return this.#apiKey;
@@ -10301,7 +10301,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     let observedName: string | undefined;
     let observedApiKey: unknown = "not-set";
 
-    const contextKey = Symbol.for("@test/private-field-only-proxy");
+    const contextKey = Symbol.for("@test/non-plain-visible-placeholder");
     const dynamicContext: SourceContext = {
       id: contextKey,
       mode: "dynamic",
@@ -10573,14 +10573,16 @@ describe("branch coverage: facade.ts edge cases", () => {
   // limitation — use prototype methods (which go through
   // callMethodOnSanitizedTarget) for private field access instead.
 
-  it("non-plain object nested in array is proxied during phase two", async () => {
+  it("non-plain object with visible placeholder nested in array is proxied", async () => {
     // Regression test for https://github.com/dahlia/optique/issues/407
-    // A class instance with a private-field placeholder inside an array
-    // must still be proxied so that methods return sanitized values.
+    // A class instance with a placeholder in an own data property inside
+    // an array is proxied so that methods return sanitized values.
     class SecretHolder {
       #secret: unknown;
+      deferred: unknown;
       constructor(secret: unknown) {
         this.#secret = secret;
+        this.deferred = secret; // visible for detection
       }
       getSecret(): unknown {
         return this.#secret;

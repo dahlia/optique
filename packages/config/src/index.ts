@@ -514,6 +514,9 @@ function stripDeferredPromptValues<T>(
     return clone as T;
   }
   if (!isPlainObject(value)) {
+    if (!containsPlaceholderValues(value)) {
+      return value;
+    }
     return createSanitizedNonPlainView(value, seen) as T;
   }
   // The core's prepareParsedForContexts() already clones plain objects

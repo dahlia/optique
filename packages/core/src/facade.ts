@@ -718,37 +718,10 @@ function prepareParsedForContexts(
   }
 
   if (Array.isArray(parsed)) {
-    // Arrays don't have identity-based lookup, so non-plain elements can
-    // be safely proxied.
-    const hasNonPlainElements = parsed.some(
-      (item) =>
-        item != null &&
-        typeof item === "object" &&
-        !isPlainObject(item as object),
-    );
     if (!containsPlaceholderValues(parsed)) {
-      if (!hasNonPlainElements) {
-        return parsed;
-      }
-      // Clone the array and proxy only non-plain entries.
-      const seen = new WeakMap<object, unknown>();
-      const clone = createArrayCloneLike(parsed);
-      seen.set(parsed, clone);
-      for (let i = 0; i < parsed.length; i++) {
-        const item = parsed[i];
-        clone[i] = item != null && typeof item === "object" &&
-            !isPlainObject(item as object)
-          ? createSanitizedNonPlainView(item as object, seen)
-          : item;
-      }
-      copySanitizedOwnProperties(parsed, clone, seen);
-      return clone as typeof parsed;
+      return parsed;
     }
-    return stripPlaceholderValues(
-      parsed,
-      new WeakMap(),
-      hasNonPlainElements,
-    );
+    return stripPlaceholderValues(parsed);
   }
 
   if (isPlainObject(parsed)) {
@@ -767,10 +740,14 @@ function prepareParsedForContexts(
     return stripPlaceholderValues(parsed, new WeakMap(), true);
   }
 
-  // Always create the sanitized proxy view for non-plain objects, even when
-  // containsPlaceholderValues() doesn't detect any.  Placeholder values may
-  // be hidden in private fields or behind method return values where own-
-  // property inspection cannot reach them.
+  // Only proxy non-plain objects when own-property placeholders are
+  // detectable.  Clean class instances pass through unchanged to preserve
+  // private-field getter access and object identity.  Non-plain objects
+  // with placeholders hidden exclusively in private fields are a known
+  // limitation at the top level.
+  if (!containsPlaceholderValues(parsed)) {
+    return parsed;
+  }
   return createSanitizedNonPlainView(
     parsed,
     new WeakMap<object, unknown>(),
