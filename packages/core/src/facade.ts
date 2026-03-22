@@ -284,6 +284,15 @@ function stripPlaceholderValues<T>(
           seen,
         );
       }
+    } else if ("get" in descriptor && descriptor.get != null) {
+      // Wrap getters to sanitize their return values so that accessor-
+      // based DTOs (e.g., `get apiKey() { return hidden; }`) don't
+      // leak raw placeholder sentinels during phase two.
+      const originalGetter = descriptor.get;
+      descriptor.get = function (this: unknown) {
+        const result = originalGetter.call(this);
+        return stripPlaceholderValues(result, seen);
+      };
     }
     Object.defineProperty(clone, key, descriptor);
   }

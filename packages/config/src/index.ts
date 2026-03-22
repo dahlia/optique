@@ -504,6 +504,12 @@ function stripDeferredPromptValues<T>(
           seen,
         );
       }
+    } else if ("get" in descriptor && descriptor.get != null) {
+      const originalGetter = descriptor.get;
+      descriptor.get = function (this: unknown) {
+        const result = originalGetter.call(this);
+        return stripDeferredPromptValues(result, seen);
+      };
     }
     Object.defineProperty(clone, key, descriptor);
   }
