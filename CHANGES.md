@@ -1310,10 +1310,17 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     paths.  Previously, tab-completion for paths like `.` or `src/.` would
     not suggest hidden files or directories.  [[#292], [#699]]
 
+ -  Fixed `createSink()` failing on Deno when installed from JSR because
+    `@logtape/file` was not declared in the package's import map.  The
+    dynamic import could not resolve the bare specifier even if the user
+    had installed `@logtape/file`.  [[#329], [#703]]
+
 [#292]: https://github.com/dahlia/optique/issues/292
 [#299]: https://github.com/dahlia/optique/issues/299
+[#329]: https://github.com/dahlia/optique/issues/329
 [#699]: https://github.com/dahlia/optique/pull/699
 [#702]: https://github.com/dahlia/optique/pull/702
+[#703]: https://github.com/dahlia/optique/pull/703
 
 ### @optique/temporal
 
