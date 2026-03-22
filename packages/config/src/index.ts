@@ -326,7 +326,10 @@ function createSanitizedNonPlainView<T extends object>(
       // computed getters read sanitized public fields while still being
       // able to access private fields.
       const result = callMethodOnSanitizedTarget(
-        { apply: (_: unknown) => Reflect.get(target, key, target) },
+        {
+          apply: (thisArg: unknown) =>
+            Reflect.get(target, key, thisArg ?? target),
+        },
         proxy,
         target,
         [],
@@ -456,6 +459,10 @@ function stripDeferredPromptValues<T>(
     // property inspection cannot reach them.
     return createSanitizedNonPlainView(value, seen) as T;
   }
+  // The core's prepareParsedForContexts() already clones plain objects
+  // and wraps function properties before passing them to config contexts,
+  // so an additional clone here is only needed when own-property
+  // placeholders are still visible.
   if (!containsPlaceholderValues(value)) {
     return value;
   }

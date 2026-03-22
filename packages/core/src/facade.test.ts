@@ -10577,6 +10577,61 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(observedDefault, "default");
   });
 
+  // NOTE: Frozen/sealed objects with both own placeholder data properties
+  // AND computed getters over those properties cannot be fully sanitized
+  // because the Proxy invariant requires non-configurable non-writable
+  // data properties to return their exact value.  This is a fundamental
+  // JavaScript limitation, not a bug.
+
+  it("method-only plain DTO without own placeholders wraps closures", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/407
+    // A plain object with no own placeholder properties but with a method
+    // whose closure captures a placeholder must still have its function
+    // properties wrapped during phase-two sanitization.
+    let observedResult: unknown = "not-set";
+
+    const contextKey = Symbol.for("@test/method-only-dto-no-own");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        if (
+          typeof parsed === "object" &&
+          parsed != null &&
+          "toConfigInput" in parsed
+        ) {
+          observedResult = (parsed as { toConfigInput(): unknown })
+            .toConfigInput();
+        }
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (_value) => ({
+        toConfigInput() {
+          return { apiKey: { [testPlaceholderKey]: true } };
+        },
+      }),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    // The method returns an object containing a placeholder.  The wrapper
+    // must strip the placeholder from the return value.
+    assert.ok(observedResult != null && typeof observedResult === "object");
+    assert.equal(
+      (observedResult as { apiKey: unknown }).apiKey,
+      undefined,
+    );
+  });
+
   it("frozen object with accessor-backed placeholder is sanitized", async () => {
     // Regression test for https://github.com/dahlia/optique/issues/407
     // Frozen/sealed objects with accessor properties must have their getter

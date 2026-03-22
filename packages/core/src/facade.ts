@@ -517,8 +517,16 @@ function createSanitizedNonPlainView<T extends object>(
       // computed getters (e.g. `get hasSecret() { return this.secret != null }`)
       // read sanitized public fields while still being able to access
       // private fields (which require the real instance as `this`).
+      // The synthetic function uses `thisArg` as the Reflect.get receiver.
+      // In the normal path, callWithSanitizedOwnProperties passes `target`
+      // (with own properties temporarily sanitized).  In the frozen/sealed
+      // fallback, callMethodOnSanitizedTarget passes `proxy`, so the getter
+      // reads sanitized values through the proxy's get trap instead.
       const result = callMethodOnSanitizedTarget(
-        { apply: (_: unknown) => Reflect.get(target, key, target) },
+        {
+          apply: (thisArg: unknown) =>
+            Reflect.get(target, key, thisArg ?? target),
+        },
         proxy,
         target,
         [],
@@ -606,13 +614,20 @@ function prepareParsedForContexts(
 
   if (
     Array.isArray(parsed) ||
-    isPlainObject(parsed) ||
     parsed instanceof Set ||
     parsed instanceof Map
   ) {
     if (!containsPlaceholderValues(parsed)) {
       return parsed;
     }
+    return stripPlaceholderValues(parsed);
+  }
+
+  if (isPlainObject(parsed)) {
+    // Always strip plain objects during phase two so that function-valued
+    // properties are wrapped even when closures capture placeholder values
+    // that are not visible as own data properties (method-only DTOs).
+    // See: https://github.com/dahlia/optique/issues/407
     return stripPlaceholderValues(parsed);
   }
 
