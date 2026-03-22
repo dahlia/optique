@@ -149,8 +149,9 @@ function isCatchAllSchema(
     });
   }
   // Unwrap any schema with a wrapped field (optional, nullable, nullish,
-  // nonOptional, exactOptional, etc.)
-  if (s.wrapped) {
+  // nonOptional, exactOptional, etc.) — but only if there's no pipe,
+  // since piped wrappers may have rejecting pipe actions.
+  if (s.wrapped && !s.pipe) {
     return isCatchAllSchema(s.wrapped, afterTransform);
   }
   return false;
@@ -190,8 +191,9 @@ function containsAsyncSchema(
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return true;
 
-  // Unwrap optional/nullable/nullish wrappers
-  if (s.wrapped) {
+  // Unwrap optional/nullable/nullish wrappers — but only if there's no
+  // pipe, since piped wrappers need their pipe actions inspected too.
+  if (s.wrapped && !s.pipe) {
     return containsAsyncSchema(s.wrapped, visited, afterTransform);
   }
 
