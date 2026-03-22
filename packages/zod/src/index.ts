@@ -87,36 +87,6 @@ function isZodAsyncError(error: Error): boolean {
 }
 
 /**
- * Checks whether a Zod error contains an `invalid_type` issue with
- * `received: "promise"`, which indicates an async preprocess/transform
- * that Zod v3 does not throw for but instead reports as a type mismatch.
- * Also recurses into `unionErrors` inside `invalid_union` issues, since
- * Zod v3 nests the real mismatch there when the async schema is inside
- * a `z.union()`.
- */
-function hasPromiseTypeIssue(error: z.ZodError): boolean {
-  for (const issue of error.issues) {
-    const i = issue as { code?: string; received?: string };
-    if (
-      i.code === "invalid_type" &&
-      (i.received === "promise" || i.received === "Promise")
-    ) {
-      return true;
-    }
-
-    // Recurse into union sub-errors (Zod v3 invalid_union)
-    const unionErrors =
-      (issue as { unionErrors?: readonly z.ZodError[] }).unionErrors;
-    if (unionErrors) {
-      for (const subError of unionErrors) {
-        if (hasPromiseTypeIssue(subError)) return true;
-      }
-    }
-  }
-  return false;
-}
-
-/**
  * Infers an appropriate metavar string from a Zod schema.
  *
  * This function analyzes the Zod schema's internal structure to determine
@@ -501,16 +471,6 @@ export function zod<T>(
 
       if (result.success) {
         return { success: true, value: result.data };
-      }
-
-      // Zod v3 async preprocessors don't throw — they return an
-      // invalid_type issue with received: "promise".  Detect this and
-      // surface the same TypeError as the catch path above.
-      if (hasPromiseTypeIssue(result.error)) {
-        throw new TypeError(
-          "Async Zod schemas (e.g., async refinements) are not supported " +
-            "by zod(). Use synchronous schemas instead.",
-        );
       }
 
       // 1. Custom error message
