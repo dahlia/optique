@@ -10632,6 +10632,44 @@ describe("branch coverage: facade.ts edge cases", () => {
     );
   });
 
+  it("wrapped plain-object method returning this preserves identity", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/407
+    // A method like `self() { return this; }` on a sanitized plain object
+    // must return the same clone object (identity preserved), not a
+    // re-cloned copy.
+    let identityHeld = false;
+
+    const contextKey = Symbol.for("@test/method-self-identity");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        const p = parsed as { self(): unknown; deferred: unknown };
+        identityHeld = p.self() === parsed;
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (_value) => ({
+        self() {
+          return this;
+        },
+        deferred: { [testPlaceholderKey]: true },
+      }),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.ok(identityHeld);
+  });
+
   it("frozen object with accessor-backed placeholder is sanitized", async () => {
     // Regression test for https://github.com/dahlia/optique/issues/407
     // Frozen/sealed objects with accessor properties must have their getter

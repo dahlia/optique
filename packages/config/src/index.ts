@@ -266,7 +266,7 @@ function createSanitizedNonPlainView<T extends object>(
     { fn: unknown; wrapper: (...args: unknown[]) => unknown }
   >();
   const proxy: T = new Proxy(value, {
-    get(target, key, _receiver) {
+    get(target, key, receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (descriptor != null && "value" in descriptor) {
         // Non-configurable non-writable properties must return the exact
@@ -330,7 +330,7 @@ function createSanitizedNonPlainView<T extends object>(
           apply: (thisArg: unknown) =>
             Reflect.get(target, key, thisArg ?? target),
         },
-        proxy,
+        receiver,
         target,
         [],
         stripDeferredPromptValues,
@@ -470,6 +470,7 @@ function stripDeferredPromptValues<T>(
     Object.getPrototypeOf(value),
   );
   seen.set(value, clone);
+  seen.set(clone, clone);
   for (const key of Reflect.ownKeys(value)) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (descriptor == null) {

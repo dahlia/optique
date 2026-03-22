@@ -211,6 +211,10 @@ function stripPlaceholderValues<T>(
     Object.getPrototypeOf(value),
   );
   seen.set(value, clone);
+  // Map the clone to itself so that wrapped methods returning the clone
+  // (e.g., `self() { return this; }`) are recognized by
+  // stripPlaceholderValues() and not re-cloned, preserving identity.
+  seen.set(clone, clone);
   for (const key of Reflect.ownKeys(value)) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (descriptor == null) {
@@ -445,7 +449,7 @@ function createSanitizedNonPlainView<T extends object>(
     { fn: unknown; wrapper: (...args: unknown[]) => unknown }
   >();
   const proxy: T = new Proxy(value, {
-    get(target, key, _receiver) {
+    get(target, key, receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (descriptor != null && "value" in descriptor) {
         // Non-configurable non-writable properties must return the exact
@@ -517,17 +521,16 @@ function createSanitizedNonPlainView<T extends object>(
       // computed getters (e.g. `get hasSecret() { return this.secret != null }`)
       // read sanitized public fields while still being able to access
       // private fields (which require the real instance as `this`).
-      // The synthetic function uses `thisArg` as the Reflect.get receiver.
-      // In the normal path, callWithSanitizedOwnProperties passes `target`
-      // (with own properties temporarily sanitized).  In the frozen/sealed
-      // fallback, callMethodOnSanitizedTarget passes `proxy`, so the getter
-      // reads sanitized values through the proxy's get trap instead.
+      // The synthetic function uses `thisArg` as the Reflect.get receiver:
+      //  - Normal path: target (with own properties temporarily sanitized)
+      //  - Frozen/sealed fallback: the caller's receiver, preserving
+      //    standard Reflect.get(..., receiver) semantics
       const result = callMethodOnSanitizedTarget(
         {
           apply: (thisArg: unknown) =>
             Reflect.get(target, key, thisArg ?? target),
         },
-        proxy,
+        receiver,
         target,
         [],
         stripPlaceholderValues,
