@@ -161,6 +161,41 @@ export type MessageTerm =
 export type Message = readonly MessageTerm[];
 
 /**
+ * Creates a deep clone of a {@link MessageTerm}.  Most variants contain only
+ * primitive fields and are cloned via object spread.  The `url` variant
+ * receives a new `URL` object (since `structuredClone` cannot handle `URL`
+ * on Node.js), and array-valued fields (`optionNames`, `values`) are
+ * shallow-copied.
+ *
+ * @param term The message term to clone.
+ * @returns A structurally equal but referentially distinct copy.
+ * @since 1.0.0
+ */
+export function cloneMessageTerm(term: MessageTerm): MessageTerm {
+  switch (term.type) {
+    case "optionNames":
+      return { ...term, optionNames: [...term.optionNames] };
+    case "values":
+      return { ...term, values: [...term.values] };
+    case "url":
+      return { type: "url", url: new URL(term.url.href) };
+    default:
+      return { ...term };
+  }
+}
+
+/**
+ * Creates a deep clone of a {@link Message} array and all of its terms.
+ *
+ * @param msg The message to clone.
+ * @returns A structurally equal but referentially distinct copy.
+ * @since 1.0.0
+ */
+export function cloneMessage(msg: Message): Message {
+  return msg.map(cloneMessageTerm);
+}
+
+/**
  * Creates a structured message with template strings and values.
  *
  * This function allows creating messages where specific values can be

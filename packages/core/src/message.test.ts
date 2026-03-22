@@ -1,4 +1,6 @@
 import {
+  cloneMessage,
+  cloneMessageTerm,
   commandLine,
   envVar,
   formatMessage,
@@ -1420,5 +1422,61 @@ describe("property-based tests", () => {
       ),
       propertyParameters,
     );
+  });
+});
+
+describe("cloneMessageTerm", () => {
+  it("should clone a text term", () => {
+    const term = text("hello");
+    const cloned = cloneMessageTerm(term);
+    assert.deepEqual(cloned, term);
+    assert.notEqual(cloned, term);
+  });
+
+  it("should clone an optionNames term with array copy", () => {
+    const term = optionNames(["--foo", "--bar"]);
+    const cloned = cloneMessageTerm(term);
+    assert.deepEqual(cloned, term);
+    assert.notEqual(cloned, term);
+    if (cloned.type === "optionNames" && term.type === "optionNames") {
+      assert.notEqual(cloned.optionNames, term.optionNames);
+    }
+  });
+
+  it("should clone a values term with array copy", () => {
+    const term = values(["a", "b"]);
+    const cloned = cloneMessageTerm(term);
+    assert.deepEqual(cloned, term);
+    assert.notEqual(cloned, term);
+    if (cloned.type === "values" && term.type === "values") {
+      assert.notEqual(cloned.values, term.values);
+    }
+  });
+
+  it("should clone a url term with a new URL object", () => {
+    const term = url("https://example.com/path");
+    const cloned = cloneMessageTerm(term);
+    assert.deepEqual(cloned, term);
+    assert.notEqual(cloned, term);
+    if (cloned.type === "url" && term.type === "url") {
+      assert.notEqual(cloned.url, term.url);
+      assert.equal(cloned.url.href, term.url.href);
+    }
+  });
+});
+
+describe("cloneMessage", () => {
+  it("should deep-clone a message with mixed term types", () => {
+    const msg: Message = [
+      text("See "),
+      url("https://example.com"),
+      text(" for details"),
+    ];
+    const cloned = cloneMessage(msg);
+    assert.deepEqual(cloned, msg);
+    assert.notEqual(cloned, msg);
+    for (let i = 0; i < msg.length; i++) {
+      assert.notEqual(cloned[i], msg[i]);
+    }
   });
 });

@@ -1,4 +1,6 @@
 import {
+  cloneDocEntry,
+  type DocEntry,
   type DocPage,
   type DocPageFormatOptions,
   type DocSection,
@@ -2612,5 +2614,68 @@ describe("branch coverage: doc.ts edge cases", () => {
         formatDocPage("app", page, { colors: false, maxWidth: 1 });
       });
     });
+  });
+});
+
+describe("cloneDocEntry", () => {
+  it("should clone an entry with all fields", () => {
+    const entry: DocEntry = {
+      term: { type: "option", names: ["-v", "--verbose"] },
+      description: [{ type: "text", text: "Enable verbose output" }],
+      default: [{ type: "value", value: "false" }],
+      choices: [{ type: "value", value: "true" }, {
+        type: "value",
+        value: "false",
+      }],
+    };
+    const cloned = cloneDocEntry(entry);
+    assert.deepEqual(cloned, entry);
+    assert.notEqual(cloned, entry);
+    assert.notEqual(cloned.term, entry.term);
+    assert.notEqual(cloned.description, entry.description);
+    assert.notEqual(cloned.default, entry.default);
+    assert.notEqual(cloned.choices, entry.choices);
+  });
+
+  it("should clone an entry with only a term", () => {
+    const entry: DocEntry = {
+      term: { type: "argument", metavar: "FILE" },
+    };
+    const cloned = cloneDocEntry(entry);
+    assert.deepEqual(cloned, entry);
+    assert.notEqual(cloned, entry);
+    assert.notEqual(cloned.term, entry.term);
+    assert.equal(cloned.description, undefined);
+    assert.equal(cloned.default, undefined);
+    assert.equal(cloned.choices, undefined);
+  });
+
+  it("should not leak mutations back to the original", () => {
+    const entry: DocEntry = {
+      term: { type: "argument", metavar: "FILE" },
+      description: [{ type: "text", text: "original" }],
+    };
+    const cloned = cloneDocEntry(entry);
+    // @ts-expect-error -- intentionally mutating readonly field to test isolation
+    cloned.description[0].text = "mutated";
+    assert.equal(
+      (entry.description![0] as { type: "text"; text: string }).text,
+      "original",
+    );
+  });
+
+  it("should clone an entry whose description contains a URL term", () => {
+    const entry: DocEntry = {
+      term: { type: "argument", metavar: "FILE" },
+      description: [
+        { type: "text", text: "See " },
+        { type: "url", url: new URL("https://example.com") },
+      ],
+    };
+    const cloned = cloneDocEntry(entry);
+    assert.deepEqual(cloned, entry);
+    assert.notEqual(cloned, entry);
+    assert.notEqual(cloned.description, entry.description);
+    assert.notEqual(cloned.description![1], entry.description![1]);
   });
 });

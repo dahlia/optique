@@ -16,6 +16,7 @@ import { multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
   getDocPage,
   getDocPageAsync,
+  getDocPageSync,
   parse,
   type Parser,
   suggestAsync,
@@ -28,6 +29,7 @@ import {
   flag,
   option,
 } from "@optique/core/primitives";
+import type { Usage } from "@optique/core/usage";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { formatDocPage } from "@optique/core/doc";
 import assert from "node:assert/strict";
@@ -2654,5 +2656,94 @@ describe("getDocPage: section merging (issue #138)", () => {
       commandsIdx < untitledIdx,
       `Commands section (idx=${commandsIdx}) should appear before untitled section (idx=${untitledIdx})`,
     );
+  });
+});
+
+// Regression test for https://github.com/dahlia/optique/issues/500
+describe("getDocPage reference isolation", () => {
+  it("should not leak mutations of returned DocPage back to parser", () => {
+    const inner = option("-v", "--verbose", {
+      description: message`Verbose level`,
+    });
+    const parser = command("cmd", inner, {
+      brief: message`A command`,
+    });
+    const page1 = getDocPageSync(parser as Parser<"sync", unknown, unknown>);
+    assert.ok(page1);
+    assert.ok(page1.usage);
+    assert.ok(page1.usage.length > 0);
+    assert.ok(page1.brief);
+    assert.ok(page1.brief.length > 0);
+    assert.ok(page1.sections.length > 0);
+    assert.ok(page1.sections[0].entries.length > 0);
+    assert.ok(page1.sections[0].entries[0].description);
+
+    // Mutate the returned page's usage terms, brief, and entry description
+    (page1.usage[0] as Record<string, unknown>).name = "MUTATED";
+    (page1.brief[0] as Record<string, unknown>).text = "MUTATED";
+    (page1.sections[0].entries[0]
+      .description[0] as Record<string, unknown>).text = "MUTATED";
+
+    // Second call should return the original values
+    const page2 = getDocPageSync(parser as Parser<"sync", unknown, unknown>);
+    assert.ok(page2);
+    assert.ok(page2.usage);
+    assert.equal(page2.usage[0].type, "command");
+    assert.equal(
+      (page2.usage[0] as { type: "command"; name: string }).name,
+      "cmd",
+    );
+    assert.deepEqual(page2.brief, [{ type: "text", text: "A command" }]);
+    assert.ok(page2.sections[0].entries[0].description);
+    assert.notEqual(
+      (page2.sections[0].entries[0].description[0] as { text?: string }).text,
+      "MUTATED",
+    );
+  });
+
+  it("should not leak usageLine callback mutations back to parser", () => {
+    const inner = option("-v", "--verbose");
+    const parser = command("cmd", inner, {
+      usageLine(defaultUsageLine: Usage) {
+        // Mutate the passed-in defaultUsageLine elements
+        if (defaultUsageLine.length > 0) {
+          (defaultUsageLine[0] as Record<string, unknown>).type = "MUTATED";
+        }
+        return defaultUsageLine;
+      },
+    });
+
+    getDocPageSync(parser as Parser<"sync", unknown, unknown>);
+
+    // Parser's own usage terms should not be corrupted by the callback
+    for (const term of parser.usage) {
+      assert.notEqual(
+        (term as Record<string, unknown>).type,
+        "MUTATED",
+      );
+    }
+  });
+
+  it("should not leak when usageLine callback returns shared usage", () => {
+    // usageLine callback returns parser.usage itself (a shared array)
+    const inner = option("-v", "--verbose");
+    const sharedUsage: Usage = [{ type: "ellipsis" }];
+    const parser = command("cmd", inner, {
+      usageLine(_defaultUsageLine: Usage) {
+        return sharedUsage;
+      },
+    });
+
+    const page1 = getDocPageSync(parser as Parser<"sync", unknown, unknown>);
+    assert.ok(page1);
+    assert.ok(page1.usage);
+    assert.ok(page1.usage.length > 1);
+    assert.equal(page1.usage[1].type, "ellipsis");
+
+    // Mutate the returned page's usage
+    (page1.usage[1] as Record<string, unknown>).type = "MUTATED";
+
+    // The shared array should not be corrupted
+    assert.equal(sharedUsage[0].type, "ellipsis");
   });
 });
