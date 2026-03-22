@@ -10,11 +10,11 @@ catalogs:
       specifier: ^8.3.0
       version: 8.3.0
     '@logtape/file':
-      specifier: ^1.2.2
-      version: 1.3.7
+      specifier: ^2.0.4
+      version: 2.0.4
     '@logtape/logtape':
-      specifier: ^1.2.2
-      version: 1.2.2
+      specifier: ^2.0.4
+      version: 2.0.4
     '@standard-schema/spec':
       specifier: ^1.1.0
       version: 1.1.0
@@ -53,7 +53,7 @@ importers:
     devDependencies:
       '@logtape/logtape':
         specifier: 'catalog:'
-        version: 1.2.2
+        version: 2.0.4
       '@optique/config':
         specifier: 'workspace:'
         version: link:../packages/config
@@ -200,7 +200,7 @@ importers:
     dependencies:
       '@logtape/logtape':
         specifier: 'catalog:'
-        version: 1.2.2
+        version: 2.0.4
       '@optique/core':
         specifier: 'workspace:'
         version: link:../core
@@ -248,10 +248,10 @@ importers:
     devDependencies:
       '@logtape/file':
         specifier: 'catalog:'
-        version: 1.3.7(@logtape/logtape@1.2.2)
+        version: 2.0.4(@logtape/logtape@2.0.4)
       '@logtape/logtape':
         specifier: 'catalog:'
-        version: 1.2.2
+        version: 2.0.4
       '@types/node':
         specifier: 'catalog:'
         version: 20.19.9
@@ -902,13 +902,13 @@ packages:
     resolution: {integrity: sha512-hloP58zRVCRSpgDxmqCWJNlizAlUgJFqG2ypq79DCvyv9tHjRYMDOcPFjzfl/A1/YxDvRCZz8wvZvmapQnKwFQ==}
     engines: {node: '>=12'}
 
-  '@logtape/file@1.3.7':
-    resolution: {integrity: sha512-7A9BmUc85tn+g+Yq3qLlNH2mwseflJsMNcCIur4Jj8qV8okBl3TnxHFH2yQfbgW/X1Hw1G3bd0nKI3kf63NWCw==}
+  '@logtape/file@2.0.4':
+    resolution: {integrity: sha512-T4ajSQR19kae/MLic4dLXehsB5nfMSUdNAIgQcdgToog9E8PGaYT0IINw+v4clD25AYogeCmn30V7/s2ieV3GA==}
     peerDependencies:
-      '@logtape/logtape': ^1.3.7
+      '@logtape/logtape': ^2.0.4
 
-  '@logtape/logtape@1.2.2':
-    resolution: {integrity: sha512-yx4uj7NUXo5pOk2lljtAf7UN9oDBw9xfxSDC4jxdbfnGDGmq4iJhenWBbU9XV8ilm8AUUMYXq2nk+qvz8E21DA==}
+  '@logtape/logtape@2.0.4':
+    resolution: {integrity: sha512-Z4COeAMdedcBFuFkXaPFvDPOVuHoEom1hwNnPCIkSyojyikuNguplwPoSG+kZthWrS7GiOJo1USQyjWwIFfTKA==}
 
   '@napi-rs/wasm-runtime@1.0.1':
     resolution: {integrity: sha512-KVlQ/jgywZpixGCKMNwxStmmbYEMyokZpCf2YuIChhfJA2uqfAKNEM8INz7zzTo55iEXfBhIIs3VqYyqzDLj8g==}
@@ -2852,11 +2852,11 @@ snapshots:
     dependencies:
       jsbi: 4.3.2
 
-  '@logtape/file@1.3.7(@logtape/logtape@1.2.2)':
+  '@logtape/file@2.0.4(@logtape/logtape@2.0.4)':
     dependencies:
-      '@logtape/logtape': 1.2.2
+      '@logtape/logtape': 2.0.4
 
-  '@logtape/logtape@1.2.2': {}
+  '@logtape/logtape@2.0.4': {}
 
   '@napi-rs/wasm-runtime@1.0.1':
     dependencies:

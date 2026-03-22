@@ -54,6 +54,7 @@
   },
   "sideEffects": false,
   "peerDependencies": {
+    "@logtape/file": "catalog:",
     "@logtape/logtape": "catalog:"
   },
   "peerDependenciesMeta": {

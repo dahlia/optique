@@ -5,8 +5,8 @@ packages:
 
 catalog:
   "@inquirer/prompts": ^8.3.0
-  "@logtape/file": ^1.2.2
-  "@logtape/logtape": ^1.2.2
+  "@logtape/file": ^2.0.4
+  "@logtape/logtape": ^2.0.4
   "@standard-schema/spec": ^1.1.0
   "@types/node": ^20.19.9
   fast-check: ^4.5.3
