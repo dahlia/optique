@@ -505,6 +505,15 @@ To be released.
     allowing private field access to work correctly through the sanitized
     view.  [[#307], [#558]]
 
+ -  Fixed phase-two sanitization leaking raw deferred prompt sentinels when
+    placeholder values are hidden behind private fields, prototype getters,
+    or method closures.  Non-plain objects are now always proxied during
+    phase two (regardless of own-property detection), getter invocations
+    use the real instance as receiver (fixing `TypeError` for private field
+    access), frozen/sealed objects use a method-wrapping clone, and function-
+    valued properties on plain objects are wrapped to strip placeholder
+    values from return values.  [[#407]]
+
  -  Fixed `integer({ type: "bigint" })`, `port({ type: "bigint" })`, and
     `portRange({ type: "bigint" })` to reject empty strings, whitespace,
     signed-plus strings, and non-decimal literals (`0x`, `0b`, `0o`) that
@@ -879,6 +888,7 @@ To be released.
 [#396]: https://github.com/dahlia/optique/issues/396
 [#403]: https://github.com/dahlia/optique/issues/403
 [#406]: https://github.com/dahlia/optique/issues/406
+[#407]: https://github.com/dahlia/optique/issues/407
 [#425]: https://github.com/dahlia/optique/issues/425
 [#429]: https://github.com/dahlia/optique/issues/429
 [#432]: https://github.com/dahlia/optique/issues/432
@@ -1073,6 +1083,10 @@ To be released.
     invoked with temporarily sanitized own properties on the original instance,
     allowing private field access to work correctly through the sanitized
     view.  [[#307], [#558]]
+
+ -  Fixed phase-two sanitization leaking raw deferred prompt sentinels when
+    placeholder values are hidden behind private fields, prototype getters,
+    or method closures (same fix as *@optique/core*).  [[#407]]
 
  -  `createConfigContext()` now validates `schema` and `fileParser` at
     construction time, and `getAnnotations()` validates `load` and
