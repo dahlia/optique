@@ -232,12 +232,18 @@ function stripPlaceholderValues<T>(
         const fn = descriptor.value as
           & { apply(thisArg: unknown, args: unknown[]): unknown }
           & (new (...args: unknown[]) => unknown);
-        descriptor.value = function (
+        const wrapper = function (
           this: unknown,
           ...args: unknown[]
         ) {
           if (new.target) {
-            return Reflect.construct(fn, args, new.target);
+            // Map new.target from wrapper → original so that constructor
+            // guards like `new.target === Ctor` see the expected function.
+            return Reflect.construct(
+              fn,
+              args,
+              new.target === wrapper ? fn : new.target,
+            );
           }
           const result = fn.apply(this, args);
           if (result instanceof Promise) {
@@ -247,6 +253,7 @@ function stripPlaceholderValues<T>(
           }
           return stripPlaceholderValues(result, seen);
         };
+        descriptor.value = wrapper;
         // Copy own properties (static members, .name, .length, .prototype)
         // from the original function to the wrapper so that callers
         // inspecting static fields, .name, or .length see the original
@@ -627,10 +634,20 @@ function prepareParsedForContexts(
   }
 
   if (isPlainObject(parsed)) {
-    // Always strip plain objects during phase two so that function-valued
-    // properties are wrapped even when closures capture placeholder values
-    // that are not visible as own data properties (method-only DTOs).
+    // Clone when own function properties exist (closures may capture
+    // placeholder values invisible to containsPlaceholderValues), or when
+    // own data properties contain detectable placeholders.  Plain objects
+    // without functions or visible placeholders pass through unchanged to
+    // preserve identity for WeakMap-backed and closure-based DTO patterns.
     // See: https://github.com/dahlia/optique/issues/407
+    const hasOwnFunctions = Reflect.ownKeys(parsed).some((key) => {
+      const desc = Object.getOwnPropertyDescriptor(parsed, key);
+      return desc != null && "value" in desc &&
+        typeof desc.value === "function";
+    });
+    if (!hasOwnFunctions && !containsPlaceholderValues(parsed)) {
+      return parsed;
+    }
     return stripPlaceholderValues(parsed);
   }
 

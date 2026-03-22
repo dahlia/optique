@@ -487,12 +487,16 @@ function stripDeferredPromptValues<T>(
         const fn = descriptor.value as
           & { apply(thisArg: unknown, args: unknown[]): unknown }
           & (new (...args: unknown[]) => unknown);
-        descriptor.value = function (
+        const wrapper = function (
           this: unknown,
           ...args: unknown[]
         ) {
           if (new.target) {
-            return Reflect.construct(fn, args, new.target);
+            return Reflect.construct(
+              fn,
+              args,
+              new.target === wrapper ? fn : new.target,
+            );
           }
           const result = fn.apply(this, args);
           if (result instanceof Promise) {
@@ -502,6 +506,7 @@ function stripDeferredPromptValues<T>(
           }
           return stripDeferredPromptValues(result, seen);
         };
+        descriptor.value = wrapper;
         for (const fk of Reflect.ownKeys(fn)) {
           const fd = Object.getOwnPropertyDescriptor(fn, fk);
           if (fd == null) continue;

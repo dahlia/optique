@@ -10670,6 +10670,40 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.ok(identityHeld);
   });
 
+  it("placeholder-free data-only plain object preserves identity in phase two", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/407
+    // A plain object with no functions and no placeholder values must pass
+    // through phase-two unchanged (not cloned), so identity-based patterns
+    // like WeakMap lookups continue to work.
+    const original = { name: "test", count: 42 };
+    let observedParsed: unknown;
+
+    const contextKey = Symbol.for("@test/plain-identity-preserved");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        observedParsed = parsed;
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (_value) => original,
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    // No functions, no placeholders → same object reference.
+    assert.equal(observedParsed, original);
+  });
+
   it("frozen object with accessor-backed placeholder is sanitized", async () => {
     // Regression test for https://github.com/dahlia/optique/issues/407
     // Frozen/sealed objects with accessor properties must have their getter
@@ -10723,11 +10757,15 @@ describe("branch coverage: facade.ts edge cases", () => {
   it("class constructor on plain object preserves new semantics", async () => {
     // Regression test for https://github.com/dahlia/optique/issues/407
     // Constructor functions on sanitized plain objects must support `new`
-    // with correct new.target, prototype, and instanceof semantics.
+    // with correct new.target, prototype, instanceof, and new.target
+    // identity semantics.
+    let observedNewTarget: unknown;
+
     class Ctor {
       value: string;
       constructor(value: string) {
         this.value = value;
+        observedNewTarget = new.target;
       }
     }
 
@@ -10761,6 +10799,8 @@ describe("branch coverage: facade.ts edge cases", () => {
 
     assert.ok(observedInstance instanceof Ctor);
     assert.equal((observedInstance as Ctor).value, "hello");
+    // new.target must be the original Ctor, not the wrapper.
+    assert.equal(observedNewTarget, Ctor);
   });
 
   it("traditional function constructor on plain object preserves new semantics", async () => {
