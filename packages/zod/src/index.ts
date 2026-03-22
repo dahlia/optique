@@ -62,6 +62,7 @@ interface ZodDefinitionInternal {
   readonly innerType?: z.Schema<unknown>;
   readonly schema?: z.Schema<unknown>;
   readonly in?: z.Schema<unknown>;
+  readonly out?: z.Schema<unknown>;
   readonly effect?: { readonly type?: string };
   readonly values?:
     | readonly (string | number | boolean | symbol | bigint)[]
@@ -305,7 +306,11 @@ function hasAsyncChecks(schema: z.Schema<unknown>): boolean {
 
   // Recurse into wrappers that may contain the async check
   const inner = def.innerType ?? def.schema ?? def.in;
-  if (inner != null) return hasAsyncChecks(inner);
+  if (inner != null && hasAsyncChecks(inner)) return true;
+
+  // Zod v4 pipe: also check the output side (e.g., .transform(async ...))
+  const out = def.out;
+  if (out != null && hasAsyncChecks(out)) return true;
 
   return false;
 }
@@ -712,45 +717,64 @@ export function zod<T>(
     };
   }
 
+  // Lazy one-time probe for async detection on coerced boolean schemas.
+  // Static analysis (hasAsyncChecks) catches `async` keyword functions,
+  // but cannot detect plain functions that return Promises.  This probe
+  // runs safeParse(true) once on first need to catch those cases.
+  let asyncProbed = false;
+  function ensureNotAsyncCoerced(): void {
+    if (asyncProbed) return;
+    asyncProbed = true;
+    try {
+      schema.safeParse(true);
+    } catch (error) {
+      if (error instanceof Error && isZodAsyncError(error)) {
+        throw new TypeError(
+          "Async Zod schemas (e.g., async refinements) are not supported " +
+            "by zod(). Use synchronous schemas instead.",
+        );
+      }
+      throw error;
+    }
+  }
+
   /**
-   * Handles a failed boolean literal pre-conversion, respecting custom
-   * `zodError` overrides when provided.
+   * Handles a failed boolean literal pre-conversion.
    *
-   * For function-style callbacks, the strategy depends on coercion mode:
-   *
-   *  -  *Non-coerced* (`z.boolean()`): `safeParse(rawInput)` is called
-   *     to obtain a real `ZodError`.  This is safe because the type
-   *     check rejects the string before any refinements execute.
+   *  -  *Non-coerced* (`z.boolean()`): falls through to `doSafeParse`
+   *     so that catch/default, custom errors, and async detection all
+   *     work.  This is safe because `safeParse(string)` fails at the
+   *     type level before any refinements execute.
    *  -  *Coerced* (`z.coerce.boolean()`): probing is unsafe (coercion
-   *     succeeds and runs refinements), so a real `ZodError` is
-   *     constructed directly using the imported `ZodError` class.
+   *     succeeds and runs refinements).  Static async detection +
+   *     lazy one-time probe catch async schemas; custom errors use a
+   *     real `ZodError` constructed from the imported class.
    */
   function handleBooleanLiteralError(
     boolResult: ValueParserResult<boolean>,
     rawInput: string,
   ): ValueParserResult<T> {
-    // Detect async schemas statically so that unsupported schemas
-    // are rejected consistently regardless of input value.
+    // Non-coerced schemas: delegate to doSafeParse so that catch,
+    // error maps, custom zodError, and async detection all work.
+    // safeParse(string) rejects at the type level before refinements.
+    if (!boolInfo.isCoerced) {
+      return doSafeParse(rawInput, rawInput);
+    }
+
+    // Coerced schemas: detect async via static analysis first,
+    // then lazy probe to catch Promise-returning refinements.
     if (hasAsyncChecks(schema)) {
       throw new TypeError(
         "Async Zod schemas (e.g., async refinements) are not supported " +
           "by zod(). Use synchronous schemas instead.",
       );
     }
+    ensureNotAsyncCoerced();
 
     if (options.errors?.zodError) {
       if (typeof options.errors.zodError !== "function") {
         return { success: false, error: options.errors.zodError };
       }
-      // For non-coerced schemas, safely obtain a real ZodError.
-      // safeParse(string) fails at the type level before any
-      // refinements or transforms execute.
-      if (!boolInfo.isCoerced) {
-        return doSafeParse(rawInput, rawInput);
-      }
-      // For coerced schemas, construct a real ZodError without
-      // probing safeParse() (which would succeed under JS truthiness
-      // and execute user refinements).
       const zodError = new ZodError([{
         code: "custom",
         message: `Invalid Boolean value: ${rawInput}`,
