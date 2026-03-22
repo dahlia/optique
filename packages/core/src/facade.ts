@@ -262,6 +262,10 @@ function stripPlaceholderValues<T>(
           }
           return stripPlaceholderValues(result);
         };
+        // Preserve the original function's prototype chain so that
+        // inherited statics (e.g., from class Child extends Base)
+        // remain accessible through the wrapper.
+        Object.setPrototypeOf(wrapper, Object.getPrototypeOf(fn));
         for (const fk of Reflect.ownKeys(fn as object)) {
           const fd = Object.getOwnPropertyDescriptor(fn, fk);
           if (fd == null) continue;
@@ -534,21 +538,12 @@ function createSanitizedNonPlainView<T extends object>(
           break;
         }
       }
-      // Invoke the getter via callMethodOnSanitizedTarget so that own
-      // properties are temporarily sanitized.  The getter runs with the
-      // real target as receiver (allowing private field access).  In the
-      // frozen/sealed fallback, the caller's receiver is used instead.
-      const result = callMethodOnSanitizedTarget(
-        {
-          apply: (thisArg: unknown) =>
-            Reflect.get(target, key, thisArg ?? target),
-        },
-        receiver,
-        target,
-        [],
-        stripPlaceholderValues,
-        seen,
-      );
+      // Use the proxy receiver so that accessor-returned closures and
+      // bound functions remain bound to the sanitized proxy.  Private
+      // field access through the proxy receiver throws TypeError — use
+      // prototype methods (which go through callMethodOnSanitizedTarget)
+      // for private field access instead.
+      const result = Reflect.get(target, key, receiver);
       if (typeof result === "function") {
         // Class constructors are returned unwrapped since the wrapper
         // would break new.target and prototype chain semantics.
