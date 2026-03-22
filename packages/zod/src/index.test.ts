@@ -989,6 +989,34 @@ describe("zod()", () => {
         { type: "text", text: "." },
       ]);
     });
+
+    it("should not interfere with z.preprocess() boolean schemas", () => {
+      const parser = zod(
+        z.preprocess((v) => v === "enabled", z.boolean()),
+      );
+      const enabledResult = parser.parse("enabled");
+      assert.ok(enabledResult.success);
+      assert.equal(enabledResult.value, true);
+
+      const disabledResult = parser.parse("disabled");
+      assert.ok(disabledResult.success);
+      assert.equal(disabledResult.value, false);
+    });
+
+    it("should throw TypeError for async boolean refinements on invalid input", () => {
+      // deno-lint-ignore require-await
+      const asyncSchema = z.coerce.boolean().refine(async (v) => v === true);
+      const parser = zod(asyncSchema as never);
+      // Both valid and invalid boolean literals should throw TypeError
+      assert.throws(
+        () => parser.parse("true"),
+        { name: "TypeError" },
+      );
+      assert.throws(
+        () => parser.parse("maybe"),
+        { name: "TypeError" },
+      );
+    });
   });
 
   describe("async schema rejection", () => {
