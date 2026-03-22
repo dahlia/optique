@@ -68,9 +68,6 @@ interface ValibotSchemaInternal {
   readonly key?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
   readonly value?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
   readonly rest?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
-  readonly getter?: (
-    input?: unknown,
-  ) => v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
 }
 
 /**
@@ -93,9 +90,9 @@ function isCatchAllSchema(
   if (s.type === "unknown" || s.type === "any" || s.type === "string") {
     if (!s.pipe) return true;
     // A piped schema is still catch-all if every action after the base
-    // schema is a non-rejecting transformation (trim, toLowerCase, etc.)
-    // and not a validation or nested schema that could reject.
-    return s.pipe.every((action) => {
+    // schema (first element) is a non-rejecting transformation (trim,
+    // toLowerCase, etc.) and not a validation or nested schema.
+    return s.pipe.slice(1).every((action) => {
       const a = action as { kind?: string };
       return a.kind !== "validation" && a.kind !== "schema";
     });
@@ -229,17 +226,9 @@ function containsAsyncSchema(
     }
   }
 
-  // Best-effort check for v.lazy(): call the getter with no arguments.
-  // Constant getters (the common case) will return the inner schema;
-  // input-dependent getters may throw, which we safely ignore.
-  if (typeof s.getter === "function") {
-    try {
-      const inner = s.getter();
-      if (containsAsyncSchema(inner, visited)) return true;
-    } catch {
-      // Input-dependent getter — cannot determine async status statically.
-    }
-  }
+  // NOTE: v.lazy() schemas are NOT inspected.  Executing the getter
+  // during construction would change observable behavior for stateful or
+  // input-dependent getters, which is a behavioral regression.
 
   return false;
 }

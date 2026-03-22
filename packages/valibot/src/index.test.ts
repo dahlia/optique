@@ -743,6 +743,22 @@ describe("valibot()", () => {
       assert.ok(result.success);
     });
 
+    it("should not reject union with piped non-rejecting string arm", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // v.pipe(v.string(), v.trim()) normalizes but never rejects
+      const asyncSchema = v.union([
+        v.pipe(v.string(), v.trim()),
+        asyncInner,
+      ] as never);
+      const parser = valibot(asyncSchema as never);
+      const result = parser.parse("hello");
+      assert.ok(result.success);
+    });
+
     it("should not reject union with v.unknown() arm after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
@@ -850,21 +866,6 @@ describe("valibot()", () => {
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
       const asyncSchema = v.tupleWithRest([], asyncRest as never);
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
-    });
-
-    it("should throw TypeError for constant async lazy()", () => {
-      const asyncSchema = v.lazy((): v.BaseSchema<
-        unknown,
-        unknown,
-        v.BaseIssue<unknown>
-      > =>
-        v.pipeAsync(
-          v.string(),
-          // deno-lint-ignore require-await
-          v.checkAsync(async (val) => val === "ok", "not ok"),
-        ) as never
-      );
       assert.throws(() => valibot(asyncSchema as never), expectedError);
     });
 
