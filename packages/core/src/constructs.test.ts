@@ -114,6 +114,36 @@ describe("or", () => {
     );
   });
 
+  it("should throw TypeError when a non-parser object is passed", () => {
+    assert.throws(
+      () => or({} as never, option("-a")),
+      {
+        name: "TypeError",
+        message: "or() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError for non-parser among valid parsers", () => {
+    assert.throws(
+      () => or(option("-a"), 42 as never),
+      {
+        name: "TypeError",
+        message: "or() argument at index 1 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError when null is passed as a parser", () => {
+    assert.throws(
+      () => or(null as never),
+      {
+        name: "TypeError",
+        message: "or() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
   it("should try parsers in order", () => {
     const parser1 = option("-a");
     const parser2 = option("-b");
@@ -1129,6 +1159,36 @@ describe("longestMatch()", () => {
       {
         name: "TypeError",
         message: "longestMatch() requires at least one parser argument.",
+      },
+    );
+  });
+
+  it("should throw TypeError when a non-parser object is passed", () => {
+    assert.throws(
+      () => longestMatch({} as never, command("a", constant("a"))),
+      {
+        name: "TypeError",
+        message: "longestMatch() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError for non-parser among valid parsers", () => {
+    assert.throws(
+      () => longestMatch(command("a", constant("a")), 42 as never),
+      {
+        name: "TypeError",
+        message: "longestMatch() argument at index 1 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError when null is passed as a parser", () => {
+    assert.throws(
+      () => longestMatch(null as never),
+      {
+        name: "TypeError",
+        message: "longestMatch() argument at index 0 is not a valid Parser.",
       },
     );
   });
@@ -3556,6 +3616,46 @@ describe("merge", () => {
     );
   });
 
+  it("should throw TypeError when a non-parser object is passed", () => {
+    assert.throws(
+      () => merge({} as never, object({ a: option("-a") }) as never),
+      {
+        name: "TypeError",
+        message: "merge() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError for non-parser among valid parsers", () => {
+    assert.throws(
+      () => merge(object({ a: option("-a") }), 42 as never),
+      {
+        name: "TypeError",
+        message: "merge() argument at index 1 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError for non-parser with label", () => {
+    assert.throws(
+      () => merge("label", 42 as never),
+      {
+        name: "TypeError",
+        message: "merge() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError when null is passed as a parser", () => {
+    assert.throws(
+      () => merge(null as never),
+      {
+        name: "TypeError",
+        message: "merge() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
   it("should preserve inferred object types with up to fifteen parsers", () => {
     const parser = merge(
       object({ k1: constant("v1" as const) }),
@@ -5462,6 +5562,36 @@ describe("concat", () => {
       {
         name: "TypeError",
         message: "concat() requires at least one parser argument.",
+      },
+    );
+  });
+
+  it("should throw TypeError when a non-parser object is passed", () => {
+    assert.throws(
+      () => concat({} as never, tuple([constant("a")]) as never),
+      {
+        name: "TypeError",
+        message: "concat() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError for non-parser among valid parsers", () => {
+    assert.throws(
+      () => concat(tuple([constant("a")]), {} as never),
+      {
+        name: "TypeError",
+        message: "concat() argument at index 1 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError when null is passed as a parser", () => {
+    assert.throws(
+      () => concat(null as never),
+      {
+        name: "TypeError",
+        message: "concat() argument at index 0 is not a valid Parser.",
       },
     );
   });

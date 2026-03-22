@@ -397,6 +397,33 @@ function extractRequiredUsage(usage: Usage): Usage {
 }
 
 /**
+ * Validates that every element of the given array is a {@link Parser} object.
+ * @param parsers The array of values to validate.
+ * @param callerName The name of the calling function, used in error messages.
+ * @throws {TypeError} If any element is not a valid {@link Parser}.
+ */
+function assertParsers(
+  parsers: readonly unknown[],
+  callerName: string,
+): void {
+  for (let i = 0; i < parsers.length; i++) {
+    const p = parsers[i];
+    if (
+      p == null ||
+      typeof p !== "object" ||
+      !("$mode" in p) ||
+      !("usage" in p) ||
+      typeof (p as Record<string, unknown>).parse !== "function" ||
+      typeof (p as Record<string, unknown>).getDocFragments !== "function"
+    ) {
+      throw new TypeError(
+        `${callerName} argument at index ${i} is not a valid Parser.`,
+      );
+    }
+  }
+}
+
+/**
  * Analyzes parsers to determine what types of inputs are expected.
  * @param parsers The parsers being combined
  * @returns Context about what types of inputs are expected
@@ -2142,6 +2169,7 @@ export function or(
   if (parsers.length < 1) {
     throw new TypeError("or() requires at least one parser argument.");
   }
+  assertParsers(parsers, "or()");
 
   // Analyze context once for error message generation
   const noMatchContext = analyzeNoMatchContext(parsers);
@@ -2697,6 +2725,7 @@ export function longestMatch(
       "longestMatch() requires at least one parser argument.",
     );
   }
+  assertParsers(parsers, "longestMatch()");
 
   // Analyze context once for error message generation
   const noMatchContext = analyzeNoMatchContext(parsers);
@@ -5352,6 +5381,7 @@ export function merge(
   if (rawParsers.length < 1) {
     throw new TypeError("merge() requires at least one parser argument.");
   }
+  assertParsers(rawParsers, "merge()");
 
   // Compute combined mode: if any parser is async, the result is async
   const combinedMode: Mode = rawParsers.some((p) => p.$mode === "async")
@@ -6279,6 +6309,7 @@ export function concat(
   if (parsers.length < 1) {
     throw new TypeError("concat() requires at least one parser argument.");
   }
+  assertParsers(parsers, "concat()");
 
   // Compute combined mode: if any parser is async, the result is async
   const combinedMode: Mode = parsers.some((p) => p.$mode === "async")

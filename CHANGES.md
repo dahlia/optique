@@ -83,6 +83,12 @@ To be released.
     compile-time arity guards, so JavaScript callers could create parsers with
     inconsistent behavior.  [[#403], [#696]]
 
+ -  Added per-argument runtime validation to `or()`, `longestMatch()`,
+    `merge()`, and `concat()`: each parser argument is now checked to be
+    a valid `Parser` object at construction time, producing a clear
+    `TypeError` instead of an internal crash when non-parser values are
+    passed.  [[#406], [#700]]
+
  -  Added the `@optique/core/mode-dispatch` subpath export so sibling
     packages can share internal sync/async dispatch helpers without
     duplicating them.  [[#157]]
@@ -872,6 +878,7 @@ To be released.
 [#395]: https://github.com/dahlia/optique/issues/395
 [#396]: https://github.com/dahlia/optique/issues/396
 [#403]: https://github.com/dahlia/optique/issues/403
+[#406]: https://github.com/dahlia/optique/issues/406
 [#425]: https://github.com/dahlia/optique/issues/425
 [#429]: https://github.com/dahlia/optique/issues/429
 [#432]: https://github.com/dahlia/optique/issues/432
@@ -990,6 +997,7 @@ To be released.
 [#696]: https://github.com/dahlia/optique/pull/696
 [#697]: https://github.com/dahlia/optique/pull/697
 [#698]: https://github.com/dahlia/optique/pull/698
+[#700]: https://github.com/dahlia/optique/pull/700
 
 ### @optique/config
 
