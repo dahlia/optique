@@ -338,6 +338,33 @@ describe("logOutput()", () => {
     );
   });
 
+  it("should request hidden-file completion for dot-prefixed paths", () => {
+    const parser = object({
+      output: logOutput(),
+    });
+    const dotSuggestions = suggestSync(parser, ["--log-output", "."]);
+    assert.ok(
+      dotSuggestions.some((s) =>
+        s.kind === "file" && s.type === "file" && s.includeHidden === true
+      ),
+    );
+    const nestedDotSuggestions = suggestSync(parser, [
+      "--log-output",
+      "src/.",
+    ]);
+    assert.ok(
+      nestedDotSuggestions.some((s) =>
+        s.kind === "file" && s.type === "file" && s.includeHidden === true
+      ),
+    );
+    const normalSuggestions = suggestSync(parser, ["--log-output", "src"]);
+    assert.ok(
+      normalSuggestions.some((s) =>
+        s.kind === "file" && s.type === "file" && !s.includeHidden
+      ),
+    );
+  });
+
   it("should format default console output in help text", () => {
     const parser = object({
       output: withDefault(logOutput(), { type: "console" }),
