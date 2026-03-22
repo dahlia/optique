@@ -2410,14 +2410,11 @@ export function or(
         fragments = docFragments.fragments;
       }
       // When a single branch matched successfully, pass its fragments
-      // through as-is so that intentional duplicate surface syntax (e.g.,
-      // via allowDuplicates) is preserved and the original fragment layout
-      // (e.g., from conditional().getDocFragments()) is not rewritten.
-      // In all other cases (all branches shown, or selected branch failed),
-      // deduplicate and wrap into sections.
-      const matchedSuccessfully = state.kind === "available" &&
-        state.state != null && state.state[1].success;
-      if (!matchedSuccessfully) {
+      // Only deduplicate when showing all branches.  When state.state is
+      // set, fragments come from a single branch (whether successful or
+      // failed), so cross-branch dedup does not apply and would collapse
+      // intentional duplicates (e.g., allowDuplicates).
+      if (state.kind === "unavailable" || state.state == null) {
         fragments = deduplicateDocFragments(fragments);
       }
       return {
