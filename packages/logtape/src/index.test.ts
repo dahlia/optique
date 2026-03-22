@@ -644,6 +644,59 @@ describe("createConsoleSink()", () => {
     );
   });
 
+  it("should format timestamp 0 as Unix epoch", () => {
+    const sink = createConsoleSink({ stream: "stdout" });
+    const originalLog = console.log;
+    const lines: string[] = [];
+    console.log = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    try {
+      sink({
+        category: ["test"],
+        level: "info",
+        message: ["hello"],
+        rawMessage: "hello",
+        properties: {},
+        timestamp: 0,
+      });
+    } finally {
+      console.log = originalLog;
+    }
+    assert.equal(lines.length, 1);
+    assert.match(
+      lines[0],
+      /^1970-01-01T00:00:00\.000Z \[INFO\s*\] test: hello$/,
+    );
+  });
+
+  it("should fall back to current time for NaN timestamp", () => {
+    const sink = createConsoleSink({ stream: "stdout" });
+    const originalLog = console.log;
+    const lines: string[] = [];
+    console.log = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    try {
+      sink({
+        category: ["test"],
+        level: "info",
+        message: ["hello"],
+        rawMessage: "hello",
+        properties: {},
+        timestamp: NaN,
+      });
+    } finally {
+      console.log = originalLog;
+    }
+    assert.equal(lines.length, 1);
+    // Should not throw RangeError; should produce a valid ISO timestamp
+    assert.match(
+      lines[0],
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[INFO\s*\] test: hello$/,
+    );
+  });
+
   it("should route by stream resolver", () => {
     const sink = createConsoleSink({
       streamResolver: (level) => level === "error" ? "stderr" : "stdout",
@@ -681,8 +734,14 @@ describe("createConsoleSink()", () => {
     }
     assert.equal(stderrLines.length, 1);
     assert.equal(stdoutLines.length, 1);
-    assert.match(stderrLines[0], /\[ERROR\s*\] app: broken 500$/);
-    assert.match(stdoutLines[0], /\[INFO\s*\] app: ok$/);
+    assert.match(
+      stderrLines[0],
+      /^1970-01-01T00:00:00\.000Z \[ERROR\s*\] app: broken 500$/,
+    );
+    assert.match(
+      stdoutLines[0],
+      /^1970-01-01T00:00:00\.000Z \[INFO\s*\] app: ok$/,
+    );
   });
 });
 
