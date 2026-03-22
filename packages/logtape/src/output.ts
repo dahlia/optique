@@ -219,13 +219,23 @@ export function logOutput(
 export function createConsoleSink(options: ConsoleSinkOptions = {}): Sink {
   const streamResolver = options.streamResolver;
   const defaultStream = options.stream ?? "stderr";
+
+  const invalidStreamError = (value: unknown): TypeError => {
+    let repr: string;
+    try {
+      repr = JSON.stringify(value);
+    } catch {
+      repr = String(value);
+    }
+    return new TypeError(
+      `Invalid stream: expected "stdout" or "stderr", got ${repr}.`,
+    );
+  };
+
   if (
     !streamResolver && defaultStream !== "stdout" && defaultStream !== "stderr"
   ) {
-    throw new TypeError(
-      `Invalid stream: expected "stdout" or "stderr", ` +
-        `got ${JSON.stringify(defaultStream)}.`,
-    );
+    throw invalidStreamError(defaultStream);
   }
 
   return (record: LogRecord): void => {
@@ -233,10 +243,7 @@ export function createConsoleSink(options: ConsoleSinkOptions = {}): Sink {
       ? streamResolver(record.level)
       : defaultStream;
     if (stream !== "stdout" && stream !== "stderr") {
-      throw new TypeError(
-        `Invalid stream: expected "stdout" or "stderr", ` +
-          `got ${JSON.stringify(stream)}.`,
-      );
+      throw invalidStreamError(stream);
     }
 
     // Format the message
