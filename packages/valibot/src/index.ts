@@ -93,8 +93,8 @@ function isCatchAllSchema(
 ): boolean {
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return false;
-  // v.unknown() and v.any() accept every value of any type
-  if (s.type === "unknown" || s.type === "any") return true;
+  // Bare v.unknown() and v.any() without pipe accept every value
+  if ((s.type === "unknown" || s.type === "any") && !s.pipe) return true;
   // Bare v.string() without pipe accepts every string (only valid when
   // the input is still known to be a string, i.e., before transforms)
   if (includeString && s.type === "string" && !s.pipe) return true;
