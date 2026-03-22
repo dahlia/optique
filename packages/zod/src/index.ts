@@ -525,15 +525,17 @@ export function zod<T>(
       }
       if (typeof value !== "object" || value === null) return String(value);
       if (Array.isArray(value)) return String(value);
+      const str = String(value);
+      if (str !== "[object Object]") return str;
       const proto = Object.getPrototypeOf(value);
       if (proto === Object.prototype || proto === null) {
         try {
-          return JSON.stringify(value) ?? String(value);
+          return JSON.stringify(value) ?? str;
         } catch {
-          // Falls through to String(value) below
+          // Falls through to str below
         }
       }
-      return String(value);
+      return str;
     },
   };
   return parser;
