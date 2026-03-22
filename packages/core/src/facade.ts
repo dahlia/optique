@@ -221,53 +221,33 @@ function stripPlaceholderValues<T>(
       continue;
     }
     if ("value" in descriptor) {
-      if (typeof descriptor.value === "function") {
-        // Wrap function-valued properties so that closures capturing
-        // placeholder values return sanitized results when called by
-        // phase-two contexts.  The wrapper delegates to `new` when
-        // invoked as a constructor, preserving new.target, prototype
-        // chains, and instanceof semantics for both class syntax and
-        // traditional constructor functions.
-        // See: https://github.com/dahlia/optique/issues/407
-        const fn = descriptor.value as
-          & { apply(thisArg: unknown, args: unknown[]): unknown }
-          & (new (...args: unknown[]) => unknown);
-        const wrapper = function (
+      // Constructable functions (classes and traditional constructors) are
+      // left unwrapped to preserve static-method `this` binding, private
+      // static field access, and constructor identity.  Non-constructable
+      // functions (arrow functions, method shorthand) are wrapped so that
+      // closures capturing placeholder values have their return values
+      // sanitized.
+      // See: https://github.com/dahlia/optique/issues/407
+      const fnProto = typeof descriptor.value === "function"
+        ? (descriptor.value as { prototype?: unknown }).prototype
+        : undefined;
+      const isConstructable = fnProto != null && typeof fnProto === "object";
+      if (typeof descriptor.value === "function" && !isConstructable) {
+        const fn = descriptor.value as {
+          apply(thisArg: unknown, args: unknown[]): unknown;
+        };
+        descriptor.value = function (
           this: unknown,
           ...args: unknown[]
         ) {
-          if (new.target) {
-            // Map new.target from wrapper → original so that constructor
-            // guards like `new.target === Ctor` see the expected function.
-            return Reflect.construct(
-              fn,
-              args,
-              new.target === wrapper ? fn : new.target,
-            );
-          }
           const result = fn.apply(this, args);
           if (result instanceof Promise) {
             return (result as Promise<unknown>).then(
-              (v) => stripPlaceholderValues(v, seen),
+              (v) => sanitizeForPhaseTwo(v, seen),
             );
           }
-          return stripPlaceholderValues(result, seen);
+          return sanitizeForPhaseTwo(result, seen);
         };
-        descriptor.value = wrapper;
-        // Copy own properties (static members, .name, .length, .prototype)
-        // from the original function to the wrapper so that callers
-        // inspecting static fields, .name, or .length see the original
-        // values, and instanceof works through the wrapper.
-        for (const fk of Reflect.ownKeys(fn)) {
-          const fd = Object.getOwnPropertyDescriptor(fn, fk);
-          if (fd == null) continue;
-          try {
-            Object.defineProperty(descriptor.value, fk, fd);
-          } catch {
-            // Some built-in function properties (e.g. arguments, caller)
-            // may not be configurable on the wrapper; best-effort copy.
-          }
-        }
       } else {
         descriptor.value = stripPlaceholderValues(
           descriptor.value,
@@ -611,6 +591,37 @@ function createSanitizedNonPlainView<T extends object>(
   return proxy;
 }
 
+/**
+ * Sanitizes a value with the "always proxy non-plain objects" behavior used
+ * for phase-two parsing.  Unlike bare stripPlaceholderValues(), this also
+ * proxies non-plain objects whose own properties don't reveal placeholders
+ * (e.g. class instances with placeholder values in private fields).
+ */
+function sanitizeForPhaseTwo(
+  value: unknown,
+  seen: WeakMap<object, unknown>,
+): unknown {
+  if (value == null || typeof value !== "object") {
+    return value;
+  }
+  if (isPlaceholderValue(value)) {
+    return undefined;
+  }
+  const cached = seen.get(value);
+  if (cached !== undefined) {
+    return cached;
+  }
+  if (
+    !isPlainObject(value) &&
+    !Array.isArray(value) &&
+    !(value instanceof Set) &&
+    !(value instanceof Map)
+  ) {
+    return createSanitizedNonPlainView(value, seen);
+  }
+  return stripPlaceholderValues(value, seen);
+}
+
 function prepareParsedForContexts(
   parsed: unknown,
 ): unknown {
@@ -634,18 +645,25 @@ function prepareParsedForContexts(
   }
 
   if (isPlainObject(parsed)) {
-    // Clone when own function properties exist (closures may capture
-    // placeholder values invisible to containsPlaceholderValues), or when
-    // own data properties contain detectable placeholders.  Plain objects
-    // without functions or visible placeholders pass through unchanged to
-    // preserve identity for WeakMap-backed and closure-based DTO patterns.
+    // Clone when own non-constructable function properties exist (closures
+    // may capture placeholder values invisible to containsPlaceholderValues),
+    // or when own data properties contain detectable placeholders.  Plain
+    // objects with only data/constructor properties and no visible
+    // placeholders pass through unchanged to preserve identity for
+    // WeakMap-backed and closure-based DTO patterns.  Constructable
+    // functions (classes, traditional constructors) are left unwrapped
+    // to preserve static-method `this` binding and constructor identity.
     // See: https://github.com/dahlia/optique/issues/407
-    const hasOwnFunctions = Reflect.ownKeys(parsed).some((key) => {
+    const hasWrappableFunctions = Reflect.ownKeys(parsed).some((key) => {
       const desc = Object.getOwnPropertyDescriptor(parsed, key);
-      return desc != null && "value" in desc &&
-        typeof desc.value === "function";
+      if (
+        desc == null || !("value" in desc) ||
+        typeof desc.value !== "function"
+      ) return false;
+      const proto = (desc.value as { prototype?: unknown }).prototype;
+      return proto == null || typeof proto !== "object";
     });
-    if (!hasOwnFunctions && !containsPlaceholderValues(parsed)) {
+    if (!hasWrappableFunctions && !containsPlaceholderValues(parsed)) {
       return parsed;
     }
     return stripPlaceholderValues(parsed);

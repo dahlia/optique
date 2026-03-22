@@ -399,6 +399,25 @@ function createSanitizedNonPlainView<T extends object>(
   return proxy;
 }
 
+function sanitizeReturnForPhaseTwo(
+  value: unknown,
+  seen: WeakMap<object, unknown>,
+): unknown {
+  if (value == null || typeof value !== "object") return value;
+  if (isDeferredPromptValue(value)) return undefined;
+  const cached = seen.get(value);
+  if (cached !== undefined) return cached;
+  if (
+    !isPlainObject(value) &&
+    !Array.isArray(value) &&
+    !(value instanceof Set) &&
+    !(value instanceof Map)
+  ) {
+    return createSanitizedNonPlainView(value, seen);
+  }
+  return stripDeferredPromptValues(value, seen);
+}
+
 function stripDeferredPromptValues<T>(
   value: T,
   seen = new WeakMap<object, unknown>(),
@@ -453,10 +472,6 @@ function stripDeferredPromptValues<T>(
     return clone as T;
   }
   if (!isPlainObject(value)) {
-    // Always create the sanitized proxy view for non-plain objects, even when
-    // containsPlaceholderValues() doesn't detect any.  Placeholder values may
-    // be hidden in private fields or behind method return values where own-
-    // property inspection cannot reach them.
     return createSanitizedNonPlainView(value, seen) as T;
   }
   // The core's prepareParsedForContexts() already clones plain objects
@@ -477,45 +492,27 @@ function stripDeferredPromptValues<T>(
       continue;
     }
     if ("value" in descriptor) {
-      if (typeof descriptor.value === "function") {
-        // Wrap function-valued properties so that closures capturing
-        // deferred prompt values return sanitized results when called by
-        // phase-two contexts.  The wrapper delegates to `new` when
-        // invoked as a constructor, preserving new.target, prototype
-        // chains, and instanceof semantics.
+      const fnProto = typeof descriptor.value === "function"
+        ? (descriptor.value as { prototype?: unknown }).prototype
+        : undefined;
+      const isConstructable = fnProto != null && typeof fnProto === "object";
+      if (typeof descriptor.value === "function" && !isConstructable) {
         // See: https://github.com/dahlia/optique/issues/407
-        const fn = descriptor.value as
-          & { apply(thisArg: unknown, args: unknown[]): unknown }
-          & (new (...args: unknown[]) => unknown);
-        const wrapper = function (
+        const fn = descriptor.value as {
+          apply(thisArg: unknown, args: unknown[]): unknown;
+        };
+        descriptor.value = function (
           this: unknown,
           ...args: unknown[]
         ) {
-          if (new.target) {
-            return Reflect.construct(
-              fn,
-              args,
-              new.target === wrapper ? fn : new.target,
-            );
-          }
           const result = fn.apply(this, args);
           if (result instanceof Promise) {
             return (result as Promise<unknown>).then(
-              (v) => stripDeferredPromptValues(v, seen),
+              (v) => sanitizeReturnForPhaseTwo(v, seen),
             );
           }
-          return stripDeferredPromptValues(result, seen);
+          return sanitizeReturnForPhaseTwo(result, seen);
         };
-        descriptor.value = wrapper;
-        for (const fk of Reflect.ownKeys(fn)) {
-          const fd = Object.getOwnPropertyDescriptor(fn, fk);
-          if (fd == null) continue;
-          try {
-            Object.defineProperty(descriptor.value, fk, fd);
-          } catch {
-            // Best-effort copy for non-configurable built-in properties.
-          }
-        }
       } else {
         descriptor.value = stripDeferredPromptValues(
           descriptor.value,
