@@ -191,7 +191,7 @@ export function cloneMessageTerm(term: MessageTerm): MessageTerm {
  * @returns A structurally equal but referentially distinct copy.
  * @since 1.0.0
  */
-export function cloneMessage(msg: Message): MessageTerm[] {
+export function cloneMessage(msg: Message): Message {
   return msg.map(cloneMessageTerm);
 }
 
