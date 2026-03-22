@@ -78,18 +78,25 @@ interface ValibotSchemaInternal {
  * - Any wrapper with a `wrapped` field pointing to a catch-all schema
  *   (e.g., `v.optional()`, `v.nullable()`, `v.nonOptional()`, etc.)
  *
- * Piped schemas are NOT considered catch-all because pipes can contain
- * transforms that change the value type followed by schemas that reject.
+ * Piped schemas are considered catch-all only when the base type is
+ * `string`/`unknown`/`any` and every pipe action is a non-rejecting
+ * transformation (not a validation or nested schema).
  */
 function isCatchAllSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
 ): boolean {
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return false;
-  // Bare v.unknown() and v.any() without pipe accept every value
-  if ((s.type === "unknown" || s.type === "any") && !s.pipe) return true;
-  // Bare v.string() without pipe accepts every string
-  if (s.type === "string" && !s.pipe) return true;
+  if (s.type === "unknown" || s.type === "any" || s.type === "string") {
+    if (!s.pipe) return true;
+    // A piped schema is still catch-all if every action after the base
+    // schema is a non-rejecting transformation (trim, toLowerCase, etc.)
+    // and not a validation or nested schema that could reject.
+    return s.pipe.every((action) => {
+      const a = action as { kind?: string };
+      return a.kind !== "validation" && a.kind !== "schema";
+    });
+  }
   // Unwrap any schema with a wrapped field (optional, nullable, nullish,
   // nonOptional, exactOptional, etc.)
   if (s.wrapped) {
