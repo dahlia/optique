@@ -321,11 +321,16 @@ function createSanitizedNonPlainView<T extends object>(
           break;
         }
       }
-      // Use `target` as receiver instead of the proxy so that prototype
-      // getters invoking `this.#field` receive the real instance rather than
-      // the proxy, which would throw a TypeError for private field access.
-      // Return values are still stripped via stripDeferredPromptValues().
-      const result = Reflect.get(target, key, target);
+      // Try with the proxy as receiver first so that computed getters
+      // read sanitized public properties through the proxy's get trap.
+      // If the getter accesses private fields, the proxy receiver causes
+      // a TypeError — fall back to the real target as receiver.
+      let result: unknown;
+      try {
+        result = Reflect.get(target, key, proxy);
+      } catch {
+        result = Reflect.get(target, key, target);
+      }
       if (typeof result === "function") {
         if (/^class[\s{]/.test(Function.prototype.toString.call(result))) {
           return result;
@@ -462,24 +467,23 @@ function stripDeferredPromptValues<T>(
       continue;
     }
     if ("value" in descriptor) {
-      if (
-        typeof descriptor.value === "function" &&
-        !/^class[\s{]/.test(
-          Function.prototype.toString.call(descriptor.value),
-        )
-      ) {
+      if (typeof descriptor.value === "function") {
         // Wrap function-valued properties so that closures capturing
         // deferred prompt values return sanitized results when called by
-        // phase-two contexts.  Skip constructors — wrapping them would
-        // break new.target, prototype chains, and instanceof semantics.
+        // phase-two contexts.  The wrapper delegates to `new` when
+        // invoked as a constructor, preserving new.target, prototype
+        // chains, and instanceof semantics.
         // See: https://github.com/dahlia/optique/issues/407
-        const fn = descriptor.value as {
-          apply(thisArg: unknown, args: unknown[]): unknown;
-        };
+        const fn = descriptor.value as
+          & { apply(thisArg: unknown, args: unknown[]): unknown }
+          & (new (...args: unknown[]) => unknown);
         descriptor.value = function (
           this: unknown,
           ...args: unknown[]
         ) {
+          if (new.target) {
+            return Reflect.construct(fn, args, new.target);
+          }
           const result = fn.apply(this, args);
           if (result instanceof Promise) {
             return (result as Promise<unknown>).then(
@@ -488,6 +492,11 @@ function stripDeferredPromptValues<T>(
           }
           return stripDeferredPromptValues(result, seen);
         };
+        Object.defineProperty(descriptor.value, "prototype", {
+          value: fn.prototype,
+          writable: true,
+          configurable: false,
+        });
       } else {
         descriptor.value = stripDeferredPromptValues(
           descriptor.value,

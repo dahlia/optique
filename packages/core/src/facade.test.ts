@@ -10438,6 +10438,51 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(observedToken, undefined);
   });
 
+  it("computed getter reads sanitized public fields via proxy", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/407
+    // A getter like `get hasSecret() { return this.secret != null }` must
+    // read the sanitized (undefined) value of `this.secret` through the
+    // proxy, not the raw placeholder on the target.
+    class WithComputed {
+      secret: unknown;
+      constructor(secret: unknown) {
+        this.secret = secret;
+      }
+      get hasSecret(): boolean {
+        return this.secret != null;
+      }
+    }
+
+    let observedHasSecret: boolean | undefined;
+
+    const contextKey = Symbol.for("@test/computed-getter-sanitized");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        const w = parsed as WithComputed;
+        observedHasSecret = w.hasSecret;
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (_value) => new WithComputed({ [testPlaceholderKey]: true }),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    // The getter reads `this.secret` through the proxy, which returns
+    // undefined (placeholder stripped).  So hasSecret must be false.
+    assert.ok(!observedHasSecret);
+  });
+
   it("frozen object with accessor-backed placeholder is sanitized", async () => {
     // Regression test for https://github.com/dahlia/optique/issues/407
     // Frozen/sealed objects with accessor properties must have their getter
@@ -10488,11 +10533,10 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(observedSecret, undefined);
   });
 
-  it("constructor-valued property on plain object is not wrapped", async () => {
+  it("class constructor on plain object preserves new semantics", async () => {
     // Regression test for https://github.com/dahlia/optique/issues/407
-    // When a plain parsed object has a constructor-valued property alongside
-    // placeholder values, the constructor must not be wrapped — wrapping
-    // would break new.target, prototype, and instanceof semantics.
+    // Constructor functions on sanitized plain objects must support `new`
+    // with correct new.target, prototype, and instanceof semantics.
     class Ctor {
       value: string;
       constructor(value: string) {
@@ -10502,7 +10546,7 @@ describe("branch coverage: facade.ts edge cases", () => {
 
     let observedInstance: unknown = "not-set";
 
-    const contextKey = Symbol.for("@test/constructor-not-wrapped");
+    const contextKey = Symbol.for("@test/class-constructor");
     const dynamicContext: SourceContext = {
       id: contextKey,
       mode: "dynamic",
@@ -10530,6 +10574,50 @@ describe("branch coverage: facade.ts edge cases", () => {
 
     assert.ok(observedInstance instanceof Ctor);
     assert.equal((observedInstance as Ctor).value, "hello");
+  });
+
+  it("traditional function constructor on plain object preserves new semantics", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/407
+    // Traditional function constructors (not class syntax) must also
+    // support `new` with correct instanceof and prototype semantics.
+    function FnCtor(this: { value: string }, value: string) {
+      this.value = value;
+    }
+
+    let observedInstance: unknown = "not-set";
+    let observedInstanceOf = false;
+
+    const contextKey = Symbol.for("@test/function-constructor");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        const p = parsed as {
+          FnCtor: new (value: string) => { value: string };
+        };
+        observedInstance = new p.FnCtor("world");
+        observedInstanceOf = observedInstance instanceof FnCtor;
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (_value) => ({
+        FnCtor: FnCtor as unknown as new (value: string) => { value: string },
+        deferred: { [testPlaceholderKey]: true },
+      }),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.ok(observedInstanceOf);
+    assert.equal((observedInstance as { value: string }).value, "world");
   });
 
   it("frozen clone preserves property descriptor flags", async () => {
