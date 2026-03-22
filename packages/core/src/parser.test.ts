@@ -31,7 +31,7 @@ import {
 } from "@optique/core/primitives";
 import type { Usage } from "@optique/core/usage";
 import { choice, integer, string } from "@optique/core/valueparser";
-import { formatDocPage } from "@optique/core/doc";
+import { type DocEntry, formatDocPage } from "@optique/core/doc";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -1169,9 +1169,12 @@ describe("nested command help", () => {
       formatMessage(nestDocFragments.description!),
       "Nested command description.",
     );
-    const nestEntries = nestDocFragments.fragments
-      .flatMap((f) => f.type === "section" ? f.entries : [])
-      .filter((e) => e.term.type === "command");
+    const nestAllEntries: DocEntry[] = [];
+    for (const f of nestDocFragments.fragments) {
+      if (f.type === "entry") nestAllEntries.push(f);
+      else nestAllEntries.push(...f.entries);
+    }
+    const nestEntries = nestAllEntries.filter((e) => e.term.type === "command");
     assert.equal(nestEntries.length, 2);
     assert.ok(
       nestEntries.some((e) =>

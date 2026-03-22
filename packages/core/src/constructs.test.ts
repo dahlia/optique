@@ -63,6 +63,14 @@ import {
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+function collectEntries(
+  fragments: readonly DocFragment[],
+): DocEntry[] {
+  return fragments.flatMap((f) =>
+    f.type === "entry" ? [f] : (f as DocSection).entries
+  );
+}
+
 function assertErrorIncludes(error: Message, text: string): void {
   const formatted = formatMessage(error);
   assert.ok(formatted.includes(text));
@@ -422,15 +430,9 @@ describe("or", () => {
         kind: "unavailable" as const,
       });
 
-      // Should return sections with entries from all parsers
+      // Should return fragments with entries from all parsers
       assert.ok(fragments.fragments.length > 0);
-      const sections = fragments.fragments.filter((f) =>
-        f.type === "section"
-      ) as (DocFragment & { type: "section" })[];
-      assert.ok(sections.length > 0);
-
-      // Check that entries from multiple parsers are included
-      const allEntries = sections.flatMap((s) => s.entries);
+      const allEntries = collectEntries(fragments.fragments);
       assert.ok(allEntries.length >= 2);
     });
 
@@ -451,10 +453,8 @@ describe("or", () => {
 
       // Should return fragments from the matched parser
       assert.ok(fragments.fragments.length > 0);
-      const sections = fragments.fragments.filter((f) =>
-        f.type === "section"
-      ) as (DocFragment & { type: "section" })[];
-      assert.ok(sections.length > 0);
+      const allEntries = collectEntries(fragments.fragments);
+      assert.ok(allEntries.length > 0);
     });
 
     it("should not deduplicate matched branch fragments", () => {
@@ -502,10 +502,7 @@ describe("or", () => {
         } as unknown as Parameters<typeof orParser.getDocFragments>[0],
       );
 
-      const sections = fragments.fragments.filter((f) =>
-        f.type === "section"
-      ) as (DocFragment & { type: "section" })[];
-      const entries = sections.flatMap((s) => s.entries);
+      const entries = collectEntries(fragments.fragments);
 
       assert.ok(
         entries.some(
@@ -531,12 +528,7 @@ describe("or", () => {
       });
 
       assert.ok(fragments.fragments.length > 0);
-      const sections = fragments.fragments.filter((f) =>
-        f.type === "section"
-      ) as (DocFragment & { type: "section" })[];
-      assert.ok(sections.length > 0);
-
-      const allEntries = sections.flatMap((s) => s.entries);
+      const allEntries = collectEntries(fragments.fragments);
       // Should have entries from both option and argument parsers
       const hasOption = allEntries.some((e: DocEntry) =>
         e.term.type === "option"
@@ -558,10 +550,7 @@ describe("or", () => {
         kind: "unavailable" as const,
       });
 
-      const sections = fragments.fragments.filter((f) =>
-        f.type === "section"
-      ) as (DocFragment & { type: "section" })[];
-      const allEntries = sections.flatMap((s) => s.entries);
+      const allEntries = collectEntries(fragments.fragments);
 
       const verboseEntry = allEntries.find((e: DocEntry) =>
         e.term.type === "option" && e.term.names.includes("--verbose")
@@ -586,10 +575,7 @@ describe("or", () => {
         kind: "unavailable" as const,
       });
 
-      const sections = fragments.fragments.filter((f) =>
-        f.type === "section"
-      ) as (DocFragment & { type: "section" })[];
-      const allEntries = sections.flatMap((s) => s.entries);
+      const allEntries = collectEntries(fragments.fragments);
 
       // Should have entries from all three parsers
       assert.ok(allEntries.length >= 3);
@@ -636,10 +622,7 @@ describe("or", () => {
         kind: "unavailable" as const,
       });
 
-      const sections = fragments.fragments.filter((f) =>
-        f.type === "section"
-      ) as (DocFragment & { type: "section" })[];
-      const allEntries = sections.flatMap((s) => s.entries);
+      const allEntries = collectEntries(fragments.fragments);
       const dupEntries = allEntries.filter((e) =>
         e.term.type === "command" && e.term.name === "dup"
       );
@@ -660,10 +643,7 @@ describe("or", () => {
         kind: "unavailable" as const,
       });
 
-      const sections = fragments.fragments.filter((f) =>
-        f.type === "section"
-      ) as (DocFragment & { type: "section" })[];
-      const allEntries = sections.flatMap((s) => s.entries);
+      const allEntries = collectEntries(fragments.fragments);
       const xEntries = allEntries.filter((e) =>
         e.term.type === "option" &&
         e.term.names.some((n) => n === "--x")
@@ -685,10 +665,7 @@ describe("or", () => {
         kind: "unavailable" as const,
       });
 
-      const sections = fragments.fragments.filter((f) =>
-        f.type === "section"
-      ) as (DocFragment & { type: "section" })[];
-      const allEntries = sections.flatMap((s) => s.entries);
+      const allEntries = collectEntries(fragments.fragments);
       const verboseEntries = allEntries.filter((e) =>
         e.term.type === "option" &&
         e.term.names.some((n) => n === "--verbose")
@@ -710,10 +687,7 @@ describe("or", () => {
         kind: "unavailable" as const,
       });
 
-      const sections = fragments.fragments.filter((f) =>
-        f.type === "section"
-      ) as (DocFragment & { type: "section" })[];
-      const allEntries = sections.flatMap((s) => s.entries);
+      const allEntries = collectEntries(fragments.fragments);
       const xEntry = allEntries.find((e) =>
         e.term.type === "option" &&
         e.term.names.some((n) => n === "--x")
@@ -736,10 +710,7 @@ describe("or", () => {
         kind: "unavailable" as const,
       });
 
-      const sections = fragments.fragments.filter((f) =>
-        f.type === "section"
-      ) as (DocFragment & { type: "section" })[];
-      const allEntries = sections.flatMap((s) => s.entries);
+      const allEntries = collectEntries(fragments.fragments);
       assert.equal(allEntries.length, 2);
     });
 
@@ -753,10 +724,7 @@ describe("or", () => {
         kind: "unavailable" as const,
       });
 
-      const sections = fragments.fragments.filter((f) =>
-        f.type === "section"
-      ) as (DocFragment & { type: "section" })[];
-      const allEntries = sections.flatMap((s) => s.entries);
+      const allEntries = collectEntries(fragments.fragments);
       const xEntries = allEntries.filter((e) =>
         e.term.type === "option" &&
         e.term.names.some((n) => n === "--x")
@@ -778,10 +746,7 @@ describe("or", () => {
         kind: "unavailable" as const,
       });
 
-      const sections = fragments.fragments.filter((f) =>
-        f.type === "section"
-      ) as (DocFragment & { type: "section" })[];
-      const allEntries = sections.flatMap((s) => s.entries);
+      const allEntries = collectEntries(fragments.fragments);
       const xEntries = allEntries.filter((e) =>
         e.term.type === "option" &&
         e.term.names.some((n) => n === "--x")
@@ -806,10 +771,7 @@ describe("or", () => {
         kind: "unavailable" as const,
       });
 
-      const sections = fragments.fragments.filter((f) =>
-        f.type === "section"
-      ) as (DocFragment & { type: "section" })[];
-      const allEntries = sections.flatMap((s) => s.entries);
+      const allEntries = collectEntries(fragments.fragments);
       const argEntries = allEntries.filter((e) => e.term.type === "argument");
       // 2 from the first branch + 1 from the second: all 3 are kept
       assert.equal(

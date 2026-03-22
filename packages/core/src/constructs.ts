@@ -2418,24 +2418,7 @@ export function or(
       const matchedSuccessfully = state.kind === "available" &&
         state.state != null && state.state[1].success;
       if (!matchedSuccessfully) {
-        const deduped = deduplicateDocFragments(fragments);
-        const entries: DocEntry[] = [];
-        const sections: DocSection[] = [];
-        for (const fragment of deduped) {
-          if (fragment.type === "entry") {
-            entries.push(fragment);
-            continue;
-          }
-          if (fragment.title == null) {
-            entries.push(...fragment.entries);
-          } else {
-            sections.push(fragment);
-          }
-        }
-        fragments = [
-          ...sections.map<DocFragment>((s) => ({ ...s, type: "section" })),
-          { type: "section", entries },
-        ];
+        fragments = deduplicateDocFragments(fragments);
       }
       return {
         brief,
