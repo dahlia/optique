@@ -65,10 +65,12 @@ import { describe, it } from "node:test";
 
 function collectEntries(
   fragments: readonly DocFragment[],
-): DocEntry[] {
-  return fragments.flatMap((f) =>
-    f.type === "entry" ? [f] : (f as DocSection).entries
-  );
+): readonly DocEntry[] {
+  return fragments.flatMap((f) => {
+    if (f.type === "entry") return [f];
+    if (f.type === "section") return f.entries;
+    return [];
+  });
 }
 
 function assertErrorIncludes(error: Message, text: string): void {
