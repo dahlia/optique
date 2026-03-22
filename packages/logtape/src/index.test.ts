@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { parse, suggestSync } from "@optique/core/parser";
 import { object } from "@optique/core/constructs";
 import { runParser } from "@optique/core/facade";
@@ -687,6 +687,20 @@ describe("createConsoleSink()", () => {
 });
 
 describe("createSink()", () => {
+  it("should declare @logtape/file in deno.json imports", async () => {
+    const denoJson = JSON.parse(
+      await readFile(
+        new URL("../deno.json", import.meta.url),
+        "utf-8",
+      ),
+    );
+    assert.ok(
+      denoJson.imports?.["@logtape/file"],
+      "deno.json must declare @logtape/file in imports for Deno to resolve " +
+        "the dynamic import in createSink()",
+    );
+  });
+
   it("should create console sink for console output", async () => {
     const sink = await createSink({ type: "console" }, { stream: "stdout" });
     assert.equal(typeof sink, "function");

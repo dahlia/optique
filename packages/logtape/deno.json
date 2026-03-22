@@ -5,6 +5,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "imports": {
+    "@logtape/file": "jsr:@logtape/file@^2.0.4"
+  },
   "exclude": [
     "dist/",
     "node_modules",
