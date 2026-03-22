@@ -975,7 +975,7 @@ describe("zod()", () => {
       ]);
     });
 
-    it("should respect custom function zodError for invalid boolean literals", () => {
+    it("should respect custom function zodError for invalid boolean literals (non-coerced)", () => {
       const parser = zod(z.boolean(), {
         errors: {
           zodError: (_error, input) => message`Not a boolean: ${input}.`,
@@ -986,6 +986,21 @@ describe("zod()", () => {
       assert.deepEqual(result.error, [
         { type: "text", text: "Not a boolean: " },
         { type: "value", value: "nope" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should respect custom function zodError for invalid boolean literals (coerced)", () => {
+      const parser = zod(z.coerce.boolean(), {
+        errors: {
+          zodError: (_error, input) => message`Bad value: ${input}.`,
+        },
+      });
+      const result = parser.parse("maybe");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Bad value: " },
+        { type: "value", value: "maybe" },
         { type: "text", text: "." },
       ]);
     });
