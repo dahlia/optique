@@ -172,17 +172,23 @@ function containsAsyncSchema(
   }
 
   // Check pipeline actions (may themselves be schemas, e.g., v.transform).
-  // Schema-typed pipeline actions are reachable (the pipeline feeds
-  // transformed values into them), so enable container checks.
+  // After a transform action, the value type may have changed, so container
+  // members inside subsequent schema actions become reachable.  Before any
+  // transform, the input is still a string and container schemas will reject.
   if (s.pipe && Array.isArray(s.pipe)) {
+    let seenTransform = checkContainers;
     for (const action of s.pipe) {
       if ((action as { async?: boolean }).async) return true;
+      const aType = (action as { type?: string }).type;
+      if (aType === "transform" || aType === "raw_transform") {
+        seenTransform = true;
+      }
       if (
         (action as { kind?: string }).kind === "schema" &&
         containsAsyncSchema(
           action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
           visited,
-          true,
+          seenTransform,
         )
       ) {
         return true;
