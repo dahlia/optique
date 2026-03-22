@@ -1018,14 +1018,57 @@ describe("zod()", () => {
       assert.equal(disabledResult.value, false);
     });
 
-    it("should throw TypeError for async boolean refinements on invalid input", () => {
+    it("should throw TypeError for async boolean schemas on valid input", () => {
       // deno-lint-ignore require-await
       const asyncSchema = z.coerce.boolean().refine(async (v) => v === true);
-      // Async schemas should be detected at construction time
+      const parser = zod(asyncSchema as never);
+      // Valid boolean literals trigger async detection via doSafeParse
       assert.throws(
-        () => zod(asyncSchema as never),
+        () => parser.parse("true"),
         { name: "TypeError" },
       );
+    });
+
+    it("should not execute transforms at construction time", () => {
+      let transformCalled = false;
+      zod(
+        z.coerce.boolean().transform((v) => {
+          transformCalled = true;
+          return !v;
+        }),
+      );
+      assert.ok(!transformCalled);
+    });
+
+    it("should not execute refinements at construction time", () => {
+      let refineCalled = false;
+      zod(
+        z.coerce.boolean().refine((v) => {
+          refineCalled = true;
+          return v;
+        }),
+      );
+      assert.ok(!refineCalled);
+    });
+
+    it("should pass a real ZodError to function zodError callbacks", () => {
+      const parser = zod(z.boolean(), {
+        errors: {
+          zodError: (error, input) => {
+            // Callback should receive a real ZodError with issues
+            assert.ok(Array.isArray(error.issues));
+            assert.ok(error.issues.length > 0);
+            return message`Custom: ${input}.`;
+          },
+        },
+      });
+      const result = parser.parse("nope");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Custom: " },
+        { type: "value", value: "nope" },
+        { type: "text", text: "." },
+      ]);
     });
 
     it("should work with z.coerce.boolean().transform()", () => {
