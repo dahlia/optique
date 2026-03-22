@@ -257,8 +257,6 @@ export function createConsoleSink(options: ConsoleSinkOptions = {}): Sink {
  *
  * @param output The log output destination.
  * @param consoleSinkOptions Options for console sink (only used when output is console).
- * @param importFileSinkModule An optional function to override the dynamic
- *   import of `@logtape/file`.  Intended for testing only.
  * @returns A promise that resolves to a {@link Sink}.
  * @throws {Error} If file output is requested but `@logtape/file` is not
  *   installed.
@@ -282,9 +280,6 @@ export function createConsoleSink(options: ConsoleSinkOptions = {}): Sink {
 export async function createSink(
   output: LogOutput,
   consoleSinkOptions: ConsoleSinkOptions = {},
-  importFileSinkModule: () => Promise<
-    { getFileSink: (path: string) => Sink }
-  > = () => import("@logtape/file"),
 ): Promise<Sink> {
   if (output.type === "console") {
     return createConsoleSink(consoleSinkOptions);
@@ -292,7 +287,7 @@ export async function createSink(
 
   let getFileSink: (path: string) => Sink;
   try {
-    ({ getFileSink } = await importFileSinkModule());
+    ({ getFileSink } = await import("@logtape/file"));
   } catch (e) {
     throw new Error(
       `File sink requires @logtape/file package. Install it with:\n` +
