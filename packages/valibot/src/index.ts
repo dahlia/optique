@@ -68,6 +68,9 @@ interface ValibotSchemaInternal {
   readonly key?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
   readonly value?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
   readonly rest?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
+  readonly getter?: (
+    input?: unknown,
+  ) => v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
 }
 
 /**
@@ -214,9 +217,17 @@ function containsAsyncSchema(
     }
   }
 
-  // NOTE: v.lazy() schemas are NOT inspected here.  The getter receives
-  // the actual parse input, so the returned schema can vary per call.
-  // Static analysis at construction time would be unreliable.
+  // Best-effort check for v.lazy(): call the getter with no arguments.
+  // Constant getters (the common case) will return the inner schema;
+  // input-dependent getters may throw, which we safely ignore.
+  if (typeof s.getter === "function") {
+    try {
+      const inner = s.getter();
+      if (containsAsyncSchema(inner)) return true;
+    } catch {
+      // Input-dependent getter — cannot determine async status statically.
+    }
+  }
 
   return false;
 }

@@ -73,14 +73,13 @@ interface ZodSchemaInternal {
 function isZodAsyncError(error: Error): boolean {
   // Zod v4: dedicated error class
   if (error.constructor.name === "$ZodAsyncError") return true;
-  // Zod v3: explicit async-related messages
+  // Zod v3: exact error messages (not prefix-matched, to avoid masking
+  // user errors that happen to start with similar text)
   if (
-    error.message.startsWith(
-      "Async refinement encountered during synchronous parse operation",
-    ) ||
-    error.message.startsWith(
-      "Asynchronous transform encountered during synchronous parse operation",
-    )
+    error.message ===
+      "Async refinement encountered during synchronous parse operation. Use .parseAsync instead." ||
+    error.message ===
+      "Asynchronous transform encountered during synchronous parse operation. Use .parseAsync instead."
   ) {
     return true;
   }
