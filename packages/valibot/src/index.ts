@@ -71,6 +71,22 @@ interface ValibotSchemaInternal {
 }
 
 /**
+ * Valibot transformation action types that are known to be non-rejecting and
+ * type-preserving (they transform a string into a string without ever adding
+ * issues).  All other transformation types (transform, raw_transform,
+ * parse_json, to_number, to_boolean, etc.) may reject input or change the
+ * value type.
+ */
+const SAFE_TRANSFORMATION_TYPES: ReadonlySet<string> = new Set([
+  "trim",
+  "to_lower_case",
+  "to_upper_case",
+  "normalize",
+  "to_min_value",
+  "to_max_value",
+]);
+
+/**
  * Checks whether a schema synchronously accepts every possible input value.
  * This includes:
  * - `v.unknown()`, `v.any()` (accept everything regardless of input type)
@@ -98,7 +114,7 @@ function isCatchAllSchema(
     return s.pipe.slice(1).every((action) => {
       const a = action as { kind?: string; type?: string };
       return a.kind !== "validation" && a.kind !== "schema" &&
-        a.type !== "raw_transform" && a.type !== "transform";
+        SAFE_TRANSFORMATION_TYPES.has(a.type ?? "");
     });
   }
   // String-based catch-alls only valid before transforms
@@ -107,7 +123,7 @@ function isCatchAllSchema(
     return s.pipe.slice(1).every((action) => {
       const a = action as { kind?: string; type?: string };
       return a.kind !== "validation" && a.kind !== "schema" &&
-        a.type !== "raw_transform" && a.type !== "transform";
+        SAFE_TRANSFORMATION_TYPES.has(a.type ?? "");
     });
   }
   // Unwrap any schema with a wrapped field (optional, nullable, nullish,
@@ -126,6 +142,10 @@ function isCatchAllSchema(
  * on the top-level `async` property is not sufficient.
  *
  * Known limitations:
+ * - `v.variant()` arms are treated like union arms, but the catch-all
+ *   detection does not recognize object-shaped variant arms.  Variant
+ *   schemas with async arms after a broad discriminator will be
+ *   conservatively rejected.
  * - `v.lazy()` schemas are not inspected because the getter depends on
  *   actual parse input, making static analysis unreliable.
  *
@@ -187,8 +207,11 @@ function containsAsyncSchema(
     let seenTransform = afterTransform;
     for (const action of s.pipe) {
       if ((action as { async?: boolean }).async) return true;
-      const aType = (action as { type?: string }).type;
-      if (aType === "transform" || aType === "raw_transform") {
+      const a = action as { kind?: string; type?: string };
+      if (
+        a.kind === "transformation" &&
+        !SAFE_TRANSFORMATION_TYPES.has(a.type ?? "")
+      ) {
         seenTransform = true;
       }
       if (
