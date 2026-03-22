@@ -164,7 +164,7 @@ function stripPlaceholderValues<T>(
     return cached as T;
   }
   if (Array.isArray(value)) {
-    if (!alwaysProxyNonPlain && !containsPlaceholderValues(value)) {
+    if (!containsPlaceholderValues(value)) {
       return value;
     }
     const clone = createArrayCloneLike(value);
@@ -176,7 +176,7 @@ function stripPlaceholderValues<T>(
     return clone as T;
   }
   if (value instanceof Set) {
-    if (!alwaysProxyNonPlain && !containsPlaceholderValues(value)) {
+    if (!containsPlaceholderValues(value)) {
       return value;
     }
     const clone = createSetCloneLike(value);
@@ -190,7 +190,7 @@ function stripPlaceholderValues<T>(
     return clone as T;
   }
   if (value instanceof Map) {
-    if (!alwaysProxyNonPlain && !containsPlaceholderValues(value)) {
+    if (!containsPlaceholderValues(value)) {
       return value;
     }
     const clone = createMapCloneLike(value);
@@ -678,8 +678,55 @@ function prepareParsedForContexts(
         typeof item === "object" &&
         !isPlainObject(item as object),
     );
-    if (!hasNonPlainElements && !containsPlaceholderValues(parsed)) {
-      return parsed;
+    if (!containsPlaceholderValues(parsed)) {
+      if (!hasNonPlainElements) {
+        return parsed;
+      }
+      // The collection itself has no visible placeholders, but it contains
+      // non-plain elements that might hide them in private fields.  Clone
+      // the collection and proxy only the non-plain entries — clean plain
+      // values pass through unchanged to preserve identity.
+      const seen = new WeakMap<object, unknown>();
+      if (Array.isArray(parsed)) {
+        const clone = createArrayCloneLike(parsed);
+        seen.set(parsed, clone);
+        for (let i = 0; i < parsed.length; i++) {
+          const item = parsed[i];
+          clone[i] = item != null && typeof item === "object" &&
+              !isPlainObject(item as object)
+            ? createSanitizedNonPlainView(item as object, seen)
+            : item;
+        }
+        return clone as typeof parsed;
+      }
+      if (parsed instanceof Set) {
+        const clone = createSetCloneLike(parsed);
+        seen.set(parsed, clone);
+        for (const item of parsed) {
+          clone.add(
+            item != null && typeof item === "object" &&
+              !isPlainObject(item as object)
+              ? createSanitizedNonPlainView(item as object, seen)
+              : item,
+          );
+        }
+        return clone as typeof parsed;
+      }
+      // Map
+      const clone = createMapCloneLike(parsed);
+      seen.set(parsed, clone);
+      for (const [key, val] of parsed) {
+        const k = key != null && typeof key === "object" &&
+            !isPlainObject(key as object)
+          ? createSanitizedNonPlainView(key as object, seen)
+          : key;
+        const v = val != null && typeof val === "object" &&
+            !isPlainObject(val as object)
+          ? createSanitizedNonPlainView(val as object, seen)
+          : val;
+        clone.set(k, v);
+      }
+      return clone as typeof parsed;
     }
     return stripPlaceholderValues(
       parsed,
