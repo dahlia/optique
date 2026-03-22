@@ -234,7 +234,7 @@ export function createConsoleSink(options: ConsoleSinkOptions = {}): Sink {
     const formattedMessage = messageParts.join("");
 
     // Format the log line
-    const timestamp = record.timestamp
+    const timestamp = record.timestamp != null
       ? new Date(record.timestamp).toISOString()
       : new Date().toISOString();
     const category = record.category.join(".");
