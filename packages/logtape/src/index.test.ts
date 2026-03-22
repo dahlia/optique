@@ -442,6 +442,16 @@ describe("logOutput()", () => {
     assert.equal(result, "shown");
     assert.ok(helpOutput.includes("/var/log/optique.log"));
   });
+
+  it("should throw TypeError for empty metavar", () => {
+    assert.throws(
+      () => logOutput({ metavar: "" as never }),
+      {
+        name: "TypeError",
+        message: "Expected a non-empty string.",
+      },
+    );
+  });
 });
 
 describe("loggingOptions()", () => {
