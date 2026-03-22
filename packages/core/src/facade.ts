@@ -527,30 +527,33 @@ function createSanitizedNonPlainView<T extends object>(
           break;
         }
       }
-      // Invoke the getter on the real target with temporarily sanitized
-      // own properties via callMethodOnSanitizedTarget().  This ensures
-      // computed getters (e.g. `get hasSecret() { return this.secret != null }`)
-      // read sanitized public fields while still being able to access
-      // private fields (which require the real instance as `this`).
-      // The synthetic function uses `thisArg` as the Reflect.get receiver:
-      //  - Normal path: target (with own properties temporarily sanitized)
-      //  - Frozen/sealed fallback: the caller's receiver, preserving
       // Invoke the getter via callMethodOnSanitizedTarget so that own
-      // properties are temporarily sanitized and the getter runs with the
-      // real target as receiver (allowing private field access).  The
-      // frozen/sealed fallback uses the caller's receiver to preserve
-      // standard Reflect.get semantics.
-      const result = callMethodOnSanitizedTarget(
-        {
-          apply: (thisArg: unknown) =>
-            Reflect.get(target, key, thisArg ?? target),
-        },
-        receiver,
-        target,
-        [],
-        stripPlaceholderValues,
-        seen,
-      );
+      // properties are temporarily sanitized.  The synthetic function maps
+      // thisArg back to the original receiver so standard Reflect.get
+      // receiver semantics are preserved.  Private field access through
+      // the proxy receiver throws TypeError — caught and returned as
+      // undefined (the sanitized placeholder value).
+      let result: unknown;
+      try {
+        result = callMethodOnSanitizedTarget(
+          {
+            apply: (thisArg: unknown) =>
+              Reflect.get(
+                target,
+                key,
+                thisArg === target ? receiver : (thisArg ?? target),
+              ),
+          },
+          receiver,
+          target,
+          [],
+          stripPlaceholderValues,
+          seen,
+        );
+      } catch (e) {
+        if (e instanceof TypeError) return undefined;
+        throw e;
+      }
       if (typeof result === "function") {
         // Class constructors are returned unwrapped since the wrapper
         // would break new.target and prototype chain semantics.
@@ -677,6 +680,7 @@ function sanitizeForPhaseTwo(
     for (const item of value) {
       clone.add(sanitizeForPhaseTwo(item, seen));
     }
+    copySanitizedOwnProperties(value, clone, seen);
     return clone;
   }
   if (value instanceof Map) {
@@ -689,6 +693,7 @@ function sanitizeForPhaseTwo(
         sanitizeForPhaseTwo(v, seen),
       );
     }
+    copySanitizedOwnProperties(value, clone, seen);
     return clone;
   }
   return stripPlaceholderValues(value, seen, true);

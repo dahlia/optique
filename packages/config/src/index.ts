@@ -321,17 +321,27 @@ function createSanitizedNonPlainView<T extends object>(
           break;
         }
       }
-      const result = callMethodOnSanitizedTarget(
-        {
-          apply: (thisArg: unknown) =>
-            Reflect.get(target, key, thisArg ?? target),
-        },
-        receiver,
-        target,
-        [],
-        stripDeferredPromptValues,
-        seen,
-      );
+      let result: unknown;
+      try {
+        result = callMethodOnSanitizedTarget(
+          {
+            apply: (thisArg: unknown) =>
+              Reflect.get(
+                target,
+                key,
+                thisArg === target ? receiver : (thisArg ?? target),
+              ),
+          },
+          receiver,
+          target,
+          [],
+          stripDeferredPromptValues,
+          seen,
+        );
+      } catch (e) {
+        if (e instanceof TypeError) return undefined;
+        throw e;
+      }
       if (typeof result === "function") {
         if (/^class[\s{]/.test(Function.prototype.toString.call(result))) {
           return result;
@@ -437,6 +447,7 @@ function sanitizeReturnForPhaseTwo(
     for (const item of value) {
       clone.add(sanitizeReturnForPhaseTwo(item, seen));
     }
+    copySanitizedOwnProperties(value, clone, seen);
     return clone;
   }
   if (value instanceof Map) {
@@ -449,6 +460,7 @@ function sanitizeReturnForPhaseTwo(
         sanitizeReturnForPhaseTwo(v, seen),
       );
     }
+    copySanitizedOwnProperties(value, clone, seen);
     return clone;
   }
   return stripDeferredPromptValues(value, seen);
