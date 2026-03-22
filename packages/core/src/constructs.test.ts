@@ -1906,6 +1906,31 @@ describe("longestMatch()", () => {
     );
   });
 
+  it("should not deduplicate matched branch fragments", () => {
+    const branch = object({
+      a: option("-v", "--verbose"),
+      b: option("-v", "--verbose"),
+    }, { allowDuplicates: true });
+    const parser = longestMatch(branch, option("--other"));
+
+    const result = parseSync(parser, ["-v"]);
+    assert.ok(result.success);
+
+    const page = getDocPage(parser, ["-v"]);
+    assert.ok(page);
+    const verboseEntries = page.sections
+      .flatMap((s) => s.entries)
+      .filter((e) =>
+        e.term.type === "option" &&
+        e.term.names.some((n) => n === "--verbose")
+      );
+    assert.equal(
+      verboseEntries.length,
+      2,
+      "matched branch should preserve its own duplicate entries",
+    );
+  });
+
   it("should handle priority correctly", () => {
     const lowPriorityParser = object({
       type: constant("low"),
