@@ -884,5 +884,22 @@ describe("valibot()", () => {
       const result = parser.parse('"hello"');
       assert.ok(result.success);
     });
+
+    it("should detect async in shared schema reused after transform", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // Shared schema node used in both a direct (unreachable) position
+      // and a post-transform (reachable) position.  The second visit
+      // must not be skipped by the cycle detector.
+      const shared = v.object({ a: asyncInner } as never);
+      const asyncSchema = v.union([
+        shared,
+        v.pipe(v.string(), v.transform(JSON.parse), shared),
+      ] as never);
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
   });
 });

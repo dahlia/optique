@@ -135,11 +135,15 @@ function isCatchAllSchema(
  */
 function containsAsyncSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  visited: WeakSet<object> = new WeakSet(),
+  visited: WeakMap<object, boolean> = new WeakMap(),
   afterTransform = false,
 ): boolean {
-  if (visited.has(schema)) return false;
-  visited.add(schema);
+  // Cycle/dedup: skip if already visited at the same or deeper level.
+  // A visit with afterTransform=true subsumes afterTransform=false,
+  // but not vice versa (the afterTransform=true path checks containers).
+  const prev = visited.get(schema);
+  if (prev !== undefined && (prev || !afterTransform)) return false;
+  visited.set(schema, (prev ?? false) || afterTransform);
 
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return true;
