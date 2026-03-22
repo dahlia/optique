@@ -63,10 +63,14 @@ export function validateOptionNames(
           `"${escapeControlChars(name)}".`,
       );
     }
-    if (!/^(--[^-]|[-/+][^-])/.test(name)) {
+    if (!/^(--|[-/+])/.test(name)) {
       throw new TypeError(
-        `${label} name must start with "--", "-", "/", or "+", ` +
-          `followed by at least one character: "${name}".`,
+        `${label} name must start with "--", "-", "/", or "+": "${name}".`,
+      );
+    }
+    if (/^(--|-|\/|\+)$/.test(name)) {
+      throw new TypeError(
+        `${label} name must not be a bare prefix: "${name}".`,
       );
     }
   }

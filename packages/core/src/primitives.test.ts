@@ -4701,7 +4701,7 @@ describe("hidden option", () => {
           () => option(bare as OptionName, string()),
           {
             name: "TypeError",
-            message: /Option name must start with/,
+            message: /Option name must not be a bare prefix/,
           },
         );
       }
@@ -4842,7 +4842,7 @@ describe("hidden option", () => {
           () => flag(bare as OptionName),
           {
             name: "TypeError",
-            message: /Flag name must start with/,
+            message: /Flag name must not be a bare prefix/,
           },
         );
       }
