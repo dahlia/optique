@@ -765,8 +765,9 @@ To be released.
      -  `cloneDocEntry()` in `@optique/core/doc`
      -  `cloneMessageTerm()` and `cloneMessage()` in `@optique/core/message`
 
-    These are used internally by `getDocPage()` to isolate returned pages
-    from parser-owned state, and are also available as public APIs.
+    These are used internally by `getDocPage()` to isolate returned
+    documentation pages from parser-owned state, and are also available
+    as public APIs for consumers who need to deep-copy these structures.
     [[#500], [#697]]
 
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
