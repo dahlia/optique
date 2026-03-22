@@ -144,6 +144,25 @@ describe("or", () => {
     );
   });
 
+  it("should throw TypeError for partial parser-like object", () => {
+    assert.throws(
+      () =>
+        or(
+          {
+            $mode: "sync",
+            usage: [],
+            parse() {},
+            getDocFragments() {},
+          } as never,
+          option("-a"),
+        ),
+      {
+        name: "TypeError",
+        message: "or() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
   it("should try parsers in order", () => {
     const parser1 = option("-a");
     const parser2 = option("-b");

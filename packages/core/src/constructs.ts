@@ -408,13 +408,18 @@ function assertParsers(
 ): void {
   for (let i = 0; i < parsers.length; i++) {
     const p = parsers[i];
+    const r = p as Record<string, unknown>;
     if (
       p == null ||
       typeof p !== "object" ||
       !("$mode" in p) ||
       !("usage" in p) ||
-      typeof (p as Record<string, unknown>).parse !== "function" ||
-      typeof (p as Record<string, unknown>).getDocFragments !== "function"
+      !("priority" in p) ||
+      !("initialState" in p) ||
+      typeof r.parse !== "function" ||
+      typeof r.complete !== "function" ||
+      typeof r.suggest !== "function" ||
+      typeof r.getDocFragments !== "function"
     ) {
       throw new TypeError(
         `${callerName} argument at index ${i} is not a valid Parser.`,
