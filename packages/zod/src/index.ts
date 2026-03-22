@@ -638,8 +638,9 @@ export function zod<T>(
    * Handles a failed boolean literal pre-conversion, respecting custom
    * `zodError` overrides when provided.  For function-style overrides,
    * passes the raw input through `safeParse()` to obtain a real
-   * `ZodError`; if `safeParse()` succeeds (coerced boolean case), falls
-   * back to the built-in literal error.
+   * `ZodError`; if `safeParse()` succeeds (coerced boolean case),
+   * constructs a synthetic error with a compatible shape so the
+   * callback is always invoked.
    *
    * Also re-throws async schema errors so that unsupported schemas are
    * detected consistently regardless of the input value.
@@ -669,16 +670,27 @@ export function zod<T>(
       if (typeof options.errors.zodError !== "function") {
         return { success: false, error: options.errors.zodError };
       }
-      // For non-coerced z.boolean(), safeParse(string) fails with a
+      // For non-coerced z.boolean(), safeParse(string) gives a real
       // ZodError we can forward.  For z.coerce.boolean(), safeParse
-      // succeeds (JS truthiness), so we fall back to the built-in
-      // error.
-      if (probeResult && !probeResult.success) {
-        return {
-          success: false,
-          error: options.errors.zodError(probeResult.error, rawInput),
-        };
-      }
+      // succeeds (JS truthiness), so we construct a synthetic error
+      // with a compatible shape so the callback is always invoked.
+      const zodError = probeResult && !probeResult.success
+        ? probeResult.error
+        : Object.assign(
+          new Error(`Invalid Boolean value: ${rawInput}`),
+          {
+            issues: [{
+              code: "custom" as const,
+              message: `Invalid Boolean value: ${rawInput}`,
+              path: [] as PropertyKey[],
+            }],
+            name: "ZodError",
+          },
+        ) as unknown as z.ZodError;
+      return {
+        success: false,
+        error: options.errors.zodError(zodError, rawInput),
+      };
     }
     return boolResult as ValueParserResult<T>;
   }
