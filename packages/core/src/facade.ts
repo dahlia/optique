@@ -228,21 +228,14 @@ function stripPlaceholderValues<T>(
       continue;
     }
     if ("value" in descriptor) {
-      // Constructable functions (classes, traditional constructors) are
-      // left unwrapped to preserve static-method `this` binding and
-      // constructor identity.  Non-constructable functions (arrow
-      // functions, method shorthand, bound callbacks) are wrapped so
-      // that closures capturing placeholder values have their return
-      // values sanitized.  Bound constructors lose their .prototype
-      // and are wrapped; the wrapper delegates `new` via new.target.
+      // All function-valued properties are wrapped so that closures
+      // capturing placeholder values have their return values sanitized.
+      // The wrapper delegates `new` via Reflect.construct and copies
+      // all own properties (.prototype, .name, .length, statics) from
+      // the original, making it transparent for construction,
+      // instanceof, and static method access.
       // See: https://github.com/dahlia/optique/issues/407
-      const fnVal = descriptor.value;
-      const fnProto = typeof fnVal === "function"
-        ? (fnVal as { prototype?: unknown }).prototype
-        : undefined;
-      const isConstructable = typeof fnVal === "function" &&
-        fnProto != null && typeof fnProto === "object";
-      if (typeof fnVal === "function" && !isConstructable) {
+      if (typeof descriptor.value === "function") {
         const fn = descriptor.value as {
           apply(thisArg: unknown, args: unknown[]): unknown;
         };
@@ -260,15 +253,15 @@ function stripPlaceholderValues<T>(
             );
           }
           const result = fn.apply(this, args);
+          // Use a fresh seen map per call so mutable return values
+          // are re-sanitized correctly on each invocation.
           if (result instanceof Promise) {
             return (result as Promise<unknown>).then(
-              (v) => stripPlaceholderValues(v, seen),
+              (v) => stripPlaceholderValues(v),
             );
           }
-          return stripPlaceholderValues(result, seen);
+          return stripPlaceholderValues(result);
         };
-        // Copy own properties (.prototype, .name, .length, statics)
-        // from the original so instanceof and identity checks work.
         for (const fk of Reflect.ownKeys(fn as object)) {
           const fd = Object.getOwnPropertyDescriptor(fn, fk);
           if (fd == null) continue;
@@ -276,10 +269,6 @@ function stripPlaceholderValues<T>(
             Object.defineProperty(wrapper, fk, fd);
           } catch { /* best-effort */ }
         }
-        // If the original function doesn't have .prototype (bound
-        // functions, arrow functions), remove the wrapper's default
-        // .prototype so instanceof checks against the wrapper don't
-        // produce false negatives for the constructed instance.
         if (
           !Object.prototype.hasOwnProperty.call(fn, "prototype")
         ) {

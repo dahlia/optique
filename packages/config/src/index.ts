@@ -476,14 +476,7 @@ function stripDeferredPromptValues<T>(
       continue;
     }
     if ("value" in descriptor) {
-      const fnVal = descriptor.value;
-      const fnProto = typeof fnVal === "function"
-        ? (fnVal as { prototype?: unknown }).prototype
-        : undefined;
-      const isConstructable = typeof fnVal === "function" &&
-        fnProto != null && typeof fnProto === "object";
-      if (typeof fnVal === "function" && !isConstructable) {
-        // See: https://github.com/dahlia/optique/issues/407
+      if (typeof descriptor.value === "function") {
         const fn = descriptor.value as {
           apply(thisArg: unknown, args: unknown[]): unknown;
         };
@@ -503,10 +496,10 @@ function stripDeferredPromptValues<T>(
           const result = fn.apply(this, args);
           if (result instanceof Promise) {
             return (result as Promise<unknown>).then(
-              (v) => stripDeferredPromptValues(v, seen),
+              (v) => stripDeferredPromptValues(v),
             );
           }
-          return stripDeferredPromptValues(result, seen);
+          return stripDeferredPromptValues(result);
         };
         for (const fk of Reflect.ownKeys(fn as object)) {
           const fd = Object.getOwnPropertyDescriptor(fn, fk);
