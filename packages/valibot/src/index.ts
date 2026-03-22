@@ -117,7 +117,7 @@ function isCatchAllSchema(
   };
   if (s.async) return false;
   // v.fallback() always succeeds (returns fallback value on failure)
-  if (s.fallback !== undefined) return true;
+  if ("fallback" in s) return true;
   // v.unknown() and v.any() accept every value of any type
   if (s.type === "unknown" || s.type === "any") {
     if (!s.pipe) return true;
@@ -204,12 +204,22 @@ function containsAsyncSchema(
   // reliable; string catch-alls are not trusted since the value may no
   // longer be a string.
   if (s.options && Array.isArray(s.options)) {
-    const isUnionLike = s.type === "union" || s.type === "variant";
-    if (isUnionLike) {
+    if (s.type === "union") {
       for (const option of s.options) {
         if (typeof option !== "object" || option == null) continue;
         if (isCatchAllSchema(option, afterTransform)) break;
         if (containsAsyncSchema(option, visited, afterTransform)) return true;
+      }
+    } else if (s.type === "variant") {
+      // Variant schemas only parse objects, so at top level (before
+      // transform) string input fails the outer type check and arms
+      // are unreachable.  Only inspect arms after a transform.
+      if (afterTransform) {
+        for (const option of s.options) {
+          if (typeof option === "object" && option != null) {
+            if (containsAsyncSchema(option, visited, true)) return true;
+          }
+        }
       }
     } else {
       for (const option of s.options) {
