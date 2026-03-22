@@ -86,6 +86,9 @@ const SAFE_TRANSFORMATION_TYPES: ReadonlySet<string> = new Set([
   "to_max_value",
   "trim_start",
   "trim_end",
+  "readonly",
+  "brand",
+  "flavor",
 ]);
 
 /**
@@ -257,6 +260,22 @@ function containsAsyncSchema(
     }
     if (s.value && containsAsyncSchema(s.value, visited, true)) return true;
     if (s.rest && containsAsyncSchema(s.rest, visited, true)) return true;
+    // v.promise() stores its inner schema in the overloaded `message` field
+    if (s.type === "promise") {
+      const promiseInner =
+        (schema as unknown as Record<string, unknown>).message;
+      if (
+        typeof promiseInner === "object" && promiseInner != null &&
+        "kind" in promiseInner &&
+        containsAsyncSchema(
+          promiseInner as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+          visited,
+          true,
+        )
+      ) {
+        return true;
+      }
+    }
   }
 
   // NOTE: v.lazy() schemas are NOT inspected.  The getter receives the
