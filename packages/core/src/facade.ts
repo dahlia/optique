@@ -228,15 +228,19 @@ function stripPlaceholderValues<T>(
       continue;
     }
     if ("value" in descriptor) {
-      // Function-valued properties are wrapped via Proxy so that closures
+      // Non-constructable function properties (arrow functions, method
+      // shorthand, bound callbacks) are wrapped via Proxy so that closures
       // capturing placeholder values have their return values sanitized.
-      // Using a Proxy preserves the original function's observable shape
-      // (.prototype presence, own properties, prototype chain, name,
-      // length) without manual copying.  Class constructors are left
-      // unwrapped to preserve static-method `this` binding.
+      // Constructable functions (classes, traditional constructors with
+      // .prototype) are left unwrapped to preserve constructor identity,
+      // static-method `this` binding, and prototype.constructor semantics.
       // See: https://github.com/dahlia/optique/issues/407
+      const fnProto = typeof descriptor.value === "function"
+        ? (descriptor.value as { prototype?: unknown }).prototype
+        : undefined;
       if (
         typeof descriptor.value === "function" &&
+        !(fnProto != null && typeof fnProto === "object") &&
         !/^class[\s{]/.test(
           Function.prototype.toString.call(descriptor.value),
         )

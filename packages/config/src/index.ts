@@ -462,8 +462,12 @@ function stripDeferredPromptValues<T>(
       continue;
     }
     if ("value" in descriptor) {
+      const cfnProto = typeof descriptor.value === "function"
+        ? (descriptor.value as { prototype?: unknown }).prototype
+        : undefined;
       if (
         typeof descriptor.value === "function" &&
+        !(cfnProto != null && typeof cfnProto === "object") &&
         !/^class[\s{]/.test(
           Function.prototype.toString.call(descriptor.value),
         )
