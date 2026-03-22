@@ -1320,14 +1320,20 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `record.timestamp` treated the valid Unix epoch timestamp `0` as
     absent.  [[#311], [#705]]
 
+ -  Fixed `createConsoleSink()` silently treating invalid `stream` and
+    `streamResolver` return values as stdout.  Invalid values now throw
+    a `TypeError`.  [[#379], [#707]]
+
 [#292]: https://github.com/dahlia/optique/issues/292
 [#299]: https://github.com/dahlia/optique/issues/299
 [#311]: https://github.com/dahlia/optique/issues/311
 [#329]: https://github.com/dahlia/optique/issues/329
+[#379]: https://github.com/dahlia/optique/issues/379
 [#699]: https://github.com/dahlia/optique/pull/699
 [#702]: https://github.com/dahlia/optique/pull/702
 [#703]: https://github.com/dahlia/optique/pull/703
 [#705]: https://github.com/dahlia/optique/pull/705
+[#707]: https://github.com/dahlia/optique/pull/707
 
 ### @optique/temporal
 
