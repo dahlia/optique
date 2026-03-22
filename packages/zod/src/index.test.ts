@@ -1005,6 +1005,22 @@ describe("zod()", () => {
       ]);
     });
 
+    it("should pass a ZodError with flatten/format to coerced boolean callbacks", () => {
+      const parser = zod(z.coerce.boolean(), {
+        errors: {
+          zodError: (error, input) => {
+            // Must support standard ZodError API
+            assert.ok(typeof error.flatten === "function");
+            assert.ok(typeof error.format === "function");
+            assert.ok(Array.isArray(error.issues));
+            return message`Custom: ${input}.`;
+          },
+        },
+      });
+      const result = parser.parse("nope");
+      assert.ok(!result.success);
+    });
+
     it("should not interfere with z.preprocess() boolean schemas", () => {
       const parser = zod(
         z.preprocess((v) => v === "enabled", z.boolean()),
@@ -1018,13 +1034,17 @@ describe("zod()", () => {
       assert.equal(disabledResult.value, false);
     });
 
-    it("should throw TypeError for async boolean schemas on valid input", () => {
+    it("should throw TypeError for async boolean schemas on any input", () => {
       // deno-lint-ignore require-await
       const asyncSchema = z.coerce.boolean().refine(async (v) => v === true);
       const parser = zod(asyncSchema as never);
-      // Valid boolean literals trigger async detection via doSafeParse
+      // Both valid and invalid boolean literals should throw TypeError
       assert.throws(
         () => parser.parse("true"),
+        { name: "TypeError" },
+      );
+      assert.throws(
+        () => parser.parse("maybe"),
         { name: "TypeError" },
       );
     });
