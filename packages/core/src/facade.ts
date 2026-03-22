@@ -151,7 +151,6 @@ function createMapCloneLike(
 function stripPlaceholderValues<T>(
   value: T,
   seen = new WeakMap<object, unknown>(),
-  alwaysProxyNonPlain = false,
 ): T {
   if (isPlaceholderValue(value)) {
     return undefined as T;
@@ -170,7 +169,7 @@ function stripPlaceholderValues<T>(
     const clone = createArrayCloneLike(value);
     seen.set(value, clone);
     for (let i = 0; i < value.length; i++) {
-      clone[i] = stripPlaceholderValues(value[i], seen, alwaysProxyNonPlain);
+      clone[i] = stripPlaceholderValues(value[i], seen);
     }
     copySanitizedOwnProperties(value, clone, seen);
     return clone as T;
@@ -183,7 +182,7 @@ function stripPlaceholderValues<T>(
     seen.set(value, clone);
     for (const entryValue of value) {
       clone.add(
-        stripPlaceholderValues(entryValue, seen, alwaysProxyNonPlain),
+        stripPlaceholderValues(entryValue, seen),
       );
     }
     copySanitizedOwnProperties(value, clone, seen);
@@ -197,15 +196,15 @@ function stripPlaceholderValues<T>(
     seen.set(value, clone);
     for (const [key, entryValue] of value) {
       clone.set(
-        stripPlaceholderValues(key, seen, alwaysProxyNonPlain),
-        stripPlaceholderValues(entryValue, seen, alwaysProxyNonPlain),
+        stripPlaceholderValues(key, seen),
+        stripPlaceholderValues(entryValue, seen),
       );
     }
     copySanitizedOwnProperties(value, clone, seen);
     return clone as T;
   }
   if (!isPlainObject(value)) {
-    if (!alwaysProxyNonPlain && !containsPlaceholderValues(value)) {
+    if (!containsPlaceholderValues(value)) {
       return value;
     }
     return createSanitizedNonPlainView(value, seen) as T;
@@ -258,10 +257,10 @@ function stripPlaceholderValues<T>(
           const result = fn.apply(this, args);
           if (result instanceof Promise) {
             return (result as Promise<unknown>).then(
-              (v) => sanitizeForPhaseTwo(v, seen),
+              (v) => stripPlaceholderValues(v, seen),
             );
           }
-          return sanitizeForPhaseTwo(result, seen);
+          return stripPlaceholderValues(result, seen);
         };
         // Copy own properties (.prototype, .name, .length, statics)
         // from the original so instanceof and identity checks work.
@@ -617,83 +616,6 @@ function createSanitizedNonPlainView<T extends object>(
   return proxy;
 }
 
-/**
- * Sanitizes a value with the "always proxy non-plain objects" behavior used
- * for phase-two parsing.  Unlike bare stripPlaceholderValues(), this also
- * proxies non-plain objects whose own properties don't reveal placeholders
- * (e.g. class instances with placeholder values in private fields).
- */
-function sanitizeForPhaseTwo(
-  value: unknown,
-  seen: WeakMap<object, unknown>,
-): unknown {
-  if (value == null || typeof value !== "object") {
-    return value;
-  }
-  if (isPlaceholderValue(value)) {
-    return undefined;
-  }
-  const cached = seen.get(value);
-  if (cached !== undefined) {
-    return cached;
-  }
-  // Non-plain objects are always proxied — they may hide placeholders in
-  // private fields or behind method return values.
-  if (
-    !isPlainObject(value) &&
-    !Array.isArray(value) &&
-    !(value instanceof Set) &&
-    !(value instanceof Map)
-  ) {
-    return createSanitizedNonPlainView(value, seen);
-  }
-  // For collections, only clone when they contain visible placeholders
-  // or non-plain elements that might hide them.  Clean collections
-  // preserve identity so methods like `getItems() { return this.items }`
-  // maintain `parsed.getItems() === parsed.items`.
-  if (Array.isArray(value)) {
-    const hasNonPlain = value.some(
-      (item) =>
-        item != null && typeof item === "object" &&
-        !isPlainObject(item as object),
-    );
-    if (!hasNonPlain && !containsPlaceholderValues(value)) {
-      return value;
-    }
-    const clone = createArrayCloneLike(value);
-    seen.set(value, clone);
-    for (let i = 0; i < value.length; i++) {
-      clone[i] = sanitizeForPhaseTwo(value[i], seen);
-    }
-    copySanitizedOwnProperties(value, clone, seen);
-    return clone;
-  }
-  if (value instanceof Set) {
-    if (!containsPlaceholderValues(value)) return value;
-    const clone = createSetCloneLike(value);
-    seen.set(value, clone);
-    for (const item of value) {
-      clone.add(sanitizeForPhaseTwo(item, seen));
-    }
-    copySanitizedOwnProperties(value, clone, seen);
-    return clone;
-  }
-  if (value instanceof Map) {
-    if (!containsPlaceholderValues(value)) return value;
-    const clone = createMapCloneLike(value);
-    seen.set(value, clone);
-    for (const [k, v] of value) {
-      clone.set(
-        sanitizeForPhaseTwo(k, seen),
-        sanitizeForPhaseTwo(v, seen),
-      );
-    }
-    copySanitizedOwnProperties(value, clone, seen);
-    return clone;
-  }
-  return stripPlaceholderValues(value, seen, true);
-}
-
 function prepareParsedForContexts(
   parsed: unknown,
 ): unknown {
@@ -705,19 +627,11 @@ function prepareParsedForContexts(
     return undefined;
   }
 
-  if (parsed instanceof Set || parsed instanceof Map) {
-    // Set/Map identity semantics depend on object identity for has()/get()
-    // lookups.  Proxying entries would break `set.has(original)` and
-    // `map.get(original)`, so only strip visible own-property placeholders.
-    // Non-plain entries with hidden placeholders in private fields are a
-    // known limitation at the top level for Set/Map.
-    if (!containsPlaceholderValues(parsed)) {
-      return parsed;
-    }
-    return stripPlaceholderValues(parsed);
-  }
-
-  if (Array.isArray(parsed)) {
+  if (
+    Array.isArray(parsed) ||
+    parsed instanceof Set ||
+    parsed instanceof Map
+  ) {
     if (!containsPlaceholderValues(parsed)) {
       return parsed;
     }
@@ -725,19 +639,11 @@ function prepareParsedForContexts(
   }
 
   if (isPlainObject(parsed)) {
-    // Clone when own non-constructable function properties exist (closures
-    // may capture placeholder values invisible to containsPlaceholderValues),
-    // or when own data properties contain detectable placeholders.  Plain
-    // objects with only data/constructor properties and no visible
-    // placeholders pass through unchanged to preserve identity for
-    // WeakMap-backed and closure-based DTO patterns.  Constructable
-    // functions (classes, traditional constructors) are left unwrapped
-    // to preserve static-method `this` binding and constructor identity.
     // See: https://github.com/dahlia/optique/issues/407
     if (!containsPlaceholderValues(parsed)) {
       return parsed;
     }
-    return stripPlaceholderValues(parsed, new WeakMap(), true);
+    return stripPlaceholderValues(parsed);
   }
 
   // Only proxy non-plain objects when own-property placeholders are
