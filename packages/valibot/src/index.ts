@@ -123,8 +123,14 @@ function isCatchAllSchema(
     if (!s.pipe) return true;
     return s.pipe.slice(1).every((action) => {
       const a = action as { kind?: string; type?: string };
-      return a.kind !== "validation" && a.kind !== "schema" &&
-        SAFE_TRANSFORMATION_TYPES.has(a.type ?? "");
+      if (a.kind === "validation") return false;
+      if (a.kind === "schema") {
+        return isCatchAllSchema(
+          action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+          afterTransform,
+        );
+      }
+      return SAFE_TRANSFORMATION_TYPES.has(a.type ?? "");
     });
   }
   // String-based catch-alls only valid before transforms
@@ -132,8 +138,14 @@ function isCatchAllSchema(
     if (!s.pipe) return true;
     return s.pipe.slice(1).every((action) => {
       const a = action as { kind?: string; type?: string };
-      return a.kind !== "validation" && a.kind !== "schema" &&
-        SAFE_TRANSFORMATION_TYPES.has(a.type ?? "");
+      if (a.kind === "validation") return false;
+      if (a.kind === "schema") {
+        return isCatchAllSchema(
+          action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+          afterTransform,
+        );
+      }
+      return SAFE_TRANSFORMATION_TYPES.has(a.type ?? "");
     });
   }
   // Unwrap any schema with a wrapped field (optional, nullable, nullish,
@@ -224,15 +236,33 @@ function containsAsyncSchema(
       ) {
         seenTransform = true;
       }
-      if (
-        (action as { kind?: string }).kind === "schema" &&
-        containsAsyncSchema(
-          action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-          visited,
-          seenTransform,
-        )
-      ) {
-        return true;
+      if (a.kind === "schema") {
+        if (
+          containsAsyncSchema(
+            action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+            visited,
+            seenTransform,
+          )
+        ) {
+          return true;
+        }
+        // A nested pipe schema may contain transforms that change the
+        // value type for subsequent steps in the outer pipe.
+        if (!seenTransform) {
+          const innerPipe = (action as ValibotSchemaInternal).pipe;
+          if (innerPipe && Array.isArray(innerPipe)) {
+            for (const innerAction of innerPipe) {
+              const ia = innerAction as { kind?: string; type?: string };
+              if (
+                ia.kind === "transformation" &&
+                !SAFE_TRANSFORMATION_TYPES.has(ia.type ?? "")
+              ) {
+                seenTransform = true;
+                break;
+              }
+            }
+          }
+        }
       }
     }
   }
