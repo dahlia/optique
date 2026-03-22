@@ -114,6 +114,90 @@ describe("or", () => {
     );
   });
 
+  it("should throw TypeError when a non-parser object is passed", () => {
+    assert.throws(
+      // @ts-expect-error - {} is not a valid Parser.
+      () => or({}, option("-a")),
+      {
+        name: "TypeError",
+        message: "or() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError for non-parser among valid parsers", () => {
+    assert.throws(
+      // @ts-expect-error - 42 is not a valid Parser.
+      () => or(option("-a"), 42),
+      {
+        name: "TypeError",
+        message: "or() argument at index 1 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError when null is passed as a parser", () => {
+    assert.throws(
+      // @ts-expect-error - null is not a valid Parser.
+      () => or(null),
+      {
+        name: "TypeError",
+        message: "or() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError for partial parser-like object", () => {
+    assert.throws(
+      () =>
+        or(
+          {
+            $mode: "sync",
+            usage: [],
+            parse() {},
+            getDocFragments() {},
+          } as never,
+          option("-a"),
+        ),
+      {
+        name: "TypeError",
+        message: "or() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError for object with malformed field types", () => {
+    assert.throws(
+      () =>
+        or(
+          {
+            $mode: "sync",
+            usage: null,
+            priority: 0,
+            initialState: undefined,
+            parse() {},
+            complete() {},
+            suggest() {},
+            getDocFragments() {},
+          } as never,
+          option("-a"),
+        ),
+      {
+        name: "TypeError",
+        message: "or() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should accept a callable object implementing Parser", () => {
+    const fnParser = Object.assign(
+      () => {},
+      option("-a"),
+    );
+    const orParser = or(fnParser as never, option("-b"));
+    assert.ok(orParser);
+  });
+
   it("should try parsers in order", () => {
     const parser1 = option("-a");
     const parser2 = option("-b");
@@ -1129,6 +1213,39 @@ describe("longestMatch()", () => {
       {
         name: "TypeError",
         message: "longestMatch() requires at least one parser argument.",
+      },
+    );
+  });
+
+  it("should throw TypeError when a non-parser object is passed", () => {
+    assert.throws(
+      // @ts-expect-error - {} is not a valid Parser.
+      () => longestMatch({}, command("a", constant("a"))),
+      {
+        name: "TypeError",
+        message: "longestMatch() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError for non-parser among valid parsers", () => {
+    assert.throws(
+      // @ts-expect-error - 42 is not a valid Parser.
+      () => longestMatch(command("a", constant("a")), 42),
+      {
+        name: "TypeError",
+        message: "longestMatch() argument at index 1 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError when null is passed as a parser", () => {
+    assert.throws(
+      // @ts-expect-error - null is not a valid Parser.
+      () => longestMatch(null),
+      {
+        name: "TypeError",
+        message: "longestMatch() argument at index 0 is not a valid Parser.",
       },
     );
   });
@@ -3556,6 +3673,50 @@ describe("merge", () => {
     );
   });
 
+  it("should throw TypeError when a non-parser object is passed", () => {
+    assert.throws(
+      // @ts-expect-error - {} is not a valid Parser.
+      () => merge({}, object({ a: option("-a") })),
+      {
+        name: "TypeError",
+        message: "merge() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError for non-parser among valid parsers", () => {
+    assert.throws(
+      // @ts-expect-error - 42 is not a valid Parser.
+      () => merge(object({ a: option("-a") }), 42),
+      {
+        name: "TypeError",
+        message: "merge() argument at index 1 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError for non-parser with label", () => {
+    assert.throws(
+      // @ts-expect-error - 42 is not a valid Parser.
+      () => merge("label", 42),
+      {
+        name: "TypeError",
+        message: "merge() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError when null is passed as a parser", () => {
+    assert.throws(
+      // @ts-expect-error - null is not a valid Parser.
+      () => merge(null),
+      {
+        name: "TypeError",
+        message: "merge() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
   it("should preserve inferred object types with up to fifteen parsers", () => {
     const parser = merge(
       object({ k1: constant("v1" as const) }),
@@ -5462,6 +5623,39 @@ describe("concat", () => {
       {
         name: "TypeError",
         message: "concat() requires at least one parser argument.",
+      },
+    );
+  });
+
+  it("should throw TypeError when a non-parser object is passed", () => {
+    assert.throws(
+      // @ts-expect-error - {} is not a valid Parser.
+      () => concat({}, tuple([constant("a")])),
+      {
+        name: "TypeError",
+        message: "concat() argument at index 0 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError for non-parser among valid parsers", () => {
+    assert.throws(
+      // @ts-expect-error - {} is not a valid Parser.
+      () => concat(tuple([constant("a")]), {}),
+      {
+        name: "TypeError",
+        message: "concat() argument at index 1 is not a valid Parser.",
+      },
+    );
+  });
+
+  it("should throw TypeError when null is passed as a parser", () => {
+    assert.throws(
+      // @ts-expect-error - null is not a valid Parser.
+      () => concat(null),
+      {
+        name: "TypeError",
+        message: "concat() argument at index 0 is not a valid Parser.",
       },
     );
   });
