@@ -10568,54 +10568,10 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(observedParsed, original);
   });
 
-  it("getter with private field returns undefined instead of throwing", async () => {
-    // Regression test for https://github.com/dahlia/optique/issues/407
-    // A getter accessing private fields through the proxy receiver would
-    // throw TypeError.  The proxy catches this and returns undefined
-    // (the same value that would result from stripping the placeholder).
-    class Config {
-      #token: unknown;
-      name: string;
-      constructor(name: string, token: unknown) {
-        this.name = name;
-        this.#token = token;
-      }
-      get token(): unknown {
-        return this.#token;
-      }
-    }
-
-    let observedName: string | undefined;
-    let observedToken: unknown = "not-set";
-
-    const contextKey = Symbol.for("@test/getter-private-graceful");
-    const dynamicContext: SourceContext = {
-      id: contextKey,
-      mode: "dynamic",
-      getAnnotations(parsed?: unknown) {
-        if (parsed == null) return {};
-        const c = parsed as Config;
-        observedName = c.name;
-        observedToken = c.token;
-        return {};
-      },
-    };
-
-    const parser = map(
-      object({
-        name: withDefault(option("--name", string()), "test"),
-      }),
-      (value) => new Config(value.name, { [testPlaceholderKey]: true }),
-    );
-
-    await runWith(parser, "test", [dynamicContext], {
-      args: [],
-    });
-
-    assert.equal(observedName, "test");
-    // Getter accesses #token → TypeError caught → returns undefined.
-    assert.equal(observedToken, undefined);
-  });
+  // NOTE: Getters that access private fields through the proxy receiver
+  // throw TypeError which propagates to the caller.  This is a known
+  // limitation — use prototype methods (which go through
+  // callMethodOnSanitizedTarget) for private field access instead.
 
   it("non-plain object nested in array is proxied during phase two", async () => {
     // Regression test for https://github.com/dahlia/optique/issues/407

@@ -321,27 +321,21 @@ function createSanitizedNonPlainView<T extends object>(
           break;
         }
       }
-      let result: unknown;
-      try {
-        result = callMethodOnSanitizedTarget(
-          {
-            apply: (thisArg: unknown) =>
-              Reflect.get(
-                target,
-                key,
-                thisArg === target ? receiver : (thisArg ?? target),
-              ),
-          },
-          receiver,
-          target,
-          [],
-          stripDeferredPromptValues,
-          seen,
-        );
-      } catch (e) {
-        if (e instanceof TypeError) return undefined;
-        throw e;
-      }
+      const result = callMethodOnSanitizedTarget(
+        {
+          apply: (thisArg: unknown) =>
+            Reflect.get(
+              target,
+              key,
+              thisArg === target ? receiver : (thisArg ?? target),
+            ),
+        },
+        receiver,
+        target,
+        [],
+        stripDeferredPromptValues,
+        seen,
+      );
       if (typeof result === "function") {
         if (/^class[\s{]/.test(Function.prototype.toString.call(result))) {
           return result;
@@ -545,8 +539,7 @@ function stripDeferredPromptValues<T>(
         ? (fnVal as { prototype?: unknown }).prototype
         : undefined;
       const isConstructable = typeof fnVal === "function" &&
-        ((fnProto != null && typeof fnProto === "object") ||
-          fnVal.name.startsWith("bound "));
+        fnProto != null && typeof fnProto === "object";
       if (typeof fnVal === "function" && !isConstructable) {
         // See: https://github.com/dahlia/optique/issues/407
         const fn = descriptor.value as {

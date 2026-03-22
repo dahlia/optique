@@ -224,19 +224,20 @@ function stripPlaceholderValues<T>(
       continue;
     }
     if ("value" in descriptor) {
-      // Constructable functions (classes, traditional constructors, bound
-      // constructors) are left unwrapped to preserve static-method `this`
-      // binding and constructor identity.  Non-constructable functions
-      // (arrow functions, method shorthand) are wrapped so that closures
-      // capturing placeholder values have their return values sanitized.
+      // Constructable functions (classes, traditional constructors) are
+      // left unwrapped to preserve static-method `this` binding and
+      // constructor identity.  Non-constructable functions (arrow
+      // functions, method shorthand, bound callbacks) are wrapped so
+      // that closures capturing placeholder values have their return
+      // values sanitized.  Bound constructors lose their .prototype
+      // and are wrapped; the wrapper delegates `new` via new.target.
       // See: https://github.com/dahlia/optique/issues/407
       const fnVal = descriptor.value;
       const fnProto = typeof fnVal === "function"
         ? (fnVal as { prototype?: unknown }).prototype
         : undefined;
       const isConstructable = typeof fnVal === "function" &&
-        ((fnProto != null && typeof fnProto === "object") ||
-          fnVal.name.startsWith("bound "));
+        fnProto != null && typeof fnProto === "object";
       if (typeof fnVal === "function" && !isConstructable) {
         const fn = descriptor.value as {
           apply(thisArg: unknown, args: unknown[]): unknown;
@@ -531,29 +532,23 @@ function createSanitizedNonPlainView<T extends object>(
       // properties are temporarily sanitized.  The synthetic function maps
       // thisArg back to the original receiver so standard Reflect.get
       // receiver semantics are preserved.  Private field access through
-      // the proxy receiver throws TypeError — caught and returned as
-      // undefined (the sanitized placeholder value).
-      let result: unknown;
-      try {
-        result = callMethodOnSanitizedTarget(
-          {
-            apply: (thisArg: unknown) =>
-              Reflect.get(
-                target,
-                key,
-                thisArg === target ? receiver : (thisArg ?? target),
-              ),
-          },
-          receiver,
-          target,
-          [],
-          stripPlaceholderValues,
-          seen,
-        );
-      } catch (e) {
-        if (e instanceof TypeError) return undefined;
-        throw e;
-      }
+      // the proxy receiver throws TypeError which propagates to the
+      // caller — use methods for private field access instead.
+      const result = callMethodOnSanitizedTarget(
+        {
+          apply: (thisArg: unknown) =>
+            Reflect.get(
+              target,
+              key,
+              thisArg === target ? receiver : (thisArg ?? target),
+            ),
+        },
+        receiver,
+        target,
+        [],
+        stripPlaceholderValues,
+        seen,
+      );
       if (typeof result === "function") {
         // Class constructors are returned unwrapped since the wrapper
         // would break new.target and prototype chain semantics.
