@@ -17,7 +17,12 @@ import {
 } from "./annotations.ts";
 import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
-import type { DocEntry, DocFragment, DocSection } from "./doc.ts";
+import {
+  deduplicateDocFragments,
+  type DocEntry,
+  type DocFragment,
+  type DocSection,
+} from "./doc.ts";
 import {
   type Message,
   message,
@@ -2404,24 +2409,19 @@ export function or(
         footer = docFragments.footer;
         fragments = docFragments.fragments;
       }
-      const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
-      const sections: DocSection[] = [];
-      for (const fragment of fragments) {
-        if (fragment.type !== "section") continue;
-        if (fragment.title == null) {
-          entries.push(...fragment.entries);
-        } else {
-          sections.push(fragment);
-        }
+      // When a single branch matched successfully, pass its fragments
+      // Only deduplicate when showing all branches.  When state.state is
+      // set, fragments come from a single branch (whether successful or
+      // failed), so cross-branch dedup does not apply and would collapse
+      // intentional duplicates (e.g., allowDuplicates).
+      if (state.kind === "unavailable" || state.state == null) {
+        fragments = deduplicateDocFragments(fragments);
       }
       return {
         brief,
         description,
         footer,
-        fragments: [
-          ...sections.map<DocFragment>((s) => ({ ...s, type: "section" })),
-          { type: "section", entries },
-        ],
+        fragments,
       };
     },
   };
@@ -2868,11 +2868,13 @@ export function longestMatch(
       let footer: Message | undefined;
       let fragments: readonly DocFragment[];
 
+      let shouldDeduplicate: boolean;
       if (state.kind === "unavailable" || state.state == null) {
         // When state is unavailable or null, show all parser options
         fragments = parsers.flatMap((p) =>
           p.getDocFragments({ kind: "unavailable" }).fragments
         );
+        shouldDeduplicate = true;
       } else {
         const [i, result] = state.state;
         if (result.success) {
@@ -2883,14 +2885,23 @@ export function longestMatch(
           description = docResult.description;
           footer = docResult.footer;
           fragments = docResult.fragments;
+          shouldDeduplicate = false;
         } else {
           fragments = parsers.flatMap((p) =>
             p.getDocFragments({ kind: "unavailable" }).fragments
           );
+          shouldDeduplicate = true;
         }
       }
 
-      return { brief, description, fragments, footer };
+      return {
+        brief,
+        description,
+        fragments: shouldDeduplicate
+          ? deduplicateDocFragments(fragments)
+          : fragments,
+        footer,
+      };
     },
   };
 }

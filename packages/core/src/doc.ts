@@ -123,6 +123,127 @@ export interface DocFragments {
   readonly footer?: Message;
 }
 
+function getDocEntryKey(entry: DocEntry): string {
+  const term = entry.term;
+  switch (term.type) {
+    case "command":
+      return `command:${term.name}`;
+    case "option":
+      return `option:${[...term.names].sort().join(",")}:${term.metavar ?? ""}`;
+    case "argument":
+      return `argument:${term.metavar}`;
+    default:
+      return JSON.stringify(term);
+  }
+}
+
+/**
+ * Removes duplicate {@link DocEntry} values that share the same surface
+ * syntax (same term type and identifying names).  When duplicates exist,
+ * the first occurrence is kept and later ones are discarded.
+ *
+ * Positional argument entries are never deduplicated because they are
+ * distinguished by position, not by metavar, and {@link DocEntry} does
+ * not carry position information.
+ *
+ * @param entries The entries to deduplicate.
+ * @returns A new array with duplicates removed, preserving insertion order.
+ * @since 1.0.0
+ */
+export function deduplicateDocEntries(
+  entries: readonly DocEntry[],
+): DocEntry[] {
+  const seen = new Set<string>();
+  const result: DocEntry[] = [];
+  for (const entry of entries) {
+    if (entry.term.type === "argument") {
+      result.push(entry);
+      continue;
+    }
+    const key = getDocEntryKey(entry);
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(entry);
+    }
+  }
+  return result;
+}
+
+/**
+ * Removes duplicate entries from a list of {@link DocFragment} values.
+ * Entry-type fragments are deduplicated by their surface syntax key.
+ * Section-type fragments have their entries deduplicated internally.
+ *
+ * @param fragments The fragments to deduplicate.
+ * @returns A new array with duplicate entries removed.
+ * @since 1.0.0
+ */
+export function deduplicateDocFragments(
+  fragments: readonly DocFragment[],
+): DocFragment[] {
+  // Untitled entries/sections share a global dedup scope.
+  // Titled sections are grouped by title and deduplicated within each group,
+  // but entries in differently-titled sections remain independent.
+  // Titled sections are emitted at the position of their first occurrence
+  // to preserve the original ordering.
+  const untitledSeen = new Set<string>();
+  const titledSectionMap = new Map<string, DocEntry[]>();
+  // Each element is either a concrete DocFragment or a title placeholder
+  // for a titled section whose entries are still being collected.
+  const slots: (DocFragment | string)[] = [];
+  for (const fragment of fragments) {
+    if (fragment.type === "entry") {
+      if (fragment.term.type === "argument") {
+        slots.push(fragment);
+      } else {
+        const key = getDocEntryKey(fragment);
+        if (!untitledSeen.has(key)) {
+          untitledSeen.add(key);
+          slots.push(fragment);
+        }
+      }
+    } else if (fragment.title == null) {
+      const dedupedEntries: DocEntry[] = [];
+      for (const entry of fragment.entries) {
+        if (entry.term.type === "argument") {
+          dedupedEntries.push(entry);
+          continue;
+        }
+        const key = getDocEntryKey(entry);
+        if (!untitledSeen.has(key)) {
+          untitledSeen.add(key);
+          dedupedEntries.push(entry);
+        }
+      }
+      if (dedupedEntries.length > 0) {
+        slots.push({
+          ...fragment,
+          type: "section",
+          entries: dedupedEntries,
+        });
+      }
+    } else {
+      if (!titledSectionMap.has(fragment.title)) {
+        titledSectionMap.set(fragment.title, []);
+        slots.push(fragment.title);
+      }
+      titledSectionMap.get(fragment.title)!.push(...fragment.entries);
+    }
+  }
+  const result: DocFragment[] = [];
+  for (const slot of slots) {
+    if (typeof slot === "string") {
+      const entries = deduplicateDocEntries(titledSectionMap.get(slot)!);
+      if (entries.length > 0) {
+        result.push({ type: "section", title: slot, entries });
+      }
+    } else {
+      result.push(slot);
+    }
+  }
+  return result;
+}
+
 /**
  * Creates a deep clone of a {@link DocEntry}.  The `term` is cloned via
  * {@link cloneUsageTerm}, and `description`, `default`, and `choices`

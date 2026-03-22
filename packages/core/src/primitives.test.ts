@@ -3262,37 +3262,34 @@ describe("command() with brief option", () => {
     // When showing command list (unavailable state), each command should show its brief
     const fragments = parser.getDocFragments({ kind: "unavailable" });
 
-    // or() combinator organizes entries into sections
     assert.ok(fragments.fragments.length > 0);
-    const sectionFragment = fragments.fragments.find((f) =>
-      f.type === "section"
-    );
-    assert.ok(sectionFragment);
-    if (sectionFragment && sectionFragment.type === "section") {
-      assert.equal(sectionFragment.entries.length, 2);
-
-      // Check first command (show)
-      const showEntry = sectionFragment.entries[0];
-      assert.deepEqual(
-        showEntry.description,
-        message`Show an item`,
-      );
-      assert.equal(showEntry.term.type, "command");
-      if (showEntry.term.type === "command") {
-        assert.equal(showEntry.term.name, "show");
-      }
-
-      // Check second command (edit)
-      const editEntry = sectionFragment.entries[1];
-      assert.deepEqual(
-        editEntry.description,
-        message`Edit an item`,
-      );
-      assert.equal(editEntry.term.type, "command");
-      if (editEntry.term.type === "command") {
-        assert.equal(editEntry.term.name, "edit");
-      }
+    const allEntries: DocEntry[] = [];
+    for (const f of fragments.fragments) {
+      if (f.type === "entry") allEntries.push(f);
+      else allEntries.push(...f.entries);
     }
+    const commandEntries = allEntries.filter((e) => e.term.type === "command");
+    assert.equal(commandEntries.length, 2);
+
+    // Check first command (show)
+    const showEntry = commandEntries.find((e) =>
+      e.term.type === "command" && e.term.name === "show"
+    );
+    assert.ok(showEntry);
+    assert.deepEqual(
+      showEntry.description,
+      message`Show an item`,
+    );
+
+    // Check second command (edit)
+    const editEntry = commandEntries.find((e) =>
+      e.term.type === "command" && e.term.name === "edit"
+    );
+    assert.ok(editEntry);
+    assert.deepEqual(
+      editEntry.description,
+      message`Edit an item`,
+    );
   });
 
   it("should use full description when command is matched", () => {
