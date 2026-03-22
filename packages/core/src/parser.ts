@@ -1058,7 +1058,9 @@ function buildDocPage(
     const customUsageLine = typeof term.usageLine === "function"
       ? term.usageLine(defaultUsageLine)
       : term.usageLine;
-    const normalizedCustomUsageLine = normalizeUsage(customUsageLine);
+    const normalizedCustomUsageLine = cloneUsage(
+      normalizeUsage(customUsageLine),
+    );
     usage.splice(
       usageIndex + 1,
       usage.length - (usageIndex + 1),
@@ -1095,7 +1097,10 @@ function buildDocPage(
       const customUsageLine = typeof first.usageLine === "function"
         ? first.usageLine(defaultUsageLine)
         : first.usageLine;
-      usage.splice(1, usage.length - 1, ...normalizeUsage(customUsageLine));
+      const normalizedCustomUsageLine = cloneUsage(
+        normalizeUsage(customUsageLine),
+      );
+      usage.splice(1, usage.length - 1, ...normalizedCustomUsageLine);
     }
   }
   return {

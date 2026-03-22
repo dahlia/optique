@@ -2735,4 +2735,26 @@ describe("getDocPage reference isolation", () => {
       );
     }
   });
+
+  it("should not leak when usageLine callback returns shared usage", () => {
+    // usageLine callback returns parser.usage itself (a shared array)
+    const inner = option("-v", "--verbose");
+    const sharedUsage: Usage = [{ type: "ellipsis" }];
+    const parser = command("cmd", inner, {
+      usageLine(_defaultUsageLine: Usage) {
+        return sharedUsage;
+      },
+    });
+
+    const page1 = getDocPageSync(parser as Parser<"sync", unknown, unknown>);
+    assert.ok(page1);
+
+    // Mutate the returned page's usage
+    if (page1.usage != null && page1.usage.length > 1) {
+      (page1.usage[1] as Record<string, unknown>).type = "MUTATED";
+    }
+
+    // The shared array should not be corrupted
+    assert.equal(sharedUsage[0].type, "ellipsis");
+  });
 });
