@@ -20,6 +20,7 @@ import { annotateFreshArray, getAnnotations } from "./annotations.ts";
 import type { DocFragment } from "./doc.ts";
 import { dispatchIterableByMode } from "./mode-dispatch.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
+import { validateOptionNames } from "./validate.ts";
 
 /**
  * State type for options that may use deferred parsing (DerivedValueParser).
@@ -735,6 +736,7 @@ export function option<M extends Mode, T>(
     optionNames = args as OptionName[];
     valueParser = undefined;
   }
+  validateOptionNames(optionNames, "Option");
   const mode: M = (valueParser?.$mode ?? "sync") as M;
   const isAsync = mode === "async";
 
@@ -1279,6 +1281,7 @@ export function flag(
   } else {
     optionNames = args as OptionName[];
   }
+  validateOptionNames(optionNames, "Flag");
 
   return {
     $valueType: [],

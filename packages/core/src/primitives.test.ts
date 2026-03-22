@@ -51,7 +51,7 @@ import {
   parseSync,
   type Suggestion,
 } from "@optique/core/parser";
-import type { Usage } from "@optique/core/usage";
+import type { OptionName, Usage } from "@optique/core/usage";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -4647,6 +4647,63 @@ describe("hidden option", () => {
       ));
       assert.equal(suggestions.length, 1);
     });
+
+    it("should throw TypeError for empty option name", () => {
+      assert.throws(
+        () => option("" as OptionName, string()),
+        { name: "TypeError", message: "Option name must not be empty." },
+      );
+    });
+
+    it("should throw TypeError for whitespace-only option name", () => {
+      assert.throws(
+        () => option("   " as OptionName, string()),
+        {
+          name: "TypeError",
+          message: /Option name must not be whitespace-only/,
+        },
+      );
+    });
+
+    it("should throw TypeError for option name with control characters", () => {
+      assert.throws(
+        () => option("--foo\x00" as OptionName, string()),
+        {
+          name: "TypeError",
+          message: /Option name must not contain control characters/,
+        },
+      );
+    });
+
+    it("should throw TypeError for option name with whitespace", () => {
+      assert.throws(
+        () => option("--foo bar" as OptionName, string()),
+        {
+          name: "TypeError",
+          message: /Option name must not contain whitespace/,
+        },
+      );
+    });
+
+    it("should throw TypeError for option name without valid prefix", () => {
+      assert.throws(
+        () => option("foo" as OptionName, string()),
+        {
+          name: "TypeError",
+          message: /Option name must start with/,
+        },
+      );
+    });
+
+    it("should throw TypeError when no option names are provided", () => {
+      assert.throws(
+        () => option(string()),
+        {
+          name: "TypeError",
+          message: "Expected at least one option name.",
+        },
+      );
+    });
   });
 
   describe("flag()", () => {
@@ -4718,6 +4775,63 @@ describe("hidden option", () => {
         "--deb",
       ));
       assert.equal(suggestions.length, 1);
+    });
+
+    it("should throw TypeError for empty flag name", () => {
+      assert.throws(
+        () => flag("" as OptionName),
+        { name: "TypeError", message: "Flag name must not be empty." },
+      );
+    });
+
+    it("should throw TypeError for whitespace-only flag name", () => {
+      assert.throws(
+        () => flag("   " as OptionName),
+        {
+          name: "TypeError",
+          message: /Flag name must not be whitespace-only/,
+        },
+      );
+    });
+
+    it("should throw TypeError for flag name with control characters", () => {
+      assert.throws(
+        () => flag("--debug\x00" as OptionName),
+        {
+          name: "TypeError",
+          message: /Flag name must not contain control characters/,
+        },
+      );
+    });
+
+    it("should throw TypeError for flag name with whitespace", () => {
+      assert.throws(
+        () => flag("--de bug" as OptionName),
+        {
+          name: "TypeError",
+          message: /Flag name must not contain whitespace/,
+        },
+      );
+    });
+
+    it("should throw TypeError for flag name without valid prefix", () => {
+      assert.throws(
+        () => flag("debug" as OptionName),
+        {
+          name: "TypeError",
+          message: /Flag name must start with/,
+        },
+      );
+    });
+
+    it("should throw TypeError when no flag names are provided", () => {
+      assert.throws(
+        () => flag({ description: message`test` }),
+        {
+          name: "TypeError",
+          message: "Expected at least one flag name.",
+        },
+      );
     });
   });
 
