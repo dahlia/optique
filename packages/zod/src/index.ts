@@ -79,7 +79,8 @@ function isZodAsyncError(error: Error): boolean {
     error.message ===
       "Async refinement encountered during synchronous parse operation. Use .parseAsync instead." ||
     error.message ===
-      "Asynchronous transform encountered during synchronous parse operation. Use .parseAsync instead."
+      "Asynchronous transform encountered during synchronous parse operation. Use .parseAsync instead." ||
+    error.message === "Synchronous parse encountered promise."
   ) {
     return true;
   }

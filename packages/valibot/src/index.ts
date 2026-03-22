@@ -229,22 +229,11 @@ function containsAsyncSchema(
     if (s.rest && containsAsyncSchema(s.rest, visited, true)) return true;
   }
 
-  // Best-effort check for v.lazy(): call the getter with no arguments.
-  // Constant getters (the common case) return the inner schema for async
-  // inspection.  Input-dependent or stateful getters may throw, which is
-  // safely ignored.  Recursive schemas are handled by the visited map.
-  if (
-    typeof (schema as unknown as { getter?: unknown }).getter === "function"
-  ) {
-    try {
-      const inner = (schema as unknown as {
-        getter: () => v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
-      }).getter();
-      if (containsAsyncSchema(inner, visited, afterTransform)) return true;
-    } catch {
-      // Input-dependent getter — cannot determine async status statically.
-    }
-  }
+  // NOTE: v.lazy() schemas are NOT inspected.  The getter receives the
+  // actual parse input and may return different schemas depending on it
+  // (e.g., sync for strings, async for other types).  Probing with no
+  // argument would take the wrong branch and cause false positives for
+  // input-dependent getters, and could also trigger user side effects.
 
   return false;
 }
