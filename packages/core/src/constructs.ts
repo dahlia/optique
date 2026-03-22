@@ -411,10 +411,10 @@ function assertParsers(
     const r = p as Record<string, unknown>;
     if (
       p == null ||
-      typeof p !== "object" ||
-      !("$mode" in p) ||
-      !("usage" in p) ||
-      !("priority" in p) ||
+      (typeof p !== "object" && typeof p !== "function") ||
+      !(r.$mode === "sync" || r.$mode === "async") ||
+      !Array.isArray(r.usage) ||
+      typeof r.priority !== "number" || Number.isNaN(r.priority) ||
       !("initialState" in p) ||
       typeof r.parse !== "function" ||
       typeof r.complete !== "function" ||
