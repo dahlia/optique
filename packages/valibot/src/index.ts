@@ -81,18 +81,29 @@ interface ValibotSchemaInternal {
  * Piped schemas are considered catch-all only when the base type is
  * `string`/`unknown`/`any` and every pipe action is a non-rejecting
  * transformation (not a validation or nested schema).
+ *
+ * @param afterTransform When true, only type-agnostic catch-alls
+ *   (`v.unknown()`, `v.any()`) are recognized.  String-based catch-alls
+ *   are not trusted since the input type may no longer be a string.
  */
 function isCatchAllSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+  afterTransform = false,
 ): boolean {
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return false;
-  if (s.type === "unknown" || s.type === "any" || s.type === "string") {
+  // v.unknown() and v.any() accept every value of any type
+  if (s.type === "unknown" || s.type === "any") {
     if (!s.pipe) return true;
-    // A piped schema is still catch-all if every action after the base
-    // schema (first element) is a non-rejecting transformation (trim,
-    // toLowerCase, etc.) — not a validation, nested schema, or
-    // rawTransform (which can add issues).
+    return s.pipe.slice(1).every((action) => {
+      const a = action as { kind?: string; type?: string };
+      return a.kind !== "validation" && a.kind !== "schema" &&
+        a.type !== "raw_transform";
+    });
+  }
+  // String-based catch-alls only valid before transforms
+  if (!afterTransform && s.type === "string") {
+    if (!s.pipe) return true;
     return s.pipe.slice(1).every((action) => {
       const a = action as { kind?: string; type?: string };
       return a.kind !== "validation" && a.kind !== "schema" &&
@@ -102,7 +113,7 @@ function isCatchAllSchema(
   // Unwrap any schema with a wrapped field (optional, nullable, nullish,
   // nonOptional, exactOptional, etc.)
   if (s.wrapped) {
-    return isCatchAllSchema(s.wrapped);
+    return isCatchAllSchema(s.wrapped, afterTransform);
   }
   return false;
 }
@@ -117,17 +128,15 @@ function isCatchAllSchema(
  * Known limitations:
  * - `v.lazy()` schemas are not inspected because the getter depends on
  *   actual parse input, making static analysis unreliable.
- * - Async schemas nested inside container members (object entries, array
- *   items, tuple items, etc.) are not detected.  At the top level, CLI
- *   input is always a string, so container type checks reject before
- *   visiting members.  After transforms, the value type is unknown and
- *   container members may become reachable, but we cannot distinguish
- *   type-preserving transforms from type-changing ones at construction
- *   time.
+ *
+ * @param afterTransform When true, a preceding `v.transform()` may have
+ *   changed the value type.  Container members become reachable and
+ *   string-based union catch-all arms are no longer trusted.
  */
 function containsAsyncSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
   visited: WeakSet<object> = new WeakSet(),
+  afterTransform = false,
 ): boolean {
   if (visited.has(schema)) return false;
   visited.add(schema);
@@ -136,44 +145,84 @@ function containsAsyncSchema(
   if (s.async) return true;
 
   // Unwrap optional/nullable/nullish wrappers
-  if (s.wrapped) return containsAsyncSchema(s.wrapped, visited);
+  if (s.wrapped) {
+    return containsAsyncSchema(s.wrapped, visited, afterTransform);
+  }
 
   // Check intersect options — all arms must match, so async arms are always
   // reachable and must be rejected.
   // For union/variant — Valibot evaluates arms left-to-right.  A catch-all
   // arm makes all *subsequent* arms unreachable, so we only suppress async
   // checking once a catch-all is found scanning in order.
+  // After a transform, only type-agnostic catch-alls (unknown/any) are
+  // reliable; string catch-alls are not trusted since the value may no
+  // longer be a string.
   if (s.options && Array.isArray(s.options)) {
     const isUnionLike = s.type === "union" || s.type === "variant";
     if (isUnionLike) {
       for (const option of s.options) {
         if (typeof option !== "object" || option == null) continue;
-        if (isCatchAllSchema(option)) break;
-        if (containsAsyncSchema(option, visited)) return true;
+        if (isCatchAllSchema(option, afterTransform)) break;
+        if (containsAsyncSchema(option, visited, afterTransform)) return true;
       }
     } else {
       for (const option of s.options) {
         if (typeof option === "object" && option != null) {
-          if (containsAsyncSchema(option, visited)) return true;
+          if (containsAsyncSchema(option, visited, afterTransform)) {
+            return true;
+          }
         }
       }
     }
   }
 
-  // Check pipeline actions for async flags and nested schemas
+  // Check pipeline actions for async flags and nested schemas.
+  // Track transforms: after a transform/rawTransform, container members
+  // become reachable and string catch-alls are no longer trusted.
   if (s.pipe && Array.isArray(s.pipe)) {
+    let seenTransform = afterTransform;
     for (const action of s.pipe) {
       if ((action as { async?: boolean }).async) return true;
+      const aType = (action as { type?: string }).type;
+      if (aType === "transform" || aType === "raw_transform") {
+        seenTransform = true;
+      }
       if (
         (action as { kind?: string }).kind === "schema" &&
         containsAsyncSchema(
           action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
           visited,
+          seenTransform,
         )
       ) {
         return true;
       }
     }
+  }
+
+  // Container members are only reachable after a transform changes the
+  // value type.  At the top level, CLI input is always a string, so
+  // container schemas (object, array, etc.) reject before visiting members.
+  if (afterTransform) {
+    if (s.entries) {
+      for (const entry of Object.values(s.entries)) {
+        if (containsAsyncSchema(entry, visited, true)) return true;
+      }
+    }
+    if (s.item && containsAsyncSchema(s.item, visited, true)) return true;
+    if (s.items && Array.isArray(s.items)) {
+      for (const item of s.items) {
+        if (containsAsyncSchema(item, visited, true)) return true;
+      }
+    }
+    if (
+      s.key && typeof s.key === "object" &&
+      containsAsyncSchema(s.key, visited, true)
+    ) {
+      return true;
+    }
+    if (s.value && containsAsyncSchema(s.value, visited, true)) return true;
+    if (s.rest && containsAsyncSchema(s.rest, visited, true)) return true;
   }
 
   // NOTE: v.lazy() schemas are NOT inspected.  Executing the getter
