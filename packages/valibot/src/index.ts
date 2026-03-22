@@ -199,8 +199,13 @@ function containsAsyncSchema(
     }
   }
 
-  // Check record/map key and value
-  if (s.key && containsAsyncSchema(s.key, visited)) return true;
+  // Check record/map key and value (guard typeof: v.variant() stores a
+  // plain string discriminator in `key`, not a schema object)
+  if (
+    s.key && typeof s.key === "object" && containsAsyncSchema(s.key, visited)
+  ) {
+    return true;
+  }
   if (s.value && containsAsyncSchema(s.value, visited)) return true;
 
   // Check objectWithRest/tupleWithRest rest schema
