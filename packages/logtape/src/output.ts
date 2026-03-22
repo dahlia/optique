@@ -222,10 +222,16 @@ export function createConsoleSink(options: ConsoleSinkOptions = {}): Sink {
 
   const invalidStreamError = (value: unknown): TypeError => {
     let repr: string;
-    try {
+    if (typeof value === "string") {
       repr = JSON.stringify(value);
-    } catch {
+    } else if (value === null || typeof value !== "object") {
       repr = String(value);
+    } else {
+      try {
+        repr = JSON.stringify(value) ?? String(value);
+      } catch {
+        repr = String(value);
+      }
     }
     return new TypeError(
       `Invalid stream: expected "stdout" or "stderr", got ${repr}.`,
