@@ -515,6 +515,13 @@ function stripDeferredPromptValues<T>(
             Object.defineProperty(wrapper, fk, fd);
           } catch { /* best-effort */ }
         }
+        if (
+          !Object.prototype.hasOwnProperty.call(fn, "prototype")
+        ) {
+          try {
+            delete (wrapper as { prototype?: unknown }).prototype;
+          } catch { /* best-effort */ }
+        }
         descriptor.value = wrapper;
       } else {
         descriptor.value = stripDeferredPromptValues(

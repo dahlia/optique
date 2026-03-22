@@ -209,6 +209,11 @@ function stripPlaceholderValues<T>(
     }
     return createSanitizedNonPlainView(value, seen) as T;
   }
+  // Fast path: clean nested plain objects pass through unchanged to
+  // preserve identity for reference-based lookups (e.g., WeakMap keys).
+  if (!containsPlaceholderValues(value)) {
+    return value;
+  }
   const clone: Record<PropertyKey, unknown> = Object.create(
     Object.getPrototypeOf(value),
   );
@@ -269,6 +274,17 @@ function stripPlaceholderValues<T>(
           if (fd == null) continue;
           try {
             Object.defineProperty(wrapper, fk, fd);
+          } catch { /* best-effort */ }
+        }
+        // If the original function doesn't have .prototype (bound
+        // functions, arrow functions), remove the wrapper's default
+        // .prototype so instanceof checks against the wrapper don't
+        // produce false negatives for the constructed instance.
+        if (
+          !Object.prototype.hasOwnProperty.call(fn, "prototype")
+        ) {
+          try {
+            delete (wrapper as { prototype?: unknown }).prototype;
           } catch { /* best-effort */ }
         }
         descriptor.value = wrapper;
