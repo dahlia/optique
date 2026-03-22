@@ -693,7 +693,7 @@ export function valibot<T>(
       }
       if (typeof value !== "object" || value === null) return String(value);
       const str = String(value);
-      if (!Array.isArray(value) && str !== "[object Object]") return str;
+      if (str !== "[object Object]") return str;
       try {
         return JSON.stringify(value);
       } catch {

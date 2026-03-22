@@ -375,11 +375,11 @@ describe("valibot()", () => {
       assert.equal(parser.format({ raw: "hello" }), '{"raw":"hello"}');
     });
 
-    it("should format array values as JSON", () => {
+    it("should format array values as comma-separated string", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform((s) => s.split(","))),
       );
-      assert.equal(parser.format(["a", "b", "c"]), '["a","b","c"]');
+      assert.equal(parser.format(["a", "b", "c"]), "a,b,c");
     });
 
     it("should not throw for non-JSON-serializable objects", () => {
