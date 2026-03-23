@@ -463,6 +463,11 @@ To be released.
     of numeric port input, silently reinterpreting single ports as ranges.
     [[#378], [#576]]
 
+ -  Changed `portRange()` and `socketAddress()` to reject empty `separator`
+    option values at construction time.  An empty separator makes the grammar
+    ill-defined because the parser cannot determine token boundaries.
+    [[#327], [#713]]
+
  -  Changed `choice()` to throw `TypeError` when `NaN` is included in the
     number choices array.  Previously, `NaN` was silently filtered out but
     still advertised in suggestions and help output, creating an unsatisfiable
@@ -850,6 +855,7 @@ To be released.
 [#320]: https://github.com/dahlia/optique/issues/320
 [#321]: https://github.com/dahlia/optique/issues/321
 [#323]: https://github.com/dahlia/optique/issues/323
+[#327]: https://github.com/dahlia/optique/issues/327
 [#332]: https://github.com/dahlia/optique/issues/332
 [#333]: https://github.com/dahlia/optique/issues/333
 [#334]: https://github.com/dahlia/optique/issues/334
@@ -1010,6 +1016,7 @@ To be released.
 [#698]: https://github.com/dahlia/optique/pull/698
 [#700]: https://github.com/dahlia/optique/pull/700
 [#709]: https://github.com/dahlia/optique/pull/709
+[#713]: https://github.com/dahlia/optique/pull/713
 
 ### @optique/config
 

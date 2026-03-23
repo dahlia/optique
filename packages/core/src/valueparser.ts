@@ -3574,6 +3574,7 @@ export interface SocketAddressOptions {
  *
  * @param options - Options for socket address validation.
  * @returns A value parser for socket addresses.
+ * @throws {TypeError} If `separator` is an empty string.
  * @throws {TypeError} If `separator` contains digit characters, since digits
  *   in the separator would cause ambiguous splitting of port input.
  * @since 0.10.0
@@ -3599,6 +3600,9 @@ export function socketAddress(
   options?: SocketAddressOptions,
 ): ValueParser<"sync", SocketAddressValue> {
   const separator = options?.separator ?? ":";
+  if (separator === "") {
+    throw new TypeError("Expected separator to not be empty.");
+  }
   if (/\p{Nd}/u.test(separator)) {
     throw new TypeError(
       `Expected separator to not contain digits, but got: ${
@@ -3971,6 +3975,7 @@ export interface PortRangeOptionsBigInt {
  * @returns A value parser for port ranges.
  * @throws {TypeError} If `options.type` is provided but is neither `"number"`
  *   nor `"bigint"`.
+ * @throws {TypeError} If `separator` is an empty string.
  * @throws {TypeError} If `separator` contains digit characters, since digits
  *   in the separator would cause ambiguous splitting of numeric port input.
  * @since 0.10.0
@@ -4015,6 +4020,9 @@ export function portRange(
     );
   }
   const separator = options?.separator ?? "-";
+  if (separator === "") {
+    throw new TypeError("Expected separator to not be empty.");
+  }
   if (/\p{Nd}/u.test(separator)) {
     throw new TypeError(
       `Expected separator to not contain digits, but got: ${
