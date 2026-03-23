@@ -723,7 +723,8 @@ export function zod<T>(
         return { success: false, error: options.errors.zodError };
       }
       const zodError = new ZodError([{
-        code: "custom",
+        code: "invalid_type",
+        expected: "boolean",
         message: `Invalid Boolean value: ${rawInput}`,
         path: [],
       }]);
