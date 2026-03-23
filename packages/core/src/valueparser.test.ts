@@ -9106,6 +9106,142 @@ describe("socketAddress()", () => {
       assert.ok(socketAddress({ separator: " ", defaultPort: 80 }));
     });
   });
+
+  describe("IP bypass prevention in both mode", () => {
+    it("should reject private IP with specific error in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowPrivate: false } },
+      });
+
+      const result = parser.parse("192.168.1.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "192.168.1.1" },
+        { type: "text", text: " is a private IP address." },
+      ]);
+    });
+
+    it("should reject loopback IP with specific error in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowLoopback: false } },
+      });
+
+      const result = parser.parse("127.0.0.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "127.0.0.1" },
+        { type: "text", text: " is a loopback address." },
+      ]);
+    });
+
+    it("should reject link-local IP with specific error in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowLinkLocal: false } },
+      });
+
+      const result = parser.parse("169.254.1.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "169.254.1.1" },
+        { type: "text", text: " is a link-local address." },
+      ]);
+    });
+
+    it("should reject invalid IPv4 with specific error in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both" },
+      });
+
+      const result1 = parser.parse("999.999.999.999");
+      assert.ok(!result1.success);
+      assert.deepStrictEqual(result1.error, [
+        { type: "text", text: "Expected a valid IPv4 address, but got " },
+        { type: "value", value: "999.999.999.999" },
+        { type: "text", text: "." },
+      ]);
+
+      const result2 = parser.parse("256.256.256.256");
+      assert.ok(!result2.success);
+      assert.deepStrictEqual(result2.error, [
+        { type: "text", text: "Expected a valid IPv4 address, but got " },
+        { type: "value", value: "256.256.256.256" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should reject restricted IP with port in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowPrivate: false } },
+      });
+
+      const result = parser.parse("192.168.1.1:80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "192.168.1.1" },
+        { type: "text", text: " is a private IP address." },
+      ]);
+    });
+
+    it("should still accept valid hostnames in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowPrivate: false } },
+      });
+
+      const result1 = parser.parse("example.com:443");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value.host, "example.com");
+
+      const result2 = parser.parse("localhost");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value.host, "localhost");
+    });
+
+    it("should still accept valid unrestricted IPs in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowPrivate: false } },
+      });
+
+      const result = parser.parse("8.8.8.8:53");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "8.8.8.8");
+      assert.strictEqual(result.value.port, 53);
+    });
+
+    it("should use custom invalidFormat over specific IP error", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowPrivate: false } },
+        errors: {
+          invalidFormat: message`Custom error`,
+        },
+      });
+
+      const result = parser.parse("192.168.1.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Custom error" },
+      ]);
+    });
+
+    it("should reject IP-shaped input in hostname mode regardless of IP restrictions", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "hostname", ip: { allowPrivate: false } },
+      });
+
+      // Even though IP parser with allowPrivate:false would reject this,
+      // it should still be detected as IP-shaped and rejected
+      const result = parser.parse("192.168.1.1");
+      assert.ok(!result.success);
+    });
+  });
 });
 
 describe("macAddress()", () => {
