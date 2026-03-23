@@ -9302,6 +9302,11 @@ describe("socketAddress()", () => {
       // it should still be detected as IP-shaped and rejected
       const result = parser.parse("192.168.1.1");
       assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a valid hostname, but got " },
+        { type: "value", value: "192.168.1.1" },
+        { type: "text", text: "." },
+      ]);
     });
   });
 });
