@@ -225,7 +225,7 @@ export function message(
     if (typeof value === "string") {
       messageTerms.push({ type: "value", value });
     } else if (Array.isArray(value)) {
-      messageTerms.push(...value.map(cloneMessageTerm));
+      messageTerms.push(...cloneMessage(value));
     } else if (typeof value === "object" && value != null && "type" in value) {
       messageTerms.push(cloneMessageTerm(value));
     } else {
