@@ -542,12 +542,21 @@ function createSanitizedNonPlainView<T extends object>(
           break;
         }
       }
-      // Use the proxy receiver so that accessor-returned closures and
-      // bound functions remain bound to the sanitized proxy.  Private
-      // field access through the proxy receiver throws TypeError — use
-      // prototype methods (which go through callMethodOnSanitizedTarget)
-      // for private field access instead.
-      const result = Reflect.get(target, key, receiver);
+      // Evaluate getters via callMethodOnSanitizedTarget so that own
+      // properties are temporarily sanitized and the getter runs with
+      // the real target as receiver, allowing private field access.
+      // In the frozen/sealed fallback the caller's receiver is used.
+      const result = callMethodOnSanitizedTarget(
+        {
+          apply: (thisArg: unknown) =>
+            Reflect.get(target, key, thisArg ?? target),
+        },
+        receiver,
+        target,
+        [],
+        stripPlaceholderValues,
+        seen,
+      );
       if (typeof result === "function") {
         // Class constructors are returned unwrapped since the wrapper
         // would break new.target and prototype chain semantics.
