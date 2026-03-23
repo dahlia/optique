@@ -272,29 +272,6 @@ function preConvertBoolean(
 }
 
 /**
- * Checks whether a schema has any runtime checks, effects, or transforms.
- * Used to decide
- * whether a runtime probe is needed: schemas without any checks/effects
- * at all (plain `z.coerce.boolean()`) can safely skip the probe.
- */
-function hasRuntimeChecks(schema: z.Schema<unknown>): boolean {
-  const def = (schema as ZodSchemaInternal)._def;
-  if (!def) return false;
-
-  if (Array.isArray(def.checks) && def.checks.length > 0) return true;
-  if (def.effect != null) return true;
-  if (typeof def.transform === "function") return true;
-
-  const inner = def.innerType ?? def.schema ?? def.in;
-  if (inner != null && hasRuntimeChecks(inner)) return true;
-
-  const out = def.out;
-  if (out != null && hasRuntimeChecks(out)) return true;
-
-  return false;
-}
-
-/**
  * Infers an appropriate metavar string from a Zod schema.
  *
  * This function analyzes the Zod schema's internal structure to determine
@@ -646,43 +623,6 @@ export function zod<T>(
   const metavar = options.metavar ?? inferMetavar(schema);
   ensureNonEmptyString(metavar);
 
-  // Lazy async detection for coerced boolean schemas.
-  //
-  // On first parse() call, probe safeParse(true) and safeParse(false)
-  // to detect async refinements/transforms that would otherwise be
-  // masked by the boolean pre-conversion layer.  The probe runs at
-  // parse time (not construction time) so that zod() remains a pure
-  // adapter with no side effects.  Results are cached so subsequent
-  // parse() calls skip the probe.
-  //
-  // All async patterns are detected uniformly through the probe
-  // (async keyword functions, Promise-returning callbacks, and
-  // superRefine wrappers), ensuring consistent behavior across
-  // Zod v3 and v4.  Schemas without any checks/effects skip the
-  // probe entirely.
-  const needsAsyncProbe = boolInfo.isBoolean && boolInfo.isCoerced &&
-    hasRuntimeChecks(schema);
-  let asyncProbeCompleted = false;
-
-  function ensureAsyncProbed(): void {
-    if (!needsAsyncProbe || asyncProbeCompleted) return;
-    asyncProbeCompleted = true;
-    for (const probeValue of [true, false]) {
-      try {
-        schema.safeParse(probeValue);
-      } catch (error) {
-        if (error instanceof Error && isZodAsyncError(error)) {
-          throw new TypeError(
-            "Async Zod schemas (e.g., async refinements) are not " +
-              "supported by zod(). Use synchronous schemas instead.",
-          );
-        }
-        // Non-async errors (e.g., throwing refinements) are caught
-        // and ignored — they will be reported normally during parse().
-      }
-    }
-  }
-
   function doSafeParse(
     input: unknown,
     rawInput: string,
@@ -755,9 +695,9 @@ export function zod<T>(
       return doSafeParse(rawInput, rawInput);
     }
 
-    // Coerced schemas: run lazy async probe (first call only).
-    ensureAsyncProbed();
-
+    // Coerced schemas: async detection is handled naturally by
+    // doSafeParse() when a valid boolean literal is parsed.  Invalid
+    // literals are rejected here without executing user callbacks.
     if (options.errors?.zodError) {
       if (typeof options.errors.zodError !== "function") {
         return { success: false, error: options.errors.zodError };

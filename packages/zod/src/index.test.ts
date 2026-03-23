@@ -1044,57 +1044,15 @@ describe("zod()", () => {
       assert.equal(disabledResult.value, false);
     });
 
-    it("should detect async keyword schemas on first parse", () => {
+    it("should detect async boolean schemas on valid input", () => {
       // deno-lint-ignore require-await
       const asyncSchema = z.coerce.boolean().refine(async (v) => v === true);
-      // Construction succeeds — async detected lazily at first parse
       const parser = zod(asyncSchema as never);
+      // Async detected via doSafeParse when a valid literal is parsed
       assert.throws(
-        () => parser.parse("maybe"),
+        () => parser.parse("true"),
         { name: "TypeError" },
       );
-    });
-
-    it("should detect Promise-returning refinements on first parse", () => {
-      const promiseSchema = z.coerce.boolean().refine(
-        () => Promise.resolve(true),
-      );
-      // Construction succeeds — static analysis can't see Promises
-      const parser = zod(promiseSchema as never);
-      // First parse triggers the lazy probe and detects async
-      assert.throws(
-        () => parser.parse("maybe"),
-        { name: "TypeError" },
-      );
-    });
-
-    it("should detect conditionally async refinements on first parse", () => {
-      const conditionalAsync = z.coerce.boolean().refine(
-        (v) => v ? true : Promise.resolve(true),
-      );
-      const parser = zod(conditionalAsync as never);
-      assert.throws(
-        () => parser.parse("maybe"),
-        { name: "TypeError" },
-      );
-    });
-
-    it("should not crash on throwing refinements during async probe", () => {
-      // Refinements that throw non-async errors should not crash
-      // the lazy probe — the error is caught and ignored.
-      const parser = zod(
-        z.coerce.boolean().refine((v) => {
-          if (v) throw new Error("boom");
-          return true;
-        }),
-      );
-      // Invalid literal triggers probe, then returns pre-conversion error
-      const invalidResult = parser.parse("maybe");
-      assert.ok(!invalidResult.success);
-      // Valid literal works normally
-      const result = parser.parse("false");
-      assert.ok(result.success);
-      assert.equal(result.value, false);
     });
 
     it("should not execute refinements at construction time", () => {
@@ -1105,6 +1063,19 @@ describe("zod()", () => {
           return v;
         }),
       );
+      assert.ok(!refineCalled);
+    });
+
+    it("should not execute refinements for rejected boolean literals", () => {
+      let refineCalled = false;
+      const parser = zod(
+        z.coerce.boolean().refine((v) => {
+          refineCalled = true;
+          return v === true;
+        }),
+      );
+      refineCalled = false;
+      parser.parse("maybe");
       assert.ok(!refineCalled);
     });
 
@@ -1156,27 +1127,6 @@ describe("zod()", () => {
       assert.ok(!invalid.success);
     });
 
-    it("should not pass invalid raw input to refinements", () => {
-      const refineArgs: unknown[] = [];
-      const parser = zod(
-        z.coerce.boolean().refine((v) => {
-          refineArgs.push(v);
-          return v === true;
-        }),
-      );
-      refineArgs.length = 0;
-      parser.parse("maybe");
-      // The lazy async probe runs refinements with true/false (not
-      // the raw invalid string).  The invalid literal itself is
-      // never passed to the schema.
-      assert.deepEqual(refineArgs, [true, false]);
-
-      // Subsequent invalid inputs skip the probe (cached).
-      refineArgs.length = 0;
-      parser.parse("nope");
-      assert.deepEqual(refineArgs, []);
-    });
-
     it("should not crash on throwing refinements for rejected literals", () => {
       const parser = zod(
         z.coerce.boolean().refine((v) => {
@@ -1204,28 +1154,27 @@ describe("zod()", () => {
       assert.equal(offResult.value, "off");
     });
 
-    it("should throw TypeError for async superRefine on first parse", () => {
+    it("should throw TypeError for async superRefine on valid input", () => {
       const asyncSchema = z.coerce.boolean().superRefine(
         // deno-lint-ignore require-await
         async (v, ctx) => {
           if (!v) ctx.addIssue({ code: "custom", message: "bad" });
         },
       );
-      // superRefine wraps the async function, so static analysis
-      // can't detect it — the lazy probe catches it on first parse.
       const parser = zod(asyncSchema as never);
+      // Async detected via doSafeParse on valid boolean literals
       assert.throws(
-        () => parser.parse("maybe"),
+        () => parser.parse("true"),
         { name: "TypeError" },
       );
     });
 
-    it("should throw TypeError for async boolean transforms on first parse", () => {
+    it("should throw TypeError for async boolean transforms on valid input", () => {
       // deno-lint-ignore require-await
       const asyncTransform = z.coerce.boolean().transform(async (v) => !v);
       const parser = zod(asyncTransform as never);
       assert.throws(
-        () => parser.parse("maybe"),
+        () => parser.parse("true"),
         { name: "TypeError" },
       );
     });
