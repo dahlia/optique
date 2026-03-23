@@ -801,6 +801,12 @@ To be released.
     as public APIs for consumers who need to deep-copy these structures.
     [[#500], [#697]]
 
+ -  Fixed `normalizeUsage()` to strip degenerate usage terms instead of
+    preserving them unchanged.  Empty-named options, empty-named commands,
+    empty-metavar arguments, empty-value literals, and container terms
+    (`optional`, `multiple`, `exclusive`) that become empty after recursive
+    normalization are now removed.  [[#485]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -911,6 +917,7 @@ To be released.
 [#469]: https://github.com/dahlia/optique/issues/469
 [#471]: https://github.com/dahlia/optique/issues/471
 [#479]: https://github.com/dahlia/optique/issues/479
+[#485]: https://github.com/dahlia/optique/issues/485
 [#488]: https://github.com/dahlia/optique/issues/488
 [#490]: https://github.com/dahlia/optique/pull/490
 [#500]: https://github.com/dahlia/optique/issues/500
