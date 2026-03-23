@@ -288,8 +288,8 @@ export function loggingOptions(
     default:
       throw new TypeError(
         `Unsupported level configuration: ${
-          JSON.stringify((config as Record<string, unknown>).level)
-        }`,
+          String((config as Record<string, unknown>).level)
+        }.  Expected "option", "verbosity", or "debug".`,
       );
   }
 
