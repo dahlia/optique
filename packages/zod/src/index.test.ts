@@ -1044,19 +1044,15 @@ describe("zod()", () => {
       assert.equal(disabledResult.value, false);
     });
 
-    it("should detect async keyword schemas at construction without side effects", () => {
-      let refineCalled = false;
+    it("should detect async keyword schemas on first parse", () => {
       // deno-lint-ignore require-await
-      const asyncSchema = z.coerce.boolean().refine(async (v) => {
-        refineCalled = true;
-        return v === true;
-      });
-      // Static AsyncFunction detection catches this at construction
+      const asyncSchema = z.coerce.boolean().refine(async (v) => v === true);
+      // Construction succeeds — async detected lazily at first parse
+      const parser = zod(asyncSchema as never);
       assert.throws(
-        () => zod(asyncSchema as never),
+        () => parser.parse("maybe"),
         { name: "TypeError" },
       );
-      assert.ok(!refineCalled);
     });
 
     it("should detect Promise-returning refinements on first parse", () => {
@@ -1224,11 +1220,12 @@ describe("zod()", () => {
       );
     });
 
-    it("should throw TypeError for async boolean transforms at construction", () => {
+    it("should throw TypeError for async boolean transforms on first parse", () => {
       // deno-lint-ignore require-await
       const asyncTransform = z.coerce.boolean().transform(async (v) => !v);
+      const parser = zod(asyncTransform as never);
       assert.throws(
-        () => zod(asyncTransform as never),
+        () => parser.parse("maybe"),
         { name: "TypeError" },
       );
     });
