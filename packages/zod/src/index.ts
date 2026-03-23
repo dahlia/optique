@@ -640,7 +640,8 @@ export function zod<T>(
 ): ValueParser<"sync", T> {
   const choices = inferChoices(schema);
   const boolInfo = analyzeBooleanSchema(schema);
-  const metavar = options.metavar ?? inferMetavar(schema);
+  const metavar = options.metavar ??
+    (boolInfo.isBoolean ? "BOOLEAN" : inferMetavar(schema));
   ensureNonEmptyString(metavar);
 
   function doSafeParse(

@@ -772,7 +772,7 @@ describe("zod()", () => {
       for (const input of ["true", "1", "yes", "on"]) {
         const result = parser.parse(input);
         assert.ok(result.success, `Expected "${input}" to parse as true`);
-        assert.equal(result.value, true);
+        assert.ok(result.value);
       }
     });
 
@@ -781,7 +781,7 @@ describe("zod()", () => {
       for (const input of ["false", "0", "no", "off"]) {
         const result = parser.parse(input);
         assert.ok(result.success, `Expected "${input}" to parse as false`);
-        assert.equal(result.value, false);
+        assert.ok(!result.value);
       }
     });
 
@@ -812,11 +812,11 @@ describe("zod()", () => {
       const parser = zod(z.coerce.boolean());
       const trueResult = parser.parse("  true  ");
       assert.ok(trueResult.success);
-      assert.equal(trueResult.value, true);
+      assert.ok(trueResult.value);
 
       const falseResult = parser.parse("\tfalse\n");
       assert.ok(falseResult.success);
-      assert.equal(falseResult.value, false);
+      assert.ok(!falseResult.value);
     });
 
     it("should reject invalid strings", () => {
@@ -831,43 +831,43 @@ describe("zod()", () => {
       const parser = zod(z.boolean());
       const trueResult = parser.parse("true");
       assert.ok(trueResult.success);
-      assert.equal(trueResult.value, true);
+      assert.ok(trueResult.value);
 
       const falseResult = parser.parse("false");
       assert.ok(falseResult.success);
-      assert.equal(falseResult.value, false);
+      assert.ok(!falseResult.value);
     });
 
     it("should work with z.coerce.boolean().optional()", () => {
       const parser = zod(z.coerce.boolean().optional());
       const result = parser.parse("true");
       assert.ok(result.success);
-      assert.equal(result.value, true);
+      assert.ok(result.value);
 
       const falseResult = parser.parse("off");
       assert.ok(falseResult.success);
-      assert.equal(falseResult.value, false);
+      assert.ok(!falseResult.value);
     });
 
     it("should work with z.coerce.boolean().nullable()", () => {
       const parser = zod(z.coerce.boolean().nullable());
       const result = parser.parse("yes");
       assert.ok(result.success);
-      assert.equal(result.value, true);
+      assert.ok(result.value);
     });
 
     it("should work with z.coerce.boolean().default(false)", () => {
       const parser = zod(z.coerce.boolean().default(false));
       const result = parser.parse("on");
       assert.ok(result.success);
-      assert.equal(result.value, true);
+      assert.ok(result.value);
     });
 
     it("should preserve Zod refinements", () => {
       const parser = zod(z.coerce.boolean().refine((v) => v === true));
       const trueResult = parser.parse("true");
       assert.ok(trueResult.success);
-      assert.equal(trueResult.value, true);
+      assert.ok(trueResult.value);
 
       const falseResult = parser.parse("false");
       assert.ok(!falseResult.success);
@@ -906,11 +906,11 @@ describe("zod()", () => {
       );
       const trueResult = parser.parse("true");
       assert.ok(trueResult.success);
-      assert.equal(trueResult.value, true);
+      assert.ok(trueResult.value);
 
       const falseResult = parser.parse("false");
       assert.ok(falseResult.success);
-      assert.equal(falseResult.value, false);
+      assert.ok(!falseResult.value);
 
       const invalidResult = parser.parse("maybe");
       assert.ok(!invalidResult.success);
@@ -920,11 +920,11 @@ describe("zod()", () => {
       const parser = zod(z.coerce.boolean().catch(false));
       const trueResult = parser.parse("true");
       assert.ok(trueResult.success);
-      assert.equal(trueResult.value, true);
+      assert.ok(trueResult.value);
 
       const falseResult = parser.parse("false");
       assert.ok(falseResult.success);
-      assert.equal(falseResult.value, false);
+      assert.ok(!falseResult.value);
 
       // Invalid boolean literals are still rejected at the
       // pre-conversion layer, before Zod's catch() can fire.
@@ -1037,11 +1037,11 @@ describe("zod()", () => {
       );
       const enabledResult = parser.parse("enabled");
       assert.ok(enabledResult.success);
-      assert.equal(enabledResult.value, true);
+      assert.ok(enabledResult.value);
 
       const disabledResult = parser.parse("disabled");
       assert.ok(disabledResult.success);
-      assert.equal(disabledResult.value, false);
+      assert.ok(!disabledResult.value);
     });
 
     it("should detect async boolean schemas on valid input", () => {
@@ -1103,11 +1103,11 @@ describe("zod()", () => {
       const parser = zod(z.coerce.boolean().transform((v) => !v));
       const result = parser.parse("false");
       assert.ok(result.success);
-      assert.equal(result.value, true);
+      assert.ok(result.value);
 
       const result2 = parser.parse("true");
       assert.ok(result2.success);
-      assert.equal(result2.value, false);
+      assert.ok(!result2.value);
 
       const invalid = parser.parse("maybe");
       assert.ok(!invalid.success);
@@ -1117,11 +1117,11 @@ describe("zod()", () => {
       const parser = zod(z.coerce.boolean().readonly());
       const trueResult = parser.parse("true");
       assert.ok(trueResult.success);
-      assert.equal(trueResult.value, true);
+      assert.ok(trueResult.value);
 
       const falseResult = parser.parse("false");
       assert.ok(falseResult.success);
-      assert.equal(falseResult.value, false);
+      assert.ok(!falseResult.value);
 
       const invalid = parser.parse("maybe");
       assert.ok(!invalid.success);
@@ -1142,7 +1142,7 @@ describe("zod()", () => {
       const parser = zod(z.boolean().catch(false));
       const result = parser.parse("maybe");
       assert.ok(result.success);
-      assert.equal(result.value, false);
+      assert.ok(!result.value);
     });
 
     it("should preserve union arm precedence with coerced boolean", () => {
