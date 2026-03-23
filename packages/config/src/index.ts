@@ -461,44 +461,49 @@ function stripDeferredPromptValues<T>(
   seen.set(value, clone);
   seen.set(clone, clone);
   for (const key of Reflect.ownKeys(value)) {
+    const desc = Object.getOwnPropertyDescriptor(value, key);
+    if (
+      desc != null && "value" in desc &&
+      typeof desc.value === "function" &&
+      !seen.has(desc.value) &&
+      !/^class[\s{]/.test(
+        Function.prototype.toString.call(desc.value),
+      )
+    ) {
+      const fn = desc.value;
+      // deno-lint-ignore prefer-const
+      let fnProxy: typeof fn;
+      fnProxy = new Proxy(fn, {
+        apply(target, thisArg, args) {
+          const result = Reflect.apply(target, thisArg, args);
+          if (result instanceof Promise) {
+            return (result as Promise<unknown>).then(
+              (v) => stripDeferredPromptValues(v, seen),
+            );
+          }
+          return stripDeferredPromptValues(result, seen);
+        },
+        construct(target, args, newTarget) {
+          return Reflect.construct(
+            target,
+            args,
+            newTarget === fnProxy ? target : newTarget,
+          );
+        },
+      });
+      seen.set(fn, fnProxy);
+    }
+  }
+  for (const key of Reflect.ownKeys(value)) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (descriptor == null) {
       continue;
     }
     if ("value" in descriptor) {
-      if (
-        typeof descriptor.value === "function" &&
-        !/^class[\s{]/.test(
-          Function.prototype.toString.call(descriptor.value),
-        )
-      ) {
-        const fn = descriptor.value;
-        const cached = seen.get(fn);
-        if (cached !== undefined) {
-          descriptor.value = cached;
-        } else {
-          // deno-lint-ignore prefer-const
-          let fnProxy: typeof fn;
-          fnProxy = new Proxy(fn, {
-            apply(target, thisArg, args) {
-              const result = Reflect.apply(target, thisArg, args);
-              if (result instanceof Promise) {
-                return (result as Promise<unknown>).then(
-                  (v) => stripDeferredPromptValues(v, seen),
-                );
-              }
-              return stripDeferredPromptValues(result, seen);
-            },
-            construct(target, args, newTarget) {
-              return Reflect.construct(
-                target,
-                args,
-                newTarget === fnProxy ? target : newTarget,
-              );
-            },
-          });
-          seen.set(fn, fnProxy);
-          descriptor.value = fnProxy;
+      if (typeof descriptor.value === "function") {
+        const fnCached = seen.get(descriptor.value);
+        if (fnCached !== undefined) {
+          descriptor.value = fnCached;
         }
       } else {
         descriptor.value = stripDeferredPromptValues(

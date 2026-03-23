@@ -228,56 +228,55 @@ function stripPlaceholderValues<T>(
   // (e.g., `self() { return this; }`) are recognized by
   // stripPlaceholderValues() and not re-cloned, preserving identity.
   seen.set(clone, clone);
+  // Pre-create Proxy wrappers for all non-class function properties before
+  // cloning, so that functions stored both as own properties and inside
+  // collections (Array/Set/Map) get the same proxy regardless of iteration
+  // order.  See: https://github.com/dahlia/optique/issues/407
+  for (const key of Reflect.ownKeys(value)) {
+    const desc = Object.getOwnPropertyDescriptor(value, key);
+    if (
+      desc != null && "value" in desc &&
+      typeof desc.value === "function" &&
+      !seen.has(desc.value) &&
+      !/^class[\s{]/.test(
+        Function.prototype.toString.call(desc.value),
+      )
+    ) {
+      const fn = desc.value;
+      // deno-lint-ignore prefer-const
+      let fnProxy: typeof fn;
+      fnProxy = new Proxy(fn, {
+        apply(target, thisArg, args) {
+          const result = Reflect.apply(target, thisArg, args);
+          if (result instanceof Promise) {
+            return (result as Promise<unknown>).then(
+              (v) => stripPlaceholderValues(v, seen),
+            );
+          }
+          return stripPlaceholderValues(result, seen);
+        },
+        construct(target, args, newTarget) {
+          return Reflect.construct(
+            target,
+            args,
+            newTarget === fnProxy ? target : newTarget,
+          );
+        },
+      });
+      seen.set(fn, fnProxy);
+    }
+  }
   for (const key of Reflect.ownKeys(value)) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (descriptor == null) {
       continue;
     }
     if ("value" in descriptor) {
-      // Function properties are wrapped via Proxy so that closures
-      // capturing placeholder values have their return values sanitized.
-      // The Proxy preserves the original function's observable shape
-      // (.prototype, own properties, prototype chain, new, instanceof).
-      // Class constructors are left unwrapped to preserve static-method
-      // `this` binding for private static fields.
-      // See: https://github.com/dahlia/optique/issues/407
-      if (
-        typeof descriptor.value === "function" &&
-        !/^class[\s{]/.test(
-          Function.prototype.toString.call(descriptor.value),
-        )
-      ) {
-        const fn = descriptor.value;
-        // Reuse cached proxy for aliased functions (a: fn, b: fn)
-        // so identity checks like parsed.a === parsed.b hold.
-        const cached = seen.get(fn);
-        if (cached !== undefined) {
-          descriptor.value = cached;
-        } else {
-          // deno-lint-ignore prefer-const
-          let fnProxy: typeof fn;
-          fnProxy = new Proxy(fn, {
-            apply(target, thisArg, args) {
-              const result = Reflect.apply(target, thisArg, args);
-              if (result instanceof Promise) {
-                return (result as Promise<unknown>).then(
-                  (v) => stripPlaceholderValues(v, seen),
-                );
-              }
-              return stripPlaceholderValues(result, seen);
-            },
-            construct(target, args, newTarget) {
-              // Map new.target from proxy → original so constructor
-              // guards like new.target === FnCtor work correctly.
-              return Reflect.construct(
-                target,
-                args,
-                newTarget === fnProxy ? target : newTarget,
-              );
-            },
-          });
-          seen.set(fn, fnProxy);
-          descriptor.value = fnProxy;
+      if (typeof descriptor.value === "function") {
+        // Use pre-created proxy or pass through (class constructors).
+        const fnCached = seen.get(descriptor.value);
+        if (fnCached !== undefined) {
+          descriptor.value = fnCached;
         }
       } else {
         descriptor.value = stripPlaceholderValues(
