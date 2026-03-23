@@ -63,6 +63,7 @@ interface ZodDefinitionInternal {
   readonly schema?: z.Schema<unknown>;
   readonly in?: z.Schema<unknown>;
   readonly out?: z.Schema<unknown>;
+  readonly getter?: () => z.Schema<unknown>;
   readonly transform?: (...args: never) => unknown;
   readonly effect?: { readonly type?: string };
   readonly values?:
@@ -178,6 +179,13 @@ function analyzeBooleanInner(
     const innerType = def.innerType;
     if (innerType != null) {
       return analyzeBooleanInner(innerType, canExposeChoices);
+    }
+  }
+
+  // Lazy wrapper — resolve and unwrap the inner schema
+  if (typeName === "ZodLazy" || typeName === "lazy") {
+    if (typeof def.getter === "function") {
+      return analyzeBooleanInner(def.getter(), canExposeChoices);
     }
   }
 

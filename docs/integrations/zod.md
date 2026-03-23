@@ -154,7 +154,10 @@ Limitations
 -----------
 
  -  *Async refinements not supported*: Since Optique's parsing is synchronous,
-    async Zod features like `refine(async ...)` cannot be used. Perform async
+    async Zod features like `refine(async ...)` cannot be used.  Async boolean
+    schemas are detected when a valid boolean literal is parsed (`"true"`,
+    `"false"`, etc.) and throw a `TypeError`; unrecognized inputs like
+    `"maybe"` return a normal validation error instead.  Perform async
     validation after parsing if needed.
 
  -  *Boolean parsing in unions*: The CLI-friendly boolean parsing (accepting
