@@ -810,6 +810,12 @@ To be released.
     become empty because all their content was malformed are removed.
     [[#485], [#716]]
 
+ -  Fixed `message()` tagged template reusing interpolated `MessageTerm`
+    objects and `Message` arrays by reference, allowing mutation of the
+    returned message to corrupt the original interpolated values.
+    Interpolated terms are now deep-cloned via `cloneMessageTerm()`.
+    [[#505], [#718]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -924,6 +930,7 @@ To be released.
 [#488]: https://github.com/dahlia/optique/issues/488
 [#490]: https://github.com/dahlia/optique/pull/490
 [#500]: https://github.com/dahlia/optique/issues/500
+[#505]: https://github.com/dahlia/optique/issues/505
 [#507]: https://github.com/dahlia/optique/issues/507
 [#508]: https://github.com/dahlia/optique/issues/508
 [#512]: https://github.com/dahlia/optique/pull/512
@@ -1037,6 +1044,7 @@ To be released.
 [#713]: https://github.com/dahlia/optique/pull/713
 [#714]: https://github.com/dahlia/optique/pull/714
 [#716]: https://github.com/dahlia/optique/pull/716
+[#718]: https://github.com/dahlia/optique/pull/718
 
 ### @optique/config
 

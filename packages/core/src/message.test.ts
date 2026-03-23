@@ -137,6 +137,22 @@ describe("message template function", () => {
     );
   });
 
+  it("should clone interpolated MessageTerm objects", () => {
+    const term = optionName("--port");
+    const msg = message`Option ${term} is required`;
+    assert.deepEqual(msg[1], term);
+    assert.notEqual(msg[1], term);
+  });
+
+  it("should clone interpolated Message arrays", () => {
+    const inner = message`invalid ${optionName("--port")}`;
+    const outer = message`Error: ${inner}`;
+    for (let i = 0; i < inner.length; i++) {
+      assert.deepEqual(outer[i + 1], inner[i]);
+      assert.notEqual(outer[i + 1], inner[i]);
+    }
+  });
+
   it("should throw TypeError for unsupported interpolation value types", () => {
     const invalid = 42 as unknown as MessageTerm;
     assert.throws(

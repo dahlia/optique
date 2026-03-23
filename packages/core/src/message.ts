@@ -225,9 +225,9 @@ export function message(
     if (typeof value === "string") {
       messageTerms.push({ type: "value", value });
     } else if (Array.isArray(value)) {
-      messageTerms.push(...value);
+      messageTerms.push(...value.map(cloneMessageTerm));
     } else if (typeof value === "object" && value != null && "type" in value) {
-      messageTerms.push(value);
+      messageTerms.push(cloneMessageTerm(value));
     } else {
       throw new TypeError(
         `Invalid value type in message: ${typeof value}.`,
