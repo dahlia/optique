@@ -3633,26 +3633,30 @@ export function socketAddress(
     type: "number",
   });
 
-  function parseHost(hostInput: string): string | null {
+  function looksLikeIpv4(input: string): boolean {
+    return /^\d+\.\d+\.\d+\.\d+$/.test(input);
+  }
+
+  function parseHost(hostInput: string): ValueParserResult<string> {
     if (hostType === "hostname") {
-      // Reject IP addresses when type is "hostname"
-      const ipResult = ipParser.parse(hostInput);
-      if (ipResult.success) {
-        return null; // IP address not allowed
+      // Reject IP-shaped input when type is "hostname"
+      if (looksLikeIpv4(hostInput)) {
+        return {
+          success: false,
+          error: message`Expected a valid hostname, but got ${hostInput}.`,
+        };
       }
-      const result = hostnameParser.parse(hostInput);
-      return result.success ? result.value : null;
+      return hostnameParser.parse(hostInput);
     } else if (hostType === "ip") {
-      const result = ipParser.parse(hostInput);
-      return result.success ? result.value : null;
+      return ipParser.parse(hostInput);
     } else {
-      // Try IP first, then hostname
-      const ipResult = ipParser.parse(hostInput);
-      if (ipResult.success) {
-        return ipResult.value;
+      // "both" mode: route by lexical form, no fallback
+      if (looksLikeIpv4(hostInput)) {
+        // IP-shaped input: validate as IP only (enforces restrictions)
+        return ipParser.parse(hostInput);
       }
-      const hostnameResult = hostnameParser.parse(hostInput);
-      return hostnameResult.success ? hostnameResult.value : null;
+      // Non-IP-shaped: validate as hostname only
+      return hostnameParser.parse(hostInput);
     }
   }
 
@@ -3678,15 +3682,18 @@ export function socketAddress(
       }
 
       // Validate host
-      const validatedHost = parseHost(hostPart);
-      if (validatedHost === null) {
+      const hostResult = parseHost(hostPart);
+      if (!hostResult.success) {
         const errorMsg = options?.errors?.invalidFormat;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(input)
-          : errorMsg ??
-            message`Expected a socket address in format host${separator}port, but got ${input}.`;
-        return { success: false, error: msg };
+        if (errorMsg) {
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg;
+          return { success: false, error: msg };
+        }
+        return { success: false, error: hostResult.error };
       }
+      const validatedHost = hostResult.value;
 
       // Validate port
       let validatedPort: number;
