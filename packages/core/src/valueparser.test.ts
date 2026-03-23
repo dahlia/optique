@@ -6089,7 +6089,7 @@ describe("port", () => {
           "192e0.168.1.1", // Scientific notation
           "+127.0.0.1", // Unary plus
           "1e2.0.0.1", // 100 via scientific notation
-          "2.5e1.0.0.1", // 25 via scientific notation
+          "25e0.0.0.1", // 25 via scientific notation
         ];
 
         for (const addr of nonDecimal) {
