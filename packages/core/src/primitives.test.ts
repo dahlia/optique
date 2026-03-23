@@ -51,7 +51,7 @@ import {
   parseSync,
   type Suggestion,
 } from "@optique/core/parser";
-import type { OptionName, Usage } from "@optique/core/usage";
+import type { Usage } from "@optique/core/usage";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -4650,61 +4650,63 @@ describe("hidden option", () => {
 
     it("should throw TypeError for empty option name", () => {
       assert.throws(
-        () => option("" as OptionName, string()),
+        // @ts-expect-error: empty string is not a valid OptionName
+        () => option("", string()),
         { name: "TypeError", message: "Option name must not be empty." },
       );
     });
 
     it("should throw TypeError for whitespace-only option name", () => {
       assert.throws(
-        () => option("   " as OptionName, string()),
+        // @ts-expect-error: whitespace-only string is not a valid OptionName
+        () => option("   ", string()),
         {
           name: "TypeError",
-          message: /Option name must not be whitespace-only/,
+          message: 'Option name must not be whitespace-only: "   ".',
         },
       );
     });
 
     it("should throw TypeError for option name with control characters", () => {
       assert.throws(
-        () => option("--foo\x00" as OptionName, string()),
+        () => option("--foo\x00", string()),
         {
           name: "TypeError",
-          message: /Option name must not contain control characters/,
+          message:
+            'Option name must not contain control characters: "--foo\\x00".',
         },
       );
     });
 
     it("should throw TypeError for option name with whitespace", () => {
       assert.throws(
-        () => option("--foo bar" as OptionName, string()),
+        () => option("--foo bar", string()),
         {
           name: "TypeError",
-          message: /Option name must not contain whitespace/,
+          message: 'Option name must not contain whitespace: "--foo bar".',
         },
       );
     });
 
     it("should throw TypeError for option name without valid prefix", () => {
       assert.throws(
-        () => option("foo" as OptionName, string()),
+        // @ts-expect-error: no valid prefix is not a valid OptionName
+        () => option("foo", string()),
         {
           name: "TypeError",
-          message: /Option name must start with/,
+          message: 'Option name must start with "--", "-", "/", or "+": "foo".',
         },
       );
     });
 
-    it("should throw TypeError for bare prefix option names", () => {
-      for (const bare of ["--", "-", "/", "+"]) {
-        assert.throws(
-          () => option(bare as OptionName, string()),
-          {
-            name: "TypeError",
-            message: /Option name must not be a bare prefix/,
-          },
-        );
-      }
+    it("should throw TypeError for options terminator as option name", () => {
+      assert.throws(
+        () => option("--", string()),
+        {
+          name: "TypeError",
+          message: 'Option name must not be the options terminator "--".',
+        },
+      );
     });
 
     it("should throw TypeError when no option names are provided", () => {
@@ -4792,61 +4794,63 @@ describe("hidden option", () => {
 
     it("should throw TypeError for empty flag name", () => {
       assert.throws(
-        () => flag("" as OptionName),
+        // @ts-expect-error: empty string is not a valid OptionName
+        () => flag(""),
         { name: "TypeError", message: "Flag name must not be empty." },
       );
     });
 
     it("should throw TypeError for whitespace-only flag name", () => {
       assert.throws(
-        () => flag("   " as OptionName),
+        // @ts-expect-error: whitespace-only string is not a valid OptionName
+        () => flag("   "),
         {
           name: "TypeError",
-          message: /Flag name must not be whitespace-only/,
+          message: 'Flag name must not be whitespace-only: "   ".',
         },
       );
     });
 
     it("should throw TypeError for flag name with control characters", () => {
       assert.throws(
-        () => flag("--debug\x00" as OptionName),
+        () => flag("--debug\x00"),
         {
           name: "TypeError",
-          message: /Flag name must not contain control characters/,
+          message:
+            'Flag name must not contain control characters: "--debug\\x00".',
         },
       );
     });
 
     it("should throw TypeError for flag name with whitespace", () => {
       assert.throws(
-        () => flag("--de bug" as OptionName),
+        () => flag("--de bug"),
         {
           name: "TypeError",
-          message: /Flag name must not contain whitespace/,
+          message: 'Flag name must not contain whitespace: "--de bug".',
         },
       );
     });
 
     it("should throw TypeError for flag name without valid prefix", () => {
       assert.throws(
-        () => flag("debug" as OptionName),
+        // @ts-expect-error: no valid prefix is not a valid OptionName
+        () => flag("debug"),
         {
           name: "TypeError",
-          message: /Flag name must start with/,
+          message: 'Flag name must start with "--", "-", "/", or "+": "debug".',
         },
       );
     });
 
-    it("should throw TypeError for bare prefix flag names", () => {
-      for (const bare of ["--", "-", "/", "+"]) {
-        assert.throws(
-          () => flag(bare as OptionName),
-          {
-            name: "TypeError",
-            message: /Flag name must not be a bare prefix/,
-          },
-        );
-      }
+    it("should throw TypeError for options terminator as flag name", () => {
+      assert.throws(
+        () => flag("--"),
+        {
+          name: "TypeError",
+          message: 'Flag name must not be the options terminator "--".',
+        },
+      );
     });
 
     it("should throw TypeError when no flag names are provided", () => {

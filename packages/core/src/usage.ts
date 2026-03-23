@@ -10,11 +10,10 @@ import type { NonEmptyString } from "./nonempty.ts";
  * - Plus-prefixed options (`+o`)
  *
  * Each prefix must be followed by at least one character, so bare prefixes
- * like `"--"`, `"-"`, `"/"`, or `"+"` are not valid option names.
- *
- * Note: due to TypeScript template literal limitations, `"--"` is accepted
- * at compile time (it matches the `-${NonEmptyString}` branch) but is
- * rejected at runtime by the `option()` and `flag()` validators.
+ * like `"-"`, `"/"`, or `"+"` are rejected at compile time.  Due to
+ * TypeScript template literal limitations, `"--"` still matches the
+ * `-${NonEmptyString}` branch and is only rejected at runtime by the
+ * `option()` and `flag()` validators.
  */
 export type OptionName =
   | `--${NonEmptyString}`

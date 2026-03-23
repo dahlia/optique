@@ -68,9 +68,9 @@ export function validateOptionNames(
         `${label} name must start with "--", "-", "/", or "+": "${name}".`,
       );
     }
-    if (/^(--|-|\/|\+)$/.test(name)) {
+    if (name === "--") {
       throw new TypeError(
-        `${label} name must not be a bare prefix: "${name}".`,
+        `${label} name must not be the options terminator "--".`,
       );
     }
   }

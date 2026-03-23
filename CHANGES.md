@@ -92,11 +92,12 @@ To be released.
  -  Added runtime validation of option names to `option()` and `flag()`:
     these functions now throw `TypeError` at construction time for empty
     strings, whitespace-only strings, strings with control characters,
-    strings with embedded whitespace, bare prefixes (`"--"`, `"-"`, `"/"`,
-    `"+"`), or strings without a valid prefix.  The `OptionName` type now
-    requires at least one character after the prefix, and the `option()`
-    and `flag()` overloads now require at least one option name argument.
-    [[#381], [#709]]
+    strings with embedded whitespace, the options terminator `"--"`, or
+    strings without a valid prefix.  The `OptionName` type now enforces
+    at least one character after the prefix at compile time in most cases,
+    though `"--"` can still type-check and is rejected at runtime only.
+    The `option()` and `flag()` overloads now require at least one option
+    name argument.  [[#381], [#709]]
 
  -  Added the `@optique/core/mode-dispatch` subpath export so sibling
     packages can share internal sync/async dispatch helpers without
