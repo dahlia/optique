@@ -1312,6 +1312,12 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
 ### @optique/logtape
 
+ -  `debug()`, `verbosity()`, and `loggingOptions()` now validate log level
+    options (`debugLevel`, `normalLevel`, `baseLevel`, `default`) at runtime
+    and throw `TypeError` for invalid values.  Previously, invalid strings
+    passed via type assertions (e.g., `as never`) would silently leak into
+    successful parse results.  [[#430], [#711]]
+
  -  Fixed `createSink()` misreporting `getFileSink()` factory errors as
     missing `@logtape/file` package.  Previously, any error thrown after the
     dynamic import (e.g., file permission errors) was caught and rewritten
@@ -1357,6 +1363,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#329]: https://github.com/dahlia/optique/issues/329
 [#373]: https://github.com/dahlia/optique/issues/373
 [#379]: https://github.com/dahlia/optique/issues/379
+[#430]: https://github.com/dahlia/optique/issues/430
 [#459]: https://github.com/dahlia/optique/issues/459
 [#699]: https://github.com/dahlia/optique/pull/699
 [#702]: https://github.com/dahlia/optique/pull/702
@@ -1365,6 +1372,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#707]: https://github.com/dahlia/optique/pull/707
 [#708]: https://github.com/dahlia/optique/pull/708
 [#710]: https://github.com/dahlia/optique/pull/710
+[#711]: https://github.com/dahlia/optique/pull/711
 
 ### @optique/temporal
 
