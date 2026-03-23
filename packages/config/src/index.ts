@@ -321,17 +321,23 @@ function createSanitizedNonPlainView<T extends object>(
           break;
         }
       }
-      const result = callMethodOnSanitizedTarget(
-        {
-          apply: (thisArg: unknown) =>
-            Reflect.get(target, key, thisArg ?? target),
-        },
-        receiver,
-        target,
-        [],
-        stripDeferredPromptValues,
-        seen,
-      );
+      let result: unknown;
+      try {
+        result = Reflect.get(target, key, receiver);
+      } catch (e) {
+        if (!(e instanceof TypeError)) throw e;
+        result = callMethodOnSanitizedTarget(
+          {
+            apply: (thisArg: unknown) =>
+              Reflect.get(target, key, thisArg ?? target),
+          },
+          receiver,
+          target,
+          [],
+          stripDeferredPromptValues,
+          seen,
+        );
+      }
       if (typeof result === "function") {
         if (/^class[\s{]/.test(Function.prototype.toString.call(result))) {
           return result;
