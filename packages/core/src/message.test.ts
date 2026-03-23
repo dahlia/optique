@@ -234,7 +234,8 @@ describe("message term constructors", () => {
     const urlObj = new URL("https://example.com");
     const term = url(urlObj);
     assert.equal(term.type, "url");
-    assert.equal(term.url, urlObj);
+    assert.equal(term.url.href, urlObj.href);
+    assert.notEqual(term.url, urlObj);
   });
 
   it("should accept various protocols (ftp, file, etc.)", () => {
@@ -294,7 +295,8 @@ describe("message term constructors", () => {
     const urlObj = new URL("https://example.com");
     const term = link(urlObj);
     assert.equal(term.type, "url");
-    assert.equal(term.url, urlObj);
+    assert.equal(term.url.href, urlObj.href);
+    assert.notEqual(term.url, urlObj);
   });
 
   it("link() should throw RangeError for invalid URL", () => {
@@ -302,6 +304,30 @@ describe("message term constructors", () => {
       () => link("not valid"),
       RangeError,
     );
+  });
+
+  it("optionNames() should not be affected by later mutation of the input array", () => {
+    const names = ["--a", "--b"];
+    const term = optionNames(names);
+    names[0] = "--z";
+    assert.equal(term.type, "optionNames");
+    assert.deepEqual(term.optionNames, ["--a", "--b"]);
+  });
+
+  it("values() should not be affected by later mutation of the input array", () => {
+    const vals = ["a", "b"];
+    const term = values(vals);
+    vals[1] = "y";
+    assert.equal(term.type, "values");
+    assert.deepEqual(term.values, ["a", "b"]);
+  });
+
+  it("url(URL) should not be affected by later mutation of the input URL", () => {
+    const href = new URL("https://example.com");
+    const term = url(href);
+    href.pathname = "/changed";
+    assert.equal(term.type, "url");
+    assert.equal(term.url.href, "https://example.com/");
   });
 });
 
