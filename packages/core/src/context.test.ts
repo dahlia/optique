@@ -1,10 +1,5 @@
 import type { Annotations } from "@optique/core/annotations";
-import {
-  isPlaceholderValue,
-  isStaticContext,
-  placeholder,
-  type SourceContext,
-} from "@optique/core/context";
+import { isStaticContext, type SourceContext } from "@optique/core/context";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as fc from "fast-check";
@@ -325,28 +320,6 @@ describe("SourceContext", () => {
       };
 
       assert.equal(context.finalizeParsed, undefined);
-    });
-  });
-
-  describe("placeholder values", () => {
-    it("should detect objects carrying the placeholder", () => {
-      const sentinel = { [placeholder]: true };
-
-      assert.ok(isPlaceholderValue(sentinel));
-      assert.ok(!isPlaceholderValue({}));
-      assert.ok(!isPlaceholderValue("string"));
-      assert.ok(!isPlaceholderValue(null));
-      assert.ok(!isPlaceholderValue(undefined));
-      assert.ok(!isPlaceholderValue(42));
-    });
-
-    it("should work with class instances", () => {
-      class MyPlaceholder {
-        readonly [placeholder] = true;
-      }
-
-      assert.ok(isPlaceholderValue(new MyPlaceholder()));
-      assert.ok(!isPlaceholderValue({ unrelated: true }));
     });
   });
 
