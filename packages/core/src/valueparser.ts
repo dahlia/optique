@@ -2623,6 +2623,17 @@ export function ipv4(options?: Ipv4Options): ValueParser<"sync", string> {
           return { success: false, error: msg };
         }
 
+        // Reject non-decimal representations (e.g., scientific notation
+        // "192e0", unary plus "+127") that Number() would silently accept
+        if (!/^[0-9]+$/.test(part)) {
+          const errorMsg = options?.errors?.invalidIpv4;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ??
+              message`Expected a valid IPv4 address, but got ${input}.`;
+          return { success: false, error: msg };
+        }
+
         const octet = Number(part);
         if (!Number.isInteger(octet) || octet < 0 || octet > 255) {
           const errorMsg = options?.errors?.invalidIpv4;

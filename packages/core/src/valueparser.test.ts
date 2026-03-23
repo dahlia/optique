@@ -6081,6 +6081,25 @@ describe("port", () => {
           assert.equal(result.value, "192.168.0.1");
         }
       });
+
+      it("should reject non-decimal octet representations", () => {
+        const parser = ipv4();
+
+        const nonDecimal = [
+          "192e0.168.1.1", // Scientific notation
+          "+127.0.0.1", // Unary plus
+          "1e2.0.0.1", // 100 via scientific notation
+          "2.5e1.0.0.1", // 25 via scientific notation
+        ];
+
+        for (const addr of nonDecimal) {
+          const result = parser.parse(addr);
+          assert.ok(
+            !result.success,
+            `Should reject non-decimal IPv4 octet: ${addr}`,
+          );
+        }
+      });
     });
 
     describe("private IP filtering", () => {
@@ -9257,6 +9276,20 @@ describe("socketAddress()", () => {
         { type: "value", value: "-invalid.com:80" },
         { type: "text", text: "." },
       ]);
+    });
+
+    it("should treat non-decimal dotted strings as hostnames in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowPrivate: false } },
+      });
+
+      // "192e0" is not a valid decimal IPv4 octet, so 192e0.168.1.1
+      // is not an IPv4 address.  It IS a valid DNS hostname label
+      // (alphanumeric), so it is accepted as a hostname.
+      const result = parser.parse("192e0.168.1.1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "192e0.168.1.1");
     });
 
     it("should reject IP-shaped input in hostname mode regardless of IP restrictions", () => {
