@@ -2216,38 +2216,92 @@ describe("normalizeUsage", () => {
       assert.deepEqual(result, usage);
     });
 
-    it("should handle exclusive with empty terms array", () => {
-      const usage: Usage = [
+    it("should strip exclusive with empty terms array", () => {
+      const result = normalizeUsage([
+        { type: "exclusive", terms: [] },
+      ]);
+      assert.deepEqual(result, []);
+    });
+
+    it("should strip optional with empty terms", () => {
+      const result = normalizeUsage([
+        { type: "optional", terms: [] },
+      ]);
+      assert.deepEqual(result, []);
+    });
+
+    it("should strip multiple with empty terms", () => {
+      const result = normalizeUsage([
+        { type: "multiple", terms: [], min: 0 },
+      ]);
+      assert.deepEqual(result, []);
+    });
+
+    it("should strip option with empty names", () => {
+      const result = normalizeUsage([
+        { type: "option", names: [] as never },
+      ]);
+      assert.deepEqual(result, []);
+    });
+
+    it("should strip command with empty name", () => {
+      const result = normalizeUsage([
+        { type: "command", name: "" } as never,
+      ]);
+      assert.deepEqual(result, []);
+    });
+
+    it("should strip argument with empty metavar", () => {
+      const result = normalizeUsage([
+        { type: "argument", metavar: "" } as never,
+      ]);
+      assert.deepEqual(result, []);
+    });
+
+    it("should strip literal with empty value", () => {
+      const result = normalizeUsage([
+        { type: "literal", value: "" } as never,
+      ]);
+      assert.deepEqual(result, []);
+    });
+
+    it("should strip exclusive with all-empty branches", () => {
+      const result = normalizeUsage([
+        { type: "exclusive", terms: [[]] },
+      ]);
+      assert.deepEqual(result, []);
+    });
+
+    it("should keep exclusive with some non-empty branches", () => {
+      const result = normalizeUsage([
         {
           type: "exclusive",
-          terms: [],
+          terms: [
+            [],
+            [{ type: "option", names: ["--verbose"] }],
+          ],
         },
-      ];
-      const result = normalizeUsage(usage);
-      assert.deepEqual(result, usage);
+      ]);
+      assert.deepEqual(result, [
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "option", names: ["--verbose"] }],
+          ],
+        },
+      ]);
     });
 
-    it("should handle optional with empty terms", () => {
-      const usage: Usage = [
-        {
-          type: "optional",
-          terms: [],
-        },
-      ];
-      const result = normalizeUsage(usage);
-      assert.deepEqual(result, usage);
-    });
-
-    it("should handle multiple with empty terms", () => {
-      const usage: Usage = [
-        {
-          type: "multiple",
-          terms: [],
-          min: 0,
-        },
-      ];
-      const result = normalizeUsage(usage);
-      assert.deepEqual(result, usage);
+    it("should strip degenerate terms from mixed usage", () => {
+      const result = normalizeUsage([
+        { type: "option", names: ["--verbose"] },
+        { type: "option", names: [] as never, metavar: "X" },
+        { type: "argument", metavar: "FILE" },
+      ]);
+      assert.deepEqual(result, [
+        { type: "option", names: ["--verbose"] },
+        { type: "argument", metavar: "FILE" },
+      ]);
     });
   });
 
