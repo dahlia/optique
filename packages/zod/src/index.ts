@@ -134,7 +134,7 @@ interface BooleanSchemaInfo {
 function analyzeBooleanSchema(
   schema: z.Schema<unknown>,
 ): BooleanSchemaInfo {
-  const result = analyzeBooleanInner(schema, true);
+  const result = analyzeBooleanInner(schema, true, new WeakSet());
   if (!result.isBoolean) {
     return { isBoolean: false, exposeChoices: false, isCoerced: false };
   }
@@ -144,7 +144,14 @@ function analyzeBooleanSchema(
 function analyzeBooleanInner(
   schema: z.Schema<unknown>,
   canExposeChoices: boolean,
+  visited: WeakSet<object>,
 ): BooleanSchemaInfo {
+  // Cycle detection for recursive z.lazy() schemas
+  if (visited.has(schema)) {
+    return { isBoolean: false, exposeChoices: false, isCoerced: false };
+  }
+  visited.add(schema);
+
   const def = (schema as ZodSchemaInternal)._def;
   if (!def) return { isBoolean: false, exposeChoices: false, isCoerced: false };
   const typeName = def.typeName ?? def.type;
@@ -178,14 +185,14 @@ function analyzeBooleanInner(
   ) {
     const innerType = def.innerType;
     if (innerType != null) {
-      return analyzeBooleanInner(innerType, canExposeChoices);
+      return analyzeBooleanInner(innerType, canExposeChoices, visited);
     }
   }
 
   // Lazy wrapper — resolve and unwrap the inner schema
   if (typeName === "ZodLazy" || typeName === "lazy") {
     if (typeof def.getter === "function") {
-      return analyzeBooleanInner(def.getter(), canExposeChoices);
+      return analyzeBooleanInner(def.getter(), canExposeChoices, visited);
     }
   }
 
@@ -199,7 +206,7 @@ function analyzeBooleanInner(
     }
     const innerSchema = def.schema;
     if (innerSchema != null) {
-      return analyzeBooleanInner(innerSchema, false);
+      return analyzeBooleanInner(innerSchema, false, visited);
     }
   }
 
@@ -207,7 +214,7 @@ function analyzeBooleanInner(
   if (typeName === "ZodCatch" || typeName === "catch") {
     const innerType = def.innerType;
     if (innerType != null) {
-      return analyzeBooleanInner(innerType, false);
+      return analyzeBooleanInner(innerType, false, visited);
     }
   }
 
@@ -220,7 +227,7 @@ function analyzeBooleanInner(
         ? def.type as z.Schema<unknown>
         : undefined);
     if (innerType != null) {
-      return analyzeBooleanInner(innerType, false);
+      return analyzeBooleanInner(innerType, false, visited);
     }
   }
 
@@ -232,12 +239,12 @@ function analyzeBooleanInner(
     // Zod v4 pipe: _def.in / _def.out
     const inSchema = def.in;
     if (inSchema != null) {
-      return analyzeBooleanInner(inSchema, false);
+      return analyzeBooleanInner(inSchema, false, visited);
     }
     // Zod v3 pipeline: _def.innerType
     const innerType = def.innerType;
     if (innerType != null) {
-      return analyzeBooleanInner(innerType, false);
+      return analyzeBooleanInner(innerType, false, visited);
     }
   }
 
@@ -245,7 +252,7 @@ function analyzeBooleanInner(
   if (typeName === "pipeline") {
     const innerType = def.innerType;
     if (innerType != null) {
-      return analyzeBooleanInner(innerType, false);
+      return analyzeBooleanInner(innerType, false, visited);
     }
   }
 
