@@ -938,6 +938,16 @@ describe("zod()", () => {
       assert.equal(parser.suggest, undefined);
     });
 
+    it("should not expose choices for superRefined boolean schemas", () => {
+      const parser = zod(
+        z.boolean().superRefine((v, ctx) => {
+          if (!v) ctx.addIssue({ code: "custom", message: "must be true" });
+        }),
+      );
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
+    });
+
     it("should not expose choices for catch-wrapped boolean schemas", () => {
       const parser = zod(z.coerce.boolean().catch(false));
       assert.equal(parser.choices, undefined);
