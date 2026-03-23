@@ -182,7 +182,8 @@ To be released.
     bypassing IP restrictions.  These non-standard forms are now detected and
     rejected with a specific error message.  Detection is bounded to values
     that fit within the 32-bit IPv4 range, so hex-prefixed hostnames outside
-    that range (e.g., `0x100000000`) remain valid.  This also affects
+    that range (e.g., `0x100000000`) remain valid.  Plain decimal host labels
+    (e.g., `1234`, `2130706433`) also remain valid hostnames.  This also affects
     `socketAddress()` with `host: { type: "hostname" }`.  [[#715], [#717]]
 
  -  Fixed `hostname()` accepting case variants of `localhost` (e.g.,
