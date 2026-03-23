@@ -568,7 +568,8 @@ describe("loggingOptions()", () => {
       () => loggingOptions({ level: "traceflag" } as never),
       {
         name: "TypeError",
-        message: /unsupported.*level/i,
+        message: "Unsupported level configuration: traceflag." +
+          '  Expected "option", "verbosity", or "debug".',
       },
     );
   });
