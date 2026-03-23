@@ -77,6 +77,12 @@ const age = zod(z.coerce.number().int().min(0));
 const num = zod(z.number());  // [!code error]
 ~~~~
 
+> [!NOTE]
+> Both `z.boolean()` and `z.coerce.boolean()` are handled specially:
+> instead of rejecting CLI strings or applying JavaScript truthiness
+> semantics, Optique accepts CLI-friendly literals (`true`/`false`,
+> `1`/`0`, `yes`/`no`, `on`/`off`, case-insensitive).
+
 
 Transformations
 ---------------
@@ -149,8 +155,17 @@ Limitations
 -----------
 
  -  *Async refinements not supported*: Since Optique's parsing is synchronous,
-    async Zod features like `refine(async ...)` cannot be used. Perform async
+    async Zod features like `refine(async ...)` cannot be used.  Async boolean
+    schemas are detected when a valid boolean literal is parsed (`"true"`,
+    `"false"`, etc.) and throw a `TypeError`; unrecognized inputs like
+    `"maybe"` return a normal validation error instead.  Perform async
     validation after parsing if needed.
+
+ -  *Boolean parsing in unions*: The CLI-friendly boolean parsing (accepting
+    `true`/`false`, `1`/`0`, `yes`/`no`, `on`/`off`) applies only when the
+    entire schema is recognized as a boolean type.  For unions that are not
+    recognized as wholly boolean, arm precedence is preserved and parsing
+    follows Zod's native union/coercion behavior.
 
 The Zod integration provides a powerful way to reuse validation logic across
 your entire application while maintaining full type safety and excellent error
