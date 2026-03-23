@@ -2304,6 +2304,38 @@ describe("normalizeUsage", () => {
         { type: "argument", metavar: "FILE" },
       ]);
     });
+
+    it("should drop exclusive branches that normalize to empty", () => {
+      const result = normalizeUsage([
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "option", names: [] as never }],
+            [{ type: "option", names: ["--verbose"] }],
+          ],
+        },
+      ]);
+      assert.deepEqual(result, [
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "option", names: ["--verbose"] }],
+          ],
+        },
+      ]);
+    });
+
+    it("should strip exclusive when all branches normalize to empty", () => {
+      const result = normalizeUsage([
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "option", names: [] as never }],
+          ],
+        },
+      ]);
+      assert.deepEqual(result, []);
+    });
   });
 
   describe("immutability", () => {

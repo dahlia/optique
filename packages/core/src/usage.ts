@@ -564,7 +564,11 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
         for (const subUsage of normalized[0].terms) {
           terms.push([...subUsage, ...rest]);
         }
-      } else {
+      } else if (normalized.length > 0 || usage.length === 0) {
+        // Keep the branch if it still has content, or if it was
+        // originally empty (intentional empty alternative, e.g.,
+        // conditional() default branches).  Drop branches that became
+        // empty solely because all their terms were degenerate.
         terms.push(normalized);
       }
     }
