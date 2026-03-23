@@ -325,7 +325,12 @@ function createSanitizedNonPlainView<T extends object>(
       try {
         result = Reflect.get(target, key, receiver);
       } catch (e) {
-        if (!(e instanceof TypeError)) throw e;
+        if (
+          !(e instanceof TypeError) ||
+          !/private/i.test(String((e as TypeError).message))
+        ) {
+          throw e;
+        }
         result = callMethodOnSanitizedTarget(
           {
             apply: (thisArg: unknown) =>
@@ -410,7 +415,34 @@ function stripDeferredPromptValues<T>(
   }
   if (typeof value === "function") {
     const fnCached = seen.get(value as object);
-    return (fnCached !== undefined ? fnCached : value) as T;
+    if (fnCached !== undefined) return fnCached as T;
+    if (
+      !/^class[\s{]/.test(Function.prototype.toString.call(value))
+    ) {
+      // deno-lint-ignore prefer-const
+      let fnProxy: typeof value;
+      fnProxy = new Proxy(value, {
+        apply(target, thisArg, args) {
+          const result = Reflect.apply(target, thisArg, args);
+          if (result instanceof Promise) {
+            return (result as Promise<unknown>).then(
+              (v) => stripDeferredPromptValues(v, seen),
+            );
+          }
+          return stripDeferredPromptValues(result, seen);
+        },
+        construct(target, args, newTarget) {
+          return Reflect.construct(
+            target,
+            args,
+            newTarget === fnProxy ? target : newTarget,
+          );
+        },
+      });
+      seen.set(value as object, fnProxy);
+      return fnProxy as T;
+    }
+    return value;
   }
   if (value == null || typeof value !== "object") {
     return value;
@@ -477,56 +509,15 @@ function stripDeferredPromptValues<T>(
   seen.set(value, clone);
   seen.set(clone, clone);
   for (const key of Reflect.ownKeys(value)) {
-    const desc = Object.getOwnPropertyDescriptor(value, key);
-    if (
-      desc != null && "value" in desc &&
-      typeof desc.value === "function" &&
-      !seen.has(desc.value) &&
-      !/^class[\s{]/.test(
-        Function.prototype.toString.call(desc.value),
-      )
-    ) {
-      const fn = desc.value;
-      // deno-lint-ignore prefer-const
-      let fnProxy: typeof fn;
-      fnProxy = new Proxy(fn, {
-        apply(target, thisArg, args) {
-          const result = Reflect.apply(target, thisArg, args);
-          if (result instanceof Promise) {
-            return (result as Promise<unknown>).then(
-              (v) => stripDeferredPromptValues(v, seen),
-            );
-          }
-          return stripDeferredPromptValues(result, seen);
-        },
-        construct(target, args, newTarget) {
-          return Reflect.construct(
-            target,
-            args,
-            newTarget === fnProxy ? target : newTarget,
-          );
-        },
-      });
-      seen.set(fn, fnProxy);
-    }
-  }
-  for (const key of Reflect.ownKeys(value)) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (descriptor == null) {
       continue;
     }
     if ("value" in descriptor) {
-      if (typeof descriptor.value === "function") {
-        const fnCached = seen.get(descriptor.value);
-        if (fnCached !== undefined) {
-          descriptor.value = fnCached;
-        }
-      } else {
-        descriptor.value = stripDeferredPromptValues(
-          descriptor.value,
-          seen,
-        );
-      }
+      descriptor.value = stripDeferredPromptValues(
+        descriptor.value,
+        seen,
+      );
     } else if ("get" in descriptor && descriptor.get != null) {
       const originalGetter = descriptor.get;
       descriptor.get = function (this: unknown) {

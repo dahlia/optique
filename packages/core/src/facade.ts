@@ -155,11 +155,38 @@ function stripPlaceholderValues<T>(
   if (isPlaceholderValue(value)) {
     return undefined as T;
   }
-  // Check seen cache for functions so that wrapped aliases (e.g., fn stored
-  // both as an own property and inside an array) return the same proxy.
+  // Wrap non-class functions to sanitize their return values.  Cached proxies
+  // are reused for aliased functions across own properties and collections.
   if (typeof value === "function") {
     const fnCached = seen.get(value as object);
-    return (fnCached !== undefined ? fnCached : value) as T;
+    if (fnCached !== undefined) return fnCached as T;
+    if (
+      !/^class[\s{]/.test(Function.prototype.toString.call(value))
+    ) {
+      // deno-lint-ignore prefer-const
+      let fnProxy: typeof value;
+      fnProxy = new Proxy(value, {
+        apply(target, thisArg, args) {
+          const result = Reflect.apply(target, thisArg, args);
+          if (result instanceof Promise) {
+            return (result as Promise<unknown>).then(
+              (v) => stripPlaceholderValues(v, seen),
+            );
+          }
+          return stripPlaceholderValues(result, seen);
+        },
+        construct(target, args, newTarget) {
+          return Reflect.construct(
+            target,
+            args,
+            newTarget === fnProxy ? target : newTarget,
+          );
+        },
+      });
+      seen.set(value as object, fnProxy);
+      return fnProxy as T;
+    }
+    return value;
   }
   if (value == null || typeof value !== "object") {
     return value;
@@ -228,62 +255,16 @@ function stripPlaceholderValues<T>(
   // (e.g., `self() { return this; }`) are recognized by
   // stripPlaceholderValues() and not re-cloned, preserving identity.
   seen.set(clone, clone);
-  // Pre-create Proxy wrappers for all non-class function properties before
-  // cloning, so that functions stored both as own properties and inside
-  // collections (Array/Set/Map) get the same proxy regardless of iteration
-  // order.  See: https://github.com/dahlia/optique/issues/407
-  for (const key of Reflect.ownKeys(value)) {
-    const desc = Object.getOwnPropertyDescriptor(value, key);
-    if (
-      desc != null && "value" in desc &&
-      typeof desc.value === "function" &&
-      !seen.has(desc.value) &&
-      !/^class[\s{]/.test(
-        Function.prototype.toString.call(desc.value),
-      )
-    ) {
-      const fn = desc.value;
-      // deno-lint-ignore prefer-const
-      let fnProxy: typeof fn;
-      fnProxy = new Proxy(fn, {
-        apply(target, thisArg, args) {
-          const result = Reflect.apply(target, thisArg, args);
-          if (result instanceof Promise) {
-            return (result as Promise<unknown>).then(
-              (v) => stripPlaceholderValues(v, seen),
-            );
-          }
-          return stripPlaceholderValues(result, seen);
-        },
-        construct(target, args, newTarget) {
-          return Reflect.construct(
-            target,
-            args,
-            newTarget === fnProxy ? target : newTarget,
-          );
-        },
-      });
-      seen.set(fn, fnProxy);
-    }
-  }
   for (const key of Reflect.ownKeys(value)) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (descriptor == null) {
       continue;
     }
     if ("value" in descriptor) {
-      if (typeof descriptor.value === "function") {
-        // Use pre-created proxy or pass through (class constructors).
-        const fnCached = seen.get(descriptor.value);
-        if (fnCached !== undefined) {
-          descriptor.value = fnCached;
-        }
-      } else {
-        descriptor.value = stripPlaceholderValues(
-          descriptor.value,
-          seen,
-        );
-      }
+      descriptor.value = stripPlaceholderValues(
+        descriptor.value,
+        seen,
+      );
     } else if ("get" in descriptor && descriptor.get != null) {
       // Wrap getters to sanitize their return values so that accessor-
       // based DTOs (e.g., `get apiKey() { return hidden; }`) don't
@@ -552,7 +533,13 @@ function createSanitizedNonPlainView<T extends object>(
       try {
         result = Reflect.get(target, key, receiver);
       } catch (e) {
-        if (!(e instanceof TypeError)) throw e;
+        // Only fall back for private-field receiver errors.
+        if (
+          !(e instanceof TypeError) ||
+          !/private/i.test(String((e as TypeError).message))
+        ) {
+          throw e;
+        }
         result = callMethodOnSanitizedTarget(
           {
             apply: (thisArg: unknown) =>
