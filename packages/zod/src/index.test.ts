@@ -1150,24 +1150,28 @@ describe("zod()", () => {
       assert.equal(result.value, false);
     });
 
-    it("should pre-convert boolean literals in union schemas", () => {
-      // Literal arm first so Zod tries it before the coerced boolean
-      const parser = zod(
-        z.union([z.literal("auto"), z.coerce.boolean()]),
+    it("should preserve union arm precedence with coerced boolean", () => {
+      // Union schemas should not be affected by boolean pre-conversion.
+      // The string arm should match "off" even though it's a boolean literal.
+      const parser = zod(z.union([z.literal("off"), z.coerce.boolean()]));
+      const offResult = parser.parse("off");
+      assert.ok(offResult.success);
+      assert.equal(offResult.value, "off");
+    });
+
+    it("should throw TypeError for async superRefine on valid input", () => {
+      const asyncSchema = z.coerce.boolean().superRefine(
+        // deno-lint-ignore require-await
+        async (v, ctx) => {
+          if (!v) ctx.addIssue({ code: "custom", message: "bad" });
+        },
       );
-      // Recognized boolean literals should be pre-converted
-      const trueResult = parser.parse("true");
-      assert.ok(trueResult.success);
-      assert.equal(trueResult.value, true);
-
-      const falseResult = parser.parse("false");
-      assert.ok(falseResult.success);
-      assert.equal(falseResult.value, false);
-
-      // Non-boolean literals should fall through to other arms
-      const autoResult = parser.parse("auto");
-      assert.ok(autoResult.success);
-      assert.equal(autoResult.value, "auto");
+      const parser = zod(asyncSchema as never);
+      // Async detected via doSafeParse on valid boolean literals
+      assert.throws(
+        () => parser.parse("true"),
+        { name: "TypeError" },
+      );
     });
 
     it("should throw TypeError for async boolean transforms on invalid input", () => {
