@@ -333,6 +333,29 @@ function hasAsyncChecks(schema: z.Schema<unknown>): boolean {
 }
 
 /**
+ * Checks whether a schema has any runtime checks, effects, or transforms
+ * that `hasAsyncChecks()` could not statically classify.  Used to decide
+ * whether a runtime probe is needed: schemas without any checks/effects
+ * at all (plain `z.coerce.boolean()`) can safely skip the probe.
+ */
+function hasRuntimeChecks(schema: z.Schema<unknown>): boolean {
+  const def = (schema as ZodSchemaInternal)._def;
+  if (!def) return false;
+
+  if (Array.isArray(def.checks) && def.checks.length > 0) return true;
+  if (def.effect != null) return true;
+  if (typeof def.transform === "function") return true;
+
+  const inner = def.innerType ?? def.schema ?? def.in;
+  if (inner != null && hasRuntimeChecks(inner)) return true;
+
+  const out = def.out;
+  if (out != null && hasRuntimeChecks(out)) return true;
+
+  return false;
+}
+
+/**
  * Infers an appropriate metavar string from a Zod schema.
  *
  * This function analyzes the Zod schema's internal structure to determine
@@ -689,15 +712,15 @@ export function zod<T>(
   // 1. Static check: inspect check/effect functions for the
   //    `AsyncFunction` constructor.  This catches `async` keyword
   //    functions without executing any user code.
-  // 2. Runtime probe: if static analysis finds nothing, probe
-  //    safeParse(true) and safeParse(false) to catch patterns that
-  //    cannot be detected statically (e.g., () => Promise.resolve(),
-  //    superRefine(async ...) where Zod wraps the callback).
-  //    Probing with both values catches conditionally async callbacks
-  //    like `v => v ? true : Promise.resolve(true)`.
+  // 2. Runtime probe: only when the schema has checks/effects that
+  //    static analysis couldn't resolve (non-AsyncFunction callbacks),
+  //    probe safeParse(true) and safeParse(false) to catch patterns
+  //    like () => Promise.resolve() or superRefine(async ...).
   //
-  // The runtime probe only executes when the static check passes,
-  // so common `async` keyword schemas incur no side effects at all.
+  // Schemas without any checks/effects skip both tiers entirely.
+  // Schemas whose checks all use the `async` keyword are caught in
+  // tier 1 with no side effects.  Only schemas with non-AsyncFunction
+  // checks trigger the runtime probe.
   if (boolInfo.isBoolean && boolInfo.isCoerced) {
     if (hasAsyncChecks(schema)) {
       throw new TypeError(
@@ -705,19 +728,23 @@ export function zod<T>(
           "by zod(). Use synchronous schemas instead.",
       );
     }
-    // Static check passed — probe to catch non-AsyncFunction patterns.
-    for (const probeValue of [true, false]) {
-      try {
-        schema.safeParse(probeValue);
-      } catch (error) {
-        if (error instanceof Error && isZodAsyncError(error)) {
-          throw new TypeError(
-            "Async Zod schemas (e.g., async refinements) are not supported " +
-              "by zod(). Use synchronous schemas instead.",
-          );
+    // Only probe when the schema has checks/effects that static
+    // analysis couldn't determine.  Plain z.coerce.boolean() without
+    // refinements has no checks and is skipped entirely.
+    if (hasRuntimeChecks(schema)) {
+      for (const probeValue of [true, false]) {
+        try {
+          schema.safeParse(probeValue);
+        } catch (error) {
+          if (error instanceof Error && isZodAsyncError(error)) {
+            throw new TypeError(
+              "Async Zod schemas (e.g., async refinements) are not " +
+                "supported by zod(). Use synchronous schemas instead.",
+            );
+          }
+          // Non-async errors (e.g., throwing refinements) are caught
+          // and ignored — they will be reported normally during parse().
         }
-        // Non-async errors (e.g., throwing refinements) are caught
-        // and ignored — they will be reported normally during parse().
       }
     }
   }
