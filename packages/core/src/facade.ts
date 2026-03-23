@@ -155,37 +155,7 @@ function stripPlaceholderValues<T>(
   if (isPlaceholderValue(value)) {
     return undefined as T;
   }
-  // Wrap non-class functions to sanitize their return values.  Cached proxies
-  // are reused for aliased functions across own properties and collections.
-  if (typeof value === "function") {
-    const fnCached = seen.get(value as object);
-    if (fnCached !== undefined) return fnCached as T;
-    if (
-      !/^class[\s{]/.test(Function.prototype.toString.call(value))
-    ) {
-      // deno-lint-ignore prefer-const
-      let fnProxy: typeof value;
-      fnProxy = new Proxy(value, {
-        apply(target, thisArg, args) {
-          const result = Reflect.apply(target, thisArg, args);
-          if (result instanceof Promise) {
-            return (result as Promise<unknown>).then(
-              (v) => stripPlaceholderValues(v, seen),
-            );
-          }
-          return stripPlaceholderValues(result, seen);
-        },
-        construct(target, args, newTarget) {
-          return Reflect.construct(
-            target,
-            args,
-            newTarget === fnProxy ? target : newTarget,
-          );
-        },
-      });
-      seen.set(value as object, fnProxy);
-      return fnProxy as T;
-    }
+  if (typeof value !== "object") {
     return value;
   }
   if (value == null || typeof value !== "object") {
@@ -241,11 +211,6 @@ function stripPlaceholderValues<T>(
       return value;
     }
     return createSanitizedNonPlainView(value, seen) as T;
-  }
-  // Fast path: clean nested plain objects pass through unchanged to
-  // preserve identity for reference-based lookups (e.g., WeakMap keys).
-  if (!containsPlaceholderValues(value)) {
-    return value;
   }
   const clone: Record<PropertyKey, unknown> = Object.create(
     Object.getPrototypeOf(value),

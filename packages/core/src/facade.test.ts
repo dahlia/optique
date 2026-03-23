@@ -10335,59 +10335,12 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(observedApiKey, undefined);
   });
 
-  it("method-only wrapper DTO strips placeholder from closure-captured value", async () => {
-    // When map() produces a plain object with a method that captures
-    // a placeholder value from the parser's output in its closure, the
-    // sanitizer must wrap function-valued properties so that method return
-    // values are stripped of placeholders.
-    let observedResult: unknown = "not-set";
-
-    const contextKey = Symbol.for("@test/method-only-wrapper-closure");
-    const dynamicContext: SourceContext = {
-      id: contextKey,
-      mode: "dynamic",
-      getAnnotations(parsed?: unknown) {
-        if (parsed == null) return {};
-        if (
-          typeof parsed === "object" &&
-          parsed != null &&
-          "toConfigInput" in parsed
-        ) {
-          observedResult = (parsed as { toConfigInput(): unknown })
-            .toConfigInput();
-        }
-        return {};
-      },
-    };
-
-    const parser = map(
-      object({
-        name: withDefault(option("--name", string()), "test"),
-      }),
-      (value) => ({
-        name: value.name,
-        deferred: { [testPlaceholderKey]: true },
-        toConfigInput() {
-          // The placeholder is both in an own property (deferred) and
-          // captured in this closure.  The sanitizer must wrap this method.
-          return { apiKey: { [testPlaceholderKey]: true } };
-        },
-      }),
-    );
-
-    await runWith(parser, "test", [dynamicContext], {
-      args: [],
-    });
-
-    // The method returns an object containing a placeholder. The sanitizer
-    // wraps function-valued properties and strips placeholder values from
-    // return values.
-    assert.ok(observedResult != null && typeof observedResult === "object");
-    assert.equal(
-      (observedResult as { apiKey: unknown }).apiKey,
-      undefined,
-    );
-  });
+  // NOTE: Plain-object function properties are not wrapped during
+  // sanitization to preserve function identity.  Method closures that
+  // capture placeholder values will return them unsanitized when called
+  // by phase-two contexts.  This is a known limitation — the proxy-based
+  // sanitization for non-plain objects (createSanitizedNonPlainView)
+  // does sanitize method return values via callMethodOnSanitizedTarget.
 
   // NOTE: Getters that access private fields through the proxy receiver
   // throw TypeError.  This is a known limitation — use methods (which go

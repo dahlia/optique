@@ -392,35 +392,7 @@ function stripDeferredPromptValues<T>(
   if (isDeferredPromptValue(value)) {
     return undefined as T;
   }
-  if (typeof value === "function") {
-    const fnCached = seen.get(value as object);
-    if (fnCached !== undefined) return fnCached as T;
-    if (
-      !/^class[\s{]/.test(Function.prototype.toString.call(value))
-    ) {
-      // deno-lint-ignore prefer-const
-      let fnProxy: typeof value;
-      fnProxy = new Proxy(value, {
-        apply(target, thisArg, args) {
-          const result = Reflect.apply(target, thisArg, args);
-          if (result instanceof Promise) {
-            return (result as Promise<unknown>).then(
-              (v) => stripDeferredPromptValues(v, seen),
-            );
-          }
-          return stripDeferredPromptValues(result, seen);
-        },
-        construct(target, args, newTarget) {
-          return Reflect.construct(
-            target,
-            args,
-            newTarget === fnProxy ? target : newTarget,
-          );
-        },
-      });
-      seen.set(value as object, fnProxy);
-      return fnProxy as T;
-    }
+  if (typeof value !== "object") {
     return value;
   }
   if (value == null || typeof value !== "object") {
