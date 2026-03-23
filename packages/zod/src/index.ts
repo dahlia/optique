@@ -63,6 +63,7 @@ interface ZodDefinitionInternal {
   readonly schema?: z.Schema<unknown>;
   readonly in?: z.Schema<unknown>;
   readonly out?: z.Schema<unknown>;
+  readonly transform?: (...args: never) => unknown;
   readonly effect?: { readonly type?: string };
   readonly values?:
     | readonly (string | number | boolean | symbol | bigint)[]
@@ -236,6 +237,41 @@ function analyzeBooleanInner(
 }
 
 /**
+ * Checks whether a schema contains a coerced boolean anywhere in its
+ * structure (including inside unions).  Used to apply boolean literal
+ * pre-conversion to schemas that aren't exclusively boolean but
+ * contain a boolean arm that would otherwise silently misparse.
+ */
+function containsCoercedBoolean(schema: z.Schema<unknown>): boolean {
+  const def = (schema as ZodSchemaInternal)._def;
+  if (!def) return false;
+  const typeName = def.typeName ?? def.type;
+
+  if (
+    (typeName === "ZodBoolean" || typeName === "boolean") &&
+    def.coerce === true
+  ) {
+    return true;
+  }
+
+  // Check union arms
+  if (typeName === "ZodUnion" || typeName === "union") {
+    const options = def.options;
+    if (Array.isArray(options)) {
+      return options.some((opt: z.Schema<unknown>) =>
+        containsCoercedBoolean(opt)
+      );
+    }
+  }
+
+  // Unwrap wrappers
+  const inner = def.innerType ?? def.schema ?? def.in;
+  if (inner != null) return containsCoercedBoolean(inner);
+
+  return false;
+}
+
+/**
  * Pre-converts a CLI string input to an actual boolean value using
  * CLI-friendly literals (true/false, 1/0, yes/no, on/off).
  */
@@ -302,6 +338,14 @@ function hasAsyncChecks(schema: z.Schema<unknown>): boolean {
     ) {
       return true;
     }
+  }
+
+  // Zod v4 transform schema: _def.transform is the transform function
+  if (
+    typeof def.transform === "function" &&
+    def.transform.constructor.name === "AsyncFunction"
+  ) {
+    return true;
   }
 
   // Recurse into wrappers that may contain the async check
@@ -664,6 +708,8 @@ export function zod<T>(
 ): ValueParser<"sync", T> {
   const choices = inferChoices(schema);
   const boolInfo = analyzeBooleanSchema(schema);
+  const hasCoercedBool = !boolInfo.isBoolean &&
+    containsCoercedBoolean(schema);
   const metavar = options.metavar ?? inferMetavar(schema);
   ensureNonEmptyString(metavar);
 
@@ -717,27 +763,6 @@ export function zod<T>(
     };
   }
 
-  // Lazy one-time probe for async detection on coerced boolean schemas.
-  // Static analysis (hasAsyncChecks) catches `async` keyword functions,
-  // but cannot detect plain functions that return Promises.  This probe
-  // runs safeParse(true) once on first need to catch those cases.
-  let asyncProbed = false;
-  function ensureNotAsyncCoerced(): void {
-    if (asyncProbed) return;
-    asyncProbed = true;
-    try {
-      schema.safeParse(true);
-    } catch (error) {
-      if (error instanceof Error && isZodAsyncError(error)) {
-        throw new TypeError(
-          "Async Zod schemas (e.g., async refinements) are not supported " +
-            "by zod(). Use synchronous schemas instead.",
-        );
-      }
-      throw error;
-    }
-  }
-
   /**
    * Handles a failed boolean literal pre-conversion.
    *
@@ -746,9 +771,10 @@ export function zod<T>(
    *     work.  This is safe because `safeParse(string)` fails at the
    *     type level before any refinements execute.
    *  -  *Coerced* (`z.coerce.boolean()`): probing is unsafe (coercion
-   *     succeeds and runs refinements).  Static async detection +
-   *     lazy one-time probe catch async schemas; custom errors use a
-   *     real `ZodError` constructed from the imported class.
+   *     succeeds and runs user refinements).  Static async detection
+   *     catches `async` keyword functions; custom errors use a real
+   *     `ZodError` constructed from the imported class.  No schema
+   *     logic is executed for invalid literals.
    */
   function handleBooleanLiteralError(
     boolResult: ValueParserResult<boolean>,
@@ -761,15 +787,15 @@ export function zod<T>(
       return doSafeParse(rawInput, rawInput);
     }
 
-    // Coerced schemas: detect async via static analysis first,
-    // then lazy probe to catch Promise-returning refinements.
+    // Coerced schemas: detect async via static analysis only.
+    // No safeParse() probe — that would execute user refinements
+    // on a fabricated value, which can mutate state or crash.
     if (hasAsyncChecks(schema)) {
       throw new TypeError(
         "Async Zod schemas (e.g., async refinements) are not supported " +
           "by zod(). Use synchronous schemas instead.",
       );
     }
-    ensureNotAsyncCoerced();
 
     if (options.errors?.zodError) {
       if (typeof options.errors.zodError !== "function") {
@@ -828,6 +854,16 @@ export function zod<T>(
           return handleBooleanLiteralError(boolResult, input);
         }
         return doSafeParse(boolResult.value, input);
+      }
+      // Schemas containing a coerced boolean arm (e.g., unions):
+      // pre-convert recognized boolean literals to prevent JS
+      // truthiness coercion; unrecognized input falls through to
+      // safeParse so other schema arms can handle it.
+      if (hasCoercedBool) {
+        const boolResult = preConvertBoolean(input);
+        if (boolResult.success) {
+          return doSafeParse(boolResult.value, input);
+        }
       }
       return doSafeParse(input, input);
     },

@@ -1151,8 +1151,9 @@ describe("zod()", () => {
     });
 
     it("should pre-convert boolean literals in union schemas", () => {
+      // Literal arm first so Zod tries it before the coerced boolean
       const parser = zod(
-        z.union([z.coerce.boolean(), z.literal("auto")]),
+        z.union([z.literal("auto"), z.coerce.boolean()]),
       );
       // Recognized boolean literals should be pre-converted
       const trueResult = parser.parse("true");
