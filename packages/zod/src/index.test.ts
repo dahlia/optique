@@ -1044,41 +1044,39 @@ describe("zod()", () => {
       assert.equal(disabledResult.value, false);
     });
 
-    it("should throw TypeError for async boolean schemas on any input", () => {
+    it("should throw TypeError for async boolean schemas at construction", () => {
       // deno-lint-ignore require-await
       const asyncSchema = z.coerce.boolean().refine(async (v) => v === true);
-      const parser = zod(asyncSchema as never);
-      // Both valid and invalid boolean literals should throw TypeError
+      // Async schemas are detected at construction time
       assert.throws(
-        () => parser.parse("true"),
-        { name: "TypeError" },
-      );
-      assert.throws(
-        () => parser.parse("maybe"),
+        () => zod(asyncSchema as never),
         { name: "TypeError" },
       );
     });
 
-    it("should not execute transforms at construction time", () => {
-      let transformCalled = false;
-      zod(
-        z.coerce.boolean().transform((v) => {
-          transformCalled = true;
-          return !v;
-        }),
+    it("should throw TypeError for Promise-returning boolean refinements", () => {
+      const promiseSchema = z.coerce.boolean().refine(
+        () => Promise.resolve(true),
       );
-      assert.ok(!transformCalled);
+      assert.throws(
+        () => zod(promiseSchema as never),
+        { name: "TypeError" },
+      );
     });
 
-    it("should not execute refinements at construction time", () => {
-      let refineCalled = false;
-      zod(
+    it("should not crash on throwing refinements during async probe", () => {
+      // Refinements that throw non-async errors should not crash
+      // construction — the error is caught and ignored.
+      const parser = zod(
         z.coerce.boolean().refine((v) => {
-          refineCalled = true;
-          return v;
+          if (v) throw new Error("boom");
+          return true;
         }),
       );
-      assert.ok(!refineCalled);
+      // The parser should still work for valid boolean literals
+      const result = parser.parse("false");
+      assert.ok(result.success);
+      assert.equal(result.value, false);
     });
 
     it("should pass a real ZodError to function zodError callbacks", () => {
