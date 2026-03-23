@@ -2325,6 +2325,30 @@ describe("normalizeUsage", () => {
       ]);
     });
 
+    it("should preserve branch with valid empty containers", () => {
+      // e.g., or(optional(constant("x")), command("foo", ...))
+      // produces a branch [{ type: "optional", terms: [] }] which
+      // normalizes to [] but is a valid zero-token alternative
+      const result = normalizeUsage([
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "optional", terms: [] }],
+            [{ type: "option", names: ["--verbose"] }],
+          ],
+        },
+      ]);
+      assert.deepEqual(result, [
+        {
+          type: "exclusive",
+          terms: [
+            [],
+            [{ type: "option", names: ["--verbose"] }],
+          ],
+        },
+      ]);
+    });
+
     it("should strip exclusive when all branches normalize to empty", () => {
       const result = normalizeUsage([
         {

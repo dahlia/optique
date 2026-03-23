@@ -805,8 +805,9 @@ To be released.
     preserving them unchanged.  Empty-named options, empty-named commands,
     empty-metavar arguments, and container terms (`optional`, `multiple`,
     `exclusive`) whose terms array is empty after recursive normalization
-    are now removed.  Semantically meaningful structures — empty branches
-    within exclusive terms and empty-value literals — are preserved.
+    are now removed.  Exclusive branches representing valid zero-token
+    alternatives and empty-value literals are preserved; branches that
+    become empty because all their content was malformed are removed.
     [[#485], [#716]]
 
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562

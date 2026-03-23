@@ -505,10 +505,11 @@ export function formatUsage(
  *    malformed output, such as options with no names, commands with empty
  *    names, arguments with empty metavars, and container terms (`optional`,
  *    `multiple`, `exclusive`) whose top-level terms array is empty after
- *    recursive normalization.  Empty branches within exclusive terms and
- *    empty-value literals are preserved because they can carry semantic
- *    meaning (e.g., `conditional()` default branches or empty-string
- *    discriminator keys).
+ *    recursive normalization.  Exclusive branches representing valid
+ *    zero-token alternatives (e.g., `conditional()` default branches or
+ *    `optional(constant(...))`) and empty-value literals are preserved.
+ *    Only branches that become empty because all their content was
+ *    malformed are removed.
  *
  * 2. *Flattening*: Recursively processes all usage terms and merges any
  *    nested exclusive terms into their parent exclusive term to avoid
@@ -564,11 +565,12 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
         for (const subUsage of normalized[0].terms) {
           terms.push([...subUsage, ...rest]);
         }
-      } else if (normalized.length > 0 || usage.length === 0) {
-        // Keep the branch if it still has content, or if it was
-        // originally empty (intentional empty alternative, e.g.,
-        // conditional() default branches).  Drop branches that became
-        // empty solely because all their terms were degenerate.
+      } else if (normalized.length > 0 || !containsMalformedLeaf(usage)) {
+        // Keep the branch if it still has content, or if it became
+        // empty without any malformed terms (valid zero-token
+        // alternative, e.g., conditional() default branches or
+        // optional(constant(...))).  Drop branches that became empty
+        // solely because all their terms were malformed.
         terms.push(normalized);
       }
     }
@@ -589,6 +591,23 @@ function isNonDegenerateTerm(term: UsageTerm): boolean {
     return term.terms.length > 0;
   }
   return true;
+}
+
+function containsMalformedLeaf(usage: Usage): boolean {
+  for (const term of usage) {
+    if (term.type === "option" && term.names.length === 0) return true;
+    if (term.type === "command" && term.name === "") return true;
+    if (term.type === "argument" && term.metavar.length === 0) return true;
+    if (term.type === "optional" || term.type === "multiple") {
+      if (containsMalformedLeaf(term.terms)) return true;
+    }
+    if (term.type === "exclusive") {
+      for (const branch of term.terms) {
+        if (containsMalformedLeaf(branch)) return true;
+      }
+    }
+  }
+  return false;
 }
 
 /**
