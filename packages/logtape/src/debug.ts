@@ -4,6 +4,7 @@ import type { Parser } from "@optique/core/parser";
 import { type Message, message } from "@optique/core/message";
 import type { OptionName } from "@optique/core/usage";
 import type { LogLevel } from "@logtape/logtape";
+import { validateLogLevel } from "./loglevel.ts";
 
 /**
  * Options for creating a debug flag parser.
@@ -49,6 +50,8 @@ export interface DebugOptions {
  *
  * @param options Configuration options for the debug flag parser.
  * @returns A {@link Parser} that produces a {@link LogLevel}.
+ * @throws {TypeError} If `debugLevel` or `normalLevel` is not a valid log
+ *   level.
  *
  * @example Basic usage
  * ```typescript
@@ -84,6 +87,8 @@ export function debug(
   const long = (options.long ?? "--debug") as OptionName;
   const debugLevel = options.debugLevel ?? "debug";
   const normalLevel = options.normalLevel ?? "info";
+  validateLogLevel(debugLevel, "debugLevel");
+  validateLogLevel(normalLevel, "normalLevel");
 
   const flagParser = flag(short, long, {
     description: options.description ?? message`Enable debug logging.`,

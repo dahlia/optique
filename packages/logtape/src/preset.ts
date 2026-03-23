@@ -5,7 +5,7 @@ import type { Parser } from "@optique/core/parser";
 import type { OptionName } from "@optique/core/usage";
 import type { Config, LogLevel } from "@logtape/logtape";
 
-import { logLevel } from "./loglevel.ts";
+import { logLevel, validateLogLevel } from "./loglevel.ts";
 import { verbosity, type VerbosityOptions } from "./verbosity.ts";
 import { debug, type DebugOptions } from "./debug.ts";
 import {
@@ -240,7 +240,8 @@ export type LoggingOptionsConfig =
  * ```
  *
  * @throws {TypeError} If the `level` discriminant is not one of `"option"`,
- *   `"verbosity"`, or `"debug"`.
+ *   `"verbosity"`, or `"debug"`, or if a log level option (`default`,
+ *   `debugLevel`, `normalLevel`, or `baseLevel`) is not a valid log level.
  * @since 0.8.0
  */
 export function loggingOptions(
@@ -258,6 +259,7 @@ export function loggingOptions(
       const long = (config.long ?? "--log-level") as OptionName;
       const short = (config.short ?? "-l") as OptionName;
       const defaultLevel = config.default ?? "info";
+      validateLogLevel(defaultLevel, "default");
 
       levelParser = withDefault(
         option(short, long, logLevel()),
