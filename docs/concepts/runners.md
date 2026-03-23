@@ -332,6 +332,7 @@ function apiKey(): ValueParser<"async", string> {
   return {
     $mode: "async",
     metavar: "KEY",
+    placeholder: "",
     async parse(input: string): Promise<ValueParserResult<string>> {
       return { success: true, value: input };
     },
@@ -1017,6 +1018,7 @@ function apiKey(): ValueParser<"async", string> {
   return {
     $mode: "async",
     metavar: "KEY",
+    placeholder: "",
     async parse(input: string): Promise<ValueParserResult<string>> {
       // Validate API key against remote service
       const response = await fetch(`https://api.example.com/validate?key=${encodeURIComponent(input)}`);
@@ -1106,6 +1108,7 @@ function apiKey(): ValueParser<"async", string> {
   return {
     $mode: "async",
     metavar: "KEY",
+    placeholder: "",
     async parse(input: string): Promise<ValueParserResult<string>> {
       return { success: true, value: input };
     },
@@ -1158,6 +1161,7 @@ function apiKey(): ValueParser<"async", string> {
   return {
     $mode: "async",
     metavar: "KEY",
+    placeholder: "",
     async parse(input: string): Promise<ValueParserResult<string>> {
       return { success: true, value: input };
     },

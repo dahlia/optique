@@ -665,6 +665,7 @@ function keyValue(separator = "="): ValueParser<"sync", [string, string]> {
   return {
     $mode: "sync",
     metavar: `KEY${separator}VALUE`,
+    placeholder: ["", ""] as [string, string],
     parse(input: string): ValueParserResult<[string, string]> {
       const index = input.indexOf(separator);
       if (index === -1 || index === 0) {
@@ -1638,6 +1639,7 @@ function keyValue(separator = "="): ValueParser<"sync", [string, string]> {
   return {
     $mode: "sync",
     metavar: `KEY${separator}VALUE`,
+    placeholder: ["", ""] as [string, string],
     parse(input: string): ValueParserResult<[string, string]> {
       return { success: true, value: ["", ""] };
     },
@@ -1724,6 +1726,7 @@ function logLevel(): ValueParser<"sync", string> {
   return {
     $mode: "sync",
     metavar: "LEVEL",
+    placeholder: "",
     parse(input: string): ValueParserResult<string> {
       if (levels.includes(input.toLowerCase())) {
         return { success: true, value: input.toLowerCase() };

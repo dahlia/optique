@@ -576,6 +576,7 @@ function portValidator(): ValueParser<"sync", number> {
   return {
     $mode: "sync",
     metavar: "PORT",
+    placeholder: 0,
 
     // Validation using runtime environment data from annotations
     parse: (input: string, state?: unknown) => {
@@ -723,26 +724,6 @@ API reference
     const annotations = getAnnotations(state);
     const myData = annotations?.[myKey];
     ~~~~
-
-`placeholder`
-:   Unique symbol exported from `@optique/core/context`.  Packages that produce
-    placeholder values (sentinel objects representing values to be resolved
-    later) should set this symbol as a property on their sentinel objects.
-    Core's `isPlaceholderValue()` detects values carrying this symbol, and
-    `runWith()` strips them from parsed results before phase-2 annotation
-    collection.  `map()` also skips transformation for placeholder values.
-
-    ~~~~ typescript twoslash
-    import { placeholder } from "@optique/core/context";
-
-    class MyPlaceholder {
-      readonly [placeholder] = true;
-    }
-    ~~~~
-
-`isPlaceholderValue(value: unknown): boolean`
-:   Tests whether a value is a placeholder by checking for the `placeholder`
-    symbol property.
 
 `isStaticContext(context: SourceContext): boolean`
 :   Checks whether a context is static (returns non-empty annotations without
@@ -962,6 +943,13 @@ This ensures that:
  -  Static contexts (like environment variables) are available immediately
  -  Dynamic contexts (like config files) can extract information from the
     first parse pass
+
+During phase 1, parsers whose values are not yet resolved (e.g., deferred
+interactive prompts) use the `ValueParser.placeholder` property to produce a
+type-appropriate stand-in value.  Because the placeholder is a valid
+inhabitant of the result type, `map()` transforms run normally on it and
+dynamic contexts receive structurally valid values rather than `undefined`.
+No sentinel symbols or runtime checks are needed.
 
 ### Help and version always available
 

@@ -71,7 +71,7 @@ import { valibot } from "@optique/valibot";
 import * as v from "valibot";
 
 // Email validation
-const email = valibot(v.pipe(v.string(), v.email()));
+const email = valibot(v.pipe(v.string(), v.email()), { placeholder: "" });
 
 // Port number with range validation
 const port = valibot(
@@ -82,11 +82,12 @@ const port = valibot(
     v.integer(),
     v.minValue(1024),
     v.maxValue(65535)
-  )
+  ),
+  { placeholder: 0 },
 );
 
 // Picklist choices
-const logLevel = valibot(v.picklist(["debug", "info", "warn", "error"]));
+const logLevel = valibot(v.picklist(["debug", "info", "warn", "error"]), { placeholder: "debug" });
 ~~~~
 
 
@@ -102,11 +103,12 @@ import * as v from "valibot";
 // ---cut-before---
 // ✅ Correct: Use v.pipe with v.transform for numbers
 const age = valibot(
-  v.pipe(v.string(), v.transform(Number), v.number(), v.minValue(0))
+  v.pipe(v.string(), v.transform(Number), v.number(), v.minValue(0)),
+  { placeholder: 0 },
 );
 
 // ❌ Won't work: v.number() expects actual numbers, not strings
-const num = valibot(v.number());  // [!code error]
+const num = valibot(v.number(), { placeholder: 0 });  // [!code error]
 ~~~~
 
 
@@ -121,12 +123,14 @@ import * as v from "valibot";
 // ---cut-before---
 // Parse and transform to Date
 const startDate = valibot(
-  v.pipe(v.string(), v.transform((s) => new Date(s)))
+  v.pipe(v.string(), v.transform((s) => new Date(s))),
+  { placeholder: new Date(0) },
 );
 
 // Transform to uppercase
 const name = valibot(
-  v.pipe(v.string(), v.transform((s) => s.toUpperCase()))
+  v.pipe(v.string(), v.transform((s) => s.toUpperCase())),
+  { placeholder: "" },
 );
 ~~~~
 
@@ -142,6 +146,7 @@ import { message } from "@optique/core/message";
 import * as v from "valibot";
 // ---cut-before---
 const email = valibot(v.pipe(v.string(), v.email()), {
+  placeholder: "",
   metavar: "EMAIL",
   errors: {
     valibotError: (issues, input) =>
@@ -163,7 +168,7 @@ import { valibot } from "@optique/valibot";
 import * as v from "valibot";
 
 const config = object({
-  email: option("--email", valibot(v.pipe(v.string(), v.email()))),
+  email: option("--email", valibot(v.pipe(v.string(), v.email()), { placeholder: "" })),
   port: option(
     "-p",
     "--port",
@@ -175,16 +180,17 @@ const config = object({
         v.integer(),
         v.minValue(1024),
         v.maxValue(65535)
-      )
+      ),
+      { placeholder: 0 },
     )
   ),
   logLevel: option(
     "--log-level",
-    valibot(v.picklist(["debug", "info", "warn", "error"]))
+    valibot(v.picklist(["debug", "info", "warn", "error"]), { placeholder: "debug" }),
   ),
   startDate: argument(
-    valibot(v.pipe(v.string(), v.transform((s) => new Date(s))))
-  )
+    valibot(v.pipe(v.string(), v.transform((s) => new Date(s))), { placeholder: new Date(0) }),
+  ),
 });
 ~~~~
 

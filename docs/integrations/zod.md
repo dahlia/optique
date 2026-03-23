@@ -51,13 +51,13 @@ import { zod } from "@optique/zod";
 import { z } from "zod";
 
 // Email validation
-const email = zod(z.string().email());
+const email = zod(z.string().email(), { placeholder: "" });
 
 // Port number with range validation
-const port = zod(z.coerce.number().int().min(1024).max(65535));
+const port = zod(z.coerce.number().int().min(1024).max(65535), { placeholder: 0 });
 
 // Enum choices
-const logLevel = zod(z.enum(["debug", "info", "warn", "error"]));
+const logLevel = zod(z.enum(["debug", "info", "warn", "error"]), { placeholder: "debug" });
 ~~~~
 
 
@@ -71,10 +71,10 @@ import { zod } from "@optique/zod";
 import { z } from "zod";
 // ---cut-before---
 // ✅ Correct: Use z.coerce for numbers
-const age = zod(z.coerce.number().int().min(0));
+const age = zod(z.coerce.number().int().min(0), { placeholder: 0 });
 
 // ❌ Won't work: z.number() expects actual numbers, not strings
-const num = zod(z.number());  // [!code error]
+const num = zod(z.number(), { placeholder: 0 });  // [!code error]
 ~~~~
 
 > [!NOTE]
@@ -94,10 +94,10 @@ import { zod } from "@optique/zod";
 import { z } from "zod";
 // ---cut-before---
 // Parse and transform to Date
-const startDate = zod(z.string().transform((s) => new Date(s)));
+const startDate = zod(z.string().transform((s) => new Date(s)), { placeholder: new Date(0) });
 
 // Transform to uppercase
-const name = zod(z.string().transform((s) => s.toUpperCase()));
+const name = zod(z.string().transform((s) => s.toUpperCase()), { placeholder: "" });
 ~~~~
 
 
@@ -112,6 +112,7 @@ import { message } from "@optique/core/message";
 import { z } from "zod";
 // ---cut-before---
 const email = zod(z.string().email(), {
+  placeholder: "",
   metavar: "EMAIL",
   errors: {
     zodError: (error, input) =>
@@ -133,10 +134,10 @@ import { zod } from "@optique/zod";
 import { z } from "zod";
 
 const config = object({
-  email: option("--email", zod(z.string().email())),
-  port: option("-p", "--port", zod(z.coerce.number().int().min(1024).max(65535))),
-  logLevel: option("--log-level", zod(z.enum(["debug", "info", "warn", "error"]))),
-  startDate: argument(zod(z.string().transform((s) => new Date(s))))
+  email: option("--email", zod(z.string().email(), { placeholder: "" })),
+  port: option("-p", "--port", zod(z.coerce.number().int().min(1024).max(65535), { placeholder: 0 })),
+  logLevel: option("--log-level", zod(z.enum(["debug", "info", "warn", "error"]), { placeholder: "debug" })),
+  startDate: argument(zod(z.string().transform((s) => new Date(s)), { placeholder: new Date(0) })),
 });
 ~~~~
 

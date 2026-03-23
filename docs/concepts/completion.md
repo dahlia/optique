@@ -267,6 +267,7 @@ function customParser(): ValueParser<"sync", string> {
   return {
     $mode: "sync",
     metavar: "CUSTOM",
+    placeholder: "",
     parse(input) {
       // Parsing logic...
     },
