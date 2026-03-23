@@ -155,7 +155,10 @@ function analyzeBooleanInner(
     const hasCustomChecks = Array.isArray(def.checks) &&
       def.checks.some((c) =>
         c.kind === "custom" ||
-        (c as unknown as { type?: string }).type === "custom"
+        (c as unknown as { type?: string }).type === "custom" ||
+        // Zod v4 superRefine/check stores type under _zod.def.check
+        (c as unknown as { _zod?: { def?: { check?: string } } })
+            ._zod?.def?.check === "custom"
       );
     return {
       isBoolean: true,
