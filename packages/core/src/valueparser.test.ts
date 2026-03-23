@@ -9574,6 +9574,69 @@ describe("socketAddress()", () => {
         },
       ]);
     });
+
+    it("should accept hex integers exceeding 32-bit range as hostnames", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowLoopback: false } },
+      });
+
+      // 0x100000000 = 2^32, exceeds the 32-bit IPv4 range
+      const result1 = parser.parse("0x100000000");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value.host, "0x100000000");
+
+      // Very large hex value, clearly not IPv4
+      const result2 = parser.parse("0xDEADBEEF0");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value.host, "0xDEADBEEF0");
+    });
+
+    it("should still reject hex integers within 32-bit range", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowLoopback: false } },
+      });
+
+      // 0xFFFFFFFF = max 32-bit value, still a valid IPv4 literal
+      const result = parser.parse("0xFFFFFFFF");
+      assert.ok(!result.success);
+    });
+
+    it("should accept hex integers exceeding 32-bit range in hostname mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "hostname" },
+      });
+
+      const result = parser.parse("0x100000000");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "0x100000000");
+    });
+
+    it("should accept dotted hex with out-of-range octets as hostnames", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowPrivate: false } },
+      });
+
+      // 0xFFF = 4095 > 255, can't be an IPv4 octet in any part position
+      const result = parser.parse("0xFFF.0.0.1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "0xFFF.0.0.1");
+    });
+
+    it("should accept decimal integers exceeding 32-bit range as hostnames", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both" },
+      });
+
+      // 4294967296 = 2^32, exceeds the 32-bit IPv4 range
+      const result = parser.parse("4294967296");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "4294967296");
+    });
   });
 });
 

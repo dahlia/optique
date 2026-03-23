@@ -3649,8 +3649,13 @@ export function socketAddress(
   }
 
   function looksLikeAltIpv4Literal(input: string): boolean {
-    // Single hex integer: 0x7f000001
-    if (/^0[xX][0-9a-fA-F]+$/.test(input)) return true;
+    // Single hex integer within 32-bit IPv4 range: 0x7f000001.
+    // Values above 0xFFFFFFFF cannot represent an IPv4 address and
+    // are allowed as single-label hostnames.
+    if (/^0[xX][0-9a-fA-F]+$/.test(input)) {
+      const n = parseInt(input.slice(2), 16);
+      return n <= 0xFFFFFFFF;
+    }
 
     // Single decimal integer > 255 (potential 32-bit IPv4 encoding).
     // Values ≤ 255 are allowed as single-label hostnames because the
@@ -3663,6 +3668,9 @@ export function socketAddress(
     // Dotted forms (2-4 parts) where at least one part uses hex notation.
     // All-decimal dotted forms are handled by looksLikeIpv4() (4-part)
     // or rejected by hostname() (2-3 part, all-numeric ≥2 labels).
+    // Each part's value is checked against the WHATWG IPv4 range for
+    // its position: first N-1 parts must be ≤ 255, the last part
+    // must be < 256^(5-N).
     const parts = input.split(".");
     if (parts.length >= 2 && parts.length <= 4) {
       const numericOrHex = /^(?:[0-9]+|0[xX][0-9a-fA-F]+)$/;
@@ -3670,7 +3678,12 @@ export function socketAddress(
         parts.every((p) => numericOrHex.test(p)) &&
         parts.some((p) => /^0[xX]/i.test(p))
       ) {
-        return true;
+        const values = parts.map((p) =>
+          /^0[xX]/i.test(p) ? parseInt(p.slice(2), 16) : Number(p)
+        );
+        const lastMax = 256 ** (5 - parts.length);
+        return values.slice(0, -1).every((v) => v <= 255) &&
+          values[values.length - 1] < lastMax;
       }
     }
 
