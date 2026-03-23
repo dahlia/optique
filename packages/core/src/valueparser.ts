@@ -3574,6 +3574,7 @@ export interface SocketAddressOptions {
  *
  * @param options - Options for socket address validation.
  * @returns A value parser for socket addresses.
+ * @throws {TypeError} If `separator` is an empty string.
  * @throws {TypeError} If `separator` contains digit characters, since digits
  *   in the separator would cause ambiguous splitting of port input.
  * @since 0.10.0
@@ -3974,6 +3975,7 @@ export interface PortRangeOptionsBigInt {
  * @returns A value parser for port ranges.
  * @throws {TypeError} If `options.type` is provided but is neither `"number"`
  *   nor `"bigint"`.
+ * @throws {TypeError} If `separator` is an empty string.
  * @throws {TypeError} If `separator` contains digit characters, since digits
  *   in the separator would cause ambiguous splitting of numeric port input.
  * @since 0.10.0

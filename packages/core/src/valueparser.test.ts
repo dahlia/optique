@@ -8584,11 +8584,17 @@ describe("portRange()", () => {
     it("should reject empty separator", () => {
       assert.throws(
         () => portRange({ separator: "" }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: "Expected separator to not be empty.",
+        },
       );
       assert.throws(
         () => portRange({ type: "bigint", separator: "" }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: "Expected separator to not be empty.",
+        },
       );
     });
 
@@ -9059,7 +9065,10 @@ describe("socketAddress()", () => {
     it("should reject empty separator", () => {
       assert.throws(
         () => socketAddress({ separator: "", defaultPort: 80 }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: "Expected separator to not be empty.",
+        },
       );
     });
 
