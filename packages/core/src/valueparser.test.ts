@@ -8581,6 +8581,17 @@ describe("portRange()", () => {
   });
 
   describe("separator validation", () => {
+    it("should reject empty separator", () => {
+      assert.throws(
+        () => portRange({ separator: "" }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ type: "bigint", separator: "" }),
+        TypeError,
+      );
+    });
+
     it("should reject separator containing digits", () => {
       assert.throws(
         () => portRange({ separator: "0" }),
@@ -9045,6 +9056,13 @@ describe("socketAddress()", () => {
   });
 
   describe("separator validation", () => {
+    it("should reject empty separator", () => {
+      assert.throws(
+        () => socketAddress({ separator: "", defaultPort: 80 }),
+        TypeError,
+      );
+    });
+
     it("should reject separator containing digits", () => {
       assert.throws(
         () => socketAddress({ separator: "0", defaultPort: 80 }),
