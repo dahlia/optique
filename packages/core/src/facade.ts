@@ -246,6 +246,7 @@ function stripPlaceholderValues<T>(
     if (!containsPlaceholderValues(value)) {
       return value;
     }
+    hiddenPlaceholderObjects.delete(value);
     return createSanitizedNonPlainView(value, seen) as T;
   }
   // Fast path: clean nested plain objects pass through unchanged to
@@ -671,6 +672,9 @@ function prepareParsedForContexts(
   if (!containsPlaceholderValues(parsed)) {
     return parsed;
   }
+  // Consume the hidden-placeholder registration so that future clean
+  // parses of the same reused object are not re-proxied.
+  hiddenPlaceholderObjects.delete(parsed);
   return createSanitizedNonPlainView(
     parsed,
     new WeakMap<object, unknown>(),
