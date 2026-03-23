@@ -193,13 +193,16 @@ describe("verbosity()", () => {
     assert.equal(result.value.level, "debug");
   });
 
-  it("should fall back to warning index for unknown base level at runtime", () => {
-    const parser = object({
-      level: verbosity({ baseLevel: "invalid" as unknown as LogLevel }),
-    });
-    const result = parse(parser, ["-v"]);
-    assert.ok(result.success);
-    assert.equal(result.value.level, "info");
+  it("should reject invalid base level at runtime", () => {
+    assert.throws(
+      () => verbosity({ baseLevel: "invalid" as never }),
+      {
+        name: "TypeError",
+        message:
+          'Invalid log level for baseLevel: invalid.  Expected "trace", ' +
+          '"debug", "info", "warning", "error", "fatal".',
+      },
+    );
   });
 });
 
@@ -229,6 +232,30 @@ describe("debug()", () => {
     const result = parse(parser, ["-d"]);
     assert.ok(result.success);
     assert.equal(result.value.level, "debug");
+  });
+
+  it("should reject invalid debugLevel at runtime", () => {
+    assert.throws(
+      () => debug({ debugLevel: "invalid" as never }),
+      {
+        name: "TypeError",
+        message:
+          'Invalid log level for debugLevel: invalid.  Expected "trace", ' +
+          '"debug", "info", "warning", "error", "fatal".',
+      },
+    );
+  });
+
+  it("should reject invalid normalLevel at runtime", () => {
+    assert.throws(
+      () => debug({ normalLevel: "invalid" as never }),
+      {
+        name: "TypeError",
+        message:
+          'Invalid log level for normalLevel: invalid.  Expected "trace", ' +
+          '"debug", "info", "warning", "error", "fatal".',
+      },
+    );
   });
 
   it("should respect custom levels", () => {
@@ -561,6 +588,69 @@ describe("loggingOptions()", () => {
       assert.ok(result.success);
       assert.equal(result.value.logging.logLevel, "info");
     });
+  });
+
+  it("should reject invalid debugLevel in debug mode", () => {
+    assert.throws(
+      () =>
+        loggingOptions({
+          level: "debug",
+          debugLevel: "invalid" as never,
+        }),
+      {
+        name: "TypeError",
+        message:
+          'Invalid log level for debugLevel: invalid.  Expected "trace", ' +
+          '"debug", "info", "warning", "error", "fatal".',
+      },
+    );
+  });
+
+  it("should reject invalid normalLevel in debug mode", () => {
+    assert.throws(
+      () =>
+        loggingOptions({
+          level: "debug",
+          normalLevel: "invalid" as never,
+        }),
+      {
+        name: "TypeError",
+        message:
+          'Invalid log level for normalLevel: invalid.  Expected "trace", ' +
+          '"debug", "info", "warning", "error", "fatal".',
+      },
+    );
+  });
+
+  it("should reject invalid default in option mode", () => {
+    assert.throws(
+      () =>
+        loggingOptions({
+          level: "option",
+          default: "invalid" as never,
+        }),
+      {
+        name: "TypeError",
+        message: 'Invalid log level for default: invalid.  Expected "trace", ' +
+          '"debug", "info", "warning", "error", "fatal".',
+      },
+    );
+  });
+
+  it("should reject invalid baseLevel in verbosity mode", () => {
+    assert.throws(
+      () =>
+        loggingOptions({
+          level: "verbosity",
+          baseLevel: "invalid" as never,
+        }),
+      {
+        name: "TypeError",
+        message:
+          'Invalid log level for baseLevel: invalid.  Expected "trace", ' +
+          '"debug", "info", "warning", "error", "fatal".',
+      },
+    );
   });
 
   it("should reject invalid level discriminant", () => {
