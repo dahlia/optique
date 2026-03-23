@@ -32,7 +32,11 @@ import type {
   Suggestion,
 } from "./parser.ts";
 import type { ValueParserResult } from "./valueparser.ts";
-import { isPlaceholderValue } from "./context.ts";
+import {
+  containsPlaceholderValues,
+  isPlaceholderValue,
+  mayContainHiddenPlaceholders,
+} from "./context.ts";
 
 /**
  * Internal helper for optional-style parsing logic shared by optional()
@@ -913,12 +917,36 @@ export function map<M extends Mode, T, U, TState>(
     return mapModeValue(
       parser.$mode,
       parser.complete(state),
-      (result) =>
-        result.success
-          ? isPlaceholderValue(result.value)
-            ? (result as unknown as { success: true; value: U })
-            : { success: true, value: transform(result.value) }
-          : result,
+      (result) => {
+        if (!result.success) return result;
+        if (isPlaceholderValue(result.value)) {
+          return result as unknown as { success: true; value: U };
+        }
+        const transformed = transform(result.value);
+        // If the input contained placeholder values and the transform
+        // produced a non-null object, tag the result with the placeholder
+        // symbol so that phase-two sanitization can detect and strip
+        // hidden placeholders (e.g., values stored in private fields or
+        // captured in closures by the transform function).
+        // See: https://github.com/dahlia/optique/issues/407
+        if (
+          containsPlaceholderValues(result.value) &&
+          transformed != null &&
+          typeof transformed === "object"
+        ) {
+          try {
+            Object.defineProperty(transformed, mayContainHiddenPlaceholders, {
+              value: true,
+              configurable: true,
+              writable: true,
+              enumerable: false,
+            });
+          } catch {
+            // frozen/sealed — best effort
+          }
+        }
+        return { success: true, value: transformed };
+      },
     );
   };
 

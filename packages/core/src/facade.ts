@@ -54,6 +54,7 @@ import { type Annotations, injectAnnotations } from "./annotations.ts";
 import {
   containsPlaceholderValues,
   isPlaceholderValue,
+  mayContainHiddenPlaceholders,
   type ParserValuePlaceholder,
   type SourceContext,
 } from "./context.ts";
@@ -256,6 +257,9 @@ function stripPlaceholderValues<T>(
   // stripPlaceholderValues() and not re-cloned, preserving identity.
   seen.set(clone, clone);
   for (const key of Reflect.ownKeys(value)) {
+    // Strip the internal hidden-placeholder tag — it was only needed to
+    // trigger containsPlaceholderValues() and should not leak to contexts.
+    if (key === mayContainHiddenPlaceholders) continue;
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (descriptor == null) {
       continue;
@@ -457,6 +461,8 @@ function createSanitizedNonPlainView<T extends object>(
   >();
   const proxy: T = new Proxy(value, {
     get(target, key, receiver) {
+      // Hide the internal hidden-placeholder tag from contexts.
+      if (key === mayContainHiddenPlaceholders) return undefined;
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (descriptor != null && "value" in descriptor) {
         // Non-configurable non-writable properties must return the exact

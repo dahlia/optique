@@ -298,6 +298,21 @@ function shouldSkipCollectionOwnKey(
  * @returns `true` if the value contains any placeholder values.
  * @since 1.0.0
  */
+/**
+ * Internal symbol used by `map()` to tag transform results whose input
+ * contained placeholder values.  Unlike the public `placeholder` symbol,
+ * this does not make the object itself a placeholder — it just signals
+ * that `containsPlaceholderValues()` should return `true` so sanitization
+ * kicks in even when the placeholders are hidden in private fields or
+ * closures.
+ *
+ * @internal
+ * @since 1.0.0
+ */
+export const mayContainHiddenPlaceholders: unique symbol = Symbol.for(
+  "@optique/core/mayContainHiddenPlaceholders",
+);
+
 export function containsPlaceholderValues(
   value: unknown,
   seen: WeakSet<object> = new WeakSet<object>(),
@@ -307,6 +322,11 @@ export function containsPlaceholderValues(
   }
   if (value == null || typeof value !== "object") {
     return false;
+  }
+  // Check for the hidden-placeholder tag added by map() when a transform
+  // runs on input containing placeholder values.
+  if (mayContainHiddenPlaceholders in value) {
+    return true;
   }
   if (seen.has(value)) {
     return false;
