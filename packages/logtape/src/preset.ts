@@ -239,6 +239,8 @@ export type LoggingOptionsConfig =
  * // --debug
  * ```
  *
+ * @throws {TypeError} If the `level` discriminant is not one of `"option"`,
+ *   `"verbosity"`, or `"debug"`.
  * @since 0.8.0
  */
 export function loggingOptions(
@@ -284,6 +286,13 @@ export function loggingOptions(
       levelParser = debug(debugOptions);
       break;
     }
+
+    default:
+      throw new TypeError(
+        `Unsupported level configuration: ${
+          String((config as Record<string, unknown>).level)
+        }.  Expected "option", "verbosity", or "debug".`,
+      );
   }
 
   // Default log output is console
