@@ -9398,6 +9398,63 @@ describe("socketAddress()", () => {
       ]);
     });
 
+    it("should reject pure octal-dotted forms with specific error", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowLoopback: false } },
+      });
+
+      // 4-part: 0177 = octal 127 → 127.0.0.1
+      const result1 = parser.parse("0177.0.0.1");
+      assert.ok(!result1.success);
+      assert.deepStrictEqual(result1.error, [
+        { type: "value", value: "0177.0.0.1" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+
+      // 2-part: 0177 = octal 127, 1 → WHATWG: 127.0.0.1
+      const result2 = parser.parse("0177.1");
+      assert.ok(!result2.success);
+      assert.deepStrictEqual(result2.error, [
+        { type: "value", value: "0177.1" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+
+      // 3-part: 0177 = octal 127 → WHATWG: 127.0.1
+      const result3 = parser.parse("0177.0.1");
+      assert.ok(!result3.success);
+      assert.deepStrictEqual(result3.error, [
+        { type: "value", value: "0177.0.1" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
+
+    it("should reject pure octal-dotted forms in hostname mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "hostname" },
+      });
+
+      const result = parser.parse("0177.0.0.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "0177.0.0.1" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
+
     it("should reject 2-part hex dotted in both mode", () => {
       const parser = socketAddress({
         defaultPort: 80,
