@@ -3691,7 +3691,16 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
-        return { success: false, error: hostResult.error };
+        // Propagate specific IP parser errors for IP-shaped input;
+        // use the socket-level format error for everything else.
+        if (looksLikeIpv4(hostPart)) {
+          return { success: false, error: hostResult.error };
+        }
+        return {
+          success: false,
+          error:
+            message`Expected a socket address in format host${separator}port, but got ${input}.`,
+        };
       }
       const validatedHost = hostResult.value;
 

@@ -9230,6 +9230,35 @@ describe("socketAddress()", () => {
       ]);
     });
 
+    it("should use socket-level format error for non-IP malformed host", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both" },
+      });
+
+      // Empty host gets socket-level error, not host parser error
+      const result1 = parser.parse(":8080");
+      assert.ok(!result1.success);
+      assert.deepStrictEqual(result1.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: ":" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: ":8080" },
+        { type: "text", text: "." },
+      ]);
+
+      // Invalid hostname gets socket-level error
+      const result2 = parser.parse("-invalid.com:80");
+      assert.ok(!result2.success);
+      assert.deepStrictEqual(result2.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: ":" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "-invalid.com:80" },
+        { type: "text", text: "." },
+      ]);
+    });
+
     it("should reject IP-shaped input in hostname mode regardless of IP restrictions", () => {
       const parser = socketAddress({
         defaultPort: 80,
