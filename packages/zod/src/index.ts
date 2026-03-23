@@ -268,16 +268,12 @@ function preConvertBoolean(
 ): ValueParserResult<boolean> {
   const normalized = input.trim().toLowerCase();
   if (
-    BOOL_TRUE_LITERALS.includes(
-      normalized as (typeof BOOL_TRUE_LITERALS)[number],
-    )
+    (BOOL_TRUE_LITERALS as readonly string[]).includes(normalized)
   ) {
     return { success: true, value: true };
   }
   if (
-    BOOL_FALSE_LITERALS.includes(
-      normalized as (typeof BOOL_FALSE_LITERALS)[number],
-    )
+    (BOOL_FALSE_LITERALS as readonly string[]).includes(normalized)
   ) {
     return { success: true, value: false };
   }
