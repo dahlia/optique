@@ -264,7 +264,7 @@ export function optionName(name: string): MessageTerm {
  * @returns A {@link MessageTerm} representing the list of option names.
  */
 export function optionNames(names: readonly string[]): MessageTerm {
-  return { type: "optionNames", optionNames: names };
+  return { type: "optionNames", optionNames: [...names] };
 }
 
 /**
@@ -299,7 +299,7 @@ export function value(value: string): MessageTerm {
  * @returns A {@link MessageTerm} representing the list of values.
  */
 export function values(values: readonly string[]): MessageTerm {
-  return { type: "values", values };
+  return { type: "values", values: [...values] };
 }
 
 /**
@@ -355,7 +355,7 @@ export function url(url: string | URL): MessageTerm {
     }
     urlObj = new URL(url);
   } else {
-    urlObj = url;
+    urlObj = new URL(url.href);
   }
   return { type: "url", url: urlObj };
 }
