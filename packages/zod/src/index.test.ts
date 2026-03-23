@@ -1044,14 +1044,19 @@ describe("zod()", () => {
       assert.equal(disabledResult.value, false);
     });
 
-    it("should throw TypeError for async boolean schemas at construction", () => {
+    it("should detect async keyword schemas without side effects", () => {
+      let refineCalled = false;
       // deno-lint-ignore require-await
-      const asyncSchema = z.coerce.boolean().refine(async (v) => v === true);
-      // Async schemas are detected at construction time
+      const asyncSchema = z.coerce.boolean().refine(async (v) => {
+        refineCalled = true;
+        return v === true;
+      });
+      // Static AsyncFunction detection catches this without probing
       assert.throws(
         () => zod(asyncSchema as never),
         { name: "TypeError" },
       );
+      assert.ok(!refineCalled);
     });
 
     it("should throw TypeError for Promise-returning boolean refinements", () => {
@@ -1060,6 +1065,16 @@ describe("zod()", () => {
       );
       assert.throws(
         () => zod(promiseSchema as never),
+        { name: "TypeError" },
+      );
+    });
+
+    it("should throw TypeError for conditionally async refinements", () => {
+      const conditionalAsync = z.coerce.boolean().refine(
+        (v) => v ? true : Promise.resolve(true),
+      );
+      assert.throws(
+        () => zod(conditionalAsync as never),
         { name: "TypeError" },
       );
     });
