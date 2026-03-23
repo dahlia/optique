@@ -563,6 +563,16 @@ describe("loggingOptions()", () => {
     });
   });
 
+  it("should reject invalid level discriminant", () => {
+    assert.throws(
+      () => loggingOptions({ level: "traceflag" } as never),
+      {
+        name: "TypeError",
+        message: /unsupported.*level/i,
+      },
+    );
+  });
+
   describe("default log output", () => {
     it("should default to console output", () => {
       const parser = object({

@@ -1346,10 +1346,16 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     malformed help output.  Now it throws `TypeError` like all other value
     parsers.  [[#459], [#708]]
 
+ -  Fixed `loggingOptions()` not validating invalid runtime `level`
+    discriminants.  Previously, passing an unsupported `level` value (e.g.,
+    from untyped JavaScript) would cause an internal crash during parser
+    assembly.  Now it throws `TypeError` with a clear message.  [[#373], [#710]]
+
 [#292]: https://github.com/dahlia/optique/issues/292
 [#299]: https://github.com/dahlia/optique/issues/299
 [#311]: https://github.com/dahlia/optique/issues/311
 [#329]: https://github.com/dahlia/optique/issues/329
+[#373]: https://github.com/dahlia/optique/issues/373
 [#379]: https://github.com/dahlia/optique/issues/379
 [#459]: https://github.com/dahlia/optique/issues/459
 [#699]: https://github.com/dahlia/optique/pull/699
@@ -1358,6 +1364,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#705]: https://github.com/dahlia/optique/pull/705
 [#707]: https://github.com/dahlia/optique/pull/707
 [#708]: https://github.com/dahlia/optique/pull/708
+[#710]: https://github.com/dahlia/optique/pull/710
 
 ### @optique/temporal
 

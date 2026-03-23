@@ -284,6 +284,13 @@ export function loggingOptions(
       levelParser = debug(debugOptions);
       break;
     }
+
+    default:
+      throw new TypeError(
+        `Unsupported level configuration: ${
+          JSON.stringify((config as Record<string, unknown>).level)
+        }`,
+      );
   }
 
   // Default log output is console
