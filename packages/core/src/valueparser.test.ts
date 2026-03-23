@@ -9466,6 +9466,48 @@ describe("socketAddress()", () => {
       ]);
     });
 
+    it("should reject mixed hex/octal dotted forms in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowLoopback: false } },
+      });
+
+      // 0377 = octal 255, 0x1 = hex 1 → WHATWG: 255.0.0.1
+      const result1 = parser.parse("0377.0.0.0x1");
+      assert.ok(!result1.success);
+      assert.deepStrictEqual(result1.error, [
+        { type: "value", value: "0377.0.0.0x1" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+
+      // 0177 = octal 127 → WHATWG: 127.0.0.1 (loopback)
+      const result2 = parser.parse("0177.0x0.0.1");
+      assert.ok(!result2.success);
+      assert.deepStrictEqual(result2.error, [
+        { type: "value", value: "0177.0x0.0.1" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
+
+    it("should accept mixed dotted forms with invalid octal digits", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both" },
+      });
+
+      // 08 contains digit 8, not valid octal — WHATWG IPv4 parsing
+      // fails on this part, so the form is not a valid IPv4 literal
+      const result = parser.parse("08.0.0.0x1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "08.0.0.0x1");
+    });
+
     it("should reject private IP in hex-dotted in both mode", () => {
       const parser = socketAddress({
         defaultPort: 80,

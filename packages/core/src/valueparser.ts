@@ -3670,9 +3670,9 @@ export function socketAddress(
     // Dotted forms (2-4 parts) where at least one part uses hex notation.
     // All-decimal dotted forms are handled by looksLikeIpv4() (4-part)
     // or rejected by hostname() (2-3 part, all-numeric ≥2 labels).
-    // Each part's value is checked against the WHATWG IPv4 range for
-    // its position: first N-1 parts must be ≤ 255, the last part
-    // must be < 256^(5-N).
+    // Parts are parsed with WHATWG IPv4 number semantics (0x → hex,
+    // leading 0 → octal, else decimal) and checked against the WHATWG
+    // range: first N-1 parts must be ≤ 255, last part < 256^(5-N).
     const parts = input.split(".");
     if (parts.length >= 2 && parts.length <= 4) {
       const numericOrHex = /^(?:[0-9]+|0[xX][0-9a-fA-F]+)$/;
@@ -3680,9 +3680,20 @@ export function socketAddress(
         parts.every((p) => numericOrHex.test(p)) &&
         parts.some((p) => /^0[xX]/i.test(p))
       ) {
-        const values = parts.map((p) =>
-          /^0[xX]/i.test(p) ? parseInt(p.slice(2), 16) : Number(p)
-        );
+        const values: number[] = [];
+        for (const p of parts) {
+          if (/^0[xX]/i.test(p)) {
+            values.push(parseInt(p.slice(2), 16));
+          } else if (p.length > 1 && p[0] === "0") {
+            // WHATWG treats leading-zero numbers as octal.  If the
+            // part contains non-octal digits (8, 9), WHATWG's IPv4
+            // number parser fails, so the whole form is not IPv4.
+            if (!/^[0-7]+$/.test(p.slice(1))) return false;
+            values.push(parseInt(p.slice(1), 8));
+          } else {
+            values.push(Number(p));
+          }
+        }
         const lastMax = 256 ** (5 - parts.length);
         return values.slice(0, -1).every((v) => v <= 255) &&
           values[values.length - 1] < lastMax;
