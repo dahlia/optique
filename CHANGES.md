@@ -169,6 +169,13 @@ To be released.
     than DNS hostnames.  This also affects `socketAddress()` with
     `host: { type: "hostname" }`.  [[#376], [#657]]
 
+ -  Fixed `socketAddress()` with `host: { type: "both" }` allowing IP-shaped
+    input to bypass IP restrictions (e.g., `allowPrivate: false`) by falling
+    through to the hostname parser.  IP-shaped input is now routed exclusively
+    to the IP parser based on lexical form, and specific restriction error
+    messages (e.g., “192.168.1.1 is a private IP address.”) are propagated
+    instead of the generic “invalid format” error.  [[#335], [#714]]
+
  -  Fixed `hostname()` accepting case variants of `localhost` (e.g.,
     `LOCALHOST`, `LocalHost`) and wildcard-localhost forms (e.g.,
     `*.localhost`) when `allowLocalhost` is set to `false`.  DNS hostnames
@@ -859,6 +866,7 @@ To be released.
 [#332]: https://github.com/dahlia/optique/issues/332
 [#333]: https://github.com/dahlia/optique/issues/333
 [#334]: https://github.com/dahlia/optique/issues/334
+[#335]: https://github.com/dahlia/optique/issues/335
 [#336]: https://github.com/dahlia/optique/issues/336
 [#337]: https://github.com/dahlia/optique/issues/337
 [#338]: https://github.com/dahlia/optique/issues/338
@@ -1017,6 +1025,7 @@ To be released.
 [#700]: https://github.com/dahlia/optique/pull/700
 [#709]: https://github.com/dahlia/optique/pull/709
 [#713]: https://github.com/dahlia/optique/pull/713
+[#714]: https://github.com/dahlia/optique/pull/714
 
 ### @optique/config
 
