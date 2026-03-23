@@ -1119,23 +1119,28 @@ describe("zod()", () => {
       assert.ok(!invalid.success);
     });
 
-    it("should not pass invalid raw input to refinements", () => {
-      const refineArgs: unknown[] = [];
+    it("should not execute refinements for rejected boolean literals", () => {
+      let refineCalled = false;
       const parser = zod(
         z.coerce.boolean().refine((v) => {
-          refineArgs.push(v);
+          refineCalled = true;
           return v === true;
         }),
       );
-      refineArgs.length = 0;
+      refineCalled = false;
       parser.parse("maybe");
-      // The lazy async probe runs safeParse(true) once; the raw
-      // invalid literal is never passed to the schema.
-      assert.deepEqual(refineArgs, [true]);
+      assert.ok(!refineCalled);
+    });
 
-      // Subsequent invalid inputs reuse the cached check.
-      parser.parse("nope");
-      assert.deepEqual(refineArgs, [true]);
+    it("should not crash on throwing refinements for rejected literals", () => {
+      const parser = zod(
+        z.coerce.boolean().refine((v) => {
+          if (v) throw new Error("boom");
+          return true;
+        }),
+      );
+      const result = parser.parse("maybe");
+      assert.ok(!result.success);
     });
 
     it("should let z.boolean().catch() handle invalid literals", () => {
@@ -1145,15 +1150,23 @@ describe("zod()", () => {
       assert.equal(result.value, false);
     });
 
-    it("should throw TypeError for Promise-returning boolean refinements", () => {
-      const promiseSchema = z.coerce.boolean().refine(
-        () => Promise.resolve(true),
+    it("should pre-convert boolean literals in union schemas", () => {
+      const parser = zod(
+        z.union([z.coerce.boolean(), z.literal("auto")]),
       );
-      const parser = zod(promiseSchema as never);
-      assert.throws(
-        () => parser.parse("maybe"),
-        { name: "TypeError" },
-      );
+      // Recognized boolean literals should be pre-converted
+      const trueResult = parser.parse("true");
+      assert.ok(trueResult.success);
+      assert.equal(trueResult.value, true);
+
+      const falseResult = parser.parse("false");
+      assert.ok(falseResult.success);
+      assert.equal(falseResult.value, false);
+
+      // Non-boolean literals should fall through to other arms
+      const autoResult = parser.parse("auto");
+      assert.ok(autoResult.success);
+      assert.equal(autoResult.value, "auto");
     });
 
     it("should throw TypeError for async boolean transforms on invalid input", () => {
