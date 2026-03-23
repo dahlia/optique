@@ -3687,8 +3687,8 @@ export function socketAddress(
             // WHATWG treats leading-zero numbers as octal.  If the
             // part contains non-octal digits (8, 9), WHATWG's IPv4
             // number parser fails, so the whole form is not IPv4.
-            if (!/^[0-7]+$/.test(p.slice(1))) return false;
-            values.push(parseInt(p.slice(1), 8));
+            if (/[89]/.test(p)) return false;
+            values.push(parseInt(p, 8));
           } else {
             values.push(Number(p));
           }
