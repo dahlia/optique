@@ -113,6 +113,32 @@ export type ValueParserResult<T> =
 
     /** The successfully parsed value of type {@link T}. */
     readonly value: T;
+
+    /**
+     * When `true`, indicates that the value is a placeholder stand-in for
+     * a deferred interactive prompt, not a real user-provided value.
+     * Combinators propagate this flag so that the two-phase parsing
+     * facade can strip deferred values before passing them to phase-two
+     * contexts.
+     *
+     * @since 1.0.0
+     */
+    readonly deferred?: true;
+
+    /**
+     * A recursive map describing which property keys in {@link value} hold
+     * deferred placeholder values.  Set by `object()` and propagated by
+     * `map()`.  Used by the two-phase facade to selectively replace only
+     * deferred fields with `undefined` while preserving non-deferred fields
+     * for phase-two context annotation collection.
+     *
+     * Each entry maps a property key to either `null` (the entire field is
+     * deferred) or another `DeferredMap` (the field is an object whose own
+     * sub-fields are partially deferred).
+     *
+     * @since 1.0.0
+     */
+    readonly deferredKeys?: DeferredMap;
   }
   | {
     /** Indicates that the parsing operation failed. */
@@ -121,6 +147,17 @@ export type ValueParserResult<T> =
     /** The error message describing why the parsing failed. */
     readonly error: Message;
   };
+
+/**
+ * A recursive map that tracks which fields in a parsed object hold deferred
+ * placeholder values.  Each entry maps a property key to either `null`
+ * (the field is fully deferred and should be replaced with `undefined`)
+ * or another `DeferredMap` (the field is partially deferred — recurse into
+ * its sub-fields).
+ *
+ * @since 1.0.0
+ */
+export type DeferredMap = ReadonlyMap<PropertyKey, DeferredMap | null>;
 
 /**
  * Options for creating a string parser.
@@ -146,6 +183,15 @@ export interface StringOptions {
    * to validate patterns before use.
    */
   readonly pattern?: RegExp;
+
+  /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Override the default `""` when a `pattern` constraint or downstream
+   * `map()` transform requires a non-empty or specially shaped string.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: string;
 
   /**
    * Custom error messages for various string parsing failures.
@@ -751,7 +797,7 @@ export function string(
   return {
     $mode: "sync",
     metavar,
-    placeholder: "",
+    placeholder: options.placeholder ?? "",
     parse(input: string): ValueParserResult<string> {
       if (patternSource != null && patternFlags != null) {
         const pattern = new RegExp(patternSource, patternFlags);
@@ -810,6 +856,15 @@ export interface IntegerOptionsNumber {
    * no maximum is enforced.
    */
   readonly max?: number;
+
+  /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Override the default `0` when `min`/`max` constraints or downstream
+   * `map()` transforms require a specific value.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: number;
 
   /**
    * Custom error messages for integer parsing failures.
@@ -876,6 +931,15 @@ export interface IntegerOptionsBigInt {
    * no maximum is enforced.
    */
   readonly max?: bigint;
+
+  /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Override the default `0n` when `min`/`max` constraints or downstream
+   * `map()` transforms require a specific value.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: bigint;
 
   /**
    * Custom error messages for bigint integer parsing failures.
@@ -1000,7 +1064,12 @@ export function integer(
     return {
       $mode: "sync",
       metavar,
-      placeholder: 0n,
+      placeholder: options?.placeholder ??
+        (options?.min != null && options.min > 0n
+          ? options.min
+          : options?.max != null && options.max < 0n
+          ? options.max
+          : 0n),
       parse(input: string): ValueParserResult<bigint> {
         if (!input.match(/^-?\d+$/)) {
           return {
@@ -1067,7 +1136,12 @@ export function integer(
   return {
     $mode: "sync",
     metavar,
-    placeholder: 0,
+    placeholder: options?.placeholder ??
+      (options?.min != null && options.min > 0
+        ? options.min
+        : options?.max != null && options.max < 0
+        ? options.max
+        : 0),
     parse(input: string): ValueParserResult<number> {
       if (!input.match(/^-?\d+$/)) {
         return {
@@ -1161,6 +1235,15 @@ export interface FloatOptions {
   readonly allowInfinity?: boolean;
 
   /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Override the default `0` when `min`/`max` constraints or downstream
+   * `map()` transforms require a specific value.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: number;
+
+  /**
    * Custom error messages for float parsing failures.
    * @since 0.5.0
    */
@@ -1226,7 +1309,12 @@ export function float(options: FloatOptions = {}): ValueParser<"sync", number> {
   return {
     $mode: "sync",
     metavar,
-    placeholder: 0,
+    placeholder: options?.placeholder ??
+      (options?.min != null && options.min > 0
+        ? options.min
+        : options?.max != null && options.max < 0
+        ? options.max
+        : 0),
     parse(input: string): ValueParserResult<number> {
       const invalidNumber = (i: string): ValueParserResult<number> => ({
         success: false,
@@ -2083,6 +2171,14 @@ export interface PortOptionsNumber {
   readonly disallowWellKnown?: boolean;
 
   /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Defaults to `min` (which itself defaults to `1`).
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: number;
+
+  /**
    * Custom error messages for port parsing failures.
    * @since 0.10.0
    */
@@ -2152,6 +2248,14 @@ export interface PortOptionsBigInt {
    * @default `false`
    */
   readonly disallowWellKnown?: boolean;
+
+  /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Defaults to `min` (which itself defaults to `1n`).
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: bigint;
 
   /**
    * Custom error messages for port parsing failures.
@@ -2279,7 +2383,7 @@ export function port(
     return {
       $mode: "sync",
       metavar,
-      placeholder: 0n,
+      placeholder: options.placeholder ?? min,
       parse(input: string): ValueParserResult<bigint> {
         if (!input.match(/^-?\d+$/)) {
           return {
@@ -2364,7 +2468,7 @@ export function port(
   return {
     $mode: "sync",
     metavar,
-    placeholder: 0,
+    placeholder: options?.placeholder ?? min,
     parse(input: string): ValueParserResult<number> {
       if (!input.match(/^-?\d+$/)) {
         return {

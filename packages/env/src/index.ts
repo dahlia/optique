@@ -284,13 +284,10 @@ export function bindEnv<
   // marker would cause optional() to delegate into bindEnv with an
   // unannotated state, surfacing "Missing env" errors instead of undefined.
 
-  return {
+  const boundParser: Parser<M, TValue, TState> = {
     $mode: parser.$mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
-    ...(parser.placeholder !== undefined
-      ? { placeholder: parser.placeholder }
-      : {}),
     priority: parser.priority,
     usage: options.default !== undefined
       ? [{ type: "optional", terms: parser.usage }]
@@ -389,6 +386,18 @@ export function bindEnv<
       return parser.getDocFragments(state, defaultValue);
     },
   };
+  // Lazily forward placeholder from inner parser to avoid eagerly
+  // evaluating derived value parser factories at construction time.
+  if ("placeholder" in parser) {
+    Object.defineProperty(boundParser, "placeholder", {
+      get() {
+        return parser.placeholder;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  return boundParser;
 }
 
 function getEnvOrDefault<M extends Mode, TValue>(

@@ -839,7 +839,7 @@ describe("zod()", () => {
 
   describe("boolean parsing", () => {
     it("should parse true literals with z.coerce.boolean()", () => {
-      const parser = zod(z.coerce.boolean());
+      const parser = zod(z.coerce.boolean(), { placeholder: false });
       for (const input of ["true", "1", "yes", "on"]) {
         const result = parser.parse(input);
         assert.ok(result.success, `Expected "${input}" to parse as true`);
@@ -848,7 +848,7 @@ describe("zod()", () => {
     });
 
     it("should parse false literals with z.coerce.boolean()", () => {
-      const parser = zod(z.coerce.boolean());
+      const parser = zod(z.coerce.boolean(), { placeholder: false });
       for (const input of ["false", "0", "no", "off"]) {
         const result = parser.parse(input);
         assert.ok(result.success, `Expected "${input}" to parse as false`);
@@ -857,7 +857,7 @@ describe("zod()", () => {
     });
 
     it("should be case-insensitive", () => {
-      const parser = zod(z.coerce.boolean());
+      const parser = zod(z.coerce.boolean(), { placeholder: false });
       for (
         const input of [
           "True",
@@ -880,7 +880,7 @@ describe("zod()", () => {
     });
 
     it("should trim whitespace", () => {
-      const parser = zod(z.coerce.boolean());
+      const parser = zod(z.coerce.boolean(), { placeholder: false });
       const trueResult = parser.parse("  true  ");
       assert.ok(trueResult.success);
       assert.ok(trueResult.value);
@@ -891,7 +891,7 @@ describe("zod()", () => {
     });
 
     it("should reject invalid strings", () => {
-      const parser = zod(z.coerce.boolean());
+      const parser = zod(z.coerce.boolean(), { placeholder: false });
       for (const input of ["maybe", "2", "random", "nope", ""]) {
         const result = parser.parse(input);
         assert.ok(!result.success, `Expected "${input}" to be rejected`);
@@ -899,7 +899,7 @@ describe("zod()", () => {
     });
 
     it("should work with z.boolean() (non-coerced)", () => {
-      const parser = zod(z.boolean());
+      const parser = zod(z.boolean(), { placeholder: false });
       const trueResult = parser.parse("true");
       assert.ok(trueResult.success);
       assert.ok(trueResult.value);
@@ -910,7 +910,9 @@ describe("zod()", () => {
     });
 
     it("should work with z.coerce.boolean().optional()", () => {
-      const parser = zod(z.coerce.boolean().optional());
+      const parser = zod(z.coerce.boolean().optional(), {
+        placeholder: false,
+      });
       const result = parser.parse("true");
       assert.ok(result.success);
       assert.ok(result.value);
@@ -921,21 +923,27 @@ describe("zod()", () => {
     });
 
     it("should work with z.coerce.boolean().nullable()", () => {
-      const parser = zod(z.coerce.boolean().nullable());
+      const parser = zod(z.coerce.boolean().nullable(), {
+        placeholder: false,
+      });
       const result = parser.parse("yes");
       assert.ok(result.success);
       assert.ok(result.value);
     });
 
     it("should work with z.coerce.boolean().default(false)", () => {
-      const parser = zod(z.coerce.boolean().default(false));
+      const parser = zod(z.coerce.boolean().default(false), {
+        placeholder: false,
+      });
       const result = parser.parse("on");
       assert.ok(result.success);
       assert.ok(result.value);
     });
 
     it("should preserve Zod refinements", () => {
-      const parser = zod(z.coerce.boolean().refine((v) => v === true));
+      const parser = zod(z.coerce.boolean().refine((v) => v === true), {
+        placeholder: false,
+      });
       const trueResult = parser.parse("true");
       assert.ok(trueResult.success);
       assert.ok(trueResult.value);
@@ -945,19 +953,19 @@ describe("zod()", () => {
     });
 
     it("should expose choices for boolean schemas", () => {
-      const parser = zod(z.coerce.boolean());
+      const parser = zod(z.coerce.boolean(), { placeholder: false });
       assert.deepEqual(parser.choices, [true, false]);
     });
 
     it("should provide suggest() for boolean schemas", () => {
-      const parser = zod(z.coerce.boolean());
+      const parser = zod(z.coerce.boolean(), { placeholder: false });
       assert.ok(parser.suggest != null);
       const suggestions = [...parser.suggest!("t")];
       assert.deepEqual(suggestions, [{ kind: "literal", text: "true" }]);
     });
 
     it("should suggest all literals for empty prefix", () => {
-      const parser = zod(z.coerce.boolean());
+      const parser = zod(z.coerce.boolean(), { placeholder: false });
       const suggestions = [...parser.suggest!("")];
       assert.deepEqual(suggestions, [
         { kind: "literal", text: "true" },
@@ -974,6 +982,7 @@ describe("zod()", () => {
     it("should work with z.coerce.boolean().refine() (ZodEffects)", () => {
       const parser = zod(
         z.coerce.boolean().refine((v) => typeof v === "boolean"),
+        { placeholder: false },
       );
       const trueResult = parser.parse("true");
       assert.ok(trueResult.success);
@@ -988,7 +997,9 @@ describe("zod()", () => {
     });
 
     it("should work with z.coerce.boolean().catch(false) (ZodCatch)", () => {
-      const parser = zod(z.coerce.boolean().catch(false));
+      const parser = zod(z.coerce.boolean().catch(false), {
+        placeholder: false,
+      });
       const trueResult = parser.parse("true");
       assert.ok(trueResult.success);
       assert.ok(trueResult.value);
@@ -1004,7 +1015,9 @@ describe("zod()", () => {
     });
 
     it("should not expose choices for refined boolean schemas", () => {
-      const parser = zod(z.coerce.boolean().refine((v) => v === true));
+      const parser = zod(z.coerce.boolean().refine((v) => v === true), {
+        placeholder: false,
+      });
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
     });
@@ -1014,24 +1027,30 @@ describe("zod()", () => {
         z.boolean().superRefine((v, ctx) => {
           if (!v) ctx.addIssue({ code: "custom", message: "must be true" });
         }),
+        { placeholder: false },
       );
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
     });
 
     it("should not expose choices for catch-wrapped boolean schemas", () => {
-      const parser = zod(z.coerce.boolean().catch(false));
+      const parser = zod(z.coerce.boolean().catch(false), {
+        placeholder: false,
+      });
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
     });
 
     it("should still expose choices for optional boolean schemas", () => {
-      const parser = zod(z.coerce.boolean().optional());
+      const parser = zod(z.coerce.boolean().optional(), {
+        placeholder: false,
+      });
       assert.deepEqual(parser.choices, [true, false]);
     });
 
     it("should respect custom zodError for refinement failures", () => {
       const parser = zod(z.coerce.boolean().refine((v) => v === true), {
+        placeholder: false,
         errors: {
           zodError: message`Only true is accepted.`,
         },
@@ -1045,6 +1064,7 @@ describe("zod()", () => {
 
     it("should respect custom static zodError for invalid boolean literals", () => {
       const parser = zod(z.coerce.boolean(), {
+        placeholder: false,
         errors: {
           zodError: message`Please enter true or false.`,
         },
@@ -1058,6 +1078,7 @@ describe("zod()", () => {
 
     it("should respect custom function zodError for invalid boolean literals (non-coerced)", () => {
       const parser = zod(z.boolean(), {
+        placeholder: false,
         errors: {
           zodError: (_error, input) => message`Not a boolean: ${input}.`,
         },
@@ -1073,6 +1094,7 @@ describe("zod()", () => {
 
     it("should respect custom function zodError for invalid boolean literals (coerced)", () => {
       const parser = zod(z.coerce.boolean(), {
+        placeholder: false,
         errors: {
           zodError: (_error, input) => message`Bad value: ${input}.`,
         },
@@ -1088,6 +1110,7 @@ describe("zod()", () => {
 
     it("should pass a ZodError with flatten/format to coerced boolean callbacks", () => {
       const parser = zod(z.coerce.boolean(), {
+        placeholder: false,
         errors: {
           zodError: (error, input) => {
             // Must support standard ZodError API
@@ -1105,6 +1128,7 @@ describe("zod()", () => {
     it("should not interfere with z.preprocess() boolean schemas", () => {
       const parser = zod(
         z.preprocess((v) => v === "enabled", z.boolean()),
+        { placeholder: false },
       );
       const enabledResult = parser.parse("enabled");
       assert.ok(enabledResult.success);
@@ -1118,7 +1142,9 @@ describe("zod()", () => {
     it("should detect async boolean schemas on valid input", () => {
       // deno-lint-ignore require-await
       const asyncSchema = z.coerce.boolean().refine(async (v) => v === true);
-      const parser = zod(asyncSchema as never);
+      const parser = zod(asyncSchema as never, {
+        placeholder: false as never,
+      });
       // Async detected via doSafeParse when a valid literal is parsed
       assert.throws(
         () => parser.parse("true"),
@@ -1133,6 +1159,7 @@ describe("zod()", () => {
           refineCalled = true;
           return v;
         }),
+        { placeholder: false },
       );
       assert.ok(!refineCalled);
     });
@@ -1144,6 +1171,7 @@ describe("zod()", () => {
           refineCalled = true;
           return v === true;
         }),
+        { placeholder: false },
       );
       refineCalled = false;
       parser.parse("maybe");
@@ -1152,6 +1180,7 @@ describe("zod()", () => {
 
     it("should pass a real ZodError to function zodError callbacks", () => {
       const parser = zod(z.boolean(), {
+        placeholder: false,
         errors: {
           zodError: (error, input) => {
             // Callback should receive a real ZodError with issues
@@ -1171,7 +1200,9 @@ describe("zod()", () => {
     });
 
     it("should work with z.coerce.boolean().transform()", () => {
-      const parser = zod(z.coerce.boolean().transform((v) => !v));
+      const parser = zod(z.coerce.boolean().transform((v) => !v), {
+        placeholder: true,
+      });
       const result = parser.parse("false");
       assert.ok(result.success);
       assert.ok(result.value);
@@ -1185,7 +1216,9 @@ describe("zod()", () => {
     });
 
     it("should work with z.coerce.boolean().readonly()", () => {
-      const parser = zod(z.coerce.boolean().readonly());
+      const parser = zod(z.coerce.boolean().readonly(), {
+        placeholder: false,
+      });
       const trueResult = parser.parse("true");
       assert.ok(trueResult.success);
       assert.ok(trueResult.value);
@@ -1204,13 +1237,14 @@ describe("zod()", () => {
           if (v) throw new Error("boom");
           return true;
         }),
+        { placeholder: false },
       );
       const result = parser.parse("maybe");
       assert.ok(!result.success);
     });
 
     it("should let z.boolean().catch() handle invalid literals", () => {
-      const parser = zod(z.boolean().catch(false));
+      const parser = zod(z.boolean().catch(false), { placeholder: false });
       const result = parser.parse("maybe");
       assert.ok(result.success);
       assert.ok(!result.value);
@@ -1219,7 +1253,9 @@ describe("zod()", () => {
     it("should preserve union arm precedence with coerced boolean", () => {
       // Union schemas should not be affected by boolean pre-conversion.
       // The string arm should match "off" even though it's a boolean literal.
-      const parser = zod(z.union([z.literal("off"), z.coerce.boolean()]));
+      const parser = zod(z.union([z.literal("off"), z.coerce.boolean()]), {
+        placeholder: "off",
+      });
       const offResult = parser.parse("off");
       assert.ok(offResult.success);
       assert.equal(offResult.value, "off");
@@ -1232,7 +1268,9 @@ describe("zod()", () => {
           if (!v) ctx.addIssue({ code: "custom", message: "bad" });
         },
       );
-      const parser = zod(asyncSchema as never);
+      const parser = zod(asyncSchema as never, {
+        placeholder: false as never,
+      });
       // Async detected via doSafeParse on valid boolean literals
       assert.throws(
         () => parser.parse("true"),
@@ -1243,7 +1281,9 @@ describe("zod()", () => {
     it("should throw TypeError for async boolean transforms on valid input", () => {
       // deno-lint-ignore require-await
       const asyncTransform = z.coerce.boolean().transform(async (v) => !v);
-      const parser = zod(asyncTransform as never);
+      const parser = zod(asyncTransform as never, {
+        placeholder: false as never,
+      });
       assert.throws(
         () => parser.parse("true"),
         { name: "TypeError" },

@@ -1164,27 +1164,27 @@ export function option<M extends Mode, T>(
     },
   };
   // Define placeholder lazily to avoid triggering derived value parser
-  // factory functions during parser construction.
+  // factory functions during parser construction.  Non-enumerable so that
+  // ...parser spread in map() does not eagerly evaluate the getter.
   if (valueParser != null) {
     Object.defineProperty(result, "placeholder", {
       get() {
-        let value: T | undefined;
         try {
-          value = valueParser!.placeholder;
-        } catch { /* derived value parser factory may throw */ }
-        Object.defineProperty(result, "placeholder", {
-          value,
-          writable: false,
-          configurable: true,
-          enumerable: true,
-        });
-        return value;
+          return valueParser!.placeholder;
+        } catch {
+          return undefined;
+        }
       },
       configurable: true,
-      enumerable: true,
+      enumerable: false,
     });
   } else {
-    (result as Record<string, unknown>).placeholder = false;
+    Object.defineProperty(result, "placeholder", {
+      value: false,
+      configurable: true,
+      enumerable: false,
+      writable: false,
+    });
   }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
@@ -1822,23 +1822,18 @@ export function argument<M extends Mode, T>(
     },
   };
   // Define placeholder lazily to avoid triggering derived value parser
-  // factory functions during parser construction.
+  // factory functions during parser construction.  Non-enumerable so that
+  // ...parser spread in map() does not eagerly evaluate the getter.
   Object.defineProperty(result, "placeholder", {
     get() {
-      let value: T | undefined;
       try {
-        value = valueParser.placeholder;
-      } catch { /* derived value parser factory may throw */ }
-      Object.defineProperty(result, "placeholder", {
-        value,
-        writable: false,
-        configurable: true,
-        enumerable: true,
-      });
-      return value;
+        return valueParser.placeholder;
+      } catch {
+        return undefined;
+      }
     },
     configurable: true,
-    enumerable: true,
+    enumerable: false,
   });
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.

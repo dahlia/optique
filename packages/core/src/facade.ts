@@ -49,7 +49,7 @@ import {
   type OptionName,
   type Usage,
 } from "./usage.ts";
-import { string } from "./valueparser.ts";
+import { type DeferredMap, string } from "./valueparser.ts";
 import { type Annotations, injectAnnotations } from "./annotations.ts";
 import { validateCommandNames, validateOptionNames } from "./validate.ts";
 import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
@@ -65,9 +65,90 @@ function finalizeParsedForContext(
     : parsed;
 }
 
+function isPlainObject(value: object): boolean {
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
 function prepareParsedForContexts(
   parsed: unknown,
+  deferred?: true,
+  deferredKeys?: DeferredMap,
 ): unknown {
+  if (!deferred) return parsed;
+  // Selectively replace only the deferred fields with undefined while
+  // preserving non-deferred fields for phase-two context annotation
+  // collection (e.g., getConfigPath may depend on non-deferred fields).
+  // Plain objects and arrays are safe to clone field-by-field; non-plain
+  // objects (Set, Map, class instances) cannot be reliably reconstructed,
+  // so they fall through to the pass-through fallback.
+  if (
+    deferredKeys != null && deferredKeys.size > 0 &&
+    parsed != null && typeof parsed === "object" &&
+    (isPlainObject(parsed) || Array.isArray(parsed))
+  ) {
+    // Check that at least one deferredKey matches an own property of the
+    // parsed object.  When map() restructures the object, the original
+    // deferredKeys may not correspond to the new shape; in that case fall
+    // through to the undefined fallback instead of returning a clone that
+    // still contains placeholder values in transformed fields.
+    // Look up a key in deferredKeys, handling the numeric/string
+    // mismatch between tuple() (stores number indices like 0) and
+    // Reflect.ownKeys() on arrays (returns string indices like "0").
+    const getDeferredEntry = (
+      key: PropertyKey,
+    ): DeferredMap | null | undefined => {
+      const entry = deferredKeys.get(key);
+      if (entry !== undefined) return entry;
+      if (typeof key === "string") {
+        const num = Number(key);
+        if (Number.isInteger(num)) return deferredKeys.get(num);
+      } else if (typeof key === "number") {
+        return deferredKeys.get(String(key));
+      }
+      return undefined;
+    };
+    const ownKeys = Reflect.ownKeys(parsed as object);
+    let hasMatchingKey = false;
+    for (const key of ownKeys) {
+      if (getDeferredEntry(key) !== undefined) {
+        hasMatchingKey = true;
+        break;
+      }
+    }
+    if (hasMatchingKey) {
+      const clone: Record<PropertyKey, unknown> = Array.isArray(parsed)
+        ? new Array(parsed.length) as unknown as Record<PropertyKey, unknown>
+        : Object.create(Object.getPrototypeOf(parsed));
+      for (const key of ownKeys) {
+        const desc = Object.getOwnPropertyDescriptor(parsed as object, key);
+        if (desc == null) continue;
+        const entry = getDeferredEntry(key);
+        if ("value" in desc && entry !== undefined) {
+          if (entry === null) {
+            // Fully deferred: replace with undefined
+            Object.defineProperty(clone, key, { ...desc, value: undefined });
+          } else {
+            // Partially deferred sub-object: recurse
+            Object.defineProperty(clone, key, {
+              ...desc,
+              value: prepareParsedForContexts(desc.value, true, entry),
+            });
+          }
+        } else {
+          Object.defineProperty(clone, key, desc);
+        }
+      }
+      return clone;
+    }
+  }
+  // No per-field info, non-plain object, or stale keys from map(): pass
+  // through as-is so that context annotations can still access the parsed
+  // value.  This is an intentional trade-off — map() drops deferredKeys
+  // because the transform may rename/restructure fields, making the inner
+  // key set invalid for the output shape.  Placeholder values may be
+  // visible to phase-two contexts in this path; the final parse always
+  // resolves them correctly regardless.
   return parsed;
 }
 
@@ -2414,12 +2495,18 @@ async function collectAnnotations(
   contexts: readonly SourceContext<unknown>[],
   parsed?: unknown,
   options?: unknown,
+  deferred?: true,
+  deferredKeys?: DeferredMap,
 ): Promise<{
   readonly annotations: Annotations;
   readonly annotationsList: readonly Annotations[];
 }> {
   const annotationsList: Annotations[] = [];
-  const preparedParsed = prepareParsedForContexts(parsed);
+  const preparedParsed = prepareParsedForContexts(
+    parsed,
+    deferred,
+    deferredKeys,
+  );
 
   for (const context of contexts) {
     const mergedAnnotations = await withPreparedParsedForContext(
@@ -2528,12 +2615,18 @@ function collectAnnotationsSync(
   contexts: readonly SourceContext<unknown>[],
   parsed?: unknown,
   options?: unknown,
+  deferred?: true,
+  deferredKeys?: DeferredMap,
 ): {
   readonly annotations: Annotations;
   readonly annotationsList: readonly Annotations[];
 } {
   const annotationsList: Annotations[] = [];
-  const preparedParsed = prepareParsedForContexts(parsed);
+  const preparedParsed = prepareParsedForContexts(
+    parsed,
+    deferred,
+    deferredKeys,
+  );
 
   for (const context of contexts) {
     const mergedAnnotations = withPreparedParsedForContext(
@@ -2904,6 +2997,8 @@ export async function runWith<
     );
 
     let firstPassResult: unknown;
+    let firstPassDeferred: true | undefined;
+    let firstPassDeferredKeys: DeferredMap | undefined;
     let firstPassFailed = false;
     try {
       if (parser.$mode === "async") {
@@ -2915,14 +3010,18 @@ export async function runWith<
         );
       }
 
-      // Extract value from result
+      // Extract value and deferred metadata from result
       if (
         typeof firstPassResult === "object" && firstPassResult !== null &&
         "success" in firstPassResult
       ) {
-        const result = firstPassResult as Result<unknown>;
+        const result = firstPassResult as
+          & Result<unknown>
+          & { deferred?: true; deferredKeys?: DeferredMap };
         if (result.success) {
           firstPassResult = result.value;
+          firstPassDeferred = result.deferred;
+          firstPassDeferredKeys = result.deferredKeys;
         } else {
           firstPassFailed = true;
         }
@@ -2961,6 +3060,8 @@ export async function runWith<
       contexts,
       firstPassResult,
       ctxOptions,
+      firstPassDeferred,
+      firstPassDeferredKeys,
     );
 
     // Final parse with merged annotations
@@ -3066,10 +3167,16 @@ export function runWithSync<
     );
 
     let firstPassResult: unknown;
+    let firstPassDeferred: true | undefined;
+    let firstPassDeferredKeys: DeferredMap | undefined;
     try {
-      const result = parseSync(augmentedParser1, args);
+      const result = parseSync(augmentedParser1, args) as
+        & { success: boolean; value?: unknown; error?: unknown }
+        & { deferred?: true; deferredKeys?: DeferredMap };
       if (result.success) {
         firstPassResult = result.value;
+        firstPassDeferred = result.deferred;
+        firstPassDeferredKeys = result.deferredKeys;
       } else {
         // First pass failed - run through runParser for proper error handling
         return runParser(augmentedParser1, programName, args, options);
@@ -3084,6 +3191,8 @@ export function runWithSync<
       contexts,
       firstPassResult,
       ctxOptions,
+      firstPassDeferred,
+      firstPassDeferredKeys,
     );
 
     // Final parse with merged annotations

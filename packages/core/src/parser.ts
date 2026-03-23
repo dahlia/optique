@@ -14,7 +14,7 @@ import {
   type Usage,
   type UsageTerm,
 } from "./usage.ts";
-import type { ValueParserResult } from "./valueparser.ts";
+import type { DeferredMap, ValueParserResult } from "./valueparser.ts";
 import {
   injectAnnotations,
   isInjectedAnnotationWrapper,
@@ -391,6 +391,18 @@ export type Result<T> =
      * have been applied and completed.
      */
     value: T;
+    /**
+     * When `true`, indicates that the value contains deferred prompt
+     * placeholders.  Propagated from {@link ValueParserResult.deferred}.
+     * @since 1.0.0
+     */
+    deferred?: true;
+    /**
+     * Property keys whose values are deferred placeholders.
+     * Propagated from {@link ValueParserResult.deferredKeys}.
+     * @since 1.0.0
+     */
+    deferredKeys?: DeferredMap;
   }
   | {
     /**
@@ -479,6 +491,10 @@ export function parseSync<T>(
       value: shouldUnwrapAnnotatedValue
         ? unwrapInjectedAnnotationWrapper(endResult.value)
         : endResult.value,
+      ...(endResult.deferred ? { deferred: true as const } : {}),
+      ...(endResult.deferredKeys
+        ? { deferredKeys: endResult.deferredKeys }
+        : {}),
     }
     : { success: false, error: endResult.error };
 }
@@ -545,6 +561,10 @@ export async function parseAsync<T>(
       value: shouldUnwrapAnnotatedValue
         ? unwrapInjectedAnnotationWrapper(endResult.value)
         : endResult.value,
+      ...(endResult.deferred ? { deferred: true as const } : {}),
+      ...(endResult.deferredKeys
+        ? { deferredKeys: endResult.deferredKeys }
+        : {}),
     }
     : { success: false, error: endResult.error };
 }

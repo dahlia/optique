@@ -1457,13 +1457,13 @@ describe("prompt()", () => {
           },
         );
 
-        assert.deepEqual(phase2Parsed, { apiKey: "" });
+        assert.deepEqual(phase2Parsed, { apiKey: undefined });
         assert.deepEqual(result, { apiKey: "config-secret" });
       },
     );
 
     it(
-      "hides top-level deferred prompts from other phase-two contexts",
+      "passes through top-level deferred prompts to other phase-two contexts",
       async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -1510,7 +1510,7 @@ describe("prompt()", () => {
     );
 
     it(
-      "hides deferred prompt values inside non-plain phase-two context inputs",
+      "passes through deferred prompt values inside non-plain phase-two context inputs",
       async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -1571,7 +1571,7 @@ describe("prompt()", () => {
       },
     );
 
-    it("hides deferred prompt values inside Set phase-two context inputs", async () => {
+    it("passes through deferred prompt values inside Set phase-two context inputs", async () => {
       const context = createConfigContext({
         schema: createPromptConfigSchema(),
       });
@@ -1621,7 +1621,7 @@ describe("prompt()", () => {
     });
 
     it(
-      "hides deferred prompt values in Set own properties during phase two",
+      "passes through deferred prompt values in Set own properties during phase two",
       async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -1818,7 +1818,7 @@ describe("prompt()", () => {
     });
 
     it(
-      "hides deferred prompt values inside nested non-plain phase-two inputs",
+      "passes through deferred prompt values inside nested non-plain phase-two inputs",
       async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -1879,7 +1879,7 @@ describe("prompt()", () => {
       },
     );
 
-    it("hides top-level deferred prompt values from config loaders", async () => {
+    it("passes through top-level deferred prompt values to config loaders", async () => {
       const context = createConfigContext({
         schema: createPromptConfigSchema(),
       });
@@ -1945,7 +1945,7 @@ describe("prompt()", () => {
         },
       });
 
-      assert.deepEqual(loaderParsed, { apiKey: "" });
+      assert.deepEqual(loaderParsed, { apiKey: undefined });
       assert.deepEqual(result, { apiKey: "config-secret" });
     });
 
@@ -2004,7 +2004,7 @@ describe("prompt()", () => {
       },
     );
 
-    it("hides deferred prompt values inside Set loader inputs", async () => {
+    it("passes through deferred prompt values inside Set loader inputs", async () => {
       const context = createConfigContext({
         schema: createPromptConfigSchema(),
       });
@@ -2046,7 +2046,7 @@ describe("prompt()", () => {
       assert.deepEqual([...result], ["config-secret"]);
     });
 
-    it("hides deferred prompt values in Set own properties for config loaders", async () => {
+    it("passes through deferred prompt values in Set own properties for config loaders", async () => {
       const context = createConfigContext({
         schema: createPromptConfigSchema(),
       });
@@ -2097,6 +2097,131 @@ describe("prompt()", () => {
       assert.ok(result instanceof BoxSet);
       assert.equal(result.apiKey, "config-secret");
     });
+
+    it(
+      "passes mapped placeholder values through to phase-two contexts (intentional trade-off)",
+      async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+
+        let phase2Token: string | undefined;
+        const dynamicContext: SourceContext = {
+          id: Symbol.for("@test/mapped-placeholder-phase-two"),
+          mode: "dynamic",
+          getAnnotations(parsed?: unknown) {
+            if (parsed != null && typeof parsed === "object") {
+              phase2Token = (parsed as { readonly token: string }).token;
+            }
+            return {};
+          },
+        };
+
+        const parser = map(
+          object({
+            apiKey: prompt(
+              bindConfig(option("--api-key", string()), {
+                context,
+                key: "apiKey",
+              }),
+              {
+                type: "password",
+                message: "API key:",
+                prompter: () => Promise.resolve("prompt-secret"),
+              },
+            ),
+          }),
+          (value) => ({ token: value.apiKey }),
+        );
+
+        const result = await runWith(
+          parser,
+          "test",
+          [dynamicContext, context],
+          {
+            args: [],
+            contextOptions: {
+              load: () => ({
+                config: { apiKey: "config-secret" },
+                meta: undefined,
+              }),
+            },
+          },
+        );
+
+        // map() drops deferredKeys because the transform is opaque.
+        // The placeholder "" leaks through to the dynamic context.
+        // This is an intentional trade-off: forwarding stale inner
+        // keys would risk stripping the wrong output fields.
+        assert.equal(phase2Token, "");
+        assert.equal(result.token, "config-secret");
+      },
+    );
+
+    it(
+      "falls back to undefined when map() transform throws on deferred placeholder",
+      async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+
+        let phase2Parsed: unknown = "not-called";
+        const dynamicContext: SourceContext = {
+          id: Symbol.for("@test/mapped-throw-phase-two"),
+          mode: "dynamic",
+          getAnnotations(parsed?: unknown) {
+            phase2Parsed = parsed;
+            return {};
+          },
+        };
+
+        const parser = map(
+          object({
+            apiKey: prompt(
+              bindConfig(option("--api-key", string()), {
+                context,
+                key: "apiKey",
+              }),
+              {
+                type: "password",
+                message: "API key:",
+                prompter: () => Promise.resolve("prompt-secret"),
+              },
+            ),
+          }),
+          (value) => {
+            // This transform crashes on the placeholder because
+            // it assumes apiKey is non-empty.
+            if (value.apiKey.length === 0) {
+              throw new Error("apiKey must be non-empty");
+            }
+            return { token: value.apiKey.toUpperCase() };
+          },
+        );
+
+        const result = await runWith(
+          parser,
+          "test",
+          [dynamicContext, context],
+          {
+            args: [],
+            contextOptions: {
+              load: () => ({
+                config: { apiKey: "config-secret" },
+                meta: undefined,
+              }),
+            },
+          },
+        );
+
+        // When the transform throws on a deferred placeholder, map()
+        // catches the error and produces undefined with deferred: true.
+        // prepareParsedForContexts() sees deferred without deferredKeys,
+        // so it passes through (which is undefined).
+        assert.equal(phase2Parsed, undefined);
+        assert.equal(result.token, "CONFIG-SECRET");
+      },
+    );
   });
 
   describe("prompt deferral through wrapper combinators", () => {

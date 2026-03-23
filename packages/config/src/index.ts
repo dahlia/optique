@@ -709,9 +709,6 @@ export function bindConfig<
     $mode: parser.$mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
-    ...(parser.placeholder !== undefined
-      ? { placeholder: parser.placeholder }
-      : {}),
     priority: parser.priority,
     usage: options.default !== undefined
       ? [{ type: "optional", terms: parser.usage }]
@@ -805,6 +802,17 @@ export function bindConfig<
     },
   };
 
+  // Lazily forward placeholder from inner parser to avoid eagerly
+  // evaluating derived value parser factories at construction time.
+  if ("placeholder" in parser) {
+    Object.defineProperty(boundParser, "placeholder", {
+      get() {
+        return parser.placeholder;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
   return boundParser;
 }
 

@@ -148,6 +148,7 @@ function deferredPromptResult<TValue>(
   return {
     success: true,
     value: placeholderValue,
+    deferred: true,
   };
 }
 
@@ -886,10 +887,17 @@ export function prompt<M extends Mode, TValue, TState>(
     if (result.success) {
       return Promise.resolve(result);
     }
-    return shouldDeferPrompt(parser, state) &&
-        "placeholder" in parser
-      ? Promise.resolve(deferredPromptResult(parser.placeholder as TValue))
-      : executePrompt();
+    // Defer when the outer parser (e.g., runWith's two-phase machinery)
+    // signals deferral, regardless of whether the wrapped parser exposes
+    // a placeholder.  Wrappers that forward shouldDeferCompletion without
+    // forwarding placeholder would otherwise fall through to executePrompt
+    // and prompt interactively during phase 1.
+    if (!shouldDeferPrompt(parser, state)) return executePrompt();
+    let ph: TValue | undefined;
+    try {
+      ph = "placeholder" in parser ? parser.placeholder as TValue : undefined;
+    } catch { /* lazy getter may throw before dependencies are ready */ }
+    return Promise.resolve(deferredPromptResult(ph as TValue));
   }
 
   const promptedParser: Parser<"async", TValue, TState> & {
@@ -1213,10 +1221,16 @@ export function prompt<M extends Mode, TValue, TState>(
         return useCompleteResultOrPrompt(r as ValueParserResult<TValue>);
       }
 
-      return shouldDeferPrompt(parser, state) &&
-          "placeholder" in parser
-        ? Promise.resolve(deferredPromptResult(parser.placeholder as TValue))
-        : executePrompt();
+      if (shouldDeferPrompt(parser, state)) {
+        let ph: TValue | undefined;
+        try {
+          ph = "placeholder" in parser
+            ? parser.placeholder as TValue
+            : undefined;
+        } catch { /* lazy getter may throw */ }
+        return Promise.resolve(deferredPromptResult(ph as TValue));
+      }
+      return executePrompt();
     },
 
     suggest: (context, prefix) => {
@@ -1248,6 +1262,23 @@ export function prompt<M extends Mode, TValue, TState>(
       return parser.getDocFragments(state, defaultValue as TValue);
     },
   };
+
+  // Lazily forward placeholder from inner parser so that outer wrappers
+  // (withDefault, group, etc.) can see it without triggering eager
+  // evaluation.
+  if ("placeholder" in parser) {
+    Object.defineProperty(promptedParser, "placeholder", {
+      get() {
+        try {
+          return parser.placeholder as TValue;
+        } catch {
+          return undefined;
+        }
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
 
   return promptedParser;
 }
