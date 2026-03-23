@@ -53,7 +53,6 @@ import { string } from "./valueparser.ts";
 import { type Annotations, injectAnnotations } from "./annotations.ts";
 import {
   containsPlaceholderValues,
-  hiddenPlaceholderObjects,
   isPlaceholderValue,
   type ParserValuePlaceholder,
   type SourceContext,
@@ -161,8 +160,6 @@ function stripPlaceholderValues<T>(
   if (typeof value === "function") {
     const fnCached = seen.get(value as object);
     if (fnCached !== undefined) return fnCached as T;
-    // Consume the hidden-placeholder registration.
-    hiddenPlaceholderObjects.delete(value as object);
     if (
       !/^class[\s{]/.test(Function.prototype.toString.call(value))
     ) {
@@ -198,9 +195,6 @@ function stripPlaceholderValues<T>(
   if (cached !== undefined) {
     return cached as T;
   }
-  // Consume the hidden-placeholder registration so that future clean
-  // parses of the same reused/singleton object are not re-sanitized.
-  hiddenPlaceholderObjects.delete(value);
   if (Array.isArray(value)) {
     if (!containsPlaceholderValues(value)) {
       return value;
@@ -246,7 +240,6 @@ function stripPlaceholderValues<T>(
     if (!containsPlaceholderValues(value)) {
       return value;
     }
-    hiddenPlaceholderObjects.delete(value);
     return createSanitizedNonPlainView(value, seen) as T;
   }
   // Fast path: clean nested plain objects pass through unchanged to
@@ -530,35 +523,12 @@ function createSanitizedNonPlainView<T extends object>(
           break;
         }
       }
-      // Evaluate getters with the proxy as receiver first so that
-      // computed getters calling this.getSecret() or this.inner.x
-      // go through the proxy's sanitization.  If the getter accesses
-      // private fields, the proxy receiver causes TypeError — fall
-      // back to callMethodOnSanitizedTarget which uses the real
-      // target with temporarily sanitized own properties.
-      let result: unknown;
-      try {
-        result = Reflect.get(target, key, receiver);
-      } catch (e) {
-        // Only fall back for private-field receiver errors.
-        if (
-          !(e instanceof TypeError) ||
-          !/private/i.test(String((e as TypeError).message))
-        ) {
-          throw e;
-        }
-        result = callMethodOnSanitizedTarget(
-          {
-            apply: (thisArg: unknown) =>
-              Reflect.get(target, key, thisArg ?? target),
-          },
-          receiver,
-          target,
-          [],
-          stripPlaceholderValues,
-          seen,
-        );
-      }
+      // Use the proxy receiver so that computed getters calling
+      // this.getSecret() or this.inner.x go through the proxy's
+      // sanitization.  Private field access through the proxy
+      // receiver throws TypeError — use prototype methods (which go
+      // through callMethodOnSanitizedTarget) for private field access.
+      const result = Reflect.get(target, key, receiver);
       if (typeof result === "function") {
         // Class constructors are returned unwrapped since the wrapper
         // would break new.target and prototype chain semantics.
@@ -631,13 +601,6 @@ function prepareParsedForContexts(
   parsed: unknown,
 ): unknown {
   if (parsed == null || typeof parsed !== "object") {
-    // Handle registered function results from map() transforms.
-    if (
-      typeof parsed === "function" &&
-      hiddenPlaceholderObjects.has(parsed as object)
-    ) {
-      return stripPlaceholderValues(parsed);
-    }
     return parsed;
   }
 
@@ -672,9 +635,6 @@ function prepareParsedForContexts(
   if (!containsPlaceholderValues(parsed)) {
     return parsed;
   }
-  // Consume the hidden-placeholder registration so that future clean
-  // parses of the same reused object are not re-proxied.
-  hiddenPlaceholderObjects.delete(parsed);
   return createSanitizedNonPlainView(
     parsed,
     new WeakMap<object, unknown>(),

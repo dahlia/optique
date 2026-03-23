@@ -298,20 +298,6 @@ function shouldSkipCollectionOwnKey(
  * @returns `true` if the value contains any placeholder values.
  * @since 1.0.0
  */
-/**
- * Registry of objects that may contain placeholder values hidden in private
- * fields or closures.  Used by `map()` to tag transform results whose input
- * contained placeholder values, so that `containsPlaceholderValues()` returns
- * `true` even when the placeholders are not visible in own data properties.
- *
- * A `WeakSet` is used instead of stamping a symbol on the object to avoid
- * mutating caller-owned objects (which could be cached/singleton/reused).
- *
- * @internal
- * @since 1.0.0
- */
-export const hiddenPlaceholderObjects: WeakSet<object> = new WeakSet();
-
 export function containsPlaceholderValues(
   value: unknown,
   seen: WeakSet<object> = new WeakSet<object>(),
@@ -319,19 +305,8 @@ export function containsPlaceholderValues(
   if (isPlaceholderValue(value)) {
     return true;
   }
-  // Check functions for hidden-placeholder registration before the
-  // typeof !== "object" gate (functions are "function", not "object").
-  if (
-    typeof value === "function" &&
-    hiddenPlaceholderObjects.has(value as object)
-  ) {
-    return true;
-  }
   if (value == null || typeof value !== "object") {
     return false;
-  }
-  if (hiddenPlaceholderObjects.has(value)) {
-    return true;
   }
   if (seen.has(value)) {
     return false;

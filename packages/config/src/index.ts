@@ -321,28 +321,7 @@ function createSanitizedNonPlainView<T extends object>(
           break;
         }
       }
-      let result: unknown;
-      try {
-        result = Reflect.get(target, key, receiver);
-      } catch (e) {
-        if (
-          !(e instanceof TypeError) ||
-          !/private/i.test(String((e as TypeError).message))
-        ) {
-          throw e;
-        }
-        result = callMethodOnSanitizedTarget(
-          {
-            apply: (thisArg: unknown) =>
-              Reflect.get(target, key, thisArg ?? target),
-          },
-          receiver,
-          target,
-          [],
-          stripDeferredPromptValues,
-          seen,
-        );
-      }
+      const result = Reflect.get(target, key, receiver);
       if (typeof result === "function") {
         if (/^class[\s{]/.test(Function.prototype.toString.call(result))) {
           return result;
