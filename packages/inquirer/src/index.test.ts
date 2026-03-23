@@ -1457,7 +1457,7 @@ describe("prompt()", () => {
           },
         );
 
-        assert.deepEqual(phase2Parsed, { apiKey: undefined });
+        assert.deepEqual(phase2Parsed, { apiKey: "" });
         assert.deepEqual(result, { apiKey: "config-secret" });
       },
     );
@@ -1468,12 +1468,12 @@ describe("prompt()", () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
         });
-        let sawUndefined = false;
+        let sawPlaceholder = false;
         const dynamicContext: SourceContext = {
           id: Symbol.for("@test/top-level-config-prompt-phase-two"),
           mode: "dynamic",
           getAnnotations(parsed?: unknown) {
-            sawUndefined = parsed === undefined;
+            sawPlaceholder = parsed === "";
             return {};
           },
         };
@@ -1504,7 +1504,7 @@ describe("prompt()", () => {
           },
         );
 
-        assert.ok(sawUndefined);
+        assert.ok(sawPlaceholder);
         assert.equal(result, "config-secret");
       },
     );
@@ -1565,7 +1565,7 @@ describe("prompt()", () => {
         );
 
         assert.ok(phase2Parsed instanceof ConfigInput);
-        assert.equal(phase2Parsed.apiKey, undefined);
+        assert.equal(phase2Parsed.apiKey, "");
         assert.ok(result instanceof ConfigInput);
         assert.equal(result.apiKey, "config-secret");
       },
@@ -1615,7 +1615,7 @@ describe("prompt()", () => {
         },
       });
 
-      assert.deepEqual(phase2Values, [undefined]);
+      assert.deepEqual(phase2Values, [""]);
       assert.ok(result instanceof Set);
       assert.deepEqual([...result], ["config-secret"]);
     });
@@ -1683,7 +1683,7 @@ describe("prompt()", () => {
         );
 
         assert.ok(phase2WasBoxSet);
-        assert.equal(phase2ApiKey, undefined);
+        assert.equal(phase2ApiKey, "");
         assert.ok(result instanceof BoxSet);
         assert.equal(result.apiKey, "config-secret");
       },
@@ -1874,7 +1874,7 @@ describe("prompt()", () => {
           },
         );
 
-        assert.equal(phase2ApiKey, undefined);
+        assert.equal(phase2ApiKey, "");
         assert.equal(result.inner.apiKey, "config-secret");
       },
     );
@@ -1909,7 +1909,7 @@ describe("prompt()", () => {
         },
       });
 
-      assert.equal(loaderParsed, undefined);
+      assert.equal(loaderParsed, "");
       assert.equal(result, "config-secret");
     });
 
@@ -1945,7 +1945,7 @@ describe("prompt()", () => {
         },
       });
 
-      assert.deepEqual(loaderParsed, { apiKey: undefined });
+      assert.deepEqual(loaderParsed, { apiKey: "" });
       assert.deepEqual(result, { apiKey: "config-secret" });
     });
 
@@ -2041,7 +2041,7 @@ describe("prompt()", () => {
         },
       });
 
-      assert.deepEqual(loaderValues, [undefined]);
+      assert.deepEqual(loaderValues, [""]);
       assert.ok(result instanceof Set);
       assert.deepEqual([...result], ["config-secret"]);
     });
@@ -2093,7 +2093,7 @@ describe("prompt()", () => {
         },
       });
 
-      assert.equal(loaderApiKey, undefined);
+      assert.equal(loaderApiKey, "");
       assert.ok(result instanceof BoxSet);
       assert.equal(result.apiKey, "config-secret");
     });

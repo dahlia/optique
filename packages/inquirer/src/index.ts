@@ -30,7 +30,6 @@ import type {
   Parser,
   ParserResult,
 } from "@optique/core/parser";
-import { placeholder } from "@optique/core/context";
 import { message } from "@optique/core/message";
 import type { ValueParserResult } from "@optique/core/valueparser";
 
@@ -135,12 +134,6 @@ const inheritParentAnnotationsKey = Symbol.for(
   "@optique/core/inheritParentAnnotations",
 );
 
-class DeferredPromptValue {
-  readonly [placeholder] = true;
-  constructor() {
-  }
-}
-
 function shouldDeferPrompt(
   parser: Parser<Mode, unknown, unknown>,
   state: unknown,
@@ -149,10 +142,12 @@ function shouldDeferPrompt(
     parser.shouldDeferCompletion(state) === true;
 }
 
-function deferredPromptResult<TValue>(): ValueParserResult<TValue> {
+function deferredPromptResult<TValue>(
+  placeholderValue: TValue,
+): ValueParserResult<TValue> {
   return {
     success: true,
-    value: new DeferredPromptValue() as TValue,
+    value: placeholderValue,
   };
 }
 
@@ -891,8 +886,9 @@ export function prompt<M extends Mode, TValue, TState>(
     if (result.success) {
       return Promise.resolve(result);
     }
-    return shouldDeferPrompt(parser, state)
-      ? Promise.resolve(deferredPromptResult<TValue>())
+    return shouldDeferPrompt(parser, state) &&
+        "placeholder" in parser
+      ? Promise.resolve(deferredPromptResult(parser.placeholder as TValue))
       : executePrompt();
   }
 
@@ -1217,8 +1213,9 @@ export function prompt<M extends Mode, TValue, TState>(
         return useCompleteResultOrPrompt(r as ValueParserResult<TValue>);
       }
 
-      return shouldDeferPrompt(parser, state)
-        ? Promise.resolve(deferredPromptResult<TValue>())
+      return shouldDeferPrompt(parser, state) &&
+          "placeholder" in parser
+        ? Promise.resolve(deferredPromptResult(parser.placeholder as TValue))
         : executePrompt();
     },
 

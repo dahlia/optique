@@ -32,7 +32,6 @@ import type {
   Suggestion,
 } from "./parser.ts";
 import type { ValueParserResult } from "./valueparser.ts";
-import { isPlaceholderValue } from "./context.ts";
 
 /**
  * Internal helper for optional-style parsing logic shared by optional()
@@ -919,9 +918,7 @@ export function map<M extends Mode, T, U, TState>(
       parser.complete(state),
       (result) =>
         result.success
-          ? isPlaceholderValue(result.value)
-            ? (result as unknown as { success: true; value: U })
-            : { success: true, value: transform(result.value) }
+          ? { success: true, value: transform(result.value) }
           : result,
     );
   };
