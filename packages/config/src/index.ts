@@ -392,6 +392,10 @@ function stripDeferredPromptValues<T>(
   if (isDeferredPromptValue(value)) {
     return undefined as T;
   }
+  if (typeof value === "function") {
+    const fnCached = seen.get(value as object);
+    return (fnCached !== undefined ? fnCached : value) as T;
+  }
   if (value == null || typeof value !== "object") {
     return value;
   }
@@ -473,7 +477,9 @@ function stripDeferredPromptValues<T>(
         if (cached !== undefined) {
           descriptor.value = cached;
         } else {
-          const fnProxy = new Proxy(fn, {
+          // deno-lint-ignore prefer-const
+          let fnProxy: typeof fn;
+          fnProxy = new Proxy(fn, {
             apply(target, thisArg, args) {
               const result = Reflect.apply(target, thisArg, args);
               if (result instanceof Promise) {
@@ -484,7 +490,11 @@ function stripDeferredPromptValues<T>(
               return stripDeferredPromptValues(result, seen);
             },
             construct(target, args, newTarget) {
-              return Reflect.construct(target, args, newTarget);
+              return Reflect.construct(
+                target,
+                args,
+                newTarget === fnProxy ? target : newTarget,
+              );
             },
           });
           seen.set(fn, fnProxy);

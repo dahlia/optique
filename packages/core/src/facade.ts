@@ -155,6 +155,12 @@ function stripPlaceholderValues<T>(
   if (isPlaceholderValue(value)) {
     return undefined as T;
   }
+  // Check seen cache for functions so that wrapped aliases (e.g., fn stored
+  // both as an own property and inside an array) return the same proxy.
+  if (typeof value === "function") {
+    const fnCached = seen.get(value as object);
+    return (fnCached !== undefined ? fnCached : value) as T;
+  }
   if (value == null || typeof value !== "object") {
     return value;
   }
@@ -248,7 +254,9 @@ function stripPlaceholderValues<T>(
         if (cached !== undefined) {
           descriptor.value = cached;
         } else {
-          const fnProxy = new Proxy(fn, {
+          // deno-lint-ignore prefer-const
+          let fnProxy: typeof fn;
+          fnProxy = new Proxy(fn, {
             apply(target, thisArg, args) {
               const result = Reflect.apply(target, thisArg, args);
               if (result instanceof Promise) {
@@ -259,7 +267,13 @@ function stripPlaceholderValues<T>(
               return stripPlaceholderValues(result, seen);
             },
             construct(target, args, newTarget) {
-              return Reflect.construct(target, args, newTarget);
+              // Map new.target from proxy → original so constructor
+              // guards like new.target === FnCtor work correctly.
+              return Reflect.construct(
+                target,
+                args,
+                newTarget === fnProxy ? target : newTarget,
+              );
             },
           });
           seen.set(fn, fnProxy);
