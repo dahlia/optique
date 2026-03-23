@@ -9362,16 +9362,35 @@ describe("socketAddress()", () => {
       ]);
     });
 
-    it("should reject single large decimal integer in both mode", () => {
+    it("should reject octal integer in both mode", () => {
       const parser = socketAddress({
         defaultPort: 80,
         host: { type: "both", ip: { allowLoopback: false } },
       });
 
-      const result = parser.parse("2130706433");
+      // 017700000001 in octal = 2130706433 = 127.0.0.1
+      const result = parser.parse("017700000001");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "value", value: "2130706433" },
+        { type: "value", value: "017700000001" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
+
+    it("should reject short octal integer in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both" },
+      });
+
+      // 0177 in octal = 127 → 0.0.0.127
+      const result = parser.parse("0177");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "0177" },
         {
           type: "text",
           text: " appears to be a non-standard IPv4 address notation.",
@@ -9546,33 +9565,78 @@ describe("socketAddress()", () => {
       ]);
     });
 
-    it("should not flag small decimal integers as alt IPv4 literals", () => {
+    it("should accept plain decimal integers as hostnames", () => {
       const parser = socketAddress({
         defaultPort: 80,
         host: { type: "both" },
       });
 
-      // Single-label numeric hostname ≤ 255 should be accepted
-      const result = parser.parse("123");
-      assert.ok(result.success);
-      assert.strictEqual(result.value.host, "123");
+      // Plain decimal integers have no syntactic marker (unlike 0x or
+      // leading-zero octal), so they are genuinely ambiguous between
+      // hostnames and IPv4 literals.  Accept them as hostnames.
+      const result1 = parser.parse("123");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value.host, "123");
+
+      const result2 = parser.parse("1234");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value.host, "1234");
+
+      const result3 = parser.parse("2130706433");
+      assert.ok(result3.success);
+      assert.strictEqual(result3.value.host, "2130706433");
     });
 
-    it("should reject single large decimal integer in hostname mode", () => {
+    it("should accept plain decimal integers in hostname mode", () => {
       const parser = socketAddress({
         defaultPort: 80,
         host: { type: "hostname" },
       });
 
-      const result = parser.parse("2130706433");
+      const result = parser.parse("1234");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "1234");
+    });
+
+    it("should reject octal integer in hostname mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "hostname" },
+      });
+
+      const result = parser.parse("017700000001");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "value", value: "2130706433" },
+        { type: "value", value: "017700000001" },
         {
           type: "text",
           text: " appears to be a non-standard IPv4 address notation.",
         },
       ]);
+    });
+
+    it("should accept leading-zero numbers with non-octal digits as hostnames", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both" },
+      });
+
+      // Contains digits 8/9, not valid octal — treat as hostname
+      const result = parser.parse("0189");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "0189");
+    });
+
+    it("should accept octal integers exceeding 32-bit range as hostnames", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both" },
+      });
+
+      // 040000000000 in octal = 2^32, exceeds 32-bit IPv4 range
+      const result = parser.parse("040000000000");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "040000000000");
     });
 
     it("should accept hex integers exceeding 32-bit range as hostnames", () => {
@@ -9624,18 +9688,6 @@ describe("socketAddress()", () => {
       const result = parser.parse("0xFFF.0.0.1");
       assert.ok(result.success);
       assert.strictEqual(result.value.host, "0xFFF.0.0.1");
-    });
-
-    it("should accept decimal integers exceeding 32-bit range as hostnames", () => {
-      const parser = socketAddress({
-        defaultPort: 80,
-        host: { type: "both" },
-      });
-
-      // 4294967296 = 2^32, exceeds the 32-bit IPv4 range
-      const result = parser.parse("4294967296");
-      assert.ok(result.success);
-      assert.strictEqual(result.value.host, "4294967296");
     });
   });
 });

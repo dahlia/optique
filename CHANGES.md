@@ -176,12 +176,14 @@ To be released.
     messages (e.g., “192.168.1.1 is a private IP address.”) are propagated
     instead of the generic “invalid format” error.  [[#335], [#714]]
 
- -  Fixed `socketAddress()` with `host: { type: “both” }` accepting alternate
+ -  Fixed `socketAddress()` with `host: { type: "both" }` accepting alternate
     IPv4 literal forms (hex octets like `0x7f.0x0.0x0.0x1`, single hex integers
-    like `0x7f000001`, and single decimal integers like `2130706433`) as
-    hostnames, bypassing IP restrictions.  These non-standard forms are now
-    detected and rejected with a specific error message.  This also affects
-    `socketAddress()` with `host: { type: “hostname” }`.  [[#715]]
+    like `0x7f000001`, and octal integers like `017700000001`) as hostnames,
+    bypassing IP restrictions.  These non-standard forms are now detected and
+    rejected with a specific error message.  Detection is bounded to values
+    that fit within the 32-bit IPv4 range, so hex-prefixed hostnames outside
+    that range (e.g., `0x100000000`) remain valid.  This also affects
+    `socketAddress()` with `host: { type: "hostname" }`.  [[#715], [#717]]
 
  -  Fixed `hostname()` accepting case variants of `localhost` (e.g.,
     `LOCALHOST`, `LocalHost`) and wildcard-localhost forms (e.g.,
@@ -1052,6 +1054,7 @@ To be released.
 [#714]: https://github.com/dahlia/optique/pull/714
 [#715]: https://github.com/dahlia/optique/issues/715
 [#716]: https://github.com/dahlia/optique/pull/716
+[#717]: https://github.com/dahlia/optique/pull/717
 [#718]: https://github.com/dahlia/optique/pull/718
 
 ### @optique/config

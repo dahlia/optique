@@ -3657,12 +3657,14 @@ export function socketAddress(
       return n <= 0xFFFFFFFF;
     }
 
-    // Single decimal integer > 255 (potential 32-bit IPv4 encoding).
-    // Values ≤ 255 are allowed as single-label hostnames because the
-    // resulting 0.0.0.x address poses minimal security risk.
-    if (/^[1-9][0-9]*$/.test(input)) {
-      const n = Number(input);
-      if (n > 255 && n <= 0xFFFFFFFF) return true;
+    // Single octal integer within 32-bit IPv4 range: 017700000001.
+    // A leading zero followed by octal digits is interpreted as octal
+    // by WHATWG URL parsers and platform resolvers (e.g., Node's
+    // dns.lookup).  Numbers containing digits 8-9 are not valid octal
+    // and fall through to hostname validation.
+    if (/^0[0-7]+$/.test(input)) {
+      const n = parseInt(input.slice(1), 8);
+      return n <= 0xFFFFFFFF;
     }
 
     // Dotted forms (2-4 parts) where at least one part uses hex notation.
