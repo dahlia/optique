@@ -3599,6 +3599,9 @@ export function socketAddress(
   options?: SocketAddressOptions,
 ): ValueParser<"sync", SocketAddressValue> {
   const separator = options?.separator ?? ":";
+  if (separator === "") {
+    throw new TypeError("Expected separator to not be empty.");
+  }
   if (/\p{Nd}/u.test(separator)) {
     throw new TypeError(
       `Expected separator to not contain digits, but got: ${
@@ -4015,6 +4018,9 @@ export function portRange(
     );
   }
   const separator = options?.separator ?? "-";
+  if (separator === "") {
+    throw new TypeError("Expected separator to not be empty.");
+  }
   if (/\p{Nd}/u.test(separator)) {
     throw new TypeError(
       `Expected separator to not contain digits, but got: ${
