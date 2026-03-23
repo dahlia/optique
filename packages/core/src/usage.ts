@@ -499,14 +499,20 @@ export function formatUsage(
  * sorting terms for better readability, and ensuring consistent structure
  * throughout the usage tree.
  *
- * This function performs two main operations:
+ * This function performs three main operations:
  *
- * 1. *Flattening*: Recursively processes all usage terms and merges any
+ * 1. *Stripping*: Removes degenerate terms that would render as empty or
+ *    malformed output, such as options with no names, commands with empty
+ *    names, arguments with empty metavars, empty literals, and container
+ *    terms (`optional`, `multiple`, `exclusive`) that become empty after
+ *    recursive normalization.
+ *
+ * 2. *Flattening*: Recursively processes all usage terms and merges any
  *    nested exclusive terms into their parent exclusive term to avoid
  *    redundant nesting. For example, an exclusive term containing another
  *    exclusive term will have its nested terms flattened into the parent.
  *
- * 2. *Sorting*: Reorders terms to improve readability by placing:
+ * 3. *Sorting*: Reorders terms to improve readability by placing:
  *    - Commands (subcommands) first
  *    - Options and other terms in the middle
  *    - Positional arguments last (including optional/multiple wrappers around
@@ -516,11 +522,12 @@ export function formatUsage(
  * positional arguments and treats them as arguments for sorting purposes.
  *
  * @param usage The usage description to normalize.
- * @returns A normalized usage description with flattened exclusive terms
- *          and terms sorted for optimal readability.
+ * @returns A normalized usage description with degenerate terms removed,
+ *          nested exclusive terms flattened, and remaining terms sorted for
+ *          optimal readability.
  */
 export function normalizeUsage(usage: Usage): Usage {
-  const terms = usage.map(normalizeUsageTerm);
+  const terms = usage.map(normalizeUsageTerm).filter(isNonDegenerateTerm);
   terms.sort((a, b) => {
     const aCmd = a.type === "command";
     const bCmd = b.type === "command";
@@ -552,9 +559,10 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
       if (normalized.length >= 1 && normalized[0].type === "exclusive") {
         const rest = normalized.slice(1);
         for (const subUsage of normalized[0].terms) {
-          terms.push([...subUsage, ...rest]);
+          const branch = [...subUsage, ...rest];
+          if (branch.length > 0) terms.push(branch);
         }
-      } else {
+      } else if (normalized.length > 0) {
         terms.push(normalized);
       }
     }
@@ -562,6 +570,20 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
   } else {
     return term;
   }
+}
+
+function isNonDegenerateTerm(term: UsageTerm): boolean {
+  if (term.type === "option") return term.names.length > 0;
+  if (term.type === "command") return term.name !== "";
+  if (term.type === "argument") return term.metavar.length > 0;
+  if (term.type === "literal") return term.value !== "";
+  if (
+    term.type === "optional" || term.type === "multiple" ||
+    term.type === "exclusive"
+  ) {
+    return term.terms.length > 0;
+  }
+  return true;
 }
 
 /**
