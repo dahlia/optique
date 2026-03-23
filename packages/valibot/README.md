@@ -45,7 +45,9 @@ import * as v from "valibot";
 
 const cli = run(
   object({
-    email: option("--email", valibot(v.pipe(v.string(), v.email()))),
+    email: option("--email",
+      valibot(v.pipe(v.string(), v.email()), { placeholder: "" }),
+    ),
   }),
 );
 
@@ -73,7 +75,9 @@ import { option } from "@optique/core/primitives";
 import { valibot } from "@optique/valibot";
 import * as v from "valibot";
 
-const email = option("--email", valibot(v.pipe(v.string(), v.email())));
+const email = option("--email",
+  valibot(v.pipe(v.string(), v.email()), { placeholder: "" }),
+);
 ~~~~
 
 ### URL validation
@@ -83,7 +87,9 @@ import { option } from "@optique/core/primitives";
 import { valibot } from "@optique/valibot";
 import * as v from "valibot";
 
-const url = option("--url", valibot(v.pipe(v.string(), v.url())));
+const url = option("--url",
+  valibot(v.pipe(v.string(), v.url()), { placeholder: "" }),
+);
 ~~~~
 
 ### Port numbers with range validation
@@ -105,7 +111,7 @@ const port = option("-p", "--port",
     v.integer(),
     v.minValue(1024),
     v.maxValue(65535)
-  ))
+  ), { placeholder: 0 }),
 );
 ~~~~
 
@@ -117,7 +123,8 @@ import { valibot } from "@optique/valibot";
 import * as v from "valibot";
 
 const logLevel = option("--log-level",
-  valibot(v.picklist(["debug", "info", "warn", "error"]))
+  valibot(v.picklist(["debug", "info", "warn", "error"]),
+    { placeholder: "debug" }),
 );
 ~~~~
 
@@ -129,7 +136,8 @@ import { valibot } from "@optique/valibot";
 import * as v from "valibot";
 
 const startDate = argument(
-  valibot(v.pipe(v.string(), v.transform((s: string) => new Date(s))))
+  valibot(v.pipe(v.string(), v.transform((s: string) => new Date(s))),
+    { placeholder: new Date(0) }),
 );
 ~~~~
 
@@ -146,6 +154,7 @@ import { message } from "@optique/core/message";
 import * as v from "valibot";
 
 const email = option("--email", valibot(v.pipe(v.string(), v.email()), {
+  placeholder: "",
   metavar: "EMAIL",
   errors: {
     valibotError: (issues, input) =>
@@ -169,7 +178,9 @@ import { valibot } from "@optique/valibot";
 import * as v from "valibot";
 
 // ✅ Correct
-const port = option("-p", valibot(v.pipe(v.string(), v.transform(Number))));
+const port = option("-p",
+  valibot(v.pipe(v.string(), v.transform(Number)), { placeholder: 0 }),
+);
 
 // ❌ Won't work (CLI arguments are always strings)
 // const port = option("-p", valibot(v.number()));
@@ -187,7 +198,9 @@ import * as v from "valibot";
 
 // ❌ Not supported
 const email = option("--email",
-  valibot(v.pipeAsync(v.string(), v.checkAsync(async (val) => await checkDB(val))))
+  valibot(v.pipeAsync(v.string(),
+    v.checkAsync(async (val) => await checkDB(val))),
+    { placeholder: "" }),
 );
 ~~~~
 
