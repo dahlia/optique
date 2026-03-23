@@ -239,6 +239,8 @@ export type LoggingOptionsConfig =
  * // --debug
  * ```
  *
+ * @throws {TypeError} If the `level` discriminant is not one of `"option"`,
+ *   `"verbosity"`, or `"debug"`.
  * @since 0.8.0
  */
 export function loggingOptions(
