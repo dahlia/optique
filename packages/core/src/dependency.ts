@@ -776,6 +776,13 @@ function createSyncDerivedFromParser<
   return {
     $mode: "sync",
     metavar: options.metavar,
+    get placeholder(): T {
+      const value = options.factory(
+        ...(options.defaultValues() as DependencyValues<Deps>),
+      ).placeholder;
+      Object.defineProperty(this, "placeholder", { value });
+      return value;
+    },
     [derivedValueParserMarker]: true,
     [dependencyId]: sourceId,
     [dependencyIds]: alldependencyIds,
@@ -908,6 +915,13 @@ function createAsyncDerivedFromParserFromAsyncFactory<
   return {
     $mode: "async",
     metavar: options.metavar,
+    get placeholder(): T {
+      const value = options.factory(
+        ...(options.defaultValues() as DependencyValues<Deps>),
+      ).placeholder;
+      Object.defineProperty(this, "placeholder", { value });
+      return value;
+    },
     [derivedValueParserMarker]: true,
     [dependencyId]: sourceId,
     [dependencyIds]: alldependencyIds,
@@ -1028,6 +1042,13 @@ function createAsyncDerivedFromParserFromSyncFactory<
   return {
     $mode: "async",
     metavar: options.metavar,
+    get placeholder(): T {
+      const value = options.factory(
+        ...(options.defaultValues() as DependencyValues<Deps>),
+      ).placeholder;
+      Object.defineProperty(this, "placeholder", { value });
+      return value;
+    },
     [derivedValueParserMarker]: true,
     [dependencyId]: sourceId,
     [dependencyIds]: alldependencyIds,
@@ -1166,6 +1187,11 @@ function createSyncDerivedParser<S, T>(
   return {
     $mode: "sync",
     metavar: options.metavar,
+    get placeholder(): T {
+      const value = options.factory(options.defaultValue()).placeholder;
+      Object.defineProperty(this, "placeholder", { value });
+      return value;
+    },
     [derivedValueParserMarker]: true,
     [dependencyId]: sourceId,
 
@@ -1277,6 +1303,11 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
   return {
     $mode: "async",
     metavar: options.metavar,
+    get placeholder(): T {
+      const value = options.factory(options.defaultValue()).placeholder;
+      Object.defineProperty(this, "placeholder", { value });
+      return value;
+    },
     [derivedValueParserMarker]: true,
     [dependencyId]: sourceId,
 
@@ -1376,6 +1407,11 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
   return {
     $mode: "async",
     metavar: options.metavar,
+    get placeholder(): T {
+      const value = options.factory(options.defaultValue()).placeholder;
+      Object.defineProperty(this, "placeholder", { value });
+      return value;
+    },
     [derivedValueParserMarker]: true,
     [dependencyId]: sourceId,
 

@@ -7,7 +7,7 @@ import { z } from "zod";
 describe("zod()", () => {
   describe("basic parsing", () => {
     it("should parse valid string input", () => {
-      const parser = zod(z.string());
+      const parser = zod(z.string(), { placeholder: "" });
       const result = parser.parse("hello");
 
       assert.ok(result.success);
@@ -15,7 +15,7 @@ describe("zod()", () => {
     });
 
     it("should parse valid email", () => {
-      const parser = zod(z.string().email());
+      const parser = zod(z.string().email(), { placeholder: "" });
       const result = parser.parse("user@example.com");
 
       assert.ok(result.success);
@@ -23,14 +23,14 @@ describe("zod()", () => {
     });
 
     it("should reject invalid email", () => {
-      const parser = zod(z.string().email());
+      const parser = zod(z.string().email(), { placeholder: "" });
       const result = parser.parse("not-an-email");
 
       assert.ok(!result.success);
     });
 
     it("should parse valid URL", () => {
-      const parser = zod(z.string().url());
+      const parser = zod(z.string().url(), { placeholder: "" });
       const result = parser.parse("https://example.com");
 
       assert.ok(result.success);
@@ -38,7 +38,7 @@ describe("zod()", () => {
     });
 
     it("should reject invalid URL", () => {
-      const parser = zod(z.string().url());
+      const parser = zod(z.string().url(), { placeholder: "" });
       const result = parser.parse("not-a-url");
 
       assert.ok(!result.success);
@@ -47,7 +47,7 @@ describe("zod()", () => {
 
   describe("number coercion", () => {
     it("should parse number with coercion", () => {
-      const parser = zod(z.coerce.number());
+      const parser = zod(z.coerce.number(), { placeholder: 0 });
       const result = parser.parse("42");
 
       assert.ok(result.success);
@@ -55,7 +55,7 @@ describe("zod()", () => {
     });
 
     it("should parse integer with coercion", () => {
-      const parser = zod(z.coerce.number().int());
+      const parser = zod(z.coerce.number().int(), { placeholder: 0 });
       const result = parser.parse("42");
 
       assert.ok(result.success);
@@ -63,14 +63,16 @@ describe("zod()", () => {
     });
 
     it("should reject non-integer when int() is required", () => {
-      const parser = zod(z.coerce.number().int());
+      const parser = zod(z.coerce.number().int(), { placeholder: 0 });
       const result = parser.parse("42.5");
 
       assert.ok(!result.success);
     });
 
     it("should validate number ranges", () => {
-      const parser = zod(z.coerce.number().int().min(1024).max(65535));
+      const parser = zod(z.coerce.number().int().min(1024).max(65535), {
+        placeholder: 0,
+      });
 
       const validResult = parser.parse("8080");
       assert.ok(validResult.success);
@@ -84,7 +86,7 @@ describe("zod()", () => {
     });
 
     it("should reject non-numeric input with coercion", () => {
-      const parser = zod(z.coerce.number());
+      const parser = zod(z.coerce.number(), { placeholder: 0 });
       const result = parser.parse("not-a-number");
 
       assert.ok(!result.success);
@@ -93,7 +95,9 @@ describe("zod()", () => {
 
   describe("enum validation", () => {
     it("should parse valid enum value", () => {
-      const parser = zod(z.enum(["debug", "info", "warn", "error"]));
+      const parser = zod(z.enum(["debug", "info", "warn", "error"]), {
+        placeholder: "debug",
+      });
       const result = parser.parse("info");
 
       assert.ok(result.success);
@@ -101,7 +105,9 @@ describe("zod()", () => {
     });
 
     it("should reject invalid enum value", () => {
-      const parser = zod(z.enum(["debug", "info", "warn", "error"]));
+      const parser = zod(z.enum(["debug", "info", "warn", "error"]), {
+        placeholder: "debug",
+      });
       const result = parser.parse("trace");
 
       assert.ok(!result.success);
@@ -110,7 +116,9 @@ describe("zod()", () => {
 
   describe("transformations", () => {
     it("should apply transformations", () => {
-      const parser = zod(z.string().transform((s) => s.toUpperCase()));
+      const parser = zod(z.string().transform((s) => s.toUpperCase()), {
+        placeholder: "",
+      });
       const result = parser.parse("hello");
 
       assert.ok(result.success);
@@ -120,6 +128,7 @@ describe("zod()", () => {
     it("should parse and transform dates", () => {
       const parser = zod(
         z.string().transform((s) => new Date(s)),
+        { placeholder: new Date(0) },
       );
       const result = parser.parse("2025-01-01");
 
@@ -132,79 +141,79 @@ describe("zod()", () => {
   describe("metavar inference", () => {
     describe("basic types", () => {
       it("should infer STRING for z.string()", () => {
-        const parser = zod(z.string());
+        const parser = zod(z.string(), { placeholder: "" });
         assert.equal(parser.metavar, "STRING");
       });
 
       it("should infer NUMBER for z.coerce.number()", () => {
-        const parser = zod(z.coerce.number());
+        const parser = zod(z.coerce.number(), { placeholder: 0 });
         assert.equal(parser.metavar, "NUMBER");
       });
 
       it("should infer INTEGER for z.coerce.number().int()", () => {
-        const parser = zod(z.coerce.number().int());
+        const parser = zod(z.coerce.number().int(), { placeholder: 0 });
         assert.equal(parser.metavar, "INTEGER");
       });
 
       it("should infer BOOLEAN for z.coerce.boolean()", () => {
-        const parser = zod(z.coerce.boolean());
+        const parser = zod(z.coerce.boolean(), { placeholder: false });
         assert.equal(parser.metavar, "BOOLEAN");
       });
 
       it("should infer DATE for z.coerce.date()", () => {
-        const parser = zod(z.coerce.date());
+        const parser = zod(z.coerce.date(), { placeholder: new Date(0) });
         assert.equal(parser.metavar, "DATE");
       });
     });
 
     describe("refined string types", () => {
       it("should infer EMAIL for z.string().email()", () => {
-        const parser = zod(z.string().email());
+        const parser = zod(z.string().email(), { placeholder: "" });
         assert.equal(parser.metavar, "EMAIL");
       });
 
       it("should infer URL for z.string().url()", () => {
-        const parser = zod(z.string().url());
+        const parser = zod(z.string().url(), { placeholder: "" });
         assert.equal(parser.metavar, "URL");
       });
 
       it("should infer UUID for z.string().uuid()", () => {
-        const parser = zod(z.string().uuid());
+        const parser = zod(z.string().uuid(), { placeholder: "" });
         assert.equal(parser.metavar, "UUID");
       });
 
       it("should infer DATETIME for z.string().datetime()", () => {
-        const parser = zod(z.string().datetime());
+        const parser = zod(z.string().datetime(), { placeholder: "" });
         assert.equal(parser.metavar, "DATETIME");
       });
 
       it("should infer DATE for z.string().date()", () => {
-        const parser = zod(z.string().date());
+        const parser = zod(z.string().date(), { placeholder: "" });
         assert.equal(parser.metavar, "DATE");
       });
 
       it("should infer TIME for z.string().time()", () => {
-        const parser = zod(z.string().time());
+        const parser = zod(z.string().time(), { placeholder: "" });
         assert.equal(parser.metavar, "TIME");
       });
 
       it("should infer DURATION for z.string().duration()", () => {
-        const parser = zod(z.string().duration());
+        const parser = zod(z.string().duration(), { placeholder: "" });
         assert.equal(parser.metavar, "DURATION");
       });
 
       it("should infer CUID for z.string().cuid()", () => {
-        const parser = zod(z.string().cuid());
+        const parser = zod(z.string().cuid(), { placeholder: "" });
         assert.equal(parser.metavar, "CUID");
       });
 
       it("should infer CUID2 for z.string().cuid2()", () => {
-        const parser = zod(z.string().cuid2());
+        const parser = zod(z.string().cuid2(), { placeholder: "" });
         assert.equal(parser.metavar, "CUID2");
       });
 
       it("should infer ULID for z.string().ulid()", () => {
-        const parser = zod(z.string().ulid());
+        const parser = zod(z.string().ulid(), { placeholder: "" });
         assert.equal(parser.metavar, "ULID");
       });
 
@@ -213,7 +222,7 @@ describe("zod()", () => {
           zod({
             _def: { type: "string", checks: [check] },
             safeParse: (input: unknown) => ({ success: true, data: input }),
-          } as unknown as z.Schema<unknown>);
+          } as unknown as z.Schema<unknown>, { placeholder: "" as unknown });
 
         assert.equal(make({ kind: "ip", version: "v4" }).metavar, "IPV4");
         assert.equal(make({ kind: "ip", version: "v6" }).metavar, "IPV6");
@@ -226,85 +235,105 @@ describe("zod()", () => {
 
     describe("enum and union types", () => {
       it("should infer CHOICE for z.enum()", () => {
-        const parser = zod(z.enum(["debug", "info", "warn", "error"]));
+        const parser = zod(z.enum(["debug", "info", "warn", "error"]), {
+          placeholder: "debug",
+        });
         assert.equal(parser.metavar, "CHOICE");
       });
 
       it("should infer VALUE for z.union()", () => {
-        const parser = zod(z.union([z.string(), z.coerce.number()]));
+        const parser = zod(z.union([z.string(), z.coerce.number()]), {
+          placeholder: "",
+        });
         assert.equal(parser.metavar, "VALUE");
       });
 
       it("should infer CHOICE for z.literal()", () => {
-        const parser = zod(z.literal("production"));
+        const parser = zod(z.literal("production"), {
+          placeholder: "production",
+        });
         assert.equal(parser.metavar, "CHOICE");
       });
 
       it("should infer VALUE for z.nativeEnum() with numeric values", () => {
         const NumericEnum = { A: 0, B: 1, 0: "A", 1: "B" } as const;
-        const parser = zod(z.nativeEnum(NumericEnum));
+        const parser = zod(z.nativeEnum(NumericEnum), {
+          placeholder: 0 as never,
+        });
         assert.equal(parser.metavar, "VALUE");
       });
 
       it("should infer CHOICE for z.nativeEnum() with string values", () => {
         const StringEnum = { Debug: "debug", Info: "info" } as const;
-        const parser = zod(z.nativeEnum(StringEnum));
+        const parser = zod(z.nativeEnum(StringEnum), { placeholder: "debug" });
         assert.equal(parser.metavar, "CHOICE");
       });
     });
 
     describe("edge cases", () => {
       it("should use first refinement for multiple refinements", () => {
-        const parser = zod(z.string().email().min(5));
+        const parser = zod(z.string().email().min(5), { placeholder: "" });
         assert.equal(parser.metavar, "EMAIL");
       });
 
       it("should unwrap optional schemas", () => {
-        const parser = zod(z.string().email().optional());
+        const parser = zod(z.string().email().optional(), { placeholder: "" });
         assert.equal(parser.metavar, "EMAIL");
       });
 
       it("should unwrap nullable schemas", () => {
-        const parser = zod(z.coerce.number().nullable());
+        const parser = zod(z.coerce.number().nullable(), { placeholder: 0 });
         assert.equal(parser.metavar, "NUMBER");
       });
 
       it("should unwrap default schemas", () => {
-        const parser = zod(z.string().email().default("user@example.com"));
+        const parser = zod(z.string().email().default("user@example.com"), {
+          placeholder: "",
+        });
         assert.equal(parser.metavar, "EMAIL");
       });
 
       it("should allow manual override", () => {
-        const parser = zod(z.string().email(), { metavar: "CUSTOM" });
+        const parser = zod(z.string().email(), {
+          placeholder: "",
+          metavar: "CUSTOM",
+        });
         assert.equal(parser.metavar, "CUSTOM");
       });
 
       it("should reject empty metavar", () => {
-        assert.throws(() => zod(z.string(), { metavar: "" as never }), {
-          name: "TypeError",
-          message: "Expected a non-empty string.",
-        });
+        assert.throws(
+          () => zod(z.string(), { placeholder: "", metavar: "" as never }),
+          {
+            name: "TypeError",
+            message: "Expected a non-empty string.",
+          },
+        );
       });
 
       it("should fallback to VALUE for unknown types", () => {
-        const parser = zod(z.object({ name: z.string() }));
+        const parser = zod(z.object({ name: z.string() }), {
+          placeholder: { name: "" },
+        });
         assert.equal(parser.metavar, "VALUE");
       });
 
       it("should fallback to VALUE for transform schemas", () => {
-        const parser = zod(z.string().transform((s) => s.toUpperCase()));
+        const parser = zod(z.string().transform((s) => s.toUpperCase()), {
+          placeholder: "",
+        });
         assert.equal(parser.metavar, "VALUE");
       });
 
       it("should fallback to VALUE for array schemas", () => {
-        const parser = zod(z.array(z.string()));
+        const parser = zod(z.array(z.string()), { placeholder: [] });
         assert.equal(parser.metavar, "VALUE");
       });
 
       it("should fallback to VALUE when schema definition is missing", () => {
         const parser = zod({
           safeParse: (input: unknown) => ({ success: true, data: input }),
-        } as unknown as z.Schema<unknown>);
+        } as unknown as z.Schema<unknown>, { placeholder: "" as unknown });
         assert.equal(parser.metavar, "VALUE");
       });
 
@@ -312,11 +341,11 @@ describe("zod()", () => {
         const optionalLike = zod({
           _def: { type: "optional" },
           safeParse: (input: unknown) => ({ success: true, data: input }),
-        } as unknown as z.Schema<unknown>);
+        } as unknown as z.Schema<unknown>, { placeholder: "" as unknown });
         const defaultLike = zod({
           _def: { type: "default" },
           safeParse: (input: unknown) => ({ success: true, data: input }),
-        } as unknown as z.Schema<unknown>);
+        } as unknown as z.Schema<unknown>, { placeholder: "" as unknown });
 
         assert.equal(optionalLike.metavar, "VALUE");
         assert.equal(defaultLike.metavar, "VALUE");
@@ -325,17 +354,21 @@ describe("zod()", () => {
 
     describe("number with constraints", () => {
       it("should infer INTEGER for z.coerce.number().int().min()", () => {
-        const parser = zod(z.coerce.number().int().min(1024).max(65535));
+        const parser = zod(z.coerce.number().int().min(1024).max(65535), {
+          placeholder: 0,
+        });
         assert.equal(parser.metavar, "INTEGER");
       });
 
       it("should infer NUMBER for z.coerce.number().min() without int()", () => {
-        const parser = zod(z.coerce.number().min(0).max(1));
+        const parser = zod(z.coerce.number().min(0).max(1), { placeholder: 0 });
         assert.equal(parser.metavar, "NUMBER");
       });
 
       it("should infer INTEGER for z.coerce.number().int().positive()", () => {
-        const parser = zod(z.coerce.number().int().positive());
+        const parser = zod(z.coerce.number().int().positive(), {
+          placeholder: 0,
+        });
         assert.equal(parser.metavar, "INTEGER");
       });
     });
@@ -343,29 +376,33 @@ describe("zod()", () => {
 
   describe("format()", () => {
     it("should format string values", () => {
-      const parser = zod(z.string());
+      const parser = zod(z.string(), { placeholder: "" });
       assert.equal(parser.format("hello"), "hello");
     });
 
     it("should format number values", () => {
-      const parser = zod(z.coerce.number());
+      const parser = zod(z.coerce.number(), { placeholder: 0 });
       assert.equal(parser.format(42), "42");
     });
 
     it("should format boolean values", () => {
-      const parser = zod(z.coerce.boolean());
+      const parser = zod(z.coerce.boolean(), { placeholder: false });
       assert.equal(parser.format(true), "true");
       assert.equal(parser.format(false), "false");
     });
 
     it("should format date values as ISO strings", () => {
-      const parser = zod(z.string().transform((s) => new Date(s)));
+      const parser = zod(z.string().transform((s) => new Date(s)), {
+        placeholder: new Date(0),
+      });
       const date = new Date("2025-06-15T00:00:00.000Z");
       assert.equal(parser.format(date), "2025-06-15T00:00:00.000Z");
     });
 
     it("should not throw for invalid date values", () => {
-      const parser = zod(z.string().transform((s) => new Date(s)));
+      const parser = zod(z.string().transform((s) => new Date(s)), {
+        placeholder: new Date(0),
+      });
       const invalid = new Date("bad");
       assert.equal(parser.format(invalid), "Invalid Date");
     });
@@ -373,6 +410,7 @@ describe("zod()", () => {
     it("should format object values as JSON", () => {
       const parser = zod(
         z.string().transform((s) => ({ raw: s })),
+        { placeholder: { raw: "" } },
       );
       assert.equal(parser.format({ raw: "hello" }), '{"raw":"hello"}');
     });
@@ -380,6 +418,7 @@ describe("zod()", () => {
     it("should format array values as comma-separated string", () => {
       const parser = zod(
         z.string().transform((s) => s.split(",")),
+        { placeholder: [] },
       );
       assert.equal(parser.format(["a", "b", "c"]), "a,b,c");
     });
@@ -387,6 +426,7 @@ describe("zod()", () => {
     it("should preserve array formatting even with [object Object] element", () => {
       const parser = zod(
         z.string().transform((s) => s.split(",")),
+        { placeholder: [] },
       );
       assert.equal(
         parser.format(["a", "[object Object]", "c"]),
@@ -397,6 +437,7 @@ describe("zod()", () => {
     it("should format arrays of objects via String()", () => {
       const parser = zod(
         z.string().transform((s) => s.split(",").map((x) => ({ v: x }))),
+        { placeholder: [] },
       );
       assert.equal(
         parser.format([{ v: "a" }, { v: "b" }]),
@@ -407,6 +448,7 @@ describe("zod()", () => {
     it("should not throw for non-JSON-serializable objects", () => {
       const parser = zod(
         z.string().transform((s) => ({ id: BigInt(s) })),
+        { placeholder: { id: 0n } },
       );
       assert.equal(parser.format({ id: 1n }), "[object Object]");
     });
@@ -414,6 +456,7 @@ describe("zod()", () => {
     it("should not throw for cyclic objects", () => {
       const parser = zod(
         z.string().transform((s) => ({ raw: s })),
+        { placeholder: { raw: "" } },
       );
       const cyclic: { raw: string; self?: unknown } = { raw: "hello" };
       cyclic.self = cyclic;
@@ -423,6 +466,7 @@ describe("zod()", () => {
     it("should handle objects with toJSON returning undefined", () => {
       const parser = zod(
         z.string().transform(() => ({ toJSON: () => undefined })),
+        { placeholder: { toJSON: () => undefined } },
       );
       assert.equal(
         parser.format({ toJSON: () => undefined }),
@@ -433,7 +477,7 @@ describe("zod()", () => {
     it("should use custom format function from options", () => {
       const parser = zod(
         z.string().transform((s) => ({ raw: s })),
-        { format: (v) => v.raw },
+        { placeholder: { raw: "" }, format: (v) => v.raw },
       );
       assert.equal(parser.format({ raw: "hello" }), "hello");
     });
@@ -442,6 +486,7 @@ describe("zod()", () => {
   describe("error customization", () => {
     it("should use custom static error message", () => {
       const parser = zod(z.string().email(), {
+        placeholder: "",
         errors: {
           zodError: message`Please provide a valid email address.`,
         },
@@ -456,6 +501,7 @@ describe("zod()", () => {
 
     it("should use custom error function with input", () => {
       const parser = zod(z.string().email(), {
+        placeholder: "",
         errors: {
           zodError: (_error, input) =>
             message`Please provide a valid email address, got ${input}.`,
@@ -473,6 +519,7 @@ describe("zod()", () => {
 
     it("should use custom error function with Zod error", () => {
       const parser = zod(z.coerce.number().int().min(1).max(10), {
+        placeholder: 0,
         errors: {
           zodError: (error, input) => {
             const issue = error.issues[0];
@@ -503,7 +550,7 @@ describe("zod()", () => {
 
   describe("default error messages", () => {
     it("should provide default error for invalid input", () => {
-      const parser = zod(z.string().email());
+      const parser = zod(z.string().email(), { placeholder: "" });
       const result = parser.parse("not-an-email");
 
       assert.ok(!result.success);
@@ -512,7 +559,7 @@ describe("zod()", () => {
     });
 
     it("should handle validation errors gracefully", () => {
-      const parser = zod(z.coerce.number().min(10));
+      const parser = zod(z.coerce.number().min(10), { placeholder: 0 });
       const result = parser.parse("5");
 
       assert.ok(!result.success);
@@ -527,7 +574,7 @@ describe("zod()", () => {
       const original = ctor.prettifyError;
       ctor.prettifyError = () => "Pretty zod error";
       try {
-        const parser = zod(schema);
+        const parser = zod(schema, { placeholder: "" });
         const result = parser.parse("not-an-email");
         assert.ok(!result.success);
         assert.deepEqual(result.error, [{
@@ -549,7 +596,7 @@ describe("zod()", () => {
         throw new Error("boom");
       };
       try {
-        const parser = zod(schema);
+        const parser = zod(schema, { placeholder: "" });
         const result = parser.parse("not-an-email");
         assert.ok(!result.success);
         assert.ok(result.error.length > 0);
@@ -561,14 +608,14 @@ describe("zod()", () => {
 
   describe("edge cases", () => {
     it("should handle empty string", () => {
-      const parser = zod(z.string().min(1));
+      const parser = zod(z.string().min(1), { placeholder: "" });
       const result = parser.parse("");
 
       assert.ok(!result.success);
     });
 
     it("should handle optional schemas", () => {
-      const parser = zod(z.string().optional());
+      const parser = zod(z.string().optional(), { placeholder: "" });
       const result = parser.parse("hello");
 
       assert.ok(result.success);
@@ -576,7 +623,9 @@ describe("zod()", () => {
     });
 
     it("should handle literal values", () => {
-      const parser = zod(z.literal("production"));
+      const parser = zod(z.literal("production"), {
+        placeholder: "production",
+      });
 
       const validResult = parser.parse("production");
       assert.ok(validResult.success);
@@ -587,10 +636,13 @@ describe("zod()", () => {
     });
 
     it("should handle union types", () => {
-      const parser = zod(z.union([
-        z.literal("auto"),
-        z.coerce.number().int().positive(),
-      ]));
+      const parser = zod(
+        z.union([
+          z.literal("auto"),
+          z.coerce.number().int().positive(),
+        ]),
+        { placeholder: "auto" },
+      );
 
       const literalResult = parser.parse("auto");
       assert.ok(literalResult.success);
@@ -607,7 +659,7 @@ describe("zod()", () => {
 
   describe("complex schemas", () => {
     it("should handle regexp validation", () => {
-      const parser = zod(z.string().regex(/^[A-Z]{3}$/));
+      const parser = zod(z.string().regex(/^[A-Z]{3}$/), { placeholder: "" });
 
       const validResult = parser.parse("ABC");
       assert.ok(validResult.success);
@@ -617,7 +669,7 @@ describe("zod()", () => {
     });
 
     it("should handle length constraints", () => {
-      const parser = zod(z.string().length(5));
+      const parser = zod(z.string().length(5), { placeholder: "" });
 
       const validResult = parser.parse("hello");
       assert.ok(validResult.success);
@@ -627,7 +679,7 @@ describe("zod()", () => {
     });
 
     it("should handle min/max length", () => {
-      const parser = zod(z.string().min(2).max(10));
+      const parser = zod(z.string().min(2).max(10), { placeholder: "" });
 
       const validResult = parser.parse("hello");
       assert.ok(validResult.success);
@@ -644,6 +696,7 @@ describe("zod()", () => {
         z.string().startsWith("http://").or(
           z.string().startsWith("https://"),
         ),
+        { placeholder: "" },
       );
 
       const httpResult = parser.parse("http://example.com");
@@ -659,19 +712,25 @@ describe("zod()", () => {
 
   describe("choices and suggest", () => {
     it("should expose choices for z.enum()", () => {
-      const parser = zod(z.enum(["debug", "info", "warn", "error"]));
+      const parser = zod(z.enum(["debug", "info", "warn", "error"]), {
+        placeholder: "debug",
+      });
       assert.deepEqual(parser.choices, ["debug", "info", "warn", "error"]);
     });
 
     it("should provide suggest() for z.enum()", () => {
-      const parser = zod(z.enum(["debug", "info", "warn", "error"]));
+      const parser = zod(z.enum(["debug", "info", "warn", "error"]), {
+        placeholder: "debug",
+      });
       assert.ok(parser.suggest != null);
       const suggestions = [...parser.suggest!("d")];
       assert.deepEqual(suggestions, [{ kind: "literal", text: "debug" }]);
     });
 
     it("should suggest all choices for empty prefix", () => {
-      const parser = zod(z.enum(["debug", "info", "warn", "error"]));
+      const parser = zod(z.enum(["debug", "info", "warn", "error"]), {
+        placeholder: "debug",
+      });
       const suggestions = [...parser.suggest!("")];
       assert.deepEqual(suggestions, [
         { kind: "literal", text: "debug" },
@@ -682,37 +741,45 @@ describe("zod()", () => {
     });
 
     it("should expose choices for z.literal()", () => {
-      const parser = zod(z.literal("production"));
+      const parser = zod(z.literal("production"), {
+        placeholder: "production",
+      });
       assert.deepEqual(parser.choices, ["production"]);
     });
 
     it("should expose choices for z.literal() with empty string", () => {
-      const parser = zod(z.literal(""));
+      const parser = zod(z.literal(""), { placeholder: "" });
       assert.deepEqual(parser.choices, [""]);
       const suggestions = [...parser.suggest!("")];
       assert.deepEqual(suggestions, [{ kind: "literal", text: "" }]);
     });
 
     it("should not expose choices for z.literal() with number", () => {
-      const parser = zod(z.literal(42));
+      const parser = zod(z.literal(42), { placeholder: 42 });
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
       assert.equal(parser.metavar, "VALUE");
     });
 
     it("should expose choices for z.union() of literals", () => {
-      const parser = zod(z.union([z.literal("dev"), z.literal("prod")]));
+      const parser = zod(z.union([z.literal("dev"), z.literal("prod")]), {
+        placeholder: "dev",
+      });
       assert.deepEqual(parser.choices, ["dev", "prod"]);
     });
 
     it("should not expose choices for z.union() with non-literal member", () => {
-      const parser = zod(z.union([z.literal("auto"), z.coerce.number()]));
+      const parser = zod(z.union([z.literal("auto"), z.coerce.number()]), {
+        placeholder: "auto",
+      });
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
     });
 
     it("should not expose choices for z.union() of numeric literals", () => {
-      const parser = zod(z.union([z.literal(1), z.literal(2)]));
+      const parser = zod(z.union([z.literal(1), z.literal(2)]), {
+        placeholder: 1,
+      });
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
     });
@@ -720,48 +787,52 @@ describe("zod()", () => {
     it("should not expose choices for z.nativeEnum() with numeric values", () => {
       // Simulate a numeric TypeScript enum with reverse mappings
       const NumericEnum = { A: 0, B: 1, 0: "A", 1: "B" } as const;
-      const parser = zod(z.nativeEnum(NumericEnum));
+      const parser = zod(z.nativeEnum(NumericEnum), {
+        placeholder: 0 as never,
+      });
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
     });
 
     it("should expose choices for z.nativeEnum() with string values", () => {
       const StringEnum = { Debug: "debug", Info: "info" } as const;
-      const parser = zod(z.nativeEnum(StringEnum));
+      const parser = zod(z.nativeEnum(StringEnum), { placeholder: "debug" });
       assert.deepEqual(parser.choices, ["debug", "info"]);
     });
 
     it("should preserve choices through z.optional()", () => {
-      const parser = zod(z.enum(["a", "b"]).optional());
+      const parser = zod(z.enum(["a", "b"]).optional(), { placeholder: "a" });
       assert.deepEqual(parser.choices, ["a", "b"]);
     });
 
     it("should preserve choices through z.nullable()", () => {
-      const parser = zod(z.enum(["a", "b"]).nullable());
+      const parser = zod(z.enum(["a", "b"]).nullable(), { placeholder: "a" });
       assert.deepEqual(parser.choices, ["a", "b"]);
     });
 
     it("should preserve choices through z.default()", () => {
-      const parser = zod(z.enum(["a", "b"]).default("a"));
+      const parser = zod(z.enum(["a", "b"]).default("a"), { placeholder: "a" });
       assert.deepEqual(parser.choices, ["a", "b"]);
     });
 
     it("should not expose choices through z.catch()", () => {
       // .catch() makes any input valid (falls back to the default),
       // so advertising a closed choice set would be misleading.
-      const parser = zod(z.enum(["a", "b"]).catch("a"));
+      const parser = zod(z.enum(["a", "b"]).catch("a"), { placeholder: "a" });
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
     });
 
     it("should not expose choices for z.string()", () => {
-      const parser = zod(z.string());
+      const parser = zod(z.string(), { placeholder: "" });
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
     });
 
     it("should infer CHOICE metavar for z.union() of literals", () => {
-      const parser = zod(z.union([z.literal("dev"), z.literal("prod")]));
+      const parser = zod(z.union([z.literal("dev"), z.literal("prod")]), {
+        placeholder: "dev",
+      });
       assert.equal(parser.metavar, "CHOICE");
     });
   });
@@ -1184,7 +1255,7 @@ describe("zod()", () => {
     it("should throw TypeError for async refinements", () => {
       // deno-lint-ignore require-await
       const asyncSchema = z.string().refine(async (value) => value === "ok");
-      const parser = zod(asyncSchema as never);
+      const parser = zod(asyncSchema as never, { placeholder: "" as never });
       assert.throws(
         () => parser.parse("ok"),
         {
@@ -1200,7 +1271,7 @@ describe("zod()", () => {
       const schema = z.string().transform(() => {
         throw new Error("Promise rejected by upstream");
       });
-      const parser = zod(schema);
+      const parser = zod(schema, { placeholder: "" });
       assert.throws(
         () => parser.parse("ok"),
         {

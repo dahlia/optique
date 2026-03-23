@@ -496,6 +496,7 @@ export function bool(options: BoolOptions = {}): ValueParser<"sync", boolean> {
   return {
     $mode: "sync",
     metavar,
+    placeholder: false,
     choices: [true, false],
     parse(input: string): ValueParserResult<boolean> {
       const normalized = input.trim().toLowerCase();

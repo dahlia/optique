@@ -45,6 +45,7 @@ function _asyncString(delay = 0): ValueParser<"async", string> {
   return {
     $mode: "async",
     metavar: "ASYNC_STRING" as NonEmptyString,
+    placeholder: "",
     async parse(input: string): Promise<ValueParserResult<string>> {
       if (delay > 0) {
         await new Promise((resolve) => setTimeout(resolve, delay));
@@ -67,6 +68,7 @@ function asyncChoice<T extends string>(
   return {
     $mode: "async",
     metavar: "ASYNC_CHOICE" as NonEmptyString,
+    placeholder: choices[0],
     async parse(input: string): Promise<ValueParserResult<T>> {
       if (delay > 0) {
         await new Promise((resolve) => setTimeout(resolve, delay));
@@ -103,6 +105,7 @@ function asyncInteger(
   return {
     $mode: "async",
     metavar: "ASYNC_INT" as NonEmptyString,
+    placeholder: 0,
     async parse(input: string): Promise<ValueParserResult<number>> {
       if (delay > 0) {
         await new Promise((resolve) => setTimeout(resolve, delay));
@@ -135,6 +138,7 @@ function asyncFailingParser(errorMsg: string): ValueParser<"async", string> {
   return {
     $mode: "async",
     metavar: "FAIL" as NonEmptyString,
+    placeholder: "",
     parse(_input: string): Promise<ValueParserResult<string>> {
       return Promise.resolve({
         success: false,
@@ -154,6 +158,7 @@ function asyncThrowingParser(errorMsg: string): ValueParser<"async", string> {
   return {
     $mode: "async",
     metavar: "THROW" as NonEmptyString,
+    placeholder: "",
     parse(_input: string): Promise<ValueParserResult<string>> {
       return Promise.reject(new Error(errorMsg));
     },
@@ -1126,6 +1131,7 @@ describe("deriveSync()", () => {
       factory: (_value: "safe" | "broken"): ValueParser<"sync", string> => ({
         $mode: "sync",
         metavar: "VALUE" as NonEmptyString,
+        placeholder: "",
         parse: (input: string) => ({ success: true, value: input }),
         format(_value: string): string {
           throw new Error("formatter error");
@@ -4047,6 +4053,7 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
     const asyncString: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VALUE" as NonEmptyString,
+      placeholder: "",
       parse(input: string): Promise<ValueParserResult<string>> {
         return Promise.resolve({ success: true, value: input });
       },
@@ -4186,6 +4193,7 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
     const asyncString: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VALUE" as NonEmptyString,
+      placeholder: "",
       parse(input: string): Promise<ValueParserResult<string>> {
         return Promise.resolve({ success: true, value: input });
       },

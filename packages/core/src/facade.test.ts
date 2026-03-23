@@ -10327,6 +10327,7 @@ describe("runParserSync", () => {
     const asyncVp: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "STR",
+      placeholder: "",
       parse(input: string) {
         return Promise.resolve({ success: true as const, value: input });
       },
@@ -10351,6 +10352,7 @@ describe("runWithSync async parser rejection", () => {
     const asyncVp: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "STR",
+      placeholder: "",
       parse(input: string) {
         return Promise.resolve({ success: true as const, value: input });
       },

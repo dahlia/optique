@@ -1856,6 +1856,7 @@ describe("createConfigContext error paths", () => {
     const asyncInt: ValueParser<"async", number> = {
       $mode: "async" as const,
       metavar: "INT",
+      placeholder: 0,
       parse(input: string): Promise<ValueParserResult<number>> {
         const n = parseInt(input, 10);
         if (isNaN(n)) {

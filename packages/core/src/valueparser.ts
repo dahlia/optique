@@ -80,6 +80,22 @@ export interface ValueParser<M extends Mode = "sync", T = unknown> {
    * @since 0.10.0
    */
   readonly choices?: readonly T[];
+
+  /**
+   * A type-appropriate default value used as a stand-in during deferred
+   * prompt resolution.  When an interactive prompt is deferred during
+   * two-phase parsing, this value is used instead of an internal sentinel
+   * so that `map()` transforms and dynamic contexts always receive a valid
+   * value of type {@link T}.
+   *
+   * The placeholder does not need to be meaningful; it only needs to be
+   * a valid inhabitant of the result type that will not crash downstream
+   * transforms.  For example, `string()` uses `""`, `integer()` uses `0`,
+   * and `choice(["a", "b", "c"])` uses `"a"`.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder: T;
 }
 
 /**
@@ -358,6 +374,7 @@ export function choice<const T extends string | number>(
     return {
       $mode: "sync",
       metavar,
+      placeholder: choices[0],
       choices: frozenNumberChoices,
       parse(input: string): ValueParserResult<T> {
         // Exact match against canonical string representations
@@ -495,6 +512,7 @@ export function choice<const T extends string | number>(
   return {
     $mode: "sync",
     metavar,
+    placeholder: choices[0],
     choices: stringChoices as readonly T[],
     parse(input: string): ValueParserResult<T> {
       const normalizedInput = caseInsensitive ? input.toLowerCase() : input;
@@ -733,6 +751,7 @@ export function string(
   return {
     $mode: "sync",
     metavar,
+    placeholder: "",
     parse(input: string): ValueParserResult<string> {
       if (patternSource != null && patternFlags != null) {
         const pattern = new RegExp(patternSource, patternFlags);
@@ -981,6 +1000,7 @@ export function integer(
     return {
       $mode: "sync",
       metavar,
+      placeholder: 0n,
       parse(input: string): ValueParserResult<bigint> {
         if (!input.match(/^-?\d+$/)) {
           return {
@@ -1047,6 +1067,7 @@ export function integer(
   return {
     $mode: "sync",
     metavar,
+    placeholder: 0,
     parse(input: string): ValueParserResult<number> {
       if (!input.match(/^-?\d+$/)) {
         return {
@@ -1205,6 +1226,7 @@ export function float(options: FloatOptions = {}): ValueParser<"sync", number> {
   return {
     $mode: "sync",
     metavar,
+    placeholder: 0,
     parse(input: string): ValueParserResult<number> {
       const invalidNumber = (i: string): ValueParserResult<number> => ({
         success: false,
@@ -1382,6 +1404,7 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
   return {
     $mode: "sync",
     metavar,
+    placeholder: new URL("http://0.invalid"),
     parse(input: string): ValueParserResult<URL> {
       if (!URL.canParse(input)) {
         return {
@@ -1481,6 +1504,7 @@ export function locale(
   return {
     $mode: "sync",
     metavar,
+    placeholder: new Intl.Locale("und"),
     parse(input: string): ValueParserResult<Intl.Locale> {
       let locale: Intl.Locale;
       try {
@@ -1929,6 +1953,7 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
   return {
     $mode: "sync",
     metavar,
+    placeholder: "00000000-0000-0000-0000-000000000000" as Uuid,
     parse(input: string): ValueParserResult<Uuid> {
       if (!uuidRegex.test(input)) {
         return {
@@ -2254,6 +2279,7 @@ export function port(
     return {
       $mode: "sync",
       metavar,
+      placeholder: 0n,
       parse(input: string): ValueParserResult<bigint> {
         if (!input.match(/^-?\d+$/)) {
           return {
@@ -2338,6 +2364,7 @@ export function port(
   return {
     $mode: "sync",
     metavar,
+    placeholder: 0,
     parse(input: string): ValueParserResult<number> {
       if (!input.match(/^-?\d+$/)) {
         return {
@@ -2579,6 +2606,7 @@ export function ipv4(options?: Ipv4Options): ValueParser<"sync", string> {
   return {
     $mode: "sync",
     metavar,
+    placeholder: "0.0.0.0",
     parse(input: string): ValueParserResult<string> {
       // Parse IPv4 address into octets
       const parts = input.split(".");
@@ -2836,6 +2864,7 @@ export function hostname(
   return {
     $mode: "sync",
     metavar,
+    placeholder: "",
     parse(input: string): ValueParserResult<string> {
       // Check length constraint first
       if (input.length > maxLength) {
@@ -3378,6 +3407,9 @@ export function email(
   return {
     $mode: "sync" as const,
     metavar,
+    placeholder: (options?.allowMultiple ? ([] as readonly string[]) : "") as
+      & string
+      & readonly string[],
     parse(
       input: string,
     ): ValueParserResult<string> | ValueParserResult<readonly string[]> {
@@ -3747,6 +3779,7 @@ export function socketAddress(
   return {
     $mode: "sync",
     metavar,
+    placeholder: { host: "", port: 0 },
     parse(input: string): ValueParserResult<SocketAddressValue> {
       const trimmed = input.trim();
       const canOmitPort = defaultPort !== undefined && !requirePort;
@@ -4387,6 +4420,7 @@ export function portRange(
   return {
     $mode: "sync",
     metavar,
+    placeholder: isBigInt ? { start: 0n, end: 0n } : { start: 0, end: 0 },
     parse(input: string): ValueParserResult<
       PortRangeValueNumber | PortRangeValueBigInt
     > {
@@ -4596,6 +4630,7 @@ export function macAddress(
   return {
     $mode: "sync",
     metavar,
+    placeholder: "00:00:00:00:00:00",
     parse(input: string): ValueParserResult<string> {
       let octets: string[] = [];
       let inputSeparator: ":" | "-" | "." | "none" | undefined;
@@ -4912,6 +4947,7 @@ export function domain(
   return {
     $mode: "sync",
     metavar,
+    placeholder: "",
     parse(input: string): ValueParserResult<string> {
       // Check length constraint first
       if (input.length > maxLength) {
@@ -5177,6 +5213,7 @@ export function ipv6(
   return {
     $mode: "sync",
     metavar,
+    placeholder: "::",
     parse(input: string): ValueParserResult<string> {
       // Parse and normalize IPv6 address
       const normalized = parseAndNormalizeIpv6(input);
@@ -5722,6 +5759,7 @@ export function ip(
   return {
     $mode: "sync",
     metavar,
+    placeholder: "0.0.0.0",
     parse(input: string): ValueParserResult<string> {
       let ipv4Error: ValueParserResult<string> | null = null;
       let ipv6Error: ValueParserResult<string> | null = null;
@@ -6091,6 +6129,7 @@ export function cidr(
   return {
     $mode: "sync",
     metavar,
+    placeholder: { address: "0.0.0.0", prefix: 0, version: 4 },
     parse(input: string): ValueParserResult<CidrValue> {
       // Parse CIDR format: <ip>/<prefix>
       const slashIndex = input.lastIndexOf("/");

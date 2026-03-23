@@ -222,6 +222,7 @@ describe("bindEnv()", () => {
       const asyncEnvParser: ValueParser<"async", number> = {
         $mode: "async",
         metavar: syncIntegerParser.metavar,
+        placeholder: 0,
         format: syncIntegerParser.format,
         parse(input: string): Promise<ValueParserResult<number>> {
           return Promise.resolve(syncIntegerParser.parse(input));
@@ -861,6 +862,7 @@ describe("bindEnv()", () => {
     const asyncInt: ValueParser<"async", number> = {
       $mode: "async",
       metavar: "INT",
+      placeholder: 0,
       parse(input: string): Promise<ValueParserResult<number>> {
         const n = parseInt(input, 10);
         if (isNaN(n)) {
@@ -908,6 +910,7 @@ describe("bindEnv()", () => {
     const asyncInt: ValueParser<"async", number> = {
       $mode: "async",
       metavar: "INT",
+      placeholder: 0,
       parse(input: string): Promise<ValueParserResult<number>> {
         const n = parseInt(input, 10);
         if (isNaN(n)) {
@@ -951,6 +954,7 @@ describe("bindEnv()", () => {
     const asyncInt: ValueParser<"async", number> = {
       $mode: "async",
       metavar: "INT",
+      placeholder: 0,
       parse(input: string): Promise<ValueParserResult<number>> {
         const n = parseInt(input, 10);
         if (isNaN(n)) {
@@ -997,6 +1001,7 @@ describe("bindEnv()", () => {
     const asyncInt: ValueParser<"async", number> = {
       $mode: "async",
       metavar: "INT",
+      placeholder: 0,
       parse(input: string): Promise<ValueParserResult<number>> {
         const n = parseInt(input, 10);
         if (isNaN(n)) {
@@ -1383,6 +1388,7 @@ describe("bindEnv()", () => {
     const asyncInt: ValueParser<"async", number> = {
       $mode: "async",
       metavar: syncInt.metavar,
+      placeholder: 0,
       parse(input: string): Promise<ValueParserResult<number>> {
         return Promise.resolve(syncInt.parse(input));
       },

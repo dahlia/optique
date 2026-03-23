@@ -22,6 +22,13 @@ export interface ValibotParserOptions<T = unknown> {
   readonly metavar?: NonEmptyString;
 
   /**
+   * A placeholder value of type `T` used as a sentinel for internal
+   * bookkeeping.  Because the output type of a Valibot schema cannot be
+   * inferred to a concrete default, callers must provide this explicitly.
+   */
+  readonly placeholder: T;
+
+  /**
    * Custom formatter for displaying parsed values in help messages.
    * When not provided, the default formatter is used: primitives use
    * `String()`, valid `Date` values use `.toISOString()`, and plain
@@ -630,7 +637,7 @@ function inferChoices(
  */
 export function valibot<T>(
   schema: v.BaseSchema<unknown, T, v.BaseIssue<unknown>>,
-  options: ValibotParserOptions<T> = {},
+  options: ValibotParserOptions<T>,
 ): ValueParser<"sync", T> {
   if (containsAsyncSchema(schema)) {
     throw new TypeError(
@@ -644,6 +651,7 @@ export function valibot<T>(
   const parser: ValueParser<"sync", T> = {
     $mode: "sync",
     metavar,
+    placeholder: options.placeholder,
     ...(choices != null && choices.length > 0
       ? {
         // Safe cast: inferChoices() only extracts values from schemas

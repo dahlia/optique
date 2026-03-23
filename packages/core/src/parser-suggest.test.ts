@@ -254,6 +254,7 @@ describe("Parser suggest() methods", () => {
       const asyncParser: ValueParser<"async", string> = {
         $mode: "async",
         metavar: "CHOICE",
+        placeholder: "",
         parse(input: string) {
           return Promise.resolve({ success: true as const, value: input });
         },

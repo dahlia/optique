@@ -21,6 +21,13 @@ export interface ZodParserOptions<T = unknown> {
   readonly metavar?: NonEmptyString;
 
   /**
+   * A placeholder value of type `T` used as a sentinel for internal
+   * bookkeeping.  Because the output type of a Zod schema cannot be
+   * inferred to a concrete default, callers must provide this explicitly.
+   */
+  readonly placeholder: T;
+
+  /**
    * Custom formatter for displaying parsed values in help messages.
    * When not provided, the default formatter is used: primitives use
    * `String()`, valid `Date` values use `.toISOString()`, and plain
@@ -632,7 +639,7 @@ function inferChoices(
  */
 export function zod<T>(
   schema: z.Schema<T>,
-  options: ZodParserOptions<T> = {},
+  options: ZodParserOptions<T>,
 ): ValueParser<"sync", T> {
   const choices = inferChoices(schema);
   const boolInfo = analyzeBooleanSchema(schema);
@@ -736,6 +743,7 @@ export function zod<T>(
   const parser: ValueParser<"sync", T> = {
     $mode: "sync",
     metavar,
+    placeholder: options.placeholder,
     ...(boolInfo.exposeChoices
       ? {
         choices: Object.freeze([true, false]) as readonly T[],

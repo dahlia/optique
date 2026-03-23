@@ -52,6 +52,7 @@ function asyncChoice<T extends string>(
   return {
     $mode: "async",
     metavar: "CHOICE",
+    placeholder: choices[0],
     parse(input: string): Promise<ValueParserResult<T>> {
       if (choices.includes(input as T)) {
         return Promise.resolve({ success: true, value: input as T });
@@ -4271,6 +4272,7 @@ describe("branch coverage: modifiers edge cases", () => {
     const fileValueParser: ValueParser<"sync", string> = {
       $mode: "sync",
       metavar: "FILE",
+      placeholder: "",
       parse(input: string): { success: true; value: string } {
         return { success: true, value: input };
       },

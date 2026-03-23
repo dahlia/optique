@@ -297,6 +297,11 @@ export function instant(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): Temporal.Instant {
+      const value = Temporal.Instant.from("1970-01-01T00:00:00Z");
+      Object.defineProperty(this, "placeholder", { value });
+      return value;
+    },
     parse(input: string): ValueParserResult<Temporal.Instant> {
       ensureTemporal();
       try {
@@ -341,6 +346,11 @@ export function duration(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): Temporal.Duration {
+      const value = Temporal.Duration.from("PT0S");
+      Object.defineProperty(this, "placeholder", { value });
+      return value;
+    },
     parse(input: string): ValueParserResult<Temporal.Duration> {
       ensureTemporal();
       try {
@@ -384,6 +394,13 @@ export function zonedDateTime(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): Temporal.ZonedDateTime {
+      const value = Temporal.ZonedDateTime.from(
+        "1970-01-01T00:00:00+00:00[UTC]",
+      );
+      Object.defineProperty(this, "placeholder", { value });
+      return value;
+    },
     parse(input: string): ValueParserResult<Temporal.ZonedDateTime> {
       ensureTemporal();
       try {
@@ -508,6 +525,11 @@ export function plainDate(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): Temporal.PlainDate {
+      const value = Temporal.PlainDate.from("1970-01-01");
+      Object.defineProperty(this, "placeholder", { value });
+      return value;
+    },
     parse(input: string): ValueParserResult<Temporal.PlainDate> {
       ensureTemporal();
       try {
@@ -552,6 +574,11 @@ export function plainTime(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): Temporal.PlainTime {
+      const value = Temporal.PlainTime.from("00:00:00");
+      Object.defineProperty(this, "placeholder", { value });
+      return value;
+    },
     parse(input: string): ValueParserResult<Temporal.PlainTime> {
       ensureTemporal();
       try {
@@ -596,6 +623,11 @@ export function plainDateTime(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): Temporal.PlainDateTime {
+      const value = Temporal.PlainDateTime.from("1970-01-01T00:00:00");
+      Object.defineProperty(this, "placeholder", { value });
+      return value;
+    },
     parse(input: string): ValueParserResult<Temporal.PlainDateTime> {
       ensureTemporal();
       try {
@@ -640,6 +672,11 @@ export function plainYearMonth(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): Temporal.PlainYearMonth {
+      const value = Temporal.PlainYearMonth.from("1970-01");
+      Object.defineProperty(this, "placeholder", { value });
+      return value;
+    },
     parse(input: string): ValueParserResult<Temporal.PlainYearMonth> {
       ensureTemporal();
       try {
@@ -684,6 +721,11 @@ export function plainMonthDay(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): Temporal.PlainMonthDay {
+      const value = Temporal.PlainMonthDay.from("01-01");
+      Object.defineProperty(this, "placeholder", { value });
+      return value;
+    },
     parse(input: string): ValueParserResult<Temporal.PlainMonthDay> {
       ensureTemporal();
       try {
@@ -795,6 +837,7 @@ export function timeZone(
   return {
     $mode: "sync",
     metavar,
+    placeholder: "UTC" as TimeZone,
     parse(input: string): ValueParserResult<TimeZone> {
       ensureTemporal();
       try {

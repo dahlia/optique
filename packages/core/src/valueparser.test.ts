@@ -13676,6 +13676,10 @@ describe("branch coverage regressions", () => {
     const originalBigInt = globalThis.BigInt;
     const originalLocale = Intl.Locale;
 
+    // Construct localeParser before mocking Intl.Locale, since the
+    // placeholder eagerly creates new Intl.Locale("und").
+    const localeParser = locale();
+
     try {
       (globalThis as unknown as { BigInt: typeof BigInt }).BigInt = ((
         _input: string,
@@ -13706,7 +13710,6 @@ describe("branch coverage regressions", () => {
         "bigint boom",
       );
 
-      const localeParser = locale();
       assert.throws(
         () => localeParser.parse("en-US"),
         TypeError,
