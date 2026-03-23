@@ -34,8 +34,8 @@ import type {
 import type { ValueParserResult } from "./valueparser.ts";
 import {
   containsPlaceholderValues,
+  hiddenPlaceholderObjects,
   isPlaceholderValue,
-  mayContainHiddenPlaceholders,
 } from "./context.ts";
 
 /**
@@ -924,26 +924,17 @@ export function map<M extends Mode, T, U, TState>(
         }
         const transformed = transform(result.value);
         // If the input contained placeholder values and the transform
-        // produced a non-null object, tag the result with the placeholder
-        // symbol so that phase-two sanitization can detect and strip
-        // hidden placeholders (e.g., values stored in private fields or
-        // captured in closures by the transform function).
+        // produced a non-null object, register it so that
+        // containsPlaceholderValues() returns true even when the
+        // placeholders are hidden in private fields or closures.
+        // Uses a WeakSet to avoid mutating the transform's return value.
         // See: https://github.com/dahlia/optique/issues/407
         if (
           containsPlaceholderValues(result.value) &&
           transformed != null &&
           typeof transformed === "object"
         ) {
-          try {
-            Object.defineProperty(transformed, mayContainHiddenPlaceholders, {
-              value: true,
-              configurable: true,
-              writable: true,
-              enumerable: false,
-            });
-          } catch {
-            // frozen/sealed — best effort
-          }
+          hiddenPlaceholderObjects.add(transformed);
         }
         return { success: true, value: transformed };
       },
