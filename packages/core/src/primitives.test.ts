@@ -4647,6 +4647,78 @@ describe("hidden option", () => {
       ));
       assert.equal(suggestions.length, 1);
     });
+
+    it("should throw TypeError for empty option name", () => {
+      assert.throws(
+        // @ts-expect-error: empty string is not a valid OptionName
+        () => option("", string()),
+        { name: "TypeError", message: "Option name must not be empty." },
+      );
+    });
+
+    it("should throw TypeError for whitespace-only option name", () => {
+      assert.throws(
+        // @ts-expect-error: whitespace-only string is not a valid OptionName
+        () => option("   ", string()),
+        {
+          name: "TypeError",
+          message: 'Option name must not be whitespace-only: "   ".',
+        },
+      );
+    });
+
+    it("should throw TypeError for option name with control characters", () => {
+      assert.throws(
+        () => option("--foo\x00", string()),
+        {
+          name: "TypeError",
+          message:
+            'Option name must not contain control characters: "--foo\\x00".',
+        },
+      );
+    });
+
+    it("should throw TypeError for option name with whitespace", () => {
+      assert.throws(
+        () => option("--foo bar", string()),
+        {
+          name: "TypeError",
+          message: 'Option name must not contain whitespace: "--foo bar".',
+        },
+      );
+    });
+
+    it("should throw TypeError for option name without valid prefix", () => {
+      assert.throws(
+        // @ts-expect-error: no valid prefix is not a valid OptionName
+        () => option("foo", string()),
+        {
+          name: "TypeError",
+          message: 'Option name must start with "--", "-", "/", or "+": "foo".',
+        },
+      );
+    });
+
+    it("should throw TypeError for options terminator as option name", () => {
+      assert.throws(
+        () => option("--", string()),
+        {
+          name: "TypeError",
+          message: 'Option name must not be the options terminator "--".',
+        },
+      );
+    });
+
+    it("should throw TypeError when no option names are provided", () => {
+      assert.throws(
+        // @ts-expect-error: intentionally testing runtime rejection
+        () => option(string()),
+        {
+          name: "TypeError",
+          message: "Expected at least one option name.",
+        },
+      );
+    });
   });
 
   describe("flag()", () => {
@@ -4718,6 +4790,78 @@ describe("hidden option", () => {
         "--deb",
       ));
       assert.equal(suggestions.length, 1);
+    });
+
+    it("should throw TypeError for empty flag name", () => {
+      assert.throws(
+        // @ts-expect-error: empty string is not a valid OptionName
+        () => flag(""),
+        { name: "TypeError", message: "Flag name must not be empty." },
+      );
+    });
+
+    it("should throw TypeError for whitespace-only flag name", () => {
+      assert.throws(
+        // @ts-expect-error: whitespace-only string is not a valid OptionName
+        () => flag("   "),
+        {
+          name: "TypeError",
+          message: 'Flag name must not be whitespace-only: "   ".',
+        },
+      );
+    });
+
+    it("should throw TypeError for flag name with control characters", () => {
+      assert.throws(
+        () => flag("--debug\x00"),
+        {
+          name: "TypeError",
+          message:
+            'Flag name must not contain control characters: "--debug\\x00".',
+        },
+      );
+    });
+
+    it("should throw TypeError for flag name with whitespace", () => {
+      assert.throws(
+        () => flag("--de bug"),
+        {
+          name: "TypeError",
+          message: 'Flag name must not contain whitespace: "--de bug".',
+        },
+      );
+    });
+
+    it("should throw TypeError for flag name without valid prefix", () => {
+      assert.throws(
+        // @ts-expect-error: no valid prefix is not a valid OptionName
+        () => flag("debug"),
+        {
+          name: "TypeError",
+          message: 'Flag name must start with "--", "-", "/", or "+": "debug".',
+        },
+      );
+    });
+
+    it("should throw TypeError for options terminator as flag name", () => {
+      assert.throws(
+        () => flag("--"),
+        {
+          name: "TypeError",
+          message: 'Flag name must not be the options terminator "--".',
+        },
+      );
+    });
+
+    it("should throw TypeError when no flag names are provided", () => {
+      assert.throws(
+        // @ts-expect-error: intentionally testing runtime rejection
+        () => flag({ description: message`test` }),
+        {
+          name: "TypeError",
+          message: "Expected at least one flag name.",
+        },
+      );
     });
   });
 

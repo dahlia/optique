@@ -89,6 +89,16 @@ To be released.
     `TypeError` instead of an internal crash when non-parser values are
     passed.  [[#406], [#700]]
 
+ -  Added runtime validation of option names to `option()` and `flag()`:
+    these functions now throw `TypeError` at construction time for empty
+    strings, whitespace-only strings, strings with control characters,
+    strings with embedded whitespace, the options terminator `"--"`, or
+    strings without a valid prefix.  The `OptionName` type now enforces
+    at least one character after the prefix at compile time in most cases,
+    though `"--"` can still type-check and is rejected at runtime only.
+    The `option()` and `flag()` overloads now require at least one option
+    name argument.  [[#381], [#709]]
+
  -  Added the `@optique/core/mode-dispatch` subpath export so sibling
     packages can share internal sync/async dispatch helpers without
     duplicating them.  [[#157]]
@@ -871,6 +881,7 @@ To be released.
 [#375]: https://github.com/dahlia/optique/issues/375
 [#376]: https://github.com/dahlia/optique/issues/376
 [#378]: https://github.com/dahlia/optique/issues/378
+[#381]: https://github.com/dahlia/optique/issues/381
 [#385]: https://github.com/dahlia/optique/issues/385
 [#387]: https://github.com/dahlia/optique/issues/387
 [#388]: https://github.com/dahlia/optique/issues/388
@@ -998,6 +1009,7 @@ To be released.
 [#697]: https://github.com/dahlia/optique/pull/697
 [#698]: https://github.com/dahlia/optique/pull/698
 [#700]: https://github.com/dahlia/optique/pull/700
+[#709]: https://github.com/dahlia/optique/pull/709
 
 ### @optique/config
 

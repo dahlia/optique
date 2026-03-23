@@ -20,6 +20,7 @@ import { annotateFreshArray, getAnnotations } from "./annotations.ts";
 import type { DocFragment } from "./doc.ts";
 import { dispatchIterableByMode } from "./mode-dispatch.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
+import { validateOptionNames } from "./validate.ts";
 
 /**
  * State type for options that may use deferred parsing (DerivedValueParser).
@@ -662,7 +663,7 @@ async function* suggestArgumentAsync<T>(
  *          values.
  */
 export function option<M extends Mode, T>(
-  ...args: readonly [...readonly OptionName[], ValueParser<M, T>]
+  ...args: readonly [OptionName, ...readonly OptionName[], ValueParser<M, T>]
 ): Parser<M, T, ValueParserResult<T> | undefined>;
 
 /**
@@ -679,7 +680,12 @@ export function option<M extends Mode, T>(
  *          values.
  */
 export function option<M extends Mode, T>(
-  ...args: readonly [...readonly OptionName[], ValueParser<M, T>, OptionOptions]
+  ...args: readonly [
+    OptionName,
+    ...readonly OptionName[],
+    ValueParser<M, T>,
+    OptionOptions,
+  ]
 ): Parser<M, T, ValueParserResult<T> | undefined>;
 
 /**
@@ -690,7 +696,7 @@ export function option<M extends Mode, T>(
  *         flags, producing `true` if the option is present.
  */
 export function option(
-  ...optionNames: readonly OptionName[]
+  ...optionNames: readonly [OptionName, ...readonly OptionName[]]
 ): Parser<"sync", boolean, ValueParserResult<boolean> | undefined>;
 
 /**
@@ -704,20 +710,25 @@ export function option(
  *          values.
  */
 export function option(
-  ...args: readonly [...readonly OptionName[], OptionOptions]
+  ...args: readonly [OptionName, ...readonly OptionName[], OptionOptions]
 ): Parser<"sync", boolean, ValueParserResult<boolean> | undefined>;
 
 export function option<M extends Mode, T>(
   ...args:
-    | readonly [...readonly OptionName[], ValueParser<M, T>, OptionOptions]
-    | readonly [...readonly OptionName[], ValueParser<M, T>]
-    | readonly [...readonly OptionName[], OptionOptions]
-    | readonly OptionName[]
+    | readonly [
+      OptionName,
+      ...readonly OptionName[],
+      ValueParser<M, T>,
+      OptionOptions,
+    ]
+    | readonly [OptionName, ...readonly OptionName[], ValueParser<M, T>]
+    | readonly [OptionName, ...readonly OptionName[], OptionOptions]
+    | readonly [OptionName, ...readonly OptionName[]]
 ): Parser<M, T | boolean, ValueParserResult<T | boolean> | undefined> {
   const lastArg = args.at(-1);
   const secondLastArg = args.at(-2);
   let valueParser: ValueParser<M, T> | undefined;
-  let optionNames: OptionName[];
+  let optionNames: readonly OptionName[];
   let options: OptionOptions = {};
   if (isValueParser<M, T>(lastArg)) {
     valueParser = lastArg;
@@ -732,9 +743,10 @@ export function option<M extends Mode, T>(
       optionNames = args.slice(0, -1) as OptionName[];
     }
   } else {
-    optionNames = args as OptionName[];
+    optionNames = args as readonly OptionName[];
     valueParser = undefined;
   }
+  validateOptionNames(optionNames, "Option");
   const mode: M = (valueParser?.$mode ?? "sync") as M;
   const isAsync = mode === "async";
 
@@ -1264,11 +1276,11 @@ export interface FlagErrorOptions {
  */
 export function flag(
   ...args:
-    | readonly [...readonly OptionName[], FlagOptions]
-    | readonly OptionName[]
+    | readonly [OptionName, ...readonly OptionName[], FlagOptions]
+    | readonly [OptionName, ...readonly OptionName[]]
 ): Parser<"sync", true, ValueParserResult<true> | undefined> {
   const lastArg = args.at(-1);
-  let optionNames: OptionName[];
+  let optionNames: readonly OptionName[];
   let options: FlagOptions = {};
 
   if (
@@ -1277,8 +1289,9 @@ export function flag(
     options = lastArg as FlagOptions;
     optionNames = args.slice(0, -1) as OptionName[];
   } else {
-    optionNames = args as OptionName[];
+    optionNames = args as readonly OptionName[];
   }
+  validateOptionNames(optionNames, "Flag");
 
   return {
     $valueType: [],

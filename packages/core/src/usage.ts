@@ -8,12 +8,18 @@ import type { NonEmptyString } from "./nonempty.ts";
  * - POSIX-style short options (`-o`) or Java-style options (`-option`)
  * - MS-DOS-style options (`/o`, `/option`)
  * - Plus-prefixed options (`+o`)
+ *
+ * Each prefix must be followed by at least one character, so bare prefixes
+ * like `"-"`, `"/"`, or `"+"` are rejected at compile time.  Due to
+ * TypeScript template literal limitations, `"--"` still matches the
+ * `-${NonEmptyString}` branch and is only rejected at runtime by the
+ * `option()` and `flag()` validators.
  */
 export type OptionName =
-  | `--${string}`
-  | `-${string}`
-  | `/${string}`
-  | `+${string}`;
+  | `--${NonEmptyString}`
+  | `-${NonEmptyString}`
+  | `/${NonEmptyString}`
+  | `+${NonEmptyString}`;
 
 /**
  * Visibility control for parser terms.
