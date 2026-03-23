@@ -6774,6 +6774,9 @@ export function group<M extends Mode, TValue, TState>(
     $mode: parser.$mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
+    ...(parser.placeholder !== undefined
+      ? { placeholder: parser.placeholder }
+      : {}),
     priority: parser.priority,
     usage: applyHiddenToUsage(parser.usage, options.hidden),
     initialState: parser.initialState,

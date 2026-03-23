@@ -237,6 +237,7 @@ export function optional<M extends Mode, TValue, TState>(
     $mode: parser.$mode,
     $valueType: [],
     $stateType: [],
+    placeholder: undefined as TValue | undefined,
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
@@ -577,6 +578,9 @@ export function withDefault<
     $mode: parser.$mode,
     $valueType: [],
     $stateType: [],
+    ...(parser.placeholder !== undefined
+      ? { placeholder: parser.placeholder }
+      : {}),
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
@@ -936,9 +940,17 @@ export function map<M extends Mode, T, U, TState>(
     }
     : {};
 
+  let mappedPlaceholder: { readonly placeholder?: U } = {};
+  if (parser.placeholder !== undefined) {
+    try {
+      mappedPlaceholder = { placeholder: transform(parser.placeholder) };
+    } catch { /* transform may not be safe on placeholder values */ }
+  }
+
   return {
     ...parser,
     $valueType: [] as readonly U[],
+    ...mappedPlaceholder,
     complete,
     ...dependencyMarkers,
     getDocFragments(state: DocState<TState>, _defaultValue?: U) {

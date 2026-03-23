@@ -197,6 +197,21 @@ export interface Parser<
   getDocFragments(state: DocState<TState>, defaultValue?: TValue): DocFragments;
 
   /**
+   * A type-appropriate default value used as a stand-in during deferred
+   * prompt resolution.  When present, combinators like `prompt()` use this
+   * value instead of an internal sentinel during two-phase parsing, so that
+   * `map()` transforms and dynamic contexts always receive a valid value
+   * of type {@link TValue}.
+   *
+   * This property is set automatically by `option()` and `argument()` from
+   * the underlying {@link ValueParser}'s `placeholder`, and propagated by
+   * combinators like `map()`, `optional()`, and `withDefault()`.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: TValue;
+
+  /**
    * Optional predicate that determines whether completion should be
    * deferred for the given parser state.
    *

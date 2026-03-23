@@ -1163,6 +1163,29 @@ export function option<M extends Mode, T>(
       return `option(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
     },
   };
+  // Define placeholder lazily to avoid triggering derived value parser
+  // factory functions during parser construction.
+  if (valueParser != null) {
+    Object.defineProperty(result, "placeholder", {
+      get() {
+        let value: T | undefined;
+        try {
+          value = valueParser!.placeholder;
+        } catch { /* derived value parser factory may throw */ }
+        Object.defineProperty(result, "placeholder", {
+          value,
+          writable: false,
+          configurable: true,
+          enumerable: true,
+        });
+        return value;
+      },
+      configurable: true,
+      enumerable: true,
+    });
+  } else {
+    (result as Record<string, unknown>).placeholder = false;
+  }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
   // At runtime, the isAsync flag ensures correct behavior:
@@ -1798,6 +1821,25 @@ export function argument<M extends Mode, T>(
       return `argument()`;
     },
   };
+  // Define placeholder lazily to avoid triggering derived value parser
+  // factory functions during parser construction.
+  Object.defineProperty(result, "placeholder", {
+    get() {
+      let value: T | undefined;
+      try {
+        value = valueParser.placeholder;
+      } catch { /* derived value parser factory may throw */ }
+      Object.defineProperty(result, "placeholder", {
+        value,
+        writable: false,
+        configurable: true,
+        enumerable: true,
+      });
+      return value;
+    },
+    configurable: true,
+    enumerable: true,
+  });
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
   return result as unknown as Parser<M, T, ValueParserResult<T> | undefined>;

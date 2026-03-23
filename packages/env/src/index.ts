@@ -288,6 +288,9 @@ export function bindEnv<
     $mode: parser.$mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
+    ...(parser.placeholder !== undefined
+      ? { placeholder: parser.placeholder }
+      : {}),
     priority: parser.priority,
     usage: options.default !== undefined
       ? [{ type: "optional", terms: parser.usage }]
