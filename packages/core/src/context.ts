@@ -319,6 +319,14 @@ export function containsPlaceholderValues(
   if (isPlaceholderValue(value)) {
     return true;
   }
+  // Check functions for hidden-placeholder registration before the
+  // typeof !== "object" gate (functions are "function", not "object").
+  if (
+    typeof value === "function" &&
+    hiddenPlaceholderObjects.has(value as object)
+  ) {
+    return true;
+  }
   if (value == null || typeof value !== "object") {
     return false;
   }

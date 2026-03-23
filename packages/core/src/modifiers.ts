@@ -932,7 +932,8 @@ export function map<M extends Mode, T, U, TState>(
         if (
           containsPlaceholderValues(result.value) &&
           transformed != null &&
-          typeof transformed === "object"
+          (typeof transformed === "object" ||
+            typeof transformed === "function")
         ) {
           hiddenPlaceholderObjects.add(transformed);
         }

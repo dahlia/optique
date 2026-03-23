@@ -53,6 +53,7 @@ import { string } from "./valueparser.ts";
 import { type Annotations, injectAnnotations } from "./annotations.ts";
 import {
   containsPlaceholderValues,
+  hiddenPlaceholderObjects,
   isPlaceholderValue,
   type ParserValuePlaceholder,
   type SourceContext,
@@ -160,6 +161,8 @@ function stripPlaceholderValues<T>(
   if (typeof value === "function") {
     const fnCached = seen.get(value as object);
     if (fnCached !== undefined) return fnCached as T;
+    // Consume the hidden-placeholder registration.
+    hiddenPlaceholderObjects.delete(value as object);
     if (
       !/^class[\s{]/.test(Function.prototype.toString.call(value))
     ) {
@@ -195,6 +198,9 @@ function stripPlaceholderValues<T>(
   if (cached !== undefined) {
     return cached as T;
   }
+  // Consume the hidden-placeholder registration so that future clean
+  // parses of the same reused/singleton object are not re-sanitized.
+  hiddenPlaceholderObjects.delete(value);
   if (Array.isArray(value)) {
     if (!containsPlaceholderValues(value)) {
       return value;
@@ -624,6 +630,13 @@ function prepareParsedForContexts(
   parsed: unknown,
 ): unknown {
   if (parsed == null || typeof parsed !== "object") {
+    // Handle registered function results from map() transforms.
+    if (
+      typeof parsed === "function" &&
+      hiddenPlaceholderObjects.has(parsed as object)
+    ) {
+      return stripPlaceholderValues(parsed);
+    }
     return parsed;
   }
 
