@@ -21,9 +21,6 @@ To be released.
         transform parsed values before phase-2 annotation collection
      -  `Parser.shouldDeferCompletion()`: optional method that combinators
         (`optional()`, `withDefault()`, `group()`) forward from inner parsers
-     -  `placeholder` symbol and `isPlaceholderValue()` in
-        `@optique/core/context`: brand-based detection of placeholder values
-        that should be stripped during two-phase parsing
 
     This removes core's hidden dependency on *@optique/config* and
     *@optique/inquirer* implementation details, enabling third-party
@@ -105,6 +102,27 @@ To be released.
     strings, and strings with control characters.  Previously `formatUsage()`
     had no validation at all, and `formatDocPage()` only rejected newlines.
     [[#431], [#724]]
+
+ -  Added `placeholder` property to `ValueParser` interface (required) and
+    `Parser` interface (optional).  Every value parser now provides a
+    type-appropriate stand-in value (e.g., `""` for `string()`, `0` for
+    `integer()`) used during deferred prompt resolution.  `option()` and
+    `argument()` set `Parser.placeholder` from the value parser, and
+    combinators like `map()`, `optional()`, and `withDefault()` propagate
+    it through the parser chain.  [[#407]]
+
+ -  Replaced the `DeferredPromptValue` sentinel with type-appropriate
+    placeholder values during two-phase parsing.  `prompt()` now uses
+    `Parser.placeholder` instead of a branded sentinel when deferring,
+    so `map()` transforms always receive valid values and dynamic contexts
+    observe structurally valid objects.  This removes the entire
+    sanitization machinery (~1000 lines of proxy-based stripping code)
+    from *@optique/core* and *@optique/config*.  [[#307], [#407]]
+
+ -  Removed `placeholder` symbol and `isPlaceholderValue()` from
+    `@optique/core/context`.  These were part of the sentinel-based
+    deferred prompt mechanism that has been replaced by the
+    `ValueParser.placeholder` approach.  [[#407]]
 
  -  Added the `@optique/core/mode-dispatch` subpath export so sibling
     packages can share internal sync/async dispatch helpers without
@@ -985,6 +1003,7 @@ To be released.
 [#396]: https://github.com/dahlia/optique/issues/396
 [#403]: https://github.com/dahlia/optique/issues/403
 [#406]: https://github.com/dahlia/optique/issues/406
+[#407]: https://github.com/dahlia/optique/issues/407
 [#425]: https://github.com/dahlia/optique/issues/425
 [#429]: https://github.com/dahlia/optique/issues/429
 [#431]: https://github.com/dahlia/optique/issues/431
@@ -1831,6 +1850,10 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     A new `format` option in `ValibotParserOptions` allows custom formatting.
     [[#285], [#706]]
 
+ -  `valibot()` now requires a `placeholder` option in `ValibotParserOptions`.
+    This value is used as a type-appropriate stand-in during deferred prompt
+    resolution.  [[#407]]
+
 [#281]: https://github.com/dahlia/optique/issues/281
 [#285]: https://github.com/dahlia/optique/issues/285
 [#460]: https://github.com/dahlia/optique/issues/460
@@ -1841,6 +1864,10 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#706]: https://github.com/dahlia/optique/pull/706
 
 ### @optique/zod
+
+ -  `zod()` now requires a `placeholder` option in `ZodParserOptions`.
+    This value is used as a type-appropriate stand-in during deferred prompt
+    resolution.  [[#407]]
 
  -  `zod()` now exposes choice metadata for `z.enum()`, string-valued
     `z.nativeEnum()` and `z.literal()` schemas, and `z.union()` schemas
