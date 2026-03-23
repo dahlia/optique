@@ -203,9 +203,14 @@ function analyzeBooleanInner(
     }
   }
 
-  // branded — suppress choices (refinements may be involved)
+  // branded — suppress choices (refinements may be involved).
+  // Zod v3 stores the inner schema on _def.type (an object),
+  // while Zod v4 uses _def.innerType.
   if (typeName === "ZodBranded" || typeName === "branded") {
-    const innerType = def.innerType;
+    const innerType = def.innerType ??
+      (typeof def.type === "object" && def.type != null
+        ? def.type as z.Schema<unknown>
+        : undefined);
     if (innerType != null) {
       return analyzeBooleanInner(innerType, false);
     }
