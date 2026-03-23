@@ -2258,21 +2258,21 @@ describe("normalizeUsage", () => {
       assert.deepEqual(result, []);
     });
 
-    it("should strip literal with empty value", () => {
+    it("should preserve literal with empty value", () => {
       const result = normalizeUsage([
         { type: "literal", value: "" } as never,
       ]);
-      assert.deepEqual(result, []);
+      assert.deepEqual(result, [{ type: "literal", value: "" }]);
     });
 
-    it("should strip exclusive with all-empty branches", () => {
+    it("should preserve exclusive with empty branches", () => {
       const result = normalizeUsage([
         { type: "exclusive", terms: [[]] },
       ]);
-      assert.deepEqual(result, []);
+      assert.deepEqual(result, [{ type: "exclusive", terms: [[]] }]);
     });
 
-    it("should keep exclusive with some non-empty branches", () => {
+    it("should preserve empty branches alongside non-empty ones", () => {
       const result = normalizeUsage([
         {
           type: "exclusive",
@@ -2286,6 +2286,7 @@ describe("normalizeUsage", () => {
         {
           type: "exclusive",
           terms: [
+            [],
             [{ type: "option", names: ["--verbose"] }],
           ],
         },

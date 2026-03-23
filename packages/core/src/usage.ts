@@ -503,9 +503,12 @@ export function formatUsage(
  *
  * 1. *Stripping*: Removes degenerate terms that would render as empty or
  *    malformed output, such as options with no names, commands with empty
- *    names, arguments with empty metavars, empty literals, and container
- *    terms (`optional`, `multiple`, `exclusive`) that become empty after
- *    recursive normalization.
+ *    names, arguments with empty metavars, and container terms (`optional`,
+ *    `multiple`, `exclusive`) whose top-level terms array is empty after
+ *    recursive normalization.  Empty branches within exclusive terms and
+ *    empty-value literals are preserved because they can carry semantic
+ *    meaning (e.g., `conditional()` default branches or empty-string
+ *    discriminator keys).
  *
  * 2. *Flattening*: Recursively processes all usage terms and merges any
  *    nested exclusive terms into their parent exclusive term to avoid
@@ -559,10 +562,9 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
       if (normalized.length >= 1 && normalized[0].type === "exclusive") {
         const rest = normalized.slice(1);
         for (const subUsage of normalized[0].terms) {
-          const branch = [...subUsage, ...rest];
-          if (branch.length > 0) terms.push(branch);
+          terms.push([...subUsage, ...rest]);
         }
-      } else if (normalized.length > 0) {
+      } else {
         terms.push(normalized);
       }
     }
@@ -576,7 +578,6 @@ function isNonDegenerateTerm(term: UsageTerm): boolean {
   if (term.type === "option") return term.names.length > 0;
   if (term.type === "command") return term.name !== "";
   if (term.type === "argument") return term.metavar.length > 0;
-  if (term.type === "literal") return term.value !== "";
   if (
     term.type === "optional" || term.type === "multiple" ||
     term.type === "exclusive"
