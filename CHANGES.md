@@ -1709,9 +1709,10 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `z.coerce.boolean()` schemas instead of JavaScript truthiness semantics.
     Accepted literals (case-insensitive): `true`/`false`, `1`/`0`, `yes`/`no`,
     `on`/`off`.  Boolean schemas also expose `choices` and `suggest()` for
-    shell completion.  [[#295]]
+    shell completion.  [[#295], [#712]]
 
 [#295]: https://github.com/dahlia/optique/issues/295
+[#712]: https://github.com/dahlia/optique/pull/712
 
 
 Version 0.10.7
