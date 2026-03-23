@@ -4709,6 +4709,7 @@ describe("hidden option", () => {
 
     it("should throw TypeError when no option names are provided", () => {
       assert.throws(
+        // @ts-expect-error: intentionally testing runtime rejection
         () => option(string()),
         {
           name: "TypeError",
@@ -4850,6 +4851,7 @@ describe("hidden option", () => {
 
     it("should throw TypeError when no flag names are provided", () => {
       assert.throws(
+        // @ts-expect-error: intentionally testing runtime rejection
         () => flag({ description: message`test` }),
         {
           name: "TypeError",
