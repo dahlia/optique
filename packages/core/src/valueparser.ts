@@ -3648,6 +3648,35 @@ export function socketAddress(
     return /^\d+\.\d+\.\d+\.\d+$/.test(input);
   }
 
+  function looksLikeAltIpv4Literal(input: string): boolean {
+    // Single hex integer: 0x7f000001
+    if (/^0[xX][0-9a-fA-F]+$/.test(input)) return true;
+
+    // Single decimal integer > 255 (potential 32-bit IPv4 encoding).
+    // Values ≤ 255 are allowed as single-label hostnames because the
+    // resulting 0.0.0.x address poses minimal security risk.
+    if (/^[1-9][0-9]*$/.test(input)) {
+      const n = Number(input);
+      if (n > 255 && n <= 0xFFFFFFFF) return true;
+    }
+
+    // Dotted forms (2-4 parts) where at least one part uses hex notation.
+    // All-decimal dotted forms are handled by looksLikeIpv4() (4-part)
+    // or rejected by hostname() (2-3 part, all-numeric ≥2 labels).
+    const parts = input.split(".");
+    if (parts.length >= 2 && parts.length <= 4) {
+      const numericOrHex = /^(?:[0-9]+|0[xX][0-9a-fA-F]+)$/;
+      if (
+        parts.every((p) => numericOrHex.test(p)) &&
+        parts.some((p) => /^0[xX]/i.test(p))
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   function parseHost(hostInput: string): ValueParserResult<string> {
     if (hostType === "hostname") {
       // Reject IP-shaped input when type is "hostname"
@@ -3655,6 +3684,13 @@ export function socketAddress(
         return {
           success: false,
           error: message`Expected a valid hostname, but got ${hostInput}.`,
+        };
+      }
+      if (looksLikeAltIpv4Literal(hostInput)) {
+        return {
+          success: false,
+          error:
+            message`${hostInput} appears to be a non-standard IPv4 address notation.`,
         };
       }
       return hostnameParser.parse(hostInput);
@@ -3665,6 +3701,13 @@ export function socketAddress(
       if (looksLikeIpv4(hostInput)) {
         // IP-shaped input: validate as IP only (enforces restrictions)
         return ipParser.parse(hostInput);
+      }
+      if (looksLikeAltIpv4Literal(hostInput)) {
+        return {
+          success: false,
+          error:
+            message`${hostInput} appears to be a non-standard IPv4 address notation.`,
+        };
       }
       // Non-IP-shaped: validate as hostname only
       return hostnameParser.parse(hostInput);
@@ -3702,9 +3745,10 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
-        // Propagate specific IP parser errors for IP-shaped input;
-        // use the socket-level format error for everything else.
-        if (looksLikeIpv4(hostPart)) {
+        // Propagate specific IP parser errors for IP-shaped input
+        // (including alternate literal forms); use the socket-level
+        // format error for everything else.
+        if (looksLikeIpv4(hostPart) || looksLikeAltIpv4Literal(hostPart)) {
           return { success: false, error: hostResult.error };
         }
         return {

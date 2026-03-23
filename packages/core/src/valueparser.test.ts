@@ -9309,6 +9309,272 @@ describe("socketAddress()", () => {
       ]);
     });
   });
+
+  describe("alternate IPv4 literal rejection", () => {
+    it("should reject hex-dotted octets in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowLoopback: false } },
+      });
+
+      const result = parser.parse("0x7f.0x0.0x0.0x1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "0x7f.0x0.0x0.0x1" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
+
+    it("should reject mixed hex/decimal dotted in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowLoopback: false } },
+      });
+
+      const result = parser.parse("0x7f.0.0.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "0x7f.0.0.1" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
+
+    it("should reject single hex integer in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowLoopback: false } },
+      });
+
+      const result = parser.parse("0x7f000001");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "0x7f000001" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
+
+    it("should reject single large decimal integer in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowLoopback: false } },
+      });
+
+      const result = parser.parse("2130706433");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "2130706433" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
+
+    it("should reject 2-part hex dotted in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowLoopback: false } },
+      });
+
+      const result = parser.parse("0x7f.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "0x7f.1" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
+
+    it("should reject 3-part hex dotted in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowLoopback: false } },
+      });
+
+      const result = parser.parse("0x7f.0.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "0x7f.0.1" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
+
+    it("should reject hex-dotted with port in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowLoopback: false } },
+      });
+
+      const result = parser.parse("0x7f.0x0.0x0.0x1:80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "0x7f.0x0.0x0.0x1" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
+
+    it("should reject uppercase hex in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowLoopback: false } },
+      });
+
+      const result = parser.parse("0X7F000001");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "0X7F000001" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
+
+    it("should reject private IP in hex-dotted in both mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowPrivate: false } },
+      });
+
+      const result = parser.parse("0xC0.0xA8.0x01.0x01");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "0xC0.0xA8.0x01.0x01" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
+
+    it("should reject hex-dotted octets in hostname mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "hostname" },
+      });
+
+      const result = parser.parse("0x7f.0x0.0x0.0x1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "0x7f.0x0.0x0.0x1" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
+
+    it("should reject single hex integer in hostname mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "hostname" },
+      });
+
+      const result = parser.parse("0x7f000001");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "0x7f000001" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
+
+    it("should still accept non-hex alphanumeric dotted hostnames", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowLoopback: false } },
+      });
+
+      // "192e0" is not hex-prefixed, so it's a valid hostname label
+      const result1 = parser.parse("192e0.168.1.1");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value.host, "192e0.168.1.1");
+
+      // Purely alphabetic dotted hostnames remain valid
+      const result2 = parser.parse("abc.def.ghi.jkl");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value.host, "abc.def.ghi.jkl");
+    });
+
+    it("should still accept valid hostnames and IPs alongside alt literal rejection", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowPrivate: false } },
+      });
+
+      const result1 = parser.parse("example.com:443");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value.host, "example.com");
+
+      const result2 = parser.parse("8.8.8.8:53");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value.host, "8.8.8.8");
+    });
+
+    it("should use custom invalidFormat over alt literal error", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowLoopback: false } },
+        errors: {
+          invalidFormat: message`Custom error`,
+        },
+      });
+
+      const result = parser.parse("0x7f000001");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Custom error" },
+      ]);
+    });
+
+    it("should not flag small decimal integers as alt IPv4 literals", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both" },
+      });
+
+      // Single-label numeric hostname ≤ 255 should be accepted
+      const result = parser.parse("123");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "123");
+    });
+
+    it("should reject single large decimal integer in hostname mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "hostname" },
+      });
+
+      const result = parser.parse("2130706433");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "2130706433" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
+  });
 });
 
 describe("macAddress()", () => {
