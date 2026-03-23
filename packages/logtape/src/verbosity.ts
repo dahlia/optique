@@ -4,6 +4,7 @@ import type { Parser } from "@optique/core/parser";
 import { type Message, message } from "@optique/core/message";
 import type { OptionName } from "@optique/core/usage";
 import type { LogLevel } from "@logtape/logtape";
+import { validateLogLevel } from "./loglevel.ts";
 
 /**
  * Options for creating a verbosity parser.
@@ -67,6 +68,7 @@ const WARNING_INDEX = 2;
  *
  * @param options Configuration options for the verbosity parser.
  * @returns A {@link Parser} that produces a {@link LogLevel}.
+ * @throws {TypeError} If `baseLevel` is not a valid log level.
  *
  * @example Basic usage
  * ```typescript
@@ -103,6 +105,8 @@ export function verbosity(
   const short = (options.short ?? "-v") as OptionName;
   const long = (options.long ?? "--verbose") as OptionName;
   const baseLevel = options.baseLevel ?? "warning";
+
+  validateLogLevel(baseLevel, "baseLevel");
 
   // Find the index of the base level
   const baseIndex = VERBOSITY_LEVELS.indexOf(baseLevel);

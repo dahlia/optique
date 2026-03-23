@@ -19,6 +19,24 @@ export const LOG_LEVELS: readonly LogLevel[] = [
 ] as const;
 
 /**
+ * Validates that the given value is a valid {@link LogLevel}.
+ *
+ * @param value The value to validate.
+ * @param paramName The parameter name for the error message.
+ * @throws {TypeError} If the value is not a valid log level.
+ * @since 1.0.0
+ */
+export function validateLogLevel(value: LogLevel, paramName: string): void {
+  if (!(LOG_LEVELS as readonly string[]).includes(value)) {
+    throw new TypeError(
+      `Invalid log level for ${paramName}: ${String(value)}.  Expected ${
+        LOG_LEVELS.map((l) => `"${l}"`).join(", ")
+      }.`,
+    );
+  }
+}
+
+/**
  * Options for creating a log level value parser.
  * @since 0.8.0
  */
