@@ -157,6 +157,12 @@ Limitations
     async Zod features like `refine(async ...)` cannot be used. Perform async
     validation after parsing if needed.
 
+ -  *Boolean parsing in unions*: The CLI-friendly boolean parsing (accepting
+    `true`/`false`, `1`/`0`, `yes`/`no`, `on`/`off`) applies only when the
+    entire schema is recognized as a boolean type.  When `z.coerce.boolean()`
+    appears as one arm of a `z.union()`, the union's arm precedence is
+    preserved and Zod's native coercion semantics apply.
+
 The Zod integration provides a powerful way to reuse validation logic across
 your entire application while maintaining full type safety and excellent error
 messages.

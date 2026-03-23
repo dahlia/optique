@@ -272,62 +272,6 @@ function preConvertBoolean(
 }
 
 /**
- * Detects whether a Zod schema contains async refinements or transforms
- * by inspecting the internal check/effect structure without executing
- * user code.  Handles both Zod v3 (ZodEffects) and Zod v4 (inline checks
- * and pipe wrappers).
- */
-function hasAsyncChecks(schema: z.Schema<unknown>): boolean {
-  const def = (schema as ZodSchemaInternal)._def;
-  if (!def) return false;
-
-  // Zod v4: inline checks on the schema itself (e.g., .refine(async ...))
-  if (Array.isArray(def.checks)) {
-    for (const check of def.checks) {
-      const fn =
-        (check as unknown as { def?: { fn?: (...args: never) => unknown } })
-          .def?.fn;
-      if (
-        typeof fn === "function" && fn.constructor.name === "AsyncFunction"
-      ) {
-        return true;
-      }
-    }
-  }
-
-  // Zod v3: ZodEffects with async refinement or transform
-  if (def.effect != null) {
-    const effect = def.effect as Record<string, unknown>;
-    const fn = (effect.refinement ?? effect.transform) as
-      | ((...args: never) => unknown)
-      | undefined;
-    if (
-      typeof fn === "function" && fn.constructor.name === "AsyncFunction"
-    ) {
-      return true;
-    }
-  }
-
-  // Zod v4 transform schema: _def.transform is the transform function
-  if (
-    typeof def.transform === "function" &&
-    def.transform.constructor.name === "AsyncFunction"
-  ) {
-    return true;
-  }
-
-  // Recurse into wrappers that may contain the async check
-  const inner = def.innerType ?? def.schema ?? def.in;
-  if (inner != null && hasAsyncChecks(inner)) return true;
-
-  // Zod v4 pipe: also check the output side (e.g., .transform(async ...))
-  const out = def.out;
-  if (out != null && hasAsyncChecks(out)) return true;
-
-  return false;
-}
-
-/**
  * Infers an appropriate metavar string from a Zod schema.
  *
  * This function analyzes the Zod schema's internal structure to determine
@@ -679,6 +623,26 @@ export function zod<T>(
   const metavar = options.metavar ?? inferMetavar(schema);
   ensureNonEmptyString(metavar);
 
+  // For coerced boolean schemas, probe safeParse(true) once at
+  // construction time to detect async refinements/transforms that
+  // static analysis cannot catch (e.g., superRefine(async ...),
+  // refine(() => Promise.resolve(...))).  Non-async errors from
+  // throwing refinements are caught and ignored.
+  if (boolInfo.isBoolean && boolInfo.isCoerced) {
+    try {
+      schema.safeParse(true);
+    } catch (error) {
+      if (error instanceof Error && isZodAsyncError(error)) {
+        throw new TypeError(
+          "Async Zod schemas (e.g., async refinements) are not supported " +
+            "by zod(). Use synchronous schemas instead.",
+        );
+      }
+      // Non-async errors (e.g., throwing refinements) are caught
+      // and ignored — they will be reported normally during parse().
+    }
+  }
+
   function doSafeParse(
     input: unknown,
     rawInput: string,
@@ -736,11 +700,10 @@ export function zod<T>(
    *     so that catch/default, custom errors, and async detection all
    *     work.  This is safe because `safeParse(string)` fails at the
    *     type level before any refinements execute.
-   *  -  *Coerced* (`z.coerce.boolean()`): probing is unsafe (coercion
-   *     succeeds and runs user refinements).  Static async detection
-   *     catches `async` keyword functions; custom errors use a real
-   *     `ZodError` constructed from the imported class.  No schema
-   *     logic is executed for invalid literals.
+   *  -  *Coerced* (`z.coerce.boolean()`): async schemas are already
+   *     detected at construction time (via the `safeParse(true)` probe),
+   *     so no runtime probe is needed.  Custom errors use a real
+   *     `ZodError` constructed from the imported class.
    */
   function handleBooleanLiteralError(
     boolResult: ValueParserResult<boolean>,
@@ -753,16 +716,7 @@ export function zod<T>(
       return doSafeParse(rawInput, rawInput);
     }
 
-    // Coerced schemas: detect async via static analysis only.
-    // No safeParse() probe — that would execute user refinements
-    // on a fabricated value, which can mutate state or crash.
-    if (hasAsyncChecks(schema)) {
-      throw new TypeError(
-        "Async Zod schemas (e.g., async refinements) are not supported " +
-          "by zod(). Use synchronous schemas instead.",
-      );
-    }
-
+    // Coerced schemas: async already detected at construction time.
     if (options.errors?.zodError) {
       if (typeof options.errors.zodError !== "function") {
         return { success: false, error: options.errors.zodError };

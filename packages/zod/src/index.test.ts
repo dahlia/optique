@@ -1167,27 +1167,25 @@ describe("zod()", () => {
       assert.equal(offResult.value, "off");
     });
 
-    it("should throw TypeError for async superRefine on valid input", () => {
+    it("should throw TypeError for async superRefine at construction", () => {
       const asyncSchema = z.coerce.boolean().superRefine(
         // deno-lint-ignore require-await
         async (v, ctx) => {
           if (!v) ctx.addIssue({ code: "custom", message: "bad" });
         },
       );
-      const parser = zod(asyncSchema as never);
-      // Async detected via doSafeParse on valid boolean literals
+      // Async detected at construction time via safeParse(true) probe
       assert.throws(
-        () => parser.parse("true"),
+        () => zod(asyncSchema as never),
         { name: "TypeError" },
       );
     });
 
-    it("should throw TypeError for async boolean transforms on invalid input", () => {
+    it("should throw TypeError for async boolean transforms at construction", () => {
       // deno-lint-ignore require-await
       const asyncTransform = z.coerce.boolean().transform(async (v) => !v);
-      const parser = zod(asyncTransform as never);
       assert.throws(
-        () => parser.parse("maybe"),
+        () => zod(asyncTransform as never),
         { name: "TypeError" },
       );
     });
