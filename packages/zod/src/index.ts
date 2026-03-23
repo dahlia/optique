@@ -237,41 +237,6 @@ function analyzeBooleanInner(
 }
 
 /**
- * Checks whether a schema contains a coerced boolean anywhere in its
- * structure (including inside unions).  Used to apply boolean literal
- * pre-conversion to schemas that aren't exclusively boolean but
- * contain a boolean arm that would otherwise silently misparse.
- */
-function containsCoercedBoolean(schema: z.Schema<unknown>): boolean {
-  const def = (schema as ZodSchemaInternal)._def;
-  if (!def) return false;
-  const typeName = def.typeName ?? def.type;
-
-  if (
-    (typeName === "ZodBoolean" || typeName === "boolean") &&
-    def.coerce === true
-  ) {
-    return true;
-  }
-
-  // Check union arms
-  if (typeName === "ZodUnion" || typeName === "union") {
-    const options = def.options;
-    if (Array.isArray(options)) {
-      return options.some((opt: z.Schema<unknown>) =>
-        containsCoercedBoolean(opt)
-      );
-    }
-  }
-
-  // Unwrap wrappers
-  const inner = def.innerType ?? def.schema ?? def.in;
-  if (inner != null) return containsCoercedBoolean(inner);
-
-  return false;
-}
-
-/**
  * Pre-converts a CLI string input to an actual boolean value using
  * CLI-friendly literals (true/false, 1/0, yes/no, on/off).
  */
@@ -708,8 +673,6 @@ export function zod<T>(
 ): ValueParser<"sync", T> {
   const choices = inferChoices(schema);
   const boolInfo = analyzeBooleanSchema(schema);
-  const hasCoercedBool = !boolInfo.isBoolean &&
-    containsCoercedBoolean(schema);
   const metavar = options.metavar ?? inferMetavar(schema);
   ensureNonEmptyString(metavar);
 
@@ -854,16 +817,6 @@ export function zod<T>(
           return handleBooleanLiteralError(boolResult, input);
         }
         return doSafeParse(boolResult.value, input);
-      }
-      // Schemas containing a coerced boolean arm (e.g., unions):
-      // pre-convert recognized boolean literals to prevent JS
-      // truthiness coercion; unrecognized input falls through to
-      // safeParse so other schema arms can handle it.
-      if (hasCoercedBool) {
-        const boolResult = preConvertBoolean(input);
-        if (boolResult.success) {
-          return doSafeParse(boolResult.value, input);
-        }
       }
       return doSafeParse(input, input);
     },
