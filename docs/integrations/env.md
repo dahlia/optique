@@ -306,11 +306,20 @@ import { zod } from "@optique/zod";
 const envContext = createEnvContext({ prefix: "MYAPP_" });
 
 const logLevel = bindEnv(
-  option("--log-level", zod(z.enum(["debug", "info", "warn", "error"]), { placeholder: "debug" })),
+  option(
+    "--log-level",
+    zod(
+      z.enum(["debug", "info", "warn", "error"]),
+      { placeholder: "debug" },
+    ),
+  ),
   {
     context: envContext,
     key: "LOG_LEVEL",
-    parser: zod(z.enum(["debug", "info", "warn", "error"]), { placeholder: "debug" }),
+    parser: zod(
+      z.enum(["debug", "info", "warn", "error"]),
+      { placeholder: "debug" },
+    ),
     default: "info" as const,
   },
 );

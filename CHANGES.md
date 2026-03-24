@@ -122,7 +122,10 @@ To be released.
     placeholder values during two-phase parsing.  `prompt()` now uses
     `Parser.placeholder` instead of a branded sentinel when deferring,
     so `map()` transforms always receive valid values and dynamic contexts
-    observe structurally valid objects.  This removes the entire
+    observe structurally valid objects.  Note that `map()` intentionally
+    does not propagate `deferredKeys`, so mapped structured outputs may
+    still carry placeholder values for deferred fields.  This removes the
+    entire
     sanitization machinery (~1000 lines of proxy-based stripping code)
     from *@optique/core* and *@optique/config*.  [[#307], [#407], [#727]]
 
@@ -1858,9 +1861,9 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     A new `format` option in `ValibotParserOptions` allows custom formatting.
     [[#285], [#706]]
 
- -  `valibot()` now requires a `placeholder` option in `ValibotParserOptions`.
-    This value is used as a type-appropriate stand-in during deferred prompt
-    resolution.  [[#407], [#727]]
+ -  *Breaking change:* `valibot()` now requires a `placeholder` option in
+    `ValibotParserOptions`.  This value is used as a type-appropriate stand-in
+    during deferred prompt resolution.  [[#407], [#727]]
 
 [#281]: https://github.com/dahlia/optique/issues/281
 [#285]: https://github.com/dahlia/optique/issues/285
@@ -1873,9 +1876,9 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
 ### @optique/zod
 
- -  `zod()` now requires a `placeholder` option in `ZodParserOptions`.
-    This value is used as a type-appropriate stand-in during deferred prompt
-    resolution.  [[#407], [#727]]
+ -  *Breaking change:* `zod()` now requires a `placeholder` option in
+    `ZodParserOptions`.  This value is used as a type-appropriate stand-in
+    during deferred prompt resolution.  [[#407], [#727]]
 
  -  `zod()` now exposes choice metadata for `z.enum()`, string-valued
     `z.nativeEnum()` and `z.literal()` schemas, and `z.union()` schemas

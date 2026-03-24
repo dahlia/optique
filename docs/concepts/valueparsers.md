@@ -3180,6 +3180,7 @@ function parser<T>(): ValueParser<"sync", T> {
 return {
 $mode: "sync",
 metavar: "VALUE",
+// Generic T has no concrete default; cast undefined to satisfy the type:
 placeholder: undefined as unknown as T,
 format() { return ""; },
 // ---cut-before---
