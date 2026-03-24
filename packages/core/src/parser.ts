@@ -1043,7 +1043,7 @@ function buildDocPage(
     }
   }
   const sections: DocSection[] = buildingSections;
-  const usage = cloneUsage(normalizeUsage(parser.usage));
+  const usage = [...normalizeUsage(parser.usage)];
   const maybeApplyCommandUsageLine = (
     term: UsageTerm | undefined,
     arg: string,
@@ -1062,9 +1062,7 @@ function buildDocPage(
     const customUsageLine = typeof term.usageLine === "function"
       ? term.usageLine(defaultUsageLine)
       : term.usageLine;
-    const normalizedCustomUsageLine = cloneUsage(
-      normalizeUsage(customUsageLine),
-    );
+    const normalizedCustomUsageLine = normalizeUsage(customUsageLine);
     usage.splice(
       usageIndex + 1,
       usage.length - (usageIndex + 1),
@@ -1101,9 +1099,7 @@ function buildDocPage(
       const customUsageLine = typeof first.usageLine === "function"
         ? first.usageLine(defaultUsageLine)
         : first.usageLine;
-      const normalizedCustomUsageLine = cloneUsage(
-        normalizeUsage(customUsageLine),
-      );
+      const normalizedCustomUsageLine = normalizeUsage(customUsageLine);
       usage.splice(1, usage.length - 1, ...normalizedCustomUsageLine);
     }
   }

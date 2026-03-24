@@ -2385,6 +2385,61 @@ describe("normalizeUsage", () => {
 
       assert.deepEqual(original, originalCopy);
     });
+
+    it("should return referentially distinct argument terms", () => {
+      const input: Usage = [{ type: "argument", metavar: "FILE" }];
+      const result = normalizeUsage(input);
+      assert.deepEqual(result, input);
+      assert.notEqual(result[0], input[0]);
+    });
+
+    it("should return referentially distinct option terms", () => {
+      const term = { type: "option", names: ["--verbose", "-v"] } as const;
+      const input: Usage = [term];
+      const result = normalizeUsage(input);
+      assert.deepEqual(result, input);
+      assert.notEqual(result[0], input[0]);
+      assert.ok(
+        result[0].type === "option" && result[0].names !== term.names,
+      );
+    });
+
+    it("should return referentially distinct command terms", () => {
+      const input: Usage = [{ type: "command", name: "init" }];
+      const result = normalizeUsage(input);
+      assert.deepEqual(result, input);
+      assert.notEqual(result[0], input[0]);
+    });
+
+    it("should return referentially distinct literal terms", () => {
+      const input: Usage = [{ type: "literal", value: "foo" }];
+      const result = normalizeUsage(input);
+      assert.deepEqual(result, input);
+      assert.notEqual(result[0], input[0]);
+    });
+
+    it("should return referentially distinct passthrough terms", () => {
+      const input: Usage = [{ type: "passthrough" }];
+      const result = normalizeUsage(input);
+      assert.deepEqual(result, input);
+      assert.notEqual(result[0], input[0]);
+    });
+
+    it("should return referentially distinct ellipsis terms", () => {
+      const input: Usage = [{ type: "ellipsis" }];
+      const result = normalizeUsage(input);
+      assert.deepEqual(result, input);
+      assert.notEqual(result[0], input[0]);
+    });
+
+    it("should return referentially distinct leaf terms inside containers", () => {
+      const innerArg = { type: "argument", metavar: "FILE" } as const;
+      const input: Usage = [{ type: "optional", terms: [innerArg] }];
+      const result = normalizeUsage(input);
+      assert.deepEqual(result, input);
+      assert.ok(result[0].type === "optional");
+      assert.notEqual(result[0].terms[0], innerArg);
+    });
   });
 
   describe("sorting behavior", () => {
