@@ -3254,6 +3254,8 @@ export interface EmailOptions {
  * @throws {TypeError} If any `allowedDomains` entry is not a string, has
  *   leading/trailing whitespace, starts with `"@"`, is empty, lacks a dot,
  *   has invalid hostname label syntax, or is an IPv4-like dotted-quad.
+ * @throws {TypeError} If `placeholder` type does not match `allowMultiple`
+ *   mode (string for single, array for multiple).
  * @since 0.10.0
  *
  * @example
@@ -3286,6 +3288,18 @@ export function email(
   ensureNonEmptyString(metavar);
 
   const allowMultiple = options?.allowMultiple ?? false;
+  if (options?.placeholder != null) {
+    if (allowMultiple && !Array.isArray(options.placeholder)) {
+      throw new TypeError(
+        "email() placeholder must be an array when allowMultiple is true.",
+      );
+    }
+    if (!allowMultiple && typeof options.placeholder !== "string") {
+      throw new TypeError(
+        "email() placeholder must be a string when allowMultiple is false.",
+      );
+    }
+  }
   const allowDisplayName = options?.allowDisplayName ?? false;
   const lowercase = options?.lowercase ?? false;
   const allowedDomains = options?.allowedDomains != null
