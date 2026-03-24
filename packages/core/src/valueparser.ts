@@ -3515,9 +3515,12 @@ export function email(
   return {
     $mode: "sync" as const,
     metavar,
-    placeholder: (options?.allowMultiple ? ([] as readonly string[]) : "") as
-      & string
-      & readonly string[],
+    placeholder:
+      (options?.allowMultiple
+        ? (["user@example.com"] as readonly string[])
+        : "user@example.com") as
+          & string
+          & readonly string[],
     parse(
       input: string,
     ): ValueParserResult<string> | ValueParserResult<readonly string[]> {
@@ -3887,7 +3890,10 @@ export function socketAddress(
   return {
     $mode: "sync",
     metavar,
-    placeholder: { host: "", port: 0 },
+    placeholder: {
+      host: hostType === "ip" ? "0.0.0.0" : "localhost",
+      port: defaultPort ?? 1,
+    },
     parse(input: string): ValueParserResult<SocketAddressValue> {
       const trimmed = input.trim();
       const canOmitPort = defaultPort !== undefined && !requirePort;
@@ -4528,7 +4534,15 @@ export function portRange(
   return {
     $mode: "sync",
     metavar,
-    placeholder: isBigInt ? { start: 0n, end: 0n } : { start: 0, end: 0 },
+    placeholder: (isBigInt
+      ? {
+        start: portParser.placeholder as bigint,
+        end: portParser.placeholder as bigint,
+      }
+      : {
+        start: portParser.placeholder as number,
+        end: portParser.placeholder as number,
+      }) as PortRangeValueNumber | PortRangeValueBigInt,
     parse(input: string): ValueParserResult<
       PortRangeValueNumber | PortRangeValueBigInt
     > {
