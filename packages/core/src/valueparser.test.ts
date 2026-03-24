@@ -11785,7 +11785,7 @@ describe("ip()", () => {
     });
 
     it("should not apply IPv4-mapped checks when version is 6", () => {
-      const parser = ip({ version: 6 });
+      const parser = ip({ version: 6, ipv4: { allowPrivate: false } });
       // ::ffff:192.168.0.1 is a valid IPv6 address; no IPv4 restrictions
       const result = parser.parse("::ffff:192.168.0.1");
       assert.ok(result.success);
