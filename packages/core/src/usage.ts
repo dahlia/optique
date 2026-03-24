@@ -1,4 +1,5 @@
 import type { NonEmptyString } from "./nonempty.ts";
+import { validateProgramName } from "./validate.ts";
 
 /**
  * Represents the name of a command-line option.  There are four types of
@@ -437,12 +438,15 @@ export interface UsageFormatOptions {
  * @param options Optional formatting options to customize the output.
  *                See {@link UsageFormatOptions} for available options.
  * @returns A formatted string representation of the usage description.
+ * @throws {TypeError} If `programName` is not a string, is empty,
+ *         whitespace-only, or contains control characters.
  */
 export function formatUsage(
   programName: string,
   usage: Usage,
   options: UsageFormatOptions = {},
 ): string {
+  validateProgramName(programName);
   usage = normalizeUsage(filterUsageForDisplay(usage));
   if (options.expandCommands) {
     const lastTerm = usage.at(-1)!;
