@@ -826,6 +826,11 @@ To be released.
     Interpolated terms are now deep-cloned via `cloneMessageTerm()`.
     [[#505], [#718]]
 
+ -  Fixed `optionNames()`, `values()`, and `url()` message term constructors
+    storing caller-owned arrays and `URL` objects by reference, allowing
+    later caller-side mutations to corrupt already-created terms.
+    These constructors now defensively copy their inputs.  [[#506], [#719]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -941,6 +946,7 @@ To be released.
 [#490]: https://github.com/dahlia/optique/pull/490
 [#500]: https://github.com/dahlia/optique/issues/500
 [#505]: https://github.com/dahlia/optique/issues/505
+[#506]: https://github.com/dahlia/optique/issues/506
 [#507]: https://github.com/dahlia/optique/issues/507
 [#508]: https://github.com/dahlia/optique/issues/508
 [#512]: https://github.com/dahlia/optique/pull/512
@@ -1057,6 +1063,7 @@ To be released.
 [#716]: https://github.com/dahlia/optique/pull/716
 [#717]: https://github.com/dahlia/optique/pull/717
 [#718]: https://github.com/dahlia/optique/pull/718
+[#719]: https://github.com/dahlia/optique/pull/719
 
 ### @optique/config
 
