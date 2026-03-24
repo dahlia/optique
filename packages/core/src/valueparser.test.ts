@@ -10148,6 +10148,20 @@ describe("macAddress()", () => {
       assert.ok(result.success);
       assert.strictEqual(result.value, "0A-01-2B-03-4D-05");
     });
+
+    it("should keep dot-separated input strict (4 hex chars per group)", () => {
+      const parser = macAddress({ separator: "." });
+
+      assert.ok(!parser.parse("01.23.45").success);
+      assert.ok(!parser.parse("1.0203.0405").success);
+    });
+
+    it("should keep no-separator input strict (12 hex chars)", () => {
+      const parser = macAddress({ separator: "none" });
+
+      assert.ok(!parser.parse("012345").success);
+      assert.ok(!parser.parse("00010203045").success);
+    });
   });
 
   describe("custom error messages", () => {

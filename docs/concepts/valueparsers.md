@@ -1794,6 +1794,11 @@ if (result.success) {
 }
 ~~~~
 
+> [!NOTE]
+> Dot-separated (Cisco) and no-separator formats require exactly the original
+> fixed widths (4 hex digits per group and 12 hex digits total, respectively)
+> and do not accept short-form input.
+
 By default, the parser accepts any of these formats. You can restrict it to
 a specific format using the `separator` option:
 
