@@ -646,6 +646,11 @@ export function zod<T>(
       "zod() requires an options object with a placeholder property.",
     );
   }
+  if (!("placeholder" in options)) {
+    throw new TypeError(
+      "zod() options must include a placeholder property.",
+    );
+  }
   const choices = inferChoices(schema);
   const boolInfo = analyzeBooleanSchema(schema);
   const metavar = options.metavar ??

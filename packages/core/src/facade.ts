@@ -134,7 +134,24 @@ function prepareParsedForContexts(
       }
     }
     if (hasMatchingKey) {
-      const clone: Record<PropertyKey, unknown> = Array.isArray(parsed)
+      // If ALL data properties are deferred, the entire object is a
+      // placeholder shell — return undefined instead of a truthy
+      // object with all-undefined fields.
+      const isArray = Array.isArray(parsed);
+      let allDeferred = true;
+      for (const key of ownKeys) {
+        if (isArray && key === "length") continue;
+        const desc = Object.getOwnPropertyDescriptor(parsed as object, key);
+        if (
+          desc != null && "value" in desc && getDeferredEntry(key) === undefined
+        ) {
+          allDeferred = false;
+          break;
+        }
+      }
+      if (allDeferred) return undefined;
+
+      const clone: Record<PropertyKey, unknown> = isArray
         ? new Array(parsed.length) as unknown as Record<PropertyKey, unknown>
         : Object.create(Object.getPrototypeOf(parsed));
       for (const key of ownKeys) {

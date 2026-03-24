@@ -644,6 +644,11 @@ export function valibot<T>(
       "valibot() requires an options object with a placeholder property.",
     );
   }
+  if (!("placeholder" in options)) {
+    throw new TypeError(
+      "valibot() options must include a placeholder property.",
+    );
+  }
   if (containsAsyncSchema(schema)) {
     throw new TypeError(
       "Async Valibot schemas (e.g., async validations) are not " +

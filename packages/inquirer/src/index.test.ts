@@ -1457,7 +1457,7 @@ describe("prompt()", () => {
           },
         );
 
-        assert.deepEqual(phase2Parsed, { apiKey: undefined });
+        assert.equal(phase2Parsed, undefined);
         assert.deepEqual(result, { apiKey: "config-secret" });
       },
     );
@@ -1945,7 +1945,7 @@ describe("prompt()", () => {
         },
       });
 
-      assert.deepEqual(loaderParsed, { apiKey: undefined });
+      assert.equal(loaderParsed, undefined);
       assert.deepEqual(result, { apiKey: "config-secret" });
     });
 
@@ -1999,7 +1999,9 @@ describe("prompt()", () => {
           },
         );
 
-        assert.equal(loaderMetadata, "seen");
+        // When all fields are deferred, the entire object is replaced
+        // with undefined, so the WeakMap identity check does not apply.
+        assert.equal(loaderMetadata, undefined);
         assert.deepEqual(result, { apiKey: "config-secret" });
       },
     );
