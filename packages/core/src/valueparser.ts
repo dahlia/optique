@@ -3648,9 +3648,73 @@ export function socketAddress(
     return /^\d+\.\d+\.\d+\.\d+$/.test(input);
   }
 
+  function looksLikeAltIpv4Literal(input: string): boolean {
+    // Single hex integer within 32-bit IPv4 range: 0x7f000001.
+    // Values above 0xFFFFFFFF cannot represent an IPv4 address and
+    // are allowed as single-label hostnames.
+    if (/^0[xX][0-9a-fA-F]+$/.test(input)) {
+      const n = parseInt(input.slice(2), 16);
+      return n <= 0xFFFFFFFF;
+    }
+
+    // Single octal integer within 32-bit IPv4 range: 017700000001.
+    // A leading zero followed by octal digits is interpreted as octal
+    // by WHATWG URL parsers and platform resolvers (e.g., Node's
+    // dns.lookup).  Numbers containing digits 8-9 are not valid octal
+    // and fall through to hostname validation.
+    if (/^0[0-7]+$/.test(input)) {
+      const n = parseInt(input.slice(1), 8);
+      return n <= 0xFFFFFFFF;
+    }
+
+    // Dotted forms (2-4 parts) where at least one part uses hex or
+    // octal notation.  Parts are parsed with WHATWG IPv4 number
+    // semantics (0x → hex, leading 0 → octal, else decimal) and
+    // checked against the WHATWG range: first N-1 parts must be ≤ 255,
+    // last part < 256^(5-N).
+    const parts = input.split(".");
+    if (parts.length >= 2 && parts.length <= 4) {
+      const numericOrHex = /^(?:[0-9]+|0[xX][0-9a-fA-F]+)$/;
+      if (
+        parts.every((p) => numericOrHex.test(p)) &&
+        parts.some((p) => /^0[xX]/i.test(p) || (p.length > 1 && p[0] === "0"))
+      ) {
+        const values: number[] = [];
+        for (const p of parts) {
+          if (/^0[xX]/i.test(p)) {
+            values.push(parseInt(p.slice(2), 16));
+          } else if (p.length > 1 && p[0] === "0") {
+            // WHATWG treats leading-zero numbers as octal.  If the
+            // part contains non-octal digits (8, 9), WHATWG's IPv4
+            // number parser fails, so the whole form is not IPv4.
+            if (/[89]/.test(p)) return false;
+            values.push(parseInt(p, 8));
+          } else {
+            values.push(Number(p));
+          }
+        }
+        const lastMax = 256 ** (5 - parts.length);
+        return values.slice(0, -1).every((v) => v <= 255) &&
+          values[values.length - 1] < lastMax;
+      }
+    }
+
+    return false;
+  }
+
   function parseHost(hostInput: string): ValueParserResult<string> {
     if (hostType === "hostname") {
-      // Reject IP-shaped input when type is "hostname"
+      // Reject IP-shaped input when type is "hostname".
+      // Check alternate forms first so that octal-dotted inputs like
+      // 0177.0.0.1 get the specific "non-standard notation" error
+      // instead of the generic "expected a hostname" error.
+      if (looksLikeAltIpv4Literal(hostInput)) {
+        return {
+          success: false,
+          error:
+            message`${hostInput} appears to be a non-standard IPv4 address notation.`,
+        };
+      }
       if (looksLikeIpv4(hostInput)) {
         return {
           success: false,
@@ -3661,7 +3725,16 @@ export function socketAddress(
     } else if (hostType === "ip") {
       return ipParser.parse(hostInput);
     } else {
-      // "both" mode: route by lexical form, no fallback
+      // "both" mode: route by lexical form, no fallback.
+      // Check alternate forms first so that octal-dotted inputs get
+      // the specific error instead of failing in ipv4().
+      if (looksLikeAltIpv4Literal(hostInput)) {
+        return {
+          success: false,
+          error:
+            message`${hostInput} appears to be a non-standard IPv4 address notation.`,
+        };
+      }
       if (looksLikeIpv4(hostInput)) {
         // IP-shaped input: validate as IP only (enforces restrictions)
         return ipParser.parse(hostInput);
@@ -3702,9 +3775,10 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
-        // Propagate specific IP parser errors for IP-shaped input;
-        // use the socket-level format error for everything else.
-        if (looksLikeIpv4(hostPart)) {
+        // Propagate specific IP parser errors for IP-shaped input
+        // (including alternate literal forms); use the socket-level
+        // format error for everything else.
+        if (looksLikeIpv4(hostPart) || looksLikeAltIpv4Literal(hostPart)) {
           return { success: false, error: hostResult.error };
         }
         return {
