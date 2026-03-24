@@ -103,13 +103,13 @@ To be released.
     had no validation at all, and `formatDocPage()` only rejected newlines.
     [[#431], [#724]]
 
- -  Added `placeholder` property to `ValueParser` interface (required) and
-    `Parser` interface (optional).  Every value parser now provides a
-    type-appropriate stand-in value (e.g., `""` for `string()`, `1` for
-    `port()`) used during deferred prompt resolution.  `option()` and
+ -  *Breaking change:* Added `placeholder` property to `ValueParser` interface
+    (required) and `Parser` interface (optional).  Every value parser now
+    provides a type-appropriate stand-in value (e.g., `""` for `string()`, `1`
+    for `port()`) used during deferred prompt resolution.  `option()` and
     `argument()` set `Parser.placeholder` from the value parser, and
-    combinators like `map()`, `optional()`, and `withDefault()` propagate
-    it through the parser chain.  [[#407], [#727]]
+    combinators like `map()`, `optional()`, and `withDefault()` propagate it
+    through the parser chain.  [[#407], [#727]]
 
  -  Added optional `placeholder` override to `string()`, `integer()`,
     `float()`, and `port()` options.  This allows customizing the stand-in
@@ -129,7 +129,7 @@ To be released.
     sanitization machinery (~1000 lines of proxy-based stripping code)
     from *@optique/core* and *@optique/config*.  [[#307], [#407], [#727]]
 
- -  Removed `placeholder` symbol and `isPlaceholderValue()` from
+ -  *Breaking change:* Removed `placeholder` symbol and `isPlaceholderValue()` from
     `@optique/core/context`.  These were part of the sentinel-based
     deferred prompt mechanism that has been replaced by the
     `ValueParser.placeholder` approach.  [[#407], [#727]]

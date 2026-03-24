@@ -96,7 +96,7 @@ import { zod } from "@optique/zod";
 import { z } from "zod";
 
 const port = option("-p", "--port",
-  zod(z.coerce.number().int().min(1024).max(65535), { placeholder: 0 }),
+  zod(z.coerce.number().int().min(1024).max(65535), { placeholder: 1024 }),
 );
 ~~~~
 

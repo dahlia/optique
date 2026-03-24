@@ -576,7 +576,7 @@ function portValidator(): ValueParser<"sync", number> {
   return {
     $mode: "sync",
     metavar: "PORT",
-    placeholder: 0,
+    placeholder: 1,
 
     // Validation using runtime environment data from annotations
     parse: (input: string, state?: unknown) => {
@@ -948,8 +948,9 @@ During phase 1, parsers whose values are not yet resolved (e.g., deferred
 interactive prompts) use the `ValueParser.placeholder` property to produce a
 type-appropriate stand-in value.  Because the placeholder is a valid
 inhabitant of the result type, `map()` transforms run normally on it and
-dynamic contexts receive structurally valid values rather than `undefined`.
-No sentinel symbols or runtime checks are needed.
+deferred parts are tracked via `deferredKeys` and selectively hidden as
+`undefined` before phase-two context collection.  No sentinel symbols or
+runtime checks are needed.
 
 ### Help and version always available
 
