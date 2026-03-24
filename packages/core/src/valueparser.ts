@@ -1026,6 +1026,8 @@ export function integer(
  *          integer type.
  * @throws {TypeError} If `options.type` is provided but is neither `"number"`
  *   nor `"bigint"`.
+ * @throws {RangeError} If the configured min/max range for number mode contains
+ *   no safe integers.
  */
 export function integer(
   options?: IntegerOptionsNumber | IntegerOptionsBigInt,
@@ -1119,6 +1121,20 @@ export function integer(
   ensureNonEmptyString(metavar);
   const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
   const minSafe = BigInt(Number.MIN_SAFE_INTEGER);
+  const safeMin = Math.max(
+    options?.min ?? Number.MIN_SAFE_INTEGER,
+    Number.MIN_SAFE_INTEGER,
+  );
+  const safeMax = Math.min(
+    options?.max ?? Number.MAX_SAFE_INTEGER,
+    Number.MAX_SAFE_INTEGER,
+  );
+  if (safeMin > safeMax) {
+    throw new RangeError(
+      "The configured integer range contains no safe integers. " +
+        'Use type: "bigint" instead.',
+    );
+  }
   const unsafeIntegerError = options?.errors?.unsafeInteger;
   function makeUnsafeIntegerError(
     input: string,
@@ -1140,11 +1156,7 @@ export function integer(
     $mode: "sync",
     metavar,
     placeholder: options?.placeholder ??
-      (options?.min != null && options.min > 0
-        ? options.min
-        : options?.max != null && options.max < 0
-        ? options.max
-        : 0),
+      (safeMin > 0 ? safeMin : safeMax < 0 ? safeMax : 0),
     parse(input: string): ValueParserResult<number> {
       if (!input.match(/^-?\d+$/)) {
         return {
