@@ -10039,6 +10039,37 @@ describe("socketAddress()", () => {
       assert.ok(result2.success);
       assert.strictEqual(result2.value.host, "db-to80");
     });
+
+    it("should reject IP-shaped split host before host-only fallback", () => {
+      // "192.168.0.1-80" with separator "-" and allowPrivate: false:
+      // the split finds host "192.168.0.1" (private, disallowed) + port
+      // "80" (valid).  The IP error must surface, not be masked by
+      // host-only accepting "192.168.0.1-80" as a hostname.
+      const parser = socketAddress({
+        separator: "-",
+        defaultPort: 80,
+        host: { type: "both", ip: { allowPrivate: false } },
+      });
+
+      const result = parser.parse("192.168.0.1-80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "192.168.0.1" },
+        { type: "text", text: " is a private IP address." },
+      ]);
+    });
+
+    it("should reject malformed IPv4 split host before host-only fallback", () => {
+      const parser = socketAddress({ separator: "-", defaultPort: 80 });
+
+      const result = parser.parse("999.999.999.999-80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a valid IPv4 address, but got " },
+        { type: "value", value: "999.999.999.999" },
+        { type: "text", text: "." },
+      ]);
+    });
   });
 });
 

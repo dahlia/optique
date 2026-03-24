@@ -3861,6 +3861,29 @@ export function socketAddress(
         };
       }
 
+      // If a split found a valid port but an IP-shaped invalid host,
+      // reject before trying host-only.  This prevents inputs like
+      // "192.168.0.1-80" from being silently accepted as hostnames
+      // when the IP is restricted.  Non-IP host errors are deferred
+      // until after host-only so that generic syntax failures (like
+      // "db-" with a trailing hyphen) don't block valid hostnames
+      // (like "db-to80").
+      if (firstHostError !== undefined) {
+        if (
+          looksLikeIpv4(firstHostError.hostPart) ||
+          looksLikeAltIpv4Literal(firstHostError.hostPart)
+        ) {
+          const errorMsg = options?.errors?.invalidFormat;
+          if (errorMsg) {
+            const msg = typeof errorMsg === "function"
+              ? errorMsg(input)
+              : errorMsg;
+            return { success: false, error: msg };
+          }
+          return { success: false, error: firstHostError.error };
+        }
+      }
+
       // Try host-only interpretation only when port can be omitted.
       // When port is required and a separator was found, the user
       // attempted a split — falling through to invalidFormat is more
@@ -3932,10 +3955,10 @@ export function socketAddress(
         }
       }
 
-      // If a split had a valid port but an invalid host, propagate
-      // specific host errors (e.g., IP-shaped).  This is checked after
-      // the host-only and trailing-separator paths so that custom
-      // invalidFormat never turns a valid host-only parse into a failure.
+      // If a split had a valid port but a non-IP invalid host (e.g.,
+      // generic syntax errors like a trailing hyphen), propagate the
+      // custom invalidFormat now.  IP-shaped host errors were already
+      // handled before the host-only path above.
       if (firstHostError !== undefined) {
         const errorMsg = options?.errors?.invalidFormat;
         if (errorMsg) {
@@ -3943,12 +3966,6 @@ export function socketAddress(
             ? errorMsg(input)
             : errorMsg;
           return { success: false, error: msg };
-        }
-        if (
-          looksLikeIpv4(firstHostError.hostPart) ||
-          looksLikeAltIpv4Literal(firstHostError.hostPart)
-        ) {
-          return { success: false, error: firstHostError.error };
         }
       }
 
