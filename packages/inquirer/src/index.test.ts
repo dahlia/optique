@@ -1950,7 +1950,7 @@ describe("prompt()", () => {
     });
 
     it(
-      "reuses scrubbed phase-two parsed identity across contexts and loaders",
+      "collapses all-deferred object to undefined for phase-two contexts and loaders",
       async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
