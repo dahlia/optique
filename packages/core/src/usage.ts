@@ -490,11 +490,20 @@ export function formatUsage(
   let first = true;
   for (const { text, width } of formatUsageTerms(usage, options)) {
     if (first) {
-      output += " ";
-      lineWidth += 1;
       first = false;
-    }
-    if (options.maxWidth != null && lineWidth + width > options.maxWidth) {
+      if (
+        options.maxWidth != null &&
+        lineWidth + 1 + width > options.maxWidth
+      ) {
+        output += "\n";
+        lineWidth = 0;
+      } else {
+        output += " ";
+        lineWidth += 1;
+      }
+    } else if (
+      options.maxWidth != null && lineWidth + width > options.maxWidth
+    ) {
       output += "\n";
       lineWidth = 0;
       if (text === " ") continue;

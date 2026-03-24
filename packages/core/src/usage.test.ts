@@ -615,7 +615,7 @@ describe("maxWidth option", () => {
       { type: "argument", metavar: "FILE" },
     ];
     const result = formatUsage("test", usage, { maxWidth: 10 });
-    assert.equal(result, "test \ncommand \n--verbose/\n-v FILE");
+    assert.equal(result, "test\ncommand \n--verbose/\n-v FILE");
   });
 
   it("should not wrap when content fits within maxWidth", () => {
@@ -647,7 +647,7 @@ describe("maxWidth option", () => {
       { type: "argument", metavar: "FILE" },
     ];
     const result = formatUsage("test", usage, { maxWidth: 1 });
-    assert.equal(result, "test \ncmd\n\nFILE");
+    assert.equal(result, "test\ncmd\n\nFILE");
   });
 
   it("should wrap multiple terms correctly", () => {
@@ -763,7 +763,7 @@ describe("maxWidth option", () => {
       { type: "command", name: "c" },
     ];
     const result = formatUsage("test", usage, { maxWidth: 3 });
-    assert.equal(result, "test \na b\nc");
+    assert.equal(result, "test\na b\nc");
   });
 
   it("should handle maxWidth of 0", () => {
@@ -772,7 +772,7 @@ describe("maxWidth option", () => {
       { type: "argument", metavar: "FILE" },
     ];
     const result = formatUsage("test", usage, { maxWidth: 0 });
-    assert.equal(result, "test \ncmd\n\nFILE");
+    assert.equal(result, "test\ncmd\n\nFILE");
   });
 
   it("should handle very long single term that exceeds maxWidth", () => {
@@ -787,7 +787,7 @@ describe("maxWidth option", () => {
     // Single term should not be broken, just placed on its own line
     assert.equal(
       result,
-      "test \n--very-very-long-option-name\n\nVERY_LONG_METAVAR",
+      "test\n--very-very-long-option-name\n\nVERY_LONG_METAVAR",
     );
   });
 
@@ -824,7 +824,7 @@ describe("maxWidth option", () => {
       maxWidth: 10,
       onlyShortestOptions: true,
     });
-    assert.equal(result, "test \ncommand -v\nFILE");
+    assert.equal(result, "test\ncommand -v\nFILE");
   });
 
   it("should combine maxWidth with both colors and onlyShortestOptions", () => {
