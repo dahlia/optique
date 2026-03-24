@@ -137,7 +137,11 @@ To be released.
 
  -  Fixed `getDocPage()` preserving hidden terms from custom `DocFragments`
     instead of filtering them.  `buildDocPage()` now filters out entries whose
-    terms are doc-hidden before assembling the final `DocPage`.  [[#494]]
+    terms are doc-hidden before assembling the final `DocPage`.  Additionally,
+    `deduplicateDocEntries()` and `deduplicateDocFragments()` now prefer visible
+    entries over doc-hidden ones when deduplicating by surface syntax, so
+    `or(hidden, visible)` with the same option name no longer discards the
+    visible copy.  [[#494], [#720]]
 
  -  Fixed `or()` and `longestMatch()` duplicating visible terms in
     documentation when branches share the same surface syntax.  [[#432], [#698]]
@@ -1069,6 +1073,7 @@ To be released.
 [#717]: https://github.com/dahlia/optique/pull/717
 [#718]: https://github.com/dahlia/optique/pull/718
 [#719]: https://github.com/dahlia/optique/pull/719
+[#720]: https://github.com/dahlia/optique/pull/720
 
 ### @optique/config
 
