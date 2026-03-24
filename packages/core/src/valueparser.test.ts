@@ -12434,6 +12434,17 @@ describe("cidr()", () => {
   });
 
   describe("IPv4-mapped IPv6 CIDR restrictions", () => {
+    it("should not apply IPv4-mapped checks when version is 6", () => {
+      const parser = cidr({ version: 6, ipv4: { allowPrivate: false } });
+      const result = parser.parse("::ffff:192.168.0.0/120");
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, {
+        address: "::ffff:c0a8:0",
+        prefix: 120,
+        version: 6,
+      });
+    });
+
     it("should reject IPv4-mapped private CIDR when allowPrivate is false", () => {
       const parser = cidr({ ipv4: { allowPrivate: false } });
       const result = parser.parse("::ffff:192.168.0.0/120");
