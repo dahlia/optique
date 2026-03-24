@@ -99,6 +99,13 @@ To be released.
     The `option()` and `flag()` overloads now require at least one option
     name argument.  [[#381], [#709]]
 
+ -  Added runtime validation of program names to `formatUsage()` and
+    broadened existing validation in `formatDocPage()`.  Both functions now
+    throw `TypeError` for non-string values, empty strings, whitespace-only
+    strings, and strings with control characters.  Previously `formatUsage()`
+    had no validation at all, and `formatDocPage()` only rejected newlines.
+    [[#431], [#724]]
+
  -  Added the `@optique/core/mode-dispatch` subpath export so sibling
     packages can share internal sync/async dispatch helpers without
     duplicating them.  [[#157]]
@@ -957,6 +964,7 @@ To be released.
 [#406]: https://github.com/dahlia/optique/issues/406
 [#425]: https://github.com/dahlia/optique/issues/425
 [#429]: https://github.com/dahlia/optique/issues/429
+[#431]: https://github.com/dahlia/optique/issues/431
 [#432]: https://github.com/dahlia/optique/issues/432
 [#439]: https://github.com/dahlia/optique/issues/439
 [#469]: https://github.com/dahlia/optique/issues/469
@@ -1091,6 +1099,7 @@ To be released.
 [#721]: https://github.com/dahlia/optique/pull/721
 [#722]: https://github.com/dahlia/optique/pull/722
 [#723]: https://github.com/dahlia/optique/pull/723
+[#724]: https://github.com/dahlia/optique/pull/724
 
 ### @optique/config
 

@@ -871,20 +871,64 @@ describe("programName parameter", () => {
     assert.equal(result2, "another-tool --verbose/-v");
   });
 
-  it("should handle empty program name", () => {
-    const usage: Usage = [
-      { type: "argument", metavar: "FILE" },
-    ];
-    const result = formatUsage("", usage);
-    assert.equal(result, " FILE");
-  });
-
   it("should handle program name with spaces", () => {
     const usage: Usage = [
       { type: "argument", metavar: "FILE" },
     ];
     const result = formatUsage("my program", usage);
     assert.equal(result, "my program FILE");
+  });
+
+  it("should throw TypeError for empty program name", () => {
+    const usage: Usage = [{ type: "argument", metavar: "FILE" }];
+    assert.throws(
+      () => formatUsage("", usage),
+      TypeError,
+    );
+  });
+
+  it("should throw TypeError for program name with control characters", () => {
+    const usage: Usage = [{ type: "argument", metavar: "FILE" }];
+    assert.throws(
+      () => formatUsage("bad\nname", usage),
+      TypeError,
+    );
+    assert.throws(
+      () => formatUsage("bad\rname", usage),
+      TypeError,
+    );
+    assert.throws(
+      () => formatUsage("bad\x00name", usage),
+      TypeError,
+    );
+  });
+
+  it("should throw TypeError for non-string program name", () => {
+    const usage: Usage = [{ type: "argument", metavar: "FILE" }];
+    assert.throws(
+      () => formatUsage(123 as never, usage),
+      TypeError,
+    );
+    assert.throws(
+      () => formatUsage(Symbol("x") as never, usage),
+      TypeError,
+    );
+  });
+
+  it("should throw TypeError for Unicode line-breaking characters", () => {
+    const usage: Usage = [{ type: "argument", metavar: "FILE" }];
+    assert.throws(
+      () => formatUsage("bad\x85name", usage),
+      TypeError,
+    );
+    assert.throws(
+      () => formatUsage("bad\u2028name", usage),
+      TypeError,
+    );
+    assert.throws(
+      () => formatUsage("bad\u2029name", usage),
+      TypeError,
+    );
   });
 });
 

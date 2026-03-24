@@ -1,4 +1,13 @@
 /**
+ * Matches Unicode control characters: C0 (U+0000–U+001F), DEL (U+007F),
+ * C1 (U+0080–U+009F), and line separators (U+2028, U+2029).
+ */
+// deno-lint-ignore no-control-regex
+const CONTROL_CHAR_RE = /[\x00-\x1f\x7f-\x9f\u2028\u2029]/;
+
+const CONTROL_CHAR_RE_GLOBAL = new RegExp(CONTROL_CHAR_RE.source, "g");
+
+/**
  * Escapes control characters in a string for readable error messages.
  *
  * @param value The string to escape.
@@ -6,8 +15,7 @@
  *          sequences.
  */
 export function escapeControlChars(value: string): string {
-  // deno-lint-ignore no-control-regex
-  return value.replace(/[\x00-\x1f\x7f]/g, (ch) => {
+  return value.replace(CONTROL_CHAR_RE_GLOBAL, (ch) => {
     const code = ch.charCodeAt(0);
     switch (code) {
       case 0x09:
@@ -17,7 +25,9 @@ export function escapeControlChars(value: string): string {
       case 0x0d:
         return "\\r";
       default:
-        return `\\x${code.toString(16).padStart(2, "0")}`;
+        return code > 0xff
+          ? `\\u${code.toString(16).padStart(4, "0")}`
+          : `\\x${code.toString(16).padStart(2, "0")}`;
     }
   });
 }
@@ -50,8 +60,7 @@ export function validateOptionNames(
           `"${escapeControlChars(name)}".`,
       );
     }
-    // deno-lint-ignore no-control-regex
-    if (/[\x00-\x1f\x7f]/.test(name)) {
+    if (CONTROL_CHAR_RE.test(name)) {
       throw new TypeError(
         `${label} name must not contain control characters: ` +
           `"${escapeControlChars(name)}".`,
@@ -104,8 +113,7 @@ export function validateCommandNames(
           `"${escapeControlChars(name)}".`,
       );
     }
-    // deno-lint-ignore no-control-regex
-    if (/[\x00-\x1f\x7f]/.test(name)) {
+    if (CONTROL_CHAR_RE.test(name)) {
       throw new TypeError(
         `${label} name must not contain control characters: ` +
           `"${escapeControlChars(name)}".`,
@@ -117,5 +125,36 @@ export function validateCommandNames(
           `"${escapeControlChars(name)}".`,
       );
     }
+  }
+}
+
+/**
+ * Validates a program name at runtime.
+ *
+ * Program names may contain spaces (e.g., file paths), but must not be empty,
+ * whitespace-only, or contain control characters.
+ *
+ * @param programName The program name to validate.
+ * @throws {TypeError} If the value is not a string, is empty,
+ *         whitespace-only, or contains control characters.
+ */
+export function validateProgramName(programName: string): void {
+  if (typeof programName !== "string") {
+    throw new TypeError("Program name must be a string.");
+  }
+  if (programName === "") {
+    throw new TypeError("Program name must not be empty.");
+  }
+  if (/^\s+$/.test(programName)) {
+    throw new TypeError(
+      `Program name must not be whitespace-only: ` +
+        `"${escapeControlChars(programName)}".`,
+    );
+  }
+  if (CONTROL_CHAR_RE.test(programName)) {
+    throw new TypeError(
+      `Program name must not contain control characters: ` +
+        `"${escapeControlChars(programName)}".`,
+    );
   }
 }
