@@ -149,6 +149,21 @@ describe("validateProgramName", () => {
 });
 
 describe("validateOptionNames", () => {
+  it("should reject C0 control characters", () => {
+    assert.throws(
+      () => validateOptionNames(["--bad\nname"], "Option"),
+      TypeError,
+    );
+    assert.throws(
+      () => validateOptionNames(["--bad\rname"], "Option"),
+      TypeError,
+    );
+    assert.throws(
+      () => validateOptionNames(["--bad\x00name"], "Option"),
+      TypeError,
+    );
+  });
+
   it("should reject C1 control characters", () => {
     assert.throws(
       () => validateOptionNames(["--bad\x80name"], "Option"),
@@ -177,6 +192,21 @@ describe("validateOptionNames", () => {
 });
 
 describe("validateCommandNames", () => {
+  it("should reject C0 control characters", () => {
+    assert.throws(
+      () => validateCommandNames(["bad\nname"], "Command"),
+      TypeError,
+    );
+    assert.throws(
+      () => validateCommandNames(["bad\rname"], "Command"),
+      TypeError,
+    );
+    assert.throws(
+      () => validateCommandNames(["bad\x00name"], "Command"),
+      TypeError,
+    );
+  });
+
   it("should reject C1 control characters", () => {
     assert.throws(
       () => validateCommandNames(["bad\x80name"], "Command"),
