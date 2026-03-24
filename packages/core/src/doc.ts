@@ -11,6 +11,7 @@ import {
   formatUsage,
   formatUsageTerm,
   isDocHidden,
+  isUsageHidden,
   type Usage,
   type UsageTerm,
 } from "./usage.ts";
@@ -596,7 +597,7 @@ export function formatDocPage(
   //  - Entries with a description column need enough space for term +
   //    gap + description, plus any showDefault/showChoices prefixes.
   //  - Bare-term entries need termIndent + 1 (just 1 term char).
-  //  - "Usage: " (7 chars) + programName.
+  //  - "Usage: " (7 chars) + max(programName, capped widest visible term).
   //  - Examples:/Author:/Bugs: labels are 9/7/5 chars on their own lines.
   const hasContent = (msg: unknown): msg is readonly unknown[] =>
     Array.isArray(msg) && msg.length > 0;
@@ -663,12 +664,20 @@ export function formatDocPage(
       : hasEntries
       ? termIndent + 1
       : 1;
-    // "Usage: " (7 chars) + programName is the minimum first line.
-    // Individual terms that are wider than maxWidth − 7 will overflow
-    // on continuation lines; this is an inherent limitation of
-    // fixed-indent wrapping and cannot be prevented without rejecting
-    // reasonable maxWidth values for intentionally long terms.
-    const usageMin = page.usage != null ? 7 + programName.length : 1;
+    // The first line needs "Usage: " (7) + programName.  Continuation
+    // lines are indented by 7 chars and need enough room for the widest
+    // atomic term segment.  To avoid over-restricting for intentionally
+    // long terms, the term width contribution is capped at
+    // programName.length + 7 (the indent width).
+    const usageMin = page.usage != null
+      ? 7 + Math.max(
+        programName.length,
+        Math.min(
+          maxVisibleAtomicWidth(page.usage),
+          programName.length + 7,
+        ),
+      )
+      : 1;
     // Examples/Author/Bugs have fixed-width label lines that cannot be
     // wrapped.  The content is indented by 2 chars (needing maxWidth >= 3),
     // but the label width is always the binding constraint.
@@ -1030,6 +1039,63 @@ export function formatDocPage(
 
 function indentLines(text: string, indent: number): string {
   return text.split("\n").join("\n" + " ".repeat(indent));
+}
+
+/**
+ * Returns the width of the widest non-breakable segment among visible
+ * (non-usage-hidden) terms in a usage tree.  Hidden terms are excluded
+ * because they are filtered out before rendering, so they do not
+ * contribute to the rendered width.
+ */
+function maxVisibleAtomicWidth(usage: Usage): number {
+  let max = 0;
+  for (const term of usage) {
+    switch (term.type) {
+      case "argument":
+        if (!isUsageHidden(term.hidden)) {
+          max = Math.max(max, term.metavar.length);
+        }
+        break;
+      case "option":
+        if (!isUsageHidden(term.hidden)) {
+          for (const name of term.names) {
+            max = Math.max(max, name.length);
+          }
+          if (term.metavar != null) {
+            max = Math.max(max, term.metavar.length);
+          }
+        }
+        break;
+      case "command":
+        if (!isUsageHidden(term.hidden)) {
+          max = Math.max(max, term.name.length);
+        }
+        break;
+      case "passthrough":
+        if (!isUsageHidden(term.hidden)) {
+          max = Math.max(max, 5); // "[...]"
+        }
+        break;
+      case "optional":
+      case "multiple":
+        max = Math.max(max, maxVisibleAtomicWidth(term.terms));
+        break;
+      case "exclusive":
+        for (const branch of term.terms) {
+          max = Math.max(max, maxVisibleAtomicWidth(branch));
+        }
+        break;
+      case "literal":
+        if (term.value !== "") {
+          max = Math.max(max, term.value.length);
+        }
+        break;
+      case "ellipsis":
+        max = Math.max(max, 3); // "..."
+        break;
+    }
+  }
+  return max;
 }
 
 // deno-lint-ignore no-control-regex
