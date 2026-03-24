@@ -617,21 +617,30 @@ describe("formatDocPage", () => {
   });
 
   it("should treat empty examples as absent", () => {
-    const page: DocPage = { examples: [], usage: [], sections: [] };
-    const result = formatDocPage("app", page);
-    assert.ok(!result.includes("Examples:"));
+    const withEmpty: DocPage = { examples: [], usage: [], sections: [] };
+    const withAbsent: DocPage = { usage: [], sections: [] };
+    assert.equal(
+      formatDocPage("app", withEmpty),
+      formatDocPage("app", withAbsent),
+    );
   });
 
   it("should treat empty author as absent", () => {
-    const page: DocPage = { author: [], usage: [], sections: [] };
-    const result = formatDocPage("app", page);
-    assert.ok(!result.includes("Author:"));
+    const withEmpty: DocPage = { author: [], usage: [], sections: [] };
+    const withAbsent: DocPage = { usage: [], sections: [] };
+    assert.equal(
+      formatDocPage("app", withEmpty),
+      formatDocPage("app", withAbsent),
+    );
   });
 
   it("should treat empty bugs as absent", () => {
-    const page: DocPage = { bugs: [], usage: [], sections: [] };
-    const result = formatDocPage("app", page);
-    assert.ok(!result.includes("Bugs:"));
+    const withEmpty: DocPage = { bugs: [], usage: [], sections: [] };
+    const withAbsent: DocPage = { usage: [], sections: [] };
+    assert.equal(
+      formatDocPage("app", withEmpty),
+      formatDocPage("app", withAbsent),
+    );
   });
 
   it("should treat empty footer as absent", () => {
