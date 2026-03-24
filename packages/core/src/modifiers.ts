@@ -1291,7 +1291,16 @@ export function multiple<M extends Mode, TValue, TState>(
             if (valueResult.success) {
               result.push(unwrapInjectedWrapper(valueResult.value));
               if (valueResult.deferred) {
-                deferredIndices.set(i, valueResult.deferredKeys ?? null);
+                if (valueResult.deferredKeys) {
+                  deferredIndices.set(i, valueResult.deferredKeys);
+                } else if (
+                  valueResult.value == null ||
+                  typeof valueResult.value !== "object"
+                ) {
+                  deferredIndices.set(i, null);
+                }
+                // Structured deferred without deferredKeys (e.g., from
+                // map()): skip — preserves non-deferred fields inside.
               }
             } else {
               return { success: false as const, error: valueResult.error };
@@ -1311,7 +1320,14 @@ export function multiple<M extends Mode, TValue, TState>(
             if (valueResult.success) {
               values.push(unwrapInjectedWrapper(valueResult.value));
               if (valueResult.deferred) {
-                deferredIndices.set(i, valueResult.deferredKeys ?? null);
+                if (valueResult.deferredKeys) {
+                  deferredIndices.set(i, valueResult.deferredKeys);
+                } else if (
+                  valueResult.value == null ||
+                  typeof valueResult.value !== "object"
+                ) {
+                  deferredIndices.set(i, null);
+                }
               }
             } else {
               return { success: false as const, error: valueResult.error };
