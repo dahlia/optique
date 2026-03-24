@@ -1883,12 +1883,12 @@ describe("formatDocPage", () => {
         usage: [{ type: "argument", metavar: "FILE" }],
         sections: [],
       };
-      // "Usage: " (7) + "app" (3) = 10, so minimum is 10
+      // "Usage: " (7) + "app" (3) + 1 (term headroom) = 11
       assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 9 }),
+        () => formatDocPage("app", page, { maxWidth: 10 }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 10, got 9.",
+          message: "maxWidth must be at least 11, got 10.",
         },
       );
       // maxWidth=11 should work: terms wrap and indent(7)+FILE(4) = 11 fits
@@ -2161,13 +2161,13 @@ describe("formatDocPage", () => {
           }],
         }],
       };
-      // usage requires 7 + len("app") = 10, entries require termIndent(2) + 4 = 6
-      // max(10, 6) = 10
+      // usage requires 7 + "app"(3) + 1 (term headroom) = 11,
+      // entries require termIndent(2) + 4 = 6; max(11, 6) = 11
       assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 9 }),
+        () => formatDocPage("app", page, { maxWidth: 10 }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 10, got 9.",
+          message: "maxWidth must be at least 11, got 10.",
         },
       );
       // maxWidth=11: terms wrap and indent(7)+FILE(4) = 11 fits

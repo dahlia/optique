@@ -596,7 +596,7 @@ export function formatDocPage(
   //  - Entries with a description column need enough space for term +
   //    gap + description, plus any showDefault/showChoices prefixes.
   //  - Bare-term entries need termIndent + 1 (just 1 term char).
-  //  - "Usage: " + programName → maxWidth >= 7 + programName.length.
+  //  - "Usage: " (7 chars) + programName [+ 1 when terms exist].
   //  - Examples:/Author:/Bugs: labels are 9/7/5 chars on their own lines.
   const hasContent = (msg: unknown): msg is readonly unknown[] =>
     Array.isArray(msg) && msg.length > 0;
@@ -664,7 +664,13 @@ export function formatDocPage(
       ? termIndent + 1
       : 1;
     // "Usage: " (7 chars) + programName is the minimum first line.
-    const usageMin = page.usage != null ? 7 + programName.length : 1;
+    // When usage has terms, add 1 so that continuation lines (indented
+    // by 7 after indentLines) get at least 1 + programName.length chars
+    // of content budget — matching the budget the first line has after
+    // the program name and its separator space.
+    const usageMin = page.usage != null
+      ? 7 + programName.length + (page.usage.length > 0 ? 1 : 0)
+      : 1;
     // Examples/Author/Bugs have fixed-width label lines that cannot be
     // wrapped.  The content is indented by 2 chars (needing maxWidth >= 3),
     // but the label width is always the binding constraint.
