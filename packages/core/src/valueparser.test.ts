@@ -12554,6 +12554,36 @@ describe("cidr()", () => {
       ]);
     });
 
+    it("should reject IPv4-mapped link-local CIDR when allowLinkLocal is false", () => {
+      const parser = cidr({ ipv4: { allowLinkLocal: false } });
+      const result = parser.parse("::ffff:169.254.0.0/120");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::ffff:a9fe:0" },
+        { type: "text", text: " is a link-local address." },
+      ]);
+    });
+
+    it("should reject IPv4-mapped multicast CIDR when allowMulticast is false", () => {
+      const parser = cidr({ ipv4: { allowMulticast: false } });
+      const result = parser.parse("::ffff:224.0.0.0/120");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::ffff:e000:0" },
+        { type: "text", text: " is a multicast address." },
+      ]);
+    });
+
+    it("should reject IPv4-mapped zero CIDR when allowZero is false", () => {
+      const parser = cidr({ ipv4: { allowZero: false } });
+      const result = parser.parse("::ffff:0.0.0.0/120");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::ffff:0:0" },
+        { type: "text", text: " is the zero address." },
+      ]);
+    });
+
     it("should snapshot IPv4 restrictions at construction time", () => {
       const opts: { ipv4: { allowPrivate: boolean } } = {
         ipv4: { allowPrivate: false },
