@@ -105,10 +105,9 @@ function prepareParsedForContexts(
     (isPlainObject(parsed) || Array.isArray(parsed))
   ) {
     // Check that at least one deferredKey matches an own property of the
-    // parsed object.  When map() restructures the object, the original
-    // deferredKeys may not correspond to the new shape; in that case fall
-    // through to the undefined fallback instead of returning a clone that
-    // still contains placeholder values in transformed fields.
+    // parsed object.  When deferredKeys don't match the current shape
+    // (e.g., stale keys after restructuring), return undefined to avoid
+    // leaking placeholder-bearing fields into phase-two contexts.
     // Look up a key in deferredKeys, handling the numeric/string
     // mismatch between tuple() (stores number indices like 0) and
     // Reflect.ownKeys() on arrays (returns string indices like "0").
@@ -151,8 +150,8 @@ function prepareParsedForContexts(
       }
       if (allDeferred) return undefined;
 
-      const clone: Record<PropertyKey, unknown> = isArray
-        ? new Array(parsed.length) as unknown as Record<PropertyKey, unknown>
+      const clone: object = isArray
+        ? new Array(parsed.length)
         : Object.create(Object.getPrototypeOf(parsed));
       for (const key of ownKeys) {
         const desc = Object.getOwnPropertyDescriptor(parsed as object, key);
@@ -175,6 +174,10 @@ function prepareParsedForContexts(
       }
       return clone;
     }
+    // deferredKeys are present but none match the object's own properties.
+    // The key set is stale relative to the current shape, so return
+    // undefined to avoid leaking placeholder values.
+    return undefined;
   }
   // Scalar deferred values (string, number, boolean, etc.) are entirely
   // placeholder data and should be hidden from phase-two contexts.
