@@ -909,9 +909,18 @@ export function withDefault<
  * inner results but intentionally drops per-field `deferredKeys`.  The
  * inner key set describes the *input* shape, but `transform` produces an
  * arbitrary *output* shape where keys may be renamed, dropped, or reused
- * with different semantics.  As a result, phase-two contexts may observe
- * placeholder values in mapped results.  For `object()` results that are
- * *not* wrapped in `map()`, per-field deferred stripping works normally.
+ * with different semantics.  For `object()` results that are *not*
+ * wrapped in `map()`, per-field deferred stripping works normally.
+ *
+ * Because the `deferred` flag is propagated conservatively, mapped scalar
+ * results are treated as missing (`undefined`) during phase-two context
+ * collection — even when `transform` only used non-deferred fields.
+ * For example, `map(object({ apiKey: prompt(...), mode: option(...) }),
+ * v => v.mode)` makes phase-two contexts see `undefined` instead of the
+ * real `mode` value.  This is the intentional trade-off: the alternative
+ * (not propagating `deferred`) would leak placeholder values into context
+ * resolution when `transform` *does* use deferred fields.  The final
+ * parse always produces the correct result regardless.
  *
  * If the transform throws on a deferred placeholder value, the mapped
  * result falls back to `undefined` with `deferred: true`, so the first
