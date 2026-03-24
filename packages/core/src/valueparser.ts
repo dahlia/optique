@@ -3907,7 +3907,11 @@ export function socketAddress(
       // should NOT fire — the "to" is part of the hostname, not a
       // separator with an omitted port.
       let hostOnlyResult: ValueParserResult<string> | undefined;
-      if (canOmitPort || trailingSepHost !== undefined) {
+      if (
+        canOmitPort ||
+        trailingSepHost !== undefined ||
+        trailingSepHostError !== undefined
+      ) {
         hostOnlyResult = parseHost(trimmed);
         if (canOmitPort && hostOnlyResult.success) {
           return {
@@ -3942,7 +3946,11 @@ export function socketAddress(
       // If a trailing separator produced an invalid host, propagate
       // the specific host error (e.g., IP-shaped) instead of falling
       // through to the generic format error.
-      if (trailingSepHostError !== undefined) {
+      if (
+        trailingSepHostError !== undefined &&
+        hostOnlyResult !== undefined &&
+        !hostOnlyResult.success
+      ) {
         const errorMsg = options?.errors?.invalidFormat;
         if (errorMsg) {
           const msg = typeof errorMsg === "function"

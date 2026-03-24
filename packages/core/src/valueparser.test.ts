@@ -9900,6 +9900,13 @@ describe("socketAddress()", () => {
 
       const result = parser.parse("db-70000");
       assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "-" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "db-70000" },
+        { type: "text", text: "." },
+      ]);
     });
 
     it("should reject doubled-separator inputs with invalid numeric port", () => {
@@ -9910,6 +9917,13 @@ describe("socketAddress()", () => {
 
       const result = parser.parse("db--70000");
       assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "-" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "db--70000" },
+        { type: "text", text: "." },
+      ]);
     });
 
     it("should route to invalidFormat, not missingPort, when separator is present", () => {
@@ -9997,6 +10011,31 @@ describe("socketAddress()", () => {
           type: "text",
           text: "Port number is required but was not specified.",
         },
+      ]);
+    });
+
+    it("should not let trailing separator error override valid hostname", () => {
+      // "0177.0.0.1to" with separator "to" and hostname mode:
+      // the trailing "to" split gives host "0177.0.0.1" which fails
+      // (alt IPv4), but "0177.0.0.1to" itself is a valid hostname
+      // (label "1to" is alphanumeric).  The trailing separator error
+      // should NOT fire when the whole input is a valid hostname.
+      const parser = socketAddress({
+        separator: "to",
+        host: { type: "hostname" },
+        requirePort: true,
+      });
+
+      const result = parser.parse("0177.0.0.1to");
+      assert.ok(!result.success);
+      // Should be invalidFormat (separator found, no valid split),
+      // NOT the alt-IPv4 error for "0177.0.0.1".
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "to" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "0177.0.0.1to" },
+        { type: "text", text: "." },
       ]);
     });
 
