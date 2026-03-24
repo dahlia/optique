@@ -10,6 +10,7 @@ import {
   cloneUsageTerm,
   formatUsage,
   formatUsageTerm,
+  isDocHidden,
   type Usage,
   type UsageTerm,
 } from "./usage.ts";
@@ -123,6 +124,28 @@ export interface DocFragments {
   readonly footer?: Message;
 }
 
+/**
+ * Returns whether a doc entry's term is hidden from documentation.
+ * Only term types with a `hidden` field (argument, option, command,
+ * passthrough) are checked; other types always return `false`.
+ *
+ * @param entry The doc entry to check.
+ * @returns `true` if the entry should be hidden from documentation.
+ * @since 1.0.0
+ */
+export function isDocEntryHidden(entry: DocEntry): boolean {
+  const term = entry.term;
+  if (
+    term.type === "argument" ||
+    term.type === "option" ||
+    term.type === "command" ||
+    term.type === "passthrough"
+  ) {
+    return isDocHidden(term.hidden);
+  }
+  return false;
+}
+
 function getDocEntryKey(entry: DocEntry): string {
   const term = entry.term;
   switch (term.type) {
@@ -140,7 +163,9 @@ function getDocEntryKey(entry: DocEntry): string {
 /**
  * Removes duplicate {@link DocEntry} values that share the same surface
  * syntax (same term type and identifying names).  When duplicates exist,
- * the first occurrence is kept and later ones are discarded.
+ * the first occurrence is kept and later ones are discarded.  If the
+ * first occurrence is doc-hidden and a later duplicate is visible, the
+ * visible one replaces it.
  *
  * Positional argument entries are never deduplicated because they are
  * distinguished by position, not by metavar, and {@link DocEntry} does
@@ -153,7 +178,7 @@ function getDocEntryKey(entry: DocEntry): string {
 export function deduplicateDocEntries(
   entries: readonly DocEntry[],
 ): DocEntry[] {
-  const seen = new Set<string>();
+  const seen = new Map<string, number>();
   const result: DocEntry[] = [];
   for (const entry of entries) {
     if (entry.term.type === "argument") {
@@ -161,9 +186,14 @@ export function deduplicateDocEntries(
       continue;
     }
     const key = getDocEntryKey(entry);
-    if (!seen.has(key)) {
-      seen.add(key);
+    const existingIndex = seen.get(key);
+    if (existingIndex == null) {
+      seen.set(key, result.length);
       result.push(entry);
+    } else if (
+      isDocEntryHidden(result[existingIndex]) && !isDocEntryHidden(entry)
+    ) {
+      result[existingIndex] = entry;
     }
   }
   return result;
@@ -186,7 +216,13 @@ export function deduplicateDocFragments(
   // but entries in differently-titled sections remain independent.
   // Titled sections are emitted at the position of their first occurrence
   // to preserve the original ordering.
-  const untitledSeen = new Set<string>();
+  // When a duplicate is found and the existing entry is doc-hidden while the
+  // new one is visible, the visible entry replaces the hidden one.
+  interface UntitledLocation {
+    slotIndex: number;
+    entryIndex?: number;
+  }
+  const untitledSeen = new Map<string, UntitledLocation>();
   const titledSectionMap = new Map<string, DocEntry[]>();
   // Each element is either a concrete DocFragment or a title placeholder
   // for a titled section whose entries are still being collected.
@@ -197,30 +233,76 @@ export function deduplicateDocFragments(
         slots.push(fragment);
       } else {
         const key = getDocEntryKey(fragment);
-        if (!untitledSeen.has(key)) {
-          untitledSeen.add(key);
+        const existing = untitledSeen.get(key);
+        if (existing == null) {
+          untitledSeen.set(key, { slotIndex: slots.length });
           slots.push(fragment);
+        } else if (!isDocEntryHidden(fragment)) {
+          const prev = existing.entryIndex != null
+            ? (slots[existing.slotIndex] as DocSection).entries[
+              existing.entryIndex
+            ]
+            : slots[existing.slotIndex] as DocEntry;
+          if (isDocEntryHidden(prev)) {
+            if (existing.entryIndex != null) {
+              // Safe: the section was constructed by us above, so entries
+              // is the mutable dedupedEntries array.
+              const entries = (slots[existing.slotIndex] as DocSection)
+                .entries as DocEntry[];
+              entries[existing.entryIndex] = fragment;
+            } else {
+              slots[existing.slotIndex] = fragment;
+            }
+          }
         }
       }
     } else if (fragment.title == null) {
       const dedupedEntries: DocEntry[] = [];
+      const sectionSlotIndex = slots.length;
+      // Reserve slot; entries array will be filled below.
+      const sectionSlot: DocFragment & { type: "section" } = {
+        ...fragment,
+        type: "section",
+        entries: dedupedEntries,
+      };
+      let pushed = false;
       for (const entry of fragment.entries) {
         if (entry.term.type === "argument") {
+          if (!pushed) {
+            slots.push(sectionSlot);
+            pushed = true;
+          }
           dedupedEntries.push(entry);
           continue;
         }
         const key = getDocEntryKey(entry);
-        if (!untitledSeen.has(key)) {
-          untitledSeen.add(key);
+        const existing = untitledSeen.get(key);
+        if (existing == null) {
+          if (!pushed) {
+            slots.push(sectionSlot);
+            pushed = true;
+          }
+          untitledSeen.set(key, {
+            slotIndex: sectionSlotIndex,
+            entryIndex: dedupedEntries.length,
+          });
           dedupedEntries.push(entry);
+        } else if (!isDocEntryHidden(entry)) {
+          const prev = existing.entryIndex != null
+            ? (slots[existing.slotIndex] as DocSection).entries[
+              existing.entryIndex
+            ]
+            : slots[existing.slotIndex] as DocEntry;
+          if (isDocEntryHidden(prev)) {
+            if (existing.entryIndex != null) {
+              const entries = (slots[existing.slotIndex] as DocSection)
+                .entries as DocEntry[];
+              entries[existing.entryIndex] = entry;
+            } else {
+              slots[existing.slotIndex] = { ...entry, type: "entry" };
+            }
+          }
         }
-      }
-      if (dedupedEntries.length > 0) {
-        slots.push({
-          ...fragment,
-          type: "section",
-          entries: dedupedEntries,
-        });
       }
     } else {
       if (!titledSectionMap.has(fragment.title)) {
