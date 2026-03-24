@@ -142,10 +142,11 @@ To be released.
     `Usage: myapp config ...` without changing parse behavior or
     completion behavior.  [[#139]]
 
- -  Fixed `formatUsage()` leaving trailing whitespace when no visible usage
-    terms remain after filtering (e.g., empty usage array or all-hidden terms).
-    `formatDocPage()` also no longer renders a trailing space in the `Usage:`
-    line for empty usage.  [[#473], [#725]]
+ -  Fixed `formatUsage()` and `formatUsageTerm()` leaving trailing whitespace
+    when no visible usage terms remain after filtering (e.g., empty usage array
+    or all-hidden terms) or when inter-term separator spaces precede a line
+    wrap.  `formatDocPage()` also no longer renders a trailing space in the
+    `Usage:` line for empty usage.  [[#473], [#725]]
 
  -  Fixed `getDocPage()` preserving hidden terms from custom `DocFragments`
     instead of filtering them.  `buildDocPage()` now filters out entries whose

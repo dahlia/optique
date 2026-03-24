@@ -667,8 +667,9 @@ export function formatDocPage(
     // The first line needs "Usage: " (7) + programName.  Continuation
     // lines are indented by 7 chars and need enough room for the widest
     // atomic term segment.  To avoid over-restricting for intentionally
-    // long terms, the term width contribution is capped at
-    // programName.length + 7 (the indent width).
+    // long terms, the term width is capped at programName.length + 7;
+    // the 7 matches the continuation indent, so terms fitting within
+    // the first line's total width are guaranteed not to overflow.
     const usageMin = page.usage != null
       ? 7 + Math.max(
         programName.length,
@@ -1057,7 +1058,7 @@ function maxVisibleAtomicWidth(usage: Usage): number {
         }
         break;
       case "option":
-        if (!isUsageHidden(term.hidden)) {
+        if (!isUsageHidden(term.hidden) && term.names.length > 0) {
           for (const name of term.names) {
             max = Math.max(max, name.length);
           }
@@ -1082,6 +1083,14 @@ function maxVisibleAtomicWidth(usage: Usage): number {
         break;
       case "exclusive":
         for (const branch of term.terms) {
+          // Skip branches whose first term is a usage-hidden command,
+          // matching filterUsageForDisplay() which removes them entirely.
+          const first = branch[0];
+          if (
+            first?.type === "command" && isUsageHidden(first.hidden)
+          ) {
+            continue;
+          }
           max = Math.max(max, maxVisibleAtomicWidth(branch));
         }
         break;
