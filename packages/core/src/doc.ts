@@ -11,7 +11,6 @@ import {
   formatUsage,
   formatUsageTerm,
   isDocHidden,
-  isUsageHidden,
   type Usage,
   type UsageTerm,
 } from "./usage.ts";
@@ -597,7 +596,7 @@ export function formatDocPage(
   //  - Entries with a description column need enough space for term +
   //    gap + description, plus any showDefault/showChoices prefixes.
   //  - Bare-term entries need termIndent + 1 (just 1 term char).
-  //  - "Usage: " (7 chars) + programName [+ 1 when terms exist].
+  //  - "Usage: " (7 chars) + programName.
   //  - Examples:/Author:/Bugs: labels are 9/7/5 chars on their own lines.
   const hasContent = (msg: unknown): msg is readonly unknown[] =>
     Array.isArray(msg) && msg.length > 0;
@@ -665,15 +664,11 @@ export function formatDocPage(
       ? termIndent + 1
       : 1;
     // "Usage: " (7 chars) + programName is the minimum first line.
-    // When usage has visible terms, add 1 so that continuation lines
-    // (indented by 7 after indentLines) get at least
-    // 1 + programName.length chars of content budget — matching the
-    // budget the first line has after the program name and its
-    // separator space.
-    const usageMin = page.usage != null
-      ? 7 + programName.length +
-        (hasVisibleUsageTerms(page.usage) ? 1 : 0)
-      : 1;
+    // Individual terms that are wider than maxWidth − 7 will overflow
+    // on continuation lines; this is an inherent limitation of
+    // fixed-indent wrapping and cannot be prevented without rejecting
+    // reasonable maxWidth values for intentionally long terms.
+    const usageMin = page.usage != null ? 7 + programName.length : 1;
     // Examples/Author/Bugs have fixed-width label lines that cannot be
     // wrapped.  The content is indented by 2 chars (needing maxWidth >= 3),
     // but the label width is always the binding constraint.
@@ -1035,39 +1030,6 @@ export function formatDocPage(
 
 function indentLines(text: string, indent: number): string {
   return text.split("\n").join("\n" + " ".repeat(indent));
-}
-
-/**
- * Returns whether a usage array contains any terms that would survive
- * the usage-hidden filter.  This mirrors the filtering logic in
- * `filterUsageForDisplay()` without constructing the filtered array.
- */
-function hasVisibleUsageTerms(usage: Usage): boolean {
-  for (const term of usage) {
-    switch (term.type) {
-      case "argument":
-      case "option":
-      case "command":
-      case "passthrough":
-        if (!isUsageHidden(term.hidden)) return true;
-        break;
-      case "optional":
-      case "multiple":
-        if (hasVisibleUsageTerms(term.terms)) return true;
-        break;
-      case "exclusive":
-        if (term.terms.some((branch) => hasVisibleUsageTerms(branch))) {
-          return true;
-        }
-        break;
-      case "literal":
-        if (term.value !== "") return true;
-        break;
-      case "ellipsis":
-        return true;
-    }
-  }
-  return false;
 }
 
 // deno-lint-ignore no-control-regex

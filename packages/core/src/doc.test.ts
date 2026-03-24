@@ -1883,15 +1883,15 @@ describe("formatDocPage", () => {
         usage: [{ type: "argument", metavar: "FILE" }],
         sections: [],
       };
-      // "Usage: " (7) + "app" (3) + 1 (term headroom) = 11
+      // "Usage: " (7) + "app" (3) = 10
       assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 10 }),
+        () => formatDocPage("app", page, { maxWidth: 9 }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 11, got 10.",
+          message: "maxWidth must be at least 10, got 9.",
         },
       );
-      // maxWidth=11 should work: terms wrap and indent(7)+FILE(4) = 11 fits
+      // maxWidth=11: indent(7)+FILE(4) = 11 fits on continuation line
       const result = formatDocPage("app", page, { maxWidth: 11 });
       assertLinesWithinMaxWidth(result, 11);
     });
@@ -1902,6 +1902,16 @@ describe("formatDocPage", () => {
         sections: [],
       };
       // "Usage: " (7) + "a" (1) = 8
+      const result = formatDocPage("a", page, { maxWidth: 8 });
+      assertLinesWithinMaxWidth(result, 8);
+    });
+
+    it("should accept maxWidth when first term wraps and fits", () => {
+      const page: DocPage = {
+        usage: [{ type: "command", name: "b" }],
+        sections: [],
+      };
+      // "Usage: a" (8) on first line, "       b" (8) on continuation
       const result = formatDocPage("a", page, { maxWidth: 8 });
       assertLinesWithinMaxWidth(result, 8);
     });
@@ -2171,16 +2181,16 @@ describe("formatDocPage", () => {
           }],
         }],
       };
-      // usage requires 7 + "app"(3) + 1 (term headroom) = 11,
-      // entries require termIndent(2) + 4 = 6; max(11, 6) = 11
+      // usage requires 7 + "app"(3) = 10,
+      // entries require termIndent(2) + 4 = 6; max(10, 6) = 10
       assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 10 }),
+        () => formatDocPage("app", page, { maxWidth: 9 }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 11, got 10.",
+          message: "maxWidth must be at least 10, got 9.",
         },
       );
-      // maxWidth=11: terms wrap and indent(7)+FILE(4) = 11 fits
+      // maxWidth=11: indent(7)+FILE(4) = 11 fits on continuation line
       const result = formatDocPage("app", page, { maxWidth: 11 });
       assertLinesWithinMaxWidth(result, 11);
     });
