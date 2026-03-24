@@ -243,6 +243,39 @@ describe("findSimilar()", () => {
       assert.ok(result[0].startsWith("--ver"));
     }
   });
+
+  it("should not produce duplicate suggestions for duplicate candidates", () => {
+    const result = findSimilar("--verbos", [
+      "--verbose",
+      "--verbose",
+      "--version",
+      "--verbose",
+      "--version",
+      "--help",
+    ], { maxSuggestions: 10 });
+    assert.deepEqual(result, [...new Set(result)]);
+    assert.equal(result.filter((s) => s === "--verbose").length, 1);
+    assert.equal(result.filter((s) => s === "--version").length, 1);
+  });
+
+  it("should deduplicate case-insensitively by default", () => {
+    const result = findSimilar("--verbos", [
+      "--Verbose",
+      "--verbose",
+      "--VERBOSE",
+    ]);
+    assert.equal(result.length, 1);
+    assert.equal(result[0], "--Verbose");
+  });
+
+  it("should return single exact match even with duplicate candidates", () => {
+    const result = findSimilar("--verbose", [
+      "--verbose",
+      "--verbose",
+      "--verbose",
+    ]);
+    assert.deepEqual(result, ["--verbose"]);
+  });
 });
 
 describe("createSuggestionMessage()", () => {
@@ -408,6 +441,32 @@ describe("integration: findSimilar + createSuggestionMessage", () => {
         }`,
       );
     }
+  });
+
+  it("should not produce duplicate suggestion lines for duplicate candidates", () => {
+    const candidates = [
+      "--verbose",
+      "--verbose",
+      "--version",
+      "--version",
+      "--verify",
+      "--verify",
+    ];
+    const suggestions = findSimilar("--ver", candidates, {
+      maxDistance: 5,
+      maxDistanceRatio: 1.0,
+      maxSuggestions: 10,
+    });
+    const msg = createSuggestionMessage(suggestions);
+    const formatted = formatMessage(msg, { quotes: true, colors: false });
+
+    const verboseCount = (formatted.match(/--verbose/g) ?? []).length;
+    const versionCount = (formatted.match(/--version/g) ?? []).length;
+    const verifyCount = (formatted.match(/--verify/g) ?? []).length;
+
+    assert.ok(verboseCount <= 1, `--verbose appeared ${verboseCount} times`);
+    assert.ok(versionCount <= 1, `--version appeared ${versionCount} times`);
+    assert.ok(verifyCount <= 1, `--verify appeared ${verifyCount} times`);
   });
 });
 
@@ -692,6 +751,28 @@ describe("property-based tests", () => {
           for (const suggestion of strict) {
             assert.ok(relaxedSet.has(suggestion));
           }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("findSimilar should never return duplicate suggestions", () => {
+    fc.assert(
+      fc.property(
+        safeStringArbitrary.filter((s: string) => s.length > 0),
+        fc.array(
+          safeStringArbitrary.filter((s: string) => s.length > 0),
+          { minLength: 0, maxLength: 20 },
+        ),
+        (input: string, candidates: readonly string[]) => {
+          const result = findSimilar(input, candidates, {
+            maxDistance: 3,
+            maxDistanceRatio: 0.5,
+            maxSuggestions: 10,
+            caseSensitive: false,
+          });
+          assert.deepEqual(result, [...new Set(result)]);
         },
       ),
       propertyParameters,
