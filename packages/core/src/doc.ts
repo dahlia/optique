@@ -14,6 +14,7 @@ import {
   type Usage,
   type UsageTerm,
 } from "./usage.ts";
+import { validateProgramName } from "./validate.ts";
 
 /**
  * A documentation entry which describes a specific usage of a command or
@@ -521,9 +522,10 @@ function defaultSectionOrder(a: DocSection, b: DocSection): number {
  * @param page The documentation page to format
  * @param options Formatting options to customize the output
  * @returns A formatted string representation of the documentation page
- * @throws {TypeError} If `programName` contains a CR or LF character, if
- * any non-empty section's title is empty, whitespace-only, or contains a CR
- * or LF character, or if `maxWidth` is not a finite integer.
+ * @throws {TypeError} If `programName` is not a string, is empty,
+ * whitespace-only, or contains control characters, if any non-empty
+ * section's title is empty, whitespace-only, or contains a CR or LF
+ * character, or if `maxWidth` is not a finite integer.
  * @throws {RangeError} If any entry needs a description column and `maxWidth`
  * is too small to fit the minimum layout (less than `termIndent + 4`), or if
  * `showChoices.maxItems` is less than `1`.
@@ -551,9 +553,7 @@ export function formatDocPage(
   page: DocPage,
   options: DocPageFormatOptions = {},
 ): string {
-  if (/[\r\n]/.test(programName)) {
-    throw new TypeError("Program name must not contain newlines.");
-  }
+  validateProgramName(programName);
   const termIndent = options.termIndent ?? 2;
   const termWidth = options.termWidth ?? 26;
   if (

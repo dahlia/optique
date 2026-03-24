@@ -1549,6 +1549,38 @@ describe("formatDocPage", () => {
     );
   });
 
+  it("should throw TypeError for non-string programName", () => {
+    const page: DocPage = { sections: [] };
+    assert.throws(
+      () => formatDocPage(123 as never, page),
+      TypeError,
+    );
+    assert.throws(
+      () => formatDocPage(Symbol("x") as never, page),
+      TypeError,
+    );
+  });
+
+  it("should throw TypeError for empty programName", () => {
+    const page: DocPage = { sections: [] };
+    assert.throws(
+      () => formatDocPage("", page),
+      TypeError,
+    );
+  });
+
+  it("should throw TypeError for programName with control characters", () => {
+    const page: DocPage = { sections: [] };
+    assert.throws(
+      () => formatDocPage("bad\x00name", page),
+      TypeError,
+    );
+    assert.throws(
+      () => formatDocPage("bad\tname", page),
+      TypeError,
+    );
+  });
+
   it("should throw TypeError when section title contains a newline", () => {
     const page: DocPage = {
       sections: [{
