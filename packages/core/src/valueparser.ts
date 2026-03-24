@@ -286,21 +286,35 @@ export type ChoiceOptions = ChoiceOptionsString;
  * A predicate function that checks if an object is a {@link ValueParser}.
  * @param object The object to check.
  * @return `true` if the object is a {@link ValueParser}, `false` otherwise.
+ * @throws {TypeError} If the object looks like a value parser (has `$mode`,
+ *   `metavar`, `parse`, and `format`) but is missing the required
+ *   `placeholder` property.
  */
 export function isValueParser<M extends Mode, T>(
   object: unknown,
 ): object is ValueParser<M, T> {
-  return typeof object === "object" && object != null &&
-    "$mode" in object &&
-    ((object as ValueParser<M, T>).$mode === "sync" ||
-      (object as ValueParser<M, T>).$mode === "async") &&
-    "metavar" in object &&
-    typeof (object as ValueParser<M, T>).metavar === "string" &&
-    "placeholder" in object &&
-    "parse" in object &&
-    typeof (object as ValueParser<M, T>).parse === "function" &&
-    "format" in object &&
+  if (
+    typeof object !== "object" || object == null ||
+    !("$mode" in object) ||
+    ((object as ValueParser<M, T>).$mode !== "sync" &&
+      (object as ValueParser<M, T>).$mode !== "async")
+  ) {
+    return false;
+  }
+  const hasMetavar = "metavar" in object &&
+    typeof (object as ValueParser<M, T>).metavar === "string";
+  const hasParse = "parse" in object &&
+    typeof (object as ValueParser<M, T>).parse === "function";
+  const hasFormat = "format" in object &&
     typeof (object as ValueParser<M, T>).format === "function";
+  const hasPlaceholder = "placeholder" in object;
+  if (hasMetavar && hasParse && hasFormat && !hasPlaceholder) {
+    throw new TypeError(
+      "Value parser is missing the required placeholder property. " +
+        "All value parsers must define a placeholder value.",
+    );
+  }
+  return hasMetavar && hasParse && hasFormat && hasPlaceholder;
 }
 
 /**

@@ -52,14 +52,21 @@ describe("isValueParser", () => {
     assert.ok(isValueParser(numberParser));
   });
 
-  it("should return false for objects missing placeholder property", () => {
+  it("should throw TypeError for parser-like objects missing placeholder", () => {
     const invalidParser = {
       $mode: "sync" as const,
       metavar: "STRING",
       parse: () => ({ success: true as const, value: "test" }),
       format: (v: string) => v,
     };
-    assert.ok(!isValueParser(invalidParser));
+    assert.throws(
+      () => isValueParser(invalidParser),
+      {
+        name: "TypeError",
+        message: "Value parser is missing the required placeholder property. " +
+          "All value parsers must define a placeholder value.",
+      },
+    );
   });
 
   it("should return false for objects missing metavar property", () => {
