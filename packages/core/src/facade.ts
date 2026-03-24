@@ -142,13 +142,18 @@ function prepareParsedForContexts(
       return clone;
     }
   }
-  // No per-field info, non-plain object, or stale keys from map(): pass
-  // through as-is so that context annotations can still access the parsed
-  // value.  This is an intentional trade-off — map() drops deferredKeys
-  // because the transform may rename/restructure fields, making the inner
-  // key set invalid for the output shape.  Placeholder values may be
-  // visible to phase-two contexts in this path; the final parse always
-  // resolves them correctly regardless.
+  // Scalar deferred values (string, number, boolean, etc.) are entirely
+  // placeholder data and should be hidden from phase-two contexts.
+  if (parsed == null || typeof parsed !== "object") {
+    return undefined;
+  }
+  // Structured deferred without per-field info (e.g., after map(), or
+  // non-plain objects): pass through as-is so that context annotations can
+  // still access non-deferred data inside the value.  This is an
+  // intentional trade-off — map() drops deferredKeys because the transform
+  // may rename/restructure fields, making the inner key set invalid for
+  // the output shape.  Placeholder values may be visible to phase-two
+  // contexts in this path; the final parse always resolves them correctly.
   return parsed;
 }
 

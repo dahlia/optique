@@ -1463,17 +1463,17 @@ describe("prompt()", () => {
     );
 
     it(
-      "passes through top-level deferred prompts to other phase-two contexts",
+      "hides top-level deferred prompts from other phase-two contexts",
       async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
         });
-        let sawPlaceholder = false;
+        let sawUndefined = false;
         const dynamicContext: SourceContext = {
           id: Symbol.for("@test/top-level-config-prompt-phase-two"),
           mode: "dynamic",
           getAnnotations(parsed?: unknown) {
-            sawPlaceholder = parsed === "";
+            sawUndefined = parsed === undefined;
             return {};
           },
         };
@@ -1504,7 +1504,7 @@ describe("prompt()", () => {
           },
         );
 
-        assert.ok(sawPlaceholder);
+        assert.ok(sawUndefined);
         assert.equal(result, "config-secret");
       },
     );
@@ -1879,7 +1879,7 @@ describe("prompt()", () => {
       },
     );
 
-    it("passes through top-level deferred prompt values to config loaders", async () => {
+    it("hides top-level deferred prompt values from config loaders", async () => {
       const context = createConfigContext({
         schema: createPromptConfigSchema(),
       });
@@ -1909,7 +1909,7 @@ describe("prompt()", () => {
         },
       });
 
-      assert.equal(loaderParsed, "");
+      assert.equal(loaderParsed, undefined);
       assert.equal(result, "config-secret");
     });
 
