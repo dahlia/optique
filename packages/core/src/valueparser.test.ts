@@ -9989,6 +9989,34 @@ describe("socketAddress()", () => {
         },
       ]);
     });
+
+    it("should propagate IP-specific error for trailing separator with invalid host", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowPrivate: false } },
+      });
+
+      const result = parser.parse("192.168.0.1:");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "192.168.0.1" },
+        { type: "text", text: " is a private IP address." },
+      ]);
+    });
+
+    it("should propagate alt IPv4 error for trailing separator", () => {
+      const parser = socketAddress({ defaultPort: 80 });
+
+      const result = parser.parse("0x7f000001:");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "0x7f000001" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
   });
 });
 

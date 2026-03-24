@@ -3771,6 +3771,12 @@ export function socketAddress(
       // input is not a valid hostname by itself (e.g., "localhost:" where
       // the colon makes it invalid as a hostname).
       let trailingSepHost: string | undefined;
+      // The failed host-validation result from the rightmost trailing
+      // separator.  Used to propagate specific host errors (e.g.,
+      // IP-shaped) when the trailing separator host is invalid.
+      let trailingSepHostError:
+        | { readonly hostPart: string; readonly error: Message }
+        | undefined;
       // Whether any separator occurrence was found in the input at all.
       let anySeparatorFound = false;
       let searchFrom = trimmed.length;
@@ -3789,12 +3795,16 @@ export function socketAddress(
 
         if (portPart === "") {
           // Trailing separator — potential omitted port.  Record the
-          // first (rightmost) valid host so it can be used as a fallback
+          // first (rightmost) result so it can be used as a fallback
           // when the whole input is not a valid hostname.
-          if (trailingSepHost === undefined) {
+          if (
+            trailingSepHost === undefined && trailingSepHostError === undefined
+          ) {
             const hostResult = parseHost(hostPart);
             if (hostResult.success) {
               trailingSepHost = hostResult.value;
+            } else {
+              trailingSepHostError = { hostPart, error: hostResult.error };
             }
           }
         } else {
@@ -3900,6 +3910,30 @@ export function socketAddress(
           : errorMsg ??
             message`Port number is required but was not specified.`;
         return { success: false, error: msg };
+      }
+
+      // If a trailing separator produced an invalid host, propagate
+      // the specific host error (e.g., IP-shaped) instead of falling
+      // through to the generic format error.
+      if (trailingSepHostError !== undefined) {
+        const errorMsg = options?.errors?.invalidFormat;
+        if (errorMsg) {
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg;
+          return { success: false, error: msg };
+        }
+        if (
+          looksLikeIpv4(trailingSepHostError.hostPart) ||
+          looksLikeAltIpv4Literal(trailingSepHostError.hostPart)
+        ) {
+          return { success: false, error: trailingSepHostError.error };
+        }
+        return {
+          success: false,
+          error:
+            message`Expected a socket address in format host${separator}port, but got ${input}.`,
+        };
       }
 
       // When no separator was found at all, the user simply provided
