@@ -5,8 +5,7 @@
 // deno-lint-ignore no-control-regex
 const CONTROL_CHAR_RE = /[\x00-\x1f\x7f-\x9f\u2028\u2029]/;
 
-// deno-lint-ignore no-control-regex
-const CONTROL_CHAR_RE_GLOBAL = /[\x00-\x1f\x7f-\x9f\u2028\u2029]/g;
+const CONTROL_CHAR_RE_GLOBAL = new RegExp(CONTROL_CHAR_RE.source, "g");
 
 /**
  * Escapes control characters in a string for readable error messages.
