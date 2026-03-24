@@ -9941,6 +9941,17 @@ describe("socketAddress()", () => {
       ]);
     });
 
+    it("should ignore non-IP split host errors when the whole input is a valid hostname", () => {
+      // "db--oops" splits as host "db-" (invalid trailing hyphen) +
+      // port "oops" (non-numeric).  The non-IP host error should be
+      // deferred, and the whole input "db--oops" accepted as a hostname.
+      const parser = socketAddress({ separator: "-", defaultPort: 80 });
+
+      const result = parser.parse("db--oops");
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, { host: "db--oops", port: 80 });
+    });
+
     it("should route to invalidFormat, not missingPort, when separator is present", () => {
       // "example-com" with separator "-" and requirePort: the separator
       // is present, so the user attempted a split.  Error should be
@@ -10131,6 +10142,21 @@ describe("socketAddress()", () => {
         { type: "text", text: "Expected a valid IPv4 address, but got " },
         { type: "value", value: "999.999.999.999" },
         { type: "text", text: "." },
+      ]);
+    });
+
+    it("should use custom invalidFormat over IP-specific split errors", () => {
+      const parser = socketAddress({
+        separator: "-",
+        defaultPort: 80,
+        host: { type: "both", ip: { allowPrivate: false } },
+        errors: { invalidFormat: message`Custom error` },
+      });
+
+      const result = parser.parse("192.168.0.1-80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Custom error" },
       ]);
     });
 
