@@ -142,6 +142,10 @@ To be released.
     `Usage: myapp config ...` without changing parse behavior or
     completion behavior.  [[#139]]
 
+ -  Fixed `formatDocPage()` rendering empty `Message` arrays as blank sections
+    and stray whitespace.  Empty `brief`, `description`, `examples`, `author`,
+    `bugs`, and `footer` fields are now treated as absent.  [[#472], [#728]]
+
  -  Fixed `formatUsage()` and `formatUsageTerm()` leaving trailing whitespace
     when no visible usage terms remain after filtering (e.g., empty usage array
     or all-hidden terms) or when inter-term separator spaces precede a line
@@ -988,6 +992,7 @@ To be released.
 [#439]: https://github.com/dahlia/optique/issues/439
 [#469]: https://github.com/dahlia/optique/issues/469
 [#471]: https://github.com/dahlia/optique/issues/471
+[#472]: https://github.com/dahlia/optique/issues/472
 [#473]: https://github.com/dahlia/optique/issues/473
 [#479]: https://github.com/dahlia/optique/issues/479
 [#485]: https://github.com/dahlia/optique/issues/485
@@ -1122,6 +1127,7 @@ To be released.
 [#724]: https://github.com/dahlia/optique/pull/724
 [#725]: https://github.com/dahlia/optique/pull/725
 [#726]: https://github.com/dahlia/optique/pull/726
+[#728]: https://github.com/dahlia/optique/pull/728
 
 ### @optique/config
 

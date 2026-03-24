@@ -598,6 +598,97 @@ describe("formatDocPage", () => {
     assert.ok(result.includes("Footer only"));
   });
 
+  it("should treat empty brief as absent", () => {
+    const withEmpty: DocPage = { brief: [], sections: [] };
+    const withAbsent: DocPage = { sections: [] };
+    assert.equal(
+      formatDocPage("app", withEmpty),
+      formatDocPage("app", withAbsent),
+    );
+  });
+
+  it("should treat empty description as absent", () => {
+    const withEmpty: DocPage = { description: [], sections: [] };
+    const withAbsent: DocPage = { sections: [] };
+    assert.equal(
+      formatDocPage("app", withEmpty),
+      formatDocPage("app", withAbsent),
+    );
+  });
+
+  it("should treat empty examples as absent", () => {
+    const withEmpty: DocPage = { examples: [], usage: [], sections: [] };
+    const withAbsent: DocPage = { usage: [], sections: [] };
+    assert.equal(
+      formatDocPage("app", withEmpty),
+      formatDocPage("app", withAbsent),
+    );
+  });
+
+  it("should treat empty author as absent", () => {
+    const withEmpty: DocPage = { author: [], usage: [], sections: [] };
+    const withAbsent: DocPage = { usage: [], sections: [] };
+    assert.equal(
+      formatDocPage("app", withEmpty),
+      formatDocPage("app", withAbsent),
+    );
+  });
+
+  it("should treat empty bugs as absent", () => {
+    const withEmpty: DocPage = { bugs: [], usage: [], sections: [] };
+    const withAbsent: DocPage = { usage: [], sections: [] };
+    assert.equal(
+      formatDocPage("app", withEmpty),
+      formatDocPage("app", withAbsent),
+    );
+  });
+
+  it("should treat empty footer as absent", () => {
+    const withEmpty: DocPage = { footer: [], sections: [] };
+    const withAbsent: DocPage = { sections: [] };
+    assert.equal(
+      formatDocPage("app", withEmpty),
+      formatDocPage("app", withAbsent),
+    );
+  });
+
+  it("should not let empty meta sections affect maxWidth validation", () => {
+    // Empty examples/author/bugs should not widen the minimum maxWidth.
+    // "Examples:" is 9 chars, so maxWidth=8 should be accepted when
+    // examples is empty (same as omitted).
+    assert.doesNotThrow(() => {
+      formatDocPage("app", { examples: [], sections: [] }, { maxWidth: 8 });
+    });
+    assert.doesNotThrow(() => {
+      formatDocPage("app", { author: [], sections: [] }, { maxWidth: 6 });
+    });
+    assert.doesNotThrow(() => {
+      formatDocPage("app", { bugs: [], sections: [] }, { maxWidth: 4 });
+    });
+  });
+
+  it("should treat entry-level empty description as absent", () => {
+    const withEmpty: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "command", name: "cmd" },
+          description: [],
+        }],
+      }],
+    };
+    const withAbsent: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "command", name: "cmd" },
+        }],
+      }],
+    };
+    assert.equal(
+      formatDocPage("app", withEmpty),
+      formatDocPage("app", withAbsent),
+    );
+  });
+
   it("should format all labels with bold+dim when colors enabled", () => {
     const page: DocPage = {
       usage: [{ type: "command", name: "myapp" }],
