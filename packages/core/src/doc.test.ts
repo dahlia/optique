@@ -533,9 +533,9 @@ describe("formatDocPage", () => {
 
     const result = formatDocPage("myapp", page, { colors: true });
 
-    // Even with empty usage array, formatUsage still outputs the program name
+    // Empty usage array renders just the program name without trailing space
     const expected = [
-      "\x1b[1;2mUsage:\x1b[0m \x1b[1mmyapp\x1b[0m ",
+      "\x1b[1;2mUsage:\x1b[0m \x1b[1mmyapp\x1b[0m",
       "",
       "\x1b[1;2mExamples:\x1b[0m",
       "  Example usage",

@@ -467,7 +467,21 @@ describe("formatUsage", () => {
     it("should format empty usage", () => {
       const usage: Usage = [];
       const result = formatUsage("test", usage);
-      assert.equal(result, "test ");
+      assert.equal(result, "test");
+    });
+
+    it("should format empty usage with colors", () => {
+      const usage: Usage = [];
+      const result = formatUsage("test", usage, { colors: true });
+      assert.equal(result, "\x1b[1mtest\x1b[0m");
+    });
+
+    it("should format usage with all-hidden terms", () => {
+      const usage: Usage = [
+        { type: "command", name: "secret", hidden: true },
+      ];
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test");
     });
   });
 
@@ -739,7 +753,7 @@ describe("maxWidth option", () => {
   it("should handle empty usage with maxWidth", () => {
     const usage: Usage = [];
     const result = formatUsage("test", usage, { maxWidth: 10 });
-    assert.equal(result, "test ");
+    assert.equal(result, "test");
   });
 
   it("should handle single character terms with maxWidth", () => {

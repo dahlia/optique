@@ -478,15 +478,22 @@ export function formatUsage(
         }
         lines.push(formatUsage(programName, command, options));
       }
-      return lines.join("\n");
+      if (lines.length > 0) {
+        return lines.join("\n");
+      }
+      // Fall through to normal rendering when all commands are hidden
     }
   }
 
-  let output = options.colors
-    ? `\x1b[1m${programName}\x1b[0m ` // Bold
-    : `${programName} `;
-  let lineWidth = programName.length + 1;
+  let output = options.colors ? `\x1b[1m${programName}\x1b[0m` : programName;
+  let lineWidth = programName.length;
+  let first = true;
   for (const { text, width } of formatUsageTerms(usage, options)) {
+    if (first) {
+      output += " ";
+      lineWidth += 1;
+      first = false;
+    }
     if (options.maxWidth != null && lineWidth + width > options.maxWidth) {
       output += "\n";
       lineWidth = 0;
