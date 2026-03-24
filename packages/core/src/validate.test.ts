@@ -192,41 +192,73 @@ describe("validateOptionNames", () => {
   it("should reject C0 control characters", () => {
     assert.throws(
       () => validateOptionNames(["--bad\nname"], "Option"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Option name must not contain control characters: "--bad\\nname".',
+      },
     );
     assert.throws(
       () => validateOptionNames(["--bad\rname"], "Option"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Option name must not contain control characters: "--bad\\rname".',
+      },
     );
     assert.throws(
       () => validateOptionNames(["--bad\x00name"], "Option"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Option name must not contain control characters: "--bad\\x00name".',
+      },
     );
   });
 
   it("should reject C1 control characters", () => {
     assert.throws(
       () => validateOptionNames(["--bad\x80name"], "Option"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Option name must not contain control characters: "--bad\\x80name".',
+      },
     );
     assert.throws(
       () => validateOptionNames(["--bad\x9bname"], "Option"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Option name must not contain control characters: "--bad\\x9bname".',
+      },
     );
     assert.throws(
       () => validateOptionNames(["--bad\x9cname"], "Option"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Option name must not contain control characters: "--bad\\x9cname".',
+      },
     );
   });
 
   it("should reject Unicode line separators", () => {
     assert.throws(
       () => validateOptionNames(["--bad\u2028name"], "Option"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Option name must not contain control characters: "--bad\\u2028name".',
+      },
     );
     assert.throws(
       () => validateOptionNames(["--bad\u2029name"], "Option"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Option name must not contain control characters: "--bad\\u2029name".',
+      },
     );
   });
 });
@@ -235,41 +267,73 @@ describe("validateCommandNames", () => {
   it("should reject C0 control characters", () => {
     assert.throws(
       () => validateCommandNames(["bad\nname"], "Command"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Command name must not contain control characters: "bad\\nname".',
+      },
     );
     assert.throws(
       () => validateCommandNames(["bad\rname"], "Command"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Command name must not contain control characters: "bad\\rname".',
+      },
     );
     assert.throws(
       () => validateCommandNames(["bad\x00name"], "Command"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Command name must not contain control characters: "bad\\x00name".',
+      },
     );
   });
 
   it("should reject C1 control characters", () => {
     assert.throws(
       () => validateCommandNames(["bad\x80name"], "Command"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Command name must not contain control characters: "bad\\x80name".',
+      },
     );
     assert.throws(
       () => validateCommandNames(["bad\x9bname"], "Command"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Command name must not contain control characters: "bad\\x9bname".',
+      },
     );
     assert.throws(
       () => validateCommandNames(["bad\x9cname"], "Command"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Command name must not contain control characters: "bad\\x9cname".',
+      },
     );
   });
 
   it("should reject Unicode line separators", () => {
     assert.throws(
       () => validateCommandNames(["bad\u2028name"], "Command"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Command name must not contain control characters: "bad\\u2028name".',
+      },
     );
     assert.throws(
       () => validateCommandNames(["bad\u2029name"], "Command"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Command name must not contain control characters: "bad\\u2029name".',
+      },
     );
   });
 });
