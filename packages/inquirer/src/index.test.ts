@@ -1571,6 +1571,85 @@ describe("prompt()", () => {
       },
     );
 
+    it(
+      "handles class with private fields in deferred phase-two contexts",
+      async () => {
+        // Regression test for https://github.com/dahlia/optique/issues/307
+        // Private fields caused the old proxy-based sanitization to throw
+        // TypeError because proxies cannot access private fields through
+        // the receiver.  The placeholder approach avoids this entirely.
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+
+        class SecretHolder {
+          #secret: string;
+          constructor(secret: string) {
+            this.#secret = secret;
+          }
+          get masked(): string {
+            return this.#secret.replace(/./g, "*");
+          }
+        }
+
+        let phase2Threw = false;
+        const dynamicContext: SourceContext = {
+          id: Symbol.for("@test/private-field-phase-two"),
+          mode: "dynamic",
+          getAnnotations(parsed?: unknown) {
+            if (parsed !== undefined) {
+              try {
+                // Accessing the getter should not throw even though
+                // the class uses private fields.
+                (parsed as SecretHolder).masked;
+              } catch {
+                phase2Threw = true;
+              }
+            }
+            return {};
+          },
+        };
+
+        const parser = map(
+          object({
+            apiKey: prompt(
+              bindConfig(option("--api-key", string()), {
+                context,
+                key: "apiKey",
+              }),
+              {
+                type: "password",
+                message: "API key:",
+                prompter: () => Promise.resolve("prompt-secret"),
+              },
+            ),
+          }),
+          (value) => new SecretHolder(value.apiKey),
+        );
+
+        const result = await runWith(
+          parser,
+          "test",
+          [dynamicContext, context],
+          {
+            args: [],
+            contextOptions: {
+              load: () => ({
+                config: { apiKey: "real-secret" },
+                meta: undefined,
+              }),
+            },
+          },
+        );
+
+        // Phase-two context sees the class instance with placeholder data
+        // (or undefined if fully deferred) — either way, no TypeError.
+        assert.ok(!phase2Threw);
+        assert.ok(result instanceof SecretHolder);
+        assert.equal(result.masked, "***********");
+      },
+    );
+
     it("passes through deferred prompt values inside Set phase-two context inputs", async () => {
       const context = createConfigContext({
         schema: createPromptConfigSchema(),
