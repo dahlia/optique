@@ -2881,6 +2881,14 @@ export interface HostnameOptions {
   readonly allowLocalhost?: boolean;
 
   /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Override when `allowLocalhost` or other constraints reject the default.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: string;
+
+  /**
    * Maximum hostname length in characters.
    * @default 253
    */
@@ -2978,7 +2986,8 @@ export function hostname(
   return {
     $mode: "sync",
     metavar,
-    placeholder: "localhost",
+    placeholder: options?.placeholder ??
+      (allowLocalhost ? "localhost" : "example.com"),
     parse(input: string): ValueParserResult<string> {
       // Check length constraint first
       if (input.length > maxLength) {
@@ -4912,6 +4921,15 @@ export interface DomainOptions {
   readonly maxLength?: number;
 
   /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Override when `allowedTlds`, `minLabels`, or other constraints
+   * reject the default `"example.com"`.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: string;
+
+  /**
    * If `true`, converts domain to lowercase.
    *
    * @default false
@@ -5077,7 +5095,7 @@ export function domain(
   return {
     $mode: "sync",
     metavar,
-    placeholder: "example.com",
+    placeholder: options?.placeholder ?? "example.com",
     parse(input: string): ValueParserResult<string> {
       // Check length constraint first
       if (input.length > maxLength) {
@@ -5343,7 +5361,7 @@ export function ipv6(
   return {
     $mode: "sync",
     metavar,
-    placeholder: "::",
+    placeholder: allowZero ? "::" : allowLoopback ? "::1" : "2001:db8::1",
     parse(input: string): ValueParserResult<string> {
       // Parse and normalize IPv6 address
       const normalized = parseAndNormalizeIpv6(input);
