@@ -11,6 +11,7 @@ import {
   formatUsage,
   formatUsageTerm,
   isDocHidden,
+  isUsageHidden,
   type Usage,
   type UsageTerm,
 } from "./usage.ts";
@@ -596,7 +597,7 @@ export function formatDocPage(
   //  - Entries with a description column need enough space for term +
   //    gap + description, plus any showDefault/showChoices prefixes.
   //  - Bare-term entries need termIndent + 1 (just 1 term char).
-  //  - "Usage: " + programName + " " → maxWidth >= 8 + programName.length.
+  //  - "Usage: " (7 chars) + max(programName, capped widest visible term).
   //  - Examples:/Author:/Bugs: labels are 9/7/5 chars on their own lines.
   const hasContent = (msg: unknown): msg is readonly unknown[] =>
     Array.isArray(msg) && msg.length > 0;
@@ -663,8 +664,21 @@ export function formatDocPage(
       : hasEntries
       ? termIndent + 1
       : 1;
-    // "Usage: " (7 chars) + programName + " " is the minimum first line.
-    const usageMin = page.usage != null ? 8 + programName.length : 1;
+    // The first line needs "Usage: " (7) + programName.  Continuation
+    // lines are indented by 7 chars and need enough room for the widest
+    // atomic term segment.  To avoid over-restricting for intentionally
+    // long terms, the term width is capped at programName.length + 7;
+    // the 7 matches the continuation indent, so terms fitting within
+    // the first line's total width are guaranteed not to overflow.
+    const usageMin = page.usage != null
+      ? 7 + Math.max(
+        programName.length,
+        Math.min(
+          maxVisibleAtomicWidth(page.usage),
+          programName.length + 7,
+        ),
+      )
+      : 1;
     // Examples/Author/Bugs have fixed-width label lines that cannot be
     // wrapped.  The content is indented by 2 chars (needing maxWidth >= 3),
     // but the label width is always the binding constraint.
@@ -1026,6 +1040,79 @@ export function formatDocPage(
 
 function indentLines(text: string, indent: number): string {
   return text.split("\n").join("\n" + " ".repeat(indent));
+}
+
+/**
+ * Returns the width of the widest non-breakable segment among visible
+ * (non-usage-hidden) terms in a usage tree.  Hidden terms are excluded
+ * because they are filtered out before rendering, so they do not
+ * contribute to the rendered width.
+ */
+function maxVisibleAtomicWidth(usage: Usage): number {
+  let max = 0;
+  for (const term of usage) {
+    switch (term.type) {
+      case "argument":
+        if (!isUsageHidden(term.hidden)) {
+          max = Math.max(max, term.metavar.length);
+        }
+        break;
+      case "option":
+        if (!isUsageHidden(term.hidden) && term.names.length > 0) {
+          for (const name of term.names) {
+            max = Math.max(max, name.length);
+          }
+          if (term.metavar != null) {
+            max = Math.max(max, term.metavar.length);
+          }
+        }
+        break;
+      case "command":
+        if (!isUsageHidden(term.hidden)) {
+          max = Math.max(max, term.name.length);
+        }
+        break;
+      case "passthrough":
+        if (!isUsageHidden(term.hidden)) {
+          max = Math.max(max, 5); // "[...]"
+        }
+        break;
+      case "optional":
+        max = Math.max(max, maxVisibleAtomicWidth(term.terms));
+        break;
+      case "multiple": {
+        // The rendered "..." suffix is a 3-char atomic segment, but
+        // only when the inner terms survive filtering.
+        const innerMax = maxVisibleAtomicWidth(term.terms);
+        if (innerMax > 0) {
+          max = Math.max(max, 3, innerMax);
+        }
+        break;
+      }
+      case "exclusive":
+        for (const branch of term.terms) {
+          // Skip branches whose first term is a usage-hidden command,
+          // matching filterUsageForDisplay() which removes them entirely.
+          const first = branch[0];
+          if (
+            first?.type === "command" && isUsageHidden(first.hidden)
+          ) {
+            continue;
+          }
+          max = Math.max(max, maxVisibleAtomicWidth(branch));
+        }
+        break;
+      case "literal":
+        if (term.value !== "") {
+          max = Math.max(max, term.value.length);
+        }
+        break;
+      case "ellipsis":
+        max = Math.max(max, 3); // "..."
+        break;
+    }
+  }
+  return max;
 }
 
 // deno-lint-ignore no-control-regex

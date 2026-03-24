@@ -467,7 +467,35 @@ describe("formatUsage", () => {
     it("should format empty usage", () => {
       const usage: Usage = [];
       const result = formatUsage("test", usage);
-      assert.equal(result, "test ");
+      assert.equal(result, "test");
+    });
+
+    it("should format empty usage with colors", () => {
+      const usage: Usage = [];
+      const result = formatUsage("test", usage, { colors: true });
+      assert.equal(result, "\x1b[1mtest\x1b[0m");
+    });
+
+    it("should format usage with all-hidden terms", () => {
+      const usage: Usage = [
+        { type: "command", name: "secret", hidden: true },
+      ];
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test");
+    });
+
+    it("should format usage with all-hidden commands in expandCommands", () => {
+      const usage: Usage = [
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "command", name: "secret", hidden: true }],
+            [{ type: "command", name: "internal", hidden: true }],
+          ],
+        },
+      ];
+      const result = formatUsage("test", usage, { expandCommands: true });
+      assert.equal(result, "test");
     });
   });
 
@@ -601,7 +629,7 @@ describe("maxWidth option", () => {
       { type: "argument", metavar: "FILE" },
     ];
     const result = formatUsage("test", usage, { maxWidth: 10 });
-    assert.equal(result, "test \ncommand \n--verbose/\n-v FILE");
+    assert.equal(result, "test\ncommand\n--verbose/\n-v FILE");
   });
 
   it("should not wrap when content fits within maxWidth", () => {
@@ -633,7 +661,7 @@ describe("maxWidth option", () => {
       { type: "argument", metavar: "FILE" },
     ];
     const result = formatUsage("test", usage, { maxWidth: 1 });
-    assert.equal(result, "test \ncmd\n\nFILE");
+    assert.equal(result, "test\ncmd\n\nFILE");
   });
 
   it("should wrap multiple terms correctly", () => {
@@ -644,7 +672,7 @@ describe("maxWidth option", () => {
       { type: "argument", metavar: "INPUT" },
     ];
     const result = formatUsage("test", usage, { maxWidth: 15 });
-    assert.equal(result, "test tool \n--output/-o \nPATH --verbose/\n-v INPUT");
+    assert.equal(result, "test tool\n--output/-o\nPATH --verbose/\n-v INPUT");
   });
 
   it("should wrap optional terms", () => {
@@ -677,7 +705,7 @@ describe("maxWidth option", () => {
     const result = formatUsage("test", usage, { maxWidth: 15 });
     assert.equal(
       result,
-      "test tool (\n--verbose/-v | \n--quiet/-q | \nCONFIG)",
+      "test tool (\n--verbose/-v |\n--quiet/-q |\nCONFIG)",
     );
   });
 
@@ -712,7 +740,7 @@ describe("maxWidth option", () => {
     const result = formatUsage("test", usage, { maxWidth: 20 });
     assert.equal(
       result,
-      "test git (commit [\n--message/-m MSG] | \nadd FILE...)",
+      "test git (commit [\n--message/-m MSG] |\nadd FILE...)",
     );
   });
 
@@ -739,7 +767,7 @@ describe("maxWidth option", () => {
   it("should handle empty usage with maxWidth", () => {
     const usage: Usage = [];
     const result = formatUsage("test", usage, { maxWidth: 10 });
-    assert.equal(result, "test ");
+    assert.equal(result, "test");
   });
 
   it("should handle single character terms with maxWidth", () => {
@@ -749,7 +777,7 @@ describe("maxWidth option", () => {
       { type: "command", name: "c" },
     ];
     const result = formatUsage("test", usage, { maxWidth: 3 });
-    assert.equal(result, "test \na b\nc");
+    assert.equal(result, "test\na b\nc");
   });
 
   it("should handle maxWidth of 0", () => {
@@ -758,7 +786,7 @@ describe("maxWidth option", () => {
       { type: "argument", metavar: "FILE" },
     ];
     const result = formatUsage("test", usage, { maxWidth: 0 });
-    assert.equal(result, "test \ncmd\n\nFILE");
+    assert.equal(result, "test\ncmd\n\nFILE");
   });
 
   it("should handle very long single term that exceeds maxWidth", () => {
@@ -773,7 +801,7 @@ describe("maxWidth option", () => {
     // Single term should not be broken, just placed on its own line
     assert.equal(
       result,
-      "test \n--very-very-long-option-name\n\nVERY_LONG_METAVAR",
+      "test\n--very-very-long-option-name\n\nVERY_LONG_METAVAR",
     );
   });
 
@@ -796,7 +824,7 @@ describe("maxWidth option", () => {
     const result = formatUsage("test", usage, { maxWidth: 10, colors: true });
     assert.equal(
       result,
-      "\x1b[1mtest\x1b[0m \x1b[1mcmd\x1b[0m \n\x1b[3m--verbose\x1b[0m\x1b[2m/\x1b[0m\n\x1b[3m-v\x1b[0m \x1b[4mFILE\x1b[0m",
+      "\x1b[1mtest\x1b[0m \x1b[1mcmd\x1b[0m\n\x1b[3m--verbose\x1b[0m\x1b[2m/\x1b[0m\n\x1b[3m-v\x1b[0m \x1b[4mFILE\x1b[0m",
     );
   });
 
@@ -810,7 +838,7 @@ describe("maxWidth option", () => {
       maxWidth: 10,
       onlyShortestOptions: true,
     });
-    assert.equal(result, "test \ncommand -v\nFILE");
+    assert.equal(result, "test\ncommand -v\nFILE");
   });
 
   it("should combine maxWidth with both colors and onlyShortestOptions", () => {
@@ -1555,7 +1583,7 @@ describe("formatUsageTerm", () => {
         ],
       };
       const result = formatUsageTerm(term, { maxWidth: 15 });
-      assert.equal(result, "(--verbose/-v |\n--quiet/-q | \nCONFIG)");
+      assert.equal(result, "(--verbose/-v |\n--quiet/-q |\nCONFIG)");
     });
 
     it("should wrap multiple term when exceeding maxWidth", () => {

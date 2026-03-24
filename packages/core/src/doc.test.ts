@@ -533,9 +533,9 @@ describe("formatDocPage", () => {
 
     const result = formatDocPage("myapp", page, { colors: true });
 
-    // Even with empty usage array, formatUsage still outputs the program name
+    // Empty usage array renders just the program name without trailing space
     const expected = [
-      "\x1b[1;2mUsage:\x1b[0m \x1b[1mmyapp\x1b[0m ",
+      "\x1b[1;2mUsage:\x1b[0m \x1b[1mmyapp\x1b[0m",
       "",
       "\x1b[1;2mExamples:\x1b[0m",
       "  Example usage",
@@ -1883,7 +1883,7 @@ describe("formatDocPage", () => {
         usage: [{ type: "argument", metavar: "FILE" }],
         sections: [],
       };
-      // "Usage: " (7) + "app" (3) + " " (1) = 11, so minimum is 11
+      // 7 + max("app"(3), min("FILE"(4), 3+7=10)) = 7 + 4 = 11
       assert.throws(
         () => formatDocPage("app", page, { maxWidth: 10 }),
         {
@@ -1891,9 +1891,39 @@ describe("formatDocPage", () => {
           message: "maxWidth must be at least 11, got 10.",
         },
       );
-      // maxWidth=11 should work
+      // maxWidth=11: indent(7)+FILE(4) = 11 fits on continuation line
       const result = formatDocPage("app", page, { maxWidth: 11 });
       assertLinesWithinMaxWidth(result, 11);
+    });
+
+    it("should accept maxWidth fitting empty usage exactly", () => {
+      const page: DocPage = {
+        usage: [],
+        sections: [],
+      };
+      // "Usage: " (7) + "a" (1) = 8
+      const result = formatDocPage("a", page, { maxWidth: 8 });
+      assertLinesWithinMaxWidth(result, 8);
+    });
+
+    it("should accept maxWidth when first term wraps and fits", () => {
+      const page: DocPage = {
+        usage: [{ type: "command", name: "b" }],
+        sections: [],
+      };
+      // "Usage: a" (8) on first line, "       b" (8) on continuation
+      const result = formatDocPage("a", page, { maxWidth: 8 });
+      assertLinesWithinMaxWidth(result, 8);
+    });
+
+    it("should accept maxWidth fitting all-hidden usage exactly", () => {
+      const page: DocPage = {
+        usage: [{ type: "command", name: "secret", hidden: true }],
+        sections: [],
+      };
+      // All terms hidden → renders as "Usage: app" (10 chars)
+      const result = formatDocPage("app", page, { maxWidth: 10 });
+      assertLinesWithinMaxWidth(result, 10);
     });
 
     it("should throw RangeError when maxWidth is too small for Examples label", () => {
@@ -2151,8 +2181,8 @@ describe("formatDocPage", () => {
           }],
         }],
       };
-      // usage requires 8 + len("app") = 11, entries require termIndent(2) + 4 = 6
-      // max(11, 6) = 11
+      // usage requires 7 + max("app"(3), min("FILE"(4), 10)) = 11,
+      // entries require termIndent(2) + 4 = 6; max(11, 6) = 11
       assert.throws(
         () => formatDocPage("app", page, { maxWidth: 10 }),
         {
@@ -2160,6 +2190,7 @@ describe("formatDocPage", () => {
           message: "maxWidth must be at least 11, got 10.",
         },
       );
+      // maxWidth=11: indent(7)+FILE(4) = 11 fits on continuation line
       const result = formatDocPage("app", page, { maxWidth: 11 });
       assertLinesWithinMaxWidth(result, 11);
     });

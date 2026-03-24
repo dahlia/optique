@@ -142,6 +142,15 @@ To be released.
     `Usage: myapp config ...` without changing parse behavior or
     completion behavior.  [[#139]]
 
+ -  Fixed `formatUsage()` and `formatUsageTerm()` leaving trailing whitespace
+    when no visible usage terms remain after filtering (e.g., empty usage array
+    or all-hidden terms) or when inter-term separator spaces precede a line
+    wrap.  `formatDocPage()` also no longer renders a trailing space in the
+    `Usage:` line for empty usage.  The `maxWidth` validation in
+    `formatDocPage()` now uses content-aware width estimation based on visible
+    usage terms, replacing the previous fixed-offset heuristic.  [[#473],
+    [#725]]
+
  -  Fixed `getDocPage()` preserving hidden terms from custom `DocFragments`
     instead of filtering them.  `buildDocPage()` now filters out entries whose
     terms are doc-hidden before assembling the final `DocPage`.  Additionally,
@@ -969,6 +978,7 @@ To be released.
 [#439]: https://github.com/dahlia/optique/issues/439
 [#469]: https://github.com/dahlia/optique/issues/469
 [#471]: https://github.com/dahlia/optique/issues/471
+[#473]: https://github.com/dahlia/optique/issues/473
 [#479]: https://github.com/dahlia/optique/issues/479
 [#485]: https://github.com/dahlia/optique/issues/485
 [#488]: https://github.com/dahlia/optique/issues/488
@@ -1100,6 +1110,7 @@ To be released.
 [#722]: https://github.com/dahlia/optique/pull/722
 [#723]: https://github.com/dahlia/optique/pull/723
 [#724]: https://github.com/dahlia/optique/pull/724
+[#725]: https://github.com/dahlia/optique/pull/725
 
 ### @optique/config
 
