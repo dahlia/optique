@@ -598,6 +598,73 @@ describe("formatDocPage", () => {
     assert.ok(result.includes("Footer only"));
   });
 
+  it("should treat empty brief as absent", () => {
+    const withEmpty: DocPage = { brief: [], sections: [] };
+    const withAbsent: DocPage = { sections: [] };
+    assert.equal(
+      formatDocPage("app", withEmpty),
+      formatDocPage("app", withAbsent),
+    );
+  });
+
+  it("should treat empty description as absent", () => {
+    const withEmpty: DocPage = { description: [], sections: [] };
+    const withAbsent: DocPage = { sections: [] };
+    assert.equal(
+      formatDocPage("app", withEmpty),
+      formatDocPage("app", withAbsent),
+    );
+  });
+
+  it("should treat empty examples as absent", () => {
+    const page: DocPage = { examples: [], usage: [], sections: [] };
+    const result = formatDocPage("app", page);
+    assert.ok(!result.includes("Examples:"));
+  });
+
+  it("should treat empty author as absent", () => {
+    const page: DocPage = { author: [], usage: [], sections: [] };
+    const result = formatDocPage("app", page);
+    assert.ok(!result.includes("Author:"));
+  });
+
+  it("should treat empty bugs as absent", () => {
+    const page: DocPage = { bugs: [], usage: [], sections: [] };
+    const result = formatDocPage("app", page);
+    assert.ok(!result.includes("Bugs:"));
+  });
+
+  it("should treat empty footer as absent", () => {
+    const withEmpty: DocPage = { footer: [], sections: [] };
+    const withAbsent: DocPage = { sections: [] };
+    assert.equal(
+      formatDocPage("app", withEmpty),
+      formatDocPage("app", withAbsent),
+    );
+  });
+
+  it("should treat entry-level empty description as absent", () => {
+    const withEmpty: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "command", name: "cmd" },
+          description: [],
+        }],
+      }],
+    };
+    const withAbsent: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "command", name: "cmd" },
+        }],
+      }],
+    };
+    assert.equal(
+      formatDocPage("app", withEmpty),
+      formatDocPage("app", withAbsent),
+    );
+  });
+
   it("should format all labels with bold+dim when colors enabled", () => {
     const page: DocPage = {
       usage: [{ type: "command", name: "myapp" }],
