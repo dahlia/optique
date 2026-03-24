@@ -9805,20 +9805,20 @@ describe("socketAddress()", () => {
       assert.strictEqual(result2.value.port, 80);
     });
 
-    it("should prefer host-only when port is optional and whole input is a valid hostname", () => {
+    it("should prefer valid split over host-only to preserve round-trip", () => {
       const parser = socketAddress({ separator: "to", defaultPort: 80 });
 
-      // Even though "80" is a valid port, the whole input "exampleto80"
-      // is a valid hostname, so it should be treated as host-only.
+      // "exampleto80" has a valid split: host="example", port=80.
+      // The split must win over host-only so that parse(format(v)) == v.
       const result1 = parser.parse("exampleto80");
       assert.ok(result1.success);
-      assert.strictEqual(result1.value.host, "exampleto80");
+      assert.strictEqual(result1.value.host, "example");
       assert.strictEqual(result1.value.port, 80);
 
       const result2 = parser.parse("serverto443");
       assert.ok(result2.success);
-      assert.strictEqual(result2.value.host, "serverto443");
-      assert.strictEqual(result2.value.port, 80);
+      assert.strictEqual(result2.value.host, "server");
+      assert.strictEqual(result2.value.port, 443);
     });
 
     it("should split at separator when requirePort is true", () => {
@@ -9859,40 +9859,28 @@ describe("socketAddress()", () => {
       assert.strictEqual(result.value.port, 80);
     });
 
-    it("should reject when split has valid host but invalid numeric port", () => {
-      // "example-70000" should NOT be silently accepted as a hostname.
-      // The port part "70000" is all digits → user intended a port → error.
-      const parser = socketAddress({ separator: "-", defaultPort: 80 });
+    it("should round-trip through format and parse", () => {
+      const parser = socketAddress({ separator: "to", defaultPort: 80 });
 
-      const result = parser.parse("example-70000");
-      assert.ok(!result.success);
+      // format() appends separator+port, and since the separator cannot
+      // contain digits, parse() always finds that boundary correctly.
+      const value = { host: "toronto", port: 8080 };
+      const formatted = parser.format(value);
+      assert.strictEqual(formatted, "torontoto8080");
+      const result = parser.parse(formatted);
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, value);
     });
 
-    it("should accept host-only when port part is not numeric", () => {
-      // "example-server" has a non-numeric port part "server",
-      // so the separator is incidental and the input is a hostname.
+    it("should fall back to host-only when no valid split exists", () => {
       const parser = socketAddress({ separator: "-", defaultPort: 80 });
 
+      // "example-server" has no valid split (port "server" is not a
+      // number), so the whole input is treated as a hostname.
       const result = parser.parse("example-server");
       assert.ok(result.success);
       assert.strictEqual(result.value.host, "example-server");
       assert.strictEqual(result.value.port, 80);
-    });
-
-    it("should report format error, not missing port, for invalid numeric port with requirePort", () => {
-      const parser = socketAddress({ separator: "to", requirePort: true });
-
-      // "exampleto70000" has a valid host + all-digit invalid port.
-      // Error should be about invalid format, not "missing port".
-      const result = parser.parse("exampleto70000");
-      assert.ok(!result.success);
-      assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "value", value: "to" },
-        { type: "text", text: "port, but got " },
-        { type: "value", value: "exampleto70000" },
-        { type: "text", text: "." },
-      ]);
     });
 
     it("should propagate IP-specific error, not missing port, for invalid host with requirePort", () => {

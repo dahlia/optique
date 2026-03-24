@@ -1407,15 +1407,13 @@ $ example --proxy "localhost 3000"  # Valid
 $ example --proxy "localhost:3000"  # Invalid: wrong separator
 ~~~~
 
-When port is optional (`defaultPort` is set and `requirePort` is false), the
-parser first tries to interpret the entire input as a hostname.  Only if that
-fails does it look for the separator to split host and port.  This prevents
-separators that can appear inside hostnames from causing incorrect splits
-(e.g., `"toronto"` with `separator: "to"` is treated as a hostname, not split
-into host `"toron"` with the default port).  However, if a split produces a
-valid hostname and an all-digit port that fails validation (e.g., out of range),
-the parser reports the port error rather than silently accepting the input as
-a hostname.
+The parser tries splitting at the separator to find a valid host+port pair
+before falling back to the host-only interpretation.  This ensures that
+`parse(format(value))` always recovers the original value.  If no split
+produces both a valid host and a valid port (e.g., the separator only appears
+inside the hostname with an empty or non-numeric suffix), the entire input is
+treated as a hostname with the default port.  For example, `"toronto"` with
+`separator: "to"` has no valid split and is correctly treated as a hostname.
 
 ### Return value
 
