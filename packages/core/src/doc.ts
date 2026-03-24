@@ -1078,8 +1078,11 @@ function maxVisibleAtomicWidth(usage: Usage): number {
         }
         break;
       case "optional":
-      case "multiple":
         max = Math.max(max, maxVisibleAtomicWidth(term.terms));
+        break;
+      case "multiple":
+        // The rendered "..." suffix is a 3-char atomic segment.
+        max = Math.max(max, 3, maxVisibleAtomicWidth(term.terms));
         break;
       case "exclusive":
         for (const branch of term.terms) {
