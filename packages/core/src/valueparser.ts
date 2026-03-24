@@ -3764,6 +3764,11 @@ export function socketAddress(
       // part that fails validation (e.g., out of range).  This prevents
       // the host-only fallback from silently masking port typos.
       let validHostNumericPortInvalid = false;
+      // The validated host from the rightmost split with an empty port
+      // part (trailing separator).  Used as a fallback when the whole
+      // input is not a valid hostname by itself (e.g., "localhost:" where
+      // the colon makes it invalid as a hostname).
+      let trailingSepHost: string | undefined;
       let searchFrom = trimmed.length;
       while (searchFrom > 0) {
         const separatorIndex = trimmed.lastIndexOf(
@@ -3777,7 +3782,17 @@ export function socketAddress(
           separatorIndex + separator.length,
         );
 
-        if (portPart !== "") {
+        if (portPart === "") {
+          // Trailing separator — potential omitted port.  Record the
+          // first (rightmost) valid host so it can be used as a fallback
+          // when the whole input is not a valid hostname.
+          if (trailingSepHost === undefined) {
+            const hostResult = parseHost(hostPart);
+            if (hostResult.success) {
+              trailingSepHost = hostResult.value;
+            }
+          }
+        } else {
           const portResult = portParser.parse(portPart);
           if (portResult.success) {
             const hostResult = parseHost(hostPart);
@@ -3854,6 +3869,24 @@ export function socketAddress(
           return {
             success: true,
             value: { host: hostOnlyResult.value, port: defaultPort! },
+          };
+        }
+        const errorMsg = options?.errors?.missingPort;
+        const msg = typeof errorMsg === "function"
+          ? errorMsg(input)
+          : errorMsg ??
+            message`Port number is required but was not specified.`;
+        return { success: false, error: msg };
+      }
+
+      // If the whole input is not a valid hostname but a trailing
+      // separator produced a valid host, treat as omitted port
+      // (e.g., "localhost:" → host "localhost" with default port).
+      if (trailingSepHost !== undefined) {
+        if (canOmitPort) {
+          return {
+            success: true,
+            value: { host: trailingSepHost, port: defaultPort! },
           };
         }
         const errorMsg = options?.errors?.missingPort;

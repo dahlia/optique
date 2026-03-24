@@ -9925,6 +9925,40 @@ describe("socketAddress()", () => {
         { type: "text", text: "." },
       ]);
     });
+
+    it("should treat trailing separator as omitted port", () => {
+      const parser = socketAddress({ defaultPort: 80 });
+
+      // "localhost:" has a trailing ":" — host is "localhost", port omitted.
+      const result = parser.parse("localhost:");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "localhost");
+      assert.strictEqual(result.value.port, 80);
+    });
+
+    it("should prefer host-only over trailing separator when input is a valid hostname", () => {
+      const parser = socketAddress({ separator: "to", defaultPort: 80 });
+
+      // "exampleto" is a valid hostname, so host-only wins.
+      // The trailing "to" is not treated as a separator.
+      const result = parser.parse("exampleto");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "exampleto");
+      assert.strictEqual(result.value.port, 80);
+    });
+
+    it("should report missing port for trailing separator with requirePort", () => {
+      const parser = socketAddress({ requirePort: true });
+
+      const result = parser.parse("localhost:");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Port number is required but was not specified.",
+        },
+      ]);
+    });
   });
 });
 
