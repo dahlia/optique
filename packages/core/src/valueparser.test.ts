@@ -12456,6 +12456,60 @@ describe("cidr()", () => {
         { type: "text", text: " not allowed in CIDR." },
       ]);
     });
+
+    it("should report invalidPrefix over mapped restriction", () => {
+      const parser = cidr({ ipv4: { allowPrivate: false } });
+      const result = parser.parse("::ffff:10.0.0.0/129");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a prefix length between 0 and ",
+        },
+        { type: "text", text: "128" },
+        { type: "text", text: " for IPv6, but got " },
+        { type: "text", text: "129" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should report prefixBelowMinimum over mapped restriction", () => {
+      const parser = cidr({
+        ipv4: { allowPrivate: false },
+        minPrefix: 112,
+      });
+      const result = parser.parse("::ffff:10.0.0.0/96");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a prefix length greater than or equal to ",
+        },
+        { type: "text", text: "112" },
+        { type: "text", text: ", but got " },
+        { type: "text", text: "96" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should report prefixAboveMaximum over mapped restriction", () => {
+      const parser = cidr({
+        ipv4: { allowLoopback: false },
+        maxPrefix: 120,
+      });
+      const result = parser.parse("::ffff:127.0.0.1/128");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a prefix length less than or equal to ",
+        },
+        { type: "text", text: "120" },
+        { type: "text", text: ", but got " },
+        { type: "text", text: "128" },
+        { type: "text", text: "." },
+      ]);
+    });
   });
 });
 

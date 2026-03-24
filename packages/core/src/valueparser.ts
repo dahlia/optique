@@ -5880,27 +5880,6 @@ export function cidr(
       if (ipVersion === null && ipv6Parser !== null) {
         const result = ipv6Parser.parse(ipPart);
         if (result.success) {
-          // Check IPv4 restrictions for IPv4-mapped IPv6 addresses
-          if (version === "both") {
-            const mappedOctets = extractIpv4FromMapped(result.value);
-            if (mappedOctets !== null) {
-              const restrictionError = checkIpv4MappedRestrictions(
-                mappedOctets,
-                result.value,
-                options?.ipv4,
-                {
-                  privateNotAllowed: errors?.privateNotAllowed,
-                  loopbackNotAllowed: errors?.loopbackNotAllowed,
-                  linkLocalNotAllowed: errors?.linkLocalNotAllowed,
-                  multicastNotAllowed: errors?.multicastNotAllowed,
-                  broadcastNotAllowed: errors?.broadcastNotAllowed,
-                  zeroNotAllowed: errors?.zeroNotAllowed,
-                },
-              );
-              if (restrictionError !== null) return restrictionError;
-            }
-          }
-
           ipVersion = 6;
           normalizedIp = result.value;
 
@@ -6046,6 +6025,29 @@ export function cidr(
           { type: "text", text: "." },
         ] as Message;
         return { success: false, error: msg };
+      }
+
+      // Check IPv4 restrictions for IPv4-mapped IPv6 addresses.
+      // This runs after all prefix validations so that prefix errors
+      // (invalidPrefix, minPrefix, maxPrefix) take precedence.
+      if (version === "both" && ipVersion === 6 && normalizedIp !== null) {
+        const mappedOctets = extractIpv4FromMapped(normalizedIp);
+        if (mappedOctets !== null) {
+          const restrictionError = checkIpv4MappedRestrictions(
+            mappedOctets,
+            normalizedIp,
+            options?.ipv4,
+            {
+              privateNotAllowed: errors?.privateNotAllowed,
+              loopbackNotAllowed: errors?.loopbackNotAllowed,
+              linkLocalNotAllowed: errors?.linkLocalNotAllowed,
+              multicastNotAllowed: errors?.multicastNotAllowed,
+              broadcastNotAllowed: errors?.broadcastNotAllowed,
+              zeroNotAllowed: errors?.zeroNotAllowed,
+            },
+          );
+          if (restrictionError !== null) return restrictionError;
+        }
       }
 
       return {
