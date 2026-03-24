@@ -5229,42 +5229,9 @@ function extractIpv4FromMapped(
 }
 
 /**
- * Computes the minimum (host bits → 0) and maximum (host bits → 1) IPv4
- * octets for a CIDR given the base address octets and IPv4 prefix length
- * (i.e., the IPv6 prefix minus 96).
- */
-function computeIpv4CidrRange(
-  octets: readonly number[],
-  ipv4Prefix: number,
-): { readonly min: readonly number[]; readonly max: readonly number[] } {
-  if (ipv4Prefix >= 32) return { min: octets, max: octets };
-  if (ipv4Prefix <= 0) return { min: [0, 0, 0, 0], max: [255, 255, 255, 255] };
-  const min = [0, 0, 0, 0];
-  const max = [0, 0, 0, 0];
-  for (let i = 0; i < 4; i++) {
-    const octetStart = i * 8;
-    if (ipv4Prefix >= octetStart + 8) {
-      min[i] = octets[i];
-      max[i] = octets[i];
-    } else if (ipv4Prefix <= octetStart) {
-      min[i] = 0;
-      max[i] = 255;
-    } else {
-      const bits = ipv4Prefix - octetStart;
-      const mask = (0xff << (8 - bits)) & 0xff;
-      min[i] = octets[i] & mask;
-      max[i] = min[i] | (~mask & 0xff);
-    }
-  }
-  return { min, max };
-}
-
-/**
  * Checks IPv4 restrictions against octets extracted from an IPv4-mapped
- * IPv6 address.  When an `ipv4Prefix` is provided (for CIDRs), the check
- * uses the network's min and max addresses so that the result depends only
- * on the network, not on host bits in the base address.  A restriction is
- * triggered only when the *entire* network falls within the restricted range.
+ * IPv6 address.  The check uses the base address, consistent with how
+ * the `ipv4()` parser validates the address part of a regular IPv4 CIDR.
  *
  * Returns an error result if a restriction is violated, or null if all
  * checks pass.
@@ -5281,7 +5248,6 @@ function checkIpv4MappedRestrictions(
     readonly broadcastNotAllowed?: Message | ((ip: string) => Message);
     readonly zeroNotAllowed?: Message | ((ip: string) => Message);
   } | undefined,
-  ipv4Prefix: number = 32,
 ): { readonly success: false; readonly error: Message } | null {
   const allowPrivate = ipv4Opts?.allowPrivate ?? true;
   const allowLoopback = ipv4Opts?.allowLoopback ?? true;
@@ -5290,12 +5256,7 @@ function checkIpv4MappedRestrictions(
   const allowBroadcast = ipv4Opts?.allowBroadcast ?? true;
   const allowZero = ipv4Opts?.allowZero ?? true;
 
-  // For CIDRs, compute the network's min/max addresses so the result
-  // depends only on the network, not on host bits in the base address.
-  // A restriction triggers only when the entire network is within range.
-  const { min, max } = computeIpv4CidrRange(octets, ipv4Prefix);
-
-  if (!allowPrivate && isPrivateIp(min) && isPrivateIp(max)) {
+  if (!allowPrivate && isPrivateIp(octets)) {
     const errorMsg = errors?.privateNotAllowed;
     const msg = typeof errorMsg === "function"
       ? errorMsg(normalizedIpv6)
@@ -5303,7 +5264,7 @@ function checkIpv4MappedRestrictions(
     return { success: false, error: msg };
   }
 
-  if (!allowLoopback && isLoopbackIp(min) && isLoopbackIp(max)) {
+  if (!allowLoopback && isLoopbackIp(octets)) {
     const errorMsg = errors?.loopbackNotAllowed;
     const msg = typeof errorMsg === "function"
       ? errorMsg(normalizedIpv6)
@@ -5311,7 +5272,7 @@ function checkIpv4MappedRestrictions(
     return { success: false, error: msg };
   }
 
-  if (!allowLinkLocal && isLinkLocalIp(min) && isLinkLocalIp(max)) {
+  if (!allowLinkLocal && isLinkLocalIp(octets)) {
     const errorMsg = errors?.linkLocalNotAllowed;
     const msg = typeof errorMsg === "function"
       ? errorMsg(normalizedIpv6)
@@ -5319,7 +5280,7 @@ function checkIpv4MappedRestrictions(
     return { success: false, error: msg };
   }
 
-  if (!allowMulticast && isMulticastIp(min) && isMulticastIp(max)) {
+  if (!allowMulticast && isMulticastIp(octets)) {
     const errorMsg = errors?.multicastNotAllowed;
     const msg = typeof errorMsg === "function"
       ? errorMsg(normalizedIpv6)
@@ -5327,7 +5288,7 @@ function checkIpv4MappedRestrictions(
     return { success: false, error: msg };
   }
 
-  if (!allowBroadcast && isBroadcastIp(min) && isBroadcastIp(max)) {
+  if (!allowBroadcast && isBroadcastIp(octets)) {
     const errorMsg = errors?.broadcastNotAllowed;
     const msg = typeof errorMsg === "function"
       ? errorMsg(normalizedIpv6)
@@ -5335,7 +5296,7 @@ function checkIpv4MappedRestrictions(
     return { success: false, error: msg };
   }
 
-  if (!allowZero && isZeroIp(min) && isZeroIp(max)) {
+  if (!allowZero && isZeroIp(octets)) {
     const errorMsg = errors?.zeroNotAllowed;
     const msg = typeof errorMsg === "function"
       ? errorMsg(normalizedIpv6)
@@ -6072,8 +6033,8 @@ export function cidr(
       // Check IPv4 restrictions for IPv4-mapped IPv6 addresses.
       // This runs after all prefix validations so that prefix errors
       // (invalidPrefix, minPrefix, maxPrefix) take precedence.
-      // The check uses the CIDR's min/max range so that the result
-      // depends only on the network, not on host bits in the base address.
+      // The base address is checked regardless of prefix length,
+      // consistent with how ipv4() validates regular IPv4 CIDRs.
       if (version === "both" && ipVersion === 6 && normalizedIp !== null) {
         const mappedOctets = extractIpv4FromMapped(normalizedIp);
         if (mappedOctets !== null) {
@@ -6089,7 +6050,6 @@ export function cidr(
               broadcastNotAllowed: errors?.broadcastNotAllowed,
               zeroNotAllowed: errors?.zeroNotAllowed,
             },
-            prefix - 96,
           );
           if (restrictionError !== null) return restrictionError;
         }

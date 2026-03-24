@@ -12511,78 +12511,36 @@ describe("cidr()", () => {
       ]);
     });
 
-    it("should skip IPv4 restrictions when prefix is at or below /96", () => {
-      // At /96 the entire IPv4-mapped space is covered; the base
-      // address's IPv4 portion is masked away and meaningless.
-      const parser = cidr({ ipv4: { allowMulticast: false } });
-      const result = parser.parse("::ffff:224.0.0.0/96");
-      assert.ok(result.success);
-      assert.deepStrictEqual(result.value, {
-        address: "::ffff:e000:0",
-        prefix: 96,
-        version: 6,
-      });
+    it("should check base address regardless of prefix length", () => {
+      // Consistent with how ipv4() checks regular IPv4 CIDRs:
+      // the base address is validated, not the network range.
+      const parser = cidr({ ipv4: { allowPrivate: false } });
+
+      // Broad prefix — base address 10.0.0.0 is still private
+      const r1 = parser.parse("::ffff:10.0.0.0/97");
+      assert.ok(!r1.success);
+
+      // Prefix at /96 — base address is still checked
+      const r2 = parser.parse("::ffff:10.0.0.0/96");
+      assert.ok(!r2.success);
+
+      // Prefix below /96 — base address is still checked
+      const r3 = parser.parse("::ffff:10.0.0.0/80");
+      assert.ok(!r3.success);
+
+      // Non-private base address with same broad prefix → accepted
+      const r4 = parser.parse("::ffff:203.0.113.0/97");
+      assert.ok(r4.success);
     });
 
-    it("should skip IPv4 restrictions when prefix is below /96", () => {
-      const parser = cidr({ ipv4: { allowPrivate: false } });
-      const result = parser.parse("::ffff:10.0.0.0/80");
-      assert.ok(result.success);
-      assert.deepStrictEqual(result.value, {
-        address: "::ffff:a00:0",
-        prefix: 80,
-        version: 6,
-      });
-    });
-
-    it("should apply IPv4 restrictions when prefix is above /96", () => {
-      const parser = cidr({ ipv4: { allowPrivate: false } });
-      // /104 constrains the first IPv4 octet → base address matters
-      const result = parser.parse("::ffff:10.0.0.0/104");
+    it("should reject mapped broadcast CIDR regardless of prefix", () => {
+      const parser = cidr({ ipv4: { allowBroadcast: false } });
+      const result = parser.parse("::ffff:255.255.255.255/127");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "value", value: "::ffff:a00:0" },
-        { type: "text", text: " is a private IP address." },
+        { type: "value", value: "::ffff:ffff:ffff" },
+        { type: "text", text: " is the broadcast address." },
       ]);
-    });
-
-    it("should accept mapped CIDR when prefix is too broad for restriction", () => {
-      // /97 = IPv4 /1 → network is 0.0.0.0/1, not entirely private
-      const parser = cidr({ ipv4: { allowPrivate: false } });
-      const result = parser.parse("::ffff:10.0.0.0/97");
-      assert.ok(result.success);
-      assert.deepStrictEqual(result.value, {
-        address: "::ffff:a00:0",
-        prefix: 97,
-        version: 6,
-      });
-    });
-
-    it("should give same result for identical networks with different host bits", () => {
-      const parser = cidr({ ipv4: { allowPrivate: false } });
-      // Both normalize to the same /97 network once masked
-      const result1 = parser.parse("::ffff:10.0.0.0/97");
-      const result2 = parser.parse("::ffff:74.0.0.0/97");
-      assert.ok(result1.success);
-      assert.ok(result2.success);
-    });
-
-    it("should reject mapped multicast CIDR when prefix covers the range", () => {
-      // /100 = IPv4 /4 → network is 224.0.0.0/4, entirely multicast
-      const parser = cidr({ ipv4: { allowMulticast: false } });
-      const result = parser.parse("::ffff:224.0.0.0/100");
-      assert.ok(!result.success);
-      assert.deepStrictEqual(result.error, [
-        { type: "value", value: "::ffff:e000:0" },
-        { type: "text", text: " is a multicast address." },
-      ]);
-    });
-
-    it("should accept mapped multicast CIDR when prefix is too broad", () => {
-      // /99 = IPv4 /3 → network includes non-multicast addresses
-      const parser = cidr({ ipv4: { allowMulticast: false } });
-      const result = parser.parse("::ffff:224.0.0.0/99");
-      assert.ok(result.success);
     });
   });
 });
