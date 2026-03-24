@@ -9841,11 +9841,12 @@ describe("macAddress()", () => {
       assert.strictEqual(result.value, "001A2B3C4D5E");
     });
 
-    it("should reject single-digit octets with colons", () => {
+    it("should accept and zero-pad single-digit octets with colons", () => {
       const parser = macAddress();
 
       const result = parser.parse("0:1:2:3:4:5");
-      assert.ok(!result.success);
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "00:01:02:03:04:05");
     });
   });
 
@@ -10007,6 +10008,57 @@ describe("macAddress()", () => {
       assert.ok(result.success);
       assert.strictEqual(result.value, "00:1A:2B:3C:4D:5E");
     });
+
+    it("should zero-pad single-digit octets with colon outputSeparator", () => {
+      const parser = macAddress({ outputSeparator: ":" });
+
+      const result = parser.parse("0:1:2:3:4:5");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "00:01:02:03:04:05");
+    });
+
+    it("should zero-pad single-digit octets with hyphen outputSeparator", () => {
+      const parser = macAddress({ outputSeparator: "-" });
+
+      const result = parser.parse("0:1:2:3:4:5");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "00-01-02-03-04-05");
+    });
+
+    it("should zero-pad single-digit octets with dot outputSeparator", () => {
+      const parser = macAddress({ outputSeparator: "." });
+
+      const result = parser.parse("0:1:2:3:4:5");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "0001.0203.0405");
+    });
+
+    it("should zero-pad single-digit octets with none outputSeparator", () => {
+      const parser = macAddress({ outputSeparator: "none" });
+
+      const result = parser.parse("0:1:2:3:4:5");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "000102030405");
+    });
+
+    it("should round-trip single-digit octets through dot format", () => {
+      const dotParser = macAddress({ outputSeparator: ".", case: "upper" });
+      const first = dotParser.parse("0:1:2:3:4:5");
+      assert.ok(first.success);
+      assert.strictEqual(first.value, "0001.0203.0405");
+
+      const second = dotParser.parse(first.value);
+      assert.ok(second.success);
+      assert.strictEqual(second.value, first.value);
+    });
+
+    it("should zero-pad and apply case conversion together", () => {
+      const parser = macAddress({ outputSeparator: ":", case: "upper" });
+
+      const result = parser.parse("a:1b:2:3c:4d:5");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "0A:1B:02:3C:4D:05");
+    });
   });
 
   describe("invalid input", () => {
@@ -10073,25 +10125,42 @@ describe("macAddress()", () => {
       assert.ok(!result.success);
     });
 
-    it("should reject single-digit octets with hyphens", () => {
+    it("should accept and zero-pad single-digit octets with hyphens", () => {
       const parser = macAddress();
 
       const result = parser.parse("0-1-2-3-4-5");
-      assert.ok(!result.success);
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "00-01-02-03-04-05");
     });
 
-    it("should reject mixed single and double digit octets with colons", () => {
+    it("should accept and zero-pad mixed single and double digit octets with colons", () => {
       const parser = macAddress();
 
       const result = parser.parse("0A:1:2B:3:4D:5");
-      assert.ok(!result.success);
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "0A:01:2B:03:4D:05");
     });
 
-    it("should reject mixed single and double digit octets with hyphens", () => {
+    it("should accept and zero-pad mixed single and double digit octets with hyphens", () => {
       const parser = macAddress();
 
       const result = parser.parse("0A-1-2B-3-4D-5");
-      assert.ok(!result.success);
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "0A-01-2B-03-4D-05");
+    });
+
+    it("should keep dot-separated input strict (4 hex chars per group)", () => {
+      const parser = macAddress({ separator: "." });
+
+      assert.ok(!parser.parse("01.23.45").success);
+      assert.ok(!parser.parse("1.0203.0405").success);
+    });
+
+    it("should keep no-separator input strict (12 hex chars)", () => {
+      const parser = macAddress({ separator: "none" });
+
+      assert.ok(!parser.parse("012345").success);
+      assert.ok(!parser.parse("00010203045").success);
     });
   });
 
@@ -10159,18 +10228,20 @@ describe("macAddress()", () => {
       assert.strictEqual(result.value, "FF:FF:FF:FF:FF:FF");
     });
 
-    it("should reject single-digit octets in all positions", () => {
+    it("should zero-pad single-digit octets in all positions", () => {
       const parser = macAddress();
 
       const result = parser.parse("0:1:2:3:4:5");
-      assert.ok(!result.success);
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "00:01:02:03:04:05");
     });
 
-    it("should reject single-digit octets even with outputSeparator", () => {
+    it("should zero-pad single-digit octets with outputSeparator", () => {
       const parser = macAddress({ outputSeparator: ":" });
 
       const result = parser.parse("0:1:2:3:4:5");
-      assert.ok(!result.success);
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "00:01:02:03:04:05");
     });
 
     it("should handle mixed case input with case conversion", () => {
