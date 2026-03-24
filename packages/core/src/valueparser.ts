@@ -3838,13 +3838,31 @@ export function socketAddress(
             /^[0-9]+$/.test(portPart)
           ) {
             // Port part is all digits but failed validation (e.g., out
-            // of range).  A non-empty host before it is enough signal
-            // that the user intended a split — reject rather than
-            // falling through to host-only.  We intentionally do not
-            // require parseHost(hostPart) to succeed: inputs like
-            // "db--70000" (host "db-" is invalid due to a trailing
-            // hyphen) should still be caught.
-            validHostNumericPortInvalid = true;
+            // of range).  For IP-shaped hosts, validate the host first
+            // so that specific IP errors (e.g., "private IP") are not
+            // masked by the generic numeric-port rejection.  For
+            // non-IP hosts, a non-empty hostPart is enough signal that
+            // the user intended a split (even if the host itself is
+            // invalid, like "db-" with a trailing hyphen).
+            if (
+              looksLikeIpv4(hostPart) ||
+              looksLikeAltIpv4Literal(hostPart)
+            ) {
+              const hostResult = parseHost(hostPart);
+              if (!hostResult.success) {
+                if (
+                  firstHostError === undefined ||
+                  (!looksLikeIpv4(firstHostError.hostPart) &&
+                    !looksLikeAltIpv4Literal(firstHostError.hostPart))
+                ) {
+                  firstHostError = { hostPart, error: hostResult.error };
+                }
+              } else {
+                validHostNumericPortInvalid = true;
+              }
+            } else {
+              validHostNumericPortInvalid = true;
+            }
           } else if (
             (firstHostError === undefined ||
               (!looksLikeIpv4(firstHostError.hostPart) &&

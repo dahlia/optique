@@ -9924,6 +9924,23 @@ describe("socketAddress()", () => {
       ]);
     });
 
+    it("should propagate IP error over numeric port rejection when host is restricted", () => {
+      // "192.168.1.1:70000" has a private IP host + out-of-range port.
+      // The IP-specific error should surface, not the generic format
+      // error from validHostNumericPortInvalid.
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowPrivate: false } },
+      });
+
+      const result = parser.parse("192.168.1.1:70000");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "192.168.1.1" },
+        { type: "text", text: " is a private IP address." },
+      ]);
+    });
+
     it("should reject doubled-separator inputs with invalid numeric port", () => {
       // "db--70000" has host "db-" (invalid trailing hyphen) + port
       // "70000".  The all-digit suffix is still a port typo even though
