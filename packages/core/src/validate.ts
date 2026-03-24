@@ -119,3 +119,35 @@ export function validateCommandNames(
     }
   }
 }
+
+/**
+ * Validates a program name at runtime.
+ *
+ * Program names may contain spaces (e.g., file paths), but must not be empty,
+ * whitespace-only, or contain control characters.
+ *
+ * @param programName The program name to validate.
+ * @throws {TypeError} If the value is not a string, is empty,
+ *         whitespace-only, or contains control characters.
+ */
+export function validateProgramName(programName: string): void {
+  if (typeof programName !== "string") {
+    throw new TypeError("Program name must be a string.");
+  }
+  if (programName === "") {
+    throw new TypeError("Program name must not be empty.");
+  }
+  if (/^\s+$/.test(programName)) {
+    throw new TypeError(
+      `Program name must not be whitespace-only: ` +
+        `"${escapeControlChars(programName)}".`,
+    );
+  }
+  // deno-lint-ignore no-control-regex
+  if (/[\x00-\x1f\x7f]/.test(programName)) {
+    throw new TypeError(
+      `Program name must not contain control characters: ` +
+        `"${escapeControlChars(programName)}".`,
+    );
+  }
+}
