@@ -9858,6 +9858,21 @@ describe("socketAddress()", () => {
       assert.strictEqual(result.value.port, 3000);
     });
 
+    it("should report missingPort for valid hostname when no defaultPort", () => {
+      // With no defaultPort and requirePort: false (default), a valid
+      // hostname should get missingPort, not invalidFormat.
+      const parser = socketAddress({ separator: "to" });
+
+      const result = parser.parse("toronto");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Port number is required but was not specified.",
+        },
+      ]);
+    });
+
     it("should try multiple separator positions from right to left", () => {
       const parser = socketAddress({ separator: "to", requirePort: true });
 

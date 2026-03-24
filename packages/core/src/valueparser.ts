@@ -3908,7 +3908,7 @@ export function socketAddress(
       // separator with an omitted port.
       let hostOnlyResult: ValueParserResult<string> | undefined;
       if (
-        canOmitPort ||
+        !requirePort ||
         trailingSepHost !== undefined ||
         trailingSepHostError !== undefined
       ) {
@@ -3971,10 +3971,27 @@ export function socketAddress(
         };
       }
 
+      // When port is not required but no default exists, and the whole
+      // input is a valid hostname, report missingPort (the hostname is
+      // valid, the parser just needs a port that wasn't provided).
+      if (
+        !canOmitPort &&
+        !requirePort &&
+        hostOnlyResult !== undefined &&
+        hostOnlyResult.success
+      ) {
+        const errorMsg = options?.errors?.missingPort;
+        const msg = typeof errorMsg === "function"
+          ? errorMsg(input)
+          : errorMsg ??
+            message`Port number is required but was not specified.`;
+        return { success: false, error: msg };
+      }
+
       // When no separator was found at all, the user simply provided
       // a hostname without any port indication → missingPort.
       if (!canOmitPort && !anySeparatorFound) {
-        hostOnlyResult = parseHost(trimmed);
+        hostOnlyResult = hostOnlyResult ?? parseHost(trimmed);
         if (hostOnlyResult.success) {
           const errorMsg = options?.errors?.missingPort;
           const msg = typeof errorMsg === "function"
