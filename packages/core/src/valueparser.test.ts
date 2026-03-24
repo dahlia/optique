@@ -11793,14 +11793,28 @@ describe("ip()", () => {
     });
 
     it("should snapshot IPv4 restrictions at construction time", () => {
-      const opts: { ipv4: { allowPrivate: boolean } } = {
-        ipv4: { allowPrivate: false },
-      };
-      const parser = ip(opts);
-      // Mutate after construction — should have no effect
-      opts.ipv4 = { allowPrivate: true };
+      const ipv4Opts = { allowPrivate: false };
+      const parser = ip({ ipv4: ipv4Opts });
+      // Mutate nested field after construction — should have no effect
+      ipv4Opts.allowPrivate = true;
       const result = parser.parse("::ffff:192.168.0.1");
       assert.ok(!result.success);
+    });
+
+    it("should snapshot error callbacks at construction time", () => {
+      const errors = {
+        privateNotAllowed: () => message`original mapped error`,
+      };
+      const parser = ip({
+        ipv4: { allowPrivate: false },
+        errors,
+      });
+      errors.privateNotAllowed = () => message`mutated mapped error`;
+      const result = parser.parse("::ffff:10.0.0.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "original mapped error" },
+      ]);
     });
   });
 });
@@ -12585,14 +12599,28 @@ describe("cidr()", () => {
     });
 
     it("should snapshot IPv4 restrictions at construction time", () => {
-      const opts: { ipv4: { allowPrivate: boolean } } = {
-        ipv4: { allowPrivate: false },
-      };
-      const parser = cidr(opts);
-      // Mutate after construction — should have no effect
-      opts.ipv4 = { allowPrivate: true };
+      const ipv4Opts = { allowPrivate: false };
+      const parser = cidr({ ipv4: ipv4Opts });
+      // Mutate nested field after construction — should have no effect
+      ipv4Opts.allowPrivate = true;
       const result = parser.parse("::ffff:192.168.0.0/120");
       assert.ok(!result.success);
+    });
+
+    it("should snapshot error callbacks at construction time", () => {
+      const errors = {
+        privateNotAllowed: () => message`original mapped cidr error`,
+      };
+      const parser = cidr({
+        ipv4: { allowPrivate: false },
+        errors,
+      });
+      errors.privateNotAllowed = () => message`mutated mapped cidr error`;
+      const result = parser.parse("::ffff:10.0.0.0/104");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "original mapped cidr error" },
+      ]);
     });
   });
 });
