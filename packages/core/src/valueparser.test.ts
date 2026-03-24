@@ -11791,6 +11791,17 @@ describe("ip()", () => {
       assert.ok(result.success);
       assert.strictEqual(result.value, "::ffff:c0a8:1");
     });
+
+    it("should snapshot IPv4 restrictions at construction time", () => {
+      const opts: { ipv4: { allowPrivate: boolean } } = {
+        ipv4: { allowPrivate: false },
+      };
+      const parser = ip(opts);
+      // Mutate after construction — should have no effect
+      opts.ipv4 = { allowPrivate: true };
+      const result = parser.parse("::ffff:192.168.0.1");
+      assert.ok(!result.success);
+    });
   });
 });
 
@@ -12541,6 +12552,17 @@ describe("cidr()", () => {
         { type: "value", value: "::ffff:ffff:ffff" },
         { type: "text", text: " is the broadcast address." },
       ]);
+    });
+
+    it("should snapshot IPv4 restrictions at construction time", () => {
+      const opts: { ipv4: { allowPrivate: boolean } } = {
+        ipv4: { allowPrivate: false },
+      };
+      const parser = cidr(opts);
+      // Mutate after construction — should have no effect
+      opts.ipv4 = { allowPrivate: true };
+      const result = parser.parse("::ffff:192.168.0.0/120");
+      assert.ok(!result.success);
     });
   });
 });

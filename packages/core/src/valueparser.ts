@@ -5458,6 +5458,29 @@ export function ip(
     })
     : null;
 
+  // Snapshot IPv4 restriction config for mapped IPv6 checking,
+  // consistent with how ipv4Parser snapshots at construction time.
+  const mappedIpv4Opts = version === "both"
+    ? {
+      allowPrivate: options?.ipv4?.allowPrivate,
+      allowLoopback: options?.ipv4?.allowLoopback,
+      allowLinkLocal: options?.ipv4?.allowLinkLocal,
+      allowMulticast: options?.ipv4?.allowMulticast,
+      allowBroadcast: options?.ipv4?.allowBroadcast,
+      allowZero: options?.ipv4?.allowZero,
+    }
+    : undefined;
+  const mappedIpv4Errors = version === "both"
+    ? {
+      privateNotAllowed: errors?.privateNotAllowed,
+      loopbackNotAllowed: errors?.loopbackNotAllowed,
+      linkLocalNotAllowed: errors?.linkLocalNotAllowed,
+      multicastNotAllowed: errors?.multicastNotAllowed,
+      broadcastNotAllowed: errors?.broadcastNotAllowed,
+      zeroNotAllowed: errors?.zeroNotAllowed,
+    }
+    : undefined;
+
   return {
     $mode: "sync",
     metavar,
@@ -5489,8 +5512,8 @@ export function ip(
               const restrictionError = checkIpv4MappedRestrictions(
                 mappedOctets,
                 result.value,
-                options?.ipv4,
-                errors,
+                mappedIpv4Opts,
+                mappedIpv4Errors,
               );
               if (restrictionError !== null) return restrictionError;
             }
@@ -5804,6 +5827,29 @@ export function cidr(
     })
     : null;
 
+  // Snapshot IPv4 restriction config for mapped IPv6 checking,
+  // consistent with how ipv4Parser snapshots at construction time.
+  const mappedIpv4Opts = version === "both"
+    ? {
+      allowPrivate: options?.ipv4?.allowPrivate,
+      allowLoopback: options?.ipv4?.allowLoopback,
+      allowLinkLocal: options?.ipv4?.allowLinkLocal,
+      allowMulticast: options?.ipv4?.allowMulticast,
+      allowBroadcast: options?.ipv4?.allowBroadcast,
+      allowZero: options?.ipv4?.allowZero,
+    }
+    : undefined;
+  const mappedIpv4Errors = version === "both"
+    ? {
+      privateNotAllowed: errors?.privateNotAllowed,
+      loopbackNotAllowed: errors?.loopbackNotAllowed,
+      linkLocalNotAllowed: errors?.linkLocalNotAllowed,
+      multicastNotAllowed: errors?.multicastNotAllowed,
+      broadcastNotAllowed: errors?.broadcastNotAllowed,
+      zeroNotAllowed: errors?.zeroNotAllowed,
+    }
+    : undefined;
+
   return {
     $mode: "sync",
     metavar,
@@ -6041,15 +6087,8 @@ export function cidr(
           const restrictionError = checkIpv4MappedRestrictions(
             mappedOctets,
             normalizedIp,
-            options?.ipv4,
-            {
-              privateNotAllowed: errors?.privateNotAllowed,
-              loopbackNotAllowed: errors?.loopbackNotAllowed,
-              linkLocalNotAllowed: errors?.linkLocalNotAllowed,
-              multicastNotAllowed: errors?.multicastNotAllowed,
-              broadcastNotAllowed: errors?.broadcastNotAllowed,
-              zeroNotAllowed: errors?.zeroNotAllowed,
-            },
+            mappedIpv4Opts,
+            mappedIpv4Errors,
           );
           if (restrictionError !== null) return restrictionError;
         }
