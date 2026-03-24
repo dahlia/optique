@@ -145,37 +145,40 @@ function shouldDeferPrompt(
 function deferredPromptResult<TValue>(
   placeholderValue: TValue,
 ): ValueParserResult<TValue> {
-  const result: ValueParserResult<TValue> & { success: true } = {
-    success: true,
-    value: placeholderValue,
-    deferred: true,
-  };
+  if (placeholderValue == null || typeof placeholderValue !== "object") {
+    return {
+      success: true,
+      value: placeholderValue,
+      deferred: true,
+    };
+  }
+
   // For object/array placeholders, enumerate all own keys as fully
   // deferred so that prepareParsedForContexts() can strip them.
   // Without this, object-valued leaf placeholders (e.g., from
   // zod(z.object(...))) would pass through to phase-two contexts
   // because they look the same as opaque structured deferred values
   // from map().
-  if (placeholderValue != null && typeof placeholderValue === "object") {
-    const isArray = Array.isArray(placeholderValue);
-    const keys = new Map<PropertyKey, null>();
-    for (const key of Reflect.ownKeys(placeholderValue as object)) {
-      // Skip "length" on arrays — setting it to undefined would throw
-      // RangeError: Invalid array length.
-      if (isArray && key === "length") continue;
-      keys.set(key, null);
-    }
-    // Always set deferredKeys — even when empty (non-plain objects
-    // like URL, Date, Intl.Locale).  An empty map distinguishes leaf
-    // deferred objects (from prompt()) from opaque structured deferred
-    // (from map()), allowing prepareParsedForContexts() to strip the
-    // former while passing through the latter.
-    {
-      (result as { deferredKeys?: ReadonlyMap<PropertyKey, unknown> })
-        .deferredKeys = keys;
-    }
+  const isArray = Array.isArray(placeholderValue);
+  const keys = new Map<PropertyKey, null>();
+  for (const key of Reflect.ownKeys(placeholderValue as object)) {
+    // Skip "length" on arrays — setting it to undefined would throw
+    // RangeError: Invalid array length.
+    if (isArray && key === "length") continue;
+    keys.set(key, null);
   }
-  return result;
+
+  // Always set deferredKeys — even when empty (non-plain objects
+  // like URL, Date, Intl.Locale).  An empty map distinguishes leaf
+  // deferred objects (from prompt()) from opaque structured deferred
+  // (from map()), allowing prepareParsedForContexts() to strip the
+  // former while passing through the latter.
+  return {
+    success: true,
+    value: placeholderValue,
+    deferred: true,
+    deferredKeys: keys,
+  };
 }
 
 function withAnnotationView<T extends object, TResult>(
