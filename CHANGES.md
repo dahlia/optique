@@ -109,14 +109,14 @@ To be released.
     `port()`) used during deferred prompt resolution.  `option()` and
     `argument()` set `Parser.placeholder` from the value parser, and
     combinators like `map()`, `optional()`, and `withDefault()` propagate
-    it through the parser chain.  [[#407]]
+    it through the parser chain.  [[#407], [#727]]
 
  -  Added optional `placeholder` override to `string()`, `integer()`,
     `float()`, and `port()` options.  This allows customizing the stand-in
     value when downstream `map()` transforms or constraints require a
     specific value.  `integer()` and `float()` automatically derive
     placeholders from `min`/`max` constraints; `port()` defaults to `min`
-    (which itself defaults to `1`).  [[#407]]
+    (which itself defaults to `1`).  [[#407], [#727]]
 
  -  Replaced the `DeferredPromptValue` sentinel with type-appropriate
     placeholder values during two-phase parsing.  `prompt()` now uses
@@ -124,12 +124,12 @@ To be released.
     so `map()` transforms always receive valid values and dynamic contexts
     observe structurally valid objects.  This removes the entire
     sanitization machinery (~1000 lines of proxy-based stripping code)
-    from *@optique/core* and *@optique/config*.  [[#307], [#407]]
+    from *@optique/core* and *@optique/config*.  [[#307], [#407], [#727]]
 
  -  Removed `placeholder` symbol and `isPlaceholderValue()` from
     `@optique/core/context`.  These were part of the sentinel-based
     deferred prompt mechanism that has been replaced by the
-    `ValueParser.placeholder` approach.  [[#407]]
+    `ValueParser.placeholder` approach.  [[#407], [#727]]
 
  -  Added the `@optique/core/mode-dispatch` subpath export so sibling
     packages can share internal sync/async dispatch helpers without
@@ -1153,6 +1153,7 @@ To be released.
 [#724]: https://github.com/dahlia/optique/pull/724
 [#725]: https://github.com/dahlia/optique/pull/725
 [#726]: https://github.com/dahlia/optique/pull/726
+[#727]: https://github.com/dahlia/optique/pull/727
 [#728]: https://github.com/dahlia/optique/pull/728
 
 ### @optique/config
@@ -1859,7 +1860,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
  -  `valibot()` now requires a `placeholder` option in `ValibotParserOptions`.
     This value is used as a type-appropriate stand-in during deferred prompt
-    resolution.  [[#407]]
+    resolution.  [[#407], [#727]]
 
 [#281]: https://github.com/dahlia/optique/issues/281
 [#285]: https://github.com/dahlia/optique/issues/285
@@ -1874,7 +1875,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
  -  `zod()` now requires a `placeholder` option in `ZodParserOptions`.
     This value is used as a type-appropriate stand-in during deferred prompt
-    resolution.  [[#407]]
+    resolution.  [[#407], [#727]]
 
  -  `zod()` now exposes choice metadata for `z.enum()`, string-valued
     `z.nativeEnum()` and `z.literal()` schemas, and `z.union()` schemas
