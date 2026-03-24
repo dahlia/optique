@@ -2746,7 +2746,7 @@ describe("deduplicateDocEntries: hidden visibility preference", () => {
     );
   });
 
-  it("should keep first entry when both are hidden", () => {
+  it("should omit entries when both are hidden", () => {
     const entries: DocEntry[] = [
       {
         term: { type: "option", names: ["--x"], hidden: true },
@@ -2759,12 +2759,41 @@ describe("deduplicateDocEntries: hidden visibility preference", () => {
     ];
 
     const result = deduplicateDocEntries(entries);
-    assert.equal(result.length, 1);
+    assert.equal(result.length, 0);
+  });
+
+  it("should not let hidden entries influence visible ordering", () => {
+    const entries: DocEntry[] = [
+      {
+        term: { type: "option", names: ["--x"], hidden: "doc" },
+      },
+      {
+        term: { type: "option", names: ["--y"] },
+        description: message`Y.`,
+      },
+      {
+        term: { type: "option", names: ["--x"] },
+        description: message`X.`,
+      },
+    ];
+
+    const result = deduplicateDocEntries(entries);
+    assert.equal(result.length, 2);
+    assert.ok(
+      result[0].term.type === "option" &&
+        result[0].term.names.includes("--y"),
+      "first visible entry should come first",
+    );
+    assert.ok(
+      result[1].term.type === "option" &&
+        result[1].term.names.includes("--x"),
+      "visible --x should follow --y, not precede it",
+    );
   });
 });
 
 describe("deduplicateDocFragments: hidden visibility preference", () => {
-  it("should prefer visible entry fragment over hidden one", () => {
+  it("should keep visible entry and discard hidden duplicate", () => {
     const result = deduplicateDocFragments([
       {
         type: "entry",
@@ -2782,6 +2811,36 @@ describe("deduplicateDocFragments: hidden visibility preference", () => {
     assert.ok(
       entries[0].term.type === "option" && !entries[0].term.hidden,
       "should keep the visible entry",
+    );
+  });
+
+  it("should not let hidden entries reorder visible ones", () => {
+    const result = deduplicateDocFragments([
+      {
+        type: "entry",
+        term: { type: "option", names: ["--x"], hidden: "doc" },
+      },
+      {
+        type: "entry",
+        term: { type: "option", names: ["--y"] },
+      },
+      {
+        type: "entry",
+        term: { type: "option", names: ["--x"] },
+      },
+    ]);
+
+    const entries = result.flatMap((f) => f.type === "entry" ? [f] : f.entries);
+    assert.equal(entries.length, 2);
+    assert.ok(
+      entries[0].term.type === "option" &&
+        entries[0].term.names.includes("--y"),
+      "first visible entry --y should come first",
+    );
+    assert.ok(
+      entries[1].term.type === "option" &&
+        entries[1].term.names.includes("--x"),
+      "visible --x should follow --y",
     );
   });
 

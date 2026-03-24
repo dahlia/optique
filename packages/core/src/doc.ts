@@ -162,38 +162,35 @@ function getDocEntryKey(entry: DocEntry): string {
 
 /**
  * Removes duplicate {@link DocEntry} values that share the same surface
- * syntax (same term type and identifying names).  When duplicates exist,
- * the first occurrence is kept and later ones are discarded.  If the
- * first occurrence is doc-hidden and a later duplicate is visible, the
- * visible one replaces it.
+ * syntax (same term type and identifying names).  Doc-hidden entries are
+ * filtered out first so they cannot influence the ordering of visible
+ * entries.  Among the remaining visible entries, the first occurrence is
+ * kept and later duplicates are discarded.
  *
  * Positional argument entries are never deduplicated because they are
  * distinguished by position, not by metavar, and {@link DocEntry} does
  * not carry position information.
  *
  * @param entries The entries to deduplicate.
- * @returns A new array with duplicates removed, preserving insertion order.
+ * @returns A new array with hidden entries removed and duplicates
+ *   collapsed, preserving insertion order of visible entries.
  * @since 1.0.0
  */
 export function deduplicateDocEntries(
   entries: readonly DocEntry[],
 ): DocEntry[] {
-  const seen = new Map<string, number>();
+  const seen = new Set<string>();
   const result: DocEntry[] = [];
   for (const entry of entries) {
+    if (isDocEntryHidden(entry)) continue;
     if (entry.term.type === "argument") {
       result.push(entry);
       continue;
     }
     const key = getDocEntryKey(entry);
-    const existingIndex = seen.get(key);
-    if (existingIndex == null) {
-      seen.set(key, result.length);
+    if (!seen.has(key)) {
+      seen.add(key);
       result.push(entry);
-    } else if (
-      isDocEntryHidden(result[existingIndex]) && !isDocEntryHidden(entry)
-    ) {
-      result[existingIndex] = entry;
     }
   }
   return result;
@@ -211,18 +208,17 @@ export function deduplicateDocEntries(
 export function deduplicateDocFragments(
   fragments: readonly DocFragment[],
 ): DocFragment[] {
+  // Doc-hidden entries are skipped so they cannot influence the ordering
+  // of visible entries.  Among remaining visible entries, the first
+  // occurrence is kept and later duplicates are discarded.
+  //
   // Untitled entries/sections share a global dedup scope.
   // Titled sections are grouped by title and deduplicated within each group,
   // but entries in differently-titled sections remain independent.
-  // Titled sections are emitted at the position of their first occurrence
-  // to preserve the original ordering.
-  // When a duplicate is found and the existing entry is doc-hidden while the
-  // new one is visible, the visible entry replaces the hidden one.
-  interface UntitledLocation {
-    slotIndex: number;
-    entryIndex?: number;
-  }
-  const untitledSeen = new Map<string, UntitledLocation>();
+  // Titled sections are emitted at the position of their first fragment
+  // that contains visible entries, so hidden-only fragments do not
+  // influence ordering.
+  const untitledSeen = new Set<string>();
   const titledSectionMap = new Map<string, DocEntry[]>();
   const titledSectionPositioned = new Set<string>();
   // Each element is either a concrete DocFragment or a title placeholder
@@ -230,80 +226,36 @@ export function deduplicateDocFragments(
   const slots: (DocFragment | string)[] = [];
   for (const fragment of fragments) {
     if (fragment.type === "entry") {
+      if (isDocEntryHidden(fragment)) continue;
       if (fragment.term.type === "argument") {
         slots.push(fragment);
       } else {
         const key = getDocEntryKey(fragment);
-        const existing = untitledSeen.get(key);
-        if (existing == null) {
-          untitledSeen.set(key, { slotIndex: slots.length });
+        if (!untitledSeen.has(key)) {
+          untitledSeen.add(key);
           slots.push(fragment);
-        } else if (!isDocEntryHidden(fragment)) {
-          const prev = existing.entryIndex != null
-            ? (slots[existing.slotIndex] as DocSection).entries[
-              existing.entryIndex
-            ]
-            : slots[existing.slotIndex] as DocEntry;
-          if (isDocEntryHidden(prev)) {
-            if (existing.entryIndex != null) {
-              // Safe: the section was constructed by us above, so entries
-              // is the mutable dedupedEntries array.
-              const entries = (slots[existing.slotIndex] as DocSection)
-                .entries as DocEntry[];
-              entries[existing.entryIndex] = fragment;
-            } else {
-              slots[existing.slotIndex] = fragment;
-            }
-          }
         }
       }
     } else if (fragment.title == null) {
       const dedupedEntries: DocEntry[] = [];
-      const sectionSlotIndex = slots.length;
-      // Reserve slot; entries array will be filled below.
-      const sectionSlot: DocFragment & { type: "section" } = {
-        ...fragment,
-        type: "section",
-        entries: dedupedEntries,
-      };
-      let pushed = false;
       for (const entry of fragment.entries) {
+        if (isDocEntryHidden(entry)) continue;
         if (entry.term.type === "argument") {
-          if (!pushed) {
-            slots.push(sectionSlot);
-            pushed = true;
-          }
           dedupedEntries.push(entry);
           continue;
         }
         const key = getDocEntryKey(entry);
-        const existing = untitledSeen.get(key);
-        if (existing == null) {
-          if (!pushed) {
-            slots.push(sectionSlot);
-            pushed = true;
-          }
-          untitledSeen.set(key, {
-            slotIndex: sectionSlotIndex,
-            entryIndex: dedupedEntries.length,
-          });
+        if (!untitledSeen.has(key)) {
+          untitledSeen.add(key);
           dedupedEntries.push(entry);
-        } else if (!isDocEntryHidden(entry)) {
-          const prev = existing.entryIndex != null
-            ? (slots[existing.slotIndex] as DocSection).entries[
-              existing.entryIndex
-            ]
-            : slots[existing.slotIndex] as DocEntry;
-          if (isDocEntryHidden(prev)) {
-            if (existing.entryIndex != null) {
-              const entries = (slots[existing.slotIndex] as DocSection)
-                .entries as DocEntry[];
-              entries[existing.entryIndex] = entry;
-            } else {
-              slots[existing.slotIndex] = { ...entry, type: "entry" };
-            }
-          }
         }
+      }
+      if (dedupedEntries.length > 0) {
+        slots.push({
+          ...fragment,
+          type: "section",
+          entries: dedupedEntries,
+        });
       }
     } else {
       if (!titledSectionMap.has(fragment.title)) {
