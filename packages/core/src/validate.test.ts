@@ -46,104 +46,144 @@ describe("validateProgramName", () => {
   });
 
   it("should throw TypeError for non-string values", () => {
-    assert.throws(
-      () => validateProgramName(123 as never),
-      TypeError,
-    );
-    assert.throws(
-      () => validateProgramName({} as never),
-      TypeError,
-    );
-    assert.throws(
-      () => validateProgramName(null as never),
-      TypeError,
-    );
-    assert.throws(
-      () => validateProgramName(undefined as never),
-      TypeError,
-    );
-    assert.throws(
-      () => validateProgramName(Symbol("x") as never),
-      TypeError,
-    );
-    assert.throws(
-      () => validateProgramName(true as never),
-      TypeError,
-    );
+    const expected = {
+      name: "TypeError",
+      message: "Program name must be a string.",
+    };
+    assert.throws(() => validateProgramName(123 as never), expected);
+    assert.throws(() => validateProgramName({} as never), expected);
+    assert.throws(() => validateProgramName(null as never), expected);
+    assert.throws(() => validateProgramName(undefined as never), expected);
+    assert.throws(() => validateProgramName(Symbol("x") as never), expected);
+    assert.throws(() => validateProgramName(true as never), expected);
   });
 
   it("should throw TypeError for empty string", () => {
     assert.throws(
       () => validateProgramName(""),
-      TypeError,
+      { name: "TypeError", message: "Program name must not be empty." },
     );
   });
 
   it("should throw TypeError for whitespace-only string", () => {
     assert.throws(
       () => validateProgramName("   "),
-      TypeError,
+      {
+        name: "TypeError",
+        message: 'Program name must not be whitespace-only: "   ".',
+      },
     );
     assert.throws(
       () => validateProgramName("\t"),
-      TypeError,
+      {
+        name: "TypeError",
+        message: 'Program name must not be whitespace-only: "\\t".',
+      },
     );
   });
 
   it("should throw TypeError for strings with control characters", () => {
     assert.throws(
       () => validateProgramName("bad\nname"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Program name must not contain control characters: "bad\\nname".',
+      },
     );
     assert.throws(
       () => validateProgramName("bad\rname"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Program name must not contain control characters: "bad\\rname".',
+      },
     );
     assert.throws(
       () => validateProgramName("bad\x00name"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Program name must not contain control characters: "bad\\x00name".',
+      },
     );
     assert.throws(
       () => validateProgramName("bad\x1fname"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Program name must not contain control characters: "bad\\x1fname".',
+      },
     );
     assert.throws(
       () => validateProgramName("bad\x7fname"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Program name must not contain control characters: "bad\\x7fname".',
+      },
     );
   });
 
   it("should throw TypeError for C1 control characters", () => {
     assert.throws(
       () => validateProgramName("bad\x80name"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Program name must not contain control characters: "bad\\x80name".',
+      },
     );
     assert.throws(
       () => validateProgramName("bad\x85name"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Program name must not contain control characters: "bad\\x85name".',
+      },
     );
     assert.throws(
       () => validateProgramName("bad\x9bname"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Program name must not contain control characters: "bad\\x9bname".',
+      },
     );
     assert.throws(
       () => validateProgramName("bad\x9cname"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Program name must not contain control characters: "bad\\x9cname".',
+      },
     );
     assert.throws(
       () => validateProgramName("bad\x9fname"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Program name must not contain control characters: "bad\\x9fname".',
+      },
     );
   });
 
   it("should throw TypeError for Unicode line separators", () => {
     assert.throws(
       () => validateProgramName("bad\u2028name"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Program name must not contain control characters: "bad\\u2028name".',
+      },
     );
     assert.throws(
       () => validateProgramName("bad\u2029name"),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          'Program name must not contain control characters: "bad\\u2029name".',
+      },
     );
   });
 });
