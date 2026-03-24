@@ -285,7 +285,7 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
   return {
     $mode: "sync",
     metavar,
-    placeholder: "",
+    placeholder: ".",
     parse(input: string): ValueParserResult<string> {
       // Empty/whitespace-only path validation
       if (input.trim() === "") {

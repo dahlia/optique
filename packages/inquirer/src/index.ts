@@ -157,8 +157,12 @@ function deferredPromptResult<TValue>(
   // because they look the same as opaque structured deferred values
   // from map().
   if (placeholderValue != null && typeof placeholderValue === "object") {
+    const isArray = Array.isArray(placeholderValue);
     const keys = new Map<PropertyKey, null>();
     for (const key of Reflect.ownKeys(placeholderValue as object)) {
+      // Skip "length" on arrays — setting it to undefined would throw
+      // RangeError: Invalid array length.
+      if (isArray && key === "length") continue;
       keys.set(key, null);
     }
     if (keys.size > 0) {
