@@ -4313,10 +4313,14 @@ export interface MacAddressOptions {
  * Creates a value parser for MAC (Media Access Control) addresses.
  *
  * Validates MAC-48 addresses (6 octets, 12 hex digits) in various formats:
- * - Colon-separated: `00:1A:2B:3C:4D:5E`
- * - Hyphen-separated: `00-1A-2B-3C-4D-5E`
- * - Dot-separated (Cisco): `001A.2B3C.4D5E`
- * - No separator: `001A2B3C4D5E`
+ * - Colon-separated: `00:1A:2B:3C:4D:5E` (1–2 hex digits per octet)
+ * - Hyphen-separated: `00-1A-2B-3C-4D-5E` (1–2 hex digits per octet)
+ * - Dot-separated (Cisco): `001A.2B3C.4D5E` (exactly 4 hex digits per group)
+ * - No separator: `001A2B3C4D5E` (exactly 12 hex digits)
+ *
+ * Colon-separated and hyphen-separated formats accept single-digit octets
+ * (e.g., `0:1:2:3:4:5`), which are automatically zero-padded to canonical
+ * two-digit form (e.g., `00:01:02:03:04:05`).
  *
  * Returns the MAC address as a formatted string according to `case` and
  * `outputSeparator` options.
@@ -4352,9 +4356,9 @@ export function macAddress(
 
   // Regular expressions for different formats
   const colonRegex =
-    /^([0-9a-fA-F]{2}):([0-9a-fA-F]{2}):([0-9a-fA-F]{2}):([0-9a-fA-F]{2}):([0-9a-fA-F]{2}):([0-9a-fA-F]{2})$/;
+    /^([0-9a-fA-F]{1,2}):([0-9a-fA-F]{1,2}):([0-9a-fA-F]{1,2}):([0-9a-fA-F]{1,2}):([0-9a-fA-F]{1,2}):([0-9a-fA-F]{1,2})$/;
   const hyphenRegex =
-    /^([0-9a-fA-F]{2})-([0-9a-fA-F]{2})-([0-9a-fA-F]{2})-([0-9a-fA-F]{2})-([0-9a-fA-F]{2})-([0-9a-fA-F]{2})$/;
+    /^([0-9a-fA-F]{1,2})-([0-9a-fA-F]{1,2})-([0-9a-fA-F]{1,2})-([0-9a-fA-F]{1,2})-([0-9a-fA-F]{1,2})-([0-9a-fA-F]{1,2})$/;
   const dotRegex = /^([0-9a-fA-F]{4})\.([0-9a-fA-F]{4})\.([0-9a-fA-F]{4})$/;
   const noneRegex = /^([0-9a-fA-F]{12})$/;
 
@@ -4430,6 +4434,9 @@ export function macAddress(
         ] as Message;
         return { success: false, error: msg };
       }
+
+      // Zero-pad each octet to canonical two-digit form
+      octets = octets.map((o) => o.padStart(2, "0"));
 
       // Apply case conversion
       let formattedOctets = octets;

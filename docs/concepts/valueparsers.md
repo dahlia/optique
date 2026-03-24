@@ -1781,6 +1781,19 @@ const result3 = parser.parse("001A.2B3C.4D5E");     // Cisco format (dot-separat
 const result4 = parser.parse("001A2B3C4D5E");       // No separator
 ~~~~
 
+Colon-separated and hyphen-separated formats also accept single-digit octets
+(1 hex digit), which are automatically zero-padded to canonical two-digit form:
+
+~~~~ typescript twoslash
+import { macAddress } from "@optique/core/valueparser";
+
+const parser = macAddress();
+const result = parser.parse("0:1:2:3:4:5");
+if (result.success) {
+  result.value;  // "00:01:02:03:04:05"
+}
+~~~~
+
 By default, the parser accepts any of these formats. You can restrict it to
 a specific format using the `separator` option:
 
@@ -1861,6 +1874,19 @@ if (result1.success) {
 const result2 = normalize.parse("001a.2b3c.4d5e");
 if (result2.success) {
   result2.value;  // "00:1A:2B:3C:4D:5E"
+}
+~~~~
+
+Single-digit octets are also zero-padded during output normalization,
+ensuring canonical MAC-48 strings and correct round-tripping:
+
+~~~~ typescript twoslash
+import { macAddress } from "@optique/core/valueparser";
+// ---cut-before---
+const dotNormalize = macAddress({ outputSeparator: ".", case: "upper" });
+const result3 = dotNormalize.parse("0:1:2:3:4:5");
+if (result3.success) {
+  result3.value;  // "0001.0203.0405"
 }
 ~~~~
 
