@@ -266,6 +266,9 @@ To be released.
     mean?” typo suggestions.  Fully hidden terms are now excluded from
     typo-suggestion candidates.  [[#516], [#690]]
 
+ -  Fixed `findSimilar()` preserving duplicate candidates, which could
+    generate duplicated “Did you mean?” suggestion entries.  [[#517], [#729]]
+
  -  Extended `hidden` visibility controls from `boolean` to
     `boolean | "usage" | "doc" | "help"` across primitive parsers:
     `option()`, `flag()`, `argument()`, `command()`, and `passThrough()`.
@@ -1008,6 +1011,7 @@ To be released.
 [#512]: https://github.com/dahlia/optique/pull/512
 [#513]: https://github.com/dahlia/optique/issues/513
 [#516]: https://github.com/dahlia/optique/issues/516
+[#517]: https://github.com/dahlia/optique/issues/517
 [#518]: https://github.com/dahlia/optique/issues/518
 [#519]: https://github.com/dahlia/optique/issues/519
 [#520]: https://github.com/dahlia/optique/pull/520
@@ -1128,6 +1132,7 @@ To be released.
 [#725]: https://github.com/dahlia/optique/pull/725
 [#726]: https://github.com/dahlia/optique/pull/726
 [#728]: https://github.com/dahlia/optique/pull/728
+[#729]: https://github.com/dahlia/optique/pull/729
 
 ### @optique/config
 
