@@ -1165,6 +1165,68 @@ describe("valibot()", () => {
       assert.throws(() => parser.parse("ok"), expectedError);
     });
 
+    it("should throw TypeError for nested lazy async inside object", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // After JSON.parse, the object schema's entries become reachable.
+      // v.lazy() inside an entry can return an async schema at runtime.
+      // The outer v.object() consumes the Promise before the top-level
+      // typed check can catch it.
+      const parser = valibot(
+        v.pipe(
+          v.string(),
+          v.transform(JSON.parse),
+          v.object({
+            a: v.lazy(
+              () =>
+                asyncInner as unknown as v.BaseSchema<
+                  unknown,
+                  string,
+                  v.BaseIssue<unknown>
+                >,
+            ),
+          }),
+        ),
+      );
+      assert.throws(() => parser.parse('{"a":"ok"}'), expectedError);
+    });
+
+    it("should throw TypeError for lazy-inside-lazy async", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // Nested lazy: outer lazy returns an object schema whose entry
+      // is itself a lazy that returns an async schema.
+      const parser = valibot(
+        v.pipe(
+          v.string(),
+          v.transform(JSON.parse),
+          v.lazy(() =>
+            v.object({
+              a: v.lazy(
+                () =>
+                  asyncInner as unknown as v.BaseSchema<
+                    unknown,
+                    string,
+                    v.BaseIssue<unknown>
+                  >,
+              ),
+            }) as v.BaseSchema<
+              unknown,
+              { readonly a: string },
+              v.BaseIssue<unknown>
+            >
+          ),
+        ),
+      );
+      assert.throws(() => parser.parse('{"a":"ok"}'), expectedError);
+    });
+
     it("should work normally with sync schema inside v.lazy()", () => {
       const syncSchema = v.lazy(() => v.string());
       const parser = valibot(syncSchema as never);

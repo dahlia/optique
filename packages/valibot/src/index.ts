@@ -344,10 +344,123 @@ function containsAsyncSchema(
   // NOTE: v.lazy() schemas are not inspected statically.  The getter
   // receives the actual parse input and may return different schemas
   // depending on it, making static analysis unreliable.  Async schemas
-  // returned by lazy getters are caught at parse time by the typed-field
-  // check in the parse() method.
+  // returned by lazy getters are caught at runtime by guardLazySchemas().
 
   return false;
+}
+
+/**
+ * Marker symbol indicating that a `v.lazy()` schema's getter has already
+ * been wrapped by {@link guardLazySchemas}.  Prevents double-wrapping when
+ * the same lazy schema is reachable via multiple paths.
+ */
+const LAZY_GUARDED: unique symbol = Symbol("optique:lazyGuarded");
+
+/**
+ * Walks the schema tree and wraps every `v.lazy()` getter with a guard
+ * that throws `TypeError` if the getter returns an async schema at runtime.
+ *
+ * This is necessary because `containsAsyncSchema()` cannot inspect lazy
+ * schemas statically — the getter depends on actual parse input.  By
+ * guarding the getter itself, async schemas are rejected at the exact
+ * point they would otherwise produce a `Promise` inside a synchronous
+ * `safeParse()` call.
+ *
+ * When a guarded getter discovers new lazy schemas inside the returned
+ * schema, it recursively guards them too, handling arbitrary nesting
+ * of lazy schemas.
+ *
+ * @param schema The root schema to walk.
+ */
+function guardLazySchemas(
+  schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+): void {
+  const visited = new WeakSet<object>();
+
+  function walk(
+    node: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+  ): void {
+    if (visited.has(node)) return;
+    visited.add(node);
+
+    const s = node as ValibotSchemaInternal & {
+      async?: boolean;
+      getter?: (
+        input: unknown,
+      ) => v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
+      [LAZY_GUARDED]?: boolean;
+    };
+
+    // Guard lazy getters: wrap the getter so it checks the returned
+    // schema's async flag before the inner ~run can return a Promise.
+    if (s.type === "lazy" && s.getter && !s[LAZY_GUARDED]) {
+      const originalGetter = s.getter;
+      (s as Record<symbol, boolean>)[LAZY_GUARDED] = true;
+      (
+        s as { getter: typeof originalGetter }
+      ).getter = function (input: unknown) {
+        const inner = originalGetter(input);
+        if ((inner as unknown as { async?: boolean }).async) {
+          throw new TypeError(
+            "Async Valibot schemas (e.g., async validations) are not " +
+              "supported by valibot(). Use synchronous schemas instead.",
+          );
+        }
+        // Recursively guard lazy schemas discovered inside the returned
+        // schema (handles lazy-inside-lazy and other dynamic structures).
+        guardLazySchemas(inner);
+        return inner;
+      };
+      return; // Can't recurse into lazy statically
+    }
+
+    // Recurse into wrapped schemas (optional, nullable, nullish, etc.)
+    if (s.wrapped) walk(s.wrapped);
+
+    // Recurse into pipe items (base schema + actions)
+    if (s.pipe && Array.isArray(s.pipe)) {
+      for (const item of s.pipe) {
+        if (typeof item === "object" && item != null) {
+          walk(
+            item as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+          );
+        }
+      }
+    }
+
+    // Recurse into union/variant/intersect options
+    if (s.options && Array.isArray(s.options)) {
+      for (const opt of s.options) {
+        if (typeof opt === "object" && opt != null) {
+          walk(
+            opt as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+          );
+        }
+      }
+    }
+
+    // Recurse into container members (object entries, array item, etc.)
+    if (s.entries) {
+      for (const entry of Object.values(s.entries)) {
+        walk(entry);
+      }
+    }
+    if (s.item) walk(s.item);
+    if (s.items && Array.isArray(s.items)) {
+      for (const item of s.items) walk(item);
+    }
+    if (s.key && typeof s.key === "object") {
+      walk(s.key);
+    }
+    if (s.value && typeof s.value === "object") {
+      walk(
+        s.value as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+      );
+    }
+    if (s.rest) walk(s.rest);
+  }
+
+  walk(schema);
 }
 
 /**
@@ -664,6 +777,7 @@ export function valibot<T>(
         "supported by valibot(). Use synchronous schemas instead.",
     );
   }
+  guardLazySchemas(schema);
   const choices = inferChoices(schema);
   const metavar = options.metavar ?? inferMetavar(schema);
   ensureNonEmptyString(metavar);
@@ -690,11 +804,10 @@ export function valibot<T>(
     parse(input: string): ValueParserResult<T> {
       const result = safeParse(schema, input);
 
-      // When an async schema bypasses containsAsyncSchema() (e.g., via
-      // v.lazy()), safeParse() calls the async ~run method synchronously.
-      // The returned Promise is destructured as a dataset, producing
-      // typed=undefined instead of boolean.  Detect this to throw a clear
-      // error instead of silently returning {success: true, value: undefined}.
+      // Defense-in-depth: if an async schema somehow bypasses both
+      // containsAsyncSchema() and guardLazySchemas(), safeParse() calls
+      // the async ~run synchronously.  The returned Promise is destructured
+      // as a dataset, producing typed=undefined instead of boolean.
       if (
         typeof (result as unknown as Record<string, unknown>).typed !==
           "boolean"
