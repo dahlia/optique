@@ -135,6 +135,10 @@ To be released.
     `Usage: myapp config ...` without changing parse behavior or
     completion behavior.  [[#139]]
 
+ -  Fixed `getDocPage()` preserving hidden terms from custom `DocFragments`
+    instead of filtering them.  `buildDocPage()` now filters out entries whose
+    terms are doc-hidden before assembling the final `DocPage`.  [[#494]]
+
  -  Fixed `or()` and `longestMatch()` duplicating visible terms in
     documentation when branches share the same surface syntax.  [[#432], [#698]]
 
@@ -944,6 +948,7 @@ To be released.
 [#485]: https://github.com/dahlia/optique/issues/485
 [#488]: https://github.com/dahlia/optique/issues/488
 [#490]: https://github.com/dahlia/optique/pull/490
+[#494]: https://github.com/dahlia/optique/issues/494
 [#500]: https://github.com/dahlia/optique/issues/500
 [#505]: https://github.com/dahlia/optique/issues/505
 [#506]: https://github.com/dahlia/optique/issues/506
