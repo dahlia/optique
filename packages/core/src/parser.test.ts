@@ -2750,3 +2750,186 @@ describe("getDocPage reference isolation", () => {
     assert.equal(sharedUsage[0].type, "ellipsis");
   });
 });
+
+// Regression test for https://github.com/dahlia/optique/issues/494
+// getDocPage() should filter out hidden terms from custom DocFragments
+// before producing the final DocPage.
+describe("getDocPage: filter hidden terms from custom DocFragments", () => {
+  function makeCustomParser(
+    fragments: Parser<"sync", unknown, unknown>["getDocFragments"],
+  ): Parser<"sync", unknown, unknown> {
+    return {
+      $mode: "sync",
+      $valueType: [] as unknown[],
+      $stateType: [] as unknown[],
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse: (ctx) => ({
+        success: true as const,
+        next: ctx,
+        consumed: [],
+      }),
+      complete: () => ({ success: true as const, value: undefined }),
+      suggest: function* () {},
+      getDocFragments: fragments,
+    };
+  }
+
+  it("should filter entry with hidden: true", () => {
+    const parser = makeCustomParser(() => ({
+      fragments: [
+        {
+          type: "entry",
+          term: { type: "option", names: ["--secret"], hidden: true },
+        },
+        {
+          type: "entry",
+          term: { type: "option", names: ["--visible"] },
+          description: message`A visible option.`,
+        },
+      ],
+    }));
+
+    const doc = getDocPageSync(parser);
+    assert.ok(doc);
+    const allEntries = doc.sections.flatMap((s) => s.entries);
+    assert.equal(allEntries.length, 1);
+    assert.equal(allEntries[0].term.type, "option");
+    assert.ok(
+      allEntries[0].term.type === "option" &&
+        allEntries[0].term.names.includes("--visible"),
+    );
+  });
+
+  it('should filter entry with hidden: "doc"', () => {
+    const parser = makeCustomParser(() => ({
+      fragments: [
+        {
+          type: "entry",
+          term: { type: "option", names: ["--doc-hidden"], hidden: "doc" },
+        },
+        {
+          type: "entry",
+          term: { type: "option", names: ["--visible"] },
+        },
+      ],
+    }));
+
+    const doc = getDocPageSync(parser);
+    assert.ok(doc);
+    const allEntries = doc.sections.flatMap((s) => s.entries);
+    assert.equal(allEntries.length, 1);
+    assert.ok(
+      allEntries[0].term.type === "option" &&
+        allEntries[0].term.names.includes("--visible"),
+    );
+  });
+
+  it('should filter entry with hidden: "help"', () => {
+    const parser = makeCustomParser(() => ({
+      fragments: [
+        {
+          type: "entry",
+          term: { type: "option", names: ["--help-hidden"], hidden: "help" },
+        },
+        {
+          type: "entry",
+          term: { type: "option", names: ["--visible"] },
+        },
+      ],
+    }));
+
+    const doc = getDocPageSync(parser);
+    assert.ok(doc);
+    const allEntries = doc.sections.flatMap((s) => s.entries);
+    assert.equal(allEntries.length, 1);
+    assert.ok(
+      allEntries[0].term.type === "option" &&
+        allEntries[0].term.names.includes("--visible"),
+    );
+  });
+
+  it('should keep entry with hidden: "usage"', () => {
+    const parser = makeCustomParser(() => ({
+      fragments: [
+        {
+          type: "entry",
+          term: {
+            type: "option",
+            names: ["--usage-hidden"],
+            hidden: "usage",
+          },
+          description: message`Hidden from usage only.`,
+        },
+      ],
+    }));
+
+    const doc = getDocPageSync(parser);
+    assert.ok(doc);
+    const allEntries = doc.sections.flatMap((s) => s.entries);
+    assert.equal(allEntries.length, 1);
+    assert.ok(
+      allEntries[0].term.type === "option" &&
+        allEntries[0].term.names.includes("--usage-hidden"),
+    );
+  });
+
+  it("should filter hidden entries within section fragments", () => {
+    const parser = makeCustomParser(() => ({
+      fragments: [
+        {
+          type: "section",
+          title: "Options",
+          entries: [
+            {
+              term: { type: "option", names: ["--secret"], hidden: true },
+            },
+            {
+              term: { type: "option", names: ["--visible"] },
+              description: message`A visible option.`,
+            },
+          ],
+        },
+      ],
+    }));
+
+    const doc = getDocPageSync(parser);
+    assert.ok(doc);
+    const section = doc.sections.find((s) => s.title === "Options");
+    assert.ok(section);
+    assert.equal(section.entries.length, 1);
+    assert.ok(
+      section.entries[0].term.type === "option" &&
+        section.entries[0].term.names.includes("--visible"),
+    );
+  });
+
+  it("should filter hidden argument and command terms", () => {
+    const parser = makeCustomParser(() => ({
+      fragments: [
+        {
+          type: "entry",
+          term: { type: "argument", metavar: "HIDDEN", hidden: true },
+        },
+        {
+          type: "entry",
+          term: { type: "command", name: "secret", hidden: true },
+        },
+        {
+          type: "entry",
+          term: { type: "option", names: ["--visible"] },
+        },
+      ],
+    }));
+
+    const doc = getDocPageSync(parser);
+    assert.ok(doc);
+    const allEntries = doc.sections.flatMap((s) => s.entries);
+    assert.equal(allEntries.length, 1);
+    assert.ok(
+      allEntries[0].term.type === "option" &&
+        allEntries[0].term.names.includes("--visible"),
+    );
+  });
+});
