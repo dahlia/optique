@@ -1906,6 +1906,16 @@ describe("formatDocPage", () => {
       assertLinesWithinMaxWidth(result, 8);
     });
 
+    it("should accept maxWidth fitting all-hidden usage exactly", () => {
+      const page: DocPage = {
+        usage: [{ type: "command", name: "secret", hidden: true }],
+        sections: [],
+      };
+      // All terms hidden → renders as "Usage: app" (10 chars)
+      const result = formatDocPage("app", page, { maxWidth: 10 });
+      assertLinesWithinMaxWidth(result, 10);
+    });
+
     it("should throw RangeError when maxWidth is too small for Examples label", () => {
       const page: DocPage = {
         examples: [{ type: "text", text: "example" }],
