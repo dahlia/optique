@@ -8,7 +8,7 @@ describe("valibot()", () => {
   describe("missing placeholder", () => {
     it("should throw TypeError when options are omitted", () => {
       assert.throws(
-        // @ts-ignore: intentionally omitting required options
+        // @ts-expect-error: intentionally omitting required options
         () => valibot(v.string()),
         {
           name: "TypeError",
@@ -20,7 +20,7 @@ describe("valibot()", () => {
 
     it("should throw TypeError when placeholder is missing from options", () => {
       assert.throws(
-        // @ts-ignore: intentionally omitting placeholder
+        // @ts-expect-error: intentionally omitting placeholder
         () => valibot(v.string(), {}),
         {
           name: "TypeError",

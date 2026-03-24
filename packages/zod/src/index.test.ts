@@ -8,7 +8,7 @@ describe("zod()", () => {
   describe("missing placeholder", () => {
     it("should throw TypeError when options are omitted", () => {
       assert.throws(
-        // @ts-ignore: intentionally omitting required options
+        // @ts-expect-error: intentionally omitting required options
         () => zod(z.string()),
         {
           name: "TypeError",
@@ -20,7 +20,7 @@ describe("zod()", () => {
 
     it("should throw TypeError when placeholder is missing from options", () => {
       assert.throws(
-        // @ts-ignore: intentionally omitting placeholder
+        // @ts-expect-error: intentionally omitting placeholder
         () => zod(z.string(), {}),
         {
           name: "TypeError",
