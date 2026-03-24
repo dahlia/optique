@@ -1497,7 +1497,7 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
     metavar,
     get placeholder() {
       return new URL(
-        `${options.allowedProtocols?.[0] ?? "http:"}//0.invalid`,
+        `${allowedProtocols?.[0] ?? "http:"}//0.invalid`,
       );
     },
     parse(input: string): ValueParserResult<URL> {
