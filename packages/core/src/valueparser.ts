@@ -5889,7 +5889,9 @@ export function ip(
   return {
     $mode: "sync",
     metavar,
-    placeholder: version === 6 ? "::" : "0.0.0.0",
+    placeholder: version === 6
+      ? ipv6Parser!.placeholder
+      : ipv4Parser!.placeholder,
     parse(input: string): ValueParserResult<string> {
       let ipv4Error: ValueParserResult<string> | null = null;
       let ipv6Error: ValueParserResult<string> | null = null;
@@ -6260,8 +6262,16 @@ export function cidr(
     $mode: "sync",
     metavar,
     placeholder: version === 6
-      ? { address: "::", prefix: 0, version: 6 as 4 | 6 }
-      : { address: "0.0.0.0", prefix: 0, version: 4 as 4 | 6 },
+      ? {
+        address: ipv6Parser!.placeholder,
+        prefix: minPrefix ?? 0,
+        version: 6 as 4 | 6,
+      }
+      : {
+        address: ipv4Parser!.placeholder,
+        prefix: minPrefix ?? 0,
+        version: 4 as 4 | 6,
+      },
     parse(input: string): ValueParserResult<CidrValue> {
       // Parse CIDR format: <ip>/<prefix>
       const slashIndex = input.lastIndexOf("/");
