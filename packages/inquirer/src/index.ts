@@ -145,11 +145,28 @@ function shouldDeferPrompt(
 function deferredPromptResult<TValue>(
   placeholderValue: TValue,
 ): ValueParserResult<TValue> {
-  return {
+  const result: ValueParserResult<TValue> & { success: true } = {
     success: true,
     value: placeholderValue,
     deferred: true,
   };
+  // For object/array placeholders, enumerate all own keys as fully
+  // deferred so that prepareParsedForContexts() can strip them.
+  // Without this, object-valued leaf placeholders (e.g., from
+  // zod(z.object(...))) would pass through to phase-two contexts
+  // because they look the same as opaque structured deferred values
+  // from map().
+  if (placeholderValue != null && typeof placeholderValue === "object") {
+    const keys = new Map<PropertyKey, null>();
+    for (const key of Reflect.ownKeys(placeholderValue as object)) {
+      keys.set(key, null);
+    }
+    if (keys.size > 0) {
+      (result as { deferredKeys?: ReadonlyMap<PropertyKey, unknown> })
+        .deferredKeys = keys;
+    }
+  }
+  return result;
 }
 
 function withAnnotationView<T extends object, TResult>(
