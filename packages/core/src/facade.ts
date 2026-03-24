@@ -90,8 +90,15 @@ function prepareParsedForContexts(
   // preserving non-deferred fields for phase-two context annotation
   // collection (e.g., getConfigPath may depend on non-deferred fields).
   // Plain objects and arrays are safe to clone field-by-field; non-plain
-  // objects (Set, Map, class instances) cannot be reliably reconstructed,
-  // so they fall through to the pass-through fallback.
+  // objects (Set, Map, class instances with deferredKeys) are leaf
+  // deferred from prompt() and should be treated as fully deferred.
+  if (
+    deferredKeys != null && deferredKeys.size > 0 &&
+    parsed != null && typeof parsed === "object" &&
+    !isPlainObject(parsed) && !Array.isArray(parsed)
+  ) {
+    return undefined;
+  }
   if (
     deferredKeys != null && deferredKeys.size > 0 &&
     parsed != null && typeof parsed === "object" &&

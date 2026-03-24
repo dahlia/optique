@@ -1631,13 +1631,18 @@ export function nonEmpty<M extends Mode, T, TState>(
     return processNonEmptyResult(result);
   };
 
-  return {
+  const nonEmptyParser: Parser<M, T, TState> = {
     $mode: parser.$mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
     usage: parser.usage,
     initialState: parser.initialState,
+    // Forward shouldDeferCompletion from inner parser so that prompt()
+    // can defer through nonEmpty() wrappers.
+    ...(typeof parser.shouldDeferCompletion === "function"
+      ? { shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser) }
+      : {}),
     parse(context: ParserContext<TState>) {
       return dispatchByMode(
         parser.$mode,
@@ -1655,4 +1660,15 @@ export function nonEmpty<M extends Mode, T, TState>(
       return syncParser.getDocFragments(state, defaultValue);
     },
   } as Parser<M, T, TState>;
+  // Forward placeholder lazily from inner parser.
+  if ("placeholder" in parser) {
+    Object.defineProperty(nonEmptyParser, "placeholder", {
+      get() {
+        return parser.placeholder;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  return nonEmptyParser;
 }
