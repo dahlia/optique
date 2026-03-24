@@ -726,7 +726,7 @@ export function formatDocPage(
       : Math.max(1, Math.floor(availableForColumns / 2));
   }
   let output = "";
-  if (page.brief != null) {
+  if (hasContent(page.brief)) {
     output += formatMessage(page.brief, {
       colors: options.colors,
       maxWidth: options.maxWidth,
@@ -747,7 +747,7 @@ export function formatDocPage(
     );
     output += "\n";
   }
-  if (page.description != null) {
+  if (hasContent(page.description)) {
     output += "\n";
     output += formatMessage(page.description, {
       colors: options.colors,
@@ -987,7 +987,7 @@ export function formatDocPage(
       }\n`;
     }
   }
-  if (page.examples != null) {
+  if (hasContent(page.examples)) {
     output += "\n";
     const examplesLabel = options.colors
       ? "\x1b[1;2mExamples:\x1b[0m\n"
@@ -1001,7 +1001,7 @@ export function formatDocPage(
     output += "  " + indentLines(examplesContent, 2);
     output += "\n";
   }
-  if (page.author != null) {
+  if (hasContent(page.author)) {
     output += "\n";
     const authorLabel = options.colors
       ? "\x1b[1;2mAuthor:\x1b[0m\n"
@@ -1015,7 +1015,7 @@ export function formatDocPage(
     output += "  " + indentLines(authorContent, 2);
     output += "\n";
   }
-  if (page.bugs != null) {
+  if (hasContent(page.bugs)) {
     output += "\n";
     const bugsLabel = options.colors ? "\x1b[1;2mBugs:\x1b[0m\n" : "Bugs:\n";
     output += bugsLabel;
@@ -1027,7 +1027,7 @@ export function formatDocPage(
     output += "  " + indentLines(bugsContent, 2);
     output += "\n";
   }
-  if (page.footer != null) {
+  if (hasContent(page.footer)) {
     output += "\n";
     output += formatMessage(page.footer, {
       colors: options.colors,
