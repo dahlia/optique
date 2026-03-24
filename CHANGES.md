@@ -173,6 +173,11 @@ To be released.
     annotation object).  This affects annotation-enabled parse/run paths,
     including `runWith()` and `runWithSync()`.  [[#146]]
 
+ -  Fixed `ip()` and `cidr()` with `version: "both"` allowing IPv4-mapped
+    IPv6 addresses (e.g., `::ffff:192.168.0.1`) to bypass IPv4 restrictions
+    such as `allowPrivate: false`.  The embedded IPv4 address is now checked
+    against the configured IPv4 restrictions.  [[#339], [#721]]
+
  -  Fixed `hostname()` accepting dotted all-numeric strings (e.g.,
     `192.168.0.1`, `999.999.999.999`) that resemble IPv4 addresses rather
     than DNS hostnames.  This also affects `socketAddress()` with
@@ -909,6 +914,7 @@ To be released.
 [#336]: https://github.com/dahlia/optique/issues/336
 [#337]: https://github.com/dahlia/optique/issues/337
 [#338]: https://github.com/dahlia/optique/issues/338
+[#339]: https://github.com/dahlia/optique/issues/339
 [#340]: https://github.com/dahlia/optique/issues/340
 [#341]: https://github.com/dahlia/optique/issues/341
 [#342]: https://github.com/dahlia/optique/issues/342
@@ -1075,6 +1081,7 @@ To be released.
 [#718]: https://github.com/dahlia/optique/pull/718
 [#719]: https://github.com/dahlia/optique/pull/719
 [#720]: https://github.com/dahlia/optique/pull/720
+[#721]: https://github.com/dahlia/optique/pull/721
 
 ### @optique/config
 

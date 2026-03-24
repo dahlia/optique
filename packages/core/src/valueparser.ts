@@ -5201,6 +5201,110 @@ function compressIpv6(groups: string[]): string {
 }
 
 /**
+ * Extracts IPv4 octets from an IPv4-mapped IPv6 address.
+ * Returns null if the address is not an IPv4-mapped address
+ * (i.e., not in the `::ffff:x.x.x.x` range).
+ */
+function extractIpv4FromMapped(
+  normalizedIpv6: string,
+): readonly number[] | null {
+  const groups = expandIpv6(normalizedIpv6);
+  if (groups === null) return null;
+
+  // Check for ::ffff: prefix (groups 0-4 are 0, group 5 is ffff)
+  for (let i = 0; i < 5; i++) {
+    if (parseInt(groups[i], 16) !== 0) return null;
+  }
+  if (parseInt(groups[5], 16) !== 0xffff) return null;
+
+  // Extract octets from groups 6 and 7
+  const high = parseInt(groups[6], 16);
+  const low = parseInt(groups[7], 16);
+  return [
+    (high >> 8) & 0xff,
+    high & 0xff,
+    (low >> 8) & 0xff,
+    low & 0xff,
+  ];
+}
+
+/**
+ * Checks IPv4 restrictions against octets extracted from an IPv4-mapped
+ * IPv6 address.  Returns an error result if a restriction is violated,
+ * or null if all checks pass.
+ */
+function checkIpv4MappedRestrictions(
+  octets: readonly number[],
+  normalizedIpv6: string,
+  ipv4Opts: Omit<Ipv4Options, "metavar" | "errors"> | undefined,
+  errors: {
+    readonly privateNotAllowed?: Message | ((ip: string) => Message);
+    readonly loopbackNotAllowed?: Message | ((ip: string) => Message);
+    readonly linkLocalNotAllowed?: Message | ((ip: string) => Message);
+    readonly multicastNotAllowed?: Message | ((ip: string) => Message);
+    readonly broadcastNotAllowed?: Message | ((ip: string) => Message);
+    readonly zeroNotAllowed?: Message | ((ip: string) => Message);
+  } | undefined,
+): { readonly success: false; readonly error: Message } | null {
+  const allowPrivate = ipv4Opts?.allowPrivate ?? true;
+  const allowLoopback = ipv4Opts?.allowLoopback ?? true;
+  const allowLinkLocal = ipv4Opts?.allowLinkLocal ?? true;
+  const allowMulticast = ipv4Opts?.allowMulticast ?? true;
+  const allowBroadcast = ipv4Opts?.allowBroadcast ?? true;
+  const allowZero = ipv4Opts?.allowZero ?? true;
+
+  if (!allowPrivate && isPrivateIp(octets)) {
+    const errorMsg = errors?.privateNotAllowed;
+    const msg = typeof errorMsg === "function"
+      ? errorMsg(normalizedIpv6)
+      : errorMsg ?? message`${normalizedIpv6} is a private IP address.`;
+    return { success: false, error: msg };
+  }
+
+  if (!allowLoopback && isLoopbackIp(octets)) {
+    const errorMsg = errors?.loopbackNotAllowed;
+    const msg = typeof errorMsg === "function"
+      ? errorMsg(normalizedIpv6)
+      : errorMsg ?? message`${normalizedIpv6} is a loopback address.`;
+    return { success: false, error: msg };
+  }
+
+  if (!allowLinkLocal && isLinkLocalIp(octets)) {
+    const errorMsg = errors?.linkLocalNotAllowed;
+    const msg = typeof errorMsg === "function"
+      ? errorMsg(normalizedIpv6)
+      : errorMsg ?? message`${normalizedIpv6} is a link-local address.`;
+    return { success: false, error: msg };
+  }
+
+  if (!allowMulticast && isMulticastIp(octets)) {
+    const errorMsg = errors?.multicastNotAllowed;
+    const msg = typeof errorMsg === "function"
+      ? errorMsg(normalizedIpv6)
+      : errorMsg ?? message`${normalizedIpv6} is a multicast address.`;
+    return { success: false, error: msg };
+  }
+
+  if (!allowBroadcast && isBroadcastIp(octets)) {
+    const errorMsg = errors?.broadcastNotAllowed;
+    const msg = typeof errorMsg === "function"
+      ? errorMsg(normalizedIpv6)
+      : errorMsg ?? message`${normalizedIpv6} is the broadcast address.`;
+    return { success: false, error: msg };
+  }
+
+  if (!allowZero && isZeroIp(octets)) {
+    const errorMsg = errors?.zeroNotAllowed;
+    const msg = typeof errorMsg === "function"
+      ? errorMsg(normalizedIpv6)
+      : errorMsg ?? message`${normalizedIpv6} is the zero address.`;
+    return { success: false, error: msg };
+  }
+
+  return null;
+}
+
+/**
  * Options for configuring the universal IP address value parser.
  *
  * @since 0.10.0
@@ -5375,6 +5479,19 @@ export function ip(
       if (ipv6Parser !== null) {
         const result = ipv6Parser.parse(input);
         if (result.success) {
+          // Check IPv4 restrictions for IPv4-mapped IPv6 addresses
+          if (version === "both") {
+            const mappedOctets = extractIpv4FromMapped(result.value);
+            if (mappedOctets !== null) {
+              const restrictionError = checkIpv4MappedRestrictions(
+                mappedOctets,
+                result.value,
+                options?.ipv4,
+                errors,
+              );
+              if (restrictionError !== null) return restrictionError;
+            }
+          }
           return result;
         }
         ipv6Error = result;
@@ -5763,6 +5880,27 @@ export function cidr(
       if (ipVersion === null && ipv6Parser !== null) {
         const result = ipv6Parser.parse(ipPart);
         if (result.success) {
+          // Check IPv4 restrictions for IPv4-mapped IPv6 addresses
+          if (version === "both") {
+            const mappedOctets = extractIpv4FromMapped(result.value);
+            if (mappedOctets !== null) {
+              const restrictionError = checkIpv4MappedRestrictions(
+                mappedOctets,
+                result.value,
+                options?.ipv4,
+                {
+                  privateNotAllowed: errors?.privateNotAllowed,
+                  loopbackNotAllowed: errors?.loopbackNotAllowed,
+                  linkLocalNotAllowed: errors?.linkLocalNotAllowed,
+                  multicastNotAllowed: errors?.multicastNotAllowed,
+                  broadcastNotAllowed: errors?.broadcastNotAllowed,
+                  zeroNotAllowed: errors?.zeroNotAllowed,
+                },
+              );
+              if (restrictionError !== null) return restrictionError;
+            }
+          }
+
           ipVersion = 6;
           normalizedIp = result.value;
 

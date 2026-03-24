@@ -2421,7 +2421,9 @@ compressed).
 
 When `version` is `"both"`, the parser tries IPv4 first, then IPv6 if IPv4
 fails. This means IPv4-mapped IPv6 addresses like `::ffff:192.0.2.1` are
-parsed as IPv6.
+parsed as IPv6. However, IPv4 restrictions (e.g., `allowPrivate: false`,
+`allowLoopback: false`) are still applied to the embedded IPv4 address in
+IPv4-mapped IPv6 addresses, so they cannot be used to bypass IPv4 policy.
 
 The parser uses `"IP"` as its default metavar.
 
