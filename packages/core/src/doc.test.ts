@@ -651,7 +651,7 @@ describe("formatDocPage", () => {
       formatDocPage("app", { examples: [], sections: [] }, { maxWidth: 8 });
     });
     assert.doesNotThrow(() => {
-      formatDocPage("app", { author: [], sections: [] }, { maxWidth: 8 });
+      formatDocPage("app", { author: [], sections: [] }, { maxWidth: 6 });
     });
     assert.doesNotThrow(() => {
       formatDocPage("app", { bugs: [], sections: [] }, { maxWidth: 4 });
