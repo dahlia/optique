@@ -2383,7 +2383,10 @@ export function port(
     return {
       $mode: "sync",
       metavar,
-      placeholder: options.placeholder ?? min,
+      placeholder: options.placeholder ??
+        (options.disallowWellKnown && min < 1024n
+          ? (1024n > min ? 1024n : min)
+          : min),
       parse(input: string): ValueParserResult<bigint> {
         if (!input.match(/^-?\d+$/)) {
           return {
@@ -2468,7 +2471,8 @@ export function port(
   return {
     $mode: "sync",
     metavar,
-    placeholder: options?.placeholder ?? min,
+    placeholder: options?.placeholder ??
+      (options?.disallowWellKnown && min < 1024 ? Math.max(1024, min) : min),
     parse(input: string): ValueParserResult<number> {
       if (!input.match(/^-?\d+$/)) {
         return {
@@ -5863,7 +5867,7 @@ export function ip(
   return {
     $mode: "sync",
     metavar,
-    placeholder: "0.0.0.0",
+    placeholder: version === 6 ? "::" : "0.0.0.0",
     parse(input: string): ValueParserResult<string> {
       let ipv4Error: ValueParserResult<string> | null = null;
       let ipv6Error: ValueParserResult<string> | null = null;
