@@ -7806,6 +7806,24 @@ export function conditional(
     return {
       success: true,
       value: [discriminatorValue, branchResult.value] as const,
+      // Propagate deferred metadata from the branch result,
+      // remapping to index 1 of the [discriminator, branchValue] tuple.
+      ...(branchResult.deferred
+        ? {
+          deferred: true as const,
+          ...(branchResult.deferredKeys
+            ? {
+              deferredKeys: new Map([[
+                1,
+                branchResult.deferredKeys,
+              ]]) as DeferredMap,
+            }
+            : branchResult.value == null ||
+                typeof branchResult.value !== "object"
+            ? { deferredKeys: new Map([[1, null]]) as DeferredMap }
+            : {}),
+        }
+        : {}),
     };
   };
 
@@ -7893,6 +7911,22 @@ export function conditional(
     return {
       success: true,
       value: [discriminatorValue, branchResult.value] as const,
+      ...(branchResult.deferred
+        ? {
+          deferred: true as const,
+          ...(branchResult.deferredKeys
+            ? {
+              deferredKeys: new Map([[
+                1,
+                branchResult.deferredKeys,
+              ]]) as DeferredMap,
+            }
+            : branchResult.value == null ||
+                typeof branchResult.value !== "object"
+            ? { deferredKeys: new Map([[1, null]]) as DeferredMap }
+            : {}),
+        }
+        : {}),
     };
   };
 

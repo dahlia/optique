@@ -105,11 +105,18 @@ To be released.
 
  -  Added `placeholder` property to `ValueParser` interface (required) and
     `Parser` interface (optional).  Every value parser now provides a
-    type-appropriate stand-in value (e.g., `""` for `string()`, `0` for
-    `integer()`) used during deferred prompt resolution.  `option()` and
+    type-appropriate stand-in value (e.g., `""` for `string()`, `1` for
+    `port()`) used during deferred prompt resolution.  `option()` and
     `argument()` set `Parser.placeholder` from the value parser, and
     combinators like `map()`, `optional()`, and `withDefault()` propagate
     it through the parser chain.  [[#407]]
+
+ -  Added optional `placeholder` override to `string()`, `integer()`,
+    `float()`, and `port()` options.  This allows customizing the stand-in
+    value when downstream `map()` transforms or constraints require a
+    specific value.  `integer()` and `float()` automatically derive
+    placeholders from `min`/`max` constraints; `port()` defaults to `min`
+    (which itself defaults to `1`).  [[#407]]
 
  -  Replaced the `DeferredPromptValue` sentinel with type-appropriate
     placeholder values during two-phase parsing.  `prompt()` now uses
