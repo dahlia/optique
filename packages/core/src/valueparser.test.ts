@@ -9830,11 +9830,21 @@ describe("socketAddress()", () => {
       assert.strictEqual(result.value.port, 8080);
     });
 
-    it("should report missing port when requirePort is true and no valid split exists", () => {
+    it("should route to invalidFormat when requirePort is true and separator is present but no valid split exists", () => {
       const parser = socketAddress({ separator: "to", requirePort: true });
 
+      // "toronto" contains "to" but no split produces a valid parse.
+      // Since the separator IS present, the error should be
+      // invalidFormat, not missingPort.
       const result = parser.parse("toronto");
       assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "to" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "toronto" },
+        { type: "text", text: "." },
+      ]);
     });
 
     it("should split when whole input is not a valid hostname", () => {
@@ -10032,12 +10042,11 @@ describe("socketAddress()", () => {
       });
 
       const result1 = withoutError.parse("db-to80");
-      assert.ok(result1.success);
-      assert.strictEqual(result1.value.host, "db-to80");
 
       const result2 = withError.parse("db-to80");
-      assert.ok(result2.success);
-      assert.strictEqual(result2.value.host, "db-to80");
+      assert.deepStrictEqual(result1, result2);
+      assert.ok(result1.success);
+      assert.deepStrictEqual(result1.value, { host: "db-to80", port: 80 });
     });
 
     it("should reject IP-shaped split host before host-only fallback", () => {

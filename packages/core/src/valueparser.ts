@@ -3884,14 +3884,17 @@ export function socketAddress(
         }
       }
 
-      // Try host-only interpretation only when port can be omitted.
-      // When port is required and a separator was found, the user
-      // attempted a split — falling through to invalidFormat is more
-      // appropriate than reporting missingPort.
+      // Try host-only interpretation.  When port can be omitted, a
+      // valid hostname is accepted with the default port.  When port
+      // is required, the result is still needed to gate the trailing-
+      // separator fallback: if the whole input is a valid hostname
+      // (e.g., "toronto" with separator "to"), the trailing separator
+      // should NOT fire — the "to" is part of the hostname, not a
+      // separator with an omitted port.
       let hostOnlyResult: ValueParserResult<string> | undefined;
-      if (canOmitPort) {
+      if (canOmitPort || trailingSepHost !== undefined) {
         hostOnlyResult = parseHost(trimmed);
-        if (hostOnlyResult.success) {
+        if (canOmitPort && hostOnlyResult.success) {
           return {
             success: true,
             value: { host: hostOnlyResult.value, port: defaultPort! },
@@ -3902,7 +3905,11 @@ export function socketAddress(
       // If the whole input is not a valid hostname but a trailing
       // separator produced a valid host, treat as omitted port
       // (e.g., "localhost:" → host "localhost" with default port).
-      if (trailingSepHost !== undefined) {
+      if (
+        trailingSepHost !== undefined &&
+        hostOnlyResult !== undefined &&
+        !hostOnlyResult.success
+      ) {
         if (canOmitPort) {
           return {
             success: true,
