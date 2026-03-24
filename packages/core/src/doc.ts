@@ -224,6 +224,7 @@ export function deduplicateDocFragments(
   }
   const untitledSeen = new Map<string, UntitledLocation>();
   const titledSectionMap = new Map<string, DocEntry[]>();
+  const titledSectionPositioned = new Set<string>();
   // Each element is either a concrete DocFragment or a title placeholder
   // for a titled section whose entries are still being collected.
   const slots: (DocFragment | string)[] = [];
@@ -307,6 +308,14 @@ export function deduplicateDocFragments(
     } else {
       if (!titledSectionMap.has(fragment.title)) {
         titledSectionMap.set(fragment.title, []);
+      }
+      // Defer placeholder until we see a fragment with visible entries,
+      // so the section's position reflects its first visible content.
+      if (
+        !titledSectionPositioned.has(fragment.title) &&
+        fragment.entries.some((e) => !isDocEntryHidden(e))
+      ) {
+        titledSectionPositioned.add(fragment.title);
         slots.push(fragment.title);
       }
       titledSectionMap.get(fragment.title)!.push(...fragment.entries);

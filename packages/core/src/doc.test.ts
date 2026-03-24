@@ -2850,4 +2850,63 @@ describe("deduplicateDocFragments: hidden visibility preference", () => {
       "untitled section dedup should prefer visible entry",
     );
   });
+
+  it("should position titled section at first visible fragment", () => {
+    const result = deduplicateDocFragments([
+      {
+        type: "section",
+        title: "A",
+        entries: [
+          { term: { type: "option", names: ["--x"], hidden: "doc" } },
+        ],
+      },
+      {
+        type: "section",
+        title: "B",
+        entries: [
+          { term: { type: "option", names: ["--y"] } },
+        ],
+      },
+      {
+        type: "section",
+        title: "A",
+        entries: [
+          { term: { type: "option", names: ["--x"] } },
+        ],
+      },
+    ]);
+
+    const titles = result
+      .filter((f) => f.type === "section" && f.title != null)
+      .map((f) => (f as DocSection & { type: "section" }).title);
+    assert.deepEqual(
+      titles,
+      ["B", "A"],
+      "A should appear after B because A's first visible entry comes later",
+    );
+  });
+
+  it("should omit titled section when all entries are hidden", () => {
+    const result = deduplicateDocFragments([
+      {
+        type: "section",
+        title: "Hidden",
+        entries: [
+          { term: { type: "option", names: ["--x"], hidden: true } },
+        ],
+      },
+      {
+        type: "section",
+        title: "Visible",
+        entries: [
+          { term: { type: "option", names: ["--y"] } },
+        ],
+      },
+    ]);
+
+    const titles = result
+      .filter((f) => f.type === "section" && f.title != null)
+      .map((f) => (f as DocSection & { type: "section" }).title);
+    assert.deepEqual(titles, ["Visible"]);
+  });
 });
