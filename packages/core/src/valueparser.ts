@@ -3749,52 +3749,69 @@ export function socketAddress(
     metavar,
     parse(input: string): ValueParserResult<SocketAddressValue> {
       const trimmed = input.trim();
+      const canOmitPort = defaultPort !== undefined && !requirePort;
 
-      // Find separator
-      const separatorIndex = trimmed.lastIndexOf(separator);
-
-      let hostPart: string;
-      let portPart: string | undefined;
-
-      if (separatorIndex === -1) {
-        // No separator found - host only
-        hostPart = trimmed;
-        portPart = undefined;
-      } else {
-        hostPart = trimmed.substring(0, separatorIndex);
-        portPart = trimmed.substring(separatorIndex + separator.length);
+      // Step 1: If port can be omitted, try the whole input as a host first.
+      // This prevents separators that appear inside hostnames (e.g., "to"
+      // in "toronto") from causing incorrect splits.
+      let hostOnlyResult: ValueParserResult<string> | undefined;
+      if (canOmitPort) {
+        hostOnlyResult = parseHost(trimmed);
+        if (hostOnlyResult.success) {
+          return {
+            success: true,
+            value: { host: hostOnlyResult.value, port: defaultPort },
+          };
+        }
       }
 
-      // Validate host
-      const hostResult = parseHost(hostPart);
-      if (!hostResult.success) {
-        const errorMsg = options?.errors?.invalidFormat;
-        if (errorMsg) {
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg;
-          return { success: false, error: msg };
+      // Step 2: Try splitting at separator occurrences, rightmost first.
+      // Only accept a split when both the port part (non-empty, valid port
+      // number) and the host part are valid.
+      let firstHostError:
+        | { readonly hostPart: string; readonly error: Message }
+        | undefined;
+      let searchFrom = trimmed.length;
+      while (searchFrom > 0) {
+        const separatorIndex = trimmed.lastIndexOf(
+          separator,
+          searchFrom - 1,
+        );
+        if (separatorIndex === -1) break;
+
+        const hostPart = trimmed.substring(0, separatorIndex);
+        const portPart = trimmed.substring(
+          separatorIndex + separator.length,
+        );
+
+        if (portPart !== "") {
+          const portResult = portParser.parse(portPart);
+          if (portResult.success) {
+            const hostResult = parseHost(hostPart);
+            if (hostResult.success) {
+              return {
+                success: true,
+                value: {
+                  host: hostResult.value,
+                  port: portResult.value as number,
+                },
+              };
+            }
+            if (firstHostError === undefined) {
+              firstHostError = { hostPart, error: hostResult.error };
+            }
+          }
         }
-        // Propagate specific IP parser errors for IP-shaped input
-        // (including alternate literal forms); use the socket-level
-        // format error for everything else.
-        if (looksLikeIpv4(hostPart) || looksLikeAltIpv4Literal(hostPart)) {
-          return { success: false, error: hostResult.error };
-        }
-        return {
-          success: false,
-          error:
-            message`Expected a socket address in format host${separator}port, but got ${input}.`,
-        };
+
+        searchFrom = separatorIndex;
       }
-      const validatedHost = hostResult.value;
 
-      // Validate port
-      let validatedPort: number;
-
-      if (portPart === undefined || portPart === "") {
-        // Port is missing
-        if (requirePort) {
+      // Step 3: No valid split found.
+      // If we haven't tried the whole input as host yet, do so now to
+      // distinguish "valid host, missing port" from "invalid format".
+      if (!canOmitPort) {
+        hostOnlyResult = parseHost(trimmed);
+        if (hostOnlyResult.success) {
           const errorMsg = options?.errors?.missingPort;
           const msg = typeof errorMsg === "function"
             ? errorMsg(input)
@@ -3802,37 +3819,40 @@ export function socketAddress(
               message`Port number is required but was not specified.`;
           return { success: false, error: msg };
         }
+      }
 
-        if (defaultPort !== undefined) {
-          validatedPort = defaultPort;
-        } else {
-          const errorMsg = options?.errors?.missingPort;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg ??
-              message`Port number is required but was not specified.`;
-          return { success: false, error: msg };
+      // Step 4: Neither valid host-only nor a valid host+port split.
+      const errorMsg = options?.errors?.invalidFormat;
+      if (errorMsg) {
+        const msg = typeof errorMsg === "function" ? errorMsg(input) : errorMsg;
+        return { success: false, error: msg };
+      }
+
+      // Propagate specific IP parser errors for IP-shaped input
+      // from the best split candidate (valid port, invalid host).
+      if (firstHostError !== undefined) {
+        if (
+          looksLikeIpv4(firstHostError.hostPart) ||
+          looksLikeAltIpv4Literal(firstHostError.hostPart)
+        ) {
+          return { success: false, error: firstHostError.error };
         }
-      } else {
-        // Parse port
-        const portResult = portParser.parse(portPart);
-        if (!portResult.success) {
-          const errorMsg = options?.errors?.invalidFormat;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg ??
-              message`Expected a socket address in format host${separator}port, but got ${input}.`;
-          return { success: false, error: msg };
+      }
+
+      // Check if the whole input itself looks like an IP that failed
+      // validation (e.g., "999.999.999.999" with no separator).
+      if (hostOnlyResult !== undefined && !hostOnlyResult.success) {
+        if (
+          looksLikeIpv4(trimmed) || looksLikeAltIpv4Literal(trimmed)
+        ) {
+          return { success: false, error: hostOnlyResult.error };
         }
-        validatedPort = portResult.value as number;
       }
 
       return {
-        success: true,
-        value: {
-          host: validatedHost,
-          port: validatedPort,
-        },
+        success: false,
+        error:
+          message`Expected a socket address in format host${separator}port, but got ${input}.`,
       };
     },
     format(value: SocketAddressValue): string {

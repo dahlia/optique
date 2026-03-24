@@ -9789,6 +9789,76 @@ describe("socketAddress()", () => {
       assert.strictEqual(result.value.host, "0xFFF.0.0.1");
     });
   });
+
+  describe("separator disambiguation", () => {
+    it("should not split host-only input when separator appears inside hostname", () => {
+      const parser = socketAddress({ separator: "to", defaultPort: 80 });
+
+      const result1 = parser.parse("toronto");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value.host, "toronto");
+      assert.strictEqual(result1.value.port, 80);
+
+      const result2 = parser.parse("proto");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value.host, "proto");
+      assert.strictEqual(result2.value.port, 80);
+    });
+
+    it("should prefer host-only when port is optional and whole input is a valid hostname", () => {
+      const parser = socketAddress({ separator: "to", defaultPort: 80 });
+
+      // Even though "80" is a valid port, the whole input "exampleto80"
+      // is a valid hostname, so it should be treated as host-only.
+      const result1 = parser.parse("exampleto80");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value.host, "exampleto80");
+      assert.strictEqual(result1.value.port, 80);
+
+      const result2 = parser.parse("serverto443");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value.host, "serverto443");
+      assert.strictEqual(result2.value.port, 80);
+    });
+
+    it("should split at separator when requirePort is true", () => {
+      const parser = socketAddress({ separator: "to", requirePort: true });
+
+      const result = parser.parse("torontoto8080");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "toronto");
+      assert.strictEqual(result.value.port, 8080);
+    });
+
+    it("should report missing port when requirePort is true and no valid split exists", () => {
+      const parser = socketAddress({ separator: "to", requirePort: true });
+
+      const result = parser.parse("toronto");
+      assert.ok(!result.success);
+    });
+
+    it("should split when whole input is not a valid hostname", () => {
+      // Default separator ":" never appears in valid hostnames,
+      // so splitting always works correctly.
+      const parser = socketAddress({ separator: ":", defaultPort: 80 });
+
+      const result = parser.parse("localhost:3000");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "localhost");
+      assert.strictEqual(result.value.port, 3000);
+    });
+
+    it("should try multiple separator positions from right to left", () => {
+      const parser = socketAddress({ separator: "to", requirePort: true });
+
+      // "prototo80" has "to" at positions 3 and 5.
+      // Right-to-left: pos 5 → host="proto", port="80" → both valid → accept
+      const result = parser.parse("prototo80");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "proto");
+      assert.strictEqual(result.value.port, 80);
+    });
+  });
 });
 
 describe("macAddress()", () => {

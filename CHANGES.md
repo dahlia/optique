@@ -220,6 +220,14 @@ To be released.
     (e.g., `1234`, `2130706433`) also remain valid hostnames.  This also affects
     `socketAddress()` with `host: { type: "hostname" }`.  [[#715], [#717]]
 
+ -  Fixed `socketAddress()` incorrectly splitting host-only inputs when a
+    custom separator appears inside the hostname (e.g., `"toronto"` with
+    `separator: "to"` was parsed as `{ host: "toron", port: 80 }` instead of
+    `{ host: "toronto", port: 80 }`).  When port is optional (`defaultPort`
+    is set and `requirePort` is false), the parser now tries interpreting the
+    entire input as a hostname before attempting to split at the separator.
+    [[#360]]
+
  -  Fixed `hostname()` accepting case variants of `localhost` (e.g.,
     `LOCALHOST`, `LocalHost`) and wildcard-localhost forms (e.g.,
     `*.localhost`) when `allowLocalhost` is set to `false`.  DNS hostnames
