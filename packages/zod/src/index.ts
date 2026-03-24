@@ -641,6 +641,11 @@ export function zod<T>(
   schema: z.Schema<T>,
   options: ZodParserOptions<T>,
 ): ValueParser<"sync", T> {
+  if (options == null || typeof options !== "object") {
+    throw new TypeError(
+      "zod() requires an options object with a placeholder property.",
+    );
+  }
   const choices = inferChoices(schema);
   const boolInfo = analyzeBooleanSchema(schema);
   const metavar = options.metavar ??

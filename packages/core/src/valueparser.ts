@@ -3897,8 +3897,10 @@ export function socketAddress(
     $mode: "sync",
     metavar,
     placeholder: {
-      host: hostType === "ip" ? "0.0.0.0" : "localhost",
-      port: defaultPort ?? 1,
+      host: hostType === "ip"
+        ? ipParser.placeholder
+        : hostnameParser.placeholder,
+      port: defaultPort ?? portParser.placeholder,
     },
     parse(input: string): ValueParserResult<SocketAddressValue> {
       const trimmed = input.trim();

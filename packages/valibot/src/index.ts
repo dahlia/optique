@@ -639,6 +639,11 @@ export function valibot<T>(
   schema: v.BaseSchema<unknown, T, v.BaseIssue<unknown>>,
   options: ValibotParserOptions<T>,
 ): ValueParser<"sync", T> {
+  if (options == null || typeof options !== "object") {
+    throw new TypeError(
+      "valibot() requires an options object with a placeholder property.",
+    );
+  }
   if (containsAsyncSchema(schema)) {
     throw new TypeError(
       "Async Valibot schemas (e.g., async validations) are not " +
