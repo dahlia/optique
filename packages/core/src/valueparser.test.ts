@@ -9858,6 +9858,60 @@ describe("socketAddress()", () => {
       assert.strictEqual(result.value.host, "proto");
       assert.strictEqual(result.value.port, 80);
     });
+
+    it("should reject when split has valid host but invalid numeric port", () => {
+      // "example-70000" should NOT be silently accepted as a hostname.
+      // The port part "70000" is all digits → user intended a port → error.
+      const parser = socketAddress({ separator: "-", defaultPort: 80 });
+
+      const result = parser.parse("example-70000");
+      assert.ok(!result.success);
+    });
+
+    it("should accept host-only when port part is not numeric", () => {
+      // "example-server" has a non-numeric port part "server",
+      // so the separator is incidental and the input is a hostname.
+      const parser = socketAddress({ separator: "-", defaultPort: 80 });
+
+      const result = parser.parse("example-server");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "example-server");
+      assert.strictEqual(result.value.port, 80);
+    });
+
+    it("should report format error, not missing port, for invalid numeric port with requirePort", () => {
+      const parser = socketAddress({ separator: "to", requirePort: true });
+
+      // "exampleto70000" has a valid host + all-digit invalid port.
+      // Error should be about invalid format, not "missing port".
+      const result = parser.parse("exampleto70000");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "to" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "exampleto70000" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should propagate IP-specific error, not missing port, for invalid host with requirePort", () => {
+      const parser = socketAddress({
+        separator: "to",
+        requirePort: true,
+        host: { type: "both" },
+      });
+
+      // "999.999.999.999to80" has valid port but invalid IP host.
+      // Error should be about the IP, not "missing port".
+      const result = parser.parse("999.999.999.999to80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a valid IPv4 address, but got " },
+        { type: "value", value: "999.999.999.999" },
+        { type: "text", text: "." },
+      ]);
+    });
   });
 });
 

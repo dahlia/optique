@@ -1412,7 +1412,10 @@ parser first tries to interpret the entire input as a hostname.  Only if that
 fails does it look for the separator to split host and port.  This prevents
 separators that can appear inside hostnames from causing incorrect splits
 (e.g., `"toronto"` with `separator: "to"` is treated as a hostname, not split
-into host `"toron"` with the default port).
+into host `"toron"` with the default port).  However, if a split produces a
+valid hostname and an all-digit port that fails validation (e.g., out of range),
+the parser reports the port error rather than silently accepting the input as
+a hostname.
 
 ### Return value
 
