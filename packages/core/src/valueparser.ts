@@ -6030,7 +6030,14 @@ export function cidr(
       // Check IPv4 restrictions for IPv4-mapped IPv6 addresses.
       // This runs after all prefix validations so that prefix errors
       // (invalidPrefix, minPrefix, maxPrefix) take precedence.
-      if (version === "both" && ipVersion === 6 && normalizedIp !== null) {
+      // Only check when prefix > 96, because the IPv4 address occupies
+      // bits 97-128 of a mapped address.  At prefix <= 96 the IPv4
+      // portion is entirely unmasked, so the base address does not
+      // meaningfully classify the network.
+      if (
+        version === "both" && ipVersion === 6 && normalizedIp !== null &&
+        prefix > 96
+      ) {
         const mappedOctets = extractIpv4FromMapped(normalizedIp);
         if (mappedOctets !== null) {
           const restrictionError = checkIpv4MappedRestrictions(

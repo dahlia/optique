@@ -12510,6 +12510,41 @@ describe("cidr()", () => {
         { type: "text", text: "." },
       ]);
     });
+
+    it("should skip IPv4 restrictions when prefix is at or below /96", () => {
+      // At /96 the entire IPv4-mapped space is covered; the base
+      // address's IPv4 portion is masked away and meaningless.
+      const parser = cidr({ ipv4: { allowMulticast: false } });
+      const result = parser.parse("::ffff:224.0.0.0/96");
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, {
+        address: "::ffff:e000:0",
+        prefix: 96,
+        version: 6,
+      });
+    });
+
+    it("should skip IPv4 restrictions when prefix is below /96", () => {
+      const parser = cidr({ ipv4: { allowPrivate: false } });
+      const result = parser.parse("::ffff:10.0.0.0/80");
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, {
+        address: "::ffff:a00:0",
+        prefix: 80,
+        version: 6,
+      });
+    });
+
+    it("should apply IPv4 restrictions when prefix is above /96", () => {
+      const parser = cidr({ ipv4: { allowPrivate: false } });
+      // /104 constrains the first IPv4 octet → base address matters
+      const result = parser.parse("::ffff:10.0.0.0/104");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::ffff:a00:0" },
+        { type: "text", text: " is a private IP address." },
+      ]);
+    });
   });
 });
 
