@@ -138,10 +138,11 @@ To be released.
  -  Fixed `getDocPage()` preserving hidden terms from custom `DocFragments`
     instead of filtering them.  `buildDocPage()` now filters out entries whose
     terms are doc-hidden before assembling the final `DocPage`.  Additionally,
-    `deduplicateDocEntries()` and `deduplicateDocFragments()` now prefer visible
-    entries over doc-hidden ones when deduplicating by surface syntax, so
-    `or(hidden, visible)` with the same option name no longer discards the
-    visible copy.  [[#494], [#720]]
+    `deduplicateDocEntries()` and `deduplicateDocFragments()` now skip hidden
+    entries before deduplicating, so hidden terms cannot influence the ordering
+    of visible entries.  Titled sections are now positioned at the first
+    fragment containing visible entries, and titled sections with only hidden
+    entries are omitted entirely.  [[#494], [#720]]
 
  -  Fixed `or()` and `longestMatch()` duplicating visible terms in
     documentation when branches share the same surface syntax.  [[#432], [#698]]
