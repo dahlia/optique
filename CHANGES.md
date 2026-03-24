@@ -135,6 +135,15 @@ To be released.
     `Usage: myapp config ...` without changing parse behavior or
     completion behavior.  [[#139]]
 
+ -  Fixed `getDocPage()` preserving hidden terms from custom `DocFragments`
+    instead of filtering them.  `buildDocPage()` now filters out entries whose
+    terms are doc-hidden before assembling the final `DocPage`.  Additionally,
+    `deduplicateDocEntries()` and `deduplicateDocFragments()` now skip hidden
+    entries before deduplicating, so hidden terms cannot influence the ordering
+    of visible entries.  Titled sections are now positioned at the first
+    fragment containing visible entries, and titled sections with only hidden
+    entries are omitted entirely.  [[#494], [#720]]
+
  -  Fixed `or()` and `longestMatch()` duplicating visible terms in
     documentation when branches share the same surface syntax.  [[#432], [#698]]
 
@@ -944,6 +953,7 @@ To be released.
 [#485]: https://github.com/dahlia/optique/issues/485
 [#488]: https://github.com/dahlia/optique/issues/488
 [#490]: https://github.com/dahlia/optique/pull/490
+[#494]: https://github.com/dahlia/optique/issues/494
 [#500]: https://github.com/dahlia/optique/issues/500
 [#505]: https://github.com/dahlia/optique/issues/505
 [#506]: https://github.com/dahlia/optique/issues/506
@@ -1064,6 +1074,7 @@ To be released.
 [#717]: https://github.com/dahlia/optique/pull/717
 [#718]: https://github.com/dahlia/optique/pull/718
 [#719]: https://github.com/dahlia/optique/pull/719
+[#720]: https://github.com/dahlia/optique/pull/720
 
 ### @optique/config
 

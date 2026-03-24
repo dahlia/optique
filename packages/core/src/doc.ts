@@ -10,6 +10,7 @@ import {
   cloneUsageTerm,
   formatUsage,
   formatUsageTerm,
+  isDocHidden,
   type Usage,
   type UsageTerm,
 } from "./usage.ts";
@@ -123,6 +124,28 @@ export interface DocFragments {
   readonly footer?: Message;
 }
 
+/**
+ * Returns whether a doc entry's term is hidden from documentation.
+ * Only term types with a `hidden` field (argument, option, command,
+ * passthrough) are checked; other types always return `false`.
+ *
+ * @param entry The doc entry to check.
+ * @returns `true` if the entry should be hidden from documentation.
+ * @since 1.0.0
+ */
+export function isDocEntryHidden(entry: DocEntry): boolean {
+  const term = entry.term;
+  if (
+    term.type === "argument" ||
+    term.type === "option" ||
+    term.type === "command" ||
+    term.type === "passthrough"
+  ) {
+    return isDocHidden(term.hidden);
+  }
+  return false;
+}
+
 function getDocEntryKey(entry: DocEntry): string {
   const term = entry.term;
   switch (term.type) {
@@ -139,15 +162,18 @@ function getDocEntryKey(entry: DocEntry): string {
 
 /**
  * Removes duplicate {@link DocEntry} values that share the same surface
- * syntax (same term type and identifying names).  When duplicates exist,
- * the first occurrence is kept and later ones are discarded.
+ * syntax (same term type and identifying names).  Doc-hidden entries are
+ * filtered out first so they cannot influence the ordering of visible
+ * entries.  Among the remaining visible entries, the first occurrence is
+ * kept and later duplicates are discarded.
  *
  * Positional argument entries are never deduplicated because they are
  * distinguished by position, not by metavar, and {@link DocEntry} does
  * not carry position information.
  *
  * @param entries The entries to deduplicate.
- * @returns A new array with duplicates removed, preserving insertion order.
+ * @returns A new array with hidden entries removed and duplicates
+ *   collapsed, preserving insertion order of visible entries.
  * @since 1.0.0
  */
 export function deduplicateDocEntries(
@@ -156,6 +182,7 @@ export function deduplicateDocEntries(
   const seen = new Set<string>();
   const result: DocEntry[] = [];
   for (const entry of entries) {
+    if (isDocEntryHidden(entry)) continue;
     if (entry.term.type === "argument") {
       result.push(entry);
       continue;
@@ -181,18 +208,25 @@ export function deduplicateDocEntries(
 export function deduplicateDocFragments(
   fragments: readonly DocFragment[],
 ): DocFragment[] {
+  // Doc-hidden entries are skipped so they cannot influence the ordering
+  // of visible entries.  Among remaining visible entries, the first
+  // occurrence is kept and later duplicates are discarded.
+  //
   // Untitled entries/sections share a global dedup scope.
   // Titled sections are grouped by title and deduplicated within each group,
   // but entries in differently-titled sections remain independent.
-  // Titled sections are emitted at the position of their first occurrence
-  // to preserve the original ordering.
+  // Titled sections are emitted at the position of their first fragment
+  // that contains visible entries, so hidden-only fragments do not
+  // influence ordering.
   const untitledSeen = new Set<string>();
   const titledSectionMap = new Map<string, DocEntry[]>();
+  const titledSectionPositioned = new Set<string>();
   // Each element is either a concrete DocFragment or a title placeholder
   // for a titled section whose entries are still being collected.
   const slots: (DocFragment | string)[] = [];
   for (const fragment of fragments) {
     if (fragment.type === "entry") {
+      if (isDocEntryHidden(fragment)) continue;
       if (fragment.term.type === "argument") {
         slots.push(fragment);
       } else {
@@ -205,6 +239,7 @@ export function deduplicateDocFragments(
     } else if (fragment.title == null) {
       const dedupedEntries: DocEntry[] = [];
       for (const entry of fragment.entries) {
+        if (isDocEntryHidden(entry)) continue;
         if (entry.term.type === "argument") {
           dedupedEntries.push(entry);
           continue;
@@ -225,6 +260,14 @@ export function deduplicateDocFragments(
     } else {
       if (!titledSectionMap.has(fragment.title)) {
         titledSectionMap.set(fragment.title, []);
+      }
+      // Defer placeholder until we see a fragment with visible entries,
+      // so the section's position reflects its first visible content.
+      if (
+        !titledSectionPositioned.has(fragment.title) &&
+        fragment.entries.some((e) => !isDocEntryHidden(e))
+      ) {
+        titledSectionPositioned.add(fragment.title);
         slots.push(fragment.title);
       }
       titledSectionMap.get(fragment.title)!.push(...fragment.entries);

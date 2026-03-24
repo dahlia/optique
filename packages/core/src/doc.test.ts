@@ -1,5 +1,7 @@
 import {
   cloneDocEntry,
+  deduplicateDocEntries,
+  deduplicateDocFragments,
   type DocEntry,
   type DocPage,
   type DocPageFormatOptions,
@@ -2677,5 +2679,293 @@ describe("cloneDocEntry", () => {
     assert.notEqual(cloned, entry);
     assert.notEqual(cloned.description, entry.description);
     assert.notEqual(cloned.description![1], entry.description![1]);
+  });
+});
+
+// Regression: deduplication should prefer visible entries over hidden ones
+// https://github.com/dahlia/optique/issues/494
+describe("deduplicateDocEntries: hidden visibility preference", () => {
+  it("should prefer visible entry when hidden copy comes first", () => {
+    const entries: DocEntry[] = [
+      {
+        term: { type: "option", names: ["--x"], hidden: "doc" },
+        description: message`Hidden.`,
+      },
+      {
+        term: { type: "option", names: ["--x"] },
+        description: message`Visible.`,
+      },
+    ];
+
+    const result = deduplicateDocEntries(entries);
+    assert.equal(result.length, 1);
+    assert.ok(
+      result[0].term.type === "option" && !result[0].term.hidden,
+      "should keep the visible entry",
+    );
+  });
+
+  it("should prefer visible entry when hidden copy comes second", () => {
+    const entries: DocEntry[] = [
+      {
+        term: { type: "option", names: ["--x"] },
+        description: message`Visible.`,
+      },
+      {
+        term: { type: "option", names: ["--x"], hidden: true },
+        description: message`Hidden.`,
+      },
+    ];
+
+    const result = deduplicateDocEntries(entries);
+    assert.equal(result.length, 1);
+    assert.ok(
+      result[0].term.type === "option" && !result[0].term.hidden,
+      "should keep the visible entry",
+    );
+  });
+
+  it("should keep first entry when both are visible", () => {
+    const entries: DocEntry[] = [
+      {
+        term: { type: "option", names: ["--x"] },
+        description: message`First.`,
+      },
+      {
+        term: { type: "option", names: ["--x"] },
+        description: message`Second.`,
+      },
+    ];
+
+    const result = deduplicateDocEntries(entries);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].description![0].type, "text");
+    assert.equal(
+      (result[0].description![0] as { text: string }).text,
+      "First.",
+    );
+  });
+
+  it("should omit entries when both are hidden", () => {
+    const entries: DocEntry[] = [
+      {
+        term: { type: "option", names: ["--x"], hidden: true },
+        description: message`First hidden.`,
+      },
+      {
+        term: { type: "option", names: ["--x"], hidden: "doc" },
+        description: message`Second hidden.`,
+      },
+    ];
+
+    const result = deduplicateDocEntries(entries);
+    assert.equal(result.length, 0);
+  });
+
+  it("should not let hidden entries influence visible ordering", () => {
+    const entries: DocEntry[] = [
+      {
+        term: { type: "option", names: ["--x"], hidden: "doc" },
+      },
+      {
+        term: { type: "option", names: ["--y"] },
+        description: message`Y.`,
+      },
+      {
+        term: { type: "option", names: ["--x"] },
+        description: message`X.`,
+      },
+    ];
+
+    const result = deduplicateDocEntries(entries);
+    assert.equal(result.length, 2);
+    assert.ok(
+      result[0].term.type === "option" &&
+        result[0].term.names.includes("--y"),
+      "first visible entry should come first",
+    );
+    assert.ok(
+      result[1].term.type === "option" &&
+        result[1].term.names.includes("--x"),
+      "visible --x should follow --y, not precede it",
+    );
+  });
+});
+
+describe("deduplicateDocFragments: hidden visibility preference", () => {
+  it("should keep visible entry and discard hidden duplicate", () => {
+    const result = deduplicateDocFragments([
+      {
+        type: "entry",
+        term: { type: "option", names: ["--x"], hidden: "doc" },
+      },
+      {
+        type: "entry",
+        term: { type: "option", names: ["--x"] },
+        description: message`Visible.`,
+      },
+    ]);
+
+    const entries = result.flatMap((f) => f.type === "entry" ? [f] : f.entries);
+    assert.equal(entries.length, 1);
+    assert.ok(
+      entries[0].term.type === "option" && !entries[0].term.hidden,
+      "should keep the visible entry",
+    );
+  });
+
+  it("should not let hidden entries reorder visible ones", () => {
+    const result = deduplicateDocFragments([
+      {
+        type: "entry",
+        term: { type: "option", names: ["--x"], hidden: "doc" },
+      },
+      {
+        type: "entry",
+        term: { type: "option", names: ["--y"] },
+      },
+      {
+        type: "entry",
+        term: { type: "option", names: ["--x"] },
+      },
+    ]);
+
+    const entries = result.flatMap((f) => f.type === "entry" ? [f] : f.entries);
+    assert.equal(entries.length, 2);
+    assert.ok(
+      entries[0].term.type === "option" &&
+        entries[0].term.names.includes("--y"),
+      "first visible entry --y should come first",
+    );
+    assert.ok(
+      entries[1].term.type === "option" &&
+        entries[1].term.names.includes("--x"),
+      "visible --x should follow --y",
+    );
+  });
+
+  it("should prefer visible entry in titled sections", () => {
+    const result = deduplicateDocFragments([
+      {
+        type: "section",
+        title: "Opts",
+        entries: [
+          {
+            term: { type: "option", names: ["--x"], hidden: true },
+          },
+        ],
+      },
+      {
+        type: "section",
+        title: "Opts",
+        entries: [
+          {
+            term: { type: "option", names: ["--x"] },
+            description: message`Visible.`,
+          },
+        ],
+      },
+    ]);
+
+    const sections = result.filter((f) =>
+      f.type === "section" && f.title === "Opts"
+    );
+    assert.equal(sections.length, 1);
+    const entries = (sections[0] as DocSection & { type: "section" }).entries;
+    assert.equal(entries.length, 1);
+    assert.ok(
+      entries[0].term.type === "option" && !entries[0].term.hidden,
+      "titled section dedup should prefer visible entry",
+    );
+  });
+
+  it("should prefer visible entry in untitled sections", () => {
+    const result = deduplicateDocFragments([
+      {
+        type: "section",
+        entries: [
+          {
+            term: { type: "option", names: ["--x"], hidden: "help" },
+          },
+        ],
+      },
+      {
+        type: "section",
+        entries: [
+          {
+            term: { type: "option", names: ["--x"] },
+            description: message`Visible.`,
+          },
+        ],
+      },
+    ]);
+
+    const entries = result.flatMap((f) =>
+      f.type === "entry" ? [f] : f.type === "section" ? f.entries : []
+    );
+    assert.equal(entries.length, 1);
+    assert.ok(
+      entries[0].term.type === "option" && !entries[0].term.hidden,
+      "untitled section dedup should prefer visible entry",
+    );
+  });
+
+  it("should position titled section at first visible fragment", () => {
+    const result = deduplicateDocFragments([
+      {
+        type: "section",
+        title: "A",
+        entries: [
+          { term: { type: "option", names: ["--x"], hidden: "doc" } },
+        ],
+      },
+      {
+        type: "section",
+        title: "B",
+        entries: [
+          { term: { type: "option", names: ["--y"] } },
+        ],
+      },
+      {
+        type: "section",
+        title: "A",
+        entries: [
+          { term: { type: "option", names: ["--x"] } },
+        ],
+      },
+    ]);
+
+    const titles = result
+      .filter((f) => f.type === "section" && f.title != null)
+      .map((f) => (f as DocSection & { type: "section" }).title);
+    assert.deepEqual(
+      titles,
+      ["B", "A"],
+      "A should appear after B because A's first visible entry comes later",
+    );
+  });
+
+  it("should omit titled section when all entries are hidden", () => {
+    const result = deduplicateDocFragments([
+      {
+        type: "section",
+        title: "Hidden",
+        entries: [
+          { term: { type: "option", names: ["--x"], hidden: true } },
+        ],
+      },
+      {
+        type: "section",
+        title: "Visible",
+        entries: [
+          { term: { type: "option", names: ["--y"] } },
+        ],
+      },
+    ]);
+
+    const titles = result
+      .filter((f) => f.type === "section" && f.title != null)
+      .map((f) => (f as DocSection & { type: "section" }).title);
+    assert.deepEqual(titles, ["Visible"]);
   });
 });
