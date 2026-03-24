@@ -2992,7 +2992,9 @@ export function hostname(
     $mode: "sync",
     metavar,
     placeholder: options?.placeholder ??
-      (allowLocalhost ? "localhost" : "example.com"),
+      (allowLocalhost
+        ? (maxLength >= 9 ? "localhost" : "a.bc")
+        : (maxLength >= 11 ? "example.com" : "a.bc")),
     parse(input: string): ValueParserResult<string> {
       // Check length constraint first
       if (input.length > maxLength) {
@@ -5122,7 +5124,8 @@ export function domain(
   return {
     $mode: "sync",
     metavar,
-    placeholder: options?.placeholder ?? "example.com",
+    placeholder: options?.placeholder ??
+      `example.${allowedTldsLower?.[0] ?? "com"}`,
     parse(input: string): ValueParserResult<string> {
       // Check length constraint first
       if (input.length > maxLength) {
