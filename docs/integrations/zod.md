@@ -54,7 +54,7 @@ import { z } from "zod";
 const email = zod(z.string().email(), { placeholder: "" });
 
 // Port number with range validation
-const port = zod(z.coerce.number().int().min(1024).max(65535), { placeholder: 0 });
+const port = zod(z.coerce.number().int().min(1024).max(65535), { placeholder: 1024 });
 
 // Enum choices
 const logLevel = zod(z.enum(["debug", "info", "warn", "error"]), { placeholder: "debug" });
@@ -135,7 +135,7 @@ import { z } from "zod";
 
 const config = object({
   email: option("--email", zod(z.string().email(), { placeholder: "" })),
-  port: option("-p", "--port", zod(z.coerce.number().int().min(1024).max(65535), { placeholder: 0 })),
+  port: option("-p", "--port", zod(z.coerce.number().int().min(1024).max(65535), { placeholder: 1024 })),
   logLevel: option("--log-level", zod(z.enum(["debug", "info", "warn", "error"]), { placeholder: "debug" })),
   startDate: argument(zod(z.string().transform((s) => new Date(s)), { placeholder: new Date(0) })),
 });

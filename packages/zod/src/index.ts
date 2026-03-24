@@ -582,7 +582,8 @@ function inferChoices(
  *
  * @template T The output type of the Zod schema.
  * @param schema A Zod schema to validate input against.
- * @param options Optional configuration for the parser.
+ * @param options Configuration for the parser, including a required
+ *   `placeholder` value used during deferred prompt resolution.
  * @returns A value parser that validates inputs using the provided schema.
  *
  * @example Basic string validation
@@ -591,7 +592,9 @@ function inferChoices(
  * import { zod } from "@optique/zod";
  * import { option } from "@optique/core/primitives";
  *
- * const email = option("--email", zod(z.string().email()));
+ * const email = option("--email",
+ *   zod(z.string().email(), { placeholder: "" }),
+ * );
  * ```
  *
  * @example Number validation with coercion
@@ -602,7 +605,7 @@ function inferChoices(
  *
  * // Use z.coerce for non-string types since CLI args are always strings
  * const port = option("-p", "--port",
- *   zod(z.coerce.number().int().min(1024).max(65535))
+ *   zod(z.coerce.number().int().min(1024).max(65535), { placeholder: 1024 }),
  * );
  * ```
  *
@@ -613,7 +616,7 @@ function inferChoices(
  * import { option } from "@optique/core/primitives";
  *
  * const logLevel = option("--log-level",
- *   zod(z.enum(["debug", "info", "warn", "error"]))
+ *   zod(z.enum(["debug", "info", "warn", "error"]), { placeholder: "debug" }),
  * );
  * ```
  *
@@ -624,13 +627,16 @@ function inferChoices(
  * import { message } from "@optique/core/message";
  * import { option } from "@optique/core/primitives";
  *
- * const email = option("--email", zod(z.string().email(), {
- *   metavar: "EMAIL",
- *   errors: {
- *     zodError: (error, input) =>
- *       message`Please provide a valid email address, got ${input}.`
- *   }
- * }));
+ * const email = option("--email",
+ *   zod(z.string().email(), {
+ *     placeholder: "",
+ *     metavar: "EMAIL",
+ *     errors: {
+ *       zodError: (error, input) =>
+ *         message`Please provide a valid email address, got ${input}.`
+ *     },
+ *   }),
+ * );
  * ```
  *
  * @throws {TypeError} If the resolved `metavar` is an empty string.

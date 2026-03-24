@@ -571,7 +571,8 @@ function inferChoices(
  *
  * @template T The output type of the Valibot schema.
  * @param schema A Valibot schema to validate input against.
- * @param options Optional configuration for the parser.
+ * @param options Configuration for the parser, including a required
+ *   `placeholder` value used during deferred prompt resolution.
  * @returns A value parser that validates inputs using the provided schema.
  *
  * @example Basic string validation
@@ -580,7 +581,9 @@ function inferChoices(
  * import { valibot } from "@optique/valibot";
  * import { option } from "@optique/core/primitives";
  *
- * const email = option("--email", valibot(v.pipe(v.string(), v.email())));
+ * const email = option("--email",
+ *   valibot(v.pipe(v.string(), v.email()), { placeholder: "" }),
+ * );
  * ```
  *
  * @example Number validation with pipeline
@@ -597,8 +600,8 @@ function inferChoices(
  *     v.number(),
  *     v.integer(),
  *     v.minValue(1024),
- *     v.maxValue(65535)
- *   ))
+ *     v.maxValue(65535),
+ *   ), { placeholder: 1024 }),
  * );
  * ```
  *
@@ -609,7 +612,9 @@ function inferChoices(
  * import { option } from "@optique/core/primitives";
  *
  * const logLevel = option("--log-level",
- *   valibot(v.picklist(["debug", "info", "warn", "error"]))
+ *   valibot(v.picklist(["debug", "info", "warn", "error"]), {
+ *     placeholder: "debug",
+ *   }),
  * );
  * ```
  *
@@ -622,12 +627,13 @@ function inferChoices(
  *
  * const email = option("--email",
  *   valibot(v.pipe(v.string(), v.email()), {
+ *     placeholder: "",
  *     metavar: "EMAIL",
  *     errors: {
  *       valibotError: (issues, input) =>
  *         message`Please provide a valid email address, got ${input}.`
- *     }
- *   })
+ *     },
+ *   }),
  * );
  * ```
  *
