@@ -11691,6 +11691,132 @@ describe("ip()", () => {
       assert.strictEqual(result.value, "2001:db8::1");
     });
   });
+
+  describe("IPv4-mapped IPv6 restrictions", () => {
+    it("should reject IPv4-mapped private address when allowPrivate is false", () => {
+      const parser = ip({ ipv4: { allowPrivate: false } });
+      const result = parser.parse("::ffff:192.168.0.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::ffff:c0a8:1" },
+        { type: "text", text: " is a private IP address." },
+      ]);
+    });
+
+    it("should reject IPv4-mapped loopback address when allowLoopback is false", () => {
+      const parser = ip({ ipv4: { allowLoopback: false } });
+      const result = parser.parse("::ffff:127.0.0.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::ffff:7f00:1" },
+        { type: "text", text: " is a loopback address." },
+      ]);
+    });
+
+    it("should reject IPv4-mapped link-local address when allowLinkLocal is false", () => {
+      const parser = ip({ ipv4: { allowLinkLocal: false } });
+      const result = parser.parse("::ffff:169.254.1.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::ffff:a9fe:101" },
+        { type: "text", text: " is a link-local address." },
+      ]);
+    });
+
+    it("should reject IPv4-mapped multicast address when allowMulticast is false", () => {
+      const parser = ip({ ipv4: { allowMulticast: false } });
+      const result = parser.parse("::ffff:224.0.0.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::ffff:e000:1" },
+        { type: "text", text: " is a multicast address." },
+      ]);
+    });
+
+    it("should reject IPv4-mapped broadcast address when allowBroadcast is false", () => {
+      const parser = ip({ ipv4: { allowBroadcast: false } });
+      const result = parser.parse("::ffff:255.255.255.255");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::ffff:ffff:ffff" },
+        { type: "text", text: " is the broadcast address." },
+      ]);
+    });
+
+    it("should reject IPv4-mapped zero address when allowZero is false", () => {
+      const parser = ip({ ipv4: { allowZero: false } });
+      const result = parser.parse("::ffff:0.0.0.0");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::ffff:0:0" },
+        { type: "text", text: " is the zero address." },
+      ]);
+    });
+
+    it("should accept IPv4-mapped public address when allowPrivate is false", () => {
+      const parser = ip({ ipv4: { allowPrivate: false } });
+      const result = parser.parse("::ffff:203.0.113.1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "::ffff:cb00:7101");
+    });
+
+    it("should accept non-mapped IPv6 with IPv4 restrictions", () => {
+      const parser = ip({ ipv4: { allowPrivate: false } });
+      const result = parser.parse("2001:db8::1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "2001:db8::1");
+    });
+
+    it("should use custom error callback for IPv4-mapped restriction", () => {
+      const parser = ip({
+        ipv4: { allowPrivate: false },
+        errors: {
+          privateNotAllowed: (addr) =>
+            message`Private address ${addr} not allowed.`,
+        },
+      });
+      const result = parser.parse("::ffff:10.0.0.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Private address " },
+        { type: "value", value: "::ffff:a00:1" },
+        { type: "text", text: " not allowed." },
+      ]);
+    });
+
+    it("should not apply IPv4-mapped checks when version is 6", () => {
+      const parser = ip({ version: 6, ipv4: { allowPrivate: false } });
+      // ::ffff:192.168.0.1 is a valid IPv6 address; no IPv4 restrictions
+      const result = parser.parse("::ffff:192.168.0.1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "::ffff:c0a8:1");
+    });
+
+    it("should snapshot IPv4 restrictions at construction time", () => {
+      const ipv4Opts = { allowPrivate: false };
+      const parser = ip({ ipv4: ipv4Opts });
+      // Mutate nested field after construction — should have no effect
+      ipv4Opts.allowPrivate = true;
+      const result = parser.parse("::ffff:192.168.0.1");
+      assert.ok(!result.success);
+    });
+
+    it("should snapshot error callbacks at construction time", () => {
+      const errors = {
+        privateNotAllowed: () => message`original mapped error`,
+      };
+      const parser = ip({
+        ipv4: { allowPrivate: false },
+        errors,
+      });
+      errors.privateNotAllowed = () => message`mutated mapped error`;
+      const result = parser.parse("::ffff:10.0.0.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "original mapped error" },
+      ]);
+    });
+  });
 });
 
 describe("cidr()", () => {
@@ -12303,6 +12429,208 @@ describe("cidr()", () => {
         { type: "text", text: ", but got " },
         { type: "text", text: "32" },
         { type: "text", text: "." },
+      ]);
+    });
+  });
+
+  describe("IPv4-mapped IPv6 CIDR restrictions", () => {
+    it("should not apply IPv4-mapped checks when version is 6", () => {
+      const parser = cidr({ version: 6, ipv4: { allowPrivate: false } });
+      const result = parser.parse("::ffff:192.168.0.0/120");
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, {
+        address: "::ffff:c0a8:0",
+        prefix: 120,
+        version: 6,
+      });
+    });
+
+    it("should reject IPv4-mapped private CIDR when allowPrivate is false", () => {
+      const parser = cidr({ ipv4: { allowPrivate: false } });
+      const result = parser.parse("::ffff:192.168.0.0/120");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::ffff:c0a8:0" },
+        { type: "text", text: " is a private IP address." },
+      ]);
+    });
+
+    it("should reject IPv4-mapped loopback CIDR when allowLoopback is false", () => {
+      const parser = cidr({ ipv4: { allowLoopback: false } });
+      const result = parser.parse("::ffff:127.0.0.1/128");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::ffff:7f00:1" },
+        { type: "text", text: " is a loopback address." },
+      ]);
+    });
+
+    it("should accept IPv4-mapped public CIDR when allowPrivate is false", () => {
+      const parser = cidr({ ipv4: { allowPrivate: false } });
+      const result = parser.parse("::ffff:203.0.113.0/120");
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, {
+        address: "::ffff:cb00:7100",
+        prefix: 120,
+        version: 6,
+      });
+    });
+
+    it("should use custom error for IPv4-mapped CIDR restriction", () => {
+      const parser = cidr({
+        ipv4: { allowPrivate: false },
+        errors: {
+          privateNotAllowed: (addr) =>
+            message`Private ${addr} not allowed in CIDR.`,
+        },
+      });
+      const result = parser.parse("::ffff:10.0.0.0/104");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Private " },
+        { type: "value", value: "::ffff:a00:0" },
+        { type: "text", text: " not allowed in CIDR." },
+      ]);
+    });
+
+    it("should report invalidPrefix over mapped restriction", () => {
+      const parser = cidr({ ipv4: { allowPrivate: false } });
+      const result = parser.parse("::ffff:10.0.0.0/129");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a prefix length between 0 and ",
+        },
+        { type: "text", text: "128" },
+        { type: "text", text: " for IPv6, but got " },
+        { type: "text", text: "129" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should report prefixBelowMinimum over mapped restriction", () => {
+      const parser = cidr({
+        ipv4: { allowPrivate: false },
+        minPrefix: 112,
+      });
+      const result = parser.parse("::ffff:10.0.0.0/96");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a prefix length greater than or equal to ",
+        },
+        { type: "text", text: "112" },
+        { type: "text", text: ", but got " },
+        { type: "text", text: "96" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should report prefixAboveMaximum over mapped restriction", () => {
+      const parser = cidr({
+        ipv4: { allowLoopback: false },
+        maxPrefix: 120,
+      });
+      const result = parser.parse("::ffff:127.0.0.1/128");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a prefix length less than or equal to ",
+        },
+        { type: "text", text: "120" },
+        { type: "text", text: ", but got " },
+        { type: "text", text: "128" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should check base address regardless of prefix length", () => {
+      // Consistent with how ipv4() checks regular IPv4 CIDRs:
+      // the base address is validated, not the network range.
+      const parser = cidr({ ipv4: { allowPrivate: false } });
+
+      // Broad prefix — base address 10.0.0.0 is still private
+      const r1 = parser.parse("::ffff:10.0.0.0/97");
+      assert.ok(!r1.success);
+
+      // Prefix at /96 — base address is still checked
+      const r2 = parser.parse("::ffff:10.0.0.0/96");
+      assert.ok(!r2.success);
+
+      // Prefix below /96 — base address is still checked
+      const r3 = parser.parse("::ffff:10.0.0.0/80");
+      assert.ok(!r3.success);
+
+      // Non-private base address with same broad prefix → accepted
+      const r4 = parser.parse("::ffff:203.0.113.0/97");
+      assert.ok(r4.success);
+    });
+
+    it("should reject mapped broadcast CIDR regardless of prefix", () => {
+      const parser = cidr({ ipv4: { allowBroadcast: false } });
+      const result = parser.parse("::ffff:255.255.255.255/127");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::ffff:ffff:ffff" },
+        { type: "text", text: " is the broadcast address." },
+      ]);
+    });
+
+    it("should reject IPv4-mapped link-local CIDR when allowLinkLocal is false", () => {
+      const parser = cidr({ ipv4: { allowLinkLocal: false } });
+      const result = parser.parse("::ffff:169.254.0.0/120");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::ffff:a9fe:0" },
+        { type: "text", text: " is a link-local address." },
+      ]);
+    });
+
+    it("should reject IPv4-mapped multicast CIDR when allowMulticast is false", () => {
+      const parser = cidr({ ipv4: { allowMulticast: false } });
+      const result = parser.parse("::ffff:224.0.0.0/120");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::ffff:e000:0" },
+        { type: "text", text: " is a multicast address." },
+      ]);
+    });
+
+    it("should reject IPv4-mapped zero CIDR when allowZero is false", () => {
+      const parser = cidr({ ipv4: { allowZero: false } });
+      const result = parser.parse("::ffff:0.0.0.0/120");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::ffff:0:0" },
+        { type: "text", text: " is the zero address." },
+      ]);
+    });
+
+    it("should snapshot IPv4 restrictions at construction time", () => {
+      const ipv4Opts = { allowPrivate: false };
+      const parser = cidr({ ipv4: ipv4Opts });
+      // Mutate nested field after construction — should have no effect
+      ipv4Opts.allowPrivate = true;
+      const result = parser.parse("::ffff:192.168.0.0/120");
+      assert.ok(!result.success);
+    });
+
+    it("should snapshot error callbacks at construction time", () => {
+      const errors = {
+        privateNotAllowed: () => message`original mapped cidr error`,
+      };
+      const parser = cidr({
+        ipv4: { allowPrivate: false },
+        errors,
+      });
+      errors.privateNotAllowed = () => message`mutated mapped cidr error`;
+      const result = parser.parse("::ffff:10.0.0.0/104");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "original mapped cidr error" },
       ]);
     });
   });
