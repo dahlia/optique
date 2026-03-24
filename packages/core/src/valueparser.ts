@@ -3816,7 +3816,7 @@ export function socketAddress(
                 success: true,
                 value: {
                   host: hostResult.value,
-                  port: portResult.value as number,
+                  port: portResult.value,
                 },
               };
             }
