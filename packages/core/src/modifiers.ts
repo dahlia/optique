@@ -1266,7 +1266,6 @@ export function multiple<M extends Mode, TValue, TState>(
     $mode: parser.$mode,
     $valueType: [] as readonly TValue[],
     $stateType: [] as readonly TState[],
-    placeholder: [] as readonly TValue[],
     priority: parser.priority,
     usage: [{ type: "multiple", terms: parser.usage, min }],
     initialState: [] as readonly TState[],
@@ -1523,6 +1522,25 @@ export function multiple<M extends Mode, TValue, TState>(
         : {}),
     };
   }
+
+  // Placeholder contains min copies of the inner parser's placeholder so
+  // that map() transforms over multiple() results see an array that
+  // satisfies the declared minimum arity.
+  Object.defineProperty(resultParser, "placeholder", {
+    get() {
+      try {
+        if (min > 0 && "placeholder" in parser) {
+          return Array.from(
+            { length: min },
+            () => parser.placeholder,
+          ) as readonly TValue[];
+        }
+      } catch { /* inner placeholder may throw */ }
+      return [] as readonly TValue[];
+    },
+    configurable: true,
+    enumerable: false,
+  });
 
   return resultParser;
 }
