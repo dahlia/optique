@@ -10079,6 +10079,37 @@ describe("socketAddress()", () => {
         { type: "text", text: "." },
       ]);
     });
+
+    it("should propagate IP-specific error even when port suffix is invalid", () => {
+      // "192.168.1.1:abc" has an invalid port "abc", but the host
+      // "192.168.1.1" is IP-shaped.  The specific IP error should
+      // still surface rather than a generic format error.
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both", ip: { allowPrivate: false } },
+      });
+
+      const result = parser.parse("192.168.1.1:abc");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "192.168.1.1" },
+        { type: "text", text: " is a private IP address." },
+      ]);
+    });
+
+    it("should propagate alt IPv4 error even when port suffix is invalid", () => {
+      const parser = socketAddress({ defaultPort: 80 });
+
+      const result = parser.parse("0x7f000001:abc");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "0x7f000001" },
+        {
+          type: "text",
+          text: " appears to be a non-standard IPv4 address notation.",
+        },
+      ]);
+    });
   });
 });
 

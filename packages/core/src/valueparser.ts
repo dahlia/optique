@@ -3836,6 +3836,21 @@ export function socketAddress(
             // "db--70000" (host "db-" is invalid due to a trailing
             // hyphen) should still be caught.
             validHostNumericPortInvalid = true;
+          } else if (
+            firstHostError === undefined &&
+            (looksLikeIpv4(hostPart) ||
+              looksLikeAltIpv4Literal(hostPart))
+          ) {
+            // Port is invalid and non-numeric (e.g., "abc").  If the
+            // host part is IP-shaped, validate it anyway so that
+            // specific IP errors (allowPrivate, allowLoopback, etc.)
+            // are not lost.  Without this, "192.168.1.1:abc" with
+            // allowPrivate: false would give a generic format error
+            // instead of the specific "private IP" error.
+            const hostResult = parseHost(hostPart);
+            if (!hostResult.success) {
+              firstHostError = { hostPart, error: hostResult.error };
+            }
           }
         }
 
