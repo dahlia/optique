@@ -3760,6 +3760,10 @@ export function socketAddress(
       let firstHostError:
         | { readonly hostPart: string; readonly error: Message }
         | undefined;
+      // Set when a split produces a valid host but an all-digit port
+      // part that fails validation (e.g., out of range).  This prevents
+      // the host-only fallback from silently masking port typos.
+      let validHostNumericPortInvalid = false;
       let searchFrom = trimmed.length;
       while (searchFrom > 0) {
         const separatorIndex = trimmed.lastIndexOf(
@@ -3789,6 +3793,17 @@ export function socketAddress(
             if (firstHostError === undefined) {
               firstHostError = { hostPart, error: hostResult.error };
             }
+          } else if (
+            !validHostNumericPortInvalid && /^[0-9]+$/.test(portPart)
+          ) {
+            // Port part is all digits but failed validation (e.g., out
+            // of range).  If the host part is also valid, the user
+            // likely intended a split — reject rather than falling
+            // through to host-only which would silently mask the error.
+            const hostCheck = parseHost(hostPart);
+            if (hostCheck.success) {
+              validHostNumericPortInvalid = true;
+            }
           }
         }
 
@@ -3796,6 +3811,24 @@ export function socketAddress(
       }
 
       // Step 2: No valid split found.
+
+      // If a split had a valid host but a recognizably-invalid numeric
+      // port, reject before trying host-only.
+      if (validHostNumericPortInvalid) {
+        const errorMsg = options?.errors?.invalidFormat;
+        if (errorMsg) {
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg;
+          return { success: false, error: msg };
+        }
+        return {
+          success: false,
+          error:
+            message`Expected a socket address in format host${separator}port, but got ${input}.`,
+        };
+      }
+
       // If a split had a valid port but an invalid host, propagate
       // specific host errors (e.g., IP-shaped) before trying host-only.
       if (firstHostError !== undefined) {

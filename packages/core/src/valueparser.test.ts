@@ -9883,6 +9883,31 @@ describe("socketAddress()", () => {
       assert.strictEqual(result.value.port, 80);
     });
 
+    it("should reject when split has valid host but invalid numeric port", () => {
+      // "db-70000" should NOT be silently accepted as a hostname.
+      // The port part "70000" is all digits → user intended a port → error.
+      const parser = socketAddress({ separator: "-", defaultPort: 80 });
+
+      const result = parser.parse("db-70000");
+      assert.ok(!result.success);
+    });
+
+    it("should reject invalid numeric port even with requirePort", () => {
+      const parser = socketAddress({ separator: "to", requirePort: true });
+
+      // "dbto70000" has a valid host + all-digit invalid port.
+      // Error should be about invalid format, not "missing port".
+      const result = parser.parse("dbto70000");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "to" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "dbto70000" },
+        { type: "text", text: "." },
+      ]);
+    });
+
     it("should propagate IP-specific error, not missing port, for invalid host with requirePort", () => {
       const parser = socketAddress({
         separator: "to",
