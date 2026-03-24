@@ -2716,7 +2716,11 @@ export function ipv4(options?: Ipv4Options): ValueParser<"sync", string> {
   return {
     $mode: "sync",
     metavar,
-    placeholder: "0.0.0.0",
+    placeholder: allowZero
+      ? "0.0.0.0"
+      : allowLoopback
+      ? "127.0.0.1"
+      : "192.0.2.1",
     parse(input: string): ValueParserResult<string> {
       // Parse IPv4 address into octets
       const parts = input.split(".");

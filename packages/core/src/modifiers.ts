@@ -1283,6 +1283,7 @@ export function multiple<M extends Mode, TValue, TState>(
           // Sync complete
           const result: TValue[] = [];
           const deferredIndices = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
           for (let i = 0; i < state.length; i++) {
             const valueResult = completeSyncWithUnwrappedFallback(
               state[i] as TState,
@@ -1297,15 +1298,17 @@ export function multiple<M extends Mode, TValue, TState>(
                   typeof valueResult.value !== "object"
                 ) {
                   deferredIndices.set(i, null);
+                } else {
+                  // Structured deferred without deferredKeys (e.g., from
+                  // map()): preserve coarse deferred signal.
+                  hasDeferred = true;
                 }
-                // Structured deferred without deferredKeys (e.g., from
-                // map()): skip — preserves non-deferred fields inside.
               }
             } else {
               return { success: false as const, error: valueResult.error };
             }
           }
-          return validateMultipleResult(result, deferredIndices);
+          return validateMultipleResult(result, deferredIndices, hasDeferred);
         },
         async () => {
           // Async complete - use Promise.all for parallel execution
@@ -1314,6 +1317,7 @@ export function multiple<M extends Mode, TValue, TState>(
           );
           const values: TValue[] = [];
           const deferredIndices = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
           for (let i = 0; i < results.length; i++) {
             const valueResult = results[i];
             if (valueResult.success) {
@@ -1326,13 +1330,15 @@ export function multiple<M extends Mode, TValue, TState>(
                   typeof valueResult.value !== "object"
                 ) {
                   deferredIndices.set(i, null);
+                } else {
+                  hasDeferred = true;
                 }
               }
             } else {
               return { success: false as const, error: valueResult.error };
             }
           }
-          return validateMultipleResult(values, deferredIndices);
+          return validateMultipleResult(values, deferredIndices, hasDeferred);
         },
       );
     },
@@ -1485,6 +1491,7 @@ export function multiple<M extends Mode, TValue, TState>(
   function validateMultipleResult(
     result: TValue[],
     deferredIndices: Map<PropertyKey, DeferredMap | null>,
+    hasDeferred = false,
   ) {
     if (result.length < min) {
       const customMessage = options.errors?.tooFew;
@@ -1511,13 +1518,16 @@ export function multiple<M extends Mode, TValue, TState>(
           } values, but got ${text(result.length.toLocaleString("en"))}.`,
       };
     }
+    const isDeferred = deferredIndices.size > 0 || hasDeferred;
     return {
       success: true as const,
       value: result,
-      ...(deferredIndices.size > 0
+      ...(isDeferred
         ? {
           deferred: true as const,
-          deferredKeys: deferredIndices as DeferredMap,
+          ...(deferredIndices.size > 0
+            ? { deferredKeys: deferredIndices as DeferredMap }
+            : {}),
         }
         : {}),
     };

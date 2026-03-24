@@ -7783,6 +7783,22 @@ export function conditional(
         return {
           success: true,
           value: [undefined, defaultResult.value] as const,
+          ...(defaultResult.deferred
+            ? {
+              deferred: true as const,
+              ...(defaultResult.deferredKeys
+                ? {
+                  deferredKeys: new Map([[
+                    1,
+                    defaultResult.deferredKeys,
+                  ]]) as DeferredMap,
+                }
+                : defaultResult.value == null ||
+                    typeof defaultResult.value !== "object"
+                ? { deferredKeys: new Map([[1, null]]) as DeferredMap }
+                : {}),
+            }
+            : {}),
         };
       }
 
@@ -7887,6 +7903,22 @@ export function conditional(
         return {
           success: true,
           value: [undefined, defaultResult.value] as const,
+          ...(defaultResult.deferred
+            ? {
+              deferred: true as const,
+              ...(defaultResult.deferredKeys
+                ? {
+                  deferredKeys: new Map([[
+                    1,
+                    defaultResult.deferredKeys,
+                  ]]) as DeferredMap,
+                }
+                : defaultResult.value == null ||
+                    typeof defaultResult.value !== "object"
+                ? { deferredKeys: new Map([[1, null]]) as DeferredMap }
+                : {}),
+            }
+            : {}),
         };
       }
 
