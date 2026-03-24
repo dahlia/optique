@@ -2932,4 +2932,76 @@ describe("getDocPage: filter hidden terms from custom DocFragments", () => {
         allEntries[0].term.names.includes("--visible"),
     );
   });
+
+  it("should not create empty sections for hidden-only fragments", () => {
+    const parser = makeCustomParser(() => ({
+      fragments: [
+        {
+          type: "section",
+          title: "Hidden Section",
+          entries: [
+            {
+              term: { type: "option", names: ["--secret"], hidden: true },
+            },
+          ],
+        },
+        {
+          type: "section",
+          title: "Visible Section",
+          entries: [
+            {
+              term: { type: "option", names: ["--visible"] },
+              description: message`Visible.`,
+            },
+          ],
+        },
+      ],
+    }));
+
+    const doc = getDocPageSync(parser);
+    assert.ok(doc);
+    assert.equal(doc.sections.length, 1);
+    assert.equal(doc.sections[0].title, "Visible Section");
+  });
+
+  it("should position titled section at first visible entry", () => {
+    const parser = makeCustomParser(() => ({
+      fragments: [
+        {
+          type: "section",
+          title: "A",
+          entries: [
+            {
+              term: { type: "option", names: ["--hidden-a"], hidden: true },
+            },
+          ],
+        },
+        {
+          type: "section",
+          title: "B",
+          entries: [
+            {
+              term: { type: "option", names: ["--b"] },
+            },
+          ],
+        },
+        {
+          type: "section",
+          title: "A",
+          entries: [
+            {
+              term: { type: "option", names: ["--a"] },
+            },
+          ],
+        },
+      ],
+    }));
+
+    const doc = getDocPageSync(parser);
+    assert.ok(doc);
+    // Section A's only visible entry came after B, so B should come first
+    assert.equal(doc.sections.length, 2);
+    assert.equal(doc.sections[0].title, "B");
+    assert.equal(doc.sections[1].title, "A");
+  });
 });

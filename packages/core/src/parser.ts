@@ -4,12 +4,12 @@ import {
   type DocFragments,
   type DocPage,
   type DocSection,
+  isDocEntryHidden,
 } from "./doc.ts";
 import { cloneMessage, type Message, message } from "./message.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import {
   cloneUsage,
-  isDocHidden,
   normalizeUsage,
   type Usage,
   type UsageTerm,
@@ -964,19 +964,6 @@ async function getDocPageAsyncImpl(
   return buildDocPage(parser, context, args);
 }
 
-function isDocEntryHidden(entry: DocEntry): boolean {
-  const term = entry.term;
-  if (
-    term.type === "argument" ||
-    term.type === "option" ||
-    term.type === "command" ||
-    term.type === "passthrough"
-  ) {
-    return isDocHidden(term.hidden);
-  }
-  return false;
-}
-
 /**
  * Builds a DocPage from the parser and context.
  * Shared by both sync and async implementations.
@@ -1037,6 +1024,7 @@ function buildDocPage(
       untitledSection.entries.push(cloneDocEntry(fragment));
     } else if (fragment.type === "section") {
       const visible = fragment.entries.filter((e) => !isDocEntryHidden(e));
+      if (visible.length === 0) continue;
       if (fragment.title == null) {
         if (untitledSection == null) {
           untitledSection = { entries: [] };
