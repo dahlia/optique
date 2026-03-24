@@ -1410,9 +1410,11 @@ $ example --proxy "localhost:3000"  # Invalid: wrong separator
 The parser tries splitting at the separator to find a valid host+port pair
 before falling back to the host-only interpretation.  This ensures that
 `parse(format(value))` always recovers the original value.  If no split
-produces both a valid host and a valid port (e.g., the separator appears
-inside the hostname and what follows is not a valid port), the entire input is
-treated as a hostname with the default port.  For example, `"toronto"` with
+produces both a valid host and a valid port because the suffix is non-numeric
+(e.g., the separator appears inside the hostname), the entire input is treated
+as a hostname with the default port.  If the suffix is numeric but not a valid
+port (e.g., out of range), parsing reports an invalid format error instead of
+falling back to host-only.  For example, `"toronto"` with
 `separator: "to"` has no valid split and is correctly treated as a hostname.
 
 ### Return value
