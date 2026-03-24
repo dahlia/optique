@@ -5097,6 +5097,7 @@ export function tuple<
           // Phase 3: Complete remaining elements
           const result: unknown[] = [];
           const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
 
           for (let i = 0; i < syncParsers.length; i++) {
             const elementResolvedState = resolvedArray[i];
@@ -5122,7 +5123,16 @@ export function tuple<
               if (depResult.success) {
                 result[i] = depResult.value;
                 if (depResult.deferred) {
-                  deferredKeys.set(i, depResult.deferredKeys ?? null);
+                  if (depResult.deferredKeys) {
+                    deferredKeys.set(i, depResult.deferredKeys);
+                  } else if (
+                    depResult.value == null ||
+                    typeof depResult.value !== "object"
+                  ) {
+                    deferredKeys.set(i, null);
+                  } else {
+                    hasDeferred = true;
+                  }
                 }
               } else {
                 return { success: false as const, error: depResult.error };
@@ -5134,20 +5144,32 @@ export function tuple<
             if (valueResult.success) {
               result[i] = valueResult.value;
               if (valueResult.deferred) {
-                deferredKeys.set(i, valueResult.deferredKeys ?? null);
+                if (valueResult.deferredKeys) {
+                  deferredKeys.set(i, valueResult.deferredKeys);
+                } else if (
+                  valueResult.value == null ||
+                  typeof valueResult.value !== "object"
+                ) {
+                  deferredKeys.set(i, null);
+                } else {
+                  hasDeferred = true;
+                }
               }
             } else {
               return { success: false as const, error: valueResult.error };
             }
           }
 
+          const isDeferred = deferredKeys.size > 0 || hasDeferred;
           return {
             success: true as const,
             value: result as { [K in keyof T]: T[K]["$valueType"][number] },
-            ...(deferredKeys.size > 0
+            ...(isDeferred
               ? {
                 deferred: true as const,
-                deferredKeys: deferredKeys as DeferredMap,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
               }
               : {}),
           };
@@ -5200,6 +5222,7 @@ export function tuple<
           // Phase 3: Complete remaining elements
           const result: unknown[] = [];
           const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
 
           for (let i = 0; i < parsers.length; i++) {
             const elementResolvedState = resolvedArray[i];
@@ -5225,7 +5248,16 @@ export function tuple<
               if (depResult.success) {
                 result[i] = depResult.value;
                 if (depResult.deferred) {
-                  deferredKeys.set(i, depResult.deferredKeys ?? null);
+                  if (depResult.deferredKeys) {
+                    deferredKeys.set(i, depResult.deferredKeys);
+                  } else if (
+                    depResult.value == null ||
+                    typeof depResult.value !== "object"
+                  ) {
+                    deferredKeys.set(i, null);
+                  } else {
+                    hasDeferred = true;
+                  }
                 }
               } else {
                 return { success: false as const, error: depResult.error };
@@ -5239,20 +5271,32 @@ export function tuple<
             if (valueResult.success) {
               result[i] = valueResult.value;
               if (valueResult.deferred) {
-                deferredKeys.set(i, valueResult.deferredKeys ?? null);
+                if (valueResult.deferredKeys) {
+                  deferredKeys.set(i, valueResult.deferredKeys);
+                } else if (
+                  valueResult.value == null ||
+                  typeof valueResult.value !== "object"
+                ) {
+                  deferredKeys.set(i, null);
+                } else {
+                  hasDeferred = true;
+                }
               }
             } else {
               return { success: false as const, error: valueResult.error };
             }
           }
 
+          const isDeferred = deferredKeys.size > 0 || hasDeferred;
           return {
             success: true as const,
             value: result as { [K in keyof T]: T[K]["$valueType"][number] },
-            ...(deferredKeys.size > 0
+            ...(isDeferred
               ? {
                 deferred: true as const,
-                deferredKeys: deferredKeys as DeferredMap,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
               }
               : {}),
           };
