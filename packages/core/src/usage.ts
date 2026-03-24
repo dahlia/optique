@@ -576,7 +576,18 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
     }
     return { type: "exclusive", terms };
   } else {
-    return term;
+    // Clone leaf terms so the normalized output is referentially distinct
+    // from the input.  Use a manual spread instead of cloneUsageTerm() to
+    // tolerate unknown term types that cloneUsageTerm() would not cover:
+    if (term.type === "option") {
+      return { ...term, names: [...term.names] };
+    } else if (term.type === "command") {
+      if (term.usageLine == null || typeof term.usageLine === "function") {
+        return { ...term };
+      }
+      return { ...term, usageLine: cloneUsage(term.usageLine) };
+    }
+    return { ...term };
   }
 }
 
