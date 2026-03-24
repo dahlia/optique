@@ -9,6 +9,7 @@ import { cloneMessage, type Message, message } from "./message.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import {
   cloneUsage,
+  isDocHidden,
   normalizeUsage,
   type Usage,
   type UsageTerm,
@@ -963,6 +964,19 @@ async function getDocPageAsyncImpl(
   return buildDocPage(parser, context, args);
 }
 
+function isDocEntryHidden(entry: DocEntry): boolean {
+  const term = entry.term;
+  if (
+    term.type === "argument" ||
+    term.type === "option" ||
+    term.type === "command" ||
+    term.type === "passthrough"
+  ) {
+    return isDocHidden(term.hidden);
+  }
+  return false;
+}
+
 /**
  * Builds a DocPage from the parser and context.
  * Shared by both sync and async implementations.
@@ -1015,18 +1029,20 @@ function buildDocPage(
 
   for (const fragment of fragments) {
     if (fragment.type === "entry") {
+      if (isDocEntryHidden(fragment)) continue;
       if (untitledSection == null) {
         untitledSection = { entries: [] };
         buildingSections.push(untitledSection);
       }
       untitledSection.entries.push(cloneDocEntry(fragment));
     } else if (fragment.type === "section") {
+      const visible = fragment.entries.filter((e) => !isDocEntryHidden(e));
       if (fragment.title == null) {
         if (untitledSection == null) {
           untitledSection = { entries: [] };
           buildingSections.push(untitledSection);
         }
-        untitledSection.entries.push(...fragment.entries.map(cloneDocEntry));
+        untitledSection.entries.push(...visible.map(cloneDocEntry));
       } else {
         let section = titledSectionMap.get(fragment.title);
         if (section == null) {
@@ -1034,7 +1050,7 @@ function buildDocPage(
           titledSectionMap.set(fragment.title, section);
           buildingSections.push(section);
         }
-        section.entries.push(...fragment.entries.map(cloneDocEntry));
+        section.entries.push(...visible.map(cloneDocEntry));
       }
     }
   }
