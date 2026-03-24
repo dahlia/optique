@@ -2883,11 +2883,13 @@ interface ValueParser<M extends Mode, T> {
     if given an empty string.
 
 `placeholder`
-:   A type-appropriate stand-in value of type `T`.  During two-phase parsing
-    (e.g., with deferred prompts), this value is used so that `map()`
-    transforms and dynamic contexts always receive a structurally valid
-    value.  It does not need to be meaningful—only a valid inhabitant of
-    the result type that will not crash downstream transforms.
+:   A type-appropriate stand-in value of type `T`.  During phase-one parsing
+    (e.g., while a prompt is deferred), this value keeps downstream
+    combinators and `map()` transforms working with the expected shape.
+    Before phase-two context collection, deferred values may still be
+    replaced with `undefined`, so contexts must not rely on seeing the
+    placeholder itself.  It does not need to be meaningful—only a valid
+    inhabitant of the result type that will not crash downstream transforms.
 
 `parse()`
 :   Converts string input to typed value or returns error
