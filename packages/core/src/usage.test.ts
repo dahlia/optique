@@ -914,6 +914,22 @@ describe("programName parameter", () => {
       TypeError,
     );
   });
+
+  it("should throw TypeError for Unicode line-breaking characters", () => {
+    const usage: Usage = [{ type: "argument", metavar: "FILE" }];
+    assert.throws(
+      () => formatUsage("bad\x85name", usage),
+      TypeError,
+    );
+    assert.throws(
+      () => formatUsage("bad\u2028name", usage),
+      TypeError,
+    );
+    assert.throws(
+      () => formatUsage("bad\u2029name", usage),
+      TypeError,
+    );
+  });
 });
 
 describe("expandCommands option", () => {

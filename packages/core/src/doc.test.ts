@@ -1581,6 +1581,22 @@ describe("formatDocPage", () => {
     );
   });
 
+  it("should throw TypeError for programName with Unicode line separators", () => {
+    const page: DocPage = { sections: [] };
+    assert.throws(
+      () => formatDocPage("bad\x85name", page),
+      TypeError,
+    );
+    assert.throws(
+      () => formatDocPage("bad\u2028name", page),
+      TypeError,
+    );
+    assert.throws(
+      () => formatDocPage("bad\u2029name", page),
+      TypeError,
+    );
+  });
+
   it("should throw TypeError when section title contains a newline", () => {
     const page: DocPage = {
       sections: [{

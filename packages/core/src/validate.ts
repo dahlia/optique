@@ -7,7 +7,7 @@
  */
 export function escapeControlChars(value: string): string {
   // deno-lint-ignore no-control-regex
-  return value.replace(/[\x00-\x1f\x7f]/g, (ch) => {
+  return value.replace(/[\x00-\x1f\x7f\x85\u2028\u2029]/g, (ch) => {
     const code = ch.charCodeAt(0);
     switch (code) {
       case 0x09:
@@ -17,7 +17,9 @@ export function escapeControlChars(value: string): string {
       case 0x0d:
         return "\\r";
       default:
-        return `\\x${code.toString(16).padStart(2, "0")}`;
+        return code > 0xff
+          ? `\\u${code.toString(16).padStart(4, "0")}`
+          : `\\x${code.toString(16).padStart(2, "0")}`;
     }
   });
 }
@@ -51,7 +53,7 @@ export function validateOptionNames(
       );
     }
     // deno-lint-ignore no-control-regex
-    if (/[\x00-\x1f\x7f]/.test(name)) {
+    if (/[\x00-\x1f\x7f\x85\u2028\u2029]/.test(name)) {
       throw new TypeError(
         `${label} name must not contain control characters: ` +
           `"${escapeControlChars(name)}".`,
@@ -105,7 +107,7 @@ export function validateCommandNames(
       );
     }
     // deno-lint-ignore no-control-regex
-    if (/[\x00-\x1f\x7f]/.test(name)) {
+    if (/[\x00-\x1f\x7f\x85\u2028\u2029]/.test(name)) {
       throw new TypeError(
         `${label} name must not contain control characters: ` +
           `"${escapeControlChars(name)}".`,
@@ -144,7 +146,7 @@ export function validateProgramName(programName: string): void {
     );
   }
   // deno-lint-ignore no-control-regex
-  if (/[\x00-\x1f\x7f]/.test(programName)) {
+  if (/[\x00-\x1f\x7f\x85\u2028\u2029]/.test(programName)) {
     throw new TypeError(
       `Program name must not contain control characters: ` +
         `"${escapeControlChars(programName)}".`,
