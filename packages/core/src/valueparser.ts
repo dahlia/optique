@@ -3820,7 +3820,16 @@ export function socketAddress(
                 },
               };
             }
-            if (firstHostError === undefined) {
+            // Record the first host error, but let IP-shaped errors
+            // replace non-IP ones so that specific IP diagnostics are
+            // not shadowed by earlier generic hostname failures.
+            if (
+              firstHostError === undefined ||
+              ((looksLikeIpv4(hostPart) ||
+                looksLikeAltIpv4Literal(hostPart)) &&
+                !looksLikeIpv4(firstHostError.hostPart) &&
+                !looksLikeAltIpv4Literal(firstHostError.hostPart))
+            ) {
               firstHostError = { hostPart, error: hostResult.error };
             }
           } else if (
@@ -3837,7 +3846,9 @@ export function socketAddress(
             // hyphen) should still be caught.
             validHostNumericPortInvalid = true;
           } else if (
-            firstHostError === undefined &&
+            (firstHostError === undefined ||
+              (!looksLikeIpv4(firstHostError.hostPart) &&
+                !looksLikeAltIpv4Literal(firstHostError.hostPart))) &&
             (looksLikeIpv4(hostPart) ||
               looksLikeAltIpv4Literal(hostPart))
           ) {
