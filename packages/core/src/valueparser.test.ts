@@ -9892,6 +9892,36 @@ describe("socketAddress()", () => {
       assert.ok(!result.success);
     });
 
+    it("should reject doubled-separator inputs with invalid numeric port", () => {
+      // "db--70000" has host "db-" (invalid trailing hyphen) + port
+      // "70000".  The all-digit suffix is still a port typo even though
+      // the host part at that split point is invalid.
+      const parser = socketAddress({ separator: "-", defaultPort: 80 });
+
+      const result = parser.parse("db--70000");
+      assert.ok(!result.success);
+    });
+
+    it("should route to invalidFormat, not missingPort, when separator is present", () => {
+      // "example-com" with separator "-" and requirePort: the separator
+      // is present, so the user attempted a split.  Error should be
+      // invalidFormat, not missingPort.
+      const parser = socketAddress({
+        separator: "-",
+        requirePort: true,
+        errors: {
+          invalidFormat: message`Bad format`,
+          missingPort: message`Port needed`,
+        },
+      });
+
+      const result = parser.parse("example-com");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Bad format" },
+      ]);
+    });
+
     it("should reject invalid numeric port even with requirePort", () => {
       const parser = socketAddress({ separator: "to", requirePort: true });
 

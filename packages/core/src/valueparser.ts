@@ -3760,15 +3760,19 @@ export function socketAddress(
       let firstHostError:
         | { readonly hostPart: string; readonly error: Message }
         | undefined;
-      // Set when a split produces a valid host but an all-digit port
+      // Set when a split produces a non-empty host but an all-digit port
       // part that fails validation (e.g., out of range).  This prevents
-      // the host-only fallback from silently masking port typos.
+      // the host-only fallback from silently masking port typos — even
+      // when the host part itself is invalid (e.g., "db--70000" where
+      // host "db-" has a trailing hyphen).
       let validHostNumericPortInvalid = false;
       // The validated host from the rightmost split with an empty port
       // part (trailing separator).  Used as a fallback when the whole
       // input is not a valid hostname by itself (e.g., "localhost:" where
       // the colon makes it invalid as a hostname).
       let trailingSepHost: string | undefined;
+      // Whether any separator occurrence was found in the input at all.
+      let anySeparatorFound = false;
       let searchFrom = trimmed.length;
       while (searchFrom > 0) {
         const separatorIndex = trimmed.lastIndexOf(
@@ -3776,6 +3780,7 @@ export function socketAddress(
           searchFrom - 1,
         );
         if (separatorIndex === -1) break;
+        anySeparatorFound = true;
 
         const hostPart = trimmed.substring(0, separatorIndex);
         const portPart = trimmed.substring(
@@ -3809,16 +3814,18 @@ export function socketAddress(
               firstHostError = { hostPart, error: hostResult.error };
             }
           } else if (
-            !validHostNumericPortInvalid && /^[0-9]+$/.test(portPart)
+            !validHostNumericPortInvalid &&
+            hostPart !== "" &&
+            /^[0-9]+$/.test(portPart)
           ) {
             // Port part is all digits but failed validation (e.g., out
-            // of range).  If the host part is also valid, the user
-            // likely intended a split — reject rather than falling
-            // through to host-only which would silently mask the error.
-            const hostCheck = parseHost(hostPart);
-            if (hostCheck.success) {
-              validHostNumericPortInvalid = true;
-            }
+            // of range).  A non-empty host before it is enough signal
+            // that the user intended a split — reject rather than
+            // falling through to host-only.  We intentionally do not
+            // require parseHost(hostPart) to succeed: inputs like
+            // "db--70000" (host "db-" is invalid due to a trailing
+            // hyphen) should still be caught.
+            validHostNumericPortInvalid = true;
           }
         }
 
@@ -3862,21 +3869,19 @@ export function socketAddress(
         }
       }
 
-      // Try the whole input as a host-only value.
-      const hostOnlyResult = parseHost(trimmed);
-      if (hostOnlyResult.success) {
-        if (canOmitPort) {
+      // Try host-only interpretation only when port can be omitted.
+      // When port is required and a separator was found, the user
+      // attempted a split — falling through to invalidFormat is more
+      // appropriate than reporting missingPort.
+      let hostOnlyResult: ValueParserResult<string> | undefined;
+      if (canOmitPort) {
+        hostOnlyResult = parseHost(trimmed);
+        if (hostOnlyResult.success) {
           return {
             success: true,
             value: { host: hostOnlyResult.value, port: defaultPort! },
           };
         }
-        const errorMsg = options?.errors?.missingPort;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(input)
-          : errorMsg ??
-            message`Port number is required but was not specified.`;
-        return { success: false, error: msg };
       }
 
       // If the whole input is not a valid hostname but a trailing
@@ -3897,6 +3902,20 @@ export function socketAddress(
         return { success: false, error: msg };
       }
 
+      // When no separator was found at all, the user simply provided
+      // a hostname without any port indication → missingPort.
+      if (!canOmitPort && !anySeparatorFound) {
+        hostOnlyResult = parseHost(trimmed);
+        if (hostOnlyResult.success) {
+          const errorMsg = options?.errors?.missingPort;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ??
+              message`Port number is required but was not specified.`;
+          return { success: false, error: msg };
+        }
+      }
+
       // Step 3: Neither valid split nor valid host-only.
       const errorMsg = options?.errors?.invalidFormat;
       if (errorMsg) {
@@ -3904,10 +3923,12 @@ export function socketAddress(
         return { success: false, error: msg };
       }
 
-      if (
-        looksLikeIpv4(trimmed) || looksLikeAltIpv4Literal(trimmed)
-      ) {
-        return { success: false, error: hostOnlyResult.error };
+      if (hostOnlyResult !== undefined && !hostOnlyResult.success) {
+        if (
+          looksLikeIpv4(trimmed) || looksLikeAltIpv4Literal(trimmed)
+        ) {
+          return { success: false, error: hostOnlyResult.error };
+        }
       }
 
       return {
