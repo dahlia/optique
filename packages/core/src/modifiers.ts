@@ -902,6 +902,9 @@ export function withDefault<
  * @param transform A function that transforms the parsed value from type T to type U.
  * @returns A {@link Parser} that produces the transformed value of type U
  *          while preserving the original parser's state type and parsing behavior.
+ * @throws Any exception thrown by `transform` when completing a non-deferred
+ *   value.  Errors from deferred placeholder transforms are caught and the
+ *   mapped result falls back to `undefined` with `deferred: true`.
  *
  * ### Deferred prompt interaction
  *
@@ -1313,13 +1316,14 @@ export function multiple<M extends Mode, TValue, TState>(
               state[i] as TState,
             );
             if (valueResult.success) {
-              result.push(unwrapInjectedWrapper(valueResult.value));
+              const unwrappedValue = unwrapInjectedWrapper(valueResult.value);
+              result.push(unwrappedValue);
               if (valueResult.deferred) {
                 if (valueResult.deferredKeys) {
                   deferredIndices.set(i, valueResult.deferredKeys);
                 } else if (
-                  valueResult.value == null ||
-                  typeof valueResult.value !== "object"
+                  unwrappedValue == null ||
+                  typeof unwrappedValue !== "object"
                 ) {
                   deferredIndices.set(i, null);
                 } else {
@@ -1345,13 +1349,14 @@ export function multiple<M extends Mode, TValue, TState>(
           for (let i = 0; i < results.length; i++) {
             const valueResult = results[i];
             if (valueResult.success) {
-              values.push(unwrapInjectedWrapper(valueResult.value));
+              const unwrappedValue = unwrapInjectedWrapper(valueResult.value);
+              values.push(unwrappedValue);
               if (valueResult.deferred) {
                 if (valueResult.deferredKeys) {
                   deferredIndices.set(i, valueResult.deferredKeys);
                 } else if (
-                  valueResult.value == null ||
-                  typeof valueResult.value !== "object"
+                  unwrappedValue == null ||
+                  typeof unwrappedValue !== "object"
                 ) {
                   deferredIndices.set(i, null);
                 } else {
