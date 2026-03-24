@@ -144,6 +144,10 @@ To be released.
     fragment containing visible entries, and titled sections with only hidden
     entries are omitted entirely.  [[#494], [#720]]
 
+ -  Fixed `normalizeUsage()` reusing leaf `UsageTerm` objects by reference,
+    which caused mutations of the normalized result to propagate back to the
+    original usage tree.  [[#504], [#722]]
+
  -  Fixed `or()` and `longestMatch()` duplicating visible terms in
     documentation when branches share the same surface syntax.  [[#432], [#698]]
 
@@ -961,6 +965,7 @@ To be released.
 [#490]: https://github.com/dahlia/optique/pull/490
 [#494]: https://github.com/dahlia/optique/issues/494
 [#500]: https://github.com/dahlia/optique/issues/500
+[#504]: https://github.com/dahlia/optique/issues/504
 [#505]: https://github.com/dahlia/optique/issues/505
 [#506]: https://github.com/dahlia/optique/issues/506
 [#507]: https://github.com/dahlia/optique/issues/507
@@ -1082,6 +1087,7 @@ To be released.
 [#719]: https://github.com/dahlia/optique/pull/719
 [#720]: https://github.com/dahlia/optique/pull/720
 [#721]: https://github.com/dahlia/optique/pull/721
+[#722]: https://github.com/dahlia/optique/pull/722
 
 ### @optique/config
 
