@@ -21,9 +21,10 @@ export interface ZodParserOptions<T = unknown> {
   readonly metavar?: NonEmptyString;
 
   /**
-   * A placeholder value of type `T` used as a sentinel for internal
-   * bookkeeping.  Because the output type of a Zod schema cannot be
+   * A phase-one stand-in value of type `T` used during deferred prompt
+   * resolution.  Because the output type of a Zod schema cannot be
    * inferred to a concrete default, callers must provide this explicitly.
+   * @since 1.0.0
    */
   readonly placeholder: T;
 

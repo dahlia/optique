@@ -398,7 +398,8 @@ export type Result<T> =
      */
     deferred?: true;
     /**
-     * Property keys whose values are deferred placeholders.
+     * Property keys (object field names or array indices) whose values are
+     * deferred placeholders.
      * Propagated from {@link ValueParserResult.deferredKeys}.
      * @since 1.0.0
      */

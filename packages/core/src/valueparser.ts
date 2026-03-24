@@ -2386,6 +2386,12 @@ export function port(
           `min: ${min} and max: ${max}.`,
       );
     }
+    if (options.disallowWellKnown && min < 1024n && max < 1024n) {
+      throw new RangeError(
+        "disallowWellKnown is incompatible with the configured port range: " +
+          `all ports ${min}..${max} are well-known.`,
+      );
+    }
 
     return {
       $mode: "sync",
@@ -2472,6 +2478,12 @@ export function port(
     throw new RangeError(
       `Expected min to be less than or equal to max, but got ` +
         `min: ${min} and max: ${max}.`,
+    );
+  }
+  if (options?.disallowWellKnown && min < 1024 && max < 1024) {
+    throw new RangeError(
+      "disallowWellKnown is incompatible with the configured port range: " +
+        `all ports ${min}..${max} are well-known.`,
     );
   }
 

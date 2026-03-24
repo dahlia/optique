@@ -5,6 +5,31 @@ import { describe, it } from "node:test";
 import * as v from "valibot";
 
 describe("valibot()", () => {
+  describe("missing placeholder", () => {
+    it("should throw TypeError when options are omitted", () => {
+      assert.throws(
+        // @ts-ignore: intentionally omitting required options
+        () => valibot(v.string()),
+        {
+          name: "TypeError",
+          message:
+            "valibot() requires an options object with a placeholder property.",
+        },
+      );
+    });
+
+    it("should throw TypeError when placeholder is missing from options", () => {
+      assert.throws(
+        // @ts-ignore: intentionally omitting placeholder
+        () => valibot(v.string(), {}),
+        {
+          name: "TypeError",
+          message: "valibot() options must include a placeholder property.",
+        },
+      );
+    });
+  });
+
   describe("basic parsing", () => {
     it("should parse valid string input", () => {
       const parser = valibot(v.string(), { placeholder: "" });

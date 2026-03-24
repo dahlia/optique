@@ -5,6 +5,31 @@ import { describe, it } from "node:test";
 import { z } from "zod";
 
 describe("zod()", () => {
+  describe("missing placeholder", () => {
+    it("should throw TypeError when options are omitted", () => {
+      assert.throws(
+        // @ts-ignore: intentionally omitting required options
+        () => zod(z.string()),
+        {
+          name: "TypeError",
+          message:
+            "zod() requires an options object with a placeholder property.",
+        },
+      );
+    });
+
+    it("should throw TypeError when placeholder is missing from options", () => {
+      assert.throws(
+        // @ts-ignore: intentionally omitting placeholder
+        () => zod(z.string(), {}),
+        {
+          name: "TypeError",
+          message: "zod() options must include a placeholder property.",
+        },
+      );
+    });
+  });
+
   describe("basic parsing", () => {
     it("should parse valid string input", () => {
       const parser = zod(z.string(), { placeholder: "" });
