@@ -76,6 +76,16 @@ function prepareParsedForContexts(
   deferredKeys?: DeferredMap,
 ): unknown {
   if (!deferred) return parsed;
+  // Non-plain leaf deferred objects (URL, Date, Intl.Locale, Temporal,
+  // etc.) from prompt() carry an empty deferredKeys map (size 0) to
+  // distinguish them from opaque structured deferred values from map()
+  // (which have no deferredKeys at all).
+  if (
+    deferredKeys != null && deferredKeys.size === 0 &&
+    parsed != null && typeof parsed === "object"
+  ) {
+    return undefined;
+  }
   // Selectively replace only the deferred fields with undefined while
   // preserving non-deferred fields for phase-two context annotation
   // collection (e.g., getConfigPath may depend on non-deferred fields).

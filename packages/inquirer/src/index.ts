@@ -165,7 +165,12 @@ function deferredPromptResult<TValue>(
       if (isArray && key === "length") continue;
       keys.set(key, null);
     }
-    if (keys.size > 0) {
+    // Always set deferredKeys — even when empty (non-plain objects
+    // like URL, Date, Intl.Locale).  An empty map distinguishes leaf
+    // deferred objects (from prompt()) from opaque structured deferred
+    // (from map()), allowing prepareParsedForContexts() to strip the
+    // former while passing through the latter.
+    {
       (result as { deferredKeys?: ReadonlyMap<PropertyKey, unknown> })
         .deferredKeys = keys;
     }

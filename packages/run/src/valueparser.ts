@@ -104,6 +104,15 @@ export interface PathOptionsBase {
   readonly extensions?: readonly string[];
 
   /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Override the default `"."` when downstream `map()` transforms or
+   * path constraints require a specific path shape.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: string;
+
+  /**
    * Custom error messages for path validation failures.
    * @since 0.5.0
    */
@@ -285,7 +294,7 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
   return {
     $mode: "sync",
     metavar,
-    placeholder: ".",
+    placeholder: options.placeholder ?? ".",
     parse(input: string): ValueParserResult<string> {
       // Empty/whitespace-only path validation
       if (input.trim() === "") {

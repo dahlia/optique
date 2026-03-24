@@ -1492,7 +1492,9 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
   return {
     $mode: "sync",
     metavar,
-    placeholder: new URL("http://0.invalid"),
+    placeholder: new URL(
+      `${options.allowedProtocols?.[0] ?? "http:"}//0.invalid`,
+    ),
     parse(input: string): ValueParserResult<URL> {
       if (!URL.canParse(input)) {
         return {
