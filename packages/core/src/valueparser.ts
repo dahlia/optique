@@ -127,10 +127,12 @@ export type ValueParserResult<T> =
 
     /**
      * A recursive map describing which property keys in {@link value} hold
-     * deferred placeholder values.  Set by `object()` and propagated by
-     * `map()`.  Used by the two-phase facade to selectively replace only
-     * deferred fields with `undefined` while preserving non-deferred fields
-     * for phase-two context annotation collection.
+     * deferred placeholder values.  Set by `object()`, `tuple()`, `merge()`,
+     * and other combinators.  Intentionally not propagated by `map()` because
+     * opaque transforms invalidate the inner key set.  Used by the two-phase
+     * facade to selectively replace only deferred fields with `undefined`
+     * while preserving non-deferred fields for phase-two context annotation
+     * collection.
      *
      * Each entry maps a property key to either `null` (the entire field is
      * deferred) or another `DeferredMap` (the field is an object whose own
@@ -294,6 +296,7 @@ export function isValueParser<M extends Mode, T>(
       (object as ValueParser<M, T>).$mode === "async") &&
     "metavar" in object &&
     typeof (object as ValueParser<M, T>).metavar === "string" &&
+    "placeholder" in object &&
     "parse" in object &&
     typeof (object as ValueParser<M, T>).parse === "function" &&
     "format" in object &&
@@ -3181,6 +3184,13 @@ export interface EmailOptions {
   readonly allowedDomains?: readonly string[];
 
   /**
+   * Override the default placeholder value used for deferred parsing.
+   * When not specified, the placeholder is derived from the first entry in
+   * {@link allowedDomains} (or `"example.com"` when no domains are set).
+   */
+  readonly placeholder?: string | readonly string[];
+
+  /**
    * Custom error messages for email parsing failures.
    */
   readonly errors?: {
@@ -3530,12 +3540,13 @@ export function email(
   return {
     $mode: "sync" as const,
     metavar,
-    placeholder:
-      (options?.allowMultiple
-        ? (["user@example.com"] as readonly string[])
-        : "user@example.com") as
-          & string
-          & readonly string[],
+    placeholder: (options?.allowMultiple
+      ? ([
+        `user@${options?.allowedDomains?.[0] ?? "example.com"}`,
+      ] as readonly string[])
+      : `user@${options?.allowedDomains?.[0] ?? "example.com"}`) as
+        & string
+        & readonly string[],
     parse(
       input: string,
     ): ValueParserResult<string> | ValueParserResult<readonly string[]> {
@@ -6279,7 +6290,7 @@ export function cidr(
   return {
     $mode: "sync",
     metavar,
-    placeholder: version === 6
+    placeholder: version === 6 || (version === "both" && (minPrefix ?? 0) > 32)
       ? {
         address: ipv6Parser!.placeholder,
         prefix: minPrefix ?? 0,

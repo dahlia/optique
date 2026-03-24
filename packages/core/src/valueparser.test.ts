@@ -36,18 +36,30 @@ describe("isValueParser", () => {
     const stringParser = {
       $mode: "sync" as const,
       metavar: "STRING",
+      placeholder: "test",
       parse: () => ({ success: true as const, value: "test" }),
       format: (v: string) => v,
     };
     const numberParser = {
       $mode: "sync" as const,
       metavar: "NUMBER",
+      placeholder: 0,
       parse: () => ({ success: true as const, value: 42 }),
       format: (v: number) => v.toString(),
     };
 
     assert.ok(isValueParser(stringParser));
     assert.ok(isValueParser(numberParser));
+  });
+
+  it("should return false for objects missing placeholder property", () => {
+    const invalidParser = {
+      $mode: "sync" as const,
+      metavar: "STRING",
+      parse: () => ({ success: true as const, value: "test" }),
+      format: (v: string) => v,
+    };
+    assert.ok(!isValueParser(invalidParser));
   });
 
   it("should return false for objects missing metavar property", () => {

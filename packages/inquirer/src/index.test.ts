@@ -2233,6 +2233,20 @@ describe("prompt()", () => {
         schema: createPromptConfigSchema(),
       });
 
+      // Spy context that records the phase-one parsed value so we can
+      // verify that the placeholder shape survives the map() transform.
+      const phaseOneValues: unknown[] = [];
+      const spyContext: SourceContext = {
+        id: Symbol("spy"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed !== undefined) {
+            phaseOneValues.push(parsed);
+          }
+          return {};
+        },
+      };
+
       const parser = map(
         prompt(
           bindConfig(option("--api-key", string()), {
@@ -2249,7 +2263,7 @@ describe("prompt()", () => {
       );
 
       // First runWith
-      const result1 = await runWith(parser, "test", [context], {
+      const result1 = await runWith(parser, "test", [context, spyContext], {
         args: [],
         contextOptions: {
           load: () => ({
@@ -2260,8 +2274,13 @@ describe("prompt()", () => {
       });
       assert.equal(result1.token, "config-1");
 
+      // The phase-one value should have { token: <string> } shape
+      assert.equal(phaseOneValues.length, 1);
+      const p1 = phaseOneValues[0] as { token: unknown };
+      assert.equal(typeof p1.token, "string");
+
       // Second runWith — placeholder should not be corrupted
-      const result2 = await runWith(parser, "test", [context], {
+      const result2 = await runWith(parser, "test", [context, spyContext], {
         args: [],
         contextOptions: {
           load: () => ({
@@ -2271,6 +2290,11 @@ describe("prompt()", () => {
         },
       });
       assert.equal(result2.token, "config-2");
+
+      // Verify that the second run also produced a valid phase-one value
+      assert.equal(phaseOneValues.length, 2);
+      const p2 = phaseOneValues[1] as { token: unknown };
+      assert.equal(typeof p2.token, "string");
     },
   );
 
