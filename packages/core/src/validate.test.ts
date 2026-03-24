@@ -17,8 +17,15 @@ describe("escapeControlChars", () => {
     assert.equal(escapeControlChars("a\x7fb"), "a\\x7fb");
   });
 
-  it("should escape Unicode line-breaking characters", () => {
+  it("should escape C1 control characters", () => {
+    assert.equal(escapeControlChars("a\x80b"), "a\\x80b");
     assert.equal(escapeControlChars("a\x85b"), "a\\x85b");
+    assert.equal(escapeControlChars("a\x9bb"), "a\\x9bb");
+    assert.equal(escapeControlChars("a\x9cb"), "a\\x9cb");
+    assert.equal(escapeControlChars("a\x9fb"), "a\\x9fb");
+  });
+
+  it("should escape Unicode line separators", () => {
     assert.equal(escapeControlChars("a\u2028b"), "a\\u2028b");
     assert.equal(escapeControlChars("a\u2029b"), "a\\u2029b");
   });
@@ -106,11 +113,30 @@ describe("validateProgramName", () => {
     );
   });
 
-  it("should throw TypeError for Unicode line-breaking characters", () => {
+  it("should throw TypeError for C1 control characters", () => {
+    assert.throws(
+      () => validateProgramName("bad\x80name"),
+      TypeError,
+    );
     assert.throws(
       () => validateProgramName("bad\x85name"),
       TypeError,
     );
+    assert.throws(
+      () => validateProgramName("bad\x9bname"),
+      TypeError,
+    );
+    assert.throws(
+      () => validateProgramName("bad\x9cname"),
+      TypeError,
+    );
+    assert.throws(
+      () => validateProgramName("bad\x9fname"),
+      TypeError,
+    );
+  });
+
+  it("should throw TypeError for Unicode line separators", () => {
     assert.throws(
       () => validateProgramName("bad\u2028name"),
       TypeError,
@@ -123,11 +149,22 @@ describe("validateProgramName", () => {
 });
 
 describe("validateOptionNames", () => {
-  it("should reject Unicode line-breaking characters", () => {
+  it("should reject C1 control characters", () => {
     assert.throws(
-      () => validateOptionNames(["--bad\x85name"], "Option"),
+      () => validateOptionNames(["--bad\x80name"], "Option"),
       TypeError,
     );
+    assert.throws(
+      () => validateOptionNames(["--bad\x9bname"], "Option"),
+      TypeError,
+    );
+    assert.throws(
+      () => validateOptionNames(["--bad\x9cname"], "Option"),
+      TypeError,
+    );
+  });
+
+  it("should reject Unicode line separators", () => {
     assert.throws(
       () => validateOptionNames(["--bad\u2028name"], "Option"),
       TypeError,
@@ -140,11 +177,22 @@ describe("validateOptionNames", () => {
 });
 
 describe("validateCommandNames", () => {
-  it("should reject Unicode line-breaking characters", () => {
+  it("should reject C1 control characters", () => {
     assert.throws(
-      () => validateCommandNames(["bad\x85name"], "Command"),
+      () => validateCommandNames(["bad\x80name"], "Command"),
       TypeError,
     );
+    assert.throws(
+      () => validateCommandNames(["bad\x9bname"], "Command"),
+      TypeError,
+    );
+    assert.throws(
+      () => validateCommandNames(["bad\x9cname"], "Command"),
+      TypeError,
+    );
+  });
+
+  it("should reject Unicode line separators", () => {
     assert.throws(
       () => validateCommandNames(["bad\u2028name"], "Command"),
       TypeError,
