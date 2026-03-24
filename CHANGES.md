@@ -220,6 +220,15 @@ To be released.
     (e.g., `1234`, `2130706433`) also remain valid hostnames.  This also affects
     `socketAddress()` with `host: { type: "hostname" }`.  [[#715], [#717]]
 
+ -  Fixed `socketAddress()` incorrectly splitting host-only inputs when a
+    custom separator appears inside the hostname (e.g., `"toronto"` with
+    `separator: "to"` was parsed as `{ host: "toron", port: 80 }` instead of
+    `{ host: "toronto", port: 80 }`).  When port is optional (`defaultPort`
+    is set and `requirePort` is false), the parser now disambiguates separator
+    positions by validating host/port split candidates first, and falls back to
+    treating the full input as a hostname only when no valid split exists.
+    [[#360], [#726]]
+
  -  Fixed `hostname()` accepting case variants of `localhost` (e.g.,
     `LOCALHOST`, `LocalHost`) and wildcard-localhost forms (e.g.,
     `*.localhost`) when `allowLocalhost` is set to `false`.  DNS hostnames
@@ -952,6 +961,7 @@ To be released.
 [#354]: https://github.com/dahlia/optique/issues/354
 [#355]: https://github.com/dahlia/optique/issues/355
 [#357]: https://github.com/dahlia/optique/issues/357
+[#360]: https://github.com/dahlia/optique/issues/360
 [#362]: https://github.com/dahlia/optique/issues/362
 [#363]: https://github.com/dahlia/optique/issues/363
 [#364]: https://github.com/dahlia/optique/issues/364
@@ -1111,6 +1121,7 @@ To be released.
 [#723]: https://github.com/dahlia/optique/pull/723
 [#724]: https://github.com/dahlia/optique/pull/724
 [#725]: https://github.com/dahlia/optique/pull/725
+[#726]: https://github.com/dahlia/optique/pull/726
 
 ### @optique/config
 
