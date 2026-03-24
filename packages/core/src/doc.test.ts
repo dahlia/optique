@@ -643,6 +643,21 @@ describe("formatDocPage", () => {
     );
   });
 
+  it("should not let empty meta sections affect maxWidth validation", () => {
+    // Empty examples/author/bugs should not widen the minimum maxWidth.
+    // "Examples:" is 9 chars, so maxWidth=8 should be accepted when
+    // examples is empty (same as omitted).
+    assert.doesNotThrow(() => {
+      formatDocPage("app", { examples: [], sections: [] }, { maxWidth: 8 });
+    });
+    assert.doesNotThrow(() => {
+      formatDocPage("app", { author: [], sections: [] }, { maxWidth: 8 });
+    });
+    assert.doesNotThrow(() => {
+      formatDocPage("app", { bugs: [], sections: [] }, { maxWidth: 4 });
+    });
+  });
+
   it("should treat entry-level empty description as absent", () => {
     const withEmpty: DocPage = {
       sections: [{

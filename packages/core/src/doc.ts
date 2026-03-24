@@ -683,9 +683,9 @@ export function formatDocPage(
     // wrapped.  The content is indented by 2 chars (needing maxWidth >= 3),
     // but the label width is always the binding constraint.
     let sectionMin = 1;
-    if (page.examples != null) sectionMin = Math.max(sectionMin, 9);
-    if (page.author != null) sectionMin = Math.max(sectionMin, 7);
-    if (page.bugs != null) sectionMin = Math.max(sectionMin, 5);
+    if (hasContent(page.examples)) sectionMin = Math.max(sectionMin, 9);
+    if (hasContent(page.author)) sectionMin = Math.max(sectionMin, 7);
+    if (hasContent(page.bugs)) sectionMin = Math.max(sectionMin, 5);
     const minWidth = Math.max(entryMin, usageMin, sectionMin);
     if (options.maxWidth < minWidth) {
       throw new RangeError(
