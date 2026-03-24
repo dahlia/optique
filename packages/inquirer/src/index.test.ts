@@ -2226,6 +2226,54 @@ describe("prompt()", () => {
     );
   });
 
+  it(
+    "map() placeholder is not corrupted by pure transforms across parses",
+    async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+
+      const parser = map(
+        prompt(
+          bindConfig(option("--api-key", string()), {
+            context,
+            key: "apiKey",
+          }),
+          {
+            type: "password",
+            message: "API key:",
+            prompter: () => Promise.resolve("prompt-secret"),
+          },
+        ),
+        (v) => ({ token: v }),
+      );
+
+      // First runWith
+      const result1 = await runWith(parser, "test", [context], {
+        args: [],
+        contextOptions: {
+          load: () => ({
+            config: { apiKey: "config-1" },
+            meta: undefined,
+          }),
+        },
+      });
+      assert.equal(result1.token, "config-1");
+
+      // Second runWith — placeholder should not be corrupted
+      const result2 = await runWith(parser, "test", [context], {
+        args: [],
+        contextOptions: {
+          load: () => ({
+            config: { apiKey: "config-2" },
+            meta: undefined,
+          }),
+        },
+      });
+      assert.equal(result2.token, "config-2");
+    },
+  );
+
   describe("prompt deferral through wrapper combinators", () => {
     for (
       const [label, config, expectedValue, expectedPromptCalls] of [

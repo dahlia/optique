@@ -542,6 +542,20 @@ const expiryTime = map(
 );
 ~~~~
 
+> [!IMPORTANT]
+> The `transform` function must not mutate its input.  During deferred
+> prompt resolution, object and array values may be shared placeholder
+> references, and in-place mutations would corrupt the placeholder for
+> subsequent parses.  Always return a new value:
+>
+> ~~~~ typescript
+> // ✅ Correct — creates a new object
+> map(parser, v => ({ ...v, host: "override" }))
+>
+> // ❌ Wrong — mutates the input in place
+> map(parser, v => { v.host = "override"; return v; })
+> ~~~~
+
 
 `multiple()` parser
 -------------------

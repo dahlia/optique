@@ -926,6 +926,21 @@ export function withDefault<
  * result falls back to `undefined` with `deferred: true`, so the first
  * pass does not abort.
  *
+ * ### Transform purity
+ *
+ * The `transform` function must not mutate its input.  Object and array
+ * values may be shared placeholder references during deferred prompt
+ * resolution, and in-place mutations would corrupt the placeholder for
+ * subsequent parses.  Always return a new value:
+ *
+ * ```typescript
+ * // ✅ Correct — creates a new object
+ * map(parser, v => ({ ...v, host: "override" }))
+ *
+ * // ❌ Wrong — mutates the input in place
+ * map(parser, v => { v.host = "override"; return v; })
+ * ```
+ *
  * @example
  * ```typescript
  * // Transform boolean flag to its inverse
