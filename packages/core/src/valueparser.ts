@@ -1495,9 +1495,11 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
   return {
     $mode: "sync",
     metavar,
-    placeholder: new URL(
-      `${options.allowedProtocols?.[0] ?? "http:"}//0.invalid`,
-    ),
+    get placeholder() {
+      return new URL(
+        `${options.allowedProtocols?.[0] ?? "http:"}//0.invalid`,
+      );
+    },
     parse(input: string): ValueParserResult<URL> {
       if (!URL.canParse(input)) {
         return {
@@ -3540,11 +3542,11 @@ export function email(
   return {
     $mode: "sync" as const,
     metavar,
-    placeholder: (options?.allowMultiple
+    placeholder: (options?.placeholder ?? (options?.allowMultiple
       ? ([
         `user@${options?.allowedDomains?.[0] ?? "example.com"}`,
       ] as readonly string[])
-      : `user@${options?.allowedDomains?.[0] ?? "example.com"}`) as
+      : `user@${options?.allowedDomains?.[0] ?? "example.com"}`)) as
         & string
         & readonly string[],
     parse(
@@ -3916,11 +3918,13 @@ export function socketAddress(
   return {
     $mode: "sync",
     metavar,
-    placeholder: {
-      host: hostType === "ip"
-        ? ipParser.placeholder
-        : hostnameParser.placeholder,
-      port: defaultPort ?? portParser.placeholder,
+    get placeholder() {
+      return {
+        host: hostType === "ip"
+          ? ipParser.placeholder
+          : hostnameParser.placeholder,
+        port: defaultPort ?? portParser.placeholder,
+      };
     },
     parse(input: string): ValueParserResult<SocketAddressValue> {
       const trimmed = input.trim();
@@ -4562,15 +4566,17 @@ export function portRange(
   return {
     $mode: "sync",
     metavar,
-    placeholder: (isBigInt
-      ? {
-        start: portParser.placeholder as bigint,
-        end: portParser.placeholder as bigint,
-      }
-      : {
-        start: portParser.placeholder as number,
-        end: portParser.placeholder as number,
-      }) as PortRangeValueNumber | PortRangeValueBigInt,
+    get placeholder(): PortRangeValueNumber | PortRangeValueBigInt {
+      return (isBigInt
+        ? {
+          start: portParser.placeholder as bigint,
+          end: portParser.placeholder as bigint,
+        }
+        : {
+          start: portParser.placeholder as number,
+          end: portParser.placeholder as number,
+        }) as PortRangeValueNumber | PortRangeValueBigInt;
+    },
     parse(input: string): ValueParserResult<
       PortRangeValueNumber | PortRangeValueBigInt
     > {
@@ -4780,7 +4786,17 @@ export function macAddress(
   return {
     $mode: "sync",
     metavar,
-    placeholder: "00:00:00:00:00:00",
+    get placeholder() {
+      const octets = ["00", "00", "00", "00", "00", "00"];
+      const sep = outputSeparator ?? (separator === "any" ? ":" : separator);
+      if (sep === ".") {
+        return `${octets[0]}${octets[1]}.${octets[2]}${octets[3]}.${octets[4]}${
+          octets[5]
+        }`;
+      }
+      if (sep === "none") return octets.join("");
+      return octets.join(sep);
+    },
     parse(input: string): ValueParserResult<string> {
       let octets: string[] = [];
       let inputSeparator: ":" | "-" | "." | "none" | undefined;
@@ -6290,17 +6306,19 @@ export function cidr(
   return {
     $mode: "sync",
     metavar,
-    placeholder: version === 6 || (version === "both" && (minPrefix ?? 0) > 32)
-      ? {
-        address: ipv6Parser!.placeholder,
-        prefix: minPrefix ?? 0,
-        version: 6 as 4 | 6,
-      }
-      : {
-        address: ipv4Parser!.placeholder,
-        prefix: minPrefix ?? 0,
-        version: 4 as 4 | 6,
-      },
+    get placeholder() {
+      return version === 6 || (version === "both" && (minPrefix ?? 0) > 32)
+        ? {
+          address: ipv6Parser!.placeholder,
+          prefix: minPrefix ?? 0,
+          version: 6 as 4 | 6,
+        }
+        : {
+          address: ipv4Parser!.placeholder,
+          prefix: minPrefix ?? 0,
+          version: 4 as 4 | 6,
+        };
+    },
     parse(input: string): ValueParserResult<CidrValue> {
       // Parse CIDR format: <ip>/<prefix>
       const slashIndex = input.lastIndexOf("/");
