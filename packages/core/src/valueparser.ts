@@ -2968,7 +2968,7 @@ export function hostname(
   return {
     $mode: "sync",
     metavar,
-    placeholder: "",
+    placeholder: "localhost",
     parse(input: string): ValueParserResult<string> {
       // Check length constraint first
       if (input.length > maxLength) {
@@ -5051,7 +5051,7 @@ export function domain(
   return {
     $mode: "sync",
     metavar,
-    placeholder: "",
+    placeholder: "example.com",
     parse(input: string): ValueParserResult<string> {
       // Check length constraint first
       if (input.length > maxLength) {
@@ -6233,7 +6233,9 @@ export function cidr(
   return {
     $mode: "sync",
     metavar,
-    placeholder: { address: "0.0.0.0", prefix: 0, version: 4 },
+    placeholder: version === 6
+      ? { address: "::", prefix: 0, version: 6 as 4 | 6 }
+      : { address: "0.0.0.0", prefix: 0, version: 4 as 4 | 6 },
     parse(input: string): ValueParserResult<CidrValue> {
       // Parse CIDR format: <ip>/<prefix>
       const slashIndex = input.lastIndexOf("/");
