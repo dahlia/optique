@@ -1,4 +1,14 @@
 /**
+ * Matches Unicode control characters: C0 (U+0000–U+001F), DEL (U+007F),
+ * C1 (U+0080–U+009F), and line separators (U+2028, U+2029).
+ */
+// deno-lint-ignore no-control-regex
+const CONTROL_CHAR_RE = /[\x00-\x1f\x7f-\x9f\u2028\u2029]/;
+
+// deno-lint-ignore no-control-regex
+const CONTROL_CHAR_RE_GLOBAL = /[\x00-\x1f\x7f-\x9f\u2028\u2029]/g;
+
+/**
  * Escapes control characters in a string for readable error messages.
  *
  * @param value The string to escape.
@@ -6,8 +16,7 @@
  *          sequences.
  */
 export function escapeControlChars(value: string): string {
-  // deno-lint-ignore no-control-regex
-  return value.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029]/g, (ch) => {
+  return value.replace(CONTROL_CHAR_RE_GLOBAL, (ch) => {
     const code = ch.charCodeAt(0);
     switch (code) {
       case 0x09:
@@ -52,8 +61,7 @@ export function validateOptionNames(
           `"${escapeControlChars(name)}".`,
       );
     }
-    // deno-lint-ignore no-control-regex
-    if (/[\x00-\x1f\x7f-\x9f\u2028\u2029]/.test(name)) {
+    if (CONTROL_CHAR_RE.test(name)) {
       throw new TypeError(
         `${label} name must not contain control characters: ` +
           `"${escapeControlChars(name)}".`,
@@ -106,8 +114,7 @@ export function validateCommandNames(
           `"${escapeControlChars(name)}".`,
       );
     }
-    // deno-lint-ignore no-control-regex
-    if (/[\x00-\x1f\x7f-\x9f\u2028\u2029]/.test(name)) {
+    if (CONTROL_CHAR_RE.test(name)) {
       throw new TypeError(
         `${label} name must not contain control characters: ` +
           `"${escapeControlChars(name)}".`,
@@ -145,8 +152,7 @@ export function validateProgramName(programName: string): void {
         `"${escapeControlChars(programName)}".`,
     );
   }
-  // deno-lint-ignore no-control-regex
-  if (/[\x00-\x1f\x7f-\x9f\u2028\u2029]/.test(programName)) {
+  if (CONTROL_CHAR_RE.test(programName)) {
     throw new TypeError(
       `Program name must not contain control characters: ` +
         `"${escapeControlChars(programName)}".`,
