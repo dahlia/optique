@@ -224,8 +224,9 @@ To be released.
     custom separator appears inside the hostname (e.g., `"toronto"` with
     `separator: "to"` was parsed as `{ host: "toron", port: 80 }` instead of
     `{ host: "toronto", port: 80 }`).  When port is optional (`defaultPort`
-    is set and `requirePort` is false), the parser now tries interpreting the
-    entire input as a hostname before attempting to split at the separator.
+    is set and `requirePort` is false), the parser now disambiguates separator
+    positions by validating host/port split candidates first, and falls back to
+    treating the full input as a hostname only when no valid split exists.
     [[#360], [#726]]
 
  -  Fixed `hostname()` accepting case variants of `localhost` (e.g.,
