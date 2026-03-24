@@ -10017,6 +10017,28 @@ describe("socketAddress()", () => {
         },
       ]);
     });
+
+    it("should not let custom invalidFormat turn valid host-only into failure", () => {
+      // "db-to80" with separator "to" is a valid hostname.
+      // Adding errors.invalidFormat should not change the parse result.
+      const withoutError = socketAddress({
+        separator: "to",
+        defaultPort: 80,
+      });
+      const withError = socketAddress({
+        separator: "to",
+        defaultPort: 80,
+        errors: { invalidFormat: message`Custom error` },
+      });
+
+      const result1 = withoutError.parse("db-to80");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value.host, "db-to80");
+
+      const result2 = withError.parse("db-to80");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value.host, "db-to80");
+    });
   });
 });
 

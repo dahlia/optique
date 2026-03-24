@@ -3861,24 +3861,6 @@ export function socketAddress(
         };
       }
 
-      // If a split had a valid port but an invalid host, propagate
-      // specific host errors (e.g., IP-shaped) before trying host-only.
-      if (firstHostError !== undefined) {
-        const errorMsg = options?.errors?.invalidFormat;
-        if (errorMsg) {
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg;
-          return { success: false, error: msg };
-        }
-        if (
-          looksLikeIpv4(firstHostError.hostPart) ||
-          looksLikeAltIpv4Literal(firstHostError.hostPart)
-        ) {
-          return { success: false, error: firstHostError.error };
-        }
-      }
-
       // Try host-only interpretation only when port can be omitted.
       // When port is required and a separator was found, the user
       // attempted a split — falling through to invalidFormat is more
@@ -3947,6 +3929,26 @@ export function socketAddress(
             : errorMsg ??
               message`Port number is required but was not specified.`;
           return { success: false, error: msg };
+        }
+      }
+
+      // If a split had a valid port but an invalid host, propagate
+      // specific host errors (e.g., IP-shaped).  This is checked after
+      // the host-only and trailing-separator paths so that custom
+      // invalidFormat never turns a valid host-only parse into a failure.
+      if (firstHostError !== undefined) {
+        const errorMsg = options?.errors?.invalidFormat;
+        if (errorMsg) {
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg;
+          return { success: false, error: msg };
+        }
+        if (
+          looksLikeIpv4(firstHostError.hostPart) ||
+          looksLikeAltIpv4Literal(firstHostError.hostPart)
+        ) {
+          return { success: false, error: firstHostError.error };
         }
       }
 
