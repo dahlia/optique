@@ -226,7 +226,7 @@ To be released.
     `{ host: "toronto", port: 80 }`).  When port is optional (`defaultPort`
     is set and `requirePort` is false), the parser now tries interpreting the
     entire input as a hostname before attempting to split at the separator.
-    [[#360]]
+    [[#360], [#726]]
 
  -  Fixed `hostname()` accepting case variants of `localhost` (e.g.,
     `LOCALHOST`, `LocalHost`) and wildcard-localhost forms (e.g.,
@@ -960,6 +960,7 @@ To be released.
 [#354]: https://github.com/dahlia/optique/issues/354
 [#355]: https://github.com/dahlia/optique/issues/355
 [#357]: https://github.com/dahlia/optique/issues/357
+[#360]: https://github.com/dahlia/optique/issues/360
 [#362]: https://github.com/dahlia/optique/issues/362
 [#363]: https://github.com/dahlia/optique/issues/363
 [#364]: https://github.com/dahlia/optique/issues/364
@@ -1119,6 +1120,7 @@ To be released.
 [#723]: https://github.com/dahlia/optique/pull/723
 [#724]: https://github.com/dahlia/optique/pull/724
 [#725]: https://github.com/dahlia/optique/pull/725
+[#726]: https://github.com/dahlia/optique/pull/726
 
 ### @optique/config
 
