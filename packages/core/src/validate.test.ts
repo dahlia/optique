@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   escapeControlChars,
   validateCommandNames,
+  validateMetaNameCollisions,
   validateOptionNames,
   validateProgramName,
 } from "./validate.ts";
@@ -333,6 +334,176 @@ describe("validateCommandNames", () => {
         name: "TypeError",
         message:
           'Command name must not contain control characters: "bad\\u2029name".',
+      },
+    );
+  });
+});
+
+describe("validateMetaNameCollisions", () => {
+  it("should pass with no meta features", () => {
+    validateMetaNameCollisions(new Set(), new Set(), [], []);
+  });
+
+  it("should pass with no collisions", () => {
+    validateMetaNameCollisions(
+      new Set(["--verbose", "-v"]),
+      new Set(["build", "test"]),
+      [["help option", ["--help"]]],
+      [["help command", ["help"]]],
+    );
+  });
+
+  it("should pass when meta features use custom names avoiding collision", () => {
+    validateMetaNameCollisions(
+      new Set(["--help"]),
+      new Set(["help"]),
+      [["help option", ["--info"]]],
+      [["help command", ["info"]]],
+    );
+  });
+
+  it("should throw on duplicate within a single meta option feature", () => {
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          new Set(),
+          new Set(),
+          [["help option", ["--help", "--help"]]],
+          [],
+        ),
+      {
+        name: "TypeError",
+        message: /help option.*duplicate.*"--help"/i,
+      },
+    );
+  });
+
+  it("should throw on duplicate within a single meta command feature", () => {
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          new Set(),
+          new Set(),
+          [],
+          [["help command", ["help", "help"]]],
+        ),
+      {
+        name: "TypeError",
+        message: /help command.*duplicate.*"help"/i,
+      },
+    );
+  });
+
+  it("should throw when two meta options share a name", () => {
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          new Set(),
+          new Set(),
+          [
+            ["help option", ["--meta"]],
+            ["completion option", ["--meta"]],
+          ],
+          [],
+        ),
+      {
+        name: "TypeError",
+        message:
+          /help option.*completion option|completion option.*help option/i,
+      },
+    );
+  });
+
+  it("should throw when two meta commands share a name", () => {
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          new Set(),
+          new Set(),
+          [],
+          [
+            ["help command", ["meta"]],
+            ["version command", ["meta"]],
+          ],
+        ),
+      {
+        name: "TypeError",
+        message: /help command.*version command|version command.*help command/i,
+      },
+    );
+  });
+
+  it("should throw when three meta commands share a name", () => {
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          new Set(),
+          new Set(),
+          [],
+          [
+            ["help command", ["meta"]],
+            ["version command", ["meta"]],
+            ["completion command", ["meta"]],
+          ],
+        ),
+      { name: "TypeError" },
+    );
+  });
+
+  it("should throw when user option collides with meta option", () => {
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          new Set(["--help"]),
+          new Set(),
+          [["help option", ["--help"]]],
+          [],
+        ),
+      {
+        name: "TypeError",
+        message: /user.*"--help".*help option/i,
+      },
+    );
+  });
+
+  it("should throw when user command collides with meta command", () => {
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          new Set(),
+          new Set(["help"]),
+          [],
+          [["help command", ["help"]]],
+        ),
+      {
+        name: "TypeError",
+        message: /user.*"help".*help command/i,
+      },
+    );
+  });
+
+  it("should not throw when meta feature is disabled", () => {
+    // User has --help but help option is not in metaOptions (disabled)
+    validateMetaNameCollisions(
+      new Set(["--help"]),
+      new Set(["help"]),
+      [],
+      [],
+    );
+  });
+
+  it("should detect collision with aliases", () => {
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          new Set(),
+          new Set(["aide"]),
+          [],
+          [["help command", ["help", "aide"]]],
+        ),
+      {
+        name: "TypeError",
+        message: /user.*"aide".*help command/i,
       },
     );
   });
