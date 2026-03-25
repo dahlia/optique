@@ -178,6 +178,15 @@ function isCatchAllSchema(
   return false;
 }
 
+/** Check object-like container members (entries, key, value). */
+const CONTAINER_OBJECTS = 1;
+/** Check array-like container members (item, items). */
+const CONTAINER_ARRAYS = 2;
+/** Check all container members. */
+const CONTAINER_ALL = CONTAINER_OBJECTS | CONTAINER_ARRAYS;
+/** Skip all container members. */
+const CONTAINER_NONE = 0;
+
 /**
  * Recursively checks whether a Valibot schema contains any async parts
  * (e.g., `pipeAsync`, `checkAsync`).  Wrapper schemas such as `optional()`,
@@ -196,16 +205,18 @@ function isCatchAllSchema(
  * @param afterTransform When true, a preceding `v.transform()` may have
  *   changed the value type.  Container members become reachable and
  *   string-based union catch-all arms are no longer trusted.
- * @param skipContainers When true, suppress container member traversal
- *   even when `afterTransform` is true.  Used by the lazy guard for
- *   non-object scalar inputs (e.g., numbers, booleans) where containers
- *   are unreachable but string catch-alls should not be trusted.
+ * @param containerCheck Bitmask controlling which container member types
+ *   to traverse when `afterTransform` is true.  `CONTAINER_OBJECTS` (1)
+ *   enables object-like members (entries, key, value); `CONTAINER_ARRAYS`
+ *   (2) enables array-like members (item, items).  Default is
+ *   `CONTAINER_ALL` (3).  Set to `CONTAINER_NONE` (0) for scalars where
+ *   no container is reachable.
  */
 function containsAsyncSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
   visited: WeakMap<object, boolean> = new WeakMap(),
   afterTransform = false,
-  skipContainers = false,
+  containerCheck = CONTAINER_ALL,
 ): boolean {
   // Cycle/dedup: skip if already visited at the same or deeper level.
   // A visit with afterTransform=true subsumes afterTransform=false,
@@ -224,7 +235,7 @@ function containsAsyncSchema(
       s.wrapped,
       visited,
       afterTransform,
-      skipContainers,
+      containerCheck,
     );
   }
 
@@ -242,7 +253,7 @@ function containsAsyncSchema(
         if (typeof option !== "object" || option == null) continue;
         if (isCatchAllSchema(option, afterTransform)) break;
         if (
-          containsAsyncSchema(option, visited, afterTransform, skipContainers)
+          containsAsyncSchema(option, visited, afterTransform, containerCheck)
         ) return true;
       }
     } else if (s.type === "variant") {
@@ -252,7 +263,7 @@ function containsAsyncSchema(
       if (afterTransform) {
         for (const option of s.options) {
           if (typeof option === "object" && option != null) {
-            if (containsAsyncSchema(option, visited, true, skipContainers)) {
+            if (containsAsyncSchema(option, visited, true, containerCheck)) {
               return true;
             }
           }
@@ -262,7 +273,7 @@ function containsAsyncSchema(
       for (const option of s.options) {
         if (typeof option === "object" && option != null) {
           if (
-            containsAsyncSchema(option, visited, afterTransform, skipContainers)
+            containsAsyncSchema(option, visited, afterTransform, containerCheck)
           ) {
             return true;
           }
@@ -277,8 +288,8 @@ function containsAsyncSchema(
   if (s.pipe && Array.isArray(s.pipe)) {
     let seenTransform = afterTransform;
     // After a non-safe transform the value type may have changed,
-    // so container members may become reachable — reset skipContainers.
-    let skipCont = skipContainers;
+    // so container members may become reachable — reset to check all.
+    let contCheck = containerCheck;
     for (const action of s.pipe) {
       if ((action as { async?: boolean }).async) return true;
       const a = action as { kind?: string; type?: string };
@@ -287,7 +298,7 @@ function containsAsyncSchema(
         !SAFE_TRANSFORMATION_TYPES.has(a.type ?? "")
       ) {
         seenTransform = true;
-        skipCont = false;
+        contCheck = CONTAINER_ALL;
       }
       if (a.kind === "schema") {
         if (
@@ -295,7 +306,7 @@ function containsAsyncSchema(
             action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
             visited,
             seenTransform,
-            skipCont,
+            contCheck,
           )
         ) {
           return true;
@@ -324,27 +335,37 @@ function containsAsyncSchema(
   // Container members are only reachable after a transform changes the
   // value type.  At the top level, CLI input is always a string, so
   // container schemas (object, array, etc.) reject before visiting members.
-  // skipContainers suppresses this even when afterTransform is true (used
-  // by the lazy guard for non-object scalar inputs).
-  if (afterTransform && !skipContainers) {
-    if (s.entries) {
-      for (const entry of Object.values(s.entries)) {
-        if (containsAsyncSchema(entry, visited, true)) return true;
+  // containerCheck bitmask controls which container members to traverse.
+  // CONTAINER_OBJECTS (1) → entries, key, value (object/record/map).
+  // CONTAINER_ARRAYS  (2) → item, items (array/tuple).
+  // rest and promise are checked when any container flag is set.
+  if (afterTransform && containerCheck !== CONTAINER_NONE) {
+    if ((containerCheck & CONTAINER_OBJECTS) !== 0) {
+      if (s.entries) {
+        for (const entry of Object.values(s.entries)) {
+          if (containsAsyncSchema(entry, visited, true)) return true;
+        }
+      }
+      if (
+        s.key && typeof s.key === "object" &&
+        containsAsyncSchema(s.key, visited, true)
+      ) {
+        return true;
+      }
+      if (s.value && containsAsyncSchema(s.value, visited, true)) {
+        return true;
       }
     }
-    if (s.item && containsAsyncSchema(s.item, visited, true)) return true;
-    if (s.items && Array.isArray(s.items)) {
-      for (const item of s.items) {
-        if (containsAsyncSchema(item, visited, true)) return true;
+    if ((containerCheck & CONTAINER_ARRAYS) !== 0) {
+      if (s.item && containsAsyncSchema(s.item, visited, true)) return true;
+      if (s.items && Array.isArray(s.items)) {
+        for (const item of s.items) {
+          if (containsAsyncSchema(item, visited, true)) return true;
+        }
       }
     }
-    if (
-      s.key && typeof s.key === "object" &&
-      containsAsyncSchema(s.key, visited, true)
-    ) {
-      return true;
-    }
-    if (s.value && containsAsyncSchema(s.value, visited, true)) return true;
+    // rest belongs to objectWithRest or tupleWithRest — check when
+    // either container type is enabled.
     if (s.rest && containsAsyncSchema(s.rest, visited, true)) return true;
     // v.promise() stores its inner schema in the overloaded `message` field
     if (s.type === "promise") {
@@ -434,6 +455,21 @@ function findLazySchemas(
 
     if (s.type === "lazy" && s.getter) {
       if (!lazyNodes.has(node)) {
+        // If the lazy node is frozen/sealed and in a post-transform
+        // position, we cannot install a runtime guard on it.  Reject
+        // at construction time to prevent silent async corruption.
+        if (afterTransform) {
+          const desc = Object.getOwnPropertyDescriptor(node, "getter");
+          if (desc && !desc.writable) {
+            throw new TypeError(
+              "Frozen v.lazy() schemas after transforms are not " +
+                "supported by valibot() because async descendants " +
+                "cannot be detected at parse time.  Remove " +
+                "Object.freeze() or avoid async schemas inside " +
+                "the lazy getter.",
+            );
+          }
+        }
         lazyNodes.add(node);
         entries.push({
           node: node as unknown as Record<string, unknown>,
@@ -580,25 +616,20 @@ function makeGuardedGetter(originalGetter: LazyGetter): LazyGetter {
     // Infer transform context from the actual runtime input type:
     // - afterTransform: non-string means string catch-alls are unreliable
     //   in unions (a string catch-all won't match a number/boolean/object).
-    // - skipContainers: container members are only reachable when the input
-    //   type matches the container's type check.  We skip containers for:
-    //   (a) non-object scalars — can't match any container
-    //   (b) array input + object/record schema — v.object() rejects arrays
-    //   (c) non-array object + array/tuple schema — v.array() rejects objects
+    // - containerCheck: bitmask selecting which container types to check.
+    //   Only containers whose type check matches the input are reachable:
+    //   plain objects reach entries/key/value; arrays reach item/items.
     const afterTransform = typeof input !== "string";
-    let skipContainers: boolean;
+    let containerCheck: number;
     if (!afterTransform || typeof input !== "object" || input === null) {
-      skipContainers = true;
+      containerCheck = CONTAINER_NONE;
+    } else if (Array.isArray(input)) {
+      containerCheck = CONTAINER_ARRAYS;
     } else {
-      const innerType = (inner as { type?: string }).type;
-      const isArray = Array.isArray(input);
-      skipContainers = (isArray &&
-        (innerType === "object" || innerType === "record")) ||
-        (!isArray &&
-          (innerType === "array" || innerType === "tuple"));
+      containerCheck = CONTAINER_OBJECTS;
     }
     if (
-      containsAsyncSchema(inner, new WeakMap(), afterTransform, skipContainers)
+      containsAsyncSchema(inner, new WeakMap(), afterTransform, containerCheck)
     ) {
       throw new TypeError(
         "Async Valibot schemas (e.g., async validations) are not " +

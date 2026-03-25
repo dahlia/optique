@@ -1284,6 +1284,34 @@ describe("valibot()", () => {
       assert.ok(!preParser.parse("world").success);
     });
 
+    it("should not reject sync union arm when async arm has wrong type", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // Union with an async array arm and a sync object arm.
+      // For object input, only the object arm is reachable — the array
+      // arm's async item must not cause a false-positive TypeError.
+      const lazyUnion = v.lazy(
+        () =>
+          v.union([
+            v.array(asyncInner as never),
+            v.object({ b: v.string() }),
+          ]) as unknown as v.BaseSchema<
+            unknown,
+            unknown,
+            v.BaseIssue<unknown>
+          >,
+      );
+      const parser = valibot(
+        v.pipe(v.string(), v.transform(JSON.parse), lazyUnion) as never,
+      );
+      // Object input: only sync object arm matches → success
+      const result = parser.parse('{"b":"ok"}');
+      assert.ok(result.success);
+    });
+
     it("should not reject lazy object for non-object transform outputs", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
@@ -1380,14 +1408,15 @@ describe("valibot()", () => {
       if (result.success) assert.equal(result.value, "hello");
     });
 
-    it("should fall back to typed check for frozen async lazy schemas", () => {
+    it("should fall back to typed check for pre-transform frozen async lazy", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
-      // Frozen lazy: getter can't be wrapped, but the typed-field
-      // defense-in-depth catches the top-level async at parse time.
+      // Frozen lazy at top level (pre-transform): getter can't be
+      // wrapped, but the typed-field defense-in-depth catches
+      // top-level async at parse time.
       const schema = Object.freeze(
         v.lazy(
           () =>
@@ -1400,6 +1429,19 @@ describe("valibot()", () => {
       );
       const parser = valibot(schema as never);
       assert.throws(() => parser.parse("ok"), expectedError);
+    });
+
+    it("should reject frozen lazy schemas in post-transform position", () => {
+      // Frozen lazy after a transform: async descendants in containers
+      // can't be detected at parse time, so reject at construction.
+      const frozen = Object.freeze(v.lazy(() => v.string()));
+      assert.throws(
+        () =>
+          valibot(
+            v.pipe(v.string(), v.transform(JSON.parse), frozen) as never,
+          ),
+        { name: "TypeError" },
+      );
     });
 
     it("should not leave recursive lazy schemas mutated", () => {
