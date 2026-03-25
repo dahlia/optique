@@ -108,6 +108,12 @@ To be released.
     whitespace-only strings, strings with embedded whitespace, and strings
     with control characters.  [[#401], [#732]]
 
+ -  Added meta name collision detection to `runParser()`.  The runner now
+    throws `TypeError` when built-in meta feature names (help, version,
+    completion) collide with user-defined parser names or with each other.
+    Previously, colliding names were silently shadowed by the built-in meta
+    parser, making user-defined commands or options unreachable.  [[#227]]
+
  -  *Breaking change:* Added `placeholder` property to `ValueParser` interface
     (required) and `Parser` interface (optional).  Every value parser now
     provides a type-appropriate stand-in value (e.g., `""` for `string()`, `1`
@@ -954,6 +960,7 @@ To be released.
 [#224]: https://github.com/dahlia/optique/issues/224
 [#225]: https://github.com/dahlia/optique/issues/225
 [#226]: https://github.com/dahlia/optique/issues/226
+[#227]: https://github.com/dahlia/optique/issues/227
 [#228]: https://github.com/dahlia/optique/issues/228
 [#229]: https://github.com/dahlia/optique/issues/229
 [#235]: https://github.com/dahlia/optique/issues/235
