@@ -44,6 +44,8 @@ import {
 import { dispatchByMode } from "./mode-dispatch.ts";
 import { argument, command, constant, flag, option } from "./primitives.ts";
 import {
+  extractCommandNames,
+  extractOptionNames,
   formatUsage,
   type HiddenVisibility,
   type OptionName,
@@ -51,7 +53,11 @@ import {
 } from "./usage.ts";
 import { type DeferredMap, string } from "./valueparser.ts";
 import { type Annotations, injectAnnotations } from "./annotations.ts";
-import { validateCommandNames, validateOptionNames } from "./validate.ts";
+import {
+  validateCommandNames,
+  validateMetaNameCollisions,
+  validateOptionNames,
+} from "./validate.ts";
 import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
 
 export type { ParserValuePlaceholder, SourceContext };
@@ -1589,6 +1595,34 @@ export function runParser<
     completionCommandConfig?.names ?? ["completion"];
   const completionOptionNames: readonly string[] =
     completionOptionConfig?.names ?? ["--completion"];
+
+  // Validate meta name collisions (meta-vs-user and meta-vs-meta)
+  const activeMetaOptions: [string, readonly string[]][] = [];
+  if (options.help && helpOptionConfig) {
+    activeMetaOptions.push(["help option", helpOptionNames]);
+  }
+  if (options.version && versionOptionConfig) {
+    activeMetaOptions.push(["version option", versionOptionNames]);
+  }
+  if (options.completion && completionOptionConfig) {
+    activeMetaOptions.push(["completion option", completionOptionNames]);
+  }
+  const activeMetaCommands: [string, readonly string[]][] = [];
+  if (options.help && helpCommandConfig) {
+    activeMetaCommands.push(["help command", helpCommandNames]);
+  }
+  if (options.version && versionCommandConfig) {
+    activeMetaCommands.push(["version command", versionCommandNames]);
+  }
+  if (options.completion && completionCommandConfig) {
+    activeMetaCommands.push(["completion command", completionCommandNames]);
+  }
+  validateMetaNameCollisions(
+    extractOptionNames(parser.usage, true),
+    extractCommandNames(parser.usage, true),
+    activeMetaOptions,
+    activeMetaCommands,
+  );
 
   // Get available shells (defaults + user-provided)
   const defaultShells: Record<string, ShellCompletion> = {

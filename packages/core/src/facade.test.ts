@@ -1,4 +1,10 @@
-import { group, merge, object, or } from "@optique/core/constructs";
+import {
+  group,
+  longestMatch,
+  merge,
+  object,
+  or,
+} from "@optique/core/constructs";
 import { getAnnotations } from "@optique/core/annotations";
 import type { SourceContext } from "@optique/core/context";
 import type { DocSection } from "@optique/core/doc";
@@ -1259,6 +1265,152 @@ describe("runParser", () => {
         {
           name: "TypeError",
           message: "Completion command name must not be empty.",
+        },
+      );
+    });
+
+    // Meta name collision detection
+    it("should reject user command that collides with help command", () => {
+      const parser = command("help", object({}));
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["help"], {
+            help: {
+              command: true,
+              onShow: () => "HELP",
+            },
+          }),
+        {
+          name: "TypeError",
+          message: /user.*"help".*help command/i,
+        },
+      );
+    });
+
+    it("should reject user option that collides with help option", () => {
+      const parser = object({ help: flag("--help") });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: {
+              option: true,
+              onShow: () => "HELP",
+            },
+          }),
+        {
+          name: "TypeError",
+          message: /user.*"--help".*help option/i,
+        },
+      );
+    });
+
+    it("should allow user command 'help' when help command uses custom name", () => {
+      const parser = longestMatch(
+        command("help", object({})),
+        command("run", object({})),
+      );
+      const result = runParser(parser, "test", ["help"], {
+        help: {
+          command: { names: ["info"] },
+          onShow: () => "HELP",
+        },
+      });
+      assert.deepEqual(result, {});
+    });
+
+    it("should reject collision between two meta commands", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { command: { names: ["meta"] } },
+            version: { command: { names: ["meta"] }, value: "1.0.0" },
+          }),
+        {
+          name: "TypeError",
+          message: /command name "meta".*both/i,
+        },
+      );
+    });
+
+    it("should reject collision between two meta options", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { option: { names: ["--meta"] } },
+            version: { option: { names: ["--meta"] }, value: "1.0.0" },
+          }),
+        {
+          name: "TypeError",
+          message: /option name "--meta".*both/i,
+        },
+      );
+    });
+
+    it("should reject hidden user option that collides with meta option", () => {
+      const parser = object({
+        help: flag("--help", { hidden: true }),
+      });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: {
+              option: true,
+              onShow: () => "HELP",
+            },
+          }),
+        {
+          name: "TypeError",
+          message: /user.*"--help".*help option/i,
+        },
+      );
+    });
+
+    it("should reject duplicate names within a single meta option", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: {
+              option: { names: ["--help", "--help"] as never },
+            },
+          }),
+        {
+          name: "TypeError",
+          message: /help option.*duplicate.*"--help"/i,
+        },
+      );
+    });
+
+    it("should reject user command that collides with version command", () => {
+      const parser = command("version", object({}));
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["version"], {
+            version: {
+              command: true,
+              value: "1.0.0",
+            },
+          }),
+        {
+          name: "TypeError",
+          message: /user.*"version".*version command/i,
+        },
+      );
+    });
+
+    it("should reject user command that collides with completion command", () => {
+      const parser = command("completion", object({}));
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["completion"], {
+            help: { option: true },
+            completion: { command: true },
+          }),
+        {
+          name: "TypeError",
+          message: /user.*"completion".*completion command/i,
         },
       );
     });
@@ -3256,7 +3408,6 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     it("should treat --completion in payload as opaque args, not as duplicate meta option", () => {
       const parser = object({
         verbose: option("--verbose"),
-        completion: option("--completion"),
       });
 
       let completionResult: unknown;
