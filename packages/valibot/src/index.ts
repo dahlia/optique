@@ -391,8 +391,8 @@ function guardLazySchemas(
       [LAZY_GUARDED]?: boolean;
     };
 
-    // Guard lazy getters: wrap the getter so it checks the returned
-    // schema's async flag before the inner ~run can return a Promise.
+    // Guard lazy getters: wrap the getter so it runs full async detection
+    // on the returned schema before the inner ~run can produce a Promise.
     if (s.type === "lazy" && s.getter && !s[LAZY_GUARDED]) {
       const originalGetter = s.getter;
       (s as Record<symbol, boolean>)[LAZY_GUARDED] = true;
@@ -400,7 +400,10 @@ function guardLazySchemas(
         s as { getter: typeof originalGetter }
       ).getter = function (input: unknown) {
         const inner = originalGetter(input);
-        if ((inner as unknown as { async?: boolean }).async) {
+        // Use afterTransform=true because inside a lazy context the
+        // input may have been transformed; container members and all
+        // other paths must be checked.
+        if (containsAsyncSchema(inner, new WeakMap(), true)) {
           throw new TypeError(
             "Async Valibot schemas (e.g., async validations) are not " +
               "supported by valibot(). Use synchronous schemas instead.",
@@ -458,6 +461,23 @@ function guardLazySchemas(
       );
     }
     if (s.rest) walk(s.rest);
+    // v.promise() stores its inner schema in the overloaded `message`
+    // field — mirror the special case in containsAsyncSchema().
+    if (s.type === "promise") {
+      const promiseInner = (node as unknown as Record<string, unknown>).message;
+      if (
+        typeof promiseInner === "object" && promiseInner != null &&
+        "kind" in promiseInner
+      ) {
+        walk(
+          promiseInner as v.BaseSchema<
+            unknown,
+            unknown,
+            v.BaseIssue<unknown>
+          >,
+        );
+      }
+    }
   }
 
   walk(schema);

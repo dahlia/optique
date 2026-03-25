@@ -1227,6 +1227,33 @@ describe("valibot()", () => {
       assert.throws(() => parser.parse('{"a":"ok"}'), expectedError);
     });
 
+    it("should throw TypeError for lazy returning container with async entry", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // v.lazy() returns v.object() whose own async flag is false, but
+      // contains an async descendant in its entries.  The guard must
+      // detect async descendants, not just the top-level flag.
+      const lazyObj = v.lazy(
+        () =>
+          v.object({ a: asyncInner } as never) as unknown as v.BaseSchema<
+            unknown,
+            { readonly a: string },
+            v.BaseIssue<unknown>
+          >,
+      );
+      const parser = valibot(
+        v.pipe(
+          v.string(),
+          v.transform(JSON.parse),
+          lazyObj,
+        ) as never,
+      );
+      assert.throws(() => parser.parse('{"a":"ok"}'), expectedError);
+    });
+
     it("should work normally with sync schema inside v.lazy()", () => {
       const syncSchema = v.lazy(() => v.string());
       const parser = valibot(syncSchema as never);
