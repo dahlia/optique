@@ -1143,5 +1143,34 @@ describe("valibot()", () => {
         expectedError,
       );
     });
+
+    it("should throw TypeError for async schema inside v.lazy()", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // v.lazy() wrapping async schema cannot be detected at construction
+      // time because the getter depends on actual parse input.  The
+      // typed-field check in parse() catches this at the top level.
+      const lazySchema = v.lazy(
+        () =>
+          asyncInner as unknown as v.BaseSchema<
+            unknown,
+            string,
+            v.BaseIssue<unknown>
+          >,
+      );
+      const parser = valibot(lazySchema, { placeholder: "" });
+      assert.throws(() => parser.parse("ok"), expectedError);
+    });
+
+    it("should work normally with sync schema inside v.lazy()", () => {
+      const syncSchema = v.lazy(() => v.string());
+      const parser = valibot(syncSchema as never, { placeholder: "" });
+      const result = parser.parse("hello");
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, "hello");
+    });
   });
 });

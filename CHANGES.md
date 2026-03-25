@@ -1872,6 +1872,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     async validations were silently skipped by the synchronous `safeParse()`
     call.  [[#462], [#701]]
 
+ -  `valibot()` now detects top-level async schemas returned from `v.lazy()`
+    at parse time and throws a clear `TypeError`.  Previously, `v.lazy()`
+    wrapping an async schema (e.g., `v.pipeAsync()`) silently returned
+    `{ success: true, value: undefined }`.  [[#461], [#731]]
+
  -  `valibot()` now formats transformed non-primitive values intelligently
     instead of producing `[object Object]`.  `Date` values use `.toISOString()`
     for stable output.  Plain objects use `JSON.stringify()`, while arrays
@@ -1886,11 +1891,13 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#281]: https://github.com/dahlia/optique/issues/281
 [#285]: https://github.com/dahlia/optique/issues/285
 [#460]: https://github.com/dahlia/optique/issues/460
+[#461]: https://github.com/dahlia/optique/issues/461
 [#462]: https://github.com/dahlia/optique/issues/462
 [#688]: https://github.com/dahlia/optique/pull/688
 [#691]: https://github.com/dahlia/optique/pull/691
 [#701]: https://github.com/dahlia/optique/pull/701
 [#706]: https://github.com/dahlia/optique/pull/706
+[#731]: https://github.com/dahlia/optique/pull/731
 
 ### @optique/zod
 

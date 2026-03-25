@@ -231,7 +231,9 @@ function containsAsyncSchema(
       for (const option of s.options) {
         if (typeof option !== "object" || option == null) continue;
         if (isCatchAllSchema(option, afterTransform)) break;
-        if (containsAsyncSchema(option, visited, afterTransform)) return true;
+        if (
+          containsAsyncSchema(option, visited, afterTransform)
+        ) return true;
       }
     } else if (s.type === "variant") {
       // Variant schemas only parse objects, so at top level (before
@@ -240,14 +242,18 @@ function containsAsyncSchema(
       if (afterTransform) {
         for (const option of s.options) {
           if (typeof option === "object" && option != null) {
-            if (containsAsyncSchema(option, visited, true)) return true;
+            if (containsAsyncSchema(option, visited, true)) {
+              return true;
+            }
           }
         }
       }
     } else {
       for (const option of s.options) {
         if (typeof option === "object" && option != null) {
-          if (containsAsyncSchema(option, visited, afterTransform)) {
+          if (
+            containsAsyncSchema(option, visited, afterTransform)
+          ) {
             return true;
           }
         }
@@ -341,11 +347,11 @@ function containsAsyncSchema(
     }
   }
 
-  // NOTE: v.lazy() schemas are NOT inspected.  The getter receives the
-  // actual parse input and may return different schemas depending on it
-  // (e.g., sync for strings, async for other types).  Probing with no
-  // argument would take the wrong branch and cause false positives for
-  // input-dependent getters, and could also trigger user side effects.
+  // NOTE: v.lazy() schemas are not inspected statically.  The getter
+  // receives the actual parse input and may return different schemas
+  // depending on it, making static analysis unreliable.  The typed-field
+  // check in parse() provides a best-effort defense for top-level async
+  // schemas returned by lazy getters.
 
   return false;
 }
@@ -689,6 +695,21 @@ export function valibot<T>(
 
     parse(input: string): ValueParserResult<T> {
       const result = safeParse(schema, input);
+
+      // When an async schema bypasses containsAsyncSchema() (e.g., via
+      // v.lazy()), safeParse() calls the async ~run synchronously.
+      // The returned Promise is destructured as a dataset, producing
+      // typed=undefined instead of boolean.  This catches top-level
+      // async schemas returned by lazy getters.
+      if (
+        typeof (result as unknown as Record<string, unknown>).typed !==
+          "boolean"
+      ) {
+        throw new TypeError(
+          "Async Valibot schemas (e.g., async validations) are not " +
+            "supported by valibot(). Use synchronous schemas instead.",
+        );
+      }
 
       if (result.success) {
         return { success: true, value: result.output };
