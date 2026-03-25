@@ -5851,6 +5851,33 @@ describe("runWith", () => {
       });
       assert.equal(disposed, 1);
     });
+
+    it("should dispose contexts on completion early exit", async () => {
+      let disposed = 0;
+      const context: SourceContext = {
+        id: Symbol.for("@test/dispose-completion"),
+        getAnnotations() {
+          return {};
+        },
+        [Symbol.dispose]() {
+          disposed++;
+        },
+      };
+
+      const parser = object({
+        name: argument(string()),
+      });
+
+      await runWith(parser, "test", [context], {
+        args: ["completion", "bash"],
+        completion: {
+          command: true,
+          onShow: () => undefined,
+        },
+        stdout: () => {},
+      });
+      assert.equal(disposed, 1);
+    });
   });
 
   describe("options passthrough", () => {
@@ -6493,6 +6520,33 @@ describe("runWithSync", () => {
         version: {
           option: true,
           value: "1.0.0",
+          onShow: () => undefined,
+        },
+        stdout: () => {},
+      });
+      assert.equal(disposed, 1);
+    });
+
+    it("should dispose contexts on completion early exit", () => {
+      let disposed = 0;
+      const context: SourceContext = {
+        id: Symbol.for("@test/sync-dispose-completion"),
+        getAnnotations() {
+          return {};
+        },
+        [Symbol.dispose]() {
+          disposed++;
+        },
+      };
+
+      const parser = object({
+        name: argument(string()),
+      });
+
+      runWithSync(parser, "test", [context], {
+        args: ["completion", "bash"],
+        completion: {
+          command: true,
           onShow: () => undefined,
         },
         stdout: () => {},
