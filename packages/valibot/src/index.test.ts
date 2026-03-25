@@ -1284,6 +1284,35 @@ describe("valibot()", () => {
       assert.ok(!preParser.parse("world").success);
     });
 
+    it("should not reject lazy object for scalar transform outputs", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // JSON.parse("123") produces a number.  v.object() rejects numbers
+      // before entries are reached.  Must NOT throw TypeError.
+      const lazyObj = v.lazy(
+        () =>
+          v.object({ a: asyncInner } as never) as unknown as v.BaseSchema<
+            unknown,
+            { readonly a: string },
+            v.BaseIssue<unknown>
+          >,
+      );
+      const parser = valibot(
+        v.pipe(v.string(), v.transform(JSON.parse), lazyObj) as never,
+      );
+      // Number input: containers unreachable → validation error
+      assert.ok(!parser.parse("123").success);
+      // Boolean input: containers unreachable → validation error
+      assert.ok(!parser.parse("true").success);
+      // Null input: containers unreachable → validation error
+      assert.ok(!parser.parse("null").success);
+      // Object input: containers reachable → TypeError (async detected)
+      assert.throws(() => parser.parse('{"a":"ok"}'), expectedError);
+    });
+
     it("should not reject top-level lazy with async container entry", () => {
       const asyncInner = v.pipeAsync(
         v.string(),

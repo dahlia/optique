@@ -196,11 +196,16 @@ function isCatchAllSchema(
  * @param afterTransform When true, a preceding `v.transform()` may have
  *   changed the value type.  Container members become reachable and
  *   string-based union catch-all arms are no longer trusted.
+ * @param skipContainers When true, suppress container member traversal
+ *   even when `afterTransform` is true.  Used by the lazy guard for
+ *   non-object scalar inputs (e.g., numbers, booleans) where containers
+ *   are unreachable but string catch-alls should not be trusted.
  */
 function containsAsyncSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
   visited: WeakMap<object, boolean> = new WeakMap(),
   afterTransform = false,
+  skipContainers = false,
 ): boolean {
   // Cycle/dedup: skip if already visited at the same or deeper level.
   // A visit with afterTransform=true subsumes afterTransform=false,
@@ -215,7 +220,12 @@ function containsAsyncSchema(
   // Unwrap optional/nullable/nullish wrappers — but only if there's no
   // pipe, since piped wrappers need their pipe actions inspected too.
   if (s.wrapped && !s.pipe) {
-    return containsAsyncSchema(s.wrapped, visited, afterTransform);
+    return containsAsyncSchema(
+      s.wrapped,
+      visited,
+      afterTransform,
+      skipContainers,
+    );
   }
 
   // Check intersect options — all arms must match, so async arms are always
@@ -231,7 +241,9 @@ function containsAsyncSchema(
       for (const option of s.options) {
         if (typeof option !== "object" || option == null) continue;
         if (isCatchAllSchema(option, afterTransform)) break;
-        if (containsAsyncSchema(option, visited, afterTransform)) return true;
+        if (
+          containsAsyncSchema(option, visited, afterTransform, skipContainers)
+        ) return true;
       }
     } else if (s.type === "variant") {
       // Variant schemas only parse objects, so at top level (before
@@ -240,14 +252,18 @@ function containsAsyncSchema(
       if (afterTransform) {
         for (const option of s.options) {
           if (typeof option === "object" && option != null) {
-            if (containsAsyncSchema(option, visited, true)) return true;
+            if (containsAsyncSchema(option, visited, true, skipContainers)) {
+              return true;
+            }
           }
         }
       }
     } else {
       for (const option of s.options) {
         if (typeof option === "object" && option != null) {
-          if (containsAsyncSchema(option, visited, afterTransform)) {
+          if (
+            containsAsyncSchema(option, visited, afterTransform, skipContainers)
+          ) {
             return true;
           }
         }
@@ -260,6 +276,9 @@ function containsAsyncSchema(
   // become reachable and string catch-alls are no longer trusted.
   if (s.pipe && Array.isArray(s.pipe)) {
     let seenTransform = afterTransform;
+    // After a non-safe transform the value type may have changed,
+    // so container members may become reachable — reset skipContainers.
+    let skipCont = skipContainers;
     for (const action of s.pipe) {
       if ((action as { async?: boolean }).async) return true;
       const a = action as { kind?: string; type?: string };
@@ -268,6 +287,7 @@ function containsAsyncSchema(
         !SAFE_TRANSFORMATION_TYPES.has(a.type ?? "")
       ) {
         seenTransform = true;
+        skipCont = false;
       }
       if (a.kind === "schema") {
         if (
@@ -275,6 +295,7 @@ function containsAsyncSchema(
             action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
             visited,
             seenTransform,
+            skipCont,
           )
         ) {
           return true;
@@ -303,7 +324,9 @@ function containsAsyncSchema(
   // Container members are only reachable after a transform changes the
   // value type.  At the top level, CLI input is always a string, so
   // container schemas (object, array, etc.) reject before visiting members.
-  if (afterTransform) {
+  // skipContainers suppresses this even when afterTransform is true (used
+  // by the lazy guard for non-object scalar inputs).
+  if (afterTransform && !skipContainers) {
     if (s.entries) {
       for (const entry of Object.values(s.entries)) {
         if (containsAsyncSchema(entry, visited, true)) return true;
@@ -554,8 +577,17 @@ function findLazySchemas(
 function makeGuardedGetter(originalGetter: LazyGetter): LazyGetter {
   return function guardedGetter(input: unknown) {
     const inner = originalGetter(input);
+    // Infer transform context from the actual runtime input type:
+    // - afterTransform: non-string means string catch-alls are unreliable
+    //   in unions (a string catch-all won't match a number/boolean/object).
+    // - skipContainers: non-object scalars can't match container schemas
+    //   (object/array/tuple), so their members are unreachable.
     const afterTransform = typeof input !== "string";
-    if (containsAsyncSchema(inner, new WeakMap(), afterTransform)) {
+    const skipContainers = afterTransform &&
+      (typeof input !== "object" || input === null);
+    if (
+      containsAsyncSchema(inner, new WeakMap(), afterTransform, skipContainers)
+    ) {
       throw new TypeError(
         "Async Valibot schemas (e.g., async validations) are not " +
           "supported by valibot(). Use synchronous schemas instead.",
