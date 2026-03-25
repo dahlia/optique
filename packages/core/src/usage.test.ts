@@ -2931,6 +2931,78 @@ describe("extractCommandNames hidden filtering", () => {
   });
 });
 
+describe("extractOptionNames includeHidden", () => {
+  it("should include fully hidden options when includeHidden is true", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--visible"], metavar: "V" },
+      { type: "option", names: ["--hidden"], metavar: "H", hidden: true },
+    ];
+    const result = extractOptionNames(usage, true);
+    assert.deepEqual(result, new Set(["--visible", "--hidden"]));
+  });
+
+  it("should still skip hidden options by default", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--visible"] },
+      { type: "option", names: ["--hidden"], hidden: true },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set(["--visible"]));
+  });
+
+  it("should include hidden options in nested terms", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [
+          { type: "option", names: ["--hidden"], hidden: true },
+        ],
+      },
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "option", names: ["--also-hidden"], hidden: true }],
+        ],
+      },
+    ];
+    const result = extractOptionNames(usage, true);
+    assert.deepEqual(result, new Set(["--hidden", "--also-hidden"]));
+  });
+});
+
+describe("extractCommandNames includeHidden", () => {
+  it("should include fully hidden commands when includeHidden is true", () => {
+    const usage: Usage = [
+      { type: "command", name: "visible" },
+      { type: "command", name: "hidden", hidden: true },
+    ];
+    const result = extractCommandNames(usage, true);
+    assert.deepEqual(result, new Set(["visible", "hidden"]));
+  });
+
+  it("should still skip hidden commands by default", () => {
+    const usage: Usage = [
+      { type: "command", name: "visible" },
+      { type: "command", name: "hidden", hidden: true },
+    ];
+    const result = extractCommandNames(usage);
+    assert.deepEqual(result, new Set(["visible"]));
+  });
+
+  it("should include hidden commands in nested terms", () => {
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "command", name: "hidden", hidden: true }],
+        ],
+      },
+    ];
+    const result = extractCommandNames(usage, true);
+    assert.deepEqual(result, new Set(["hidden"]));
+  });
+});
+
 describe("additional branch coverage", () => {
   it("extract* helpers should ignore non-array usage inputs", () => {
     const invalidUsage = null as unknown as Usage;

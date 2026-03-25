@@ -261,6 +261,8 @@ export type Usage = readonly UsageTerm[];
  * multiple, and exclusive terms.
  *
  * @param usage The usage description to extract option names from.
+ * @param includeHidden Whether to include fully hidden options (`hidden: true`)
+ *   in the result.  Defaults to `false`.
  * @returns A set containing all option names found in the usage description.
  *
  * @example
@@ -273,14 +275,17 @@ export type Usage = readonly UsageTerm[];
  * // names = Set(["--verbose", "-v", "--quiet", "-q"])
  * ```
  */
-export function extractOptionNames(usage: Usage): Set<string> {
+export function extractOptionNames(
+  usage: Usage,
+  includeHidden?: boolean,
+): Set<string> {
   const names = new Set<string>();
 
   function traverseUsage(terms: Usage): void {
     if (!terms || !Array.isArray(terms)) return;
     for (const term of terms) {
       if (term.type === "option") {
-        if (isSuggestionHidden(term.hidden)) continue;
+        if (!includeHidden && isSuggestionHidden(term.hidden)) continue;
         for (const name of term.names) {
           names.add(name);
         }
@@ -304,8 +309,10 @@ export function extractOptionNames(usage: Usage): Set<string> {
  * This function recursively traverses the usage structure and collects
  * all command names, similar to {@link extractOptionNames}.
  *
- * @param usage The usage structure to extract command names from
- * @returns A Set of all command names found in the usage structure
+ * @param usage The usage structure to extract command names from.
+ * @param includeHidden Whether to include fully hidden commands
+ *   (`hidden: true`) in the result.  Defaults to `false`.
+ * @returns A set of all command names found in the usage structure.
  *
  * @example
  * ```typescript
@@ -318,14 +325,17 @@ export function extractOptionNames(usage: Usage): Set<string> {
  * ```
  * @since 0.7.0
  */
-export function extractCommandNames(usage: Usage): Set<string> {
+export function extractCommandNames(
+  usage: Usage,
+  includeHidden?: boolean,
+): Set<string> {
   const names = new Set<string>();
 
   function traverseUsage(terms: Usage): void {
     if (!terms || !Array.isArray(terms)) return;
     for (const term of terms) {
       if (term.type === "command") {
-        if (isSuggestionHidden(term.hidden)) continue;
+        if (!includeHidden && isSuggestionHidden(term.hidden)) continue;
         names.add(term.name);
       } else if (term.type === "optional" || term.type === "multiple") {
         traverseUsage(term.terms);
