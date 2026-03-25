@@ -16,7 +16,6 @@ import {
   type Suggestion,
   suggestSync,
 } from "@optique/core/parser";
-import type { NonEmptyString } from "@optique/core/nonempty";
 import {
   argument,
   command,
@@ -323,7 +322,7 @@ function compileOracleCliSpec(
       fields[optionSpec.key] = optionSpec.required ? base : optional(base);
     }
   }
-  return command(spec.command as NonEmptyString, object(fields));
+  return command(spec.command, object(fields));
 }
 
 function parseOracleCliSpec(
@@ -2243,10 +2242,7 @@ describe("property-based tests", () => {
         identifierArbitrary,
         argumentTokenArbitrary,
         (expectedName: string, actualName: string, value: string) => {
-          const parser = command(
-            expectedName as NonEmptyString,
-            argument(string()),
-          );
+          const parser = command(expectedName, argument(string()));
           const result = parseSync(parser, [actualName, value]);
 
           if (expectedName === actualName) {
@@ -2478,14 +2474,14 @@ describe("property-based tests", () => {
 
           const parser = or(
             command(
-              leftName as NonEmptyString,
+              leftName,
               object({
                 type: constant(leftName),
                 value: argument(string()),
               }),
             ),
             command(
-              rightName as NonEmptyString,
+              rightName,
               object({
                 type: constant(rightName),
                 value: argument(string()),

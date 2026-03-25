@@ -42,7 +42,6 @@ import {
   suggestAsync,
 } from "./parser.ts";
 import { dispatchByMode } from "./mode-dispatch.ts";
-import type { NonEmptyString } from "./nonempty.ts";
 import { argument, command, constant, flag, option } from "./primitives.ts";
 import {
   formatUsage,
@@ -242,7 +241,7 @@ function createHelpParser(
     >[] = [];
     for (let i = 0; i < names.length; i++) {
       commandParsers.push(
-        command(names[i] as NonEmptyString, innerParser, {
+        command(names[i], innerParser, {
           description: message`Show help information.`,
           hidden: i === 0 ? commandConfig.hidden : true,
         }),
@@ -284,7 +283,7 @@ function createVersionParser(
     >[] = [];
     for (let i = 0; i < names.length; i++) {
       commandParsers.push(
-        command(names[i] as NonEmptyString, innerParser, {
+        command(names[i], innerParser, {
           description: message`Show version information.`,
           hidden: i === 0 ? commandConfig.hidden : true,
         }),
@@ -467,7 +466,7 @@ function createCompletionParser(
     >[] = [];
     for (let i = 0; i < names.length; i++) {
       commandParsers.push(
-        command(names[i] as NonEmptyString, completionInner, {
+        command(names[i], completionInner, {
           ...completionCommandConfig,
           hidden: i === 0 ? commandConfig.hidden : true,
         }),

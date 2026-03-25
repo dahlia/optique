@@ -19,7 +19,6 @@ import {
 import { annotateFreshArray, getAnnotations } from "./annotations.ts";
 import type { DocFragment } from "./doc.ts";
 import { dispatchIterableByMode } from "./mode-dispatch.ts";
-import type { NonEmptyString } from "./nonempty.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import { validateCommandNames, validateOptionNames } from "./validate.ts";
 
@@ -2052,7 +2051,7 @@ async function* suggestCommandAsync<T, TState>(
  *         embedded whitespace, or contains control characters.
  */
 export function command<M extends Mode, T, TState>(
-  name: NonEmptyString,
+  name: string,
   parser: Parser<M, T, TState>,
   options: CommandOptions = {},
 ): Parser<M, T, CommandState<TState>> {

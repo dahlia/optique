@@ -2686,7 +2686,6 @@ describe("command", () => {
 
   it("should throw TypeError for empty command name", () => {
     assert.throws(
-      // @ts-expect-error: empty string is not a valid NonEmptyString
       () => command("", constant("empty" as const)),
       { name: "TypeError", message: "Command name must not be empty." },
     );
