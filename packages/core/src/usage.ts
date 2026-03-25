@@ -352,6 +352,62 @@ export function extractCommandNames(
 }
 
 /**
+ * Extracts option names that are reachable at the leading token position
+ * (before any command or argument gate).
+ *
+ * Unlike {@link extractOptionNames}, which traverses the entire usage tree,
+ * this function stops scanning a terms array after encountering a `command` or
+ * `argument` term, because subsequent terms are scoped under that positional
+ * token.  It still recurses into `optional`, `multiple`, and `exclusive`
+ * containers, since they represent alternatives or wrappers at the same
+ * position.
+ *
+ * @param usage The usage description to extract leading option names from.
+ * @param includeHidden Whether to include fully hidden options
+ *   (`hidden: true`) in the result.  Defaults to `false`.
+ * @returns A set of option names reachable at the leading token position.
+ * @since 1.0.0
+ */
+export function extractLeadingOptionNames(
+  usage: Usage,
+  includeHidden?: boolean,
+): Set<string> {
+  const names = new Set<string>();
+
+  function collectLeading(terms: Usage): void {
+    if (!terms || !Array.isArray(terms)) return;
+    for (const term of terms) {
+      switch (term.type) {
+        case "option":
+          if (!includeHidden && isSuggestionHidden(term.hidden)) break;
+          for (const name of term.names) {
+            names.add(name);
+          }
+          break; // options don't consume a position; continue scanning
+        case "command":
+          return; // command consumes a position; stop scanning siblings
+        case "argument":
+          return; // argument consumes a position; stop scanning siblings
+        case "optional":
+        case "multiple":
+          collectLeading(term.terms);
+          break;
+        case "exclusive":
+          for (const branch of term.terms) {
+            collectLeading(branch);
+          }
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  collectLeading(usage);
+  return names;
+}
+
+/**
  * Extracts command names that could match as the first positional token.
  *
  * Unlike {@link extractCommandNames}, which traverses the entire usage tree,

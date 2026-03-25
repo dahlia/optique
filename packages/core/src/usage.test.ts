@@ -4,6 +4,7 @@ import {
   extractArgumentMetavars,
   extractCommandNames,
   extractLeadingCommandNames,
+  extractLeadingOptionNames,
   extractOptionNames,
   formatUsage,
   formatUsageTerm,
@@ -3001,6 +3002,96 @@ describe("extractCommandNames includeHidden", () => {
     ];
     const result = extractCommandNames(usage, true);
     assert.deepEqual(result, new Set(["hidden"]));
+  });
+});
+
+describe("extractLeadingOptionNames", () => {
+  it("should extract top-level option names", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [{ type: "option", names: ["--verbose", "-v"] }],
+      },
+      {
+        type: "optional",
+        terms: [{ type: "option", names: ["--debug"] }],
+      },
+    ];
+    assert.deepEqual(
+      extractLeadingOptionNames(usage),
+      new Set(["--verbose", "-v", "--debug"]),
+    );
+  });
+
+  it("should not extract options nested after a command", () => {
+    // command("tool", object({ v: flag("--version") }))
+    const usage: Usage = [
+      { type: "command", name: "tool" },
+      {
+        type: "optional",
+        terms: [{ type: "option", names: ["--version"] }],
+      },
+    ];
+    assert.deepEqual(extractLeadingOptionNames(usage), new Set());
+  });
+
+  it("should extract leading options but skip nested ones in exclusive", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [{ type: "option", names: ["--verbose"] }],
+      },
+      {
+        type: "exclusive",
+        terms: [
+          [
+            { type: "command", name: "help" },
+            {
+              type: "optional",
+              terms: [{ type: "option", names: ["--version"] }],
+            },
+          ],
+          [{ type: "command", name: "build" }],
+        ],
+      },
+    ];
+    assert.deepEqual(
+      extractLeadingOptionNames(usage),
+      new Set(["--verbose"]),
+    );
+  });
+
+  it("should stop after argument terms", () => {
+    const usage: Usage = [
+      { type: "argument", metavar: "FILE" },
+      {
+        type: "optional",
+        terms: [{ type: "option", names: ["--format"] }],
+      },
+    ];
+    assert.deepEqual(extractLeadingOptionNames(usage), new Set());
+  });
+
+  it("should include hidden options when includeHidden is true", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [{ type: "option", names: ["--hidden"], hidden: true }],
+      },
+    ];
+    assert.deepEqual(extractLeadingOptionNames(usage), new Set());
+    assert.deepEqual(
+      extractLeadingOptionNames(usage, true),
+      new Set(["--hidden"]),
+    );
+  });
+
+  it("should handle empty and null usage", () => {
+    assert.deepEqual(extractLeadingOptionNames([]), new Set());
+    assert.deepEqual(
+      extractLeadingOptionNames(null as unknown as Usage),
+      new Set(),
+    );
   });
 });
 
