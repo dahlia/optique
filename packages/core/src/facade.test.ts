@@ -1,4 +1,5 @@
 import {
+  conditional,
   group,
   longestMatch,
   merge,
@@ -1432,6 +1433,29 @@ describe("runParser", () => {
         },
       });
       assert.deepEqual(result, {});
+    });
+
+    // conditional discriminator gates should not trigger false positives
+    it("should allow conditional branch command that shares meta command name", () => {
+      const parser = conditional(
+        option("--mode", string()),
+        {
+          server: command("help", object({})),
+        },
+      );
+      // "help" is behind --mode server (literal gate) → not a leading command
+      const result = runParser(
+        parser,
+        "test",
+        ["--mode", "server", "help"],
+        {
+          help: {
+            command: true,
+            onShow: () => "HELP",
+          },
+        },
+      );
+      assert.deepEqual(result, ["server", {}]);
     });
 
     // P2: cross-namespace collision detection

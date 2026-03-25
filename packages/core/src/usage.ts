@@ -356,9 +356,9 @@ export function extractCommandNames(
  * (before any command or argument gate).
  *
  * Unlike {@link extractOptionNames}, which traverses the entire usage tree,
- * this function stops scanning a terms array after encountering a `command` or
- * `argument` term, because subsequent terms are scoped under that positional
- * token.  It still recurses into `optional`, `multiple`, and `exclusive`
+ * this function stops scanning a terms array after encountering a `command`,
+ * `argument`, or `literal` term, because subsequent terms are scoped under
+ * that positional token.  It still recurses into `optional`, `multiple`, and `exclusive`
  * containers, since they represent alternatives or wrappers at the same
  * position.
  *
@@ -387,7 +387,8 @@ export function extractLeadingOptionNames(
         case "command":
           return; // command consumes a position; stop scanning siblings
         case "argument":
-          return; // argument consumes a position; stop scanning siblings
+        case "literal":
+          return; // positional token; stop scanning siblings
         case "optional":
         case "multiple":
           collectLeading(term.terms);
@@ -411,9 +412,10 @@ export function extractLeadingOptionNames(
  * Extracts command names that could match as the first positional token.
  *
  * Unlike {@link extractCommandNames}, which traverses the entire usage tree,
- * this function stops scanning a terms array after encountering a `command` or
- * `argument` term, because subsequent terms in that array are the inner
- * parser's content (reachable only after the leading term is consumed).
+ * this function stops scanning a terms array after encountering a `command`,
+ * `argument`, or `literal` term, because subsequent terms in that array are
+ * scoped under that positional token (reachable only after the leading term
+ * is consumed).
  * It still recurses into `optional`, `multiple`, and `exclusive` containers,
  * since they represent alternatives or optional wrappers at the same token
  * position.
@@ -442,7 +444,8 @@ export function extractLeadingCommandNames(
           names.add(term.name);
           return; // command consumes the first token; stop scanning siblings
         case "argument":
-          return; // argument consumes the first token; stop scanning siblings
+        case "literal":
+          return; // positional token; stop scanning siblings
         case "optional":
         case "multiple":
           collectLeading(term.terms);

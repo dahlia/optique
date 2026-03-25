@@ -3072,6 +3072,28 @@ describe("extractLeadingOptionNames", () => {
     assert.deepEqual(extractLeadingOptionNames(usage), new Set());
   });
 
+  it("should stop after literal terms (conditional discriminator)", () => {
+    // conditional(option("--mode", string()), { server: object({ v: flag("--version") }) })
+    // Branch usage: [option("--mode"), literal("server"), option("--version")]
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [
+            { type: "option", names: ["--mode"] },
+            { type: "literal", value: "server" },
+            { type: "option", names: ["--version"] },
+          ],
+        ],
+      },
+    ];
+    // --mode is before the literal → leading; --version is after → NOT leading
+    assert.deepEqual(
+      extractLeadingOptionNames(usage),
+      new Set(["--mode"]),
+    );
+  });
+
   it("should include hidden options when includeHidden is true", () => {
     const usage: Usage = [
       {
@@ -3173,6 +3195,25 @@ describe("extractLeadingCommandNames", () => {
       extractLeadingCommandNames(usage),
       new Set(),
     );
+  });
+
+  it("should stop after literal terms (conditional discriminator)", () => {
+    // conditional(option("--mode", string()), { server: command("help", object({})) })
+    // Branch usage: [option("--mode"), literal("server"), command("help")]
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [
+            { type: "option", names: ["--mode"] },
+            { type: "literal", value: "server" },
+            { type: "command", name: "help" },
+          ],
+        ],
+      },
+    ];
+    // "help" is after the literal → NOT leading
+    assert.deepEqual(extractLeadingCommandNames(usage), new Set());
   });
 
   it("should include hidden commands when includeHidden is true", () => {
