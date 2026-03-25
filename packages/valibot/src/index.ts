@@ -637,6 +637,8 @@ function inferChoices(
  * );
  * ```
  *
+ * @throws {TypeError} If `options` is missing, not an object, or does not
+ *   include `placeholder`.
  * @throws {TypeError} If the resolved `metavar` is an empty string.
  * @throws {TypeError} If the schema contains async validations that cannot be
  *   executed synchronously.
