@@ -919,6 +919,11 @@ To be released.
     later caller-side mutations to corrupt already-created terms.
     These constructors now defensively copy their inputs.  [[#506], [#719]]
 
+ -  Fixed `runWith()` and `runWithSync()` skipping context disposal
+    (`Symbol.dispose` / `Symbol.asyncDispose`) on early help, version,
+    and completion exits.  Contexts are now disposed on every exit path,
+    including early meta-command exits.  [[#226], [#733]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -948,6 +953,7 @@ To be released.
 [#223]: https://github.com/dahlia/optique/issues/223
 [#224]: https://github.com/dahlia/optique/issues/224
 [#225]: https://github.com/dahlia/optique/issues/225
+[#226]: https://github.com/dahlia/optique/issues/226
 [#228]: https://github.com/dahlia/optique/issues/228
 [#229]: https://github.com/dahlia/optique/issues/229
 [#235]: https://github.com/dahlia/optique/issues/235
@@ -1176,6 +1182,7 @@ To be released.
 [#729]: https://github.com/dahlia/optique/pull/729
 [#730]: https://github.com/dahlia/optique/pull/730
 [#732]: https://github.com/dahlia/optique/pull/732
+[#733]: https://github.com/dahlia/optique/pull/733
 
 ### @optique/config
 
