@@ -344,143 +344,286 @@ function containsAsyncSchema(
   // NOTE: v.lazy() schemas are not inspected statically.  The getter
   // receives the actual parse input and may return different schemas
   // depending on it, making static analysis unreliable.  Async schemas
-  // returned by lazy getters are caught at runtime by guardLazySchemas().
+  // returned by lazy getters are caught at runtime by temporary guards
+  // installed during safeParseWithLazyGuards().
 
   return false;
 }
 
 /**
- * Marker symbol indicating that a `v.lazy()` schema's getter has already
- * been wrapped by {@link guardLazySchemas}.  Prevents double-wrapping when
- * the same lazy schema is reachable via multiple paths.
+ * A lazy schema entry discovered by {@link findLazySchemas}, recording the
+ * node, its original getter, and the `afterTransform` context at which it
+ * was reached.
  */
-const LAZY_GUARDED: unique symbol = Symbol("optique:lazyGuarded");
+/** Function signature of a `v.lazy()` schema's getter. */
+type LazyGetter = (
+  input: unknown,
+) => v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
+
+interface LazyEntry {
+  readonly node: Record<string, unknown>;
+  readonly originalGetter: LazyGetter;
+  afterTransform: boolean;
+}
+
+/** A record of a lazy getter that needs to be restored after parsing. */
+interface RestoreEntry {
+  readonly node: Record<string, unknown>;
+  readonly originalGetter: LazyGetter;
+}
 
 /**
- * Walks the schema tree and wraps every `v.lazy()` getter with a guard
- * that throws `TypeError` if the getter returns an async schema at runtime.
- *
- * This is necessary because `containsAsyncSchema()` cannot inspect lazy
- * schemas statically — the getter depends on actual parse input.  By
- * guarding the getter itself, async schemas are rejected at the exact
- * point they would otherwise produce a `Promise` inside a synchronous
- * `safeParse()` call.
- *
- * When a guarded getter discovers new lazy schemas inside the returned
- * schema, it recursively guards them too, handling arbitrary nesting
- * of lazy schemas.
- *
- * @param schema The root schema to walk.
+ * Module-level list of lazy-schema restore entries accumulated during a
+ * {@link safeParseWithLazyGuards} call.  Guarded getters that discover
+ * nested lazy schemas at runtime append to this list so the outer `finally`
+ * block can restore *all* modified getters.  Safe because JavaScript is
+ * single-threaded — no concurrent `parse()` calls can interleave.
  */
-function guardLazySchemas(
+let activeRestoreList: RestoreEntry[] | null = null;
+
+/**
+ * Walks a schema tree and collects every reachable `v.lazy()` node together
+ * with the `afterTransform` context at that point in the tree.
+ *
+ * The traversal mirrors `containsAsyncSchema()` in how it tracks transforms
+ * in pipes and skips container members before a transform (they are
+ * unreachable from raw string input).  This ensures lazy schemas receive
+ * the correct context so that their runtime guard does not produce false
+ * positives.
+ */
+function findLazySchemas(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-): void {
-  const visited = new WeakSet<object>();
+  initialAfterTransform = false,
+): LazyEntry[] {
+  const lazyMap = new Map<object, LazyEntry>();
+  const visited = new WeakMap<object, boolean>();
 
   function walk(
     node: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+    afterTransform: boolean,
   ): void {
-    if (visited.has(node)) return;
-    visited.add(node);
+    // Cycle/dedup: mirror containsAsyncSchema()'s visited logic.
+    const prev = visited.get(node);
+    if (prev !== undefined && (prev || !afterTransform)) return;
+    visited.set(node, (prev ?? false) || afterTransform);
 
     const s = node as ValibotSchemaInternal & {
       async?: boolean;
       getter?: (
         input: unknown,
       ) => v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
-      [LAZY_GUARDED]?: boolean;
     };
 
-    // Guard lazy getters: wrap the getter so it runs full async detection
-    // on the returned schema before the inner ~run can produce a Promise.
-    if (s.type === "lazy" && s.getter && !s[LAZY_GUARDED]) {
-      const originalGetter = s.getter;
-      (s as Record<symbol, boolean>)[LAZY_GUARDED] = true;
-      (
-        s as { getter: typeof originalGetter }
-      ).getter = function (input: unknown) {
-        const inner = originalGetter(input);
-        // Use afterTransform=true because inside a lazy context the
-        // input may have been transformed; container members and all
-        // other paths must be checked.
-        if (containsAsyncSchema(inner, new WeakMap(), true)) {
-          throw new TypeError(
-            "Async Valibot schemas (e.g., async validations) are not " +
-              "supported by valibot(). Use synchronous schemas instead.",
-          );
-        }
-        // Recursively guard lazy schemas discovered inside the returned
-        // schema (handles lazy-inside-lazy and other dynamic structures).
-        guardLazySchemas(inner);
-        return inner;
-      };
+    if (s.type === "lazy" && s.getter) {
+      const existing = lazyMap.get(node);
+      if (!existing) {
+        lazyMap.set(node, {
+          node: node as unknown as Record<string, unknown>,
+          originalGetter: s.getter,
+          afterTransform,
+        });
+      } else if (!existing.afterTransform && afterTransform) {
+        existing.afterTransform = true;
+      }
       return; // Can't recurse into lazy statically
     }
 
-    // Recurse into wrapped schemas (optional, nullable, nullish, etc.)
-    if (s.wrapped) walk(s.wrapped);
-
-    // Recurse into pipe items (base schema + actions)
-    if (s.pipe && Array.isArray(s.pipe)) {
-      for (const item of s.pipe) {
-        if (typeof item === "object" && item != null) {
-          walk(
-            item as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-          );
-        }
-      }
+    // Unwrap optional/nullable/nullish wrappers — but only if there's
+    // no pipe, since piped wrappers need their pipe actions inspected.
+    if (s.wrapped && !s.pipe) {
+      walk(s.wrapped, afterTransform);
+      return;
     }
 
     // Recurse into union/variant/intersect options
     if (s.options && Array.isArray(s.options)) {
-      for (const opt of s.options) {
-        if (typeof opt === "object" && opt != null) {
-          walk(
-            opt as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-          );
+      if (s.type === "variant") {
+        // Variant only parses objects; arms unreachable before transform
+        if (afterTransform) {
+          for (const opt of s.options) {
+            if (typeof opt === "object" && opt != null) {
+              walk(
+                opt as v.BaseSchema<
+                  unknown,
+                  unknown,
+                  v.BaseIssue<unknown>
+                >,
+                true,
+              );
+            }
+          }
+        }
+      } else {
+        for (const opt of s.options) {
+          if (typeof opt === "object" && opt != null) {
+            walk(
+              opt as v.BaseSchema<
+                unknown,
+                unknown,
+                v.BaseIssue<unknown>
+              >,
+              afterTransform,
+            );
+          }
         }
       }
     }
 
-    // Recurse into container members (object entries, array item, etc.)
-    if (s.entries) {
-      for (const entry of Object.values(s.entries)) {
-        walk(entry);
+    // Recurse into pipe with transform tracking
+    if (s.pipe && Array.isArray(s.pipe)) {
+      let seenTransform = afterTransform;
+      for (const action of s.pipe) {
+        const a = action as { kind?: string; type?: string };
+        if (
+          a.kind === "transformation" &&
+          !SAFE_TRANSFORMATION_TYPES.has(a.type ?? "")
+        ) {
+          seenTransform = true;
+        }
+        if (typeof action === "object" && action != null) {
+          walk(
+            action as v.BaseSchema<
+              unknown,
+              unknown,
+              v.BaseIssue<unknown>
+            >,
+            seenTransform,
+          );
+        }
+        if (a.kind === "schema" && !seenTransform) {
+          const innerPipe = (action as ValibotSchemaInternal).pipe;
+          if (innerPipe && Array.isArray(innerPipe)) {
+            for (const innerAction of innerPipe) {
+              const ia = innerAction as { kind?: string; type?: string };
+              if (
+                ia.kind === "transformation" &&
+                !SAFE_TRANSFORMATION_TYPES.has(ia.type ?? "")
+              ) {
+                seenTransform = true;
+                break;
+              }
+            }
+          }
+        }
       }
     }
-    if (s.item) walk(s.item);
-    if (s.items && Array.isArray(s.items)) {
-      for (const item of s.items) walk(item);
-    }
-    if (s.key && typeof s.key === "object") {
-      walk(s.key);
-    }
-    if (s.value && typeof s.value === "object") {
-      walk(
-        s.value as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-      );
-    }
-    if (s.rest) walk(s.rest);
-    // v.promise() stores its inner schema in the overloaded `message`
-    // field — mirror the special case in containsAsyncSchema().
-    if (s.type === "promise") {
-      const promiseInner = (node as unknown as Record<string, unknown>).message;
-      if (
-        typeof promiseInner === "object" && promiseInner != null &&
-        "kind" in promiseInner
-      ) {
+
+    // Container members are only reachable after a transform
+    if (afterTransform) {
+      if (s.entries) {
+        for (const entry of Object.values(s.entries)) {
+          walk(entry, true);
+        }
+      }
+      if (s.item) walk(s.item, true);
+      if (s.items && Array.isArray(s.items)) {
+        for (const item of s.items) walk(item, true);
+      }
+      if (s.key && typeof s.key === "object") walk(s.key, true);
+      if (s.value && typeof s.value === "object") {
         walk(
-          promiseInner as v.BaseSchema<
-            unknown,
-            unknown,
-            v.BaseIssue<unknown>
-          >,
+          s.value as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+          true,
         );
+      }
+      if (s.rest) walk(s.rest, true);
+      if (s.type === "promise") {
+        const promiseInner =
+          (node as unknown as Record<string, unknown>).message;
+        if (
+          typeof promiseInner === "object" && promiseInner != null &&
+          "kind" in promiseInner
+        ) {
+          walk(
+            promiseInner as v.BaseSchema<
+              unknown,
+              unknown,
+              v.BaseIssue<unknown>
+            >,
+            true,
+          );
+        }
       }
     }
   }
 
-  walk(schema);
+  walk(schema, initialAfterTransform);
+  return [...lazyMap.values()];
+}
+
+/**
+ * Creates a guarded getter that checks the returned schema for async
+ * descendants using the captured `afterTransform` context.
+ */
+function makeGuardedGetter(
+  originalGetter: (
+    input: unknown,
+  ) => v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+  afterTransform: boolean,
+): (
+  input: unknown,
+) => v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>> {
+  return function (input: unknown) {
+    const inner = originalGetter(input);
+    if (containsAsyncSchema(inner, new WeakMap(), afterTransform)) {
+      throw new TypeError(
+        "Async Valibot schemas (e.g., async validations) are not " +
+          "supported by valibot(). Use synchronous schemas instead.",
+      );
+    }
+    // Guard lazy schemas inside the returned schema (lazy-inside-lazy).
+    if (activeRestoreList) {
+      const innerEntries = findLazySchemas(inner, afterTransform);
+      for (const entry of innerEntries) {
+        activeRestoreList.push({
+          node: entry.node,
+          originalGetter: entry.originalGetter,
+        });
+        (entry.node as { getter: LazyGetter }).getter = makeGuardedGetter(
+          entry.originalGetter,
+          entry.afterTransform,
+        );
+      }
+    }
+    return inner;
+  };
+}
+
+/**
+ * Calls `safeParse()` with temporary lazy-schema guards installed.
+ * All modified getters are restored in a `finally` block so the caller's
+ * schema is never permanently mutated.
+ */
+function safeParseWithLazyGuards<T>(
+  schema: v.BaseSchema<unknown, T, v.BaseIssue<unknown>>,
+  input: string,
+  lazyEntries: readonly LazyEntry[],
+): ReturnType<
+  typeof safeParse<v.BaseSchema<unknown, T, v.BaseIssue<unknown>>>
+> {
+  const restoreList: RestoreEntry[] = [];
+  activeRestoreList = restoreList;
+
+  // Install guarded getters
+  for (const entry of lazyEntries) {
+    restoreList.push({
+      node: entry.node,
+      originalGetter: entry.originalGetter,
+    });
+    (entry.node as { getter: LazyGetter }).getter = makeGuardedGetter(
+      entry.originalGetter,
+      entry.afterTransform,
+    );
+  }
+
+  try {
+    return safeParse(schema, input);
+  } finally {
+    activeRestoreList = null;
+    for (const r of restoreList) {
+      (r.node as { getter: LazyGetter }).getter = r.originalGetter;
+    }
+  }
 }
 
 /**
@@ -797,7 +940,7 @@ export function valibot<T>(
         "supported by valibot(). Use synchronous schemas instead.",
     );
   }
-  guardLazySchemas(schema);
+  const lazyEntries = findLazySchemas(schema);
   const choices = inferChoices(schema);
   const metavar = options.metavar ?? inferMetavar(schema);
   ensureNonEmptyString(metavar);
@@ -822,10 +965,12 @@ export function valibot<T>(
       : {}),
 
     parse(input: string): ValueParserResult<T> {
-      const result = safeParse(schema, input);
+      const result = lazyEntries.length > 0
+        ? safeParseWithLazyGuards(schema, input, lazyEntries)
+        : safeParse(schema, input);
 
       // Defense-in-depth: if an async schema somehow bypasses both
-      // containsAsyncSchema() and guardLazySchemas(), safeParse() calls
+      // containsAsyncSchema() and the lazy guards, safeParse() calls
       // the async ~run synchronously.  The returned Promise is destructured
       // as a dataset, producing typed=undefined instead of boolean.
       if (

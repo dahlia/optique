@@ -1254,6 +1254,61 @@ describe("valibot()", () => {
       assert.throws(() => parser.parse('{"a":"ok"}'), expectedError);
     });
 
+    it("should not reject top-level lazy with async container entry", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // Top-level lazy receives raw string input.  v.object() rejects
+      // the string before entries are reached, so async entries are
+      // unreachable.  Must NOT throw TypeError — should fail validation.
+      const lazyObj = v.lazy(
+        () =>
+          v.object({ a: asyncInner } as never) as unknown as v.BaseSchema<
+            unknown,
+            { readonly a: string },
+            v.BaseIssue<unknown>
+          >,
+      );
+      const parser = valibot(lazyObj);
+      const result = parser.parse("hello");
+      assert.ok(!result.success);
+    });
+
+    it("should not mutate the caller's schema object", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const lazySchema = v.lazy(
+        () =>
+          asyncInner as unknown as v.BaseSchema<
+            unknown,
+            string,
+            v.BaseIssue<unknown>
+          >,
+      );
+      // Capture the original getter before valibot() touches it.
+      const originalGetter =
+        (lazySchema as unknown as { getter: (...args: unknown[]) => unknown })
+          .getter;
+      const parser = valibot(lazySchema);
+      // After construction AND after parsing, the getter must be unchanged.
+      assert.equal(
+        (lazySchema as unknown as { getter: (...args: unknown[]) => unknown })
+          .getter,
+        originalGetter,
+      );
+      assert.throws(() => parser.parse("ok"), expectedError);
+      assert.equal(
+        (lazySchema as unknown as { getter: (...args: unknown[]) => unknown })
+          .getter,
+        originalGetter,
+      );
+    });
+
     it("should work normally with sync schema inside v.lazy()", () => {
       const syncSchema = v.lazy(() => v.string());
       const parser = valibot(syncSchema as never);
