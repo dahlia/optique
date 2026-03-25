@@ -2975,18 +2975,6 @@ export async function runWith<
 ): Promise<InferValue<TParser>> {
   const args = options?.args ?? [];
 
-  // Early exit: skip context processing for help/version/completion
-  if (needsEarlyExit(args, options)) {
-    if (parser.$mode === "async") {
-      return runParser(parser, programName, args, options) as Promise<
-        InferValue<TParser>
-      >;
-    }
-    return Promise.resolve(
-      runParser(parser, programName, args, options) as InferValue<TParser>,
-    );
-  }
-
   // If no contexts, just run the parser directly
   if (contexts.length === 0) {
     if (parser.$mode === "async") {
@@ -3000,6 +2988,18 @@ export async function runWith<
   }
 
   try {
+    // Early exit: skip context processing for help/version/completion
+    if (needsEarlyExit(args, options)) {
+      if (parser.$mode === "async") {
+        return runParser(parser, programName, args, options) as Promise<
+          InferValue<TParser>
+        >;
+      }
+      return Promise.resolve(
+        runParser(parser, programName, args, options) as InferValue<TParser>,
+      );
+    }
+
     // Phase 1: Collect initial annotations
     const ctxOptions = options?.contextOptions;
     const {
@@ -3173,17 +3173,17 @@ export function runWithSync<
 
   const args = options?.args ?? [];
 
-  // Early exit: skip context processing for help/version/completion
-  if (needsEarlyExit(args, options)) {
-    return runParser(parser, programName, args, options);
-  }
-
   // If no contexts, just run the parser directly
   if (contexts.length === 0) {
     return runParser(parser, programName, args, options);
   }
 
   try {
+    // Early exit: skip context processing for help/version/completion
+    if (needsEarlyExit(args, options)) {
+      return runParser(parser, programName, args, options);
+    }
+
     // Phase 1: Collect initial annotations
     const ctxOptions = options?.contextOptions;
     const {
