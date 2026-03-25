@@ -352,6 +352,61 @@ export function extractCommandNames(
 }
 
 /**
+ * Extracts command names that could match as the first positional token.
+ *
+ * Unlike {@link extractCommandNames}, which traverses the entire usage tree,
+ * this function stops scanning a terms array after encountering a `command` or
+ * `argument` term, because subsequent terms in that array are the inner
+ * parser's content (reachable only after the leading term is consumed).
+ * It still recurses into `optional`, `multiple`, and `exclusive` containers,
+ * since they represent alternatives or optional wrappers at the same token
+ * position.
+ *
+ * @param usage The usage description to extract leading command names from.
+ * @param includeHidden Whether to include fully hidden commands
+ *   (`hidden: true`) in the result.  Defaults to `false`.
+ * @returns A set of command names that could match at the first token position.
+ * @since 1.0.0
+ */
+export function extractLeadingCommandNames(
+  usage: Usage,
+  includeHidden?: boolean,
+): Set<string> {
+  const names = new Set<string>();
+
+  function collectLeading(terms: Usage): void {
+    if (!terms || !Array.isArray(terms)) return;
+    for (const term of terms) {
+      switch (term.type) {
+        case "command":
+          if (!includeHidden && isSuggestionHidden(term.hidden)) {
+            // Hidden command still consumes a token position, so stop.
+            return;
+          }
+          names.add(term.name);
+          return; // command consumes the first token; stop scanning siblings
+        case "argument":
+          return; // argument consumes the first token; stop scanning siblings
+        case "optional":
+        case "multiple":
+          collectLeading(term.terms);
+          break; // continue scanning siblings after optional/multiple
+        case "exclusive":
+          for (const branch of term.terms) {
+            collectLeading(branch);
+          }
+          break; // continue scanning siblings after exclusive
+        default:
+          break; // option, literal, passthrough, ellipsis: skip, continue
+      }
+    }
+  }
+
+  collectLeading(usage);
+  return names;
+}
+
+/**
  * Extracts all argument metavars from a Usage array.
  *
  * This function recursively traverses the usage structure and collects
