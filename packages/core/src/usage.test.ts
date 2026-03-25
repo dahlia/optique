@@ -661,7 +661,7 @@ describe("maxWidth option", () => {
       { type: "argument", metavar: "FILE" },
     ];
     const result = formatUsage("test", usage, { maxWidth: 1 });
-    assert.equal(result, "test\ncmd\n\nFILE");
+    assert.equal(result, "test\ncmd\nFILE");
   });
 
   it("should wrap multiple terms correctly", () => {
@@ -786,7 +786,7 @@ describe("maxWidth option", () => {
       { type: "argument", metavar: "FILE" },
     ];
     const result = formatUsage("test", usage, { maxWidth: 0 });
-    assert.equal(result, "test\ncmd\n\nFILE");
+    assert.equal(result, "test\ncmd\nFILE");
   });
 
   it("should handle very long single term that exceeds maxWidth", () => {
@@ -801,8 +801,17 @@ describe("maxWidth option", () => {
     // Single term should not be broken, just placed on its own line
     assert.equal(
       result,
-      "test\n--very-very-long-option-name\n\nVERY_LONG_METAVAR",
+      "test\n--very-very-long-option-name\nVERY_LONG_METAVAR",
     );
+  });
+
+  it("should not emit double newline for oversize non-first term", () => {
+    const usage: Usage = [
+      { type: "command", name: "cmd" },
+      { type: "argument", metavar: "SUPERLONGARG" },
+    ];
+    const result = formatUsage("app", usage, { maxWidth: 3 });
+    assert.equal(result, "app\ncmd\nSUPERLONGARG");
   });
 
   it("should not wrap when undefined maxWidth", () => {
@@ -1548,7 +1557,7 @@ describe("formatUsageTerm", () => {
         metavar: "VERY_LONG_FILENAME",
       };
       const result = formatUsageTerm(term, { maxWidth: 10 });
-      assert.equal(result, "\nVERY_LONG_FILENAME");
+      assert.equal(result, "VERY_LONG_FILENAME");
     });
 
     it("should wrap option term when exceeding maxWidth", () => {
@@ -1558,7 +1567,7 @@ describe("formatUsageTerm", () => {
         metavar: "LONG_VALUE",
       };
       const result = formatUsageTerm(term, { maxWidth: 15 });
-      assert.equal(result, "\n--very-long-option\n/-v LONG_VALUE");
+      assert.equal(result, "--very-long-option\n/-v LONG_VALUE");
     });
 
     it("should wrap optional term when exceeding maxWidth", () => {
@@ -1615,7 +1624,13 @@ describe("formatUsageTerm", () => {
         names: ["--verbose", "-v"],
       };
       const result = formatUsageTerm(term, { maxWidth: 0 });
-      assert.equal(result, "\n--verbose\n/\n-v");
+      assert.equal(result, "--verbose\n/\n-v");
+    });
+
+    it("should not emit leading newline for oversize first term", () => {
+      const term: UsageTerm = { type: "argument", metavar: "SUPERLONG" };
+      const result = formatUsageTerm(term, { maxWidth: 3 });
+      assert.equal(result, "SUPERLONG");
     });
   });
 
