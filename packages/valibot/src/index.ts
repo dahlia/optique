@@ -373,13 +373,18 @@ interface RestoreEntry {
 }
 
 /**
- * Module-level list of lazy-schema restore entries accumulated during a
- * {@link safeParseWithLazyGuards} call.  Guarded getters that discover
- * nested lazy schemas at runtime append to this list so the outer `finally`
- * block can restore *all* modified getters.  Safe because JavaScript is
- * single-threaded — no concurrent `parse()` calls can interleave.
+ * Stack of restore lists for nested {@link safeParseWithLazyGuards} calls.
+ * Each call pushes its own list; guarded getters always append to the
+ * topmost list.  When a call completes, it pops and restores its list.
+ *
+ * A stack (instead of a single variable) handles reentrancy: if a lazy
+ * getter internally triggers another `parse()`, the inner call uses its
+ * own restore list without clobbering the outer one.
+ *
+ * Safe because JavaScript is single-threaded — no concurrent calls can
+ * interleave within a single stack frame.
  */
-let activeRestoreList: RestoreEntry[] | null = null;
+const restoreStack: RestoreEntry[][] = [];
 
 /**
  * Walks a schema tree and collects every reachable `v.lazy()` node together
@@ -556,14 +561,10 @@ function findLazySchemas(
  * descendants using the captured `afterTransform` context.
  */
 function makeGuardedGetter(
-  originalGetter: (
-    input: unknown,
-  ) => v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+  originalGetter: LazyGetter,
   afterTransform: boolean,
-): (
-  input: unknown,
-) => v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>> {
-  return function (input: unknown) {
+): LazyGetter {
+  return function guardedGetter(input: unknown) {
     const inner = originalGetter(input);
     if (containsAsyncSchema(inner, new WeakMap(), afterTransform)) {
       throw new TypeError(
@@ -572,21 +573,48 @@ function makeGuardedGetter(
       );
     }
     // Guard lazy schemas inside the returned schema (lazy-inside-lazy).
-    if (activeRestoreList) {
-      const innerEntries = findLazySchemas(inner, afterTransform);
-      for (const entry of innerEntries) {
-        activeRestoreList.push({
-          node: entry.node,
-          originalGetter: entry.originalGetter,
-        });
-        (entry.node as { getter: LazyGetter }).getter = makeGuardedGetter(
-          entry.originalGetter,
-          entry.afterTransform,
-        );
-      }
+    const currentList = restoreStack[restoreStack.length - 1];
+    if (currentList) {
+      installLazyGuards(
+        findLazySchemas(inner, afterTransform),
+        currentList,
+      );
     }
     return inner;
   };
+}
+
+/**
+ * Set of lazy schema nodes that currently have guarded getters installed
+ * (across all active stack frames).  Used to detect recursive / self-
+ * referential lazy schemas and avoid re-wrapping them — which would
+ * record the wrapper as the "original" and corrupt restoration.
+ */
+const guardedNodes: WeakSet<object> = new WeakSet();
+
+/**
+ * Installs guarded getters for the given lazy entries, appending restore
+ * records to `restoreList`.  Skips nodes that are already guarded (tracked
+ * via `guardedNodes`) to handle recursive lazy schemas correctly.
+ */
+function installLazyGuards(
+  entries: readonly LazyEntry[],
+  restoreList: RestoreEntry[],
+): void {
+  for (const entry of entries) {
+    // Skip nodes already guarded in any active stack frame — the existing
+    // guard and restore entry already cover this node.
+    if (guardedNodes.has(entry.node)) continue;
+    guardedNodes.add(entry.node);
+    restoreList.push({
+      node: entry.node,
+      originalGetter: entry.originalGetter,
+    });
+    (entry.node as { getter: LazyGetter }).getter = makeGuardedGetter(
+      entry.originalGetter,
+      entry.afterTransform,
+    );
+  }
 }
 
 /**
@@ -602,26 +630,17 @@ function safeParseWithLazyGuards<T>(
   typeof safeParse<v.BaseSchema<unknown, T, v.BaseIssue<unknown>>>
 > {
   const restoreList: RestoreEntry[] = [];
-  activeRestoreList = restoreList;
+  restoreStack.push(restoreList);
 
-  // Install guarded getters
-  for (const entry of lazyEntries) {
-    restoreList.push({
-      node: entry.node,
-      originalGetter: entry.originalGetter,
-    });
-    (entry.node as { getter: LazyGetter }).getter = makeGuardedGetter(
-      entry.originalGetter,
-      entry.afterTransform,
-    );
-  }
+  installLazyGuards(lazyEntries, restoreList);
 
   try {
     return safeParse(schema, input);
   } finally {
-    activeRestoreList = null;
+    restoreStack.pop();
     for (const r of restoreList) {
       (r.node as { getter: LazyGetter }).getter = r.originalGetter;
+      guardedNodes.delete(r.node);
     }
   }
 }

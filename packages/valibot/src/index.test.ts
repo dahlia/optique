@@ -1309,6 +1309,35 @@ describe("valibot()", () => {
       );
     });
 
+    it("should not leave recursive lazy schemas mutated", () => {
+      // A self-referential lazy schema: the getter returns an object
+      // whose field references the same lazy node.
+      type Node = { readonly value: string; readonly next?: Node };
+      const self: v.BaseSchema<unknown, Node, v.BaseIssue<unknown>> = v.lazy(
+        () =>
+          v.object({
+            value: v.string(),
+            next: v.optional(self),
+          }) as unknown as v.BaseSchema<unknown, Node, v.BaseIssue<unknown>>,
+      );
+      const originalGetter =
+        (self as unknown as { getter: (...args: unknown[]) => unknown })
+          .getter;
+      const parser = valibot(
+        v.pipe(v.string(), v.transform(JSON.parse), self) as never,
+      );
+      // Parse multiple times — the getter must be restored each time.
+      for (let i = 0; i < 3; i++) {
+        const result = parser.parse('{"value":"a","next":{"value":"b"}}');
+        assert.ok(result.success);
+      }
+      assert.equal(
+        (self as unknown as { getter: (...args: unknown[]) => unknown })
+          .getter,
+        originalGetter,
+      );
+    });
+
     it("should work normally with sync schema inside v.lazy()", () => {
       const syncSchema = v.lazy(() => v.string());
       const parser = valibot(syncSchema as never);
