@@ -19,8 +19,9 @@ import {
 import { annotateFreshArray, getAnnotations } from "./annotations.ts";
 import type { DocFragment } from "./doc.ts";
 import { dispatchIterableByMode } from "./mode-dispatch.ts";
+import type { NonEmptyString } from "./nonempty.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
-import { validateOptionNames } from "./validate.ts";
+import { validateCommandNames, validateOptionNames } from "./validate.ts";
 
 /**
  * State type for options that may use deferred parsing (DerivedValueParser).
@@ -2047,12 +2048,15 @@ async function* suggestCommandAsync<T, TState>(
  *                a description for documentation.
  * @returns A {@link Parser} that matches the command name and delegates
  *          to the inner parser for the remaining arguments.
+ * @throws {TypeError} If `name` is empty, whitespace-only, contains
+ *         embedded whitespace, or contains control characters.
  */
 export function command<M extends Mode, T, TState>(
-  name: string,
+  name: NonEmptyString,
   parser: Parser<M, T, TState>,
   options: CommandOptions = {},
 ): Parser<M, T, CommandState<TState>> {
+  validateCommandNames([name], "Command");
   const isAsync = parser.$mode === "async";
 
   // Use type assertion to allow both sync and async returns from parse method

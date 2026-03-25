@@ -103,6 +103,11 @@ To be released.
     had no validation at all, and `formatDocPage()` only rejected newlines.
     [[#431], [#724]]
 
+ -  Added runtime validation of the command name to `command()`: the function
+    now throws `TypeError` at construction time for empty strings,
+    whitespace-only strings, strings with embedded whitespace, and strings
+    with control characters.  [[#401], [#732]]
+
  -  *Breaking change:* Added `placeholder` property to `ValueParser` interface
     (required) and `Parser` interface (optional).  Every value parser now
     provides a type-appropriate stand-in value (e.g., `""` for `string()`, `1`
@@ -1018,6 +1023,7 @@ To be released.
 [#389]: https://github.com/dahlia/optique/issues/389
 [#395]: https://github.com/dahlia/optique/issues/395
 [#396]: https://github.com/dahlia/optique/issues/396
+[#401]: https://github.com/dahlia/optique/issues/401
 [#403]: https://github.com/dahlia/optique/issues/403
 [#406]: https://github.com/dahlia/optique/issues/406
 [#407]: https://github.com/dahlia/optique/issues/407
@@ -1169,6 +1175,7 @@ To be released.
 [#728]: https://github.com/dahlia/optique/pull/728
 [#729]: https://github.com/dahlia/optique/pull/729
 [#730]: https://github.com/dahlia/optique/pull/730
+[#732]: https://github.com/dahlia/optique/pull/732
 
 ### @optique/config
 
