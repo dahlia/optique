@@ -164,9 +164,9 @@ export function findSimilar(
       ? candidate
       : candidate.toLowerCase();
 
-    // Skip duplicate candidates (by normalized form)
-    if (seen.has(normalizedCandidate)) continue;
-    seen.add(normalizedCandidate);
+    // Skip exact duplicate candidates
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
 
     // Calculate distance
     const distance = levenshteinDistance(normalizedInput, normalizedCandidate);

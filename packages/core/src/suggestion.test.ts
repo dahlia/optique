@@ -258,14 +258,14 @@ describe("findSimilar()", () => {
     assert.equal(result.filter((s) => s === "--version").length, 1);
   });
 
-  it("should deduplicate case-insensitively by default", () => {
+  it("should preserve case-distinct candidates", () => {
     const result = findSimilar("--verbos", [
       "--Verbose",
       "--verbose",
-      "--VERBOSE",
-    ]);
-    assert.equal(result.length, 1);
-    assert.equal(result[0], "--Verbose");
+    ], { maxSuggestions: 10 });
+    assert.equal(result.length, 2);
+    assert.ok(result.includes("--Verbose"));
+    assert.ok(result.includes("--verbose"));
   });
 
   it("should return single exact match even with duplicate candidates", () => {
