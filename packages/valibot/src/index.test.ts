@@ -1161,13 +1161,13 @@ describe("valibot()", () => {
             v.BaseIssue<unknown>
           >,
       );
-      const parser = valibot(lazySchema);
+      const parser = valibot(lazySchema, { placeholder: "" });
       assert.throws(() => parser.parse("ok"), expectedError);
     });
 
     it("should work normally with sync schema inside v.lazy()", () => {
       const syncSchema = v.lazy(() => v.string());
-      const parser = valibot(syncSchema as never);
+      const parser = valibot(syncSchema as never, { placeholder: "" });
       const result = parser.parse("hello");
       assert.ok(result.success);
       if (result.success) assert.equal(result.value, "hello");
