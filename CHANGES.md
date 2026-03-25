@@ -183,6 +183,10 @@ To be released.
     usage terms, replacing the previous fixed-offset heuristic.  [[#473],
     [#725]]
 
+ -  Fixed `formatUsage()`, `formatUsageTerm()`, and `formatMessage()` emitting
+    a spurious leading newline (or double newline) when an oversize term that
+    exceeds `maxWidth` is already at the start of a new line.  [[#497], [#730]]
+
  -  Fixed `getDocPage()` preserving hidden terms from custom `DocFragments`
     instead of filtering them.  `buildDocPage()` now filters out entries whose
     terms are doc-hidden before assembling the final `DocPage`.  Additionally,
@@ -1031,6 +1035,7 @@ To be released.
 [#488]: https://github.com/dahlia/optique/issues/488
 [#490]: https://github.com/dahlia/optique/pull/490
 [#494]: https://github.com/dahlia/optique/issues/494
+[#497]: https://github.com/dahlia/optique/issues/497
 [#500]: https://github.com/dahlia/optique/issues/500
 [#504]: https://github.com/dahlia/optique/issues/504
 [#505]: https://github.com/dahlia/optique/issues/505
@@ -1163,6 +1168,7 @@ To be released.
 [#727]: https://github.com/dahlia/optique/pull/727
 [#728]: https://github.com/dahlia/optique/pull/728
 [#729]: https://github.com/dahlia/optique/pull/729
+[#730]: https://github.com/dahlia/optique/pull/730
 
 ### @optique/config
 
