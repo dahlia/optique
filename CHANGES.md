@@ -1859,9 +1859,9 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     async validations were silently skipped by the synchronous `safeParse()`
     call.  [[#462], [#701]]
 
- -  `valibot()` now detects async schemas inside `v.lazy()` at parse time
-    and throws a clear `TypeError`.  Previously, `v.lazy()` wrapping an async
-    schema (e.g., `v.pipeAsync()`) silently returned
+ -  `valibot()` now detects top-level async schemas returned from `v.lazy()`
+    at parse time and throws a clear `TypeError`.  Previously, `v.lazy()`
+    wrapping an async schema (e.g., `v.pipeAsync()`) silently returned
     `{ success: true, value: undefined }`.  [[#461], [#731]]
 
  -  `valibot()` now formats transformed non-primitive values intelligently
