@@ -309,7 +309,6 @@ function containsAsyncSchema(
   // Container members are only reachable after a transform changes the
   // value type.  At the top level, CLI input is always a string, so
   // container schemas (object, array, etc.) reject before visiting members.
-  // containerCheck bitmask controls which container members to traverse.
   if (afterTransform) {
     if (s.entries) {
       for (const entry of Object.values(s.entries)) {
