@@ -2684,15 +2684,65 @@ describe("command", () => {
     }
   });
 
-  it("should handle empty command name gracefully", () => {
-    // This is a bit of an edge case, but should not crash
-    const parser = command("", constant("empty" as const));
+  it("should throw TypeError for empty command name", () => {
+    assert.throws(
+      // @ts-expect-error: empty string is not a valid NonEmptyString
+      () => command("", constant("empty" as const)),
+      { name: "TypeError", message: "Command name must not be empty." },
+    );
+  });
 
-    const result = parseSync(parser, [""]);
-    assert.ok(result.success);
-    if (result.success) {
-      assert.equal(result.value, "empty");
-    }
+  it("should throw TypeError for whitespace-only command name", () => {
+    assert.throws(
+      () => command("   " as never, constant("ws" as const)),
+      {
+        name: "TypeError",
+        message: 'Command name must not be whitespace-only: "   ".',
+      },
+    );
+  });
+
+  it("should throw TypeError for command name with embedded whitespace", () => {
+    assert.throws(
+      () => command("bad cmd" as never, constant("sp" as const)),
+      {
+        name: "TypeError",
+        message: 'Command name must not contain whitespace: "bad cmd".',
+      },
+    );
+  });
+
+  it("should throw TypeError for command name with newline", () => {
+    assert.throws(
+      () => command("bad\nname" as never, constant("nl" as const)),
+      {
+        name: "TypeError",
+        message:
+          'Command name must not contain control characters: "bad\\nname".',
+      },
+    );
+  });
+
+  it("should throw TypeError for command name with C0 control character", () => {
+    assert.throws(
+      () => command("bad\x00name" as never, constant("c0" as const)),
+      {
+        name: "TypeError",
+        message:
+          'Command name must not contain control characters: "bad\\x00name".',
+      },
+    );
+  });
+
+  it("should throw TypeError for command name with C1 control character", () => {
+    assert.throws(
+      () => command("bad\x80name" as never, constant("c1" as const)),
+      {
+        name: "TypeError",
+        message:
+          'Command name must not contain control characters: "bad\\x80name".',
+      },
+    );
   });
 
   describe("getDocFragments", () => {
