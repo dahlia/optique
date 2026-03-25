@@ -385,6 +385,14 @@ export function extractLeadingOptionNames(
           }
           break; // options don't consume a position; continue scanning
         case "command":
+          // Known limitation: stopping here causes false negatives for
+          // combinators like tuple() and object() that flatten usage in
+          // priority order.  In tuple([flag("--help"), command("run")]),
+          // the command (priority 15) appears before the flag (priority 10)
+          // in the usage array, so this scan stops before reaching the
+          // flag.  The flag IS valid at argv[0], but we cannot distinguish
+          // this from a genuinely nested option (e.g., command("run",
+          // flag("--help"))) because both produce identical usage arrays.
           return; // command consumes a position; stop scanning siblings
         case "argument":
         case "literal":

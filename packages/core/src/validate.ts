@@ -255,6 +255,14 @@ export function validateMetaNameCollisions(
       }
       // Literal values (e.g., conditional discriminator values) can be
       // shadowed by lenient option scanners that match anywhere in argv.
+      //
+      // Known limitation: this only checks literals against option-form meta
+      // entries.  Command-form meta entries are not checked because we lack
+      // a "leading literals" set — and more fundamentally,
+      // appendLiteralToUsage() does not produce literal terms for
+      // argument-based conditionals, so their branch keys are invisible
+      // to this check entirely.  See:
+      // https://github.com/dahlia/optique/issues/734
       if (kind === "option" && userNames.allLiterals.has(name)) {
         throw new TypeError(
           `Literal value "${name}" conflicts with the ` +
