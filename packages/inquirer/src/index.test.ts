@@ -1593,12 +1593,14 @@ describe("prompt()", () => {
         }
 
         let phase2Threw = false;
+        let phase2SawSecretHolder = false;
         let phase2Masked: string | undefined;
         const dynamicContext: SourceContext = {
           id: Symbol.for("@test/private-field-phase-two"),
           mode: "dynamic",
           getAnnotations(parsed?: unknown) {
             if (parsed !== undefined) {
+              phase2SawSecretHolder = parsed instanceof SecretHolder;
               try {
                 // Accessing the getter should not throw even though
                 // the class uses private fields.
@@ -1646,6 +1648,7 @@ describe("prompt()", () => {
         // Phase-two context sees the mapped placeholder instance and
         // accessing its private-field-backed getter must not throw.
         assert.ok(!phase2Threw);
+        assert.ok(phase2SawSecretHolder);
         assert.equal(phase2Masked, "");
         assert.ok(result instanceof SecretHolder);
         assert.equal(result.masked, "***********");

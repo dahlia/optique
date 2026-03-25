@@ -28,6 +28,30 @@ describe("zod()", () => {
         },
       );
     });
+
+    it("should throw TypeError when options is null", () => {
+      assert.throws(
+        // @ts-expect-error: intentionally passing null
+        () => zod(z.string(), null),
+        {
+          name: "TypeError",
+          message:
+            "zod() requires an options object with a placeholder property.",
+        },
+      );
+    });
+
+    it("should throw TypeError when options is a primitive", () => {
+      assert.throws(
+        // @ts-expect-error: intentionally passing a primitive
+        () => zod(z.string(), 42),
+        {
+          name: "TypeError",
+          message:
+            "zod() requires an options object with a placeholder property.",
+        },
+      );
+    });
   });
 
   describe("basic parsing", () => {
