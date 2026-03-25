@@ -732,7 +732,10 @@ export function formatMessage(
     }
 
     // Handle automatic word wrapping
-    if (options.maxWidth != null && totalWidth + width > options.maxWidth) {
+    if (
+      options.maxWidth != null && totalWidth > 0 &&
+      totalWidth + width > options.maxWidth
+    ) {
       output += "\n";
       totalWidth = 0;
     }

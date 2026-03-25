@@ -502,7 +502,8 @@ export function formatUsage(
         lineWidth += 1;
       }
     } else if (
-      options.maxWidth != null && lineWidth + width > options.maxWidth
+      options.maxWidth != null && lineWidth > 0 &&
+      lineWidth + width > options.maxWidth
     ) {
       if (output.endsWith(" ")) {
         output = output.slice(0, -1);
@@ -811,7 +812,10 @@ export function formatUsageTerm(
   for (
     const { text, width } of formatUsageTermInternal(visibleTerms[0], options)
   ) {
-    if (options.maxWidth != null && lineWidth + width > options.maxWidth) {
+    if (
+      options.maxWidth != null && lineWidth > 0 &&
+      lineWidth + width > options.maxWidth
+    ) {
       if (output.endsWith(" ")) {
         output = output.slice(0, -1);
       }
