@@ -1254,6 +1254,36 @@ describe("valibot()", () => {
       assert.throws(() => parser.parse('{"a":"ok"}'), expectedError);
     });
 
+    it("should handle shared lazy in both pre- and post-transform contexts", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // Shared lazy node used in pre-transform (raw string) and
+      // post-transform (parsed object) contexts.  The guard must
+      // adapt per-call: no TypeError for string input, TypeError
+      // for object input with reachable async entries.
+      const lazyObj = v.lazy(
+        () =>
+          v.object({ a: asyncInner } as never) as unknown as v.BaseSchema<
+            unknown,
+            { readonly a: string },
+            v.BaseIssue<unknown>
+          >,
+      );
+      // Pre-transform: should fail validation, not TypeError
+      const preParser = valibot(lazyObj);
+      assert.ok(!preParser.parse("hello").success);
+      // Post-transform: should throw TypeError
+      const postParser = valibot(
+        v.pipe(v.string(), v.transform(JSON.parse), lazyObj) as never,
+      );
+      assert.throws(() => postParser.parse('{"a":"ok"}'), expectedError);
+      // Pre-transform should still work after post-transform parser exists
+      assert.ok(!preParser.parse("world").success);
+    });
+
     it("should not reject top-level lazy with async container entry", () => {
       const asyncInner = v.pipeAsync(
         v.string(),

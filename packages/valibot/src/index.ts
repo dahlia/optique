@@ -350,24 +350,16 @@ function containsAsyncSchema(
   return false;
 }
 
-/**
- * A lazy schema entry discovered by {@link findLazySchemas}, recording the
- * node, its original getter, and the `afterTransform` context at which it
- * was reached.
- */
 /** Function signature of a `v.lazy()` schema's getter. */
 type LazyGetter = (
   input: unknown,
 ) => v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
 
+/**
+ * A lazy schema node discovered by {@link findLazySchemas}, recording the
+ * node and its original getter for temporary guard installation.
+ */
 interface LazyEntry {
-  readonly node: Record<string, unknown>;
-  readonly originalGetter: LazyGetter;
-  afterTransform: boolean;
-}
-
-/** A record of a lazy getter that needs to be restored after parsing. */
-interface RestoreEntry {
   readonly node: Record<string, unknown>;
   readonly originalGetter: LazyGetter;
 }
@@ -384,23 +376,23 @@ interface RestoreEntry {
  * Safe because JavaScript is single-threaded — no concurrent calls can
  * interleave within a single stack frame.
  */
-const restoreStack: RestoreEntry[][] = [];
+const restoreStack: LazyEntry[][] = [];
 
 /**
- * Walks a schema tree and collects every reachable `v.lazy()` node together
- * with the `afterTransform` context at that point in the tree.
+ * Walks a schema tree and collects every reachable `v.lazy()` node.
  *
  * The traversal mirrors `containsAsyncSchema()` in how it tracks transforms
  * in pipes and skips container members before a transform (they are
- * unreachable from raw string input).  This ensures lazy schemas receive
- * the correct context so that their runtime guard does not produce false
- * positives.
+ * unreachable from raw string input).  The guards themselves infer the
+ * transform context dynamically from the runtime input type, so no static
+ * `afterTransform` is stored per entry.
  */
 function findLazySchemas(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
   initialAfterTransform = false,
 ): LazyEntry[] {
-  const lazyMap = new Map<object, LazyEntry>();
+  const lazyNodes = new WeakSet<object>();
+  const entries: LazyEntry[] = [];
   const visited = new WeakMap<object, boolean>();
 
   function walk(
@@ -414,21 +406,16 @@ function findLazySchemas(
 
     const s = node as ValibotSchemaInternal & {
       async?: boolean;
-      getter?: (
-        input: unknown,
-      ) => v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
+      getter?: LazyGetter;
     };
 
     if (s.type === "lazy" && s.getter) {
-      const existing = lazyMap.get(node);
-      if (!existing) {
-        lazyMap.set(node, {
+      if (!lazyNodes.has(node)) {
+        lazyNodes.add(node);
+        entries.push({
           node: node as unknown as Record<string, unknown>,
           originalGetter: s.getter,
-          afterTransform,
         });
-      } else if (!existing.afterTransform && afterTransform) {
-        existing.afterTransform = true;
       }
       return; // Can't recurse into lazy statically
     }
@@ -553,19 +540,21 @@ function findLazySchemas(
   }
 
   walk(schema, initialAfterTransform);
-  return [...lazyMap.values()];
+  return entries;
 }
 
 /**
  * Creates a guarded getter that checks the returned schema for async
- * descendants using the captured `afterTransform` context.
+ * descendants.  The `afterTransform` context is inferred dynamically
+ * from the runtime input type: string input means containers are
+ * unreachable (pre-transform); non-string means they may be reachable
+ * (post-transform).  This handles shared lazy nodes that appear in
+ * both pre- and post-transform positions without false positives.
  */
-function makeGuardedGetter(
-  originalGetter: LazyGetter,
-  afterTransform: boolean,
-): LazyGetter {
+function makeGuardedGetter(originalGetter: LazyGetter): LazyGetter {
   return function guardedGetter(input: unknown) {
     const inner = originalGetter(input);
+    const afterTransform = typeof input !== "string";
     if (containsAsyncSchema(inner, new WeakMap(), afterTransform)) {
       throw new TypeError(
         "Async Valibot schemas (e.g., async validations) are not " +
@@ -599,20 +588,16 @@ const guardedNodes: WeakSet<object> = new WeakSet();
  */
 function installLazyGuards(
   entries: readonly LazyEntry[],
-  restoreList: RestoreEntry[],
+  restoreList: LazyEntry[],
 ): void {
   for (const entry of entries) {
     // Skip nodes already guarded in any active stack frame — the existing
     // guard and restore entry already cover this node.
     if (guardedNodes.has(entry.node)) continue;
     guardedNodes.add(entry.node);
-    restoreList.push({
-      node: entry.node,
-      originalGetter: entry.originalGetter,
-    });
+    restoreList.push(entry);
     (entry.node as { getter: LazyGetter }).getter = makeGuardedGetter(
       entry.originalGetter,
-      entry.afterTransform,
     );
   }
 }
@@ -629,7 +614,7 @@ function safeParseWithLazyGuards<T>(
 ): ReturnType<
   typeof safeParse<v.BaseSchema<unknown, T, v.BaseIssue<unknown>>>
 > {
-  const restoreList: RestoreEntry[] = [];
+  const restoreList: LazyEntry[] = [];
   restoreStack.push(restoreList);
 
   installLazyGuards(lazyEntries, restoreList);
