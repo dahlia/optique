@@ -600,6 +600,12 @@ describe("formatMessage", () => {
     assert.ok(formatted.length > 0);
   });
 
+  it("should not emit leading newline for oversize first word", () => {
+    const msg: Message = [{ type: "text", text: "SUPERLONGWORD" }];
+    const formatted = formatMessage(msg, { maxWidth: 3 });
+    assert.equal(formatted, "SUPERLONGWORD");
+  });
+
   it("should handle single character maxWidth", () => {
     const msg: Message = [
       { type: "text", text: "A" },

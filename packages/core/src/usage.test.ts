@@ -805,6 +805,15 @@ describe("maxWidth option", () => {
     );
   });
 
+  it("should not emit double newline for oversize non-first term", () => {
+    const usage: Usage = [
+      { type: "command", name: "cmd" },
+      { type: "argument", metavar: "SUPERLONGARG" },
+    ];
+    const result = formatUsage("app", usage, { maxWidth: 3 });
+    assert.equal(result, "app\ncmd\nSUPERLONGARG");
+  });
+
   it("should not wrap when undefined maxWidth", () => {
     const usage: Usage = [
       { type: "command", name: "command" },
@@ -1616,6 +1625,12 @@ describe("formatUsageTerm", () => {
       };
       const result = formatUsageTerm(term, { maxWidth: 0 });
       assert.equal(result, "\n--verbose\n/\n-v");
+    });
+
+    it("should not emit leading newline for oversize first term", () => {
+      const term: UsageTerm = { type: "argument", metavar: "SUPERLONG" };
+      const result = formatUsageTerm(term, { maxWidth: 3 });
+      assert.equal(result, "SUPERLONG");
     });
   });
 
