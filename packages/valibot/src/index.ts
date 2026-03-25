@@ -178,15 +178,6 @@ function isCatchAllSchema(
   return false;
 }
 
-/** Check object-like container members (entries, key, value). */
-const CONTAINER_OBJECTS = 1;
-/** Check array-like container members (item, items). */
-const CONTAINER_ARRAYS = 2;
-/** Check all container members. */
-const CONTAINER_ALL = CONTAINER_OBJECTS | CONTAINER_ARRAYS;
-/** Skip all container members. */
-const CONTAINER_NONE = 0;
-
 /**
  * Recursively checks whether a Valibot schema contains any async parts
  * (e.g., `pipeAsync`, `checkAsync`).  Wrapper schemas such as `optional()`,
@@ -205,18 +196,11 @@ const CONTAINER_NONE = 0;
  * @param afterTransform When true, a preceding `v.transform()` may have
  *   changed the value type.  Container members become reachable and
  *   string-based union catch-all arms are no longer trusted.
- * @param containerCheck Bitmask controlling which container member types
- *   to traverse when `afterTransform` is true.  `CONTAINER_OBJECTS` (1)
- *   enables object-like members (entries, key, value); `CONTAINER_ARRAYS`
- *   (2) enables array-like members (item, items).  Default is
- *   `CONTAINER_ALL` (3).  Set to `CONTAINER_NONE` (0) for scalars where
- *   no container is reachable.
  */
 function containsAsyncSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
   visited: WeakMap<object, boolean> = new WeakMap(),
   afterTransform = false,
-  containerCheck = CONTAINER_ALL,
 ): boolean {
   // Cycle/dedup: skip if already visited at the same or deeper level.
   // A visit with afterTransform=true subsumes afterTransform=false,
@@ -231,12 +215,7 @@ function containsAsyncSchema(
   // Unwrap optional/nullable/nullish wrappers — but only if there's no
   // pipe, since piped wrappers need their pipe actions inspected too.
   if (s.wrapped && !s.pipe) {
-    return containsAsyncSchema(
-      s.wrapped,
-      visited,
-      afterTransform,
-      containerCheck,
-    );
+    return containsAsyncSchema(s.wrapped, visited, afterTransform);
   }
 
   // Check intersect options — all arms must match, so async arms are always
@@ -253,7 +232,7 @@ function containsAsyncSchema(
         if (typeof option !== "object" || option == null) continue;
         if (isCatchAllSchema(option, afterTransform)) break;
         if (
-          containsAsyncSchema(option, visited, afterTransform, containerCheck)
+          containsAsyncSchema(option, visited, afterTransform)
         ) return true;
       }
     } else if (s.type === "variant") {
@@ -263,7 +242,7 @@ function containsAsyncSchema(
       if (afterTransform) {
         for (const option of s.options) {
           if (typeof option === "object" && option != null) {
-            if (containsAsyncSchema(option, visited, true, containerCheck)) {
+            if (containsAsyncSchema(option, visited, true)) {
               return true;
             }
           }
@@ -273,7 +252,7 @@ function containsAsyncSchema(
       for (const option of s.options) {
         if (typeof option === "object" && option != null) {
           if (
-            containsAsyncSchema(option, visited, afterTransform, containerCheck)
+            containsAsyncSchema(option, visited, afterTransform)
           ) {
             return true;
           }
@@ -287,9 +266,6 @@ function containsAsyncSchema(
   // become reachable and string catch-alls are no longer trusted.
   if (s.pipe && Array.isArray(s.pipe)) {
     let seenTransform = afterTransform;
-    // After a non-safe transform the value type may have changed,
-    // so container members may become reachable — reset to check all.
-    let contCheck = containerCheck;
     for (const action of s.pipe) {
       if ((action as { async?: boolean }).async) return true;
       const a = action as { kind?: string; type?: string };
@@ -298,7 +274,6 @@ function containsAsyncSchema(
         !SAFE_TRANSFORMATION_TYPES.has(a.type ?? "")
       ) {
         seenTransform = true;
-        contCheck = CONTAINER_ALL;
       }
       if (a.kind === "schema") {
         if (
@@ -306,7 +281,6 @@ function containsAsyncSchema(
             action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
             visited,
             seenTransform,
-            contCheck,
           )
         ) {
           return true;
@@ -336,36 +310,25 @@ function containsAsyncSchema(
   // value type.  At the top level, CLI input is always a string, so
   // container schemas (object, array, etc.) reject before visiting members.
   // containerCheck bitmask controls which container members to traverse.
-  // CONTAINER_OBJECTS (1) → entries, key, value (object/record/map).
-  // CONTAINER_ARRAYS  (2) → item, items (array/tuple).
-  // rest and promise are checked when any container flag is set.
-  if (afterTransform && containerCheck !== CONTAINER_NONE) {
-    if ((containerCheck & CONTAINER_OBJECTS) !== 0) {
-      if (s.entries) {
-        for (const entry of Object.values(s.entries)) {
-          if (containsAsyncSchema(entry, visited, true)) return true;
-        }
-      }
-      if (
-        s.key && typeof s.key === "object" &&
-        containsAsyncSchema(s.key, visited, true)
-      ) {
-        return true;
-      }
-      if (s.value && containsAsyncSchema(s.value, visited, true)) {
-        return true;
+  if (afterTransform) {
+    if (s.entries) {
+      for (const entry of Object.values(s.entries)) {
+        if (containsAsyncSchema(entry, visited, true)) return true;
       }
     }
-    if ((containerCheck & CONTAINER_ARRAYS) !== 0) {
-      if (s.item && containsAsyncSchema(s.item, visited, true)) return true;
-      if (s.items && Array.isArray(s.items)) {
-        for (const item of s.items) {
-          if (containsAsyncSchema(item, visited, true)) return true;
-        }
+    if (s.item && containsAsyncSchema(s.item, visited, true)) return true;
+    if (s.items && Array.isArray(s.items)) {
+      for (const item of s.items) {
+        if (containsAsyncSchema(item, visited, true)) return true;
       }
     }
-    // rest belongs to objectWithRest or tupleWithRest — check when
-    // either container type is enabled.
+    if (
+      s.key && typeof s.key === "object" &&
+      containsAsyncSchema(s.key, visited, true)
+    ) {
+      return true;
+    }
+    if (s.value && containsAsyncSchema(s.value, visited, true)) return true;
     if (s.rest && containsAsyncSchema(s.rest, visited, true)) return true;
     // v.promise() stores its inner schema in the overloaded `message` field
     if (s.type === "promise") {
@@ -387,325 +350,11 @@ function containsAsyncSchema(
 
   // NOTE: v.lazy() schemas are not inspected statically.  The getter
   // receives the actual parse input and may return different schemas
-  // depending on it, making static analysis unreliable.  Async schemas
-  // returned by lazy getters are caught at runtime by temporary guards
-  // installed during safeParseWithLazyGuards().
+  // depending on it, making static analysis unreliable.  The typed-field
+  // check in parse() provides a best-effort defense for top-level async
+  // schemas returned by lazy getters.
 
   return false;
-}
-
-/** Function signature of a `v.lazy()` schema's getter. */
-type LazyGetter = (
-  input: unknown,
-) => v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
-
-/**
- * A lazy schema node discovered by {@link findLazySchemas}, recording the
- * node and its original getter for temporary guard installation.
- */
-interface LazyEntry {
-  readonly node: Record<string, unknown>;
-  readonly originalGetter: LazyGetter;
-}
-
-/**
- * Stack of restore lists for nested {@link safeParseWithLazyGuards} calls.
- * Each call pushes its own list; guarded getters always append to the
- * topmost list.  When a call completes, it pops and restores its list.
- *
- * A stack (instead of a single variable) handles reentrancy: if a lazy
- * getter internally triggers another `parse()`, the inner call uses its
- * own restore list without clobbering the outer one.
- *
- * Safe because JavaScript is single-threaded — no concurrent calls can
- * interleave within a single stack frame.
- */
-const restoreStack: LazyEntry[][] = [];
-
-/**
- * Walks a schema tree and collects every reachable `v.lazy()` node.
- *
- * The traversal mirrors `containsAsyncSchema()` in how it tracks transforms
- * in pipes and skips container members before a transform (they are
- * unreachable from raw string input).  The guards themselves infer the
- * transform context dynamically from the runtime input type, so no static
- * `afterTransform` is stored per entry.
- */
-function findLazySchemas(
-  schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  initialAfterTransform = false,
-): LazyEntry[] {
-  const lazyNodes = new WeakSet<object>();
-  const entries: LazyEntry[] = [];
-  const visited = new WeakMap<object, boolean>();
-
-  function walk(
-    node: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-    afterTransform: boolean,
-  ): void {
-    // Cycle/dedup: mirror containsAsyncSchema()'s visited logic.
-    const prev = visited.get(node);
-    if (prev !== undefined && (prev || !afterTransform)) return;
-    visited.set(node, (prev ?? false) || afterTransform);
-
-    const s = node as ValibotSchemaInternal & {
-      async?: boolean;
-      getter?: LazyGetter;
-    };
-
-    if (s.type === "lazy" && s.getter) {
-      if (!lazyNodes.has(node)) {
-        // If the lazy node is frozen/sealed and in a post-transform
-        // position, we cannot install a runtime guard on it.  Reject
-        // at construction time to prevent silent async corruption.
-        if (afterTransform) {
-          const desc = Object.getOwnPropertyDescriptor(node, "getter");
-          if (desc && !desc.writable) {
-            throw new TypeError(
-              "Frozen v.lazy() schemas after transforms are not " +
-                "supported by valibot() because async descendants " +
-                "cannot be detected at parse time.  Remove " +
-                "Object.freeze() or avoid async schemas inside " +
-                "the lazy getter.",
-            );
-          }
-        }
-        lazyNodes.add(node);
-        entries.push({
-          node: node as unknown as Record<string, unknown>,
-          originalGetter: s.getter,
-        });
-      }
-      return; // Can't recurse into lazy statically
-    }
-
-    // Unwrap optional/nullable/nullish wrappers — but only if there's
-    // no pipe, since piped wrappers need their pipe actions inspected.
-    if (s.wrapped && !s.pipe) {
-      walk(s.wrapped, afterTransform);
-      return;
-    }
-
-    // Recurse into union/variant/intersect options
-    if (s.options && Array.isArray(s.options)) {
-      if (s.type === "variant") {
-        // Variant only parses objects; arms unreachable before transform
-        if (afterTransform) {
-          for (const opt of s.options) {
-            if (typeof opt === "object" && opt != null) {
-              walk(
-                opt as v.BaseSchema<
-                  unknown,
-                  unknown,
-                  v.BaseIssue<unknown>
-                >,
-                true,
-              );
-            }
-          }
-        }
-      } else {
-        for (const opt of s.options) {
-          if (typeof opt === "object" && opt != null) {
-            walk(
-              opt as v.BaseSchema<
-                unknown,
-                unknown,
-                v.BaseIssue<unknown>
-              >,
-              afterTransform,
-            );
-          }
-        }
-      }
-    }
-
-    // Recurse into pipe with transform tracking
-    if (s.pipe && Array.isArray(s.pipe)) {
-      let seenTransform = afterTransform;
-      for (const action of s.pipe) {
-        const a = action as { kind?: string; type?: string };
-        if (
-          a.kind === "transformation" &&
-          !SAFE_TRANSFORMATION_TYPES.has(a.type ?? "")
-        ) {
-          seenTransform = true;
-        }
-        if (typeof action === "object" && action != null) {
-          walk(
-            action as v.BaseSchema<
-              unknown,
-              unknown,
-              v.BaseIssue<unknown>
-            >,
-            seenTransform,
-          );
-        }
-        if (a.kind === "schema" && !seenTransform) {
-          const innerPipe = (action as ValibotSchemaInternal).pipe;
-          if (innerPipe && Array.isArray(innerPipe)) {
-            for (const innerAction of innerPipe) {
-              const ia = innerAction as { kind?: string; type?: string };
-              if (
-                ia.kind === "transformation" &&
-                !SAFE_TRANSFORMATION_TYPES.has(ia.type ?? "")
-              ) {
-                seenTransform = true;
-                break;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Container members are only reachable after a transform
-    if (afterTransform) {
-      if (s.entries) {
-        for (const entry of Object.values(s.entries)) {
-          walk(entry, true);
-        }
-      }
-      if (s.item) walk(s.item, true);
-      if (s.items && Array.isArray(s.items)) {
-        for (const item of s.items) walk(item, true);
-      }
-      if (s.key && typeof s.key === "object") walk(s.key, true);
-      if (s.value && typeof s.value === "object") {
-        walk(
-          s.value as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-          true,
-        );
-      }
-      if (s.rest) walk(s.rest, true);
-      if (s.type === "promise") {
-        const promiseInner =
-          (node as unknown as Record<string, unknown>).message;
-        if (
-          typeof promiseInner === "object" && promiseInner != null &&
-          "kind" in promiseInner
-        ) {
-          walk(
-            promiseInner as v.BaseSchema<
-              unknown,
-              unknown,
-              v.BaseIssue<unknown>
-            >,
-            true,
-          );
-        }
-      }
-    }
-  }
-
-  walk(schema, initialAfterTransform);
-  return entries;
-}
-
-/**
- * Creates a guarded getter that checks the returned schema for async
- * descendants.  The `afterTransform` context is inferred dynamically
- * from the runtime input type: string input means containers are
- * unreachable (pre-transform); non-string means they may be reachable
- * (post-transform).  This handles shared lazy nodes that appear in
- * both pre- and post-transform positions without false positives.
- */
-function makeGuardedGetter(originalGetter: LazyGetter): LazyGetter {
-  return function guardedGetter(input: unknown) {
-    const inner = originalGetter(input);
-    // Infer transform context from the actual runtime input type:
-    // - afterTransform: non-string means string catch-alls are unreliable
-    //   in unions (a string catch-all won't match a number/boolean/object).
-    // - containerCheck: bitmask selecting which container types to check.
-    //   Only containers whose type check matches the input are reachable:
-    //   plain objects reach entries/key/value; arrays reach item/items.
-    const afterTransform = typeof input !== "string";
-    let containerCheck: number;
-    if (!afterTransform || typeof input !== "object" || input === null) {
-      containerCheck = CONTAINER_NONE;
-    } else if (Array.isArray(input)) {
-      containerCheck = CONTAINER_ARRAYS;
-    } else {
-      containerCheck = CONTAINER_OBJECTS;
-    }
-    if (
-      containsAsyncSchema(inner, new WeakMap(), afterTransform, containerCheck)
-    ) {
-      throw new TypeError(
-        "Async Valibot schemas (e.g., async validations) are not " +
-          "supported by valibot(). Use synchronous schemas instead.",
-      );
-    }
-    // Guard lazy schemas inside the returned schema (lazy-inside-lazy).
-    const currentList = restoreStack[restoreStack.length - 1];
-    if (currentList) {
-      installLazyGuards(
-        findLazySchemas(inner, afterTransform),
-        currentList,
-      );
-    }
-    return inner;
-  };
-}
-
-/**
- * Set of lazy schema nodes that currently have guarded getters installed
- * (across all active stack frames).  Used to detect recursive / self-
- * referential lazy schemas and avoid re-wrapping them — which would
- * record the wrapper as the "original" and corrupt restoration.
- */
-const guardedNodes: WeakSet<object> = new WeakSet();
-
-/**
- * Installs guarded getters for the given lazy entries, appending restore
- * records to `restoreList`.  Skips nodes that are already guarded (tracked
- * via `guardedNodes`) to handle recursive lazy schemas correctly.
- */
-function installLazyGuards(
-  entries: readonly LazyEntry[],
-  restoreList: LazyEntry[],
-): void {
-  for (const entry of entries) {
-    // Skip nodes already guarded in any active stack frame — the existing
-    // guard and restore entry already cover this node.
-    if (guardedNodes.has(entry.node)) continue;
-    // Skip non-writable getters (frozen/sealed schemas).  The typed-field
-    // defense-in-depth in parse() still catches top-level async for these.
-    const desc = Object.getOwnPropertyDescriptor(entry.node, "getter");
-    if (desc && !desc.writable) continue;
-    guardedNodes.add(entry.node);
-    restoreList.push(entry);
-    (entry.node as { getter: LazyGetter }).getter = makeGuardedGetter(
-      entry.originalGetter,
-    );
-  }
-}
-
-/**
- * Calls `safeParse()` with temporary lazy-schema guards installed.
- * All modified getters are restored in a `finally` block so the caller's
- * schema is never permanently mutated.
- */
-function safeParseWithLazyGuards<T>(
-  schema: v.BaseSchema<unknown, T, v.BaseIssue<unknown>>,
-  input: string,
-  lazyEntries: readonly LazyEntry[],
-): ReturnType<
-  typeof safeParse<v.BaseSchema<unknown, T, v.BaseIssue<unknown>>>
-> {
-  const restoreList: LazyEntry[] = [];
-  restoreStack.push(restoreList);
-
-  try {
-    installLazyGuards(lazyEntries, restoreList);
-    return safeParse(schema, input);
-  } finally {
-    restoreStack.pop();
-    for (const r of restoreList) {
-      (r.node as { getter: LazyGetter }).getter = r.originalGetter;
-      guardedNodes.delete(r.node);
-    }
-  }
 }
 
 /**
@@ -1022,7 +671,6 @@ export function valibot<T>(
         "supported by valibot(). Use synchronous schemas instead.",
     );
   }
-  const lazyEntries = findLazySchemas(schema);
   const choices = inferChoices(schema);
   const metavar = options.metavar ?? inferMetavar(schema);
   ensureNonEmptyString(metavar);
@@ -1047,14 +695,13 @@ export function valibot<T>(
       : {}),
 
     parse(input: string): ValueParserResult<T> {
-      const result = lazyEntries.length > 0
-        ? safeParseWithLazyGuards(schema, input, lazyEntries)
-        : safeParse(schema, input);
+      const result = safeParse(schema, input);
 
-      // Defense-in-depth: if an async schema somehow bypasses both
-      // containsAsyncSchema() and the lazy guards, safeParse() calls
-      // the async ~run synchronously.  The returned Promise is destructured
-      // as a dataset, producing typed=undefined instead of boolean.
+      // When an async schema bypasses containsAsyncSchema() (e.g., via
+      // v.lazy()), safeParse() calls the async ~run synchronously.
+      // The returned Promise is destructured as a dataset, producing
+      // typed=undefined instead of boolean.  This catches top-level
+      // async schemas returned by lazy getters.
       if (
         typeof (result as unknown as Record<string, unknown>).typed !==
           "boolean"
