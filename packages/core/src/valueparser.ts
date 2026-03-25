@@ -1143,7 +1143,11 @@ export function integer(
     options?.max ?? Number.MAX_SAFE_INTEGER,
     Number.MAX_SAFE_INTEGER,
   );
-  if (safeMin > safeMax) {
+  // Snap to the integer intersection so the placeholder and range check
+  // reflect actually parseable integer values.
+  const firstAllowed = Math.ceil(safeMin);
+  const lastAllowed = Math.floor(safeMax);
+  if (firstAllowed > lastAllowed) {
     throw new RangeError(
       "The configured integer range contains no safe integers. " +
         'Use type: "bigint" instead.',
@@ -1170,7 +1174,7 @@ export function integer(
     $mode: "sync",
     metavar,
     placeholder: options?.placeholder ??
-      (safeMin > 0 ? safeMin : safeMax < 0 ? safeMax : 0),
+      (firstAllowed > 0 ? firstAllowed : lastAllowed < 0 ? lastAllowed : 0),
     parse(input: string): ValueParserResult<number> {
       if (!input.match(/^-?\d+$/)) {
         return {
@@ -3229,6 +3233,7 @@ export interface EmailOptions {
    * Override the default placeholder value used for deferred parsing.
    * When not specified, the placeholder is derived from the first entry in
    * {@link allowedDomains} (or `"example.com"` when no domains are set).
+   * @since 1.0.0
    */
   readonly placeholder?: string | readonly string[];
 
