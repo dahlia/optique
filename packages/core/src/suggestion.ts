@@ -156,12 +156,17 @@ export function findSimilar(
 
   // Collect matches with their distances
   const matches: Array<{ candidate: string; distance: number }> = [];
+  const seen = new Set<string>();
 
   for (const candidate of candidates) {
     // Normalize candidate for comparison
     const normalizedCandidate = caseSensitive
       ? candidate
       : candidate.toLowerCase();
+
+    // Skip exact duplicate candidates
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
 
     // Calculate distance
     const distance = levenshteinDistance(normalizedInput, normalizedCandidate);
