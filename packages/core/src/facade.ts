@@ -44,7 +44,9 @@ import {
 import { dispatchByMode } from "./mode-dispatch.ts";
 import { argument, command, constant, flag, option } from "./primitives.ts";
 import {
+  extractCommandNames,
   extractLeadingCommandNames,
+  extractLeadingOptionNames,
   extractOptionNames,
   formatUsage,
   type HiddenVisibility,
@@ -54,6 +56,7 @@ import {
 import { type DeferredMap, string } from "./valueparser.ts";
 import { type Annotations, injectAnnotations } from "./annotations.ts";
 import {
+  type MetaEntry,
   validateCommandNames,
   validateMetaNameCollisions,
   validateOptionNames,
@@ -1597,30 +1600,47 @@ export function runParser<
     completionOptionConfig?.names ?? ["--completion"];
 
   // Validate meta name collisions (meta-vs-user and meta-vs-meta).
-  // All meta entries are checked in a unified namespace because command
-  // names and option names share the same token space.
-  const activeMetaEntries: [string, readonly string[]][] = [];
+  // The collision scope is position-aware:
+  //   - Meta "command" entries only match at args[0], so they are checked
+  //     against leading user names.
+  //   - Meta "option" entries use lenient scanners that match anywhere in
+  //     argv, so they are checked against all user names at every depth.
+  const activeMetaEntries: MetaEntry[] = [];
   if (options.help && helpOptionConfig) {
-    activeMetaEntries.push(["help option", helpOptionNames]);
+    activeMetaEntries.push(["option", "help option", helpOptionNames]);
   }
   if (options.help && helpCommandConfig) {
-    activeMetaEntries.push(["help command", helpCommandNames]);
+    activeMetaEntries.push(["command", "help command", helpCommandNames]);
   }
   if (options.version && versionOptionConfig) {
-    activeMetaEntries.push(["version option", versionOptionNames]);
+    activeMetaEntries.push(["option", "version option", versionOptionNames]);
   }
   if (options.version && versionCommandConfig) {
-    activeMetaEntries.push(["version command", versionCommandNames]);
+    activeMetaEntries.push([
+      "command",
+      "version command",
+      versionCommandNames,
+    ]);
   }
   if (options.completion && completionOptionConfig) {
-    activeMetaEntries.push(["completion option", completionOptionNames]);
+    activeMetaEntries.push([
+      "option",
+      "completion option",
+      completionOptionNames,
+    ]);
   }
   if (options.completion && completionCommandConfig) {
-    activeMetaEntries.push(["completion command", completionCommandNames]);
+    activeMetaEntries.push([
+      "command",
+      "completion command",
+      completionCommandNames,
+    ]);
   }
   validateMetaNameCollisions(
-    extractOptionNames(parser.usage, true),
+    extractLeadingOptionNames(parser.usage, true),
     extractLeadingCommandNames(parser.usage, true),
+    extractOptionNames(parser.usage, true),
+    extractCommandNames(parser.usage, true),
     activeMetaEntries,
   );
 

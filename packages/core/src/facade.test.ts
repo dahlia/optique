@@ -1469,6 +1469,51 @@ describe("runParser", () => {
         },
       );
     });
+
+    // Position-aware scoping: nested options vs meta commands
+    it("should allow nested --version option when meta version is command-form only", () => {
+      // command("tool", object({ v: flag("--version") }))
+      // + version: { command: { names: ["--version"] } }
+      // --version is nested inside "tool", meta command only matches args[0]
+      const parser = command(
+        "tool",
+        object({ v: flag("--version") }),
+      );
+      const result = runParser(parser, "test", ["tool", "--version"], {
+        version: {
+          command: { names: ["--version"] },
+          value: "1.0.0",
+        },
+      });
+      assert.deepEqual(result, { v: true });
+    });
+
+    // Position-aware scoping: nested commands vs meta options
+    it("should reject nested command('--help') shadowed by meta help option", () => {
+      // command("tool", command("--help", ...)) + help: { option: true }
+      // The lenient help option scanner intercepts --help ANYWHERE in argv,
+      // so "tool --help" would never reach the nested command.
+      const parser = command(
+        "tool",
+        longestMatch(
+          command("--help", object({})),
+          command("run", object({})),
+        ),
+      );
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["tool", "--help"], {
+            help: {
+              option: true,
+              onShow: () => "HELP",
+            },
+          }),
+        {
+          name: "TypeError",
+          message: /user.*"--help".*help option/i,
+        },
+      );
+    });
   });
 
   describe("error handling", () => {

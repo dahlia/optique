@@ -139,34 +139,56 @@ export function validateCommandNames(
  *         whitespace-only, or contains control characters.
  */
 /**
+ * A meta entry describes one active meta feature for collision checking.
+ *
+ * The tuple elements are:
+ *
+ * 1. `kind` — `"command"` if this meta feature matches at `args[0]` only,
+ *    or `"option"` if a lenient scanner matches the name anywhere in `argv`.
+ * 2. `label` — human-readable label for error messages (e.g., `"help option"`).
+ * 3. `names` — the configured name(s) for this meta feature.
+ *
+ * @since 1.0.0
+ */
+export type MetaEntry = readonly [
+  kind: "command" | "option",
+  label: string,
+  names: readonly string[],
+];
+
+/**
  * Validates that there are no name collisions among meta features
  * (help, version, completion) and between meta features and user parsers.
  *
- * All meta entries are checked in a single unified namespace, because
- * command names and option names share the same token space (e.g., a
- * command named `"--help"` competes with an option named `"--help"`).
+ * The collision check is *position-aware*:
  *
- * Checks are performed in this order:
+ * - Meta **command** entries match at `args[0]` only, so they are checked
+ *   against *leading* user names (those reachable before any command or
+ *   argument gate).
+ * - Meta **option** entries use lenient scanners that match anywhere in
+ *   `argv`, so they are checked against *all* user names at every depth.
  *
- * 1. No duplicate names within a single meta feature.
- * 2. No shared names between any two meta features (across namespaces).
- * 3. No meta name shadows a user-defined option or command name.
+ * Meta-vs-meta collisions are always checked in a unified namespace,
+ * because a meta command named `"--help"` and a meta option named
+ * `"--help"` both compete for the same token.
  *
- * @param userOptionNames Option names extracted from the user parser.
- * @param userCommandNames Leading command names extracted from the user parser.
- * @param metaEntries Array of `[label, names]` tuples for all active meta
- *   features, both command and option forms (e.g., `["help option",
- *   ["--help"]]`, `["help command", ["help"]]`).
+ * @param leadingUserOptionNames Option names at the leading position.
+ * @param leadingUserCommandNames Command names at the leading position.
+ * @param allUserOptionNames All option names (including nested ones).
+ * @param allUserCommandNames All command names (including nested ones).
+ * @param metaEntries Active meta feature entries annotated with their kind.
  * @throws {TypeError} If any collision or duplicate is detected.
  * @since 1.0.0
  */
 export function validateMetaNameCollisions(
-  userOptionNames: ReadonlySet<string>,
-  userCommandNames: ReadonlySet<string>,
-  metaEntries: readonly (readonly [string, readonly string[]])[],
+  leadingUserOptionNames: ReadonlySet<string>,
+  leadingUserCommandNames: ReadonlySet<string>,
+  allUserOptionNames: ReadonlySet<string>,
+  allUserCommandNames: ReadonlySet<string>,
+  metaEntries: readonly MetaEntry[],
 ): void {
   // 1. Check for duplicates within each meta feature
-  for (const [label, names] of metaEntries) {
+  for (const [, label, names] of metaEntries) {
     const seen = new Set<string>();
     for (const name of names) {
       if (seen.has(name)) {
@@ -180,7 +202,7 @@ export function validateMetaNameCollisions(
 
   // 2. Check for collisions between any two meta features (unified namespace)
   const nameToLabel = new Map<string, string>();
-  for (const [label, names] of metaEntries) {
+  for (const [, label, names] of metaEntries) {
     for (const name of names) {
       const existingLabel = nameToLabel.get(name);
       if (existingLabel != null) {
@@ -193,17 +215,25 @@ export function validateMetaNameCollisions(
     }
   }
 
-  // 3. Check for collisions between meta features and user parser
-  //    (check both option and command names against all meta names)
-  for (const [label, names] of metaEntries) {
+  // 3. Check for collisions between meta features and user parser.
+  //    The scope depends on the meta feature kind:
+  //    - "command" entries only reach args[0] → check leading user names
+  //    - "option" entries scan entire argv  → check all user names
+  for (const [kind, label, names] of metaEntries) {
+    const optionNames = kind === "command"
+      ? leadingUserOptionNames
+      : allUserOptionNames;
+    const commandNames = kind === "command"
+      ? leadingUserCommandNames
+      : allUserCommandNames;
     for (const name of names) {
-      if (userOptionNames.has(name)) {
+      if (optionNames.has(name)) {
         throw new TypeError(
           `User-defined option "${name}" conflicts with the ` +
             `built-in ${label}.`,
         );
       }
-      if (userCommandNames.has(name)) {
+      if (commandNames.has(name)) {
         throw new TypeError(
           `User-defined command "${name}" conflicts with the ` +
             `built-in ${label}.`,
