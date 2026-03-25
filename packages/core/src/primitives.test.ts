@@ -2693,7 +2693,7 @@ describe("command", () => {
 
   it("should throw TypeError for whitespace-only command name", () => {
     assert.throws(
-      () => command("   " as never, constant("ws" as const)),
+      () => command("   ", constant("ws" as const)),
       {
         name: "TypeError",
         message: 'Command name must not be whitespace-only: "   ".',
@@ -2703,7 +2703,7 @@ describe("command", () => {
 
   it("should throw TypeError for command name with embedded whitespace", () => {
     assert.throws(
-      () => command("bad cmd" as never, constant("sp" as const)),
+      () => command("bad cmd", constant("sp" as const)),
       {
         name: "TypeError",
         message: 'Command name must not contain whitespace: "bad cmd".',
@@ -2713,7 +2713,7 @@ describe("command", () => {
 
   it("should throw TypeError for command name with newline", () => {
     assert.throws(
-      () => command("bad\nname" as never, constant("nl" as const)),
+      () => command("bad\nname", constant("nl" as const)),
       {
         name: "TypeError",
         message:
@@ -2724,7 +2724,7 @@ describe("command", () => {
 
   it("should throw TypeError for command name with C0 control character", () => {
     assert.throws(
-      () => command("bad\x00name" as never, constant("c0" as const)),
+      () => command("bad\x00name", constant("c0" as const)),
       {
         name: "TypeError",
         message:
@@ -2735,7 +2735,7 @@ describe("command", () => {
 
   it("should throw TypeError for command name with C1 control character", () => {
     assert.throws(
-      () => command("bad\x80name" as never, constant("c1" as const)),
+      () => command("bad\x80name", constant("c1" as const)),
       {
         name: "TypeError",
         message:
