@@ -626,6 +626,10 @@ function installLazyGuards(
     // Skip nodes already guarded in any active stack frame — the existing
     // guard and restore entry already cover this node.
     if (guardedNodes.has(entry.node)) continue;
+    // Skip non-writable getters (frozen/sealed schemas).  The typed-field
+    // defense-in-depth in parse() still catches top-level async for these.
+    const desc = Object.getOwnPropertyDescriptor(entry.node, "getter");
+    if (desc && !desc.writable) continue;
     guardedNodes.add(entry.node);
     restoreList.push(entry);
     (entry.node as { getter: LazyGetter }).getter = makeGuardedGetter(
@@ -649,9 +653,8 @@ function safeParseWithLazyGuards<T>(
   const restoreList: LazyEntry[] = [];
   restoreStack.push(restoreList);
 
-  installLazyGuards(lazyEntries, restoreList);
-
   try {
+    installLazyGuards(lazyEntries, restoreList);
     return safeParse(schema, input);
   } finally {
     restoreStack.pop();

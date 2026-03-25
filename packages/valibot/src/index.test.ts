@@ -1368,6 +1368,36 @@ describe("valibot()", () => {
       );
     });
 
+    it("should handle frozen sync lazy schemas without throwing", () => {
+      const schema = Object.freeze(v.lazy(() => v.string()));
+      const parser = valibot(schema as never);
+      const result = parser.parse("hello");
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, "hello");
+    });
+
+    it("should fall back to typed check for frozen async lazy schemas", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // Frozen lazy: getter can't be wrapped, but the typed-field
+      // defense-in-depth catches the top-level async at parse time.
+      const schema = Object.freeze(
+        v.lazy(
+          () =>
+            asyncInner as unknown as v.BaseSchema<
+              unknown,
+              string,
+              v.BaseIssue<unknown>
+            >,
+        ),
+      );
+      const parser = valibot(schema as never);
+      assert.throws(() => parser.parse("ok"), expectedError);
+    });
+
     it("should not leave recursive lazy schemas mutated", () => {
       // A self-referential lazy schema: the getter returns an object
       // whose field references the same lazy node.
