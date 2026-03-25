@@ -1284,14 +1284,15 @@ describe("valibot()", () => {
       assert.ok(!preParser.parse("world").success);
     });
 
-    it("should not reject lazy object for scalar transform outputs", () => {
+    it("should not reject lazy object for non-object transform outputs", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
-      // JSON.parse("123") produces a number.  v.object() rejects numbers
-      // before entries are reached.  Must NOT throw TypeError.
+      // JSON.parse can produce scalars, arrays, or objects.
+      // v.object() only matches plain objects — all others should
+      // produce normal validation errors, not TypeError.
       const lazyObj = v.lazy(
         () =>
           v.object({ a: asyncInner } as never) as unknown as v.BaseSchema<
@@ -1309,6 +1310,9 @@ describe("valibot()", () => {
       assert.ok(!parser.parse("true").success);
       // Null input: containers unreachable → validation error
       assert.ok(!parser.parse("null").success);
+      // Array input: v.object() rejects arrays → validation error
+      assert.ok(!parser.parse("[]").success);
+      assert.ok(!parser.parse("[1,2,3]").success);
       // Object input: containers reachable → TypeError (async detected)
       assert.throws(() => parser.parse('{"a":"ok"}'), expectedError);
     });

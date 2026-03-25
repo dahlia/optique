@@ -580,11 +580,23 @@ function makeGuardedGetter(originalGetter: LazyGetter): LazyGetter {
     // Infer transform context from the actual runtime input type:
     // - afterTransform: non-string means string catch-alls are unreliable
     //   in unions (a string catch-all won't match a number/boolean/object).
-    // - skipContainers: non-object scalars can't match container schemas
-    //   (object/array/tuple), so their members are unreachable.
+    // - skipContainers: container members are only reachable when the input
+    //   type matches the container's type check.  We skip containers for:
+    //   (a) non-object scalars — can't match any container
+    //   (b) array input + object/record schema — v.object() rejects arrays
+    //   (c) non-array object + array/tuple schema — v.array() rejects objects
     const afterTransform = typeof input !== "string";
-    const skipContainers = afterTransform &&
-      (typeof input !== "object" || input === null);
+    let skipContainers: boolean;
+    if (!afterTransform || typeof input !== "object" || input === null) {
+      skipContainers = true;
+    } else {
+      const innerType = (inner as { type?: string }).type;
+      const isArray = Array.isArray(input);
+      skipContainers = (isArray &&
+        (innerType === "object" || innerType === "record")) ||
+        (!isArray &&
+          (innerType === "array" || innerType === "tuple"));
+    }
     if (
       containsAsyncSchema(inner, new WeakMap(), afterTransform, skipContainers)
     ) {
