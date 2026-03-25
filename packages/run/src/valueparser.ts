@@ -201,6 +201,7 @@ export type PathOptions =
  * @throws {TypeError} If {@link PathOptionsBase.allowCreate} is not a boolean.
  * @throws {TypeError} If both {@link PathOptionsMustExist.mustExist} and
  *   {@link PathOptionsMustNotExist.mustNotExist} are `true`.
+ * @throws {TypeError} If `placeholder` is not a string.
  *
  * @example
  * ```typescript
@@ -281,6 +282,15 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
       `Expected mustNotExist to be a boolean, but got ` +
         `${typeof rawOptions.mustNotExist}: ` +
         `${String(rawOptions.mustNotExist)}.`,
+    );
+  }
+  if (
+    options.placeholder !== undefined &&
+    typeof options.placeholder !== "string"
+  ) {
+    throw new TypeError(
+      `Expected placeholder to be a string, but got ${typeof options
+        .placeholder}: ${String(options.placeholder)}.`,
     );
   }
   const mustExist = "mustExist" in options ? options.mustExist : false;
