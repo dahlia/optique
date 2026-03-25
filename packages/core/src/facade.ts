@@ -44,7 +44,7 @@ import {
 import { dispatchByMode } from "./mode-dispatch.ts";
 import { argument, command, constant, flag, option } from "./primitives.ts";
 import {
-  extractCommandNames,
+  extractLeadingCommandNames,
   extractOptionNames,
   formatUsage,
   type HiddenVisibility,
@@ -1596,32 +1596,32 @@ export function runParser<
   const completionOptionNames: readonly string[] =
     completionOptionConfig?.names ?? ["--completion"];
 
-  // Validate meta name collisions (meta-vs-user and meta-vs-meta)
-  const activeMetaOptions: [string, readonly string[]][] = [];
+  // Validate meta name collisions (meta-vs-user and meta-vs-meta).
+  // All meta entries are checked in a unified namespace because command
+  // names and option names share the same token space.
+  const activeMetaEntries: [string, readonly string[]][] = [];
   if (options.help && helpOptionConfig) {
-    activeMetaOptions.push(["help option", helpOptionNames]);
+    activeMetaEntries.push(["help option", helpOptionNames]);
+  }
+  if (options.help && helpCommandConfig) {
+    activeMetaEntries.push(["help command", helpCommandNames]);
   }
   if (options.version && versionOptionConfig) {
-    activeMetaOptions.push(["version option", versionOptionNames]);
-  }
-  if (options.completion && completionOptionConfig) {
-    activeMetaOptions.push(["completion option", completionOptionNames]);
-  }
-  const activeMetaCommands: [string, readonly string[]][] = [];
-  if (options.help && helpCommandConfig) {
-    activeMetaCommands.push(["help command", helpCommandNames]);
+    activeMetaEntries.push(["version option", versionOptionNames]);
   }
   if (options.version && versionCommandConfig) {
-    activeMetaCommands.push(["version command", versionCommandNames]);
+    activeMetaEntries.push(["version command", versionCommandNames]);
+  }
+  if (options.completion && completionOptionConfig) {
+    activeMetaEntries.push(["completion option", completionOptionNames]);
   }
   if (options.completion && completionCommandConfig) {
-    activeMetaCommands.push(["completion command", completionCommandNames]);
+    activeMetaEntries.push(["completion command", completionCommandNames]);
   }
   validateMetaNameCollisions(
     extractOptionNames(parser.usage, true),
-    extractCommandNames(parser.usage, true),
-    activeMetaOptions,
-    activeMetaCommands,
+    extractLeadingCommandNames(parser.usage, true),
+    activeMetaEntries,
   );
 
   // Get available shells (defaults + user-provided)

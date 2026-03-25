@@ -1328,7 +1328,7 @@ describe("runParser", () => {
           }),
         {
           name: "TypeError",
-          message: /command name "meta".*both/i,
+          message: /name "meta".*both/i,
         },
       );
     });
@@ -1343,7 +1343,7 @@ describe("runParser", () => {
           }),
         {
           name: "TypeError",
-          message: /option name "--meta".*both/i,
+          message: /name "--meta".*both/i,
         },
       );
     });
@@ -1411,6 +1411,61 @@ describe("runParser", () => {
         {
           name: "TypeError",
           message: /user.*"completion".*completion command/i,
+        },
+      );
+    });
+
+    // P1: nested subcommands should not trigger false positives
+    it("should allow nested subcommand named 'help' when it is not a leading command", () => {
+      const parser = command(
+        "tool",
+        longestMatch(
+          command("help", object({})),
+          command("build", object({})),
+        ),
+      );
+      // "tool" is the leading command; nested "help" does not collide
+      const result = runParser(parser, "test", ["tool", "help"], {
+        help: {
+          command: true,
+          onShow: () => "HELP",
+        },
+      });
+      assert.deepEqual(result, {});
+    });
+
+    // P2: cross-namespace collision detection
+    it("should reject meta command name that looks like an option", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { option: true },
+            version: {
+              command: { names: ["--help"] },
+              value: "1.0.0",
+            },
+          }),
+        {
+          name: "TypeError",
+          message: /help option.*version command|version command.*help option/i,
+        },
+      );
+    });
+
+    it("should reject user command('--help') colliding with meta help option", () => {
+      const parser = command("--help", object({}));
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["--help"], {
+            help: {
+              option: true,
+              onShow: () => "HELP",
+            },
+          }),
+        {
+          name: "TypeError",
+          message: /user.*"--help".*help option/i,
         },
       );
     });
