@@ -157,34 +157,48 @@ export type MetaEntry = readonly [
 ];
 
 /**
+ * User parser names extracted at different scopes for collision checking.
+ *
+ * @since 1.0.0
+ */
+export interface UserParserNames {
+  /** Option names reachable at the leading position (before any positional
+   *  gate). */
+  readonly leadingOptions: ReadonlySet<string>;
+  /** Command names reachable at the leading position. */
+  readonly leadingCommands: ReadonlySet<string>;
+  /** All option names at any depth. */
+  readonly allOptions: ReadonlySet<string>;
+  /** All command names at any depth. */
+  readonly allCommands: ReadonlySet<string>;
+  /** All literal values at any depth (e.g., conditional discriminator
+   *  values). */
+  readonly allLiterals: ReadonlySet<string>;
+}
+
+/**
  * Validates that there are no name collisions among meta features
  * (help, version, completion) and between meta features and user parsers.
  *
  * The collision check is *position-aware*:
  *
  * - Meta **command** entries match at `args[0]` only, so they are checked
- *   against *leading* user names (those reachable before any command or
- *   argument gate).
+ *   against *leading* user names (those reachable before any positional gate).
  * - Meta **option** entries use lenient scanners that match anywhere in
- *   `argv`, so they are checked against *all* user names at every depth.
+ *   `argv`, so they are checked against *all* user names at every depth,
+ *   including literal values from conditional discriminators.
  *
  * Meta-vs-meta collisions are always checked in a unified namespace,
  * because a meta command named `"--help"` and a meta option named
  * `"--help"` both compete for the same token.
  *
- * @param leadingUserOptionNames Option names at the leading position.
- * @param leadingUserCommandNames Command names at the leading position.
- * @param allUserOptionNames All option names (including nested ones).
- * @param allUserCommandNames All command names (including nested ones).
+ * @param userNames User parser names extracted at different scopes.
  * @param metaEntries Active meta feature entries annotated with their kind.
  * @throws {TypeError} If any collision or duplicate is detected.
  * @since 1.0.0
  */
 export function validateMetaNameCollisions(
-  leadingUserOptionNames: ReadonlySet<string>,
-  leadingUserCommandNames: ReadonlySet<string>,
-  allUserOptionNames: ReadonlySet<string>,
-  allUserCommandNames: ReadonlySet<string>,
+  userNames: UserParserNames,
   metaEntries: readonly MetaEntry[],
 ): void {
   // 1. Check for duplicates within each meta feature
@@ -218,14 +232,14 @@ export function validateMetaNameCollisions(
   // 3. Check for collisions between meta features and user parser.
   //    The scope depends on the meta feature kind:
   //    - "command" entries only reach args[0] → check leading user names
-  //    - "option" entries scan entire argv  → check all user names
+  //    - "option" entries scan entire argv  → check all user names + literals
   for (const [kind, label, names] of metaEntries) {
     const optionNames = kind === "command"
-      ? leadingUserOptionNames
-      : allUserOptionNames;
+      ? userNames.leadingOptions
+      : userNames.allOptions;
     const commandNames = kind === "command"
-      ? leadingUserCommandNames
-      : allUserCommandNames;
+      ? userNames.leadingCommands
+      : userNames.allCommands;
     for (const name of names) {
       if (optionNames.has(name)) {
         throw new TypeError(
@@ -236,6 +250,14 @@ export function validateMetaNameCollisions(
       if (commandNames.has(name)) {
         throw new TypeError(
           `User-defined command "${name}" conflicts with the ` +
+            `built-in ${label}.`,
+        );
+      }
+      // Literal values (e.g., conditional discriminator values) can be
+      // shadowed by lenient option scanners that match anywhere in argv.
+      if (kind === "option" && userNames.allLiterals.has(name)) {
+        throw new TypeError(
+          `Literal value "${name}" conflicts with the ` +
             `built-in ${label}.`,
         );
       }

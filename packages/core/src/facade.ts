@@ -47,6 +47,7 @@ import {
   extractCommandNames,
   extractLeadingCommandNames,
   extractLeadingOptionNames,
+  extractLiteralValues,
   extractOptionNames,
   formatUsage,
   type HiddenVisibility,
@@ -1637,10 +1638,13 @@ export function runParser<
     ]);
   }
   validateMetaNameCollisions(
-    extractLeadingOptionNames(parser.usage, true),
-    extractLeadingCommandNames(parser.usage, true),
-    extractOptionNames(parser.usage, true),
-    extractCommandNames(parser.usage, true),
+    {
+      leadingOptions: extractLeadingOptionNames(parser.usage, true),
+      leadingCommands: extractLeadingCommandNames(parser.usage, true),
+      allOptions: extractOptionNames(parser.usage, true),
+      allCommands: extractCommandNames(parser.usage, true),
+      allLiterals: extractLiteralValues(parser.usage),
+    },
     activeMetaEntries,
   );
 

@@ -5,6 +5,7 @@ import {
   merge,
   object,
   or,
+  tuple,
 } from "@optique/core/constructs";
 import { getAnnotations } from "@optique/core/annotations";
 import type { SourceContext } from "@optique/core/context";
@@ -1456,6 +1457,44 @@ describe("runParser", () => {
         },
       );
       assert.deepEqual(result, ["server", {}]);
+    });
+
+    // Exclusive that consumes a token should not leak subsequent commands
+    it("should allow command after token-consuming exclusive", () => {
+      // tuple([or(argument(string()), command("foo", ...)), command("help", ...)])
+      const parser = tuple([
+        or(argument(string()), command("foo", object({}))),
+        command("help", object({})),
+      ]);
+      // "help" is at position 2 (after exclusive consumes position 1)
+      const result = runParser(parser, "test", ["x", "help"], {
+        help: {
+          command: true,
+          onShow: () => "HELP",
+        },
+      });
+      assert.deepEqual(result, ["x", {}]);
+    });
+
+    // Literal values shadowed by meta option scanners
+    it("should reject conditional discriminator value colliding with meta option", () => {
+      const parser = conditional(
+        option("--mode", string()),
+        { "--help": object({}) },
+      );
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["--mode", "--help"], {
+            help: {
+              option: true,
+              onShow: () => "HELP",
+            },
+          }),
+        {
+          name: "TypeError",
+          message: /literal.*"--help".*help option/i,
+        },
+      );
     });
 
     // P2: cross-namespace collision detection

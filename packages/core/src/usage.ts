@@ -397,6 +397,7 @@ export function extractLeadingOptionNames(
           for (const branch of term.terms) {
             collectLeading(branch);
           }
+          if (exclusiveConsumesToken(term.terms)) return;
           break;
         default:
           break;
@@ -454,15 +455,83 @@ export function extractLeadingCommandNames(
           for (const branch of term.terms) {
             collectLeading(branch);
           }
-          break; // continue scanning siblings after exclusive
+          if (exclusiveConsumesToken(term.terms)) return;
+          break; // some branches are transparent; continue scanning
         default:
-          break; // option, literal, passthrough, ellipsis: skip, continue
+          break; // option, passthrough, ellipsis: skip, continue
       }
     }
   }
 
   collectLeading(usage);
   return names;
+}
+
+/**
+ * Checks whether every branch of an exclusive term must consume a positional
+ * token.  When true, terms after the exclusive are at position N+1 and should
+ * not be considered "leading".
+ */
+function exclusiveConsumesToken(branches: readonly Usage[]): boolean {
+  if (branches.length === 0) return false;
+  return branches.every((branch) => branchConsumesToken(branch));
+}
+
+function branchConsumesToken(terms: Usage): boolean {
+  if (!terms || !Array.isArray(terms)) return false;
+  for (const term of terms) {
+    switch (term.type) {
+      case "command":
+      case "argument":
+      case "literal":
+        return true;
+      case "option":
+        break; // transparent; continue scanning
+      case "optional":
+      case "multiple":
+        break; // optional content doesn't guarantee consumption
+      case "exclusive":
+        if (exclusiveConsumesToken(term.terms)) return true;
+        break;
+      default:
+        break;
+    }
+  }
+  return false;
+}
+
+/**
+ * Extracts all literal values from a usage description.
+ *
+ * This function recursively traverses the usage tree and collects all
+ * `literal` term values.  Literal values represent fixed strings that
+ * the user must type (e.g., conditional discriminator values like
+ * `"server"` in `conditional(option("--mode", string()), { server: ... })`).
+ *
+ * @param usage The usage description to extract literal values from.
+ * @returns A set of all literal values found in the usage description.
+ * @since 1.0.0
+ */
+export function extractLiteralValues(usage: Usage): Set<string> {
+  const values = new Set<string>();
+
+  function traverseUsage(terms: Usage): void {
+    if (!terms || !Array.isArray(terms)) return;
+    for (const term of terms) {
+      if (term.type === "literal") {
+        values.add(term.value);
+      } else if (term.type === "optional" || term.type === "multiple") {
+        traverseUsage(term.terms);
+      } else if (term.type === "exclusive") {
+        for (const branch of term.terms) {
+          traverseUsage(branch);
+        }
+      }
+    }
+  }
+
+  traverseUsage(usage);
+  return values;
 }
 
 /**

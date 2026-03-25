@@ -5,6 +5,7 @@ import {
   extractCommandNames,
   extractLeadingCommandNames,
   extractLeadingOptionNames,
+  extractLiteralValues,
   extractOptionNames,
   formatUsage,
   formatUsageTerm,
@@ -3259,6 +3260,94 @@ describe("extractLeadingCommandNames", () => {
     assert.deepEqual(
       extractLeadingCommandNames(usage),
       new Set(["tool", "other"]),
+    );
+  });
+
+  it("should stop after exclusive where all branches consume a token", () => {
+    // tuple([or(argument(string()), command("foo", ...)), command("help", ...)])
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "argument", metavar: "ARG" }],
+          [{ type: "command", name: "foo" }],
+        ],
+      },
+      { type: "command", name: "help" }, // position 2, NOT leading
+    ];
+    assert.deepEqual(
+      extractLeadingCommandNames(usage),
+      new Set(["foo"]),
+    );
+  });
+
+  it("should continue after exclusive where some branches are transparent", () => {
+    // Exclusive with option-only branches doesn't consume a position
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "option", names: ["--a"] }],
+          [{ type: "option", names: ["--b"] }],
+        ],
+      },
+      { type: "command", name: "help" },
+    ];
+    assert.deepEqual(
+      extractLeadingCommandNames(usage),
+      new Set(["help"]),
+    );
+  });
+});
+
+describe("extractLiteralValues", () => {
+  it("should extract literal values from the usage tree", () => {
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [
+            { type: "option", names: ["--mode"] },
+            { type: "literal", value: "server" },
+            { type: "command", name: "run" },
+          ],
+          [
+            { type: "option", names: ["--mode"] },
+            { type: "literal", value: "client" },
+            { type: "command", name: "connect" },
+          ],
+        ],
+      },
+    ];
+    assert.deepEqual(
+      extractLiteralValues(usage),
+      new Set(["server", "client"]),
+    );
+  });
+
+  it("should extract literals nested inside optional/multiple", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [{ type: "literal", value: "--help" }],
+      },
+    ];
+    assert.deepEqual(extractLiteralValues(usage), new Set(["--help"]));
+  });
+
+  it("should return empty set when no literals exist", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--verbose"] },
+      { type: "command", name: "build" },
+    ];
+    assert.deepEqual(extractLiteralValues(usage), new Set());
+  });
+
+  it("should handle empty and null usage", () => {
+    assert.deepEqual(extractLiteralValues([]), new Set());
+    assert.deepEqual(
+      extractLiteralValues(null as unknown as Usage),
+      new Set(),
     );
   });
 });

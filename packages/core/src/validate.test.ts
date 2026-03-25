@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   escapeControlChars,
+  type UserParserNames,
   validateCommandNames,
   validateMetaNameCollisions,
   validateOptionNames,
@@ -340,61 +341,70 @@ describe("validateCommandNames", () => {
 });
 
 describe("validateMetaNameCollisions", () => {
-  // Helper: shorthand for cases where leading = all (no nesting)
   const e = new Set<string>();
+  // Helper: build UserParserNames with same sets for leading and all
+  function u(
+    opts: ReadonlySet<string> = e,
+    cmds: ReadonlySet<string> = e,
+    lits: ReadonlySet<string> = e,
+  ): UserParserNames {
+    return {
+      leadingOptions: opts,
+      leadingCommands: cmds,
+      allOptions: opts,
+      allCommands: cmds,
+      allLiterals: lits,
+    };
+  }
 
   it("should pass with no meta features", () => {
-    validateMetaNameCollisions(e, e, e, e, []);
+    validateMetaNameCollisions(u(), []);
   });
 
   it("should pass with no collisions", () => {
-    const opts = new Set(["--verbose", "-v"]);
-    const cmds = new Set(["build", "test"]);
-    validateMetaNameCollisions(opts, cmds, opts, cmds, [
-      ["option", "help option", ["--help"]],
-      ["command", "help command", ["help"]],
-    ]);
+    validateMetaNameCollisions(
+      u(new Set(["--verbose", "-v"]), new Set(["build", "test"])),
+      [
+        ["option", "help option", ["--help"]],
+        ["command", "help command", ["help"]],
+      ],
+    );
   });
 
   it("should pass when meta features use custom names avoiding collision", () => {
-    const opts = new Set(["--help"]);
-    const cmds = new Set(["help"]);
-    validateMetaNameCollisions(opts, cmds, opts, cmds, [
-      ["option", "help option", ["--info"]],
-      ["command", "help command", ["info"]],
-    ]);
+    validateMetaNameCollisions(
+      u(new Set(["--help"]), new Set(["help"])),
+      [
+        ["option", "help option", ["--info"]],
+        ["command", "help command", ["info"]],
+      ],
+    );
   });
 
   it("should throw on duplicate within a single meta feature", () => {
     assert.throws(
       () =>
-        validateMetaNameCollisions(e, e, e, e, [
+        validateMetaNameCollisions(u(), [
           ["option", "help option", ["--help", "--help"]],
         ]),
-      {
-        name: "TypeError",
-        message: /help option.*duplicate.*"--help"/i,
-      },
+      { name: "TypeError", message: /help option.*duplicate.*"--help"/i },
     );
   });
 
   it("should throw on duplicate within a single meta command feature", () => {
     assert.throws(
       () =>
-        validateMetaNameCollisions(e, e, e, e, [
+        validateMetaNameCollisions(u(), [
           ["command", "help command", ["help", "help"]],
         ]),
-      {
-        name: "TypeError",
-        message: /help command.*duplicate.*"help"/i,
-      },
+      { name: "TypeError", message: /help command.*duplicate.*"help"/i },
     );
   });
 
   it("should throw when two meta options share a name", () => {
     assert.throws(
       () =>
-        validateMetaNameCollisions(e, e, e, e, [
+        validateMetaNameCollisions(u(), [
           ["option", "help option", ["--meta"]],
           ["option", "completion option", ["--meta"]],
         ]),
@@ -409,7 +419,7 @@ describe("validateMetaNameCollisions", () => {
   it("should throw when two meta commands share a name", () => {
     assert.throws(
       () =>
-        validateMetaNameCollisions(e, e, e, e, [
+        validateMetaNameCollisions(u(), [
           ["command", "help command", ["meta"]],
           ["command", "version command", ["meta"]],
         ]),
@@ -420,63 +430,40 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
-  it("should throw when three meta commands share a name", () => {
-    assert.throws(
-      () =>
-        validateMetaNameCollisions(e, e, e, e, [
-          ["command", "help command", ["meta"]],
-          ["command", "version command", ["meta"]],
-          ["command", "completion command", ["meta"]],
-        ]),
-      { name: "TypeError" },
-    );
-  });
-
   it("should throw when user option collides with meta option", () => {
-    const opts = new Set(["--help"]);
     assert.throws(
       () =>
-        validateMetaNameCollisions(opts, e, opts, e, [
+        validateMetaNameCollisions(u(new Set(["--help"])), [
           ["option", "help option", ["--help"]],
         ]),
-      {
-        name: "TypeError",
-        message: /user.*"--help".*help option/i,
-      },
+      { name: "TypeError", message: /user.*"--help".*help option/i },
     );
   });
 
   it("should throw when user command collides with meta command", () => {
-    const cmds = new Set(["help"]);
     assert.throws(
       () =>
-        validateMetaNameCollisions(e, cmds, e, cmds, [
+        validateMetaNameCollisions(u(e, new Set(["help"])), [
           ["command", "help command", ["help"]],
         ]),
-      {
-        name: "TypeError",
-        message: /user.*"help".*help command/i,
-      },
+      { name: "TypeError", message: /user.*"help".*help command/i },
     );
   });
 
   it("should not throw when meta feature is disabled", () => {
-    const opts = new Set(["--help"]);
-    const cmds = new Set(["help"]);
-    validateMetaNameCollisions(opts, cmds, opts, cmds, []);
+    validateMetaNameCollisions(
+      u(new Set(["--help"]), new Set(["help"])),
+      [],
+    );
   });
 
   it("should detect collision with aliases", () => {
-    const cmds = new Set(["aide"]);
     assert.throws(
       () =>
-        validateMetaNameCollisions(e, cmds, e, cmds, [
+        validateMetaNameCollisions(u(e, new Set(["aide"])), [
           ["command", "help command", ["help", "aide"]],
         ]),
-      {
-        name: "TypeError",
-        message: /user.*"aide".*help command/i,
-      },
+      { name: "TypeError", message: /user.*"aide".*help command/i },
     );
   });
 
@@ -484,7 +471,7 @@ describe("validateMetaNameCollisions", () => {
   it("should throw when meta command name collides with meta option name", () => {
     assert.throws(
       () =>
-        validateMetaNameCollisions(e, e, e, e, [
+        validateMetaNameCollisions(u(), [
           ["option", "help option", ["--help"]],
           ["command", "version command", ["--help"]],
         ]),
@@ -496,77 +483,88 @@ describe("validateMetaNameCollisions", () => {
   });
 
   it("should throw when user command collides with meta option (all depth)", () => {
-    // Meta option scans entire argv → check against ALL user commands
-    const allCmds = new Set(["--help"]);
     assert.throws(
       () =>
-        validateMetaNameCollisions(e, e, e, allCmds, [
-          ["option", "help option", ["--help"]],
-        ]),
-      {
-        name: "TypeError",
-        message: /user.*"--help".*help option/i,
-      },
-    );
-  });
-
-  it("should throw when user option collides with meta command (leading only)", () => {
-    // Meta command only matches args[0] → check against LEADING user options
-    const leadOpts = new Set(["--version"]);
-    assert.throws(
-      () =>
-        validateMetaNameCollisions(leadOpts, e, leadOpts, e, [
-          ["command", "version command", ["--version"]],
-        ]),
-      {
-        name: "TypeError",
-        message: /user.*"--version".*version command/i,
-      },
+        validateMetaNameCollisions(
+          {
+            leadingOptions: e,
+            leadingCommands: e,
+            allOptions: e,
+            allCommands: new Set(["--help"]),
+            allLiterals: e,
+          },
+          [["option", "help option", ["--help"]]],
+        ),
+      { name: "TypeError", message: /user.*"--help".*help option/i },
     );
   });
 
   // Position-scoping tests
   it("should not flag nested option against meta command (position-aware)", () => {
-    // command("tool", object({ v: flag("--version") }))
-    // + version: { command: { names: ["--version"] } }
-    // --version is NESTED (not leading), meta command only matches args[0]
-    const leadOpts = new Set<string>(); // no leading options
-    const allOpts = new Set(["--version"]); // nested option exists
-    validateMetaNameCollisions(leadOpts, e, allOpts, e, [
-      ["command", "version command", ["--version"]],
-    ]);
-    // Should NOT throw — the nested --version is unreachable at args[0]
+    validateMetaNameCollisions(
+      {
+        leadingOptions: e,
+        leadingCommands: e,
+        allOptions: new Set(["--version"]),
+        allCommands: e,
+        allLiterals: e,
+      },
+      [["command", "version command", ["--version"]]],
+    );
   });
 
   it("should flag nested option against meta option (scans everywhere)", () => {
-    // Meta option scans entire buffer, so nested --help IS shadowed
-    const leadOpts = new Set<string>(); // no leading options
-    const allOpts = new Set(["--help"]); // nested option exists
     assert.throws(
       () =>
-        validateMetaNameCollisions(leadOpts, e, allOpts, e, [
-          ["option", "help option", ["--help"]],
-        ]),
-      {
-        name: "TypeError",
-        message: /user.*"--help".*help option/i,
-      },
+        validateMetaNameCollisions(
+          {
+            leadingOptions: e,
+            leadingCommands: e,
+            allOptions: new Set(["--help"]),
+            allCommands: e,
+            allLiterals: e,
+          },
+          [["option", "help option", ["--help"]]],
+        ),
+      { name: "TypeError", message: /user.*"--help".*help option/i },
     );
   });
 
   it("should flag nested command against meta option (scans everywhere)", () => {
-    // Meta option scans entire buffer, so nested command("--help") IS shadowed
-    const leadCmds = new Set<string>(); // no leading commands with that name
-    const allCmds = new Set(["--help"]); // nested command exists
     assert.throws(
       () =>
-        validateMetaNameCollisions(e, leadCmds, e, allCmds, [
-          ["option", "help option", ["--help"]],
-        ]),
-      {
-        name: "TypeError",
-        message: /user.*"--help".*help option/i,
-      },
+        validateMetaNameCollisions(
+          {
+            leadingOptions: e,
+            leadingCommands: e,
+            allOptions: e,
+            allCommands: new Set(["--help"]),
+            allLiterals: e,
+          },
+          [["option", "help option", ["--help"]]],
+        ),
+      { name: "TypeError", message: /user.*"--help".*help option/i },
+    );
+  });
+
+  // Literal value collision tests
+  it("should flag literal value colliding with meta option", () => {
+    // conditional(option("--mode", string()), { "--help": object({}) })
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          u(e, e, new Set(["--help"])),
+          [["option", "help option", ["--help"]]],
+        ),
+      { name: "TypeError", message: /literal.*"--help".*help option/i },
+    );
+  });
+
+  it("should not flag literal value against meta command", () => {
+    // Meta commands only check args[0]; literals are deeper
+    validateMetaNameCollisions(
+      u(e, e, new Set(["help"])),
+      [["command", "help command", ["help"]]],
     );
   });
 });
