@@ -104,6 +104,15 @@ export interface PathOptionsBase {
   readonly extensions?: readonly string[];
 
   /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Override the default `"."` when downstream `map()` transforms or
+   * path constraints require a specific path shape.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: string;
+
+  /**
    * Custom error messages for path validation failures.
    * @since 0.5.0
    */
@@ -192,6 +201,7 @@ export type PathOptions =
  * @throws {TypeError} If {@link PathOptionsBase.allowCreate} is not a boolean.
  * @throws {TypeError} If both {@link PathOptionsMustExist.mustExist} and
  *   {@link PathOptionsMustNotExist.mustNotExist} are `true`.
+ * @throws {TypeError} If `placeholder` is not a string.
  *
  * @example
  * ```typescript
@@ -274,6 +284,15 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
         `${String(rawOptions.mustNotExist)}.`,
     );
   }
+  if (
+    options.placeholder !== undefined &&
+    typeof options.placeholder !== "string"
+  ) {
+    throw new TypeError(
+      `Expected placeholder to be a string, but got ${typeof options
+        .placeholder}: ${String(options.placeholder)}.`,
+    );
+  }
   const mustExist = "mustExist" in options ? options.mustExist : false;
   const mustNotExist = "mustNotExist" in options ? options.mustNotExist : false;
   if (mustExist && mustNotExist) {
@@ -285,6 +304,7 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
   return {
     $mode: "sync",
     metavar,
+    placeholder: options.placeholder ?? ".",
     parse(input: string): ValueParserResult<string> {
       // Empty/whitespace-only path validation
       if (input.trim() === "") {

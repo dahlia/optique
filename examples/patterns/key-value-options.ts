@@ -21,6 +21,7 @@ function keyValue(separator = "="): ValueParser<"sync", [string, string]> {
   return {
     $mode: "sync",
     metavar: `KEY${separator}VALUE`,
+    placeholder: ["", ""] as [string, string],
     parse(input: string): ValueParserResult<[string, string]> {
       const index = input.indexOf(separator);
       if (index === -1 || index === 0) {

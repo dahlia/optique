@@ -346,6 +346,7 @@ function createAsyncValueParser(
   return {
     $mode: "async",
     metavar,
+    placeholder: "",
     parse(input: string): Promise<ValueParserResult<string>> {
       const dir = getRepoDir(options?.dir);
       return parseFn(dir, input, options?.errors);

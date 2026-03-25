@@ -31,8 +31,7 @@ import type {
   ParserResult,
   Suggestion,
 } from "./parser.ts";
-import type { ValueParserResult } from "./valueparser.ts";
-import { isPlaceholderValue } from "./context.ts";
+import type { DeferredMap, ValueParserResult } from "./valueparser.ts";
 
 /**
  * Internal helper for optional-style parsing logic shared by optional()
@@ -237,6 +236,7 @@ export function optional<M extends Mode, TValue, TState>(
     $mode: parser.$mode,
     $valueType: [],
     $stateType: [],
+    placeholder: undefined as TValue | undefined,
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
@@ -573,7 +573,7 @@ export function withDefault<
     : {};
 
   // Type cast needed due to TypeScript's conditional type limitations with generic M
-  return {
+  const withDefaultParser = {
     $mode: parser.$mode,
     $valueType: [],
     $stateType: [],
@@ -869,6 +869,18 @@ export function withDefault<
     // Type assertion needed because TypeScript cannot verify ModeValue<M, T>
     // when M is a generic type parameter. Runtime behavior is correct via mode dispatch.
   } as unknown as Parser<M, TValue | TDefault, [TState] | undefined>;
+  // Lazily forward placeholder from inner parser to avoid eagerly
+  // evaluating derived value parser factories at construction time.
+  if ("placeholder" in parser) {
+    Object.defineProperty(withDefaultParser, "placeholder", {
+      get() {
+        return parser.placeholder;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  return withDefaultParser;
 }
 
 /**
@@ -890,6 +902,47 @@ export function withDefault<
  * @param transform A function that transforms the parsed value from type T to type U.
  * @returns A {@link Parser} that produces the transformed value of type U
  *          while preserving the original parser's state type and parsing behavior.
+ * @throws Any exception thrown by `transform` when completing a non-deferred
+ *   value.  Errors from deferred placeholder transforms are caught and the
+ *   mapped result falls back to `undefined` with `deferred: true`.
+ *
+ * ### Deferred prompt interaction
+ *
+ * During two-phase parsing, `map()` propagates the `deferred` flag from
+ * inner results but intentionally drops per-field `deferredKeys`.  The
+ * inner key set describes the *input* shape, but `transform` produces an
+ * arbitrary *output* shape where keys may be renamed, dropped, or reused
+ * with different semantics.  For `object()` results that are *not*
+ * wrapped in `map()`, per-field deferred stripping works normally.
+ *
+ * Because the `deferred` flag is propagated conservatively, mapped scalar
+ * results are treated as missing (`undefined`) during phase-two context
+ * collection — even when `transform` only used non-deferred fields.
+ * For example, `map(object({ apiKey: prompt(...), mode: option(...) }),
+ * v => v.mode)` makes phase-two contexts see `undefined` instead of the
+ * real `mode` value.  This is the intentional trade-off: the alternative
+ * (not propagating `deferred`) would leak placeholder values into context
+ * resolution when `transform` *does* use deferred fields.  The final
+ * parse always produces the correct result regardless.
+ *
+ * If the transform throws on a deferred placeholder value, the mapped
+ * result falls back to `undefined` with `deferred: true`, so the first
+ * pass does not abort.
+ *
+ * ### Transform purity
+ *
+ * The `transform` function must not mutate its input.  Object and array
+ * values may be shared placeholder references during deferred prompt
+ * resolution, and in-place mutations would corrupt the placeholder for
+ * subsequent parses.  Always return a new value:
+ *
+ * ```typescript
+ * // ✅ Correct — creates a new object
+ * map(parser, v => ({ ...v, host: "override" }))
+ *
+ * // ❌ Wrong — mutates the input in place
+ * map(parser, v => { v.host = "override"; return v; })
+ * ```
  *
  * @example
  * ```typescript
@@ -913,12 +966,39 @@ export function map<M extends Mode, T, U, TState>(
     return mapModeValue(
       parser.$mode,
       parser.complete(state),
-      (result) =>
-        result.success
-          ? isPlaceholderValue(result.value)
-            ? (result as unknown as { success: true; value: U })
-            : { success: true, value: transform(result.value) }
-          : result,
+      (result) => {
+        if (!result.success) return result;
+        if (result.deferred) {
+          // The value is a phase-1 placeholder that may not satisfy the
+          // inner parser's normal guarantees (e.g., port() placeholder 0
+          // fed into a positivity check).  Try the transform; if it
+          // throws, fall back to undefined so the deferred flag still
+          // propagates and phase-2 contexts treat the value as missing.
+          try {
+            return {
+              success: true,
+              value: transform(result.value),
+              deferred: true as const,
+              // deferredKeys is intentionally NOT propagated through
+              // map().  The inner object()'s key set describes the INPUT
+              // shape, but the transform produces an arbitrary OUTPUT
+              // shape where keys may be renamed, dropped, or reused
+              // with different semantics.  Forwarding stale keys would
+              // cause prepareParsedForContexts() to strip the wrong
+              // fields.  Instead, the deferred flag alone signals that
+              // the mapped value may contain placeholder data, and the
+              // facade falls back to passing the value through as-is.
+            };
+          } catch {
+            return {
+              success: true,
+              value: undefined as unknown as U,
+              deferred: true as const,
+            };
+          }
+        }
+        return { success: true, value: transform(result.value) };
+      },
     );
   };
 
@@ -936,7 +1016,7 @@ export function map<M extends Mode, T, U, TState>(
     }
     : {};
 
-  return {
+  const mappedParser = {
     ...parser,
     $valueType: [] as readonly U[],
     complete,
@@ -948,6 +1028,23 @@ export function map<M extends Mode, T, U, TState>(
       return parser.getDocFragments(state, undefined);
     },
   } as Parser<M, U, TState>;
+  // Lazily compute the mapped placeholder.  Non-enumerable so that
+  // further ...parser spreads in downstream wrappers do not eagerly
+  // evaluate the getter and trigger inner factory side effects.
+  if ("placeholder" in parser) {
+    Object.defineProperty(mappedParser, "placeholder", {
+      get() {
+        try {
+          return transform(parser.placeholder as T);
+        } catch {
+          return undefined;
+        }
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  return mappedParser;
 }
 
 /**
@@ -1212,15 +1309,34 @@ export function multiple<M extends Mode, TValue, TState>(
         () => {
           // Sync complete
           const result: TValue[] = [];
-          for (const s of state) {
-            const valueResult = completeSyncWithUnwrappedFallback(s as TState);
+          const deferredIndices = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          for (let i = 0; i < state.length; i++) {
+            const valueResult = completeSyncWithUnwrappedFallback(
+              state[i] as TState,
+            );
             if (valueResult.success) {
-              result.push(unwrapInjectedWrapper(valueResult.value));
+              const unwrappedValue = unwrapInjectedWrapper(valueResult.value);
+              result.push(unwrappedValue);
+              if (valueResult.deferred) {
+                if (valueResult.deferredKeys) {
+                  deferredIndices.set(i, valueResult.deferredKeys);
+                } else if (
+                  unwrappedValue == null ||
+                  typeof unwrappedValue !== "object"
+                ) {
+                  deferredIndices.set(i, null);
+                } else {
+                  // Structured deferred without deferredKeys (e.g., from
+                  // map()): preserve coarse deferred signal.
+                  hasDeferred = true;
+                }
+              }
             } else {
               return { success: false as const, error: valueResult.error };
             }
           }
-          return validateMultipleResult(result);
+          return validateMultipleResult(result, deferredIndices, hasDeferred);
         },
         async () => {
           // Async complete - use Promise.all for parallel execution
@@ -1228,14 +1344,30 @@ export function multiple<M extends Mode, TValue, TState>(
             state.map((s) => completeAsyncWithUnwrappedFallback(s)),
           );
           const values: TValue[] = [];
-          for (const valueResult of results) {
+          const deferredIndices = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          for (let i = 0; i < results.length; i++) {
+            const valueResult = results[i];
             if (valueResult.success) {
-              values.push(unwrapInjectedWrapper(valueResult.value));
+              const unwrappedValue = unwrapInjectedWrapper(valueResult.value);
+              values.push(unwrappedValue);
+              if (valueResult.deferred) {
+                if (valueResult.deferredKeys) {
+                  deferredIndices.set(i, valueResult.deferredKeys);
+                } else if (
+                  unwrappedValue == null ||
+                  typeof unwrappedValue !== "object"
+                ) {
+                  deferredIndices.set(i, null);
+                } else {
+                  hasDeferred = true;
+                }
+              }
             } else {
               return { success: false as const, error: valueResult.error };
             }
           }
-          return validateMultipleResult(values);
+          return validateMultipleResult(values, deferredIndices, hasDeferred);
         },
       );
     },
@@ -1385,7 +1517,11 @@ export function multiple<M extends Mode, TValue, TState>(
   } as unknown as Parser<M, readonly TValue[], readonly TState[]>;
 
   // Helper function for validating multiple result count
-  function validateMultipleResult(result: TValue[]) {
+  function validateMultipleResult(
+    result: TValue[],
+    deferredIndices: Map<PropertyKey, DeferredMap | null>,
+    hasDeferred = false,
+  ) {
     if (result.length < min) {
       const customMessage = options.errors?.tooFew;
       return {
@@ -1411,8 +1547,39 @@ export function multiple<M extends Mode, TValue, TState>(
           } values, but got ${text(result.length.toLocaleString("en"))}.`,
       };
     }
-    return { success: true as const, value: result };
+    const isDeferred = deferredIndices.size > 0 || hasDeferred;
+    return {
+      success: true as const,
+      value: result,
+      ...(isDeferred
+        ? {
+          deferred: true as const,
+          ...(deferredIndices.size > 0
+            ? { deferredKeys: deferredIndices as DeferredMap }
+            : {}),
+        }
+        : {}),
+    };
   }
+
+  // Placeholder contains min copies of the inner parser's placeholder so
+  // that map() transforms over multiple() results see an array that
+  // satisfies the declared minimum arity.
+  Object.defineProperty(resultParser, "placeholder", {
+    get() {
+      try {
+        if (min > 0 && "placeholder" in parser) {
+          return Array.from(
+            { length: min },
+            () => parser.placeholder,
+          ) as readonly TValue[];
+        }
+      } catch { /* inner placeholder may throw */ }
+      return [] as readonly TValue[];
+    },
+    configurable: true,
+    enumerable: false,
+  });
 
   return resultParser;
 }
@@ -1493,13 +1660,18 @@ export function nonEmpty<M extends Mode, T, TState>(
     return processNonEmptyResult(result);
   };
 
-  return {
+  const nonEmptyParser: Parser<M, T, TState> = {
     $mode: parser.$mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
     usage: parser.usage,
     initialState: parser.initialState,
+    // Forward shouldDeferCompletion from inner parser so that prompt()
+    // can defer through nonEmpty() wrappers.
+    ...(typeof parser.shouldDeferCompletion === "function"
+      ? { shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser) }
+      : {}),
     parse(context: ParserContext<TState>) {
       return dispatchByMode(
         parser.$mode,
@@ -1517,4 +1689,15 @@ export function nonEmpty<M extends Mode, T, TState>(
       return syncParser.getDocFragments(state, defaultValue);
     },
   } as Parser<M, T, TState>;
+  // Forward placeholder lazily from inner parser.
+  if ("placeholder" in parser) {
+    Object.defineProperty(nonEmptyParser, "placeholder", {
+      get() {
+        return parser.placeholder;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  return nonEmptyParser;
 }

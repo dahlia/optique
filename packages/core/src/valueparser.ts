@@ -80,6 +80,22 @@ export interface ValueParser<M extends Mode = "sync", T = unknown> {
    * @since 0.10.0
    */
   readonly choices?: readonly T[];
+
+  /**
+   * A type-appropriate default value used as a stand-in during deferred
+   * prompt resolution.  When an interactive prompt is deferred during
+   * two-phase parsing, this value is used instead of an internal sentinel
+   * so that `map()` transforms and dynamic contexts always receive a valid
+   * value of type {@link T}.
+   *
+   * The placeholder does not need to be meaningful; it only needs to be
+   * a valid inhabitant of the result type that will not crash downstream
+   * transforms.  For example, `string()` uses `""`, `integer()` uses `0`,
+   * and `choice(["a", "b", "c"])` uses `"a"`.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder: T;
 }
 
 /**
@@ -97,6 +113,34 @@ export type ValueParserResult<T> =
 
     /** The successfully parsed value of type {@link T}. */
     readonly value: T;
+
+    /**
+     * When `true`, indicates that the value is a placeholder stand-in for
+     * a deferred interactive prompt, not a real user-provided value.
+     * Combinators propagate this flag so that the two-phase parsing
+     * facade can strip deferred values before passing them to phase-two
+     * contexts.
+     *
+     * @since 1.0.0
+     */
+    readonly deferred?: true;
+
+    /**
+     * A recursive map describing which property keys in {@link value} hold
+     * deferred placeholder values.  Set by `object()`, `tuple()`, `merge()`,
+     * and other combinators.  Intentionally not propagated by `map()` because
+     * opaque transforms invalidate the inner key set.  Used by the two-phase
+     * facade to selectively replace only deferred fields with `undefined`
+     * while preserving non-deferred fields for phase-two context annotation
+     * collection.
+     *
+     * Each entry maps a property key to either `null` (the entire field is
+     * deferred) or another `DeferredMap` (the field is an object whose own
+     * sub-fields are partially deferred).
+     *
+     * @since 1.0.0
+     */
+    readonly deferredKeys?: DeferredMap;
   }
   | {
     /** Indicates that the parsing operation failed. */
@@ -105,6 +149,17 @@ export type ValueParserResult<T> =
     /** The error message describing why the parsing failed. */
     readonly error: Message;
   };
+
+/**
+ * A recursive map that tracks which fields in a parsed object hold deferred
+ * placeholder values.  Each entry maps a property key to either `null`
+ * (the field is fully deferred and should be replaced with `undefined`)
+ * or another `DeferredMap` (the field is partially deferred — recurse into
+ * its sub-fields).
+ *
+ * @since 1.0.0
+ */
+export type DeferredMap = ReadonlyMap<PropertyKey, DeferredMap | null>;
 
 /**
  * Options for creating a string parser.
@@ -130,6 +185,15 @@ export interface StringOptions {
    * to validate patterns before use.
    */
   readonly pattern?: RegExp;
+
+  /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Override the default `""` when a `pattern` constraint or downstream
+   * `map()` transform requires a non-empty or specially shaped string.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: string;
 
   /**
    * Custom error messages for various string parsing failures.
@@ -222,20 +286,35 @@ export type ChoiceOptions = ChoiceOptionsString;
  * A predicate function that checks if an object is a {@link ValueParser}.
  * @param object The object to check.
  * @return `true` if the object is a {@link ValueParser}, `false` otherwise.
+ * @throws {TypeError} If the object looks like a value parser (has `$mode`,
+ *   `metavar`, `parse`, and `format`) but is missing the required
+ *   `placeholder` property.
  */
 export function isValueParser<M extends Mode, T>(
   object: unknown,
 ): object is ValueParser<M, T> {
-  return typeof object === "object" && object != null &&
-    "$mode" in object &&
-    ((object as ValueParser<M, T>).$mode === "sync" ||
-      (object as ValueParser<M, T>).$mode === "async") &&
-    "metavar" in object &&
-    typeof (object as ValueParser<M, T>).metavar === "string" &&
-    "parse" in object &&
-    typeof (object as ValueParser<M, T>).parse === "function" &&
-    "format" in object &&
+  if (
+    typeof object !== "object" || object == null ||
+    !("$mode" in object) ||
+    ((object as ValueParser<M, T>).$mode !== "sync" &&
+      (object as ValueParser<M, T>).$mode !== "async")
+  ) {
+    return false;
+  }
+  const hasMetavar = "metavar" in object &&
+    typeof (object as ValueParser<M, T>).metavar === "string";
+  const hasParse = "parse" in object &&
+    typeof (object as ValueParser<M, T>).parse === "function";
+  const hasFormat = "format" in object &&
     typeof (object as ValueParser<M, T>).format === "function";
+  const hasPlaceholder = "placeholder" in object;
+  if (hasMetavar && hasParse && hasFormat && !hasPlaceholder) {
+    throw new TypeError(
+      "Value parser is missing the required placeholder property. " +
+        "All value parsers must define a placeholder value.",
+    );
+  }
+  return hasMetavar && hasParse && hasFormat && hasPlaceholder;
 }
 
 /**
@@ -358,6 +437,7 @@ export function choice<const T extends string | number>(
     return {
       $mode: "sync",
       metavar,
+      placeholder: choices[0],
       choices: frozenNumberChoices,
       parse(input: string): ValueParserResult<T> {
         // Exact match against canonical string representations
@@ -495,6 +575,7 @@ export function choice<const T extends string | number>(
   return {
     $mode: "sync",
     metavar,
+    placeholder: choices[0],
     choices: stringChoices as readonly T[],
     parse(input: string): ValueParserResult<T> {
       const normalizedInput = caseInsensitive ? input.toLowerCase() : input;
@@ -733,6 +814,7 @@ export function string(
   return {
     $mode: "sync",
     metavar,
+    placeholder: options.placeholder ?? "",
     parse(input: string): ValueParserResult<string> {
       if (patternSource != null && patternFlags != null) {
         const pattern = new RegExp(patternSource, patternFlags);
@@ -791,6 +873,15 @@ export interface IntegerOptionsNumber {
    * no maximum is enforced.
    */
   readonly max?: number;
+
+  /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Override the default `0` when `min`/`max` constraints or downstream
+   * `map()` transforms require a specific value.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: number;
 
   /**
    * Custom error messages for integer parsing failures.
@@ -857,6 +948,15 @@ export interface IntegerOptionsBigInt {
    * no maximum is enforced.
    */
   readonly max?: bigint;
+
+  /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Override the default `0n` when `min`/`max` constraints or downstream
+   * `map()` transforms require a specific value.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: bigint;
 
   /**
    * Custom error messages for bigint integer parsing failures.
@@ -940,6 +1040,8 @@ export function integer(
  *          integer type.
  * @throws {TypeError} If `options.type` is provided but is neither `"number"`
  *   nor `"bigint"`.
+ * @throws {RangeError} If the configured min/max range for number mode contains
+ *   no safe integers.
  */
 export function integer(
   options?: IntegerOptionsNumber | IntegerOptionsBigInt,
@@ -981,6 +1083,12 @@ export function integer(
     return {
       $mode: "sync",
       metavar,
+      placeholder: options?.placeholder ??
+        (options?.min != null && options.min > 0n
+          ? options.min
+          : options?.max != null && options.max < 0n
+          ? options.max
+          : 0n),
       parse(input: string): ValueParserResult<bigint> {
         if (!input.match(/^-?\d+$/)) {
           return {
@@ -1027,6 +1135,24 @@ export function integer(
   ensureNonEmptyString(metavar);
   const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
   const minSafe = BigInt(Number.MIN_SAFE_INTEGER);
+  const safeMin = Math.max(
+    options?.min ?? Number.MIN_SAFE_INTEGER,
+    Number.MIN_SAFE_INTEGER,
+  );
+  const safeMax = Math.min(
+    options?.max ?? Number.MAX_SAFE_INTEGER,
+    Number.MAX_SAFE_INTEGER,
+  );
+  // Snap to the integer intersection so the placeholder and range check
+  // reflect actually parseable integer values.
+  const firstAllowed = Math.ceil(safeMin);
+  const lastAllowed = Math.floor(safeMax);
+  if (firstAllowed > lastAllowed) {
+    throw new RangeError(
+      "The configured integer range contains no safe integers. " +
+        'Use type: "bigint" instead.',
+    );
+  }
   const unsafeIntegerError = options?.errors?.unsafeInteger;
   function makeUnsafeIntegerError(
     input: string,
@@ -1047,6 +1173,8 @@ export function integer(
   return {
     $mode: "sync",
     metavar,
+    placeholder: options?.placeholder ??
+      (firstAllowed > 0 ? firstAllowed : lastAllowed < 0 ? lastAllowed : 0),
     parse(input: string): ValueParserResult<number> {
       if (!input.match(/^-?\d+$/)) {
         return {
@@ -1140,6 +1268,15 @@ export interface FloatOptions {
   readonly allowInfinity?: boolean;
 
   /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Override the default `0` when `min`/`max` constraints or downstream
+   * `map()` transforms require a specific value.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: number;
+
+  /**
    * Custom error messages for float parsing failures.
    * @since 0.5.0
    */
@@ -1205,6 +1342,12 @@ export function float(options: FloatOptions = {}): ValueParser<"sync", number> {
   return {
     $mode: "sync",
     metavar,
+    placeholder: options?.placeholder ??
+      (options?.min != null && options.min > 0
+        ? options.min
+        : options?.max != null && options.max < 0
+        ? options.max
+        : 0),
     parse(input: string): ValueParserResult<number> {
       const invalidNumber = (i: string): ValueParserResult<number> => ({
         success: false,
@@ -1382,6 +1525,11 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
   return {
     $mode: "sync",
     metavar,
+    get placeholder() {
+      return new URL(
+        `${allowedProtocols?.[0] ?? "http:"}//0.invalid`,
+      );
+    },
     parse(input: string): ValueParserResult<URL> {
       if (!URL.canParse(input)) {
         return {
@@ -1481,6 +1629,7 @@ export function locale(
   return {
     $mode: "sync",
     metavar,
+    placeholder: new Intl.Locale("und"),
     parse(input: string): ValueParserResult<Intl.Locale> {
       let locale: Intl.Locale;
       try {
@@ -1929,6 +2078,7 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
   return {
     $mode: "sync",
     metavar,
+    placeholder: "00000000-0000-0000-0000-000000000000" as Uuid,
     parse(input: string): ValueParserResult<Uuid> {
       if (!uuidRegex.test(input)) {
         return {
@@ -2058,6 +2208,14 @@ export interface PortOptionsNumber {
   readonly disallowWellKnown?: boolean;
 
   /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Defaults to `min` (which itself defaults to `1`).
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: number;
+
+  /**
    * Custom error messages for port parsing failures.
    * @since 0.10.0
    */
@@ -2127,6 +2285,14 @@ export interface PortOptionsBigInt {
    * @default `false`
    */
   readonly disallowWellKnown?: boolean;
+
+  /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Defaults to `min` (which itself defaults to `1n`).
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: bigint;
 
   /**
    * Custom error messages for port parsing failures.
@@ -2250,10 +2416,20 @@ export function port(
           `min: ${min} and max: ${max}.`,
       );
     }
+    if (options.disallowWellKnown && min < 1024n && max < 1024n) {
+      throw new RangeError(
+        "disallowWellKnown is incompatible with the configured port range: " +
+          `all ports ${min}..${max} are well-known.`,
+      );
+    }
 
     return {
       $mode: "sync",
       metavar,
+      placeholder: options.placeholder ??
+        (options.disallowWellKnown && min < 1024n
+          ? (1024n > min ? 1024n : min)
+          : min),
       parse(input: string): ValueParserResult<bigint> {
         if (!input.match(/^-?\d+$/)) {
           return {
@@ -2334,10 +2510,18 @@ export function port(
         `min: ${min} and max: ${max}.`,
     );
   }
+  if (options?.disallowWellKnown && min < 1024 && max < 1024) {
+    throw new RangeError(
+      "disallowWellKnown is incompatible with the configured port range: " +
+        `all ports ${min}..${max} are well-known.`,
+    );
+  }
 
   return {
     $mode: "sync",
     metavar,
+    placeholder: options?.placeholder ??
+      (options?.disallowWellKnown && min < 1024 ? Math.max(1024, min) : min),
     parse(input: string): ValueParserResult<number> {
       if (!input.match(/^-?\d+$/)) {
         return {
@@ -2579,6 +2763,11 @@ export function ipv4(options?: Ipv4Options): ValueParser<"sync", string> {
   return {
     $mode: "sync",
     metavar,
+    placeholder: allowZero
+      ? "0.0.0.0"
+      : allowLoopback
+      ? "127.0.0.1"
+      : "192.0.2.1",
     parse(input: string): ValueParserResult<string> {
       // Parse IPv4 address into octets
       const parts = input.split(".");
@@ -2739,6 +2928,14 @@ export interface HostnameOptions {
   readonly allowLocalhost?: boolean;
 
   /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Override when `allowLocalhost` or other constraints reject the default.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: string;
+
+  /**
    * Maximum hostname length in characters.
    * @default 253
    */
@@ -2836,6 +3033,10 @@ export function hostname(
   return {
     $mode: "sync",
     metavar,
+    placeholder: options?.placeholder ??
+      (allowLocalhost
+        ? (maxLength >= 9 ? "localhost" : "a.bc")
+        : (maxLength >= 11 ? "example.com" : "a.bc")),
     parse(input: string): ValueParserResult<string> {
       // Check length constraint first
       if (input.length > maxLength) {
@@ -3029,6 +3230,14 @@ export interface EmailOptions {
   readonly allowedDomains?: readonly string[];
 
   /**
+   * Override the default placeholder value used for deferred parsing.
+   * When not specified, the placeholder is derived from the first entry in
+   * {@link allowedDomains} (or `"example.com"` when no domains are set).
+   * @since 1.0.0
+   */
+  readonly placeholder?: string | readonly string[];
+
+  /**
    * Custom error messages for email parsing failures.
    */
   readonly errors?: {
@@ -3064,6 +3273,8 @@ export interface EmailOptions {
  * @throws {TypeError} If any `allowedDomains` entry is not a string, has
  *   leading/trailing whitespace, starts with `"@"`, is empty, lacks a dot,
  *   has invalid hostname label syntax, or is an IPv4-like dotted-quad.
+ * @throws {TypeError} If `placeholder` type does not match `allowMultiple`
+ *   mode (string for single, array for multiple).
  * @since 0.10.0
  *
  * @example
@@ -3096,6 +3307,18 @@ export function email(
   ensureNonEmptyString(metavar);
 
   const allowMultiple = options?.allowMultiple ?? false;
+  if (options?.placeholder != null) {
+    if (allowMultiple && !Array.isArray(options.placeholder)) {
+      throw new TypeError(
+        "email() placeholder must be an array when allowMultiple is true.",
+      );
+    }
+    if (!allowMultiple && typeof options.placeholder !== "string") {
+      throw new TypeError(
+        "email() placeholder must be a string when allowMultiple is false.",
+      );
+    }
+  }
   const allowDisplayName = options?.allowDisplayName ?? false;
   const lowercase = options?.lowercase ?? false;
   const allowedDomains = options?.allowedDomains != null
@@ -3378,6 +3601,13 @@ export function email(
   return {
     $mode: "sync" as const,
     metavar,
+    placeholder: (options?.placeholder ?? (options?.allowMultiple
+      ? ([
+        `user@${options?.allowedDomains?.[0] ?? "example.com"}`,
+      ] as readonly string[])
+      : `user@${options?.allowedDomains?.[0] ?? "example.com"}`)) as
+        & string
+        & readonly string[],
     parse(
       input: string,
     ): ValueParserResult<string> | ValueParserResult<readonly string[]> {
@@ -3747,6 +3977,14 @@ export function socketAddress(
   return {
     $mode: "sync",
     metavar,
+    get placeholder() {
+      return {
+        host: hostType === "ip"
+          ? ipParser.placeholder
+          : hostnameParser.placeholder,
+        port: defaultPort ?? portParser.placeholder,
+      };
+    },
     parse(input: string): ValueParserResult<SocketAddressValue> {
       const trimmed = input.trim();
       const canOmitPort = defaultPort !== undefined && !requirePort;
@@ -4387,6 +4625,17 @@ export function portRange(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): PortRangeValueNumber | PortRangeValueBigInt {
+      return (isBigInt
+        ? {
+          start: portParser.placeholder as bigint,
+          end: portParser.placeholder as bigint,
+        }
+        : {
+          start: portParser.placeholder as number,
+          end: portParser.placeholder as number,
+        }) as PortRangeValueNumber | PortRangeValueBigInt;
+    },
     parse(input: string): ValueParserResult<
       PortRangeValueNumber | PortRangeValueBigInt
     > {
@@ -4596,6 +4845,17 @@ export function macAddress(
   return {
     $mode: "sync",
     metavar,
+    get placeholder() {
+      const octets = ["00", "00", "00", "00", "00", "00"];
+      const sep = outputSeparator ?? (separator === "any" ? ":" : separator);
+      if (sep === ".") {
+        return `${octets[0]}${octets[1]}.${octets[2]}${octets[3]}.${octets[4]}${
+          octets[5]
+        }`;
+      }
+      if (sep === "none") return octets.join("");
+      return octets.join(sep);
+    },
     parse(input: string): ValueParserResult<string> {
       let octets: string[] = [];
       let inputSeparator: ":" | "-" | "." | "none" | undefined;
@@ -4745,6 +5005,15 @@ export interface DomainOptions {
    * @since 1.0.0
    */
   readonly maxLength?: number;
+
+  /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * Override when `allowedTlds`, `minLabels`, or other constraints
+   * reject the default `"example.com"`.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: string;
 
   /**
    * If `true`, converts domain to lowercase.
@@ -4912,6 +5181,8 @@ export function domain(
   return {
     $mode: "sync",
     metavar,
+    placeholder: options?.placeholder ??
+      `example.${allowedTldsLower?.[0] ?? "com"}`,
     parse(input: string): ValueParserResult<string> {
       // Check length constraint first
       if (input.length > maxLength) {
@@ -5177,6 +5448,7 @@ export function ipv6(
   return {
     $mode: "sync",
     metavar,
+    placeholder: allowZero ? "::" : allowLoopback ? "::1" : "2001:db8::1",
     parse(input: string): ValueParserResult<string> {
       // Parse and normalize IPv6 address
       const normalized = parseAndNormalizeIpv6(input);
@@ -5722,6 +5994,9 @@ export function ip(
   return {
     $mode: "sync",
     metavar,
+    placeholder: version === 6
+      ? ipv6Parser!.placeholder
+      : ipv4Parser!.placeholder,
     parse(input: string): ValueParserResult<string> {
       let ipv4Error: ValueParserResult<string> | null = null;
       let ipv6Error: ValueParserResult<string> | null = null;
@@ -6091,6 +6366,19 @@ export function cidr(
   return {
     $mode: "sync",
     metavar,
+    get placeholder() {
+      return version === 6 || (version === "both" && (minPrefix ?? 0) > 32)
+        ? {
+          address: ipv6Parser!.placeholder,
+          prefix: minPrefix ?? 0,
+          version: 6 as 4 | 6,
+        }
+        : {
+          address: ipv4Parser!.placeholder,
+          prefix: minPrefix ?? 0,
+          version: 4 as 4 | 6,
+        };
+    },
     parse(input: string): ValueParserResult<CidrValue> {
       // Parse CIDR format: <ip>/<prefix>
       const slashIndex = input.lastIndexOf("/");

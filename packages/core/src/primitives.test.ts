@@ -64,6 +64,7 @@ function fileSuggestingParser(): ValueParser<"sync", string> {
   return {
     $mode: "sync",
     metavar: "FILE",
+    placeholder: "",
     parse(input: string): ValueParserResult<string> {
       return { success: true, value: input };
     },
@@ -80,6 +81,7 @@ function asyncFileSuggestingParser(): ValueParser<"async", string> {
   return {
     $mode: "async",
     metavar: "FILE",
+    placeholder: "",
     parse(input: string): Promise<ValueParserResult<string>> {
       return Promise.resolve({ success: true, value: input });
     },
@@ -100,6 +102,7 @@ function noSuggestParser(): ValueParser<"sync", string> {
   return {
     $mode: "sync",
     metavar: "TEXT",
+    placeholder: "",
     parse(input: string): ValueParserResult<string> {
       return { success: true, value: input };
     },
@@ -753,6 +756,7 @@ describe("option", () => {
       const asyncModeParser: ValueParser<"async", string> = {
         $mode: "async",
         metavar: "MODE",
+        placeholder: "",
         parse(input: string): Promise<ValueParserResult<string>> {
           return Promise.resolve({ success: true, value: input });
         },
@@ -1997,6 +2001,7 @@ describe("primitives additional branch coverage", () => {
     const asyncInt: ValueParser<"async", number> = {
       $mode: "async",
       metavar: "INT",
+      placeholder: 0,
       parse(input) {
         return Promise.resolve({ success: true, value: Number(input) });
       },
@@ -5531,6 +5536,7 @@ describe("branch coverage: primitives edge cases", () => {
     const parserWithFlakySuggest: ValueParser<"sync", string> = {
       $mode: "sync",
       metavar: "TEXT",
+      placeholder: "",
       parse(input: string): ValueParserResult<string> {
         return { success: true, value: input };
       },
@@ -5564,6 +5570,7 @@ describe("branch coverage: primitives edge cases", () => {
     const parserWithFlakySuggest: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "TEXT",
+      placeholder: "",
       parse(input: string): Promise<ValueParserResult<string>> {
         return Promise.resolve({ success: true, value: input });
       },
@@ -5618,6 +5625,7 @@ describe("branch coverage: primitives edge cases", () => {
       factory: (_mode: string, _env: string) => ({
         $mode: "async" as const,
         metavar: "TARGET",
+        placeholder: "",
         parse(input: string): Promise<ValueParserResult<string>> {
           return Promise.resolve({ success: true, value: input });
         },
@@ -5661,6 +5669,7 @@ describe("branch coverage: primitives edge cases", () => {
       factory: (mode: string) => ({
         $mode: "async" as const,
         metavar: "OUTPUT",
+        placeholder: "",
         parse(input: string): Promise<ValueParserResult<string>> {
           return Promise.resolve({ success: true, value: input });
         },
@@ -6079,6 +6088,7 @@ describe("branch coverage: primitives edge cases", () => {
     const syncFileNoPattern: ValueParser<"sync", string> = {
       $mode: "sync",
       metavar: "FILE",
+      placeholder: "",
       parse(input: string): ValueParserResult<string> {
         return { success: true, value: input };
       },
@@ -6122,6 +6132,7 @@ describe("branch coverage: primitives edge cases", () => {
     const asyncFileNoPattern: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "FILE",
+      placeholder: "",
       parse(input: string): Promise<ValueParserResult<string>> {
         return Promise.resolve({ success: true, value: input });
       },
@@ -6303,6 +6314,7 @@ describe("branch coverage: primitives edge cases", () => {
       factory: (_mode: string) => ({
         $mode: "async" as const,
         metavar: "TARGET",
+        placeholder: "",
         parse(input: string): Promise<ValueParserResult<string>> {
           return Promise.resolve({ success: true, value: input });
         },
@@ -6345,6 +6357,7 @@ describe("branch coverage: primitives edge cases", () => {
         factory: (_mode: string) => ({
           $mode: "async" as const,
           metavar: "NAME",
+          placeholder: "",
           parse(input: string): Promise<ValueParserResult<string>> {
             return Promise.resolve({ success: true, value: input });
           },

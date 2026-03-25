@@ -21,6 +21,14 @@ export interface ZodParserOptions<T = unknown> {
   readonly metavar?: NonEmptyString;
 
   /**
+   * A phase-one stand-in value of type `T` used during deferred prompt
+   * resolution.  Because the output type of a Zod schema cannot be
+   * inferred to a concrete default, callers must provide this explicitly.
+   * @since 1.0.0
+   */
+  readonly placeholder: T;
+
+  /**
    * Custom formatter for displaying parsed values in help messages.
    * When not provided, the default formatter is used: primitives use
    * `String()`, valid `Date` values use `.toISOString()`, and plain
@@ -574,7 +582,8 @@ function inferChoices(
  *
  * @template T The output type of the Zod schema.
  * @param schema A Zod schema to validate input against.
- * @param options Optional configuration for the parser.
+ * @param options Configuration for the parser, including a required
+ *   `placeholder` value used during deferred prompt resolution.
  * @returns A value parser that validates inputs using the provided schema.
  *
  * @example Basic string validation
@@ -583,7 +592,9 @@ function inferChoices(
  * import { zod } from "@optique/zod";
  * import { option } from "@optique/core/primitives";
  *
- * const email = option("--email", zod(z.string().email()));
+ * const email = option("--email",
+ *   zod(z.string().email(), { placeholder: "" }),
+ * );
  * ```
  *
  * @example Number validation with coercion
@@ -594,7 +605,7 @@ function inferChoices(
  *
  * // Use z.coerce for non-string types since CLI args are always strings
  * const port = option("-p", "--port",
- *   zod(z.coerce.number().int().min(1024).max(65535))
+ *   zod(z.coerce.number().int().min(1024).max(65535), { placeholder: 1024 }),
  * );
  * ```
  *
@@ -605,7 +616,7 @@ function inferChoices(
  * import { option } from "@optique/core/primitives";
  *
  * const logLevel = option("--log-level",
- *   zod(z.enum(["debug", "info", "warn", "error"]))
+ *   zod(z.enum(["debug", "info", "warn", "error"]), { placeholder: "debug" }),
  * );
  * ```
  *
@@ -616,15 +627,20 @@ function inferChoices(
  * import { message } from "@optique/core/message";
  * import { option } from "@optique/core/primitives";
  *
- * const email = option("--email", zod(z.string().email(), {
- *   metavar: "EMAIL",
- *   errors: {
- *     zodError: (error, input) =>
- *       message`Please provide a valid email address, got ${input}.`
- *   }
- * }));
+ * const email = option("--email",
+ *   zod(z.string().email(), {
+ *     placeholder: "",
+ *     metavar: "EMAIL",
+ *     errors: {
+ *       zodError: (error, input) =>
+ *         message`Please provide a valid email address, got ${input}.`
+ *     },
+ *   }),
+ * );
  * ```
  *
+ * @throws {TypeError} If `options` is missing, not an object, or does not
+ *   include `placeholder`.
  * @throws {TypeError} If the resolved `metavar` is an empty string.
  * @throws {TypeError} If the schema contains async refinements or other async
  *   operations that cannot be executed synchronously.
@@ -632,8 +648,18 @@ function inferChoices(
  */
 export function zod<T>(
   schema: z.Schema<T>,
-  options: ZodParserOptions<T> = {},
+  options: ZodParserOptions<T>,
 ): ValueParser<"sync", T> {
+  if (options == null || typeof options !== "object") {
+    throw new TypeError(
+      "zod() requires an options object with a placeholder property.",
+    );
+  }
+  if (!("placeholder" in options)) {
+    throw new TypeError(
+      "zod() options must include a placeholder property.",
+    );
+  }
   const choices = inferChoices(schema);
   const boolInfo = analyzeBooleanSchema(schema);
   const metavar = options.metavar ??
@@ -736,6 +762,7 @@ export function zod<T>(
   const parser: ValueParser<"sync", T> = {
     $mode: "sync",
     metavar,
+    placeholder: options.placeholder,
     ...(boolInfo.exposeChoices
       ? {
         choices: Object.freeze([true, false]) as readonly T[],

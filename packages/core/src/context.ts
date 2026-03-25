@@ -211,48 +211,6 @@ export interface SourceContext<TRequiredOptions = void> {
 }
 
 /**
- * Brand symbol for placeholder values.
- *
- * Placeholder values are sentinel objects that represent values to be
- * resolved later (e.g., deferred interactive prompts).  During two-phase
- * parsing, placeholder values are stripped from parsed results before they
- * are passed to phase-2 context annotation collection, and `map()`
- * transformations skip them.
- *
- * Packages that produce placeholder values should set this symbol as a
- * property on their sentinel objects:
- *
- * ~~~~ typescript
- * import { placeholder } from "@optique/core/context";
- *
- * class MyPlaceholder {
- *   readonly [placeholder] = true;
- * }
- * ~~~~
- *
- * @since 1.0.0
- */
-export const placeholder: unique symbol = Symbol.for(
-  "@optique/core/placeholder",
-);
-
-/**
- * Tests whether a value is a placeholder.
- *
- * Returns `true` if the value is a non-null object carrying the
- * {@link placeholder} property.
- *
- * @param value The value to test.
- * @returns `true` if the value is a placeholder.
- * @since 1.0.0
- */
-export function isPlaceholderValue(value: unknown): boolean {
-  return value != null &&
-    typeof value === "object" &&
-    placeholder in value;
-}
-
-/**
  * Checks whether a context is static (returns annotations without needing
  * parsed results).
  *

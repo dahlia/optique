@@ -51,6 +51,7 @@ function asyncString(delay = 0): ValueParser<"async", string> {
   return {
     $mode: "async",
     metavar: "ASYNC_STRING",
+    placeholder: "",
     async parse(input: string): Promise<ValueParserResult<string>> {
       if (delay > 0) {
         await new Promise((resolve) => setTimeout(resolve, delay));
@@ -70,6 +71,7 @@ function asyncInteger(): ValueParser<"async", number> {
   return {
     $mode: "async",
     metavar: "ASYNC_INT",
+    placeholder: 0,
     parse(input: string): Promise<ValueParserResult<number>> {
       const num = parseInt(input, 10);
       if (isNaN(num)) {
@@ -95,6 +97,7 @@ function asyncChoice(
   return {
     $mode: "async",
     metavar: "ASYNC_CHOICE",
+    placeholder: "",
     parse(input: string): Promise<ValueParserResult<string>> {
       if (choices.includes(input)) {
         return Promise.resolve({ success: true, value: input });
@@ -1243,6 +1246,7 @@ describe("State persistence across multiple parse calls", () => {
       const parser: ValueParser<"async", string> & { callCount: number } = {
         $mode: "async",
         metavar: "COUNTING_STRING",
+        placeholder: "",
         callCount: 0,
         async parse(input: string): Promise<ValueParserResult<string>> {
           this.callCount++;
@@ -2628,6 +2632,7 @@ function asyncThrowingParser(): ValueParser<"async", string> {
   return {
     $mode: "async",
     metavar: "THROW",
+    placeholder: "",
     parse(_input: string): Promise<ValueParserResult<string>> {
       return Promise.reject(new Error("Async parser threw an error"));
     },
@@ -2644,6 +2649,7 @@ function asyncRejectingParser(): ValueParser<"async", string> {
   return {
     $mode: "async",
     metavar: "REJECT",
+    placeholder: "",
     parse(_input: string): Promise<ValueParserResult<string>> {
       return Promise.reject(new Error("Async parser rejected"));
     },
@@ -3043,6 +3049,7 @@ describe("Async error recovery patterns", () => {
       return {
         $mode: "async",
         metavar: "STRICT_INT",
+        placeholder: 0,
         parse(input: string): Promise<ValueParserResult<number>> {
           // Only accepts positive integers
           const num = parseInt(input, 10);
@@ -3094,6 +3101,7 @@ describe("Async suggestions with prefix filtering", () => {
     return {
       $mode: "async",
       metavar: "FILTERED_CHOICE",
+      placeholder: "",
       parse(input: string): Promise<ValueParserResult<string>> {
         if (choices.includes(input)) {
           return Promise.resolve({ success: true, value: input });
@@ -4474,6 +4482,7 @@ describe("Edge cases in nested async structures", () => {
     const failingParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "FAIL",
+      placeholder: "",
       parse: () =>
         Promise.resolve({
           success: false,
@@ -4734,6 +4743,7 @@ describe("Realistic async I/O scenarios", () => {
       return {
         $mode: "async",
         metavar: "FILE",
+        placeholder: "",
         async parse(input: string): Promise<ValueParserResult<string>> {
           // Simulate async file stat operation
           await new Promise((resolve) => setTimeout(resolve, 5));
@@ -4806,6 +4816,7 @@ describe("Realistic async I/O scenarios", () => {
       return {
         $mode: "async",
         metavar: "USER_ID",
+        placeholder: 0,
         async parse(input: string): Promise<ValueParserResult<number>> {
           const id = parseInt(input, 10);
           if (isNaN(id)) {
@@ -4877,6 +4888,7 @@ describe("Realistic async I/O scenarios", () => {
       return {
         $mode: "async",
         metavar: "HOSTNAME",
+        placeholder: "",
         async parse(input: string): Promise<ValueParserResult<string>> {
           // Simulate async DNS lookup
           await new Promise((resolve) => setTimeout(resolve, 2));
@@ -4930,6 +4942,7 @@ describe("Realistic async I/O scenarios", () => {
       return {
         $mode: "async",
         metavar: "DB_URL",
+        placeholder: { host: "", port: 0, database: "" },
         async parse(
           input: string,
         ): Promise<
@@ -5023,6 +5036,7 @@ describe("Realistic async I/O scenarios", () => {
       return {
         $mode: "async",
         metavar: "ENVIRONMENT",
+        placeholder: "",
         async parse(input: string): Promise<ValueParserResult<string>> {
           // Simulate API call to fetch valid options
           await new Promise((resolve) => setTimeout(resolve, 2));
@@ -5101,6 +5115,7 @@ describe("Realistic async I/O scenarios", () => {
       return {
         $mode: "async",
         metavar: "VALUE",
+        placeholder: "",
         async parse(input: string): Promise<ValueParserResult<string>> {
           const existing = calls.get(key) ?? [];
           calls.set(key, [...existing, input]);
@@ -5147,6 +5162,7 @@ describe("Realistic async I/O scenarios", () => {
       return {
         $mode: "async",
         metavar: "VALUE",
+        placeholder: "",
         async parse(input: string): Promise<ValueParserResult<string>> {
           await new Promise((resolve) => setTimeout(resolve, 1));
 
@@ -5222,6 +5238,7 @@ describe("Async exception handling", () => {
       return {
         $mode: "async",
         metavar: "THROWING",
+        placeholder: "",
         parse(_input: string): Promise<ValueParserResult<string>> {
           return Promise.reject(new Error("Async parser threw an error"));
         },
@@ -5328,6 +5345,7 @@ describe("Async exception handling", () => {
       return {
         $mode: "async",
         metavar: "THROWING_SUGGEST",
+        placeholder: "",
         parse(input: string): Promise<ValueParserResult<string>> {
           return Promise.resolve({ success: true, value: input });
         },
@@ -5360,6 +5378,7 @@ describe("Async exception handling", () => {
       return {
         $mode: "async",
         metavar: "DELAYED_THROW",
+        placeholder: "",
         async parse(_input: string): Promise<ValueParserResult<string>> {
           await new Promise((resolve) => setTimeout(resolve, delayMs));
           throw new Error(`Delayed throw after ${delayMs}ms`);
@@ -5706,6 +5725,7 @@ describe("longestMatch() with async parsers", () => {
         return {
           $mode: "async",
           metavar: "THROW",
+          placeholder: "",
           parse(_input: string): Promise<ValueParserResult<string>> {
             return Promise.reject(new Error("longestMatch branch threw"));
           },
@@ -5961,6 +5981,7 @@ describe("concat() with async parsers", () => {
       return {
         $mode: "async",
         metavar: "THROWING",
+        placeholder: "",
         parse(_input: string): Promise<ValueParserResult<string>> {
           return Promise.reject(new Error("Concat async parser threw"));
         },
@@ -6187,6 +6208,7 @@ describe("group() with async parsers", () => {
       return {
         $mode: "async",
         metavar: "THROWING",
+        placeholder: "",
         parse(_input: string): Promise<ValueParserResult<string>> {
           return Promise.reject(new Error("Group async parser threw"));
         },
@@ -6746,6 +6768,7 @@ describe("multiple async parser failures (error reporting)", () => {
       return {
         $mode: "async",
         metavar: "INT",
+        placeholder: 0,
         parse(input: string): Promise<ValueParserResult<number>> {
           const num = parseInt(input, 10);
           if (isNaN(num)) {
@@ -6933,6 +6956,7 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
       return {
         $mode: "async",
         metavar: "CHOICE",
+        placeholder: "",
         parse(_input: string): Promise<ValueParserResult<string>> {
           return Promise.reject(new Error("Async discriminator threw"));
         },
@@ -6962,6 +6986,7 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
         return {
           $mode: "async",
           metavar: "THROWING",
+          placeholder: "",
           parse(_input: string): Promise<ValueParserResult<string>> {
             return Promise.reject(new Error("Async branch threw"));
           },
@@ -6990,6 +7015,7 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
         return {
           $mode: "async",
           metavar: "THROWING",
+          placeholder: "",
           parse(_input: string): Promise<ValueParserResult<string>> {
             return Promise.reject(new Error("Async branch threw"));
           },
@@ -7563,6 +7589,7 @@ describe("runParserAsync", () => {
     const failingParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "FAIL",
+      placeholder: "",
       parse(_input: string): Promise<ValueParserResult<string>> {
         return Promise.resolve({
           success: false,

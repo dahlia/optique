@@ -22,6 +22,7 @@ function reachableUrl(): ValueParser<"async", URL> {
   return {
     $mode: "async",
     metavar: "URL",
+    placeholder: new URL("http://0.invalid"),
     async parse(input: string): Promise<ValueParserResult<URL>> {
       // First validate URL format
       let url: URL;
@@ -66,6 +67,7 @@ function apiKey(validationEndpoint: string): ValueParser<"async", string> {
   return {
     $mode: "async",
     metavar: "API_KEY",
+    placeholder: "",
     async parse(input: string): Promise<ValueParserResult<string>> {
       // Basic format validation
       if (input.length < 16) {

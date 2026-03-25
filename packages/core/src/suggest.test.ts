@@ -553,6 +553,7 @@ describe("suggest function", () => {
       const remoteParser = {
         $mode: "sync" as const,
         metavar: "REMOTE" as const,
+        placeholder: "",
         parse(input: string) {
           return { success: true as const, value: input };
         },
@@ -572,6 +573,7 @@ describe("suggest function", () => {
       const tagParser = {
         $mode: "sync" as const,
         metavar: "TAG" as const,
+        placeholder: "",
         parse(input: string) {
           return { success: true as const, value: input };
         },
@@ -607,6 +609,7 @@ describe("suggest function", () => {
       const remoteParser = {
         $mode: "sync" as const,
         metavar: "REMOTE" as const,
+        placeholder: "",
         parse(input: string) {
           return { success: true as const, value: input };
         },
@@ -626,6 +629,7 @@ describe("suggest function", () => {
       const tagParser = {
         $mode: "sync" as const,
         metavar: "TAG" as const,
+        placeholder: "",
         parse(input: string) {
           return { success: true as const, value: input };
         },
@@ -660,6 +664,7 @@ describe("suggest function", () => {
       const formatParser = {
         $mode: "sync" as const,
         metavar: "FORMAT" as const,
+        placeholder: "",
         parse(input: string) {
           return { success: true as const, value: input };
         },
@@ -679,6 +684,7 @@ describe("suggest function", () => {
       const fileParser = {
         $mode: "sync" as const,
         metavar: "FILE" as const,
+        placeholder: "",
         parse(input: string) {
           return { success: true as const, value: input };
         },
@@ -763,6 +769,7 @@ describe("suggest function", () => {
       return {
         $mode: "async",
         metavar: "ASYNC_CHOICE" as NonEmptyString,
+        placeholder: choices[0],
         parse(input: string): Promise<ValueParserResult<T>> {
           if (choices.includes(input as T)) {
             return Promise.resolve({ success: true, value: input as T });

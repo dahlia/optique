@@ -108,6 +108,7 @@ function logOutputValueParser(
   return {
     $mode: "sync",
     metavar,
+    placeholder: { type: "console" },
     parse(input: string): ValueParserResult<LogOutput> {
       if (input === "-") {
         return { success: true, value: { type: "console" } };

@@ -2870,6 +2870,7 @@ import type { Mode, ModeValue, NonEmptyString, ValueParserResult } from "@optiqu
 interface ValueParser<M extends Mode, T> {
   readonly $mode: M;
   readonly metavar: NonEmptyString;
+  readonly placeholder: T;
   parse(input: string): ModeValue<M, ValueParserResult<T>>;
   format(value: T): string;
 }
@@ -2880,6 +2881,15 @@ interface ValueParser<M extends Mode, T> {
     Must be a non-empty string—TypeScript will reject empty string literals
     at compile time, and factory functions will throw `TypeError` at runtime
     if given an empty string.
+
+`placeholder`
+:   A type-appropriate stand-in value of type `T`.  During phase-one parsing
+    (e.g., while a prompt is deferred), this value keeps downstream
+    combinators and `map()` transforms working with the expected shape.
+    Before phase-two context collection, deferred values may still be
+    replaced with `undefined`, so contexts must not rely on seeing the
+    placeholder itself.  It does not need to be meaningful—only a valid
+    inhabitant of the result type that will not crash downstream transforms.
 
 `parse()`
 :   Converts string input to typed value or returns error
@@ -2904,6 +2914,10 @@ function ipv4(): ValueParser<"sync", IPv4Address> {
   return {
     $mode: "sync",
     metavar: "IP_ADDRESS",
+    placeholder: {
+      octets: [0, 0, 0, 0],
+      toString() { return "0.0.0.0"; },
+    },
 
     parse(input: string): ValueParserResult<IPv4Address> {
       const parts = input.split('.');
@@ -2968,6 +2982,7 @@ function date(options: DateParserOptions = {}): ValueParser<"sync", Date> {
   return {
     $mode: "sync",
     metavar,
+    placeholder: new Date(0),
 
     parse(input: string): ValueParserResult<Date> {
       let date: Date;
@@ -3062,6 +3077,10 @@ function ipv4(): ValueParser<"sync", IPv4Address> {
   return {
     $mode: "sync",
     metavar: "IP_ADDRESS",
+    placeholder: {
+      octets: [0, 0, 0, 0],
+      toString() { return "0.0.0.0"; },
+    },
     parse(input: string): ValueParserResult<IPv4Address> {
       return { success: false, error: message`` };
     },
@@ -3082,6 +3101,7 @@ function date(options: DateParserOptions = {}): ValueParser<"sync", Date> {
   return {
     $mode: "sync",
     metavar,
+    placeholder: new Date(0),
     parse(input: string): ValueParserResult<Date> {
       return { success: false, error: message`` };
     },
@@ -3162,6 +3182,8 @@ function parser<T>(): ValueParser<"sync", T> {
 return {
 $mode: "sync",
 metavar: "VALUE",
+// Generic T has no concrete default; cast undefined to satisfy the type:
+placeholder: undefined as unknown as T,
 format() { return ""; },
 // ---cut-before---
 parse(input: string): ValueParserResult<T> {
@@ -3241,6 +3263,7 @@ function reachableUrl(): ValueParser<"async", URL> {
   return {
     $mode: "async",
     metavar: "URL",
+    placeholder: new URL("http://0.invalid"),
     async parse(input: string): Promise<ValueParserResult<URL>> {
       // First validate URL format
       let url: URL;
@@ -3348,6 +3371,7 @@ function userId(): ValueParser<"async", string> {
   return {
     $mode: "async",
     metavar: "USER_ID",
+    placeholder: "",
     async parse(input: string): Promise<ValueParserResult<string>> {
       // Validate against remote service...
       return { success: true, value: input };
@@ -3447,6 +3471,7 @@ function httpMethod(): ValueParser<"sync", string> {
   return {
     $mode: "sync",
     metavar: "METHOD",
+    placeholder: "",
     parse(input: string): ValueParserResult<string> {
       const method = input.toUpperCase();
       if (methods.includes(method)) {
@@ -3491,6 +3516,7 @@ function configFile(): ValueParser<"sync", string> {
   return {
     $mode: "sync",
     metavar: "CONFIG",
+    placeholder: "",
     parse(input: string): ValueParserResult<string> {
       // Validation logic here
       return { success: true, value: input };

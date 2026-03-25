@@ -82,6 +82,7 @@ function asyncStringValue(): ValueParser<"async", string> {
   return {
     $mode: "async",
     metavar: "ASYNC_STRING",
+    placeholder: "",
     parse(input: string): Promise<ValueParserResult<string>> {
       return Promise.resolve({ success: true, value: input });
     },
@@ -8640,6 +8641,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -8655,6 +8657,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -8672,6 +8675,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -8784,6 +8788,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -8801,6 +8806,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -8834,6 +8840,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -8856,6 +8863,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9056,6 +9064,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9073,6 +9082,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9171,6 +9181,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9190,6 +9201,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9548,6 +9560,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9673,6 +9686,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9716,6 +9730,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9758,6 +9773,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9780,6 +9796,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9801,6 +9818,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9823,6 +9841,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9843,6 +9862,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9862,6 +9882,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9882,6 +9903,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9899,6 +9921,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9916,6 +9939,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9963,6 +9987,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -9994,6 +10019,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -10022,6 +10048,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -10080,6 +10107,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -10139,6 +10167,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -10170,6 +10199,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
@@ -11194,6 +11224,7 @@ describe("merge()/concat() suggest with cross-parser dependencies", () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
       metavar: "VAL",
+      placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };

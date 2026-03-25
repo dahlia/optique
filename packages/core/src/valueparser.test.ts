@@ -36,18 +36,37 @@ describe("isValueParser", () => {
     const stringParser = {
       $mode: "sync" as const,
       metavar: "STRING",
+      placeholder: "test",
       parse: () => ({ success: true as const, value: "test" }),
       format: (v: string) => v,
     };
     const numberParser = {
       $mode: "sync" as const,
       metavar: "NUMBER",
+      placeholder: 0,
       parse: () => ({ success: true as const, value: 42 }),
       format: (v: number) => v.toString(),
     };
 
     assert.ok(isValueParser(stringParser));
     assert.ok(isValueParser(numberParser));
+  });
+
+  it("should throw TypeError for parser-like objects missing placeholder", () => {
+    const invalidParser = {
+      $mode: "sync" as const,
+      metavar: "STRING",
+      parse: () => ({ success: true as const, value: "test" }),
+      format: (v: string) => v,
+    };
+    assert.throws(
+      () => isValueParser(invalidParser),
+      {
+        name: "TypeError",
+        message: "Value parser is missing the required placeholder property. " +
+          "All value parsers must define a placeholder value.",
+      },
+    );
   });
 
   it("should return false for objects missing metavar property", () => {
@@ -13676,6 +13695,10 @@ describe("branch coverage regressions", () => {
     const originalBigInt = globalThis.BigInt;
     const originalLocale = Intl.Locale;
 
+    // Construct localeParser before mocking Intl.Locale, since the
+    // placeholder eagerly creates new Intl.Locale("und").
+    const localeParser = locale();
+
     try {
       (globalThis as unknown as { BigInt: typeof BigInt }).BigInt = ((
         _input: string,
@@ -13706,7 +13729,6 @@ describe("branch coverage regressions", () => {
         "bigint boom",
       );
 
-      const localeParser = locale();
       assert.throws(
         () => localeParser.parse("en-US"),
         TypeError,

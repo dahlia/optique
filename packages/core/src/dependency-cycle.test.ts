@@ -32,6 +32,7 @@ test("dependency resolution handles cyclic plain objects", () => {
   const cyclicParser: ValueParser<"sync", CyclicValue> = {
     $mode: "sync",
     metavar: "META" as NonEmptyString,
+    placeholder: cyclicValue,
     parse(): ValueParserResult<CyclicValue> {
       return { success: true, value: cyclicValue };
     },

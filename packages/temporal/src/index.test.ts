@@ -1200,6 +1200,7 @@ describe("async mode integration", () => {
     return {
       $mode: "async",
       metavar: "ASYNC_STRING" as NonEmptyString,
+      placeholder: "",
       async parse(input: string): Promise<ValueParserResult<string>> {
         // Simulate async operation
         await new Promise((resolve) => setTimeout(resolve, 1));

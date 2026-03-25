@@ -57,6 +57,7 @@ function asyncChoice<T extends string>(
   return {
     $mode: "async",
     metavar: "ASYNC_CHOICE" as NonEmptyString,
+    placeholder: choices[0],
     async parse(input: string): Promise<ValueParserResult<T>> {
       if (delay > 0) {
         await new Promise((resolve) => setTimeout(resolve, delay));
@@ -1649,6 +1650,7 @@ describe("flag() parser with dependencies", () => {
     const boolParser: ValueParser<"sync", boolean> = {
       $mode: "sync",
       metavar: "BOOL" as NonEmptyString,
+      placeholder: false,
       parse(input: string) {
         if (input === "true" || input === "1" || input === "yes") {
           return { success: true, value: true };
@@ -1726,6 +1728,7 @@ describe("Factory edge cases", () => {
       factory: (_mode: "fail") => ({
         $mode: "sync" as const,
         metavar: "VALUE" as NonEmptyString,
+        placeholder: "",
         parse(_input: string) {
           return { success: false, error: message`Always fails` };
         },
@@ -4547,6 +4550,7 @@ describe("multiple() with derived parser", () => {
           return {
             $mode: "sync" as const,
             metavar: "NUMBER" as const,
+            placeholder: "",
             parse: (input: string) => {
               const num = Number(input);
               if (Number.isNaN(num)) {
@@ -4641,6 +4645,7 @@ describe("multiple() with derived parser", () => {
         return {
           $mode: "sync" as const,
           metavar: "FILE" as const,
+          placeholder: "",
           parse: (input: string) => {
             const expectedExt = format === "json" ? ".json" : ".csv";
             if (!input.endsWith(expectedExt)) {
@@ -4720,6 +4725,7 @@ describe("Multi-level dependencies using deriveFrom()", () => {
           return {
             $mode: "sync" as const,
             metavar: "INSTANCE" as const,
+            placeholder: "",
             parse: () => ({
               success: false,
               error:
@@ -4926,6 +4932,7 @@ describe("Edge case dependency values", () => {
         return {
           $mode: "sync" as const,
           metavar: "VALUE" as const,
+          placeholder: "",
           parse: (input: string) => {
             if (prefix === "") {
               // Empty prefix: accept anything
@@ -4988,6 +4995,7 @@ describe("Edge case dependency values", () => {
         return {
           $mode: "sync" as const,
           metavar: "ITEMS" as const,
+          placeholder: "",
           parse: (input: string) => {
             const items = input.split(delim);
             return { success: true, value: items.join(",") };
@@ -5026,6 +5034,7 @@ describe("Edge case dependency values", () => {
         return {
           $mode: "sync" as const,
           metavar: "INPUT" as const,
+          placeholder: "",
           parse: (input: string) => {
             try {
               const regex = new RegExp(pattern);
@@ -5176,6 +5185,7 @@ describe("Real-world scenario: Database CLI", () => {
       {
         $mode: "sync" as const,
         metavar: "SCHEMA" as const,
+        placeholder: "",
         parse: (s: string) => ({ success: true, value: s }),
         format: (s: string) => s,
       },
@@ -5210,6 +5220,7 @@ describe("Real-world scenario: Database CLI", () => {
             {
               $mode: "sync" as const,
               metavar: "N" as const,
+              placeholder: 0,
               parse: (s: string) => ({ success: true, value: parseInt(s, 10) }),
               format: (n: number) => String(n),
             },
@@ -5301,6 +5312,7 @@ describe("Real-world scenario: Database CLI", () => {
           return {
             $mode: "sync" as const,
             metavar: "TABLE" as const,
+            placeholder: "",
             parse: () => ({
               success: false,
               error: message`Schema ${schema} is not valid for ${db} database.`,
@@ -5803,6 +5815,7 @@ describe("Negatable-style options with dependencies", () => {
     return {
       $mode: "sync",
       metavar: "BOOL" as NonEmptyString,
+      placeholder: false,
       parse(input: string): ValueParserResult<boolean> {
         const lower = input.toLowerCase();
         if (lower === "true" || lower === "1" || lower === "yes") {

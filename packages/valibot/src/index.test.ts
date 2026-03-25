@@ -5,9 +5,34 @@ import { describe, it } from "node:test";
 import * as v from "valibot";
 
 describe("valibot()", () => {
+  describe("missing placeholder", () => {
+    it("should throw TypeError when options are omitted", () => {
+      assert.throws(
+        // @ts-expect-error: intentionally omitting required options
+        () => valibot(v.string()),
+        {
+          name: "TypeError",
+          message:
+            "valibot() requires an options object with a placeholder property.",
+        },
+      );
+    });
+
+    it("should throw TypeError when placeholder is missing from options", () => {
+      assert.throws(
+        // @ts-expect-error: intentionally omitting placeholder
+        () => valibot(v.string(), {}),
+        {
+          name: "TypeError",
+          message: "valibot() options must include a placeholder property.",
+        },
+      );
+    });
+  });
+
   describe("basic parsing", () => {
     it("should parse valid string input", () => {
-      const parser = valibot(v.string());
+      const parser = valibot(v.string(), { placeholder: "" });
       const result = parser.parse("hello");
 
       assert.ok(result.success);
@@ -15,7 +40,9 @@ describe("valibot()", () => {
     });
 
     it("should parse valid email", () => {
-      const parser = valibot(v.pipe(v.string(), v.email()));
+      const parser = valibot(v.pipe(v.string(), v.email()), {
+        placeholder: "",
+      });
       const result = parser.parse("user@example.com");
 
       assert.ok(result.success);
@@ -23,14 +50,16 @@ describe("valibot()", () => {
     });
 
     it("should reject invalid email", () => {
-      const parser = valibot(v.pipe(v.string(), v.email()));
+      const parser = valibot(v.pipe(v.string(), v.email()), {
+        placeholder: "",
+      });
       const result = parser.parse("not-an-email");
 
       assert.ok(!result.success);
     });
 
     it("should parse valid URL", () => {
-      const parser = valibot(v.pipe(v.string(), v.url()));
+      const parser = valibot(v.pipe(v.string(), v.url()), { placeholder: "" });
       const result = parser.parse("https://example.com");
 
       assert.ok(result.success);
@@ -38,7 +67,7 @@ describe("valibot()", () => {
     });
 
     it("should reject invalid URL", () => {
-      const parser = valibot(v.pipe(v.string(), v.url()));
+      const parser = valibot(v.pipe(v.string(), v.url()), { placeholder: "" });
       const result = parser.parse("not-a-url");
 
       assert.ok(!result.success);
@@ -47,7 +76,9 @@ describe("valibot()", () => {
 
   describe("number transformation", () => {
     it("should parse number with transformation", () => {
-      const parser = valibot(v.pipe(v.string(), v.transform(Number)));
+      const parser = valibot(v.pipe(v.string(), v.transform(Number)), {
+        placeholder: 0,
+      });
       const result = parser.parse("42");
 
       assert.ok(result.success);
@@ -57,6 +88,7 @@ describe("valibot()", () => {
     it("should parse integer with validation", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform(Number), v.number(), v.integer()),
+        { placeholder: 0 },
       );
       const result = parser.parse("42");
 
@@ -67,6 +99,7 @@ describe("valibot()", () => {
     it("should reject non-integer when integer() is required", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform(Number), v.number(), v.integer()),
+        { placeholder: 0 },
       );
       const result = parser.parse("42.5");
 
@@ -83,6 +116,7 @@ describe("valibot()", () => {
           v.minValue(1024),
           v.maxValue(65535),
         ),
+        { placeholder: 0 },
       );
 
       const validResult = parser.parse("8080");
@@ -99,6 +133,7 @@ describe("valibot()", () => {
     it("should reject non-numeric input with transformation", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform(Number), v.number()),
+        { placeholder: 0 },
       );
       const result = parser.parse("not-a-number");
 
@@ -108,7 +143,9 @@ describe("valibot()", () => {
 
   describe("picklist validation", () => {
     it("should parse valid picklist value", () => {
-      const parser = valibot(v.picklist(["debug", "info", "warn", "error"]));
+      const parser = valibot(v.picklist(["debug", "info", "warn", "error"]), {
+        placeholder: "debug",
+      });
       const result = parser.parse("info");
 
       assert.ok(result.success);
@@ -116,7 +153,9 @@ describe("valibot()", () => {
     });
 
     it("should reject invalid picklist value", () => {
-      const parser = valibot(v.picklist(["debug", "info", "warn", "error"]));
+      const parser = valibot(v.picklist(["debug", "info", "warn", "error"]), {
+        placeholder: "debug",
+      });
       const result = parser.parse("trace");
 
       assert.ok(!result.success);
@@ -127,6 +166,7 @@ describe("valibot()", () => {
     it("should apply transformations", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform((s) => s.toUpperCase())),
+        { placeholder: "" },
       );
       const result = parser.parse("hello");
 
@@ -137,6 +177,7 @@ describe("valibot()", () => {
     it("should parse and transform dates", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform((s) => new Date(s))),
+        { placeholder: new Date(0) },
       );
       const result = parser.parse("2025-01-01");
 
@@ -149,54 +190,66 @@ describe("valibot()", () => {
   describe("metavar inference", () => {
     describe("basic types", () => {
       it("should infer STRING for v.string()", () => {
-        const parser = valibot(v.string());
+        const parser = valibot(v.string(), { placeholder: "" });
         assert.equal(parser.metavar, "STRING");
       });
 
       it("should infer NUMBER for v.number()", () => {
-        const parser = valibot(v.number());
+        const parser = valibot(v.number(), { placeholder: 0 });
         assert.equal(parser.metavar, "NUMBER");
       });
 
       it("should infer INTEGER for v.pipe(v.number(), v.integer())", () => {
-        const parser = valibot(v.pipe(v.number(), v.integer()));
+        const parser = valibot(v.pipe(v.number(), v.integer()), {
+          placeholder: 0,
+        });
         assert.equal(parser.metavar, "INTEGER");
       });
 
       it("should infer BOOLEAN for v.boolean()", () => {
-        const parser = valibot(v.boolean());
+        const parser = valibot(v.boolean(), { placeholder: false });
         assert.equal(parser.metavar, "BOOLEAN");
       });
 
       it("should infer DATE for v.date()", () => {
-        const parser = valibot(v.date());
+        const parser = valibot(v.date(), { placeholder: new Date(0) });
         assert.equal(parser.metavar, "DATE");
       });
     });
 
     describe("refined string types", () => {
       it("should infer EMAIL for v.pipe(v.string(), v.email())", () => {
-        const parser = valibot(v.pipe(v.string(), v.email()));
+        const parser = valibot(v.pipe(v.string(), v.email()), {
+          placeholder: "",
+        });
         assert.equal(parser.metavar, "EMAIL");
       });
 
       it("should infer URL for v.pipe(v.string(), v.url())", () => {
-        const parser = valibot(v.pipe(v.string(), v.url()));
+        const parser = valibot(v.pipe(v.string(), v.url()), {
+          placeholder: "",
+        });
         assert.equal(parser.metavar, "URL");
       });
 
       it("should infer UUID for v.pipe(v.string(), v.uuid())", () => {
-        const parser = valibot(v.pipe(v.string(), v.uuid()));
+        const parser = valibot(v.pipe(v.string(), v.uuid()), {
+          placeholder: "",
+        });
         assert.equal(parser.metavar, "UUID");
       });
 
       it("should infer ULID for v.pipe(v.string(), v.ulid())", () => {
-        const parser = valibot(v.pipe(v.string(), v.ulid()));
+        const parser = valibot(v.pipe(v.string(), v.ulid()), {
+          placeholder: "",
+        });
         assert.equal(parser.metavar, "ULID");
       });
 
       it("should infer CUID2 for v.pipe(v.string(), v.cuid2())", () => {
-        const parser = valibot(v.pipe(v.string(), v.cuid2()));
+        const parser = valibot(v.pipe(v.string(), v.cuid2()), {
+          placeholder: "",
+        });
         assert.equal(parser.metavar, "CUID2");
       });
 
@@ -209,7 +262,7 @@ describe("valibot()", () => {
             unknown,
             unknown,
             v.BaseIssue<unknown>
-          >);
+          >, { placeholder: "" as unknown });
 
         assert.equal(make("iso_date").metavar, "DATE");
         assert.equal(make("iso_date_time").metavar, "DATETIME");
@@ -225,17 +278,23 @@ describe("valibot()", () => {
 
     describe("picklist and union types", () => {
       it("should infer CHOICE for v.picklist()", () => {
-        const parser = valibot(v.picklist(["debug", "info", "warn", "error"]));
+        const parser = valibot(v.picklist(["debug", "info", "warn", "error"]), {
+          placeholder: "debug",
+        });
         assert.equal(parser.metavar, "CHOICE");
       });
 
       it("should infer VALUE for v.union()", () => {
-        const parser = valibot(v.union([v.string(), v.number()]));
+        const parser = valibot(v.union([v.string(), v.number()]), {
+          placeholder: "",
+        });
         assert.equal(parser.metavar, "VALUE");
       });
 
       it("should infer CHOICE for v.literal()", () => {
-        const parser = valibot(v.literal("production"));
+        const parser = valibot(v.literal("production"), {
+          placeholder: "production",
+        });
         assert.equal(parser.metavar, "CHOICE");
       });
     });
@@ -244,47 +303,59 @@ describe("valibot()", () => {
       it("should use first validation for multiple validations", () => {
         const parser = valibot(
           v.pipe(v.string(), v.email(), v.minLength(5)),
+          { placeholder: "" },
         );
         assert.equal(parser.metavar, "EMAIL");
       });
 
       it("should unwrap optional schemas", () => {
-        const parser = valibot(v.optional(v.pipe(v.string(), v.email())));
+        const parser = valibot(v.optional(v.pipe(v.string(), v.email())), {
+          placeholder: "",
+        });
         assert.equal(parser.metavar, "EMAIL");
       });
 
       it("should unwrap nullable schemas", () => {
-        const parser = valibot(v.nullable(v.number()));
+        const parser = valibot(v.nullable(v.number()), { placeholder: 0 });
         assert.equal(parser.metavar, "NUMBER");
       });
 
       it("should unwrap nullish schemas", () => {
-        const parser = valibot(v.nullish(v.pipe(v.string(), v.email())));
+        const parser = valibot(v.nullish(v.pipe(v.string(), v.email())), {
+          placeholder: "",
+        });
         assert.equal(parser.metavar, "EMAIL");
       });
 
       it("should allow manual override", () => {
         const parser = valibot(v.pipe(v.string(), v.email()), {
+          placeholder: "",
           metavar: "CUSTOM",
         });
         assert.equal(parser.metavar, "CUSTOM");
       });
 
       it("should reject empty metavar", () => {
-        assert.throws(() => valibot(v.string(), { metavar: "" as never }), {
-          name: "TypeError",
-          message: "Expected a non-empty string.",
-        });
+        assert.throws(
+          () => valibot(v.string(), { placeholder: "", metavar: "" as never }),
+          {
+            name: "TypeError",
+            message: "Expected a non-empty string.",
+          },
+        );
       });
 
       it("should fallback to VALUE for unknown types", () => {
-        const parser = valibot(v.object({ name: v.string() }));
+        const parser = valibot(v.object({ name: v.string() }), {
+          placeholder: { name: "" },
+        });
         assert.equal(parser.metavar, "VALUE");
       });
 
       it("should fallback to VALUE for transform schemas without pipeline type", () => {
         const parser = valibot(
           v.pipe(v.string(), v.transform((s) => s.toUpperCase())),
+          { placeholder: "" },
         );
         assert.equal(parser.metavar, "VALUE");
       });
@@ -296,7 +367,7 @@ describe("valibot()", () => {
           unknown,
           unknown,
           v.BaseIssue<unknown>
-        >);
+        >, { placeholder: "" as unknown });
         assert.equal(parser.metavar, "VALUE");
       });
 
@@ -308,12 +379,12 @@ describe("valibot()", () => {
           unknown,
           unknown,
           v.BaseIssue<unknown>
-        >);
+        >, { placeholder: "" as unknown });
         assert.equal(parser.metavar, "VALUE");
       });
 
       it("should fallback to VALUE for array schemas", () => {
-        const parser = valibot(v.array(v.string()));
+        const parser = valibot(v.array(v.string()), { placeholder: [] });
         assert.equal(parser.metavar, "VALUE");
       });
     });
@@ -322,6 +393,7 @@ describe("valibot()", () => {
       it("should infer INTEGER for v.pipe(v.number(), v.integer(), v.minValue())", () => {
         const parser = valibot(
           v.pipe(v.number(), v.integer(), v.minValue(1024), v.maxValue(65535)),
+          { placeholder: 0 },
         );
         assert.equal(parser.metavar, "INTEGER");
       });
@@ -329,6 +401,7 @@ describe("valibot()", () => {
       it("should infer NUMBER for v.pipe(v.number(), v.minValue()) without integer()", () => {
         const parser = valibot(
           v.pipe(v.number(), v.minValue(0), v.maxValue(1)),
+          { placeholder: 0 },
         );
         assert.equal(parser.metavar, "NUMBER");
       });
@@ -337,17 +410,17 @@ describe("valibot()", () => {
 
   describe("format()", () => {
     it("should format string values", () => {
-      const parser = valibot(v.string());
+      const parser = valibot(v.string(), { placeholder: "" });
       assert.equal(parser.format("hello"), "hello");
     });
 
     it("should format number values", () => {
-      const parser = valibot(v.number());
+      const parser = valibot(v.number(), { placeholder: 0 });
       assert.equal(parser.format(42), "42");
     });
 
     it("should format boolean values", () => {
-      const parser = valibot(v.boolean());
+      const parser = valibot(v.boolean(), { placeholder: false });
       assert.equal(parser.format(true), "true");
       assert.equal(parser.format(false), "false");
     });
@@ -355,6 +428,7 @@ describe("valibot()", () => {
     it("should format date values as ISO strings", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform((s) => new Date(s))),
+        { placeholder: new Date(0) },
       );
       const date = new Date("2025-06-15T00:00:00.000Z");
       assert.equal(parser.format(date), "2025-06-15T00:00:00.000Z");
@@ -363,6 +437,7 @@ describe("valibot()", () => {
     it("should not throw for invalid date values", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform((s) => new Date(s))),
+        { placeholder: new Date(0) },
       );
       const invalid = new Date("bad");
       assert.equal(parser.format(invalid), "Invalid Date");
@@ -371,6 +446,7 @@ describe("valibot()", () => {
     it("should format object values as JSON", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform((s) => ({ raw: s }))),
+        { placeholder: { raw: "" } },
       );
       assert.equal(parser.format({ raw: "hello" }), '{"raw":"hello"}');
     });
@@ -378,6 +454,7 @@ describe("valibot()", () => {
     it("should format array values as comma-separated string", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform((s) => s.split(","))),
+        { placeholder: [] },
       );
       assert.equal(parser.format(["a", "b", "c"]), "a,b,c");
     });
@@ -385,6 +462,7 @@ describe("valibot()", () => {
     it("should preserve array formatting even with [object Object] element", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform((s) => s.split(","))),
+        { placeholder: [] },
       );
       assert.equal(
         parser.format(["a", "[object Object]", "c"]),
@@ -398,6 +476,7 @@ describe("valibot()", () => {
           v.string(),
           v.transform((s) => s.split(",").map((x) => ({ v: x }))),
         ),
+        { placeholder: [] },
       );
       assert.equal(
         parser.format([{ v: "a" }, { v: "b" }]),
@@ -408,6 +487,7 @@ describe("valibot()", () => {
     it("should not throw for non-JSON-serializable objects", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform((s) => ({ id: BigInt(s) }))),
+        { placeholder: { id: 0n } },
       );
       assert.equal(parser.format({ id: 1n }), "[object Object]");
     });
@@ -415,6 +495,7 @@ describe("valibot()", () => {
     it("should not throw for cyclic objects", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform((s) => ({ raw: s }))),
+        { placeholder: { raw: "" } },
       );
       const cyclic: { raw: string; self?: unknown } = { raw: "hello" };
       cyclic.self = cyclic;
@@ -427,6 +508,7 @@ describe("valibot()", () => {
           v.string(),
           v.transform(() => ({ toJSON: () => undefined })),
         ),
+        { placeholder: { toJSON: () => undefined } },
       );
       assert.equal(
         parser.format({ toJSON: () => undefined }),
@@ -437,7 +519,7 @@ describe("valibot()", () => {
     it("should use custom format function from options", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform((s) => ({ raw: s }))),
-        { format: (val) => val.raw },
+        { placeholder: { raw: "" }, format: (val) => val.raw },
       );
       assert.equal(parser.format({ raw: "hello" }), "hello");
     });
@@ -446,6 +528,7 @@ describe("valibot()", () => {
   describe("error customization", () => {
     it("should use custom static error message", () => {
       const parser = valibot(v.pipe(v.string(), v.email()), {
+        placeholder: "",
         errors: {
           valibotError: message`Please provide a valid email address.`,
         },
@@ -460,6 +543,7 @@ describe("valibot()", () => {
 
     it("should use custom error function with input", () => {
       const parser = valibot(v.pipe(v.string(), v.email()), {
+        placeholder: "",
         errors: {
           valibotError: (_issues, input) =>
             message`Please provide a valid email address, got ${input}.`,
@@ -486,6 +570,7 @@ describe("valibot()", () => {
           v.maxValue(10),
         ),
         {
+          placeholder: 0,
           errors: {
             valibotError: (issues, input) => {
               const issue = issues[0];
@@ -521,7 +606,9 @@ describe("valibot()", () => {
 
   describe("default error messages", () => {
     it("should provide default error for invalid input", () => {
-      const parser = valibot(v.pipe(v.string(), v.email()));
+      const parser = valibot(v.pipe(v.string(), v.email()), {
+        placeholder: "",
+      });
       const result = parser.parse("not-an-email");
 
       assert.ok(!result.success);
@@ -532,6 +619,7 @@ describe("valibot()", () => {
     it("should handle validation errors gracefully", () => {
       const parser = valibot(
         v.pipe(v.string(), v.transform(Number), v.number(), v.minValue(10)),
+        { placeholder: 0 },
       );
       const result = parser.parse("5");
 
@@ -542,14 +630,16 @@ describe("valibot()", () => {
 
   describe("edge cases", () => {
     it("should handle empty string", () => {
-      const parser = valibot(v.pipe(v.string(), v.minLength(1)));
+      const parser = valibot(v.pipe(v.string(), v.minLength(1)), {
+        placeholder: "",
+      });
       const result = parser.parse("");
 
       assert.ok(!result.success);
     });
 
     it("should handle optional schemas", () => {
-      const parser = valibot(v.optional(v.string()));
+      const parser = valibot(v.optional(v.string()), { placeholder: "" });
       const result = parser.parse("hello");
 
       assert.ok(result.success);
@@ -557,7 +647,9 @@ describe("valibot()", () => {
     });
 
     it("should handle literal values", () => {
-      const parser = valibot(v.literal("production"));
+      const parser = valibot(v.literal("production"), {
+        placeholder: "production",
+      });
 
       const validResult = parser.parse("production");
       assert.ok(validResult.success);
@@ -573,6 +665,7 @@ describe("valibot()", () => {
           v.literal("auto"),
           v.pipe(v.string(), v.transform(Number), v.number(), v.integer()),
         ]),
+        { placeholder: "auto" },
       );
 
       const literalResult = parser.parse("auto");
@@ -590,7 +683,9 @@ describe("valibot()", () => {
 
   describe("complex schemas", () => {
     it("should handle regex validation", () => {
-      const parser = valibot(v.pipe(v.string(), v.regex(/^[A-Z]{3}$/)));
+      const parser = valibot(v.pipe(v.string(), v.regex(/^[A-Z]{3}$/)), {
+        placeholder: "",
+      });
 
       const validResult = parser.parse("ABC");
       assert.ok(validResult.success);
@@ -600,7 +695,9 @@ describe("valibot()", () => {
     });
 
     it("should handle length constraints", () => {
-      const parser = valibot(v.pipe(v.string(), v.length(5)));
+      const parser = valibot(v.pipe(v.string(), v.length(5)), {
+        placeholder: "",
+      });
 
       const validResult = parser.parse("hello");
       assert.ok(validResult.success);
@@ -612,6 +709,7 @@ describe("valibot()", () => {
     it("should handle min/max length", () => {
       const parser = valibot(
         v.pipe(v.string(), v.minLength(2), v.maxLength(10)),
+        { placeholder: "" },
       );
 
       const validResult = parser.parse("hello");
@@ -630,6 +728,7 @@ describe("valibot()", () => {
           v.pipe(v.string(), v.startsWith("http://")),
           v.pipe(v.string(), v.startsWith("https://")),
         ]),
+        { placeholder: "" },
       );
 
       const httpResult = parser.parse("http://example.com");
@@ -645,19 +744,25 @@ describe("valibot()", () => {
 
   describe("choices and suggest", () => {
     it("should expose choices for v.picklist()", () => {
-      const parser = valibot(v.picklist(["debug", "info", "warn", "error"]));
+      const parser = valibot(v.picklist(["debug", "info", "warn", "error"]), {
+        placeholder: "debug",
+      });
       assert.deepEqual(parser.choices, ["debug", "info", "warn", "error"]);
     });
 
     it("should provide suggest() for v.picklist()", () => {
-      const parser = valibot(v.picklist(["debug", "info", "warn", "error"]));
+      const parser = valibot(v.picklist(["debug", "info", "warn", "error"]), {
+        placeholder: "debug",
+      });
       assert.ok(parser.suggest != null);
       const suggestions = [...parser.suggest!("d")];
       assert.deepEqual(suggestions, [{ kind: "literal", text: "debug" }]);
     });
 
     it("should suggest all choices for empty prefix", () => {
-      const parser = valibot(v.picklist(["debug", "info", "warn", "error"]));
+      const parser = valibot(v.picklist(["debug", "info", "warn", "error"]), {
+        placeholder: "debug",
+      });
       const suggestions = [...parser.suggest!("")];
       assert.deepEqual(suggestions, [
         { kind: "literal", text: "debug" },
@@ -668,19 +773,21 @@ describe("valibot()", () => {
     });
 
     it("should expose choices for v.literal()", () => {
-      const parser = valibot(v.literal("production"));
+      const parser = valibot(v.literal("production"), {
+        placeholder: "production",
+      });
       assert.deepEqual(parser.choices, ["production"]);
     });
 
     it("should expose choices for v.literal() with empty string", () => {
-      const parser = valibot(v.literal(""));
+      const parser = valibot(v.literal(""), { placeholder: "" });
       assert.deepEqual(parser.choices, [""]);
       const suggestions = [...parser.suggest!("")];
       assert.deepEqual(suggestions, [{ kind: "literal", text: "" }]);
     });
 
     it("should not expose choices for v.literal() with number", () => {
-      const parser = valibot(v.literal(42));
+      const parser = valibot(v.literal(42), { placeholder: 42 });
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
       assert.equal(parser.metavar, "VALUE");
@@ -689,6 +796,7 @@ describe("valibot()", () => {
     it("should expose choices for v.union() of literals", () => {
       const parser = valibot(
         v.union([v.literal("dev"), v.literal("prod")]),
+        { placeholder: "dev" },
       );
       assert.deepEqual(parser.choices, ["dev", "prod"]);
     });
@@ -696,6 +804,7 @@ describe("valibot()", () => {
     it("should not expose choices for v.union() with non-literal member", () => {
       const parser = valibot(
         v.union([v.literal("auto"), v.string()]),
+        { placeholder: "auto" },
       );
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
@@ -704,6 +813,7 @@ describe("valibot()", () => {
     it("should not expose choices for v.union() of numeric literals", () => {
       const parser = valibot(
         v.union([v.literal(1), v.literal(2)]),
+        { placeholder: 1 },
       );
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
@@ -713,6 +823,7 @@ describe("valibot()", () => {
     it("should preserve choices through v.optional()", () => {
       const parser = valibot(
         v.optional(v.picklist(["a", "b"])),
+        { placeholder: "a" },
       );
       assert.deepEqual(parser.choices, ["a", "b"]);
     });
@@ -720,6 +831,7 @@ describe("valibot()", () => {
     it("should preserve choices through v.nullable()", () => {
       const parser = valibot(
         v.nullable(v.picklist(["a", "b"])),
+        { placeholder: "a" },
       );
       assert.deepEqual(parser.choices, ["a", "b"]);
     });
@@ -727,12 +839,13 @@ describe("valibot()", () => {
     it("should preserve choices through v.nullish()", () => {
       const parser = valibot(
         v.nullish(v.picklist(["a", "b"])),
+        { placeholder: "a" },
       );
       assert.deepEqual(parser.choices, ["a", "b"]);
     });
 
     it("should not expose choices for v.string()", () => {
-      const parser = valibot(v.string());
+      const parser = valibot(v.string(), { placeholder: "" });
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
     });
@@ -740,6 +853,7 @@ describe("valibot()", () => {
     it("should infer CHOICE metavar for v.union() of literals", () => {
       const parser = valibot(
         v.union([v.literal("dev"), v.literal("prod")]),
+        { placeholder: "dev" },
       );
       assert.equal(parser.metavar, "CHOICE");
     });
@@ -758,7 +872,10 @@ describe("valibot()", () => {
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
+      assert.throws(
+        () => valibot(asyncSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
     });
 
     it("should throw TypeError for async schema inside optional()", () => {
@@ -768,7 +885,10 @@ describe("valibot()", () => {
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
       const asyncSchema = v.optional(asyncInner as never);
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
+      assert.throws(
+        () => valibot(asyncSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
     });
 
     it("should throw TypeError for async schema inside nullable()", () => {
@@ -778,7 +898,10 @@ describe("valibot()", () => {
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
       const asyncSchema = v.nullable(asyncInner as never);
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
+      assert.throws(
+        () => valibot(asyncSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
     });
 
     it("should not reject unions with a catch-all sync string arm", () => {
@@ -790,7 +913,9 @@ describe("valibot()", () => {
       // Union with a bare v.string() arm is safe because CLI input is
       // always a string, so the sync arm matches first.
       const asyncSchema = v.union([v.string(), asyncInner] as never);
-      const parser = valibot(asyncSchema as never);
+      const parser = valibot(asyncSchema as never, {
+        placeholder: "" as never,
+      });
       const result = parser.parse("hello");
       assert.ok(result.success);
     });
@@ -804,7 +929,10 @@ describe("valibot()", () => {
       // v.literal("a") only matches "a", so non-"a" inputs reach the
       // async arm — this must be rejected.
       const asyncSchema = v.union([v.literal("a"), asyncInner] as never);
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
+      assert.throws(
+        () => valibot(asyncSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
     });
 
     it("should not reject unions with wrapped catch-all string arm", () => {
@@ -818,7 +946,9 @@ describe("valibot()", () => {
         v.optional(v.string()),
         asyncInner,
       ] as never);
-      const parser = valibot(asyncSchema as never);
+      const parser = valibot(asyncSchema as never, {
+        placeholder: "" as never,
+      });
       const result = parser.parse("hello");
       assert.ok(result.success);
     });
@@ -834,7 +964,9 @@ describe("valibot()", () => {
         v.pipe(v.string(), v.trim()),
         asyncInner,
       ] as never);
-      const parser = valibot(asyncSchema as never);
+      const parser = valibot(asyncSchema as never, {
+        placeholder: "" as never,
+      });
       const result = parser.parse("hello");
       assert.ok(result.success);
     });
@@ -852,7 +984,9 @@ describe("valibot()", () => {
         v.transform(JSON.parse),
         v.union([v.unknown(), asyncInner] as never),
       );
-      const parser = valibot(asyncSchema as never);
+      const parser = valibot(asyncSchema as never, {
+        placeholder: "" as never,
+      });
       const result = parser.parse('"hello"');
       assert.ok(result.success);
     });
@@ -870,7 +1004,10 @@ describe("valibot()", () => {
         v.transform((s: string) => s.trim()),
         v.union([v.string(), asyncInner] as never),
       );
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
+      assert.throws(
+        () => valibot(asyncSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
     });
 
     it("should throw TypeError for async schema inside intersect()", () => {
@@ -880,7 +1017,10 @@ describe("valibot()", () => {
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
       const asyncSchema = v.intersect([v.string(), asyncInner] as never);
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
+      assert.throws(
+        () => valibot(asyncSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
     });
 
     it("should not reject async entries in direct containers", () => {
@@ -891,11 +1031,17 @@ describe("valibot()", () => {
       );
       // Direct containers are unreachable from string input — the outer
       // type check (object/array/tuple) rejects the string first.
-      const objParser = valibot(v.object({ a: asyncInner } as never));
+      const objParser = valibot(v.object({ a: asyncInner } as never), {
+        placeholder: "" as never,
+      });
       assert.ok(!objParser.parse("hello").success);
-      const arrParser = valibot(v.array(asyncInner as never));
+      const arrParser = valibot(v.array(asyncInner as never), {
+        placeholder: "" as never,
+      });
       assert.ok(!arrParser.parse("hello").success);
-      const tupParser = valibot(v.tuple([asyncInner] as never));
+      const tupParser = valibot(v.tuple([asyncInner] as never), {
+        placeholder: "" as never,
+      });
       assert.ok(!tupParser.parse("hello").success);
     });
 
@@ -908,11 +1054,16 @@ describe("valibot()", () => {
       // Direct containers are unreachable from string input.
       const owrParser = valibot(
         v.objectWithRest({}, asyncRest as never),
+        { placeholder: "" as never },
       );
       assert.ok(!owrParser.parse("hello").success);
-      const twrParser = valibot(v.tupleWithRest([], asyncRest as never));
+      const twrParser = valibot(v.tupleWithRest([], asyncRest as never), {
+        placeholder: "" as never,
+      });
       assert.ok(!twrParser.parse("hello").success);
-      const promParser = valibot(v.promise(asyncRest as never));
+      const promParser = valibot(v.promise(asyncRest as never), {
+        placeholder: "" as never,
+      });
       assert.ok(!promParser.parse("hello").success);
     });
 
@@ -928,7 +1079,10 @@ describe("valibot()", () => {
         v.transform(JSON.parse),
         v.object({ a: asyncInner } as never),
       );
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
+      assert.throws(
+        () => valibot(asyncSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
     });
 
     it("should reject async union arm after transform", () => {
@@ -944,7 +1098,10 @@ describe("valibot()", () => {
         v.transform(JSON.parse),
         v.union([v.string(), asyncInner] as never),
       );
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
+      assert.throws(
+        () => valibot(asyncSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
     });
 
     it("should not reject union with v.unknown() after transform", () => {
@@ -960,7 +1117,9 @@ describe("valibot()", () => {
         v.transform(JSON.parse),
         v.union([v.unknown(), asyncInner] as never),
       );
-      const parser = valibot(asyncSchema as never);
+      const parser = valibot(asyncSchema as never, {
+        placeholder: "" as never,
+      });
       const result = parser.parse('"hello"');
       assert.ok(result.success);
     });
@@ -979,7 +1138,10 @@ describe("valibot()", () => {
         shared,
         v.pipe(v.string(), v.transform(JSON.parse), shared),
       ] as never);
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
+      assert.throws(
+        () => valibot(asyncSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
     });
   });
 });

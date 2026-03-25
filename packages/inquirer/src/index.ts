@@ -30,7 +30,6 @@ import type {
   Parser,
   ParserResult,
 } from "@optique/core/parser";
-import { placeholder } from "@optique/core/context";
 import { message } from "@optique/core/message";
 import type { ValueParserResult } from "@optique/core/valueparser";
 
@@ -135,12 +134,6 @@ const inheritParentAnnotationsKey = Symbol.for(
   "@optique/core/inheritParentAnnotations",
 );
 
-class DeferredPromptValue {
-  readonly [placeholder] = true;
-  constructor() {
-  }
-}
-
 function shouldDeferPrompt(
   parser: Parser<Mode, unknown, unknown>,
   state: unknown,
@@ -149,10 +142,42 @@ function shouldDeferPrompt(
     parser.shouldDeferCompletion(state) === true;
 }
 
-function deferredPromptResult<TValue>(): ValueParserResult<TValue> {
+function deferredPromptResult<TValue>(
+  placeholderValue: TValue,
+): ValueParserResult<TValue> {
+  if (placeholderValue == null || typeof placeholderValue !== "object") {
+    return {
+      success: true,
+      value: placeholderValue,
+      deferred: true,
+    };
+  }
+
+  // For object/array placeholders, enumerate all own keys as fully
+  // deferred so that prepareParsedForContexts() can strip them.
+  // Without this, object-valued leaf placeholders (e.g., from
+  // zod(z.object(...))) would pass through to phase-two contexts
+  // because they look the same as opaque structured deferred values
+  // from map().
+  const isArray = Array.isArray(placeholderValue);
+  const keys = new Map<PropertyKey, null>();
+  for (const key of Reflect.ownKeys(placeholderValue as object)) {
+    // Skip "length" on arrays — setting it to undefined would throw
+    // RangeError: Invalid array length.
+    if (isArray && key === "length") continue;
+    keys.set(key, null);
+  }
+
+  // Always set deferredKeys — even when empty (non-plain objects
+  // like URL, Date, Intl.Locale).  An empty map distinguishes leaf
+  // deferred objects (from prompt()) from opaque structured deferred
+  // (from map()), allowing prepareParsedForContexts() to strip the
+  // former while passing through the latter.
   return {
     success: true,
-    value: new DeferredPromptValue() as TValue,
+    value: placeholderValue,
+    deferred: true,
+    deferredKeys: keys,
   };
 }
 
@@ -891,9 +916,17 @@ export function prompt<M extends Mode, TValue, TState>(
     if (result.success) {
       return Promise.resolve(result);
     }
-    return shouldDeferPrompt(parser, state)
-      ? Promise.resolve(deferredPromptResult<TValue>())
-      : executePrompt();
+    // Defer when the outer parser (e.g., runWith's two-phase machinery)
+    // signals deferral, regardless of whether the wrapped parser exposes
+    // a placeholder.  Wrappers that forward shouldDeferCompletion without
+    // forwarding placeholder would otherwise fall through to executePrompt
+    // and prompt interactively during phase 1.
+    if (!shouldDeferPrompt(parser, state)) return executePrompt();
+    let ph: TValue | undefined;
+    try {
+      ph = "placeholder" in parser ? parser.placeholder as TValue : undefined;
+    } catch { /* lazy getter may throw before dependencies are ready */ }
+    return Promise.resolve(deferredPromptResult(ph as TValue));
   }
 
   const promptedParser: Parser<"async", TValue, TState> & {
@@ -1217,9 +1250,16 @@ export function prompt<M extends Mode, TValue, TState>(
         return useCompleteResultOrPrompt(r as ValueParserResult<TValue>);
       }
 
-      return shouldDeferPrompt(parser, state)
-        ? Promise.resolve(deferredPromptResult<TValue>())
-        : executePrompt();
+      if (shouldDeferPrompt(parser, state)) {
+        let ph: TValue | undefined;
+        try {
+          ph = "placeholder" in parser
+            ? parser.placeholder as TValue
+            : undefined;
+        } catch { /* lazy getter may throw */ }
+        return Promise.resolve(deferredPromptResult(ph as TValue));
+      }
+      return executePrompt();
     },
 
     suggest: (context, prefix) => {
@@ -1251,6 +1291,23 @@ export function prompt<M extends Mode, TValue, TState>(
       return parser.getDocFragments(state, defaultValue as TValue);
     },
   };
+
+  // Lazily forward placeholder from inner parser so that outer wrappers
+  // (withDefault, group, etc.) can see it without triggering eager
+  // evaluation.
+  if ("placeholder" in parser) {
+    Object.defineProperty(promptedParser, "placeholder", {
+      get() {
+        try {
+          return parser.placeholder as TValue;
+        } catch {
+          return undefined;
+        }
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
 
   return promptedParser;
 }

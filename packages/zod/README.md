@@ -37,7 +37,9 @@ import { z } from "zod";
 
 const cli = run(
   object({
-    email: option("--email", zod(z.string().email())),
+    email: option("--email",
+      zod(z.string().email(), { placeholder: "" }),
+    ),
   }),
 );
 
@@ -65,7 +67,9 @@ import { option } from "@optique/core/primitives";
 import { zod } from "@optique/zod";
 import { z } from "zod";
 
-const email = option("--email", zod(z.string().email()));
+const email = option("--email",
+  zod(z.string().email(), { placeholder: "" }),
+);
 ~~~~
 
 ### URL validation
@@ -75,7 +79,9 @@ import { option } from "@optique/core/primitives";
 import { zod } from "@optique/zod";
 import { z } from "zod";
 
-const url = option("--url", zod(z.string().url()));
+const url = option("--url",
+  zod(z.string().url(), { placeholder: "" }),
+);
 ~~~~
 
 ### Port numbers with range validation
@@ -90,7 +96,7 @@ import { zod } from "@optique/zod";
 import { z } from "zod";
 
 const port = option("-p", "--port",
-  zod(z.coerce.number().int().min(1024).max(65535))
+  zod(z.coerce.number().int().min(1024).max(65535), { placeholder: 1024 }),
 );
 ~~~~
 
@@ -102,7 +108,7 @@ import { zod } from "@optique/zod";
 import { z } from "zod";
 
 const logLevel = option("--log-level",
-  zod(z.enum(["debug", "info", "warn", "error"]))
+  zod(z.enum(["debug", "info", "warn", "error"]), { placeholder: "debug" }),
 );
 ~~~~
 
@@ -114,7 +120,7 @@ import { zod } from "@optique/zod";
 import { z } from "zod";
 
 const startDate = argument(
-  zod(z.string().transform((s) => new Date(s)))
+  zod(z.string().transform((s) => new Date(s)), { placeholder: new Date(0) }),
 );
 ~~~~
 
@@ -131,6 +137,7 @@ import { message } from "@optique/core/message";
 import { z } from "zod";
 
 const email = option("--email", zod(z.string().email(), {
+  placeholder: "",
   metavar: "EMAIL",
   errors: {
     zodError: (error, input) =>
@@ -154,7 +161,7 @@ import { zod } from "@optique/zod";
 import { z } from "zod";
 
 // ✅ Correct
-const port = option("-p", zod(z.coerce.number()));
+const port = option("-p", zod(z.coerce.number(), { placeholder: 0 }));
 
 // ❌ Won't work (CLI arguments are always strings)
 // const port = option("-p", zod(z.number()));
@@ -172,7 +179,8 @@ import { z } from "zod";
 
 // ❌ Not supported
 const email = option("--email",
-  zod(z.string().refine(async (val) => await checkDB(val)))
+  zod(z.string().refine(async (val) => await checkDB(val)),
+    { placeholder: "" }),
 );
 ~~~~
 

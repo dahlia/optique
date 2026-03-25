@@ -22,6 +22,14 @@ export interface ValibotParserOptions<T = unknown> {
   readonly metavar?: NonEmptyString;
 
   /**
+   * A phase-one stand-in value of type `T` used during deferred prompt
+   * resolution.  Because the output type of a Valibot schema cannot be
+   * inferred to a concrete default, callers must provide this explicitly.
+   * @since 1.0.0
+   */
+  readonly placeholder: T;
+
+  /**
    * Custom formatter for displaying parsed values in help messages.
    * When not provided, the default formatter is used: primitives use
    * `String()`, valid `Date` values use `.toISOString()`, and plain
@@ -563,7 +571,8 @@ function inferChoices(
  *
  * @template T The output type of the Valibot schema.
  * @param schema A Valibot schema to validate input against.
- * @param options Optional configuration for the parser.
+ * @param options Configuration for the parser, including a required
+ *   `placeholder` value used during deferred prompt resolution.
  * @returns A value parser that validates inputs using the provided schema.
  *
  * @example Basic string validation
@@ -572,7 +581,9 @@ function inferChoices(
  * import { valibot } from "@optique/valibot";
  * import { option } from "@optique/core/primitives";
  *
- * const email = option("--email", valibot(v.pipe(v.string(), v.email())));
+ * const email = option("--email",
+ *   valibot(v.pipe(v.string(), v.email()), { placeholder: "" }),
+ * );
  * ```
  *
  * @example Number validation with pipeline
@@ -589,8 +600,8 @@ function inferChoices(
  *     v.number(),
  *     v.integer(),
  *     v.minValue(1024),
- *     v.maxValue(65535)
- *   ))
+ *     v.maxValue(65535),
+ *   ), { placeholder: 1024 }),
  * );
  * ```
  *
@@ -601,7 +612,9 @@ function inferChoices(
  * import { option } from "@optique/core/primitives";
  *
  * const logLevel = option("--log-level",
- *   valibot(v.picklist(["debug", "info", "warn", "error"]))
+ *   valibot(v.picklist(["debug", "info", "warn", "error"]), {
+ *     placeholder: "debug",
+ *   }),
  * );
  * ```
  *
@@ -614,15 +627,18 @@ function inferChoices(
  *
  * const email = option("--email",
  *   valibot(v.pipe(v.string(), v.email()), {
+ *     placeholder: "",
  *     metavar: "EMAIL",
  *     errors: {
  *       valibotError: (issues, input) =>
  *         message`Please provide a valid email address, got ${input}.`
- *     }
- *   })
+ *     },
+ *   }),
  * );
  * ```
  *
+ * @throws {TypeError} If `options` is missing, not an object, or does not
+ *   include `placeholder`.
  * @throws {TypeError} If the resolved `metavar` is an empty string.
  * @throws {TypeError} If the schema contains async validations that cannot be
  *   executed synchronously.
@@ -630,8 +646,18 @@ function inferChoices(
  */
 export function valibot<T>(
   schema: v.BaseSchema<unknown, T, v.BaseIssue<unknown>>,
-  options: ValibotParserOptions<T> = {},
+  options: ValibotParserOptions<T>,
 ): ValueParser<"sync", T> {
+  if (options == null || typeof options !== "object") {
+    throw new TypeError(
+      "valibot() requires an options object with a placeholder property.",
+    );
+  }
+  if (!("placeholder" in options)) {
+    throw new TypeError(
+      "valibot() options must include a placeholder property.",
+    );
+  }
   if (containsAsyncSchema(schema)) {
     throw new TypeError(
       "Async Valibot schemas (e.g., async validations) are not " +
@@ -644,6 +670,7 @@ export function valibot<T>(
   const parser: ValueParser<"sync", T> = {
     $mode: "sync",
     metavar,
+    placeholder: options.placeholder,
     ...(choices != null && choices.length > 0
       ? {
         // Safe cast: inferChoices() only extracts values from schemas

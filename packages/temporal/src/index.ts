@@ -297,6 +297,13 @@ export function instant(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): Temporal.Instant {
+      try {
+        return Temporal.Instant.from("1970-01-01T00:00:00Z");
+      } catch {
+        return undefined as unknown as Temporal.Instant;
+      }
+    },
     parse(input: string): ValueParserResult<Temporal.Instant> {
       ensureTemporal();
       try {
@@ -341,6 +348,13 @@ export function duration(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): Temporal.Duration {
+      try {
+        return Temporal.Duration.from("PT0S");
+      } catch {
+        return undefined as unknown as Temporal.Duration;
+      }
+    },
     parse(input: string): ValueParserResult<Temporal.Duration> {
       ensureTemporal();
       try {
@@ -384,6 +398,15 @@ export function zonedDateTime(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): Temporal.ZonedDateTime {
+      try {
+        return Temporal.ZonedDateTime.from(
+          "1970-01-01T00:00:00+00:00[UTC]",
+        );
+      } catch {
+        return undefined as unknown as Temporal.ZonedDateTime;
+      }
+    },
     parse(input: string): ValueParserResult<Temporal.ZonedDateTime> {
       ensureTemporal();
       try {
@@ -508,6 +531,13 @@ export function plainDate(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): Temporal.PlainDate {
+      try {
+        return Temporal.PlainDate.from("1970-01-01");
+      } catch {
+        return undefined as unknown as Temporal.PlainDate;
+      }
+    },
     parse(input: string): ValueParserResult<Temporal.PlainDate> {
       ensureTemporal();
       try {
@@ -552,6 +582,13 @@ export function plainTime(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): Temporal.PlainTime {
+      try {
+        return Temporal.PlainTime.from("00:00:00");
+      } catch {
+        return undefined as unknown as Temporal.PlainTime;
+      }
+    },
     parse(input: string): ValueParserResult<Temporal.PlainTime> {
       ensureTemporal();
       try {
@@ -596,6 +633,13 @@ export function plainDateTime(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): Temporal.PlainDateTime {
+      try {
+        return Temporal.PlainDateTime.from("1970-01-01T00:00:00");
+      } catch {
+        return undefined as unknown as Temporal.PlainDateTime;
+      }
+    },
     parse(input: string): ValueParserResult<Temporal.PlainDateTime> {
       ensureTemporal();
       try {
@@ -640,6 +684,13 @@ export function plainYearMonth(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): Temporal.PlainYearMonth {
+      try {
+        return Temporal.PlainYearMonth.from("1970-01");
+      } catch {
+        return undefined as unknown as Temporal.PlainYearMonth;
+      }
+    },
     parse(input: string): ValueParserResult<Temporal.PlainYearMonth> {
       ensureTemporal();
       try {
@@ -684,6 +735,13 @@ export function plainMonthDay(
   return {
     $mode: "sync",
     metavar,
+    get placeholder(): Temporal.PlainMonthDay {
+      try {
+        return Temporal.PlainMonthDay.from("01-01");
+      } catch {
+        return undefined as unknown as Temporal.PlainMonthDay;
+      }
+    },
     parse(input: string): ValueParserResult<Temporal.PlainMonthDay> {
       ensureTemporal();
       try {
@@ -795,6 +853,7 @@ export function timeZone(
   return {
     $mode: "sync",
     metavar,
+    placeholder: "UTC" as TimeZone,
     parse(input: string): ValueParserResult<TimeZone> {
       ensureTemporal();
       try {

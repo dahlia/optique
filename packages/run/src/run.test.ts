@@ -608,6 +608,7 @@ describe("run", () => {
       return {
         $mode: "async",
         metavar: "ASYNC_STRING",
+        placeholder: "",
         async parse(input: string): Promise<ValueParserResult<string>> {
           // Simulate async operation (e.g., validation against remote service)
           await new Promise((resolve) => setTimeout(resolve, 1));
@@ -991,6 +992,7 @@ describe("runSync", () => {
     return {
       $mode: "sync",
       metavar: "STRING",
+      placeholder: "",
       parse(input: string): ValueParserResult<string> {
         return { success: true, value: input.toLowerCase() };
       },
@@ -1153,6 +1155,7 @@ describe("runAsync", () => {
     return {
       $mode: "async",
       metavar: "ASYNC_STRING",
+      placeholder: "",
       parse(input: string): Promise<ValueParserResult<string>> {
         return Promise.resolve({
           success: true,
@@ -2535,6 +2538,7 @@ describe("runSync async parser rejection", () => {
     return {
       $mode: "async",
       metavar: "STRING",
+      placeholder: "",
       parse(input: string) {
         return Promise.resolve({
           success: true as const,

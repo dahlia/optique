@@ -272,7 +272,7 @@ function isOptionRequiringValue(usage: Usage, token: string): boolean {
 
   return traverse(usage);
 }
-import type { ValueParserResult } from "./valueparser.ts";
+import type { DeferredMap, ValueParserResult } from "./valueparser.ts";
 
 /**
  * Options for customizing error messages in the {@link or} combinator.
@@ -4325,6 +4325,8 @@ export function object<
           const result = {} as {
             [K in keyof T]: T[K]["$valueType"][number];
           };
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
           const getCompletionFieldState = createFieldStateGetter(state);
           for (const field of parserKeys) {
             const fieldKey = field as string | symbol;
@@ -4346,6 +4348,18 @@ export function object<
               if (depResult.success) {
                 (result as Record<string | symbol, unknown>)[fieldKey] =
                   depResult.value;
+                if (depResult.deferred) {
+                  if (depResult.deferredKeys) {
+                    deferredKeys.set(fieldKey, depResult.deferredKeys);
+                  } else if (
+                    depResult.value == null ||
+                    typeof depResult.value !== "object"
+                  ) {
+                    deferredKeys.set(fieldKey, null);
+                  } else {
+                    hasDeferred = true;
+                  }
+                }
               } else {
                 return { success: false as const, error: depResult.error };
               }
@@ -4359,9 +4373,39 @@ export function object<
             if (valueResult.success) {
               (result as Record<string | symbol, unknown>)[fieldKey] =
                 valueResult.value;
+              if (valueResult.deferred) {
+                if (valueResult.deferredKeys) {
+                  deferredKeys.set(fieldKey, valueResult.deferredKeys);
+                } else if (
+                  valueResult.value == null ||
+                  typeof valueResult.value !== "object"
+                ) {
+                  // Scalar deferred value (e.g., string from prompt()).
+                  // The entire value IS the deferred placeholder.
+                  deferredKeys.set(fieldKey, null);
+                } else {
+                  // Structured deferred value without per-field info
+                  // (e.g., object from map()).  Don't mark the entire
+                  // field as deferred — that would blank out non-deferred
+                  // data inside it.  Let it pass through.
+                  hasDeferred = true;
+                }
+              }
             } else return { success: false as const, error: valueResult.error };
           }
-          return { success: true as const, value: result };
+          const isDeferred = deferredKeys.size > 0 || hasDeferred;
+          return {
+            success: true as const,
+            value: result,
+            ...(isDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
         },
         async () => {
           // Phase 1: Pre-complete fields with PendingDependencySourceState
@@ -4458,6 +4502,8 @@ export function object<
           const result = {} as {
             [K in keyof T]: T[K]["$valueType"][number];
           };
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
           const getCompletionFieldState = createFieldStateGetter(state);
           for (const field of parserKeys) {
             const fieldKey = field as string | symbol;
@@ -4475,6 +4521,18 @@ export function object<
               if (depResult.success) {
                 (result as Record<string | symbol, unknown>)[fieldKey] =
                   depResult.value;
+                if (depResult.deferred) {
+                  if (depResult.deferredKeys) {
+                    deferredKeys.set(fieldKey, depResult.deferredKeys);
+                  } else if (
+                    depResult.value == null ||
+                    typeof depResult.value !== "object"
+                  ) {
+                    deferredKeys.set(fieldKey, null);
+                  } else {
+                    hasDeferred = true;
+                  }
+                }
               } else {
                 return { success: false as const, error: depResult.error };
               }
@@ -4488,9 +4546,39 @@ export function object<
             if (valueResult.success) {
               (result as Record<string | symbol, unknown>)[fieldKey] =
                 valueResult.value;
+              if (valueResult.deferred) {
+                if (valueResult.deferredKeys) {
+                  deferredKeys.set(fieldKey, valueResult.deferredKeys);
+                } else if (
+                  valueResult.value == null ||
+                  typeof valueResult.value !== "object"
+                ) {
+                  // Scalar deferred value (e.g., string from prompt()).
+                  // The entire value IS the deferred placeholder.
+                  deferredKeys.set(fieldKey, null);
+                } else {
+                  // Structured deferred value without per-field info
+                  // (e.g., object from map()).  Don't mark the entire
+                  // field as deferred — that would blank out non-deferred
+                  // data inside it.  Let it pass through.
+                  hasDeferred = true;
+                }
+              }
             } else return { success: false as const, error: valueResult.error };
           }
-          return { success: true as const, value: result };
+          const isDeferred = deferredKeys.size > 0 || hasDeferred;
+          return {
+            success: true as const,
+            value: result,
+            ...(isDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
         },
       );
     },
@@ -5008,6 +5096,8 @@ export function tuple<
 
           // Phase 3: Complete remaining elements
           const result: unknown[] = [];
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
 
           for (let i = 0; i < syncParsers.length; i++) {
             const elementResolvedState = resolvedArray[i];
@@ -5032,6 +5122,18 @@ export function tuple<
               const depResult = elementResolvedState.result;
               if (depResult.success) {
                 result[i] = depResult.value;
+                if (depResult.deferred) {
+                  if (depResult.deferredKeys) {
+                    deferredKeys.set(i, depResult.deferredKeys);
+                  } else if (
+                    depResult.value == null ||
+                    typeof depResult.value !== "object"
+                  ) {
+                    deferredKeys.set(i, null);
+                  } else {
+                    hasDeferred = true;
+                  }
+                }
               } else {
                 return { success: false as const, error: depResult.error };
               }
@@ -5041,14 +5143,35 @@ export function tuple<
             const valueResult = elementParser.complete(elementResolvedState);
             if (valueResult.success) {
               result[i] = valueResult.value;
+              if (valueResult.deferred) {
+                if (valueResult.deferredKeys) {
+                  deferredKeys.set(i, valueResult.deferredKeys);
+                } else if (
+                  valueResult.value == null ||
+                  typeof valueResult.value !== "object"
+                ) {
+                  deferredKeys.set(i, null);
+                } else {
+                  hasDeferred = true;
+                }
+              }
             } else {
               return { success: false as const, error: valueResult.error };
             }
           }
 
+          const isDeferred = deferredKeys.size > 0 || hasDeferred;
           return {
             success: true as const,
             value: result as { [K in keyof T]: T[K]["$valueType"][number] },
+            ...(isDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
           };
         },
         async () => {
@@ -5098,6 +5221,8 @@ export function tuple<
 
           // Phase 3: Complete remaining elements
           const result: unknown[] = [];
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
 
           for (let i = 0; i < parsers.length; i++) {
             const elementResolvedState = resolvedArray[i];
@@ -5122,6 +5247,18 @@ export function tuple<
               const depResult = elementResolvedState.result;
               if (depResult.success) {
                 result[i] = depResult.value;
+                if (depResult.deferred) {
+                  if (depResult.deferredKeys) {
+                    deferredKeys.set(i, depResult.deferredKeys);
+                  } else if (
+                    depResult.value == null ||
+                    typeof depResult.value !== "object"
+                  ) {
+                    deferredKeys.set(i, null);
+                  } else {
+                    hasDeferred = true;
+                  }
+                }
               } else {
                 return { success: false as const, error: depResult.error };
               }
@@ -5133,14 +5270,35 @@ export function tuple<
             );
             if (valueResult.success) {
               result[i] = valueResult.value;
+              if (valueResult.deferred) {
+                if (valueResult.deferredKeys) {
+                  deferredKeys.set(i, valueResult.deferredKeys);
+                } else if (
+                  valueResult.value == null ||
+                  typeof valueResult.value !== "object"
+                ) {
+                  deferredKeys.set(i, null);
+                } else {
+                  hasDeferred = true;
+                }
+              }
             } else {
               return { success: false as const, error: valueResult.error };
             }
           }
 
+          const isDeferred = deferredKeys.size > 0 || hasDeferred;
           return {
             success: true as const,
             value: result as { [K in keyof T]: T[K]["$valueType"][number] },
+            ...(isDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
           };
         },
       );
@@ -5719,6 +5877,8 @@ export function merge(
         const resolvedState = resolveDeferredParseStates(state, registry);
 
         const object: MergeState = {};
+        const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+        let hasDeferred = false;
         for (let i = 0; i < syncParsers.length; i++) {
           const parser = syncParsers[i];
           const parserState = extractCompleteState(parser, resolvedState, i);
@@ -5726,9 +5886,42 @@ export function merge(
             parserState as Parameters<typeof parser.complete>[0],
           );
           if (!result.success) return result;
-          for (const field in result.value) object[field] = result.value[field];
+          for (const field in result.value) {
+            object[field] = result.value[field];
+            // When a later child overwrites a key that an earlier child
+            // marked as deferred, clear the stale marker so that
+            // prepareParsedForContexts() does not strip the real value.
+            if (
+              deferredKeys.has(field) &&
+              !(result.deferred && result.deferredKeys?.has(field))
+            ) {
+              deferredKeys.delete(field);
+            }
+          }
+          if (result.deferred && result.deferredKeys) {
+            for (const [key, value] of result.deferredKeys) {
+              deferredKeys.set(key, value);
+            }
+          } else if (result.deferred) {
+            // Child is deferred but lacks per-field info (e.g., after
+            // map()).  We cannot determine which of its fields are
+            // deferred, so let them pass through.
+            hasDeferred = true;
+          }
         }
-        return { success: true, value: object };
+        const isDeferred = deferredKeys.size > 0 || hasDeferred;
+        return {
+          success: true as const,
+          value: object,
+          ...(isDeferred
+            ? {
+              deferred: true as const,
+              ...(deferredKeys.size > 0
+                ? { deferredKeys: deferredKeys as DeferredMap }
+                : {}),
+            }
+            : {}),
+        };
       }
 
       // For async mode, complete asynchronously
@@ -5752,6 +5945,8 @@ export function merge(
         );
 
         const object: MergeState = {};
+        const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+        let hasDeferred = false;
         for (let i = 0; i < parsers.length; i++) {
           const parser = parsers[i];
           const parserState = extractCompleteState(parser, resolvedState, i);
@@ -5759,9 +5954,42 @@ export function merge(
             parserState as Parameters<typeof parser.complete>[0],
           );
           if (!result.success) return result;
-          for (const field in result.value) object[field] = result.value[field];
+          for (const field in result.value) {
+            object[field] = result.value[field];
+            // When a later child overwrites a key that an earlier child
+            // marked as deferred, clear the stale marker so that
+            // prepareParsedForContexts() does not strip the real value.
+            if (
+              deferredKeys.has(field) &&
+              !(result.deferred && result.deferredKeys?.has(field))
+            ) {
+              deferredKeys.delete(field);
+            }
+          }
+          if (result.deferred && result.deferredKeys) {
+            for (const [key, value] of result.deferredKeys) {
+              deferredKeys.set(key, value);
+            }
+          } else if (result.deferred) {
+            // Child is deferred but lacks per-field info (e.g., after
+            // map()).  We cannot determine which of its fields are
+            // deferred, so let them pass through.
+            hasDeferred = true;
+          }
         }
-        return { success: true, value: object };
+        const isDeferred = deferredKeys.size > 0 || hasDeferred;
+        return {
+          success: true as const,
+          value: object,
+          ...(isDeferred
+            ? {
+              deferred: true as const,
+              ...(deferredKeys.size > 0
+                ? { deferredKeys: deferredKeys as DeferredMap }
+                : {}),
+            }
+            : {}),
+        };
       })();
     },
     suggest(
@@ -6542,20 +6770,64 @@ export function concat(
 
     // Phase 3: Complete each parser with resolved state
     const results: unknown[] = [];
+    const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+    let hasDeferred = false;
     for (let i = 0; i < syncParsers.length; i++) {
       const parser = syncParsers[i];
       const parserState = resolvedCombinedState[i];
       const result = parser.complete(parserState);
       if (!result.success) return result;
 
-      // Flatten the tuple results
+      // Flatten the tuple results, remapping deferred keys to the
+      // flattened output indices so prepareParsedForContexts() can
+      // strip them correctly.
+      const baseIndex = results.length;
       if (Array.isArray(result.value)) {
         results.push(...result.value);
+        if (result.deferred && result.deferredKeys) {
+          for (const [key, value] of result.deferredKeys) {
+            const numKey = typeof key === "string" ? Number(key) : key;
+            if (typeof numKey === "number" && Number.isInteger(numKey)) {
+              deferredKeys.set(baseIndex + numKey, value);
+            } else {
+              deferredKeys.set(key, value);
+            }
+          }
+        } else if (result.deferred) {
+          // Opaque deferred array child (e.g., after map()). Don't
+          // mark all indices — that would blank out non-deferred
+          // elements. Let them pass through with placeholder values.
+          hasDeferred = true;
+        }
       } else {
         results.push(result.value);
+        if (result.deferred) {
+          if (result.deferredKeys) {
+            deferredKeys.set(baseIndex, result.deferredKeys);
+          } else if (
+            result.value == null || typeof result.value !== "object"
+          ) {
+            // Scalar deferred child — record its index.
+            deferredKeys.set(baseIndex, null);
+          } else {
+            hasDeferred = true;
+          }
+        }
       }
     }
-    return { success: true, value: results };
+    const isDeferred = deferredKeys.size > 0 || hasDeferred;
+    return {
+      success: true,
+      value: results,
+      ...(isDeferred
+        ? {
+          deferred: true as const,
+          ...(deferredKeys.size > 0
+            ? { deferredKeys: deferredKeys as DeferredMap }
+            : {}),
+        }
+        : {}),
+    };
   };
 
   // Async complete implementation
@@ -6577,20 +6849,60 @@ export function concat(
 
     // Phase 3: Complete each parser with resolved state
     const results: unknown[] = [];
+    const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+    let hasDeferred = false;
     for (let i = 0; i < parsers.length; i++) {
       const parser = parsers[i];
       const parserState = resolvedCombinedState[i];
       const result = await parser.complete(parserState);
       if (!result.success) return result;
 
-      // Flatten the tuple results
+      // Flatten the tuple results, remapping deferred keys to the
+      // flattened output indices.
+      const baseIndex = results.length;
       if (Array.isArray(result.value)) {
         results.push(...result.value);
+        if (result.deferred && result.deferredKeys) {
+          for (const [key, value] of result.deferredKeys) {
+            const numKey = typeof key === "string" ? Number(key) : key;
+            if (typeof numKey === "number" && Number.isInteger(numKey)) {
+              deferredKeys.set(baseIndex + numKey, value);
+            } else {
+              deferredKeys.set(key, value);
+            }
+          }
+        } else if (result.deferred) {
+          hasDeferred = true;
+        }
       } else {
         results.push(result.value);
+        if (result.deferred) {
+          if (result.deferredKeys) {
+            deferredKeys.set(baseIndex, result.deferredKeys);
+          } else if (
+            result.value == null || typeof result.value !== "object"
+          ) {
+            // Scalar deferred child — record its index.
+            deferredKeys.set(baseIndex, null);
+          } else {
+            hasDeferred = true;
+          }
+        }
       }
     }
-    return { success: true, value: results };
+    const isDeferred = deferredKeys.size > 0 || hasDeferred;
+    return {
+      success: true,
+      value: results,
+      ...(isDeferred
+        ? {
+          deferred: true as const,
+          ...(deferredKeys.size > 0
+            ? { deferredKeys: deferredKeys as DeferredMap }
+            : {}),
+        }
+        : {}),
+    };
   };
 
   return {
@@ -6770,7 +7082,7 @@ export function group<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   options: GroupOptions = {},
 ): Parser<M, TValue, TState> {
-  return {
+  const groupParser: Parser<M, TValue, TState> = {
     $mode: parser.$mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
@@ -6893,6 +7205,18 @@ export function group<M extends Mode, TValue, TState>(
       };
     },
   };
+  // Lazily forward placeholder from inner parser to avoid eagerly
+  // evaluating derived value parser factories at construction time.
+  if ("placeholder" in parser) {
+    Object.defineProperty(groupParser, "placeholder", {
+      get() {
+        return parser.placeholder;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  return groupParser;
 }
 
 /**
@@ -7459,6 +7783,22 @@ export function conditional(
         return {
           success: true,
           value: [undefined, defaultResult.value] as const,
+          ...(defaultResult.deferred
+            ? {
+              deferred: true as const,
+              ...(defaultResult.deferredKeys
+                ? {
+                  deferredKeys: new Map([[
+                    1,
+                    defaultResult.deferredKeys,
+                  ]]) as DeferredMap,
+                }
+                : defaultResult.value == null ||
+                    typeof defaultResult.value !== "object"
+                ? { deferredKeys: new Map([[1, null]]) as DeferredMap }
+                : {}),
+            }
+            : {}),
         };
       }
 
@@ -7526,6 +7866,24 @@ export function conditional(
     return {
       success: true,
       value: [discriminatorValue, branchResult.value] as const,
+      // Propagate deferred metadata from the branch result,
+      // remapping to index 1 of the [discriminator, branchValue] tuple.
+      ...(branchResult.deferred
+        ? {
+          deferred: true as const,
+          ...(branchResult.deferredKeys
+            ? {
+              deferredKeys: new Map([[
+                1,
+                branchResult.deferredKeys,
+              ]]) as DeferredMap,
+            }
+            : branchResult.value == null ||
+                typeof branchResult.value !== "object"
+            ? { deferredKeys: new Map([[1, null]]) as DeferredMap }
+            : {}),
+        }
+        : {}),
     };
   };
 
@@ -7545,6 +7903,22 @@ export function conditional(
         return {
           success: true,
           value: [undefined, defaultResult.value] as const,
+          ...(defaultResult.deferred
+            ? {
+              deferred: true as const,
+              ...(defaultResult.deferredKeys
+                ? {
+                  deferredKeys: new Map([[
+                    1,
+                    defaultResult.deferredKeys,
+                  ]]) as DeferredMap,
+                }
+                : defaultResult.value == null ||
+                    typeof defaultResult.value !== "object"
+                ? { deferredKeys: new Map([[1, null]]) as DeferredMap }
+                : {}),
+            }
+            : {}),
         };
       }
 
@@ -7613,6 +7987,22 @@ export function conditional(
     return {
       success: true,
       value: [discriminatorValue, branchResult.value] as const,
+      ...(branchResult.deferred
+        ? {
+          deferred: true as const,
+          ...(branchResult.deferredKeys
+            ? {
+              deferredKeys: new Map([[
+                1,
+                branchResult.deferredKeys,
+              ]]) as DeferredMap,
+            }
+            : branchResult.value == null ||
+                typeof branchResult.value !== "object"
+            ? { deferredKeys: new Map([[1, null]]) as DeferredMap }
+            : {}),
+        }
+        : {}),
     };
   };
 

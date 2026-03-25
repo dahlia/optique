@@ -1457,7 +1457,7 @@ describe("prompt()", () => {
           },
         );
 
-        assert.deepEqual(phase2Parsed, { apiKey: undefined });
+        assert.equal(phase2Parsed, undefined);
         assert.deepEqual(result, { apiKey: "config-secret" });
       },
     );
@@ -1510,7 +1510,7 @@ describe("prompt()", () => {
     );
 
     it(
-      "hides deferred prompt values inside non-plain phase-two context inputs",
+      "passes through deferred prompt values inside non-plain phase-two context inputs",
       async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -1565,13 +1565,97 @@ describe("prompt()", () => {
         );
 
         assert.ok(phase2Parsed instanceof ConfigInput);
-        assert.equal(phase2Parsed.apiKey, undefined);
+        assert.equal(phase2Parsed.apiKey, "");
         assert.ok(result instanceof ConfigInput);
         assert.equal(result.apiKey, "config-secret");
       },
     );
 
-    it("hides deferred prompt values inside Set phase-two context inputs", async () => {
+    it(
+      "handles class with private fields in deferred phase-two contexts",
+      async () => {
+        // Regression test for https://github.com/dahlia/optique/issues/307
+        // Private fields caused the old proxy-based sanitization to throw
+        // TypeError because proxies cannot access private fields through
+        // the receiver.  The placeholder approach avoids this entirely.
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+
+        class SecretHolder {
+          #secret: string;
+          constructor(secret: string) {
+            this.#secret = secret;
+          }
+          get masked(): string {
+            return this.#secret.replace(/./g, "*");
+          }
+        }
+
+        let phase2Threw = false;
+        let phase2SawSecretHolder = false;
+        let phase2Masked: string | undefined;
+        const dynamicContext: SourceContext = {
+          id: Symbol.for("@test/private-field-phase-two"),
+          mode: "dynamic",
+          getAnnotations(parsed?: unknown) {
+            if (parsed !== undefined) {
+              phase2SawSecretHolder = parsed instanceof SecretHolder;
+              try {
+                // Accessing the getter should not throw even though
+                // the class uses private fields.
+                phase2Masked = (parsed as SecretHolder).masked;
+              } catch {
+                phase2Threw = true;
+              }
+            }
+            return {};
+          },
+        };
+
+        const parser = map(
+          object({
+            apiKey: prompt(
+              bindConfig(option("--api-key", string()), {
+                context,
+                key: "apiKey",
+              }),
+              {
+                type: "password",
+                message: "API key:",
+                prompter: () => Promise.resolve("prompt-secret"),
+              },
+            ),
+          }),
+          (value) => new SecretHolder(value.apiKey),
+        );
+
+        const result = await runWith(
+          parser,
+          "test",
+          [dynamicContext, context],
+          {
+            args: [],
+            contextOptions: {
+              load: () => ({
+                config: { apiKey: "real-secret" },
+                meta: undefined,
+              }),
+            },
+          },
+        );
+
+        // Phase-two context sees the mapped placeholder instance and
+        // accessing its private-field-backed getter must not throw.
+        assert.ok(!phase2Threw);
+        assert.ok(phase2SawSecretHolder);
+        assert.equal(phase2Masked, "");
+        assert.ok(result instanceof SecretHolder);
+        assert.equal(result.masked, "***********");
+      },
+    );
+
+    it("passes through deferred prompt values inside Set phase-two context inputs", async () => {
       const context = createConfigContext({
         schema: createPromptConfigSchema(),
       });
@@ -1615,13 +1699,13 @@ describe("prompt()", () => {
         },
       });
 
-      assert.deepEqual(phase2Values, [undefined]);
+      assert.deepEqual(phase2Values, [""]);
       assert.ok(result instanceof Set);
       assert.deepEqual([...result], ["config-secret"]);
     });
 
     it(
-      "hides deferred prompt values in Set own properties during phase two",
+      "passes through deferred prompt values in Set own properties during phase two",
       async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -1683,7 +1767,7 @@ describe("prompt()", () => {
         );
 
         assert.ok(phase2WasBoxSet);
-        assert.equal(phase2ApiKey, undefined);
+        assert.equal(phase2ApiKey, "");
         assert.ok(result instanceof BoxSet);
         assert.equal(result.apiKey, "config-secret");
       },
@@ -1818,7 +1902,7 @@ describe("prompt()", () => {
     });
 
     it(
-      "hides deferred prompt values inside nested non-plain phase-two inputs",
+      "passes through deferred prompt values inside nested non-plain phase-two inputs",
       async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -1874,7 +1958,7 @@ describe("prompt()", () => {
           },
         );
 
-        assert.equal(phase2ApiKey, undefined);
+        assert.equal(phase2ApiKey, "");
         assert.equal(result.inner.apiKey, "config-secret");
       },
     );
@@ -1945,12 +2029,12 @@ describe("prompt()", () => {
         },
       });
 
-      assert.deepEqual(loaderParsed, { apiKey: undefined });
+      assert.equal(loaderParsed, undefined);
       assert.deepEqual(result, { apiKey: "config-secret" });
     });
 
     it(
-      "reuses scrubbed phase-two parsed identity across contexts and loaders",
+      "collapses all-deferred object to undefined for phase-two contexts and loaders",
       async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -1999,12 +2083,14 @@ describe("prompt()", () => {
           },
         );
 
-        assert.equal(loaderMetadata, "seen");
+        // When all fields are deferred, the entire object is replaced
+        // with undefined, so the WeakMap identity check does not apply.
+        assert.equal(loaderMetadata, undefined);
         assert.deepEqual(result, { apiKey: "config-secret" });
       },
     );
 
-    it("hides deferred prompt values inside Set loader inputs", async () => {
+    it("passes through deferred prompt values inside Set loader inputs", async () => {
       const context = createConfigContext({
         schema: createPromptConfigSchema(),
       });
@@ -2041,12 +2127,12 @@ describe("prompt()", () => {
         },
       });
 
-      assert.deepEqual(loaderValues, [undefined]);
+      assert.deepEqual(loaderValues, [""]);
       assert.ok(result instanceof Set);
       assert.deepEqual([...result], ["config-secret"]);
     });
 
-    it("hides deferred prompt values in Set own properties for config loaders", async () => {
+    it("passes through deferred prompt values in Set own properties for config loaders", async () => {
       const context = createConfigContext({
         schema: createPromptConfigSchema(),
       });
@@ -2093,11 +2179,208 @@ describe("prompt()", () => {
         },
       });
 
-      assert.equal(loaderApiKey, undefined);
+      assert.equal(loaderApiKey, "");
       assert.ok(result instanceof BoxSet);
       assert.equal(result.apiKey, "config-secret");
     });
+
+    it(
+      "passes mapped placeholder values through to phase-two contexts (intentional trade-off)",
+      async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+
+        let phase2Token: string | undefined;
+        const dynamicContext: SourceContext = {
+          id: Symbol.for("@test/mapped-placeholder-phase-two"),
+          mode: "dynamic",
+          getAnnotations(parsed?: unknown) {
+            if (parsed != null && typeof parsed === "object") {
+              phase2Token = (parsed as { readonly token: string }).token;
+            }
+            return {};
+          },
+        };
+
+        const parser = map(
+          object({
+            apiKey: prompt(
+              bindConfig(option("--api-key", string()), {
+                context,
+                key: "apiKey",
+              }),
+              {
+                type: "password",
+                message: "API key:",
+                prompter: () => Promise.resolve("prompt-secret"),
+              },
+            ),
+          }),
+          (value) => ({ token: value.apiKey }),
+        );
+
+        const result = await runWith(
+          parser,
+          "test",
+          [dynamicContext, context],
+          {
+            args: [],
+            contextOptions: {
+              load: () => ({
+                config: { apiKey: "config-secret" },
+                meta: undefined,
+              }),
+            },
+          },
+        );
+
+        // map() drops deferredKeys because the transform is opaque.
+        // The placeholder "" leaks through to the dynamic context.
+        // This is an intentional trade-off: forwarding stale inner
+        // keys would risk stripping the wrong output fields.
+        assert.equal(phase2Token, "");
+        assert.equal(result.token, "config-secret");
+      },
+    );
+
+    it(
+      "falls back to undefined when map() transform throws on deferred placeholder",
+      async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+
+        let phase2Parsed: unknown = "not-called";
+        const dynamicContext: SourceContext = {
+          id: Symbol.for("@test/mapped-throw-phase-two"),
+          mode: "dynamic",
+          getAnnotations(parsed?: unknown) {
+            phase2Parsed = parsed;
+            return {};
+          },
+        };
+
+        const parser = map(
+          object({
+            apiKey: prompt(
+              bindConfig(option("--api-key", string()), {
+                context,
+                key: "apiKey",
+              }),
+              {
+                type: "password",
+                message: "API key:",
+                prompter: () => Promise.resolve("prompt-secret"),
+              },
+            ),
+          }),
+          (value) => {
+            // This transform crashes on the placeholder because
+            // it assumes apiKey is non-empty.
+            if (value.apiKey.length === 0) {
+              throw new Error("apiKey must be non-empty");
+            }
+            return { token: value.apiKey.toUpperCase() };
+          },
+        );
+
+        const result = await runWith(
+          parser,
+          "test",
+          [dynamicContext, context],
+          {
+            args: [],
+            contextOptions: {
+              load: () => ({
+                config: { apiKey: "config-secret" },
+                meta: undefined,
+              }),
+            },
+          },
+        );
+
+        // When the transform throws on a deferred placeholder, map()
+        // catches the error and produces undefined with deferred: true.
+        // prepareParsedForContexts() sees deferred without deferredKeys,
+        // so it passes through (which is undefined).
+        assert.equal(phase2Parsed, undefined);
+        assert.equal(result.token, "CONFIG-SECRET");
+      },
+    );
   });
+
+  it(
+    "map() placeholder is not corrupted by pure transforms across parses",
+    async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+
+      // Spy context that records the phase-one parsed value so we can
+      // verify that the placeholder shape survives the map() transform.
+      const phaseOneValues: unknown[] = [];
+      const spyContext: SourceContext = {
+        id: Symbol("spy"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed !== undefined) {
+            phaseOneValues.push(parsed);
+          }
+          return {};
+        },
+      };
+
+      const parser = map(
+        prompt(
+          bindConfig(option("--api-key", string()), {
+            context,
+            key: "apiKey",
+          }),
+          {
+            type: "password",
+            message: "API key:",
+            prompter: () => Promise.resolve("prompt-secret"),
+          },
+        ),
+        (v) => ({ token: v }),
+      );
+
+      // First runWith
+      const result1 = await runWith(parser, "test", [context, spyContext], {
+        args: [],
+        contextOptions: {
+          load: () => ({
+            config: { apiKey: "config-1" },
+            meta: undefined,
+          }),
+        },
+      });
+      assert.equal(result1.token, "config-1");
+
+      // The phase-one value should have { token: <string> } shape
+      assert.equal(phaseOneValues.length, 1);
+      const p1 = phaseOneValues[0] as { token: unknown };
+      assert.equal(typeof p1.token, "string");
+
+      // Second runWith — placeholder should not be corrupted
+      const result2 = await runWith(parser, "test", [context, spyContext], {
+        args: [],
+        contextOptions: {
+          load: () => ({
+            config: { apiKey: "config-2" },
+            meta: undefined,
+          }),
+        },
+      });
+      assert.equal(result2.token, "config-2");
+
+      // Verify that the second run also produced a valid phase-one value
+      assert.equal(phaseOneValues.length, 2);
+      const p2 = phaseOneValues[1] as { token: unknown };
+      assert.equal(typeof p2.token, "string");
+    },
+  );
 
   describe("prompt deferral through wrapper combinators", () => {
     for (

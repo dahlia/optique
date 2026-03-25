@@ -126,7 +126,7 @@ import {
  * @template T The type of the constant value produced by the parser.
  */
 export function constant<const T>(value: T): Parser<"sync", T, T> {
-  return {
+  const result: Parser<"sync", T, T> = {
     $valueType: [],
     $stateType: [],
     $mode: "sync",
@@ -146,6 +146,13 @@ export function constant<const T>(value: T): Parser<"sync", T, T> {
       return { fragments: [] };
     },
   };
+  Object.defineProperty(result, "placeholder", {
+    value,
+    configurable: true,
+    enumerable: false,
+    writable: false,
+  });
+  return result;
 }
 
 /**
@@ -1163,6 +1170,29 @@ export function option<M extends Mode, T>(
       return `option(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
     },
   };
+  // Define placeholder lazily to avoid triggering derived value parser
+  // factory functions during parser construction.  Non-enumerable so that
+  // ...parser spread in map() does not eagerly evaluate the getter.
+  if (valueParser != null) {
+    Object.defineProperty(result, "placeholder", {
+      get() {
+        try {
+          return valueParser!.placeholder;
+        } catch {
+          return undefined;
+        }
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  } else {
+    Object.defineProperty(result, "placeholder", {
+      value: false,
+      configurable: true,
+      enumerable: false,
+      writable: false,
+    });
+  }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
   // At runtime, the isAsync flag ensures correct behavior:
@@ -1293,7 +1323,7 @@ export function flag(
   }
   validateOptionNames(optionNames, "Flag");
 
-  return {
+  const result: Parser<"sync", true, ValueParserResult<true> | undefined> = {
     $valueType: [],
     $stateType: [],
     $mode: "sync",
@@ -1518,7 +1548,16 @@ export function flag(
     [Symbol.for("Deno.customInspect")]() {
       return `flag(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
     },
-  } satisfies Parser<"sync", true, ValueParserResult<true> | undefined>;
+  };
+  // Non-enumerable so that ...parser spread in map() does not
+  // eagerly evaluate the getter.
+  Object.defineProperty(result, "placeholder", {
+    value: true,
+    configurable: true,
+    enumerable: false,
+    writable: false,
+  });
+  return result;
 }
 
 /**
@@ -1798,6 +1837,20 @@ export function argument<M extends Mode, T>(
       return `argument()`;
     },
   };
+  // Define placeholder lazily to avoid triggering derived value parser
+  // factory functions during parser construction.  Non-enumerable so that
+  // ...parser spread in map() does not eagerly evaluate the getter.
+  Object.defineProperty(result, "placeholder", {
+    get() {
+      try {
+        return valueParser.placeholder;
+      } catch {
+        return undefined;
+      }
+    },
+    configurable: true,
+    enumerable: false,
+  });
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
   return result as unknown as Parser<M, T, ValueParserResult<T> | undefined>;

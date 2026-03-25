@@ -49,250 +49,12 @@ import {
   type OptionName,
   type Usage,
 } from "./usage.ts";
-import { string } from "./valueparser.ts";
+import { type DeferredMap, string } from "./valueparser.ts";
 import { type Annotations, injectAnnotations } from "./annotations.ts";
 import { validateCommandNames, validateOptionNames } from "./validate.ts";
-import {
-  isPlaceholderValue,
-  type ParserValuePlaceholder,
-  type SourceContext,
-} from "./context.ts";
+import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
 
 export type { ParserValuePlaceholder, SourceContext };
-
-function isPlainObject(value: object): boolean {
-  const proto = Object.getPrototypeOf(value);
-  return proto === Object.prototype || proto === null;
-}
-
-function shouldSkipCollectionOwnKey(
-  value: object,
-  key: PropertyKey,
-): boolean {
-  if (Array.isArray(value)) {
-    return key === "length" ||
-      (typeof key === "string" &&
-        Number.isInteger(Number(key)) &&
-        String(Number(key)) === key);
-  }
-  return false;
-}
-
-function containsPlaceholderValuesInOwnProperties(
-  value: object,
-  seen: WeakSet<object>,
-): boolean {
-  for (const key of Reflect.ownKeys(value)) {
-    if (shouldSkipCollectionOwnKey(value, key)) {
-      continue;
-    }
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (
-      descriptor != null &&
-      "value" in descriptor &&
-      containsPlaceholderValues(descriptor.value, seen)
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function copySanitizedOwnProperties(
-  source: object,
-  target: object,
-  seen: WeakMap<object, unknown>,
-): void {
-  for (const key of Reflect.ownKeys(source)) {
-    if (shouldSkipCollectionOwnKey(source, key)) {
-      continue;
-    }
-    const descriptor = Object.getOwnPropertyDescriptor(source, key);
-    if (descriptor == null) {
-      continue;
-    }
-    if ("value" in descriptor) {
-      descriptor.value = stripPlaceholderValues(
-        descriptor.value,
-        seen,
-      );
-    }
-    Object.defineProperty(target, key, descriptor);
-  }
-}
-
-function createArrayCloneLike(value: readonly unknown[]): unknown[] {
-  try {
-    const arrayCtor = value.constructor as abstract new (
-      length?: number,
-    ) => unknown[];
-    return Reflect.construct(
-      Array,
-      [value.length],
-      arrayCtor,
-    ) as unknown[];
-  } catch {
-    return new Array(value.length);
-  }
-}
-
-function createSetCloneLike(value: Set<unknown>): Set<unknown> {
-  try {
-    const setCtor = value.constructor as abstract new (
-      iterable?: Iterable<unknown>,
-    ) => Set<unknown>;
-    return Reflect.construct(
-      Set,
-      [],
-      setCtor,
-    ) as Set<unknown>;
-  } catch {
-    return new Set<unknown>();
-  }
-}
-
-function createMapCloneLike(
-  value: Map<unknown, unknown>,
-): Map<unknown, unknown> {
-  try {
-    const mapCtor = value.constructor as abstract new (
-      iterable?: Iterable<readonly [unknown, unknown]>,
-    ) => Map<unknown, unknown>;
-    return Reflect.construct(
-      Map,
-      [],
-      mapCtor,
-    ) as Map<unknown, unknown>;
-  } catch {
-    return new Map<unknown, unknown>();
-  }
-}
-
-function containsPlaceholderValues(
-  value: unknown,
-  seen = new WeakSet<object>(),
-): boolean {
-  // FIXME: This only inspects own data properties, so placeholder values
-  // hidden behind private fields or method-only wrapper DTOs are missed. See:
-  // https://github.com/dahlia/optique/issues/307
-  if (isPlaceholderValue(value)) {
-    return true;
-  }
-  if (value == null || typeof value !== "object") {
-    return false;
-  }
-  if (seen.has(value)) {
-    return false;
-  }
-  seen.add(value);
-  if (Array.isArray(value)) {
-    if (
-      value.some((item) => containsPlaceholderValues(item, seen))
-    ) {
-      return true;
-    }
-    return containsPlaceholderValuesInOwnProperties(value, seen);
-  }
-  if (value instanceof Set) {
-    for (const entryValue of value) {
-      if (containsPlaceholderValues(entryValue, seen)) {
-        return true;
-      }
-    }
-    return containsPlaceholderValuesInOwnProperties(value, seen);
-  }
-  if (value instanceof Map) {
-    for (const [key, entryValue] of value) {
-      if (
-        containsPlaceholderValues(key, seen) ||
-        containsPlaceholderValues(entryValue, seen)
-      ) {
-        return true;
-      }
-    }
-    return containsPlaceholderValuesInOwnProperties(value, seen);
-  }
-  return containsPlaceholderValuesInOwnProperties(value, seen);
-}
-
-function stripPlaceholderValues<T>(
-  value: T,
-  seen = new WeakMap<object, unknown>(),
-): T {
-  if (isPlaceholderValue(value)) {
-    return undefined as T;
-  }
-  if (value == null || typeof value !== "object") {
-    return value;
-  }
-  const cached = seen.get(value);
-  if (cached !== undefined) {
-    return cached as T;
-  }
-  if (Array.isArray(value)) {
-    if (!containsPlaceholderValues(value)) {
-      return value;
-    }
-    const clone = createArrayCloneLike(value);
-    seen.set(value, clone);
-    for (let i = 0; i < value.length; i++) {
-      clone[i] = stripPlaceholderValues(value[i], seen);
-    }
-    copySanitizedOwnProperties(value, clone, seen);
-    return clone as T;
-  }
-  if (value instanceof Set) {
-    if (!containsPlaceholderValues(value)) {
-      return value;
-    }
-    const clone = createSetCloneLike(value);
-    seen.set(value, clone);
-    for (const entryValue of value) {
-      clone.add(stripPlaceholderValues(entryValue, seen));
-    }
-    copySanitizedOwnProperties(value, clone, seen);
-    return clone as T;
-  }
-  if (value instanceof Map) {
-    if (!containsPlaceholderValues(value)) {
-      return value;
-    }
-    const clone = createMapCloneLike(value);
-    seen.set(value, clone);
-    for (const [key, entryValue] of value) {
-      clone.set(
-        stripPlaceholderValues(key, seen),
-        stripPlaceholderValues(entryValue, seen),
-      );
-    }
-    copySanitizedOwnProperties(value, clone, seen);
-    return clone as T;
-  }
-  if (!isPlainObject(value)) {
-    if (!containsPlaceholderValues(value)) {
-      return value;
-    }
-    return createSanitizedNonPlainView(value, seen) as T;
-  }
-  const clone: Record<PropertyKey, unknown> = Object.create(
-    Object.getPrototypeOf(value),
-  );
-  seen.set(value, clone);
-  for (const key of Reflect.ownKeys(value)) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (descriptor == null) {
-      continue;
-    }
-    if ("value" in descriptor) {
-      descriptor.value = stripPlaceholderValues(
-        descriptor.value,
-        seen,
-      );
-    }
-    Object.defineProperty(clone, key, descriptor);
-  }
-  return clone as T;
-}
 
 function finalizeParsedForContext(
   context: SourceContext<unknown>,
@@ -303,341 +65,133 @@ function finalizeParsedForContext(
     : parsed;
 }
 
-const SANITIZE_FAILED: unique symbol = Symbol("sanitizeFailed");
-
-interface ActiveSanitization {
-  readonly saved: Map<PropertyKey, PropertyDescriptor>;
-  readonly sanitizedValues: Map<PropertyKey, unknown>;
-  count: number;
-}
-
-const activeSanitizations = new WeakMap<object, ActiveSanitization>();
-
-function callWithSanitizedOwnProperties(
-  target: object,
-  fn: { apply(thisArg: unknown, args: unknown[]): unknown },
-  args: unknown[],
-  strip: <V>(value: V, seen: WeakMap<object, unknown>) => V,
-  seen: WeakMap<object, unknown>,
-): unknown | typeof SANITIZE_FAILED {
-  let active = activeSanitizations.get(target);
-  if (active != null) {
-    // Properties are already sanitized by a concurrent call; just
-    // increment the reference count so we defer restoration.
-    active.count++;
-  } else {
-    const saved = new Map<PropertyKey, PropertyDescriptor>();
-    const sanitizedValues = new Map<PropertyKey, unknown>();
-    for (const key of Reflect.ownKeys(target)) {
-      const desc = Object.getOwnPropertyDescriptor(target, key);
-      if (desc != null && "value" in desc) {
-        let stripped: unknown;
-        try {
-          stripped = strip(desc.value, seen);
-        } catch {
-          // strip() failed; roll back and bail.
-          for (const [k, d] of saved) {
-            try {
-              Object.defineProperty(target, k, d);
-            } catch {
-              // Best-effort rollback.
-            }
-          }
-          return SANITIZE_FAILED;
-        }
-        if (stripped !== desc.value) {
-          try {
-            Object.defineProperty(target, key, { ...desc, value: stripped });
-            saved.set(key, desc);
-            sanitizedValues.set(key, stripped);
-          } catch {
-            // Property is non-configurable or object is frozen; cannot
-            // safely call the method with unsanitized state.
-            for (const [k, d] of saved) {
-              try {
-                Object.defineProperty(target, k, d);
-              } catch {
-                // Best-effort rollback.
-              }
-            }
-            return SANITIZE_FAILED;
-          }
-        }
-      }
-    }
-    active = { saved, sanitizedValues, count: 1 };
-    activeSanitizations.set(target, active);
-  }
-
-  function release(): void {
-    active!.count--;
-    if (active!.count === 0) {
-      activeSanitizations.delete(target);
-      for (const [key, desc] of active!.saved) {
-        try {
-          // Only restore if the method did not mutate or delete the
-          // property.  Compare against the exact sanitized value that was
-          // set, not a re-computed strip() which would create a new clone.
-          const current = Object.getOwnPropertyDescriptor(target, key);
-          if (current == null) continue; // method deleted the property
-          if (
-            "value" in current &&
-            current.value !== active!.sanitizedValues.get(key)
-          ) {
-            continue; // method wrote a new value
-          }
-          Object.defineProperty(target, key, desc);
-        } catch {
-          // The method may have frozen, sealed, or redefined this
-          // property; best-effort restoration.
-        }
-      }
-    }
-  }
-
-  let result: unknown;
-  try {
-    result = fn.apply(target, args);
-  } catch (e) {
-    release();
-    throw e;
-  }
-
-  // If the method returns a real Promise (async method), defer restoration
-  // until the promise settles so that awaited continuations still observe
-  // the sanitized property values.  Custom thenables are not assimilated
-  // to avoid coercing non-Promise return types.
-  if (result instanceof Promise) {
-    return (result as Promise<unknown>).then(
-      (v) => {
-        release();
-        return strip(v, seen);
-      },
-      (e) => {
-        release();
-        throw e;
-      },
-    );
-  }
-
-  release();
-  return strip(result, seen);
-}
-
-function callMethodOnSanitizedTarget(
-  fn: { apply(thisArg: unknown, args: unknown[]): unknown },
-  proxy: object,
-  target: object,
-  args: unknown[],
-  strip: <V>(value: V, seen: WeakMap<object, unknown>) => V,
-  seen: WeakMap<object, unknown>,
-): unknown {
-  // All methods are called on the target with temporarily sanitized own
-  // properties.  This handles private fields (which require target as
-  // receiver), Promise-returning methods, and native async methods
-  // uniformly, without retrying or detecting function types.
-  const result = callWithSanitizedOwnProperties(
-    target,
-    fn,
-    args,
-    strip,
-    seen,
-  );
-  if (result !== SANITIZE_FAILED) return result;
-
-  // SANITIZE_FAILED means the target is frozen/sealed and its properties
-  // cannot be temporarily replaced.  Fall back to the proxy path, which
-  // handles methods that don't access private fields.  Private-field
-  // methods on frozen objects will propagate the TypeError.
-  const fallback = fn.apply(proxy, args);
-  if (fallback instanceof Promise) {
-    return (fallback as Promise<unknown>).then((v) => strip(v, seen));
-  }
-  return strip(fallback, seen);
-}
-
-function createSanitizedNonPlainView<T extends object>(
-  value: T,
-  seen: WeakMap<object, unknown>,
-): T {
-  // NOTE: Methods are invoked on the original target with temporarily
-  // sanitized own properties via callMethodOnSanitizedTarget().  This
-  // allows private field access (which requires the real instance as
-  // receiver) while ensuring public placeholder-value fields are scrubbed.
-  // If the target is frozen/sealed, methods fall back to the proxy path.
-  // See: https://github.com/dahlia/optique/issues/307
-  const methodCache = new Map<
-    PropertyKey,
-    { fn: unknown; wrapper: (...args: unknown[]) => unknown }
-  >();
-  const proxy: T = new Proxy(value, {
-    get(target, key, receiver) {
-      const descriptor = Object.getOwnPropertyDescriptor(target, key);
-      if (descriptor != null && "value" in descriptor) {
-        // Non-configurable non-writable properties must return the exact
-        // value to satisfy the proxy invariant.
-        if (!descriptor.configurable && !descriptor.writable) {
-          return descriptor.value;
-        }
-        const val = stripPlaceholderValues(
-          descriptor.value,
-          seen,
-        );
-        if (typeof val === "function") {
-          // For non-configurable non-writable properties, the proxy invariant
-          // requires returning the exact value.  Class constructors are also
-          // returned unwrapped since the wrapper would break new.target and
-          // prototype chain semantics when invoked with `new`.
-          if (
-            (!descriptor.configurable && !descriptor.writable) ||
-            /^class[\s{]/.test(Function.prototype.toString.call(val))
-          ) {
-            return val;
-          }
-          // Own function-valued properties (class fields, constructor-
-          // assigned methods) need the sanitized-target wrapper just like
-          // prototype methods.  Cached and invalidated when the underlying
-          // function changes.
-          const cached = methodCache.get(key);
-          if (cached != null && cached.fn === val) return cached.wrapper;
-          const wrapper = function (this: unknown, ...args: unknown[]) {
-            if (this !== proxy) {
-              return stripPlaceholderValues(
-                val.apply(this, args),
-                seen,
-              );
-            }
-            return callMethodOnSanitizedTarget(
-              val,
-              proxy,
-              target,
-              args,
-              stripPlaceholderValues,
-              seen,
-            );
-          };
-          methodCache.set(key, { fn: val, wrapper });
-          return wrapper;
-        }
-        return val;
-      }
-      // Accessor properties and prototype methods: resolved via Reflect.get.
-      // Only prototype data methods are cached; accessor-returned functions
-      // are re-created on each access since the getter may return different
-      // functions based on backing state.  Walk the prototype chain to
-      // detect inherited getters, not just own accessors.
-      let isAccessor = false;
-      for (
-        let proto: object | null = target;
-        proto != null;
-        proto = Object.getPrototypeOf(proto)
-      ) {
-        const d = Object.getOwnPropertyDescriptor(proto, key);
-        if (d != null) {
-          isAccessor = "get" in d;
-          break;
-        }
-      }
-      const result = Reflect.get(target, key, receiver);
-      if (typeof result === "function") {
-        // Class constructors are returned unwrapped since the wrapper
-        // would break new.target and prototype chain semantics.
-        if (/^class[\s{]/.test(Function.prototype.toString.call(result))) {
-          return result;
-        }
-        if (!isAccessor) {
-          const cached = methodCache.get(key);
-          if (cached != null && cached.fn === result) return cached.wrapper;
-          const wrapper = function (this: unknown, ...args: unknown[]) {
-            if (this !== proxy) {
-              return stripPlaceholderValues(
-                result.apply(this, args),
-                seen,
-              );
-            }
-            return callMethodOnSanitizedTarget(
-              result,
-              proxy,
-              target,
-              args,
-              stripPlaceholderValues,
-              seen,
-            );
-          };
-          methodCache.set(key, { fn: result, wrapper });
-          return wrapper;
-        }
-        // Accessor-returned function: wrap without caching.
-        return function (this: unknown, ...args: unknown[]) {
-          if (this !== proxy) {
-            return stripPlaceholderValues(
-              result.apply(this, args),
-              seen,
-            );
-          }
-          return callMethodOnSanitizedTarget(
-            result,
-            proxy,
-            target,
-            args,
-            stripPlaceholderValues,
-            seen,
-          );
-        };
-      }
-      return stripPlaceholderValues(result, seen);
-    },
-    getOwnPropertyDescriptor(target, key) {
-      const descriptor = Object.getOwnPropertyDescriptor(target, key);
-      if (descriptor == null || !("value" in descriptor)) {
-        return descriptor;
-      }
-      // Non-configurable non-writable properties must return the exact
-      // value to satisfy the proxy invariant.
-      if (!descriptor.configurable && !descriptor.writable) {
-        return descriptor;
-      }
-      return {
-        ...descriptor,
-        value: stripPlaceholderValues(descriptor.value, seen),
-      };
-    },
-  });
-  seen.set(value, proxy);
-  return proxy;
+function isPlainObject(value: object): boolean {
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
 }
 
 function prepareParsedForContexts(
   parsed: unknown,
+  deferred?: true,
+  deferredKeys?: DeferredMap,
 ): unknown {
-  if (parsed == null || typeof parsed !== "object") {
-    return stripPlaceholderValues(parsed);
-  }
-
-  if (isPlaceholderValue(parsed)) {
+  if (!deferred) return parsed;
+  // Non-plain leaf deferred objects (URL, Date, Intl.Locale, Temporal,
+  // etc.) from prompt() carry an empty deferredKeys map (size 0) to
+  // distinguish them from opaque structured deferred values from map()
+  // (which have no deferredKeys at all).
+  if (
+    deferredKeys != null && deferredKeys.size === 0 &&
+    parsed != null && typeof parsed === "object"
+  ) {
     return undefined;
   }
-
+  // Selectively replace only the deferred fields with undefined while
+  // preserving non-deferred fields for phase-two context annotation
+  // collection (e.g., getConfigPath may depend on non-deferred fields).
+  // Plain objects and arrays are safe to clone field-by-field; non-plain
+  // objects (Set, Map, class instances with deferredKeys) are leaf
+  // deferred from prompt() and should be treated as fully deferred.
   if (
-    Array.isArray(parsed) ||
-    isPlainObject(parsed) ||
-    parsed instanceof Set ||
-    parsed instanceof Map
+    deferredKeys != null && deferredKeys.size > 0 &&
+    parsed != null && typeof parsed === "object" &&
+    !isPlainObject(parsed) && !Array.isArray(parsed)
   ) {
-    if (!containsPlaceholderValues(parsed)) {
-      return parsed;
+    return undefined;
+  }
+  if (
+    deferredKeys != null && deferredKeys.size > 0 &&
+    parsed != null && typeof parsed === "object" &&
+    (isPlainObject(parsed) || Array.isArray(parsed))
+  ) {
+    // Check that at least one deferredKey matches an own property of the
+    // parsed object.  When deferredKeys don't match the current shape
+    // (e.g., stale keys after restructuring), return undefined to avoid
+    // leaking placeholder-bearing fields into phase-two contexts.
+    // Look up a key in deferredKeys, handling the numeric/string
+    // mismatch between tuple() (stores number indices like 0) and
+    // Reflect.ownKeys() on arrays (returns string indices like "0").
+    const getDeferredEntry = (
+      key: PropertyKey,
+    ): DeferredMap | null | undefined => {
+      const entry = deferredKeys.get(key);
+      if (entry !== undefined) return entry;
+      if (typeof key === "string") {
+        const num = Number(key);
+        if (Number.isInteger(num)) return deferredKeys.get(num);
+      } else if (typeof key === "number") {
+        return deferredKeys.get(String(key));
+      }
+      return undefined;
+    };
+    const ownKeys = Reflect.ownKeys(parsed as object);
+    let hasMatchingKey = false;
+    for (const key of ownKeys) {
+      if (getDeferredEntry(key) !== undefined) {
+        hasMatchingKey = true;
+        break;
+      }
     }
-    return stripPlaceholderValues(parsed);
-  }
+    if (hasMatchingKey) {
+      // If ALL data properties are deferred, the entire object is a
+      // placeholder shell — return undefined instead of a truthy
+      // object with all-undefined fields.
+      const isArray = Array.isArray(parsed);
+      let allDeferred = true;
+      for (const key of ownKeys) {
+        if (isArray && key === "length") continue;
+        const desc = Object.getOwnPropertyDescriptor(parsed as object, key);
+        if (
+          desc != null && "value" in desc && getDeferredEntry(key) === undefined
+        ) {
+          allDeferred = false;
+          break;
+        }
+      }
+      if (allDeferred) return undefined;
 
-  if (!containsPlaceholderValues(parsed)) {
-    return parsed;
+      const clone: object = isArray
+        ? new Array(parsed.length)
+        : Object.create(Object.getPrototypeOf(parsed));
+      for (const key of ownKeys) {
+        const desc = Object.getOwnPropertyDescriptor(parsed as object, key);
+        if (desc == null) continue;
+        const entry = getDeferredEntry(key);
+        if ("value" in desc && entry !== undefined) {
+          if (entry === null) {
+            // Fully deferred: replace with undefined
+            Object.defineProperty(clone, key, { ...desc, value: undefined });
+          } else {
+            // Partially deferred sub-object: recurse
+            Object.defineProperty(clone, key, {
+              ...desc,
+              value: prepareParsedForContexts(desc.value, true, entry),
+            });
+          }
+        } else {
+          Object.defineProperty(clone, key, desc);
+        }
+      }
+      return clone;
+    }
+    // deferredKeys are present but none match the object's own properties.
+    // The key set is stale relative to the current shape, so return
+    // undefined to avoid leaking placeholder values.
+    return undefined;
   }
-
-  return createSanitizedNonPlainView(
-    parsed,
-    new WeakMap<object, unknown>(),
-  );
+  // Scalar deferred values (string, number, boolean, etc.) are entirely
+  // placeholder data and should be hidden from phase-two contexts.
+  if (parsed == null || typeof parsed !== "object") {
+    return undefined;
+  }
+  // Structured deferred without per-field info (e.g., after map(), or
+  // non-plain objects): pass through as-is so that context annotations can
+  // still access non-deferred data inside the value.  This is an
+  // intentional trade-off — map() drops deferredKeys because the transform
+  // may rename/restructure fields, making the inner key set invalid for
+  // the output shape.  Placeholder values may be visible to phase-two
+  // contexts in this path; the final parse always resolves them correctly.
+  return parsed;
 }
 
 function withPreparedParsedForContext<T>(
@@ -2983,12 +2537,18 @@ async function collectAnnotations(
   contexts: readonly SourceContext<unknown>[],
   parsed?: unknown,
   options?: unknown,
+  deferred?: true,
+  deferredKeys?: DeferredMap,
 ): Promise<{
   readonly annotations: Annotations;
   readonly annotationsList: readonly Annotations[];
 }> {
   const annotationsList: Annotations[] = [];
-  const preparedParsed = prepareParsedForContexts(parsed);
+  const preparedParsed = prepareParsedForContexts(
+    parsed,
+    deferred,
+    deferredKeys,
+  );
 
   for (const context of contexts) {
     const mergedAnnotations = await withPreparedParsedForContext(
@@ -3097,12 +2657,18 @@ function collectAnnotationsSync(
   contexts: readonly SourceContext<unknown>[],
   parsed?: unknown,
   options?: unknown,
+  deferred?: true,
+  deferredKeys?: DeferredMap,
 ): {
   readonly annotations: Annotations;
   readonly annotationsList: readonly Annotations[];
 } {
   const annotationsList: Annotations[] = [];
-  const preparedParsed = prepareParsedForContexts(parsed);
+  const preparedParsed = prepareParsedForContexts(
+    parsed,
+    deferred,
+    deferredKeys,
+  );
 
   for (const context of contexts) {
     const mergedAnnotations = withPreparedParsedForContext(
@@ -3473,6 +3039,8 @@ export async function runWith<
     );
 
     let firstPassResult: unknown;
+    let firstPassDeferred: true | undefined;
+    let firstPassDeferredKeys: DeferredMap | undefined;
     let firstPassFailed = false;
     try {
       if (parser.$mode === "async") {
@@ -3484,14 +3052,18 @@ export async function runWith<
         );
       }
 
-      // Extract value from result
+      // Extract value and deferred metadata from result
       if (
         typeof firstPassResult === "object" && firstPassResult !== null &&
         "success" in firstPassResult
       ) {
-        const result = firstPassResult as Result<unknown>;
+        const result = firstPassResult as
+          & Result<unknown>
+          & { deferred?: true; deferredKeys?: DeferredMap };
         if (result.success) {
           firstPassResult = result.value;
+          firstPassDeferred = result.deferred;
+          firstPassDeferredKeys = result.deferredKeys;
         } else {
           firstPassFailed = true;
         }
@@ -3530,6 +3102,8 @@ export async function runWith<
       contexts,
       firstPassResult,
       ctxOptions,
+      firstPassDeferred,
+      firstPassDeferredKeys,
     );
 
     // Final parse with merged annotations
@@ -3635,10 +3209,16 @@ export function runWithSync<
     );
 
     let firstPassResult: unknown;
+    let firstPassDeferred: true | undefined;
+    let firstPassDeferredKeys: DeferredMap | undefined;
     try {
-      const result = parseSync(augmentedParser1, args);
+      const result = parseSync(augmentedParser1, args) as
+        & { success: boolean; value?: unknown; error?: unknown }
+        & { deferred?: true; deferredKeys?: DeferredMap };
       if (result.success) {
         firstPassResult = result.value;
+        firstPassDeferred = result.deferred;
+        firstPassDeferredKeys = result.deferredKeys;
       } else {
         // First pass failed - run through runParser for proper error handling
         return runParser(augmentedParser1, programName, args, options);
@@ -3653,6 +3233,8 @@ export function runWithSync<
       contexts,
       firstPassResult,
       ctxOptions,
+      firstPassDeferred,
+      firstPassDeferredKeys,
     );
 
     // Final parse with merged annotations

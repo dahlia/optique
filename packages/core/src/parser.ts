@@ -14,7 +14,7 @@ import {
   type Usage,
   type UsageTerm,
 } from "./usage.ts";
-import type { ValueParserResult } from "./valueparser.ts";
+import type { DeferredMap, ValueParserResult } from "./valueparser.ts";
 import {
   injectAnnotations,
   isInjectedAnnotationWrapper,
@@ -197,6 +197,21 @@ export interface Parser<
   getDocFragments(state: DocState<TState>, defaultValue?: TValue): DocFragments;
 
   /**
+   * A type-appropriate default value used as a stand-in during deferred
+   * prompt resolution.  When present, combinators like `prompt()` use this
+   * value instead of an internal sentinel during two-phase parsing, so that
+   * `map()` transforms and dynamic contexts always receive a valid value
+   * of type {@link TValue}.
+   *
+   * This property is set automatically by `option()` and `argument()` from
+   * the underlying {@link ValueParser}'s `placeholder`, and propagated by
+   * combinators like `map()`, `optional()`, and `withDefault()`.
+   *
+   * @since 1.0.0
+   */
+  readonly placeholder?: TValue;
+
+  /**
    * Optional predicate that determines whether completion should be
    * deferred for the given parser state.
    *
@@ -376,6 +391,19 @@ export type Result<T> =
      * have been applied and completed.
      */
     value: T;
+    /**
+     * When `true`, indicates that the value contains deferred prompt
+     * placeholders.  Propagated from {@link ValueParserResult.deferred}.
+     * @since 1.0.0
+     */
+    deferred?: true;
+    /**
+     * Property keys (object field names or array indices) whose values are
+     * deferred placeholders.
+     * Propagated from {@link ValueParserResult.deferredKeys}.
+     * @since 1.0.0
+     */
+    deferredKeys?: DeferredMap;
   }
   | {
     /**
@@ -464,6 +492,10 @@ export function parseSync<T>(
       value: shouldUnwrapAnnotatedValue
         ? unwrapInjectedAnnotationWrapper(endResult.value)
         : endResult.value,
+      ...(endResult.deferred ? { deferred: true as const } : {}),
+      ...(endResult.deferredKeys
+        ? { deferredKeys: endResult.deferredKeys }
+        : {}),
     }
     : { success: false, error: endResult.error };
 }
@@ -530,6 +562,10 @@ export async function parseAsync<T>(
       value: shouldUnwrapAnnotatedValue
         ? unwrapInjectedAnnotationWrapper(endResult.value)
         : endResult.value,
+      ...(endResult.deferred ? { deferred: true as const } : {}),
+      ...(endResult.deferredKeys
+        ? { deferredKeys: endResult.deferredKeys }
+        : {}),
     }
     : { success: false, error: endResult.error };
 }
