@@ -52,7 +52,7 @@ import {
   option,
   passThrough,
 } from "@optique/core/primitives";
-import { formatUsage } from "@optique/core/usage";
+import { extractLiteralValues, formatUsage } from "@optique/core/usage";
 import {
   choice,
   integer,
@@ -11045,6 +11045,47 @@ describe("branch coverage: constructs.ts edge cases", () => {
 
     const usageText = formatUsage("app", parser.usage);
     assert.ok(usageText.length > 0);
+  });
+
+  it("conditional() with argument discriminator produces literal terms", () => {
+    const parser = conditional(
+      argument(string()),
+      {
+        help: object({ port: option("--port", integer()) }),
+        serve: object({ dir: argument(string()) }),
+      },
+    );
+    const literals = extractLiteralValues(parser.usage);
+    assert.ok(literals.has("help"));
+    assert.ok(literals.has("serve"));
+  });
+
+  it("conditional() with argument discriminator shows branch keys in usage", () => {
+    const parser = conditional(
+      argument(string()),
+      {
+        fast: option("--threads", integer()),
+        slow: flag("--verbose"),
+      },
+    );
+    const usageText = formatUsage("app", parser.usage);
+    assert.ok(usageText.includes("fast"));
+    assert.ok(usageText.includes("slow"));
+  });
+
+  it("conditional() with multi-argument discriminator does not produce literal terms", () => {
+    // When the discriminator derives its value from multiple positional
+    // tokens, individual arguments are not independently equal to the
+    // branch key, so no literal should be emitted.
+    const discriminator = map(
+      tuple([argument(string()), argument(string())]),
+      ([a, b]: readonly [string, string]) => `${a}-${b}`,
+    );
+    const parser = conditional(discriminator, {
+      "help-me": object({ port: option("--port", integer()) }),
+    });
+    const literals = extractLiteralValues(parser.usage);
+    assert.ok(!literals.has("help-me"));
   });
 
   it("conditional() async complete handles dependency source completion state", async () => {

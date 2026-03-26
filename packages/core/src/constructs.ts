@@ -7437,8 +7437,38 @@ export function conditional(
     ...allBranchParsers.map((p) => p.priority),
   );
 
-  // Helper to replace metavar with literal value after the option in usage
-  function appendLiteralToUsage(usage: Usage, literalValue: string): Usage {
+  // Helper: count argument terms in a usage tree.  For exclusive
+  // containers, only the branch with the most arguments counts, since
+  // only one branch is taken at runtime.
+  function countArgumentTerms(terms: Usage): number {
+    let count = 0;
+    for (const term of terms) {
+      if (term.type === "argument") {
+        count++;
+      } else if (term.type === "optional" || term.type === "multiple") {
+        count += countArgumentTerms(term.terms);
+      } else if (term.type === "exclusive") {
+        let max = 0;
+        for (const branch of term.terms) {
+          max = Math.max(max, countArgumentTerms(branch));
+        }
+        count += max;
+      }
+    }
+    return count;
+  }
+
+  // Helper to replace metavar/argument with literal value in usage.
+  // `replaceArguments` controls whether argument terms are replaced;
+  // it is only true when the discriminator consists of a single
+  // positional token.  Multi-argument discriminators derive the branch
+  // key from combining multiple tokens, so no single argument is
+  // independently equal to the branch key.
+  function appendLiteralToUsage(
+    usage: Usage,
+    literalValue: string,
+    replaceArguments: boolean,
+  ): Usage {
     const result: UsageTerm[] = [];
     for (const term of usage) {
       if (term.type === "option" && term.metavar !== undefined) {
@@ -7446,20 +7476,34 @@ export function conditional(
         const { metavar: _, ...optionWithoutMetavar } = term;
         result.push(optionWithoutMetavar);
         result.push({ type: "literal", value: literalValue });
+      } else if (term.type === "argument" && replaceArguments) {
+        // Replace the entire argument with a literal term—the branch
+        // key IS the concrete value for this positional slot.
+        result.push({ type: "literal", value: literalValue });
       } else if (term.type === "optional") {
         result.push({
           ...term,
-          terms: appendLiteralToUsage(term.terms, literalValue),
+          terms: appendLiteralToUsage(
+            term.terms,
+            literalValue,
+            replaceArguments,
+          ),
         });
       } else if (term.type === "multiple") {
         result.push({
           ...term,
-          terms: appendLiteralToUsage(term.terms, literalValue),
+          terms: appendLiteralToUsage(
+            term.terms,
+            literalValue,
+            replaceArguments,
+          ),
         });
       } else if (term.type === "exclusive") {
         result.push({
           ...term,
-          terms: term.terms.map((t) => appendLiteralToUsage(t, literalValue)),
+          terms: term.terms.map((t) =>
+            appendLiteralToUsage(t, literalValue, replaceArguments)
+          ),
         });
       } else {
         result.push(term);
@@ -7468,9 +7512,13 @@ export function conditional(
     return result;
   }
 
+  // Only replace argument terms when the discriminator is a single
+  // positional token.  See https://github.com/dahlia/optique/issues/734
+  const replaceArguments = countArgumentTerms(discriminator.usage) === 1;
+
   // Build usage: discriminator (with literal value) + exclusive branches
   const branchUsages: Usage[] = branchParsers.map(([key, p]) => [
-    ...appendLiteralToUsage(discriminator.usage, key),
+    ...appendLiteralToUsage(discriminator.usage, key, replaceArguments),
     ...p.usage,
   ]);
   if (defaultBranch) {

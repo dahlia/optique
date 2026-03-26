@@ -352,6 +352,7 @@ describe("validateMetaNameCollisions", () => {
     return {
       leadingOptions: opts,
       leadingCommands: cmds,
+      leadingLiterals: lits,
       allOptions: opts,
       allCommands: cmds,
       allLiterals: lits,
@@ -533,6 +534,7 @@ describe("validateMetaNameCollisions", () => {
           {
             leadingOptions: e,
             leadingCommands: e,
+            leadingLiterals: e,
             allOptions: e,
             allCommands: new Set(["--help"]),
             allLiterals: e,
@@ -549,6 +551,7 @@ describe("validateMetaNameCollisions", () => {
       {
         leadingOptions: e,
         leadingCommands: e,
+        leadingLiterals: e,
         allOptions: new Set(["--version"]),
         allCommands: e,
         allLiterals: e,
@@ -562,6 +565,7 @@ describe("validateMetaNameCollisions", () => {
       {
         leadingOptions: e,
         leadingCommands: e,
+        leadingLiterals: e,
         allOptions: e,
         allCommands: new Set(["help"]),
         allLiterals: e,
@@ -577,6 +581,7 @@ describe("validateMetaNameCollisions", () => {
           {
             leadingOptions: new Set(["--version"]),
             leadingCommands: e,
+            leadingLiterals: e,
             allOptions: e,
             allCommands: e,
             allLiterals: e,
@@ -597,6 +602,7 @@ describe("validateMetaNameCollisions", () => {
           {
             leadingOptions: e,
             leadingCommands: e,
+            leadingLiterals: e,
             allOptions: new Set(["--help"]),
             allCommands: e,
             allLiterals: e,
@@ -614,6 +620,7 @@ describe("validateMetaNameCollisions", () => {
           {
             leadingOptions: e,
             leadingCommands: e,
+            leadingLiterals: e,
             allOptions: e,
             allCommands: new Set(["--help"]),
             allLiterals: e,
@@ -637,11 +644,36 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
-  it("should not flag literal value against meta command", () => {
-    // Meta commands only check args[0]; literals are deeper
+  it("should not flag non-leading literal value against meta command", () => {
+    // Meta commands only match at args[0]; non-leading literals are safe
     validateMetaNameCollisions(
-      u(e, e, new Set(["help"])),
+      {
+        leadingOptions: e,
+        leadingCommands: e,
+        leadingLiterals: e,
+        allOptions: e,
+        allCommands: e,
+        allLiterals: new Set(["help"]),
+      },
       [["command", "help command", ["help"]]],
+    );
+  });
+
+  it("should flag leading literal value colliding with meta command", () => {
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          {
+            leadingOptions: e,
+            leadingCommands: e,
+            leadingLiterals: new Set(["help"]),
+            allOptions: e,
+            allCommands: e,
+            allLiterals: new Set(["help"]),
+          },
+          [["command", "help command", ["help"]]],
+        ),
+      { name: "TypeError", message: /literal.*"help".*help command/i },
     );
   });
 
@@ -655,6 +687,7 @@ describe("validateMetaNameCollisions", () => {
           {
             leadingOptions: e,
             leadingCommands: e,
+            leadingLiterals: e,
             allOptions: new Set(["--completion=bash"]),
             allCommands: e,
             allLiterals: e,
@@ -675,6 +708,7 @@ describe("validateMetaNameCollisions", () => {
           {
             leadingOptions: e,
             leadingCommands: e,
+            leadingLiterals: e,
             allOptions: e,
             allCommands: new Set(["--completion=bash"]),
             allLiterals: e,
@@ -715,6 +749,27 @@ describe("validateMetaNameCollisions", () => {
     validateMetaNameCollisions(
       u(new Set(["--completion=bash"])),
       [["command", "completion command", ["--completion"]]],
+    );
+  });
+
+  it("should flag leading literal matching prefix against meta command", () => {
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          {
+            leadingOptions: e,
+            leadingCommands: e,
+            leadingLiterals: new Set(["completion=bash"]),
+            allOptions: e,
+            allCommands: e,
+            allLiterals: new Set(["completion=bash"]),
+          },
+          [["command", "completion command", ["completion"], true]],
+        ),
+      {
+        name: "TypeError",
+        message: /literal.*"completion=bash".*completion command/i,
+      },
     );
   });
 });

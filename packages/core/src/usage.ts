@@ -369,10 +369,8 @@ export function extractCommandNames(
  * appearing before commands due to priority sorting) and false negatives
  * (e.g., options after commands that are actually parallel peers).
  * The proper fix is to use `Parser.leadingNames` instead of usage-tree
- * analysis.  This also cannot detect `conditional(argument(...))`
- * discriminator values, which never appear in the usage tree.
- * See https://github.com/dahlia/optique/issues/734 and
- * https://github.com/dahlia/optique/issues/735
+ * analysis.
+ * See https://github.com/dahlia/optique/issues/735
  *
  * @param usage The usage description to extract leading option names from.
  * @param includeHidden Whether to include fully hidden options
@@ -437,10 +435,9 @@ export function extractLeadingOptionNames(
  * `exclusive` containers, since they represent alternatives or optional
  * wrappers at the same token position.
  *
- * Known limitation: this function has the same usage-tree ordering and
- * `conditional(argument(...))` caveats as {@link extractLeadingOptionNames}.
- * See https://github.com/dahlia/optique/issues/734 and
- * https://github.com/dahlia/optique/issues/735
+ * Known limitation: this function has the same usage-tree ordering caveat
+ * as {@link extractLeadingOptionNames}.
+ * See https://github.com/dahlia/optique/issues/735
  *
  * @param usage The usage description to extract leading command names from.
  * @param includeHidden Whether to include fully hidden commands
@@ -489,6 +486,60 @@ export function extractLeadingCommandNames(
 
   collectLeading(usage);
   return names;
+}
+
+/**
+ * Extracts literal values that could match as the first positional token.
+ *
+ * Unlike {@link extractLiteralValues}, which traverses the entire usage tree,
+ * this function stops scanning a terms array after encountering a `command`,
+ * `argument`, or `literal` term, because subsequent terms in that array are
+ * scoped under that positional token.  It still recurses into `optional`,
+ * `multiple`, and `exclusive` containers.
+ *
+ * Known limitation: this function has the same usage-tree ordering caveat
+ * as {@link extractLeadingOptionNames}.
+ * See https://github.com/dahlia/optique/issues/735
+ *
+ * @param usage The usage description to extract leading literal values from.
+ * @returns A set of literal values that could match at the first token
+ *   position.
+ * @since 1.0.0
+ */
+export function extractLeadingLiteralValues(usage: Usage): Set<string> {
+  const values = new Set<string>();
+
+  function collectLeading(terms: Usage): void {
+    if (!terms || !Array.isArray(terms)) return;
+    for (const term of terms) {
+      switch (term.type) {
+        case "literal":
+          values.add(term.value);
+          return; // literal consumes a position; stop scanning siblings
+        case "command":
+        case "argument":
+          return; // positional token; stop scanning siblings
+        case "optional":
+          collectLeading(term.terms);
+          break;
+        case "multiple":
+          collectLeading(term.terms);
+          if (term.min > 0 && branchConsumesToken(term.terms)) return;
+          break;
+        case "exclusive":
+          for (const branch of term.terms) {
+            collectLeading(branch);
+          }
+          if (exclusiveConsumesToken(term.terms)) return;
+          break;
+        default:
+          break; // option, passthrough, ellipsis: skip, continue
+      }
+    }
+  }
+
+  collectLeading(usage);
+  return values;
 }
 
 /**

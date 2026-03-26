@@ -1501,6 +1501,30 @@ describe("runParser", () => {
       );
     });
 
+    it("should reject conditional(argument()) branch key colliding with meta command", () => {
+      const parser = conditional(
+        argument(string()),
+        {
+          help: object({ port: option("--port", integer()) }),
+          serve: object({ dir: argument(string()) }),
+        },
+      );
+      assert.throws(
+        () =>
+          runParser(parser, "myapp", [], {
+            help: {
+              command: true,
+              onShow: () => "HELP",
+            },
+            stderr: () => {},
+          }),
+        {
+          name: "TypeError",
+          message: /literal.*"help".*help command/i,
+        },
+      );
+    });
+
     // P2: cross-namespace collision detection
     it("should reject meta command name that looks like an option", () => {
       const parser = object({ name: argument(string()) });
