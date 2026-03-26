@@ -568,14 +568,13 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
-  // Prefix matching tests (--completion=<shell> form)
-  it("should flag user option matching meta option name= prefix", () => {
-    // flag("--completion=bash") is shadowed by --completion= prefix matching
+  // Prefix matching tests (only for entries with prefixMatch: true)
+  it("should flag user option matching prefix when prefixMatch is true", () => {
     assert.throws(
       () =>
         validateMetaNameCollisions(
           u(new Set(["--completion=bash"])),
-          [["option", "completion option", ["--completion"]]],
+          [["option", "completion option", ["--completion"], true]],
         ),
       {
         name: "TypeError",
@@ -584,7 +583,7 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
-  it("should flag user command matching meta option name= prefix", () => {
+  it("should flag user command matching prefix when prefixMatch is true", () => {
     assert.throws(
       () =>
         validateMetaNameCollisions(
@@ -595,7 +594,7 @@ describe("validateMetaNameCollisions", () => {
             allCommands: new Set(["--completion=bash"]),
             allLiterals: e,
           },
-          [["option", "completion option", ["--completion"]]],
+          [["option", "completion option", ["--completion"], true]],
         ),
       {
         name: "TypeError",
@@ -604,8 +603,30 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
+  it("should flag literal matching prefix when prefixMatch is true", () => {
+    // conditional(option("--mode", string()), { "--completion=bash": ... })
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          u(e, e, new Set(["--completion=bash"])),
+          [["option", "completion option", ["--completion"], true]],
+        ),
+      {
+        name: "TypeError",
+        message: /literal.*"--completion=bash".*completion option/i,
+      },
+    );
+  });
+
+  it("should not prefix-match when prefixMatch is not set", () => {
+    // help/version use exact matching; --help=foo is a valid user name
+    validateMetaNameCollisions(
+      u(new Set(["--help=foo"])),
+      [["option", "help option", ["--help"]]],
+    );
+  });
+
   it("should not flag prefix match against meta command entries", () => {
-    // Meta commands use exact match at args[0], not prefix
     validateMetaNameCollisions(
       u(new Set(["--completion=bash"])),
       [["command", "completion command", ["--completion"]]],

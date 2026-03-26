@@ -1628,6 +1628,7 @@ export function runParser<
       "option",
       "completion option",
       completionOptionNames,
+      true, // completion option also matches "name=value" form at runtime
     ]);
   }
   if (options.completion && completionCommandConfig) {

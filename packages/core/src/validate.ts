@@ -147,6 +147,9 @@ export function validateCommandNames(
  *    or `"option"` if a lenient scanner matches the name anywhere in `argv`.
  * 2. `label` — human-readable label for error messages (e.g., `"help option"`).
  * 3. `names` — the configured name(s) for this meta feature.
+ * 4. `prefixMatch` — when `true`, the runtime also intercepts tokens
+ *    starting with `name=` (e.g., `--completion=bash`).  Only the
+ *    completion option uses this form; help/version use exact matching.
  *
  * @since 1.0.0
  */
@@ -154,6 +157,7 @@ export type MetaEntry = readonly [
   kind: "command" | "option",
   label: string,
   names: readonly string[],
+  prefixMatch?: boolean,
 ];
 
 /**
@@ -233,7 +237,7 @@ export function validateMetaNameCollisions(
   //    The scope depends on the meta feature kind:
   //    - "command" entries only reach args[0] → check leading user names
   //    - "option" entries scan entire argv  → check all user names + literals
-  for (const [kind, label, names] of metaEntries) {
+  for (const [kind, label, names, prefixMatch] of metaEntries) {
     const optionNames = kind === "command"
       ? userNames.leadingOptions
       : userNames.allOptions;
@@ -271,10 +275,11 @@ export function validateMetaNameCollisions(
             `built-in ${label}.`,
         );
       }
-      // Option-form meta features also match the "name=value" form at
-      // runtime (e.g., --completion=bash).  Check if any user name
-      // starts with "name=" to catch this prefix-based shadowing.
-      if (kind === "option") {
+      // Only the completion option matches the "name=value" form at
+      // runtime (e.g., --completion=bash).  Help/version scanners use
+      // exact matching, so --help=foo and --version=foo are valid user
+      // names that should not be flagged.
+      if (prefixMatch) {
         const prefix = name + "=";
         for (const userName of optionNames) {
           if (userName.startsWith(prefix)) {
@@ -288,6 +293,14 @@ export function validateMetaNameCollisions(
           if (userName.startsWith(prefix)) {
             throw new TypeError(
               `User-defined command "${userName}" conflicts with the ` +
+                `built-in ${label} (prefix "${prefix}").`,
+            );
+          }
+        }
+        for (const literal of userNames.allLiterals) {
+          if (literal.startsWith(prefix)) {
+            throw new TypeError(
+              `Literal value "${literal}" conflicts with the ` +
                 `built-in ${label} (prefix "${prefix}").`,
             );
           }
