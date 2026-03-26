@@ -943,6 +943,11 @@ To be released.
     and completion exits.  Contexts are now disposed on every exit path,
     including early meta-command exits.  [[#226], [#733]]
 
+ -  Added construction-time validation for labels in `object()`, `tuple()`,
+    `merge()`, and `group()`.  Labels that are empty, whitespace-only, or
+    contain control characters now throw `TypeError` immediately instead of
+    producing broken help output.  [[#404], [#737]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -1051,6 +1056,7 @@ To be released.
 [#396]: https://github.com/dahlia/optique/issues/396
 [#401]: https://github.com/dahlia/optique/issues/401
 [#403]: https://github.com/dahlia/optique/issues/403
+[#404]: https://github.com/dahlia/optique/issues/404
 [#406]: https://github.com/dahlia/optique/issues/406
 [#407]: https://github.com/dahlia/optique/issues/407
 [#425]: https://github.com/dahlia/optique/issues/425
@@ -1204,6 +1210,7 @@ To be released.
 [#732]: https://github.com/dahlia/optique/pull/732
 [#733]: https://github.com/dahlia/optique/pull/733
 [#736]: https://github.com/dahlia/optique/pull/736
+[#737]: https://github.com/dahlia/optique/pull/737
 
 ### @optique/config
 

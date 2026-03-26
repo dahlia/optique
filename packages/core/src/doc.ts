@@ -15,7 +15,7 @@ import {
   type Usage,
   type UsageTerm,
 } from "./usage.ts";
-import { validateProgramName } from "./validate.ts";
+import { validateLabel, validateProgramName } from "./validate.ts";
 
 /**
  * A documentation entry which describes a specific usage of a command or
@@ -525,8 +525,8 @@ function defaultSectionOrder(a: DocSection, b: DocSection): number {
  * @returns A formatted string representation of the documentation page
  * @throws {TypeError} If `programName` is not a string, is empty,
  * whitespace-only, or contains control characters, if any non-empty
- * section's title is empty, whitespace-only, or contains a CR or LF
- * character, or if `maxWidth` is not a finite integer.
+ * section's title is not a string, is empty, whitespace-only, or contains
+ * control characters, or if `maxWidth` is not a finite integer.
  * @throws {RangeError} If any entry needs a description column and `maxWidth`
  * is too small to fit the minimum layout (less than `termIndent + 4`), or if
  * `showChoices.maxItems` is less than `1`.
@@ -780,11 +780,7 @@ export function formatDocPage(
     if (section.entries.length < 1) continue;
     output += "\n";
     if (section.title != null) {
-      if (section.title.trim() === "" || /[\r\n]/.test(section.title)) {
-        throw new TypeError(
-          "Section title must not be empty, whitespace-only, or contain newlines.",
-        );
-      }
+      validateLabel(section.title);
       const sectionLabel = options.colors
         ? `\x1b[1;2m${section.title}:\x1b[0m\n`
         : `${section.title}:\n`;

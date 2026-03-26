@@ -130,6 +130,7 @@ import {
   type UsageTerm,
 } from "./usage.ts";
 import { collectLeadingCandidates } from "./usage-internals.ts";
+import { validateLabel } from "./validate.ts";
 
 function createUnexpectedInputErrorWithScopedSuggestions(
   baseError: Message,
@@ -3822,6 +3823,8 @@ export function object<
  * @returns A {@link Parser} that produces an object with the same keys as
  *          the input, where each value is the result of the corresponding
  *          parser.
+ * @throws {TypeError} If the label is not a string, is empty,
+ *         whitespace-only, or contains control characters.
  */
 export function object<
   T extends { readonly [key: string | symbol]: Parser<Mode, unknown, unknown> },
@@ -3853,6 +3856,8 @@ export function object<
  * @returns A {@link Parser} that produces an object with the same keys as
  *          the input, where each value is the result of the corresponding
  *          parser.
+ * @throws {TypeError} If the label is not a string, is empty,
+ *         whitespace-only, or contains control characters.
  * @since 0.5.0
  */
 export function object<
@@ -3889,6 +3894,7 @@ export function object<
   const label: string | undefined = typeof labelOrParsers === "string"
     ? labelOrParsers
     : undefined;
+  if (label != null) validateLabel(label);
 
   let parsers: T;
   let options: ObjectOptions = {};
@@ -4761,6 +4767,8 @@ export function tuple<
  * @returns A {@link Parser} that produces a readonly tuple with the same length
  *          as the input array, where each element is the result of the
  *          corresponding parser.
+ * @throws {TypeError} If the label is not a string, is empty,
+ *         whitespace-only, or contains control characters.
  */
 export function tuple<
   const T extends readonly Parser<Mode, unknown, unknown>[],
@@ -4794,6 +4802,7 @@ export function tuple<
   const label: string | undefined = typeof labelOrParsers === "string"
     ? labelOrParsers
     : undefined;
+  if (label != null) validateLabel(label);
 
   let parsers: T;
   let options: TupleOptions = {};
@@ -5471,6 +5480,8 @@ export function merge<const TParsers extends MergeParsers>(
  * @returns A parser that merges parsed object fields from all parsers.
  * Type inference is precise for tuple calls up to 15 parser arguments.
  * @throws {TypeError} If no parser arguments are provided.
+ * @throws {TypeError} If the label is not a string, is empty,
+ *         whitespace-only, or contains control characters.
  * @since 0.4.0
  */
 export function merge<const TParsers extends MergeParsers>(
@@ -5489,6 +5500,8 @@ export function merge<const TParsers extends MergeParsers>(
  * @returns A parser that merges parsed object fields from all parsers.
  * Type inference is precise for tuple calls up to 15 parser arguments.
  * @throws {TypeError} If no parser arguments are provided.
+ * @throws {TypeError} If the label is not a string, is empty,
+ *         whitespace-only, or contains control characters.
  * @since 0.7.0
  */
 export function merge<const TParsers extends MergeParsers>(
@@ -5523,6 +5536,7 @@ export function merge(
 > {
   // Check if first argument is a label
   const label = typeof args[0] === "string" ? args[0] : undefined;
+  if (label != null) validateLabel(label);
 
   // Check if last argument is options
   const lastArg = args[args.length - 1];
@@ -7064,6 +7078,8 @@ export function concat(
  * @param options Optional visibility controls for the wrapped parser terms.
  * @returns A new parser that behaves identically to the input parser
  *          but generates documentation within a labeled section.
+ * @throws {TypeError} If the label is not a string, is empty,
+ *         whitespace-only, or contains control characters.
  * @since 0.4.0
  */
 /**
@@ -7082,6 +7098,7 @@ export function group<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   options: GroupOptions = {},
 ): Parser<M, TValue, TState> {
+  validateLabel(label);
   const groupParser: Parser<M, TValue, TState> = {
     $mode: parser.$mode,
     $valueType: parser.$valueType,

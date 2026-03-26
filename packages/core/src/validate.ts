@@ -355,3 +355,35 @@ export function validateProgramName(programName: string): void {
     );
   }
 }
+
+/**
+ * Validates a label at runtime.
+ *
+ * Labels are used as section titles in documentation output.  They may contain
+ * spaces (e.g., "Connection options"), but must not be empty, whitespace-only,
+ * or contain control characters.
+ *
+ * @param label The label to validate.
+ * @throws {TypeError} If the label is not a string, is empty,
+ *         whitespace-only, or contains control characters.
+ * @since 1.0.0
+ */
+export function validateLabel(label: string): void {
+  if (typeof label !== "string") {
+    throw new TypeError("Label must be a string.");
+  }
+  if (label === "") {
+    throw new TypeError("Label must not be empty.");
+  }
+  if (/^\s+$/.test(label)) {
+    throw new TypeError(
+      `Label must not be whitespace-only: "${escapeControlChars(label)}".`,
+    );
+  }
+  if (CONTROL_CHAR_RE.test(label)) {
+    throw new TypeError(
+      `Label must not contain control characters: ` +
+        `"${escapeControlChars(label)}".`,
+    );
+  }
+}
