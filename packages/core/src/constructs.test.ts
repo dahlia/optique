@@ -11047,7 +11047,11 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.ok(usageText.length > 0);
   });
 
-  it("conditional() with argument discriminator produces literal terms", () => {
+  it("conditional() with argument discriminator does not produce literal terms", () => {
+    // Argument terms are not replaced with literals because map() is
+    // invisible in the usage tree: we cannot tell whether the branch
+    // key is the raw argv token or a transformed value.
+    // See https://github.com/dahlia/optique/issues/734
     const parser = conditional(
       argument(string()),
       {
@@ -11056,84 +11060,8 @@ describe("branch coverage: constructs.ts edge cases", () => {
       },
     );
     const literals = extractLiteralValues(parser.usage);
-    assert.ok(literals.has("help"));
-    assert.ok(literals.has("serve"));
-  });
-
-  it("conditional() with argument discriminator shows branch keys in usage", () => {
-    const parser = conditional(
-      argument(string()),
-      {
-        fast: option("--threads", integer()),
-        slow: flag("--verbose"),
-      },
-    );
-    const usageText = formatUsage("app", parser.usage);
-    assert.ok(usageText.includes("fast"));
-    assert.ok(usageText.includes("slow"));
-  });
-
-  it("conditional() with mixed option+argument discriminator does not replace argument", () => {
-    // When the discriminator includes both an option with metavar and
-    // an argument, the branch key comes from the option value, not the
-    // argument.  The argument should not be rewritten to a literal.
-    const discriminator = map(
-      tuple([option("--mode", string()), argument(string())]),
-      ([mode, _]: readonly [string, string]) => mode,
-    );
-    const parser = conditional(discriminator, {
-      help: object({ port: option("--port", integer()) }),
-    });
-    const usageText = formatUsage("app", parser.usage);
-    // The argument should remain as a metavar (e.g., STRING),
-    // not be rewritten to the branch key "help"
-    assert.ok(!usageText.includes("help help"));
-    // The option-value literal "help" should still appear (from the
-    // option metavar → literal replacement)
-    assert.ok(usageText.includes("help"));
-  });
-
-  it("conditional() should not expose hidden argument discriminator in usage", () => {
-    const parser = conditional(
-      argument(string(), { hidden: true }),
-      {
-        help: object({ port: option("--port", integer()) }),
-        serve: object({ dir: argument(string()) }),
-      },
-    );
-    const usageText = formatUsage("app", parser.usage);
-    // The hidden argument should NOT be exposed as a literal branch key
-    assert.ok(!usageText.includes("help"));
-    assert.ok(!usageText.includes("serve"));
-  });
-
-  it("conditional() with repeated argument discriminator does not produce literal terms", () => {
-    // multiple(argument(...)) consumes multiple tokens; the branch key
-    // is derived from joining them, so no single token equals the key.
-    const discriminator = map(
-      multiple(argument(string()), { min: 1 }),
-      (xs: readonly string[]) => xs.join("-"),
-    );
-    const parser = conditional(discriminator, {
-      "help-me": object({ port: option("--port", integer()) }),
-    });
-    const literals = extractLiteralValues(parser.usage);
-    assert.ok(!literals.has("help-me"));
-  });
-
-  it("conditional() with multi-argument discriminator does not produce literal terms", () => {
-    // When the discriminator derives its value from multiple positional
-    // tokens, individual arguments are not independently equal to the
-    // branch key, so no literal should be emitted.
-    const discriminator = map(
-      tuple([argument(string()), argument(string())]),
-      ([a, b]: readonly [string, string]) => `${a}-${b}`,
-    );
-    const parser = conditional(discriminator, {
-      "help-me": object({ port: option("--port", integer()) }),
-    });
-    const literals = extractLiteralValues(parser.usage);
-    assert.ok(!literals.has("help-me"));
+    assert.ok(!literals.has("help"));
+    assert.ok(!literals.has("serve"));
   });
 
   it("conditional() async complete handles dependency source completion state", async () => {

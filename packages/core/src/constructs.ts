@@ -7437,67 +7437,13 @@ export function conditional(
     ...allBranchParsers.map((p) => p.priority),
   );
 
-  // Helper: check whether the usage tree contains any argument or option-
-  // with-metavar terms.  Used to decide whether argument → literal
-  // replacement is safe.  `insideMultiple` tracks whether we are inside
-  // a `multiple` container, which means the argument consumes more than
-  // one token and the branch key is derived from combining them.
-  function analyzeDiscriminatorUsage(
-    terms: Usage,
-    insideMultiple = false,
-  ): {
-    readonly argumentCount: number;
-    readonly hasOptionsWithMetavar: boolean;
-    readonly hasRepeatedArgument: boolean;
-  } {
-    let argumentCount = 0;
-    let hasOptionsWithMetavar = false;
-    let hasRepeatedArgument = false;
-    for (const term of terms) {
-      if (term.type === "argument") {
-        argumentCount++;
-        if (insideMultiple) hasRepeatedArgument = true;
-      } else if (term.type === "option" && term.metavar !== undefined) {
-        hasOptionsWithMetavar = true;
-      } else if (term.type === "optional") {
-        const inner = analyzeDiscriminatorUsage(term.terms, insideMultiple);
-        argumentCount += inner.argumentCount;
-        hasOptionsWithMetavar = hasOptionsWithMetavar ||
-          inner.hasOptionsWithMetavar;
-        hasRepeatedArgument = hasRepeatedArgument || inner.hasRepeatedArgument;
-      } else if (term.type === "multiple") {
-        const inner = analyzeDiscriminatorUsage(term.terms, true);
-        argumentCount += inner.argumentCount;
-        hasOptionsWithMetavar = hasOptionsWithMetavar ||
-          inner.hasOptionsWithMetavar;
-        hasRepeatedArgument = hasRepeatedArgument || inner.hasRepeatedArgument;
-      } else if (term.type === "exclusive") {
-        let maxArgs = 0;
-        for (const branch of term.terms) {
-          const inner = analyzeDiscriminatorUsage(branch, insideMultiple);
-          maxArgs = Math.max(maxArgs, inner.argumentCount);
-          hasOptionsWithMetavar = hasOptionsWithMetavar ||
-            inner.hasOptionsWithMetavar;
-          hasRepeatedArgument = hasRepeatedArgument ||
-            inner.hasRepeatedArgument;
-        }
-        argumentCount += maxArgs;
-      }
-    }
-    return { argumentCount, hasOptionsWithMetavar, hasRepeatedArgument };
-  }
-
-  // Helper to replace metavar/argument with literal value in usage.
-  // `replaceArguments` controls whether argument terms are replaced;
-  // it is only true when the discriminator is a pure single-argument
-  // parser with no value-bearing options.  When the discriminator
-  // contains options with metavar, the branch key comes from the
-  // option value and unrelated arguments should not be rewritten.
-  function appendLiteralToUsage(
-    usage: Usage,
-    literalValue: string,
-    replaceArguments: boolean,
-  ): Usage {
+  // Helper to replace metavar with literal value after the option in usage.
+  // Only option terms with metavar are rewritten: the metavar is stripped
+  // and a literal term is appended.  Argument terms are left unchanged
+  // because map() is invisible in the usage tree, so we cannot tell
+  // whether the branch key equals the raw argv token or a transformed
+  // value.  See https://github.com/dahlia/optique/issues/734
+  function appendLiteralToUsage(usage: Usage, literalValue: string): Usage {
     const result: UsageTerm[] = [];
     for (const term of usage) {
       if (term.type === "option" && term.metavar !== undefined) {
@@ -7505,39 +7451,20 @@ export function conditional(
         const { metavar: _, ...optionWithoutMetavar } = term;
         result.push(optionWithoutMetavar);
         result.push({ type: "literal", value: literalValue });
-      } else if (
-        term.type === "argument" && replaceArguments && !term.hidden
-      ) {
-        // Replace the entire argument with a literal term—the branch
-        // key IS the concrete value for this positional slot.
-        // Hidden arguments are left as-is because the `literal` type
-        // has no `hidden` property; replacing would expose a term the
-        // author explicitly hid.
-        result.push({ type: "literal", value: literalValue });
       } else if (term.type === "optional") {
         result.push({
           ...term,
-          terms: appendLiteralToUsage(
-            term.terms,
-            literalValue,
-            replaceArguments,
-          ),
+          terms: appendLiteralToUsage(term.terms, literalValue),
         });
       } else if (term.type === "multiple") {
         result.push({
           ...term,
-          terms: appendLiteralToUsage(
-            term.terms,
-            literalValue,
-            replaceArguments,
-          ),
+          terms: appendLiteralToUsage(term.terms, literalValue),
         });
       } else if (term.type === "exclusive") {
         result.push({
           ...term,
-          terms: term.terms.map((t) =>
-            appendLiteralToUsage(t, literalValue, replaceArguments)
-          ),
+          terms: term.terms.map((t) => appendLiteralToUsage(t, literalValue)),
         });
       } else {
         result.push(term);
@@ -7546,17 +7473,9 @@ export function conditional(
     return result;
   }
 
-  // Only replace argument terms when the discriminator is a pure
-  // single-argument parser with no value-bearing options.
-  // See https://github.com/dahlia/optique/issues/734
-  const { argumentCount, hasOptionsWithMetavar, hasRepeatedArgument } =
-    analyzeDiscriminatorUsage(discriminator.usage);
-  const replaceArguments = argumentCount === 1 && !hasOptionsWithMetavar &&
-    !hasRepeatedArgument;
-
   // Build usage: discriminator (with literal value) + exclusive branches
   const branchUsages: Usage[] = branchParsers.map(([key, p]) => [
-    ...appendLiteralToUsage(discriminator.usage, key, replaceArguments),
+    ...appendLiteralToUsage(discriminator.usage, key),
     ...p.usage,
   ]);
   if (defaultBranch) {

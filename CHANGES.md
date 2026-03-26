@@ -127,16 +127,13 @@ To be released.
     parameter for callers that need `hidden: true` terms included in the
     result.  [[#227], [#736]]
 
- -  `conditional()` with an `argument()` discriminator now produces `literal`
-    terms in the usage tree.  Previously, argument-based branch keys were
-    invisible to collision detection and displayed as a generic metavar
-    (e.g., `STRING`) in help text.  Now the concrete branch key values
-    appear as literals, enabling meta name collision detection and improving
-    help output.  [[#734]]
-
- -  Added `extractLeadingLiteralValues()` to *@optique/core/usage*.  Meta
-    command collision detection now checks leading literal values in addition
-    to leading options and commands.  [[#734]]
+ -  Added `extractLeadingLiteralValues()` to *@optique/core/usage* and
+    `leadingLiterals` to `UserParserNames`.  Meta command collision
+    detection now checks leading literal values (position-aware: command-form
+    meta features check leading literals, option-form check all literals).
+    Argument-based conditional discriminators remain undetected because
+    `map()` is invisible in the usage tree; the proper fix requires
+    direct branch key communication ([[#735]]).  [[#734]]
 
  -  *Breaking change:* Added `placeholder` property to `ValueParser` interface
     (required) and `Parser` interface (optional).  Every value parser now
@@ -1228,6 +1225,7 @@ To be released.
 [#732]: https://github.com/dahlia/optique/pull/732
 [#733]: https://github.com/dahlia/optique/pull/733
 [#734]: https://github.com/dahlia/optique/issues/734
+[#735]: https://github.com/dahlia/optique/issues/735
 [#736]: https://github.com/dahlia/optique/pull/736
 [#737]: https://github.com/dahlia/optique/pull/737
 [#739]: https://github.com/dahlia/optique/pull/739

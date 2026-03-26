@@ -275,6 +275,13 @@ export function validateMetaNameCollisions(
       // collide with meta features.  The scope is position-aware:
       // command-form entries only reach args[0] → check leading literals;
       // option-form entries scan entire argv → check all literals.
+      //
+      // Known limitation: only option-based conditional discriminators
+      // produce literal terms.  Argument-based discriminators do not
+      // because map() is invisible in the usage tree—we cannot tell
+      // whether the branch key is the raw argv token or a transformed
+      // value.  See https://github.com/dahlia/optique/issues/734
+      // and https://github.com/dahlia/optique/issues/735
       const literalNames = kind === "command"
         ? userNames.leadingLiterals
         : userNames.allLiterals;

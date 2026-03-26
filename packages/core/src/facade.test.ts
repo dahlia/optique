@@ -1501,7 +1501,10 @@ describe("runParser", () => {
       );
     });
 
-    it("should reject conditional(argument()) branch key colliding with meta command", () => {
+    it("should not reject conditional(argument()) branch key against meta command", () => {
+      // Argument-based conditional branch keys are not detectable via
+      // usage-tree analysis because map() is invisible in the tree.
+      // See https://github.com/dahlia/optique/issues/734
       const parser = conditional(
         argument(string()),
         {
@@ -1509,33 +1512,7 @@ describe("runParser", () => {
           serve: object({ dir: argument(string()) }),
         },
       );
-      assert.throws(
-        () =>
-          runParser(parser, "myapp", [], {
-            help: {
-              command: true,
-              onShow: () => "HELP",
-            },
-            stderr: () => {},
-          }),
-        {
-          name: "TypeError",
-          message: /literal.*"help".*help command/i,
-        },
-      );
-    });
-
-    it("should not reject option-based conditional branch key against meta command", () => {
-      // The branch key "help" is the value of --mode, never at args[0].
-      // Meta commands only check args[0], so no collision.
-      const parser = conditional(
-        option("--mode", string()),
-        {
-          help: object({ port: option("--port", integer()) }),
-          serve: object({ dir: argument(string()) }),
-        },
-      );
-      runParser(parser, "myapp", ["--mode", "help", "--port", "3000"], {
+      runParser(parser, "myapp", ["serve", "foo"], {
         help: {
           command: true,
           onShow: () => "HELP",
