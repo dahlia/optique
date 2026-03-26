@@ -45,9 +45,6 @@ import { dispatchByMode } from "./mode-dispatch.ts";
 import { argument, command, constant, flag, option } from "./primitives.ts";
 import {
   extractCommandNames,
-  extractLeadingCommandNames,
-  extractLeadingLiteralValues,
-  extractLeadingOptionNames,
   extractLiteralValues,
   extractOptionNames,
   formatUsage,
@@ -1643,9 +1640,7 @@ export function runParser<
   }
   validateMetaNameCollisions(
     {
-      leadingOptions: extractLeadingOptionNames(parser.usage, true),
-      leadingCommands: extractLeadingCommandNames(parser.usage, true),
-      leadingLiterals: extractLeadingLiteralValues(parser.usage),
+      leadingNames: parser.leadingNames,
       allOptions: extractOptionNames(parser.usage, true),
       allCommands: extractCommandNames(parser.usage, true),
       allLiterals: extractLiteralValues(parser.usage),

@@ -1462,21 +1462,26 @@ describe("runParser", () => {
       assert.deepEqual(result, ["server", {}]);
     });
 
-    // Exclusive that consumes a token should not leak subsequent commands
-    it("should allow command after token-consuming exclusive", () => {
-      // tuple([or(argument(string()), command("foo", ...)), command("help", ...)])
+    // All tuple children share the same buffer, so command("help") in the
+    // tuple IS reachable at args[0].  This is a correct collision detection.
+    it("should reject tuple child command that collides with meta command", () => {
       const parser = tuple([
         or(argument(string()), command("foo", object({}))),
         command("help", object({})),
       ]);
-      // "help" is at position 2 (after exclusive consumes position 1)
-      const result = runParser(parser, "test", ["x", "help"], {
-        help: {
-          command: true,
-          onShow: () => "HELP",
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["x", "help"], {
+            help: {
+              command: true,
+              onShow: () => "HELP",
+            },
+          }),
+        {
+          name: "TypeError",
+          message: /user.*"help".*help command/i,
         },
-      });
-      assert.deepEqual(result, ["x", {}]);
+      );
     });
 
     // Literal values shadowed by meta option scanners
