@@ -13642,7 +13642,7 @@ describe("branch coverage regressions", () => {
     const mac = macAddress({ separator: "none" });
     const macResult = mac.parse("aabbccddeeff");
     assert.ok(macResult.success);
-    assert.equal(mac.format("aa:bb:cc:dd:ee:ff"), "aabbccddeeff");
+    assert.equal(mac.format("aa:bb:cc:dd:ee:ff"), "aa:bb:cc:dd:ee:ff");
 
     const dom = domain();
     assert.equal(dom.format("example.com"), "example.com");
@@ -13867,39 +13867,6 @@ describe("format() for network-address value parsers", () => {
     assert.equal(mac.format("00:1a:2b:3c:4d:5e"), "00:1a:2b:3c:4d:5e");
   });
 
-  it("macAddress().format() should normalize with outputSeparator", () => {
-    const mac = macAddress({ outputSeparator: "-" });
-    assert.equal(mac.format("00:1a:2b:3c:4d:5e"), "00-1a-2b-3c-4d-5e");
-  });
-
-  it("macAddress().format() should normalize with case option", () => {
-    const mac = macAddress({ case: "upper" });
-    assert.equal(mac.format("00:1a:2b:3c:4d:5e"), "00:1A:2B:3C:4D:5E");
-  });
-
-  it("macAddress().format() should normalize separator=none", () => {
-    const mac = macAddress({ separator: "none" });
-    assert.equal(mac.format("00:1a:2b:3c:4d:5e"), "001a2b3c4d5e");
-  });
-
-  it("macAddress().format() preserves separator when separator is any", () => {
-    const mac = macAddress();
-    assert.equal(mac.format("00-1a-2b-3c-4d-5e"), "00-1a-2b-3c-4d-5e");
-    assert.equal(mac.format("001a.2b3c.4d5e"), "001a.2b3c.4d5e");
-    assert.equal(mac.format("001a2b3c4d5e"), "001a2b3c4d5e");
-  });
-
-  it("macAddress().format() pads shorthand octets correctly", () => {
-    const mac = macAddress();
-    assert.equal(mac.format("0:1:2:3:4:5"), "00:01:02:03:04:05");
-    assert.equal(mac.format("a:b:c:d:e:f"), "0a:0b:0c:0d:0e:0f");
-  });
-
-  it("macAddress().format() handles shorthand with outputSeparator", () => {
-    const mac = macAddress({ outputSeparator: "." });
-    assert.equal(mac.format("0:1:2:3:4:5"), "0001.0203.0405");
-  });
-
   it("macAddress() parse-format round-trips for all separator styles", () => {
     const mac = macAddress();
     for (
@@ -13918,23 +13885,9 @@ describe("format() for network-address value parsers", () => {
     }
   });
 
-  it("macAddress() parse-format round-trips with outputSeparator", () => {
-    const mac = macAddress({ outputSeparator: ".", case: "upper" });
-    const parsed = mac.parse("aa:bb:cc:dd:ee:ff");
-    assert.ok(parsed.success);
-    if (parsed.success) {
-      assert.equal(mac.format(parsed.value), parsed.value);
-    }
-  });
-
   it("domain().format() should return the value, not metavar", () => {
     const dom = domain();
     assert.equal(dom.format("Example.COM"), "Example.COM");
-  });
-
-  it("domain().format() should apply lowercase when configured", () => {
-    const dom = domain({ lowercase: true });
-    assert.equal(dom.format("Example.COM"), "example.com");
   });
 
   it("domain() parse-format round-trips with lowercase", () => {

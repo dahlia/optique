@@ -4958,43 +4958,7 @@ export function macAddress(
       return { success: true, value: joinOctets(octets, finalSeparator) };
     },
     format(value: string): string {
-      // Extract octets by splitting on the detected separator so that
-      // shorthand octets (e.g., "0:1:2:3:4:5") keep their boundaries.
-      let octets: string[];
-      let detectedSep: ":" | "-" | "." | "none";
-      if (value.includes(":")) {
-        octets = value.split(":");
-        detectedSep = ":";
-      } else if (value.includes("-")) {
-        octets = value.split("-");
-        detectedSep = "-";
-      } else if (value.includes(".")) {
-        // Cisco format: each group is 4 hex digits → split into pairs
-        octets = value.split(".").flatMap((g) => [
-          g.slice(0, 2),
-          g.slice(2),
-        ]);
-        detectedSep = ".";
-      } else {
-        octets = [];
-        for (let i = 0; i < value.length; i += 2) {
-          octets.push(value.slice(i, i + 2));
-        }
-        detectedSep = "none";
-      }
-      octets = octets.map((o) => o.padStart(2, "0"));
-      // Determine target separator: explicit outputSeparator takes
-      // precedence; when separator is "any", preserve the style that
-      // parse() kept from the original input.
-      let sep: ":" | "-" | "." | "none";
-      if (outputSeparator != null) {
-        sep = outputSeparator;
-      } else if (separator !== "any") {
-        sep = separator;
-      } else {
-        sep = detectedSep;
-      }
-      return joinOctets(octets, sep);
+      return value;
     },
   };
 }
@@ -5351,7 +5315,7 @@ export function domain(
       return { success: true, value: result };
     },
     format(value: string): string {
-      return lowercase ? value.toLowerCase() : value;
+      return value;
     },
   };
 }
