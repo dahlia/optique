@@ -4912,9 +4912,11 @@ export function macAddress(
       }
       detectedSep = "none";
     }
-    // Guard: a valid MAC has exactly 6 octets.  If not, the value is not
-    // a MAC address (e.g., a sentinel default) — return it unchanged.
-    if (octets.length !== 6) return value;
+    // Guard: a valid MAC has exactly 6 hex octets.  If not, the value is
+    // not a MAC address (e.g., a sentinel default) — return it unchanged.
+    if (octets.length !== 6 || !octets.every((o) => /^[0-9a-fA-F]+$/.test(o))) {
+      return value;
+    }
     octets = octets.map((o) => o.padStart(2, "0"));
     let sep: ":" | "-" | "." | "none";
     if (outputSeparator != null) {

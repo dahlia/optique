@@ -1712,6 +1712,11 @@ export function nonEmpty<M extends Mode, T, TState>(
     ...(typeof parser.shouldDeferCompletion === "function"
       ? { shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser) }
       : {}),
+    // Forward value normalization from inner parser so that withDefault()
+    // can normalize defaults through nonEmpty() wrappers.
+    ...(typeof parser.normalizeValue === "function"
+      ? { normalizeValue: parser.normalizeValue.bind(parser) }
+      : {}),
     parse(context: ParserContext<TState>) {
       return dispatchByMode(
         parser.$mode,

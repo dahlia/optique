@@ -13954,6 +13954,7 @@ describe("ValueParser.normalize()", () => {
     const mac = macAddress({ outputSeparator: ":" });
     assert.equal(mac.normalize!("local"), "local");
     assert.equal(mac.normalize!("auto"), "auto");
+    assert.equal(mac.normalize!("foo.bar.baz"), "foo.bar.baz");
   });
 
   it("macAddress().format() preserves non-MAC strings unchanged", () => {

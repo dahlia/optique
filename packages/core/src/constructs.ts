@@ -7194,6 +7194,11 @@ export function group<M extends Mode, TValue, TState>(
         shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser),
       }
       : {}),
+    // Forward value normalization from inner parser so that withDefault()
+    // can normalize defaults through group() wrappers.
+    ...(typeof parser.normalizeValue === "function"
+      ? { normalizeValue: parser.normalizeValue.bind(parser) }
+      : {}),
     parse: (context) => parser.parse(context),
     complete: (state) => parser.complete(state),
     suggest: (context, prefix) => {

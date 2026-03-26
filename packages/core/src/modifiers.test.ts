@@ -1472,6 +1472,30 @@ describe("withDefault", () => {
       assert.equal(result.value, "local");
     }
   });
+
+  it("should preserve dotted sentinel defaults for macAddress", () => {
+    const parser = withDefault(
+      option("--mac", macAddress()),
+      "foo.bar.baz",
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "foo.bar.baz");
+    }
+  });
+
+  it("should normalize defaults through nonEmpty() wrappers", () => {
+    const parser = withDefault(
+      nonEmpty(option("--domain", domain({ lowercase: true }))),
+      "Example.COM",
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "example.com");
+    }
+  });
 });
 
 describe("map", () => {
