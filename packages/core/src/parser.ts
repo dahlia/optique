@@ -859,9 +859,12 @@ export function getDocPageSync(
   if (Array.isArray(argsOrOptions)) {
     args = argsOrOptions;
     options = optionsParam;
+  } else if (argsOrOptions != null) {
+    args = [];
+    options = argsOrOptions as ParseOptions;
   } else {
     args = [];
-    options = argsOrOptions as ParseOptions | undefined;
+    options = optionsParam;
   }
   return getDocPageSyncImpl(parser, args, options);
 }
@@ -902,9 +905,12 @@ export function getDocPageAsync(
   if (Array.isArray(argsOrOptions)) {
     args = argsOrOptions;
     options = optionsParam;
+  } else if (argsOrOptions != null) {
+    args = [];
+    options = argsOrOptions as ParseOptions;
   } else {
     args = [];
-    options = argsOrOptions as ParseOptions | undefined;
+    options = optionsParam;
   }
   if (parser.$mode === "sync") {
     return Promise.resolve(
@@ -1008,9 +1014,12 @@ export function getDocPage(
   if (Array.isArray(argsOrOptions)) {
     args = argsOrOptions;
     options = optionsParam;
+  } else if (argsOrOptions != null) {
+    args = [];
+    options = argsOrOptions as ParseOptions;
   } else {
     args = [];
-    options = argsOrOptions as ParseOptions | undefined;
+    options = optionsParam;
   }
   if (parser.$mode === "sync") {
     return getDocPageSyncImpl(
