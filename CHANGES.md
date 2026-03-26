@@ -133,7 +133,14 @@ To be released.
     meta features check leading literals, option-form check all literals).
     Argument-based conditional discriminators remain undetected because
     `map()` is invisible in the usage tree; the proper fix requires
-    direct branch key communication ([[#735]]).  [[#734]]
+    direct branch key communication.  [[#734], [#738]]
+
+ -  Added optional `optionValue` property to the `literal` variant of
+    `UsageTerm`.  When `true`, the literal was derived from an option's
+    metavar by `conditional()` and represents an option value rather than
+    a standalone positional token.  `extractLeadingLiteralValues()` uses
+    this to distinguish option values from real positional literals.
+    [[#734], [#738]]
 
  -  *Breaking change:* Added `placeholder` property to `ValueParser` interface
     (required) and `Parser` interface (optional).  Every value parser now
@@ -1225,9 +1232,9 @@ To be released.
 [#732]: https://github.com/dahlia/optique/pull/732
 [#733]: https://github.com/dahlia/optique/pull/733
 [#734]: https://github.com/dahlia/optique/issues/734
-[#735]: https://github.com/dahlia/optique/issues/735
 [#736]: https://github.com/dahlia/optique/pull/736
 [#737]: https://github.com/dahlia/optique/pull/737
+[#738]: https://github.com/dahlia/optique/pull/738
 [#739]: https://github.com/dahlia/optique/pull/739
 
 ### @optique/config
