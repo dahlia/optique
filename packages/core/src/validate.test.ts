@@ -752,23 +752,25 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
-  it("should flag leading literal matching prefix against meta command", () => {
+  it("should flag literal matching prefix against meta option", () => {
+    // prefixMatch is only meaningful for option-form meta entries
+    // (facade.ts only sets it for the completion option).
     assert.throws(
       () =>
         validateMetaNameCollisions(
           {
             leadingOptions: e,
             leadingCommands: e,
-            leadingLiterals: new Set(["completion=bash"]),
+            leadingLiterals: e,
             allOptions: e,
             allCommands: e,
-            allLiterals: new Set(["completion=bash"]),
+            allLiterals: new Set(["--completion=bash"]),
           },
-          [["command", "completion command", ["completion"], true]],
+          [["option", "completion option", ["--completion"], true]],
         ),
       {
         name: "TypeError",
-        message: /literal.*"completion=bash".*completion command/i,
+        message: /literal.*"--completion=bash".*completion option/i,
       },
     );
   });
