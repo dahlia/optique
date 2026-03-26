@@ -922,12 +922,18 @@ export function withDefault<
       enumerable: false,
     });
   }
-  // Forward value normalization as non-enumerable.
+  // Forward value normalization as non-enumerable.  Guard with try/catch
+  // because TDefault may be a sentinel type incompatible with the inner
+  // parser's normalizer.
   if (typeof parser.normalizeValue === "function") {
     const innerNormalize = parser.normalizeValue.bind(parser);
     Object.defineProperty(withDefaultParser, "normalizeValue", {
       value(v: TValue | TDefault): TValue | TDefault {
-        return innerNormalize(v as TValue) as TValue | TDefault;
+        try {
+          return innerNormalize(v as TValue) as TValue | TDefault;
+        } catch {
+          return v;
+        }
       },
       configurable: true,
       enumerable: false,

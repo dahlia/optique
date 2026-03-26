@@ -13955,6 +13955,11 @@ describe("ValueParser.normalize()", () => {
     assert.equal(mac.normalize!("local"), "local");
     assert.equal(mac.normalize!("auto"), "auto");
     assert.equal(mac.normalize!("foo.bar.baz"), "foo.bar.baz");
+    // 3-char octets are invalid — should not be rewritten
+    assert.equal(
+      mac.normalize!("aaa:bbb:ccc:ddd:eee:fff"),
+      "aaa:bbb:ccc:ddd:eee:fff",
+    );
   });
 
   it("macAddress().format() preserves non-MAC strings unchanged", () => {
