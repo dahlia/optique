@@ -794,6 +794,21 @@ describe("validateMetaNameCollisions", () => {
       },
     );
   });
+
+  it("should not prefix-match literal values when prefixMatch is not set", () => {
+    // help/version use exact matching; --help=verbose is a valid literal
+    validateMetaNameCollisions(
+      {
+        leadingOptions: e,
+        leadingCommands: e,
+        leadingLiterals: e,
+        allOptions: e,
+        allCommands: e,
+        allLiterals: new Set(["--help=verbose"]),
+      },
+      [["option", "help option", ["--help"]]],
+    );
+  });
 });
 
 describe("validateLabel", () => {
