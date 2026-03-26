@@ -530,8 +530,8 @@ export function extractLeadingLiteralValues(usage: Usage): Set<string> {
           if (term.optionValue) {
             // This literal is an option value (produced by
             // appendLiteralToUsage stripping an option's metavar),
-            // not a standalone positional token.  It does not occupy
-            // a positional slot, so continue scanning siblings.
+            // not a standalone positional token.  We continue scanning
+            // for other standalone literals that may appear after it.
             break;
           }
           values.add(term.value);
