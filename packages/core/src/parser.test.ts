@@ -2751,6 +2751,19 @@ describe("Annotations system", () => {
     const doc = await getDocPageAsync(parser, opts);
     assert.ok(doc !== undefined);
   });
+
+  it("should accept union-typed argsOrOptions forwarding", () => {
+    function wrapper(
+      argsOrOptions?: readonly string[] | ParseOptions,
+      options?: ParseOptions,
+    ) {
+      const parser = constant("ok");
+      return getDocPageSync(parser, argsOrOptions, options);
+    }
+    assert.ok(wrapper() !== undefined);
+    assert.ok(wrapper([]) !== undefined);
+    assert.ok(wrapper({ annotations: {} }) !== undefined);
+  });
 });
 
 describe("getDocPage regression: meta commands with withDefault(or(...))", () => {

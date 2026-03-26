@@ -831,42 +831,30 @@ function findCommandInExclusive(
  * in a Promise).
  *
  * @param parser The sync parser to generate documentation for.
- * @param args Optional array of command-line arguments for context.
- * @param options Optional {@link ParseOptions} for customizing parsing behavior.
+ * @param argsOrOptions Optional array of command-line arguments for context,
+ *        or a {@link ParseOptions} object for annotations.  When a
+ *        `ParseOptions` is passed here, the `options` parameter is ignored.
+ * @param options Optional {@link ParseOptions} for customizing parsing
+ *        behavior.  Only used when `argsOrOptions` is an array or omitted.
  * @returns A {@link DocPage} or `undefined`.
  * @since 0.9.0
  * @since 0.10.0 Added optional `options` parameter for annotations support.
- * @since 1.0.0 Added overload accepting `options` as the second argument.
+ * @since 1.0.0 The second parameter now also accepts a `ParseOptions` object
+ *              directly.
  */
 export function getDocPageSync(
   parser: Parser<"sync", unknown, unknown>,
-  options?: ParseOptions,
-): DocPage | undefined;
-
-export function getDocPageSync(
-  parser: Parser<"sync", unknown, unknown>,
-  args?: readonly string[],
-  options?: ParseOptions,
-): DocPage | undefined;
-
-export function getDocPageSync(
-  parser: Parser<"sync", unknown, unknown>,
   argsOrOptions?: readonly string[] | ParseOptions,
-  optionsParam?: ParseOptions,
+  options?: ParseOptions,
 ): DocPage | undefined {
-  let args: readonly string[];
-  let options: ParseOptions | undefined;
   if (Array.isArray(argsOrOptions)) {
-    args = argsOrOptions;
-    options = optionsParam;
-  } else if (argsOrOptions != null) {
-    args = [];
-    options = argsOrOptions as ParseOptions;
-  } else {
-    args = [];
-    options = optionsParam;
+    return getDocPageSyncImpl(parser, argsOrOptions, options);
   }
-  return getDocPageSyncImpl(parser, args, options);
+  return getDocPageSyncImpl(
+    parser,
+    [],
+    (argsOrOptions as ParseOptions | undefined) ?? options,
+  );
 }
 
 /**
@@ -877,51 +865,45 @@ export function getDocPageSync(
  * async value parsers.
  *
  * @param parser The parser to generate documentation for.
- * @param args Optional array of command-line arguments for context.
- * @param options Optional {@link ParseOptions} for customizing parsing behavior.
+ * @param argsOrOptions Optional array of command-line arguments for context,
+ *        or a {@link ParseOptions} object for annotations.  When a
+ *        `ParseOptions` is passed here, the `options` parameter is ignored.
+ * @param options Optional {@link ParseOptions} for customizing parsing
+ *        behavior.  Only used when `argsOrOptions` is an array or omitted.
  * @returns A Promise of {@link DocPage} or `undefined`.
  * @since 0.9.0
  * @since 0.10.0 Added optional `options` parameter for annotations support.
- * @since 1.0.0 Added overload accepting `options` as the second argument.
+ * @since 1.0.0 The second parameter now also accepts a `ParseOptions` object
+ *              directly.
  */
 export function getDocPageAsync(
   parser: Parser<Mode, unknown, unknown>,
-  options?: ParseOptions,
-): Promise<DocPage | undefined>;
-
-export function getDocPageAsync(
-  parser: Parser<Mode, unknown, unknown>,
-  args?: readonly string[],
-  options?: ParseOptions,
-): Promise<DocPage | undefined>;
-
-export function getDocPageAsync(
-  parser: Parser<Mode, unknown, unknown>,
   argsOrOptions?: readonly string[] | ParseOptions,
-  optionsParam?: ParseOptions,
+  options?: ParseOptions,
 ): Promise<DocPage | undefined> {
-  let args: readonly string[];
-  let options: ParseOptions | undefined;
   if (Array.isArray(argsOrOptions)) {
-    args = argsOrOptions;
-    options = optionsParam;
-  } else if (argsOrOptions != null) {
-    args = [];
-    options = argsOrOptions as ParseOptions;
-  } else {
-    args = [];
-    options = optionsParam;
+    if (parser.$mode === "sync") {
+      return Promise.resolve(
+        getDocPageSyncImpl(
+          parser as Parser<"sync", unknown, unknown>,
+          argsOrOptions,
+          options,
+        ),
+      );
+    }
+    return getDocPageAsyncImpl(parser, argsOrOptions, options);
   }
+  const resolved = (argsOrOptions as ParseOptions | undefined) ?? options;
   if (parser.$mode === "sync") {
     return Promise.resolve(
       getDocPageSyncImpl(
         parser as Parser<"sync", unknown, unknown>,
-        args,
-        options,
+        [],
+        resolved,
       ),
     );
   }
-  return getDocPageAsyncImpl(parser, args, options);
+  return getDocPageAsyncImpl(parser, [], resolved);
 }
 
 /**
@@ -939,10 +921,12 @@ export function getDocPageAsync(
  * For async parsers, returns a Promise of the documentation page.
  *
  * @param parser The parser to generate documentation for
- * @param args Optional array of command-line arguments that have been parsed
- *             so far. Defaults to an empty array. This is used to determine
- *             the current parsing context and generate contextual documentation.
- * @param options Optional {@link ParseOptions} for customizing parsing behavior.
+ * @param argsOrOptions Optional array of command-line arguments that have been
+ *        parsed so far, or a {@link ParseOptions} object for annotations.
+ *        When a `ParseOptions` is passed here, the `options` parameter is
+ *        ignored.  Defaults to an empty array when omitted.
+ * @param options Optional {@link ParseOptions} for customizing parsing
+ *        behavior.  Only used when `argsOrOptions` is an array or omitted.
  * @returns For sync parsers, returns a {@link DocPage} directly.
  *          For async parsers, returns a Promise of {@link DocPage}.
  *          Returns `undefined` if no documentation can be generated.
@@ -962,44 +946,24 @@ export function getDocPageAsync(
  * ```
  * @since 0.9.0 Updated to support async parsers.
  * @since 0.10.0 Added optional `options` parameter for annotations support.
- * @since 1.0.0 Added overload accepting `options` as the second argument.
+ * @since 1.0.0 The second parameter now also accepts a `ParseOptions` object
+ *              directly.
  */
-// Overload: sync parser, options as 2nd arg
 export function getDocPage(
   parser: Parser<"sync", unknown, unknown>,
+  argsOrOptions?: readonly string[] | ParseOptions,
   options?: ParseOptions,
 ): DocPage | undefined;
 
-// Overload: async parser, options as 2nd arg
 export function getDocPage(
   parser: Parser<"async", unknown, unknown>,
+  argsOrOptions?: readonly string[] | ParseOptions,
   options?: ParseOptions,
 ): Promise<DocPage | undefined>;
 
-// Overload: generic mode parser, options as 2nd arg
 export function getDocPage<M extends Mode>(
   parser: Parser<M, unknown, unknown>,
-  options?: ParseOptions,
-): ModeValue<M, DocPage | undefined>;
-
-// Overload: sync parser with args
-export function getDocPage(
-  parser: Parser<"sync", unknown, unknown>,
-  args?: readonly string[],
-  options?: ParseOptions,
-): DocPage | undefined;
-
-// Overload: async parser with args
-export function getDocPage(
-  parser: Parser<"async", unknown, unknown>,
-  args?: readonly string[],
-  options?: ParseOptions,
-): Promise<DocPage | undefined>;
-
-// Overload: generic mode parser with args
-export function getDocPage<M extends Mode>(
-  parser: Parser<M, unknown, unknown>,
-  args?: readonly string[],
+  argsOrOptions?: readonly string[] | ParseOptions,
   options?: ParseOptions,
 ): ModeValue<M, DocPage | undefined>;
 
@@ -1007,28 +971,27 @@ export function getDocPage<M extends Mode>(
 export function getDocPage(
   parser: Parser<Mode, unknown, unknown>,
   argsOrOptions?: readonly string[] | ParseOptions,
-  optionsParam?: ParseOptions,
+  options?: ParseOptions,
 ): DocPage | undefined | Promise<DocPage | undefined> {
-  let args: readonly string[];
-  let options: ParseOptions | undefined;
   if (Array.isArray(argsOrOptions)) {
-    args = argsOrOptions;
-    options = optionsParam;
-  } else if (argsOrOptions != null) {
-    args = [];
-    options = argsOrOptions as ParseOptions;
-  } else {
-    args = [];
-    options = optionsParam;
+    if (parser.$mode === "sync") {
+      return getDocPageSyncImpl(
+        parser as Parser<"sync", unknown, unknown>,
+        argsOrOptions,
+        options,
+      );
+    }
+    return getDocPageAsyncImpl(parser, argsOrOptions, options);
   }
+  const resolved = (argsOrOptions as ParseOptions | undefined) ?? options;
   if (parser.$mode === "sync") {
     return getDocPageSyncImpl(
       parser as Parser<"sync", unknown, unknown>,
-      args,
-      options,
+      [],
+      resolved,
     );
   }
-  return getDocPageAsyncImpl(parser, args, options);
+  return getDocPageAsyncImpl(parser, [], resolved);
 }
 
 /**
