@@ -4885,6 +4885,43 @@ export function macAddress(
     return formatted.join(sep);
   }
 
+  // Normalizes a MAC address string by splitting on the detected separator,
+  // padding octets, and re-joining with the configured separator and case.
+  // Shared by both format() and normalize().
+  function normalizeMac(value: string): string {
+    let octets: string[];
+    let detectedSep: ":" | "-" | "." | "none";
+    if (value.includes(":")) {
+      octets = value.split(":");
+      detectedSep = ":";
+    } else if (value.includes("-")) {
+      octets = value.split("-");
+      detectedSep = "-";
+    } else if (value.includes(".")) {
+      octets = value.split(".").flatMap((g) => [
+        g.slice(0, 2),
+        g.slice(2),
+      ]);
+      detectedSep = ".";
+    } else {
+      octets = [];
+      for (let i = 0; i < value.length; i += 2) {
+        octets.push(value.slice(i, i + 2));
+      }
+      detectedSep = "none";
+    }
+    octets = octets.map((o) => o.padStart(2, "0"));
+    let sep: ":" | "-" | "." | "none";
+    if (outputSeparator != null) {
+      sep = outputSeparator;
+    } else if (separator !== "any") {
+      sep = separator;
+    } else {
+      sep = detectedSep;
+    }
+    return joinOctets(octets, sep);
+  }
+
   return {
     $mode: "sync",
     metavar,
@@ -4976,43 +5013,8 @@ export function macAddress(
       const finalSeparator = outputSeparator ?? inputSeparator ?? ":";
       return { success: true, value: joinOctets(octets, finalSeparator) };
     },
-    format(value: string): string {
-      return value;
-    },
-    normalize(value: string): string {
-      // Extract octets by splitting on the detected separator
-      let octets: string[];
-      let detectedSep: ":" | "-" | "." | "none";
-      if (value.includes(":")) {
-        octets = value.split(":");
-        detectedSep = ":";
-      } else if (value.includes("-")) {
-        octets = value.split("-");
-        detectedSep = "-";
-      } else if (value.includes(".")) {
-        octets = value.split(".").flatMap((g) => [
-          g.slice(0, 2),
-          g.slice(2),
-        ]);
-        detectedSep = ".";
-      } else {
-        octets = [];
-        for (let i = 0; i < value.length; i += 2) {
-          octets.push(value.slice(i, i + 2));
-        }
-        detectedSep = "none";
-      }
-      octets = octets.map((o) => o.padStart(2, "0"));
-      let sep: ":" | "-" | "." | "none";
-      if (outputSeparator != null) {
-        sep = outputSeparator;
-      } else if (separator !== "any") {
-        sep = separator;
-      } else {
-        sep = detectedSep;
-      }
-      return joinOctets(octets, sep);
-    },
+    format: normalizeMac,
+    normalize: normalizeMac,
   };
 }
 
@@ -5368,7 +5370,7 @@ export function domain(
       return { success: true, value: result };
     },
     format(value: string): string {
-      return value;
+      return lowercase ? value.toLowerCase() : value;
     },
     ...(lowercase ? { normalize: (value: string) => value.toLowerCase() } : {}),
   };

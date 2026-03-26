@@ -13642,7 +13642,7 @@ describe("branch coverage regressions", () => {
     const mac = macAddress({ separator: "none" });
     const macResult = mac.parse("aabbccddeeff");
     assert.ok(macResult.success);
-    assert.equal(mac.format("aa:bb:cc:dd:ee:ff"), "aa:bb:cc:dd:ee:ff");
+    assert.equal(mac.format("aa:bb:cc:dd:ee:ff"), "aabbccddeeff");
 
     const dom = domain();
     assert.equal(dom.format("example.com"), "example.com");
@@ -13885,9 +13885,19 @@ describe("format() for network-address value parsers", () => {
     }
   });
 
+  it("macAddress().format() should normalize with configured options", () => {
+    const mac = macAddress({ case: "upper", outputSeparator: ":" });
+    assert.equal(mac.format("aa-bb-cc-dd-ee-ff"), "AA:BB:CC:DD:EE:FF");
+  });
+
   it("domain().format() should return the value, not metavar", () => {
     const dom = domain();
     assert.equal(dom.format("Example.COM"), "Example.COM");
+  });
+
+  it("domain().format() should lowercase when configured", () => {
+    const dom = domain({ lowercase: true });
+    assert.equal(dom.format("Example.COM"), "example.com");
   });
 
   it("domain() parse-format round-trips with lowercase", () => {

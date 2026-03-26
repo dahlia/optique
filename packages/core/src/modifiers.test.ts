@@ -1448,6 +1448,18 @@ describe("withDefault", () => {
       assert.equal(result.value, "Hello");
     }
   });
+
+  it("should not crash on sentinel defaults of incompatible type", () => {
+    const parser = withDefault(
+      option("--domain", domain({ lowercase: true })),
+      { kind: "local" } as unknown as string,
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { kind: "local" });
+    }
+  });
 });
 
 describe("map", () => {

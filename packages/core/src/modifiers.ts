@@ -632,11 +632,18 @@ export function withDefault<
         const raw = typeof defaultValue === "function"
           ? (defaultValue as () => TDefault)()
           : defaultValue;
-        return typeof parser.normalizeValue === "function"
-          ? parser.normalizeValue(
-            raw as unknown as TValue,
-          ) as unknown as TDefault
-          : raw;
+        if (typeof parser.normalizeValue === "function") {
+          try {
+            return parser.normalizeValue(
+              raw as unknown as TValue,
+            ) as unknown as TDefault;
+          } catch {
+            // Normalization is best-effort; sentinel defaults whose type
+            // differs from TValue (e.g., union defaults like { kind: "local" })
+            // are returned as-is.
+          }
+        }
+        return raw;
       }
 
       if (!Array.isArray(state)) {
