@@ -15,7 +15,7 @@ import {
   type Usage,
   type UsageTerm,
 } from "./usage.ts";
-import { validateProgramName } from "./validate.ts";
+import { validateLabel, validateProgramName } from "./validate.ts";
 
 /**
  * A documentation entry which describes a specific usage of a command or
@@ -780,11 +780,7 @@ export function formatDocPage(
     if (section.entries.length < 1) continue;
     output += "\n";
     if (section.title != null) {
-      if (section.title.trim() === "" || /[\r\n]/.test(section.title)) {
-        throw new TypeError(
-          "Section title must not be empty, whitespace-only, or contain newlines.",
-        );
-      }
+      validateLabel(section.title);
       const sectionLabel = options.colors
         ? `\x1b[1;2m${section.title}:\x1b[0m\n`
         : `${section.title}:\n`;
