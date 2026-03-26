@@ -677,6 +677,26 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
+  it("should flag non-leading literal value colliding with meta option", () => {
+    // Option-form meta entries scan entire argv, so they check allLiterals
+    // even when leadingLiterals is empty.
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          {
+            leadingOptions: e,
+            leadingCommands: e,
+            leadingLiterals: e,
+            allOptions: e,
+            allCommands: e,
+            allLiterals: new Set(["--help"]),
+          },
+          [["option", "help option", ["--help"]]],
+        ),
+      { name: "TypeError", message: /literal.*"--help".*help option/i },
+    );
+  });
+
   // Prefix matching tests (only for entries with prefixMatch: true)
   it("should flag user option matching prefix when prefixMatch is true", () => {
     // Put --completion=bash only in allOptions (not leading) to prove
