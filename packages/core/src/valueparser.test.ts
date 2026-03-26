@@ -13950,6 +13950,17 @@ describe("ValueParser.normalize()", () => {
     assert.equal(mac.normalize!("0:1:2:3:4:5"), "0001.0203.0405");
   });
 
+  it("macAddress().normalize() preserves non-MAC strings unchanged", () => {
+    const mac = macAddress({ outputSeparator: ":" });
+    assert.equal(mac.normalize!("local"), "local");
+    assert.equal(mac.normalize!("auto"), "auto");
+  });
+
+  it("macAddress().format() preserves non-MAC strings unchanged", () => {
+    const mac = macAddress({ outputSeparator: ":" });
+    assert.equal(mac.format("local"), "local");
+  });
+
   it("domain().normalize() applies lowercase when configured", () => {
     const dom = domain({ lowercase: true });
     assert.equal(dom.normalize!("Example.COM"), "example.com");

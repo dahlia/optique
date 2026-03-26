@@ -1460,6 +1460,18 @@ describe("withDefault", () => {
       assert.deepEqual(result.value, { kind: "local" });
     }
   });
+
+  it("should preserve string sentinel defaults that are not valid values", () => {
+    const parser = withDefault(
+      option("--mac", macAddress({ outputSeparator: ":" })),
+      "local",
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "local");
+    }
+  });
 });
 
 describe("map", () => {

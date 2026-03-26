@@ -4887,6 +4887,8 @@ export function macAddress(
 
   // Normalizes a MAC address string by splitting on the detected separator,
   // padding octets, and re-joining with the configured separator and case.
+  // Returns the value unchanged if it does not have the expected 6-octet
+  // structure (e.g., a string sentinel like "local").
   // Shared by both format() and normalize().
   function normalizeMac(value: string): string {
     let octets: string[];
@@ -4910,6 +4912,9 @@ export function macAddress(
       }
       detectedSep = "none";
     }
+    // Guard: a valid MAC has exactly 6 octets.  If not, the value is not
+    // a MAC address (e.g., a sentinel default) — return it unchanged.
+    if (octets.length !== 6) return value;
     octets = octets.map((o) => o.padStart(2, "0"));
     let sep: ":" | "-" | "." | "none";
     if (outputSeparator != null) {
