@@ -981,6 +981,7 @@ describe("or() - duplicate option handling", () => {
       $mode: "async",
       priority: 10,
       usage: [{ type: "option", names: ["--shared"], metavar: "VALUE" }],
+      leadingNames: new Set(),
       initialState: "a-initial",
       parse(context) {
         if (context.buffer[0] === "--shared") {
@@ -1024,6 +1025,7 @@ describe("or() - duplicate option handling", () => {
         { type: "option", names: ["--shared"], metavar: "VALUE" },
         { type: "option", names: ["--b"], metavar: "VALUE" },
       ],
+      leadingNames: new Set(),
       initialState: "b-initial",
       parse(context) {
         if (
@@ -1667,6 +1669,7 @@ describe("longestMatch()", () => {
       $mode: "sync",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: null,
       parse() {
         return {
@@ -1711,6 +1714,7 @@ describe("longestMatch()", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: null,
       parse() {
         return Promise.resolve({
@@ -2384,6 +2388,7 @@ describe("object", () => {
         names: ["--mode"],
         metavar: "MODE",
       }],
+      leadingNames: new Set(),
       initialState: "mode-initial",
       parse(context: ParserContext<string>) {
         return Promise.resolve({
@@ -2454,6 +2459,7 @@ describe("object", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState,
       parse(context: ParserContext<string>) {
         return Promise.resolve({
@@ -3124,6 +3130,7 @@ describe("object() - duplicate option detection", () => {
       $stateType: [] as readonly PrivateState[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: new PrivateState(),
       parse(context) {
         return {
@@ -3174,6 +3181,7 @@ describe("object() - duplicate option detection", () => {
       $stateType: [] as readonly ChildState[],
       priority: 1,
       usage: [],
+      leadingNames: new Set(),
       initialState: childState,
       [Symbol.for("@optique/core/inheritParentAnnotations")]: true,
       parse(context) {
@@ -8431,6 +8439,7 @@ describe("branch coverage: conditional() complete/suggest edges", () => {
       $stateType: [] as readonly string[],
       priority: 10,
       usage: [{ type: "option", names: ["--mode"], metavar: "MODE" }],
+      leadingNames: new Set(),
       initialState: "init",
       parse: () => ({
         success: true,
@@ -8538,6 +8547,7 @@ describe("branch coverage: conditional() complete/suggest edges", () => {
           }],
         }],
       }],
+      leadingNames: new Set(),
       initialState: undefined,
       parse: () => ({
         success: false,
@@ -8969,6 +8979,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse: (context: ParserContext<unknown>) => ({
         success: true as const,
@@ -9000,6 +9011,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: dep,
       parse: (context: ParserContext<unknown>) => ({
         success: true as const,
@@ -9031,6 +9043,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: dep,
       parse: (context: ParserContext<unknown>) =>
         Promise.resolve({
@@ -9071,6 +9084,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       [wrappedDependencySourceMarker]: dep,
       parse: () => ({
@@ -9105,6 +9119,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       [wrappedDependencySourceMarker]: dep,
       parse: () =>
@@ -9222,6 +9237,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         $stateType: undefined,
         priority: 0,
         usage: [],
+        leadingNames: new Set(),
         initialState: dep,
         parse: () => ({
           success: true as const,
@@ -9313,6 +9329,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         $stateType: undefined,
         priority: 0,
         usage: [],
+        leadingNames: new Set(),
         initialState: dep,
         parse: () =>
           Promise.resolve({
@@ -9366,6 +9383,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       [wrappedDependencySourceMarker]: dep,
       parse: () => ({
@@ -9399,6 +9417,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       [wrappedDependencySourceMarker]: dep,
       parse: () =>
@@ -9435,6 +9454,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       [wrappedDependencySourceMarker]: syncDep,
       parse: () => ({
@@ -9465,6 +9485,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       [wrappedDependencySourceMarker]: asyncDep,
       parse: () =>
@@ -9511,6 +9532,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse: (_context: ParserContext<undefined>) => ({
         success: false as const,
@@ -10343,6 +10365,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         [] as readonly ({ readonly dynamicState?: string } | undefined)[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse(context) {
         return {
@@ -10402,6 +10425,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: [] as readonly string[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: "seed",
       parse(context: ParserContext<string>) {
         return {
@@ -10425,6 +10449,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: [] as readonly undefined[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse(context: ParserContext<undefined>) {
         return { success: true as const, next: context, consumed: [] };
@@ -10461,6 +10486,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: [] as readonly string[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: "seed",
       parse(context: ParserContext<string>) {
         return {
@@ -10484,6 +10510,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: [] as readonly undefined[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse(context: ParserContext<undefined>) {
         return { success: true as const, next: context, consumed: [] };
@@ -10547,6 +10574,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: [] as readonly string[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: "seed",
       parse(context: ParserContext<string>) {
         return Promise.resolve({
@@ -10572,6 +10600,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: [] as readonly undefined[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse(context: ParserContext<undefined>) {
         return Promise.resolve({
@@ -10682,6 +10711,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: [] as readonly undefined[],
       priority: 5,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse() {
         return { success: false as const, consumed: 0, error: message`fail` };
@@ -10714,6 +10744,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: [] as readonly undefined[],
       priority: 5,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse() {
         return Promise.resolve({
@@ -10798,6 +10829,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: [] as readonly undefined[],
       priority: 1,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse(context) {
         return Promise.resolve({
@@ -10867,6 +10899,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: [] as readonly undefined[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse() {
         return { success: false as const, consumed: 1, error: message`bad` };
@@ -10896,6 +10929,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: [] as readonly undefined[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse(context: ParserContext<undefined>) {
         return { success: true as const, next: context, consumed: [] };
@@ -10914,6 +10948,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: [] as readonly undefined[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse(context: ParserContext<undefined>) {
         return Promise.resolve({
@@ -11072,6 +11107,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: [] as readonly unknown[],
       priority: 1,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse(context: ParserContext<unknown>) {
         return Promise.resolve({
@@ -11101,6 +11137,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: [] as readonly unknown[],
       priority: 1,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse(context: ParserContext<unknown>) {
         return Promise.resolve({
@@ -11135,6 +11172,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: [] as readonly unknown[],
       priority: 1,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse(context: ParserContext<unknown>) {
         return Promise.resolve({
@@ -11159,6 +11197,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       $stateType: [] as readonly unknown[],
       priority: 1,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse(context: ParserContext<unknown>) {
         return Promise.resolve({
@@ -11364,5 +11403,83 @@ describe("merge()/concat() suggest with cross-parser dependencies", () => {
       texts.includes("strict"),
       `Expected "strict" in suggestions, got: ${JSON.stringify(texts)}`,
     );
+  });
+});
+
+describe("leadingNames", () => {
+  it("should be the union of all branches for or()", () => {
+    const parser = or(
+      command("help", object({})),
+      command("build", object({})),
+    );
+    assert.deepEqual(parser.leadingNames, new Set(["help", "build"]));
+  });
+
+  it("should be the union of all branches for longestMatch()", () => {
+    const parser = longestMatch(
+      command("help", object({})),
+      command("build", object({})),
+    );
+    assert.deepEqual(parser.leadingNames, new Set(["help", "build"]));
+  });
+
+  it("should be the union of all fields for object()", () => {
+    const parser = object({
+      verbose: flag("--verbose"),
+      cmd: command("help", object({})),
+    });
+    assert.deepEqual(parser.leadingNames, new Set(["--verbose", "help"]));
+  });
+
+  it("should be the union of all elements for tuple()", () => {
+    const parser = tuple([
+      argument(string()),
+      command("help", object({})),
+    ]);
+    assert.deepEqual(parser.leadingNames, new Set(["help"]));
+  });
+
+  it("should be the union of all parsers for merge()", () => {
+    const parser = merge(
+      object({ verbose: flag("--verbose") }),
+      object({ cmd: command("help", object({})) }),
+    );
+    assert.deepEqual(parser.leadingNames, new Set(["--verbose", "help"]));
+  });
+
+  it("should be the union of all parsers for concat()", () => {
+    const parser = concat(
+      tuple([flag("--verbose")]),
+      tuple([command("help", object({}))]),
+    );
+    assert.deepEqual(parser.leadingNames, new Set(["--verbose", "help"]));
+  });
+
+  it("should forward from inner parser for group()", () => {
+    const inner = object({ v: flag("--verbose") });
+    const parser = group("grp", inner);
+    assert.deepEqual(parser.leadingNames, inner.leadingNames);
+  });
+
+  it("should contain only discriminator names for conditional()", () => {
+    const parser = conditional(
+      option("--mode", string()),
+      {
+        server: command("help", object({})),
+        client: object({ port: option("--port", integer()) }),
+      },
+    );
+    assert.deepEqual(parser.leadingNames, new Set(["--mode"]));
+  });
+
+  it("should not include nested subcommand names (command wrapping command)", () => {
+    const parser = command(
+      "tool",
+      longestMatch(
+        command("help", object({})),
+        command("build", object({})),
+      ),
+    );
+    assert.deepEqual(parser.leadingNames, new Set(["tool"]));
   });
 });

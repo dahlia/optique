@@ -292,6 +292,7 @@ export function bindEnv<
     usage: options.default !== undefined
       ? [{ type: "optional", terms: parser.usage }]
       : parser.usage,
+    leadingNames: parser.leadingNames,
     initialState: parser.initialState,
 
     parse: (context) => {

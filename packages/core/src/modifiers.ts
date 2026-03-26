@@ -239,6 +239,7 @@ export function optional<M extends Mode, TValue, TState>(
     placeholder: undefined as TValue | undefined,
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
+    leadingNames: parser.leadingNames,
     initialState: undefined,
     ...wrappedDependencyMarker,
     // Forward completion deferral hook from inner parser, adapting the
@@ -579,6 +580,7 @@ export function withDefault<
     $stateType: [],
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
+    leadingNames: parser.leadingNames,
     initialState: undefined,
     ...wrappedDependencyMarker,
     // Forward completion deferral hook from inner parser, adapting the
@@ -1295,6 +1297,7 @@ export function multiple<M extends Mode, TValue, TState>(
     $stateType: [] as readonly TState[],
     priority: parser.priority,
     usage: [{ type: "multiple", terms: parser.usage, min }],
+    leadingNames: parser.leadingNames,
     initialState: [] as readonly TState[],
     parse(context: ParserContext<MultipleState>) {
       return dispatchByMode(
@@ -1666,6 +1669,7 @@ export function nonEmpty<M extends Mode, T, TState>(
     $stateType: parser.$stateType,
     priority: parser.priority,
     usage: parser.usage,
+    leadingNames: parser.leadingNames,
     initialState: parser.initialState,
     // Forward shouldDeferCompletion from inner parser so that prompt()
     // can defer through nonEmpty() wrappers.

@@ -61,6 +61,25 @@ type CombineObjectModes<
     : never
 >;
 
+/**
+ * A shared empty set used as the `leadingNames` value for parsers that
+ * do not match any specific name at the first buffer position.
+ */
+const EMPTY_LEADING_NAMES: ReadonlySet<string> = new Set();
+
+/**
+ * Computes the union of `leadingNames` from all given parsers.
+ */
+function unionLeadingNames(
+  parsers: readonly { readonly leadingNames: ReadonlySet<string> }[],
+): ReadonlySet<string> {
+  const names = new Set<string>();
+  for (const p of parsers) {
+    for (const name of p.leadingNames) names.add(name);
+  }
+  return names.size === 0 ? EMPTY_LEADING_NAMES : names;
+}
+
 const inheritParentAnnotationsKey = Symbol.for(
   "@optique/core/inheritParentAnnotations",
 );
@@ -2399,6 +2418,7 @@ export function or(
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
     usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
+    leadingNames: unionLeadingNames(parsers),
     initialState: undefined,
     complete: createExclusiveComplete(
       parsers,
@@ -2879,6 +2899,7 @@ export function longestMatch(
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
     usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
+    leadingNames: unionLeadingNames(parsers),
     initialState: undefined,
     complete: createExclusiveComplete(
       parsers,
@@ -4193,6 +4214,7 @@ export function object<
       parserPairs.flatMap(([_, p]) => p.usage),
       options.hidden,
     ),
+    leadingNames: unionLeadingNames(parserPairs.map(([_, p]) => p)),
     get initialState(): {
       readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U3)
         ? U3
@@ -5040,6 +5062,7 @@ export function tuple<
     usage: parsers
       .toSorted((a, b) => b.priority - a.priority)
       .flatMap((p) => p.usage),
+    leadingNames: unionLeadingNames(parsers),
     priority: parsers.length > 0
       ? Math.max(...parsers.map((p) => p.priority))
       : 0,
@@ -5823,6 +5846,7 @@ export function merge(
       parsers.flatMap((p) => p.usage),
       options.hidden,
     ),
+    leadingNames: unionLeadingNames(parsers),
     initialState,
     parse(context: ParserContext<MergeState>) {
       if (isAsync) {
@@ -6927,6 +6951,7 @@ export function concat(
       ? Math.max(...parsers.map((p) => p.priority))
       : 0,
     usage: parsers.flatMap((p) => p.usage),
+    leadingNames: unionLeadingNames(parsers),
     initialState,
     parse(context) {
       if (isAsync) {
@@ -7105,6 +7130,7 @@ export function group<M extends Mode, TValue, TState>(
     $stateType: parser.$stateType,
     priority: parser.priority,
     usage: applyHiddenToUsage(parser.usage, options.hidden),
+    leadingNames: parser.leadingNames,
     initialState: parser.initialState,
     // Forward field parser pairs from inner parser so that merge()
     // can pre-complete dependency source fields from grouped children.
@@ -8122,6 +8148,7 @@ export function conditional(
     $stateType: [],
     priority: maxPriority,
     usage,
+    leadingNames: discriminator.leadingNames,
     initialState,
 
     parse(context) {

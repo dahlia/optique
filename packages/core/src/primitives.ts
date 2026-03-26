@@ -23,6 +23,12 @@ import type { DependencyRegistryLike } from "./registry-types.ts";
 import { validateCommandNames, validateOptionNames } from "./validate.ts";
 
 /**
+ * A shared empty set used as the `leadingNames` value for parsers that
+ * do not match any specific name at the first buffer position.
+ */
+const EMPTY_LEADING_NAMES: ReadonlySet<string> = new Set();
+
+/**
  * State type for options that may use deferred parsing (DerivedValueParser).
  * This extends the normal ValueParserResult to also support DeferredParseState
  * and PendingDependencySourceState.
@@ -132,6 +138,7 @@ export function constant<const T>(value: T): Parser<"sync", T, T> {
     $mode: "sync",
     priority: 0,
     usage: [],
+    leadingNames: EMPTY_LEADING_NAMES,
     initialState: value,
     parse(context) {
       return { success: true, next: context, consumed: [] };
@@ -181,6 +188,7 @@ export function fail<T>(): Parser<"sync", T, undefined> {
     $mode: "sync",
     priority: 0,
     usage: [],
+    leadingNames: EMPTY_LEADING_NAMES,
     initialState: undefined,
     parse(_context) {
       return {
@@ -781,6 +789,7 @@ export function option<M extends Mode, T>(
           ...(options.hidden != null && { hidden: options.hidden }),
         },
     ],
+    leadingNames: new Set<string>(optionNames),
     initialState: valueParser == null
       ? { success: true, value: false }
       : isDependencySource(valueParser)
@@ -1333,6 +1342,7 @@ export function flag(
       names: optionNames,
       ...(options.hidden != null && { hidden: options.hidden }),
     }],
+    leadingNames: new Set<string>(optionNames),
     initialState: undefined,
     parse(context) {
       if (context.optionsTerminated) {
@@ -1643,6 +1653,7 @@ export function argument<M extends Mode, T>(
     $stateType: [],
     priority: 5,
     usage: [term],
+    leadingNames: EMPTY_LEADING_NAMES,
     initialState: undefined,
     parse(
       context: ParserContext<
@@ -2074,6 +2085,7 @@ export function command<M extends Mode, T, TState>(
       },
       ...parser.usage,
     ],
+    leadingNames: new Set([name]),
     initialState: undefined,
     parse(context: ParserContext<CommandState<TState>>) {
       // Handle different states
@@ -2410,6 +2422,7 @@ export function passThrough(
       type: "passthrough",
       ...(options.hidden != null && { hidden: options.hidden }),
     }],
+    leadingNames: EMPTY_LEADING_NAMES,
     initialState: [],
 
     parse(context) {

@@ -944,6 +944,7 @@ export function prompt<M extends Mode, TValue, TState>(
     usage: parser.usage.length === 1 && parser.usage[0].type === "optional"
       ? parser.usage
       : [{ type: "optional", terms: parser.usage }],
+    leadingNames: parser.leadingNames,
     // Use the sentinel as initialState so complete() can detect the
     // completability-check call and deduplicate prompt execution.
     get initialState(): TState {

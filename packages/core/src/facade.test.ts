@@ -5388,6 +5388,7 @@ describe("runWith", () => {
         $stateType: [] as readonly (string | undefined)[],
         priority: 1,
         usage: [],
+        leadingNames: new Set(),
         initialState: undefined,
         parse(context) {
           const value = getAnnotations(context.state)?.[sharedKey];
@@ -6945,6 +6946,7 @@ describe("runWithSync", () => {
         $stateType: [] as readonly (string | undefined)[],
         priority: 1,
         usage: [],
+        leadingNames: new Set(),
         initialState: undefined,
         parse(context) {
           const value = getAnnotations(context.state)?.[sharedKey];
@@ -9135,6 +9137,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as unknown as readonly { value: string | null }[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: { value: null },
       parse(context) {
         const [head, ...rest] = context.buffer;
@@ -9190,6 +9193,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as unknown as readonly { value: string | null }[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: { value: null },
       parse(context) {
         const [head, ...rest] = context.buffer;
@@ -9373,6 +9377,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as unknown as readonly { value: string | null }[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: { value: null },
       parse(context) {
         const [head, ...rest] = context.buffer;
@@ -9436,6 +9441,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as unknown as readonly { value: string | null }[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: { value: null },
       parse() {
         throw new Error("Boom.");
@@ -9479,6 +9485,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as unknown as readonly { value: string | null }[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: { value: null },
       parse() {
         throw new Error("Sync boom.");
@@ -9519,6 +9526,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as never,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse(context) {
         return {
@@ -9574,6 +9582,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as never,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse(context) {
         return {
@@ -9627,6 +9636,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as unknown as readonly { value: string | null }[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: { value: null },
       parse(context) {
         const [head, ...rest] = context.buffer;
@@ -9725,6 +9735,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as never,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse(context) {
         return Promise.resolve({
@@ -9824,6 +9835,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as never,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -9874,6 +9886,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as never,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse() {
         return Promise.resolve({
@@ -10065,6 +10078,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as unknown as readonly undefined[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse() {
         return Promise.resolve({

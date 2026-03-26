@@ -315,6 +315,7 @@ export function loggingOptions(
       $stateType: [],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
       initialState: undefined,
       parse: (context) => ({
         success: true as const,

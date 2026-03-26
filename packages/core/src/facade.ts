@@ -581,6 +581,7 @@ function combineWithHelpVersion(
       $stateType: [],
       priority: 200, // Very high priority
       usage: helpParsers.helpOption.usage,
+      leadingNames: helpParsers.helpOption.leadingNames,
       initialState: null,
 
       parse(context) {
@@ -698,6 +699,7 @@ function combineWithHelpVersion(
       $stateType: [],
       priority: 200, // Very high priority
       usage: versionParsers.versionOption.usage,
+      leadingNames: versionParsers.versionOption.leadingNames,
       initialState: null,
 
       parse(context) {

@@ -136,6 +136,18 @@ export interface Parser<
   readonly usage: Usage;
 
   /**
+   * Names (command names, option names) that this parser could match at
+   * the first buffer position.  Used by `runParser()` to detect collisions
+   * with built-in meta features (help, version, completion).
+   *
+   * Each combinator computes this from its structural semantics rather than
+   * from the display-oriented {@link usage} tree.
+   *
+   * @since 1.0.0
+   */
+  readonly leadingNames: ReadonlySet<string>;
+
+  /**
    * The initial state for this parser.  This is used to initialize the
    * state when parsing starts.
    */
