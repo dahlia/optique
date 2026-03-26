@@ -4,6 +4,7 @@ import {
   extractArgumentMetavars,
   extractCommandNames,
   extractLeadingCommandNames,
+  extractLeadingLiteralValues,
   extractLeadingOptionNames,
   extractLiteralValues,
   extractOptionNames,
@@ -3392,6 +3393,62 @@ describe("extractLiteralValues", () => {
       extractLiteralValues(null as unknown as Usage),
       new Set(),
     );
+  });
+});
+
+describe("extractLeadingLiteralValues", () => {
+  it("should collect standalone leading literal", () => {
+    const usage: Usage = [{ type: "literal", value: "help" }];
+    assert.deepEqual(extractLeadingLiteralValues(usage), new Set(["help"]));
+  });
+
+  it("should not collect literal that follows an option", () => {
+    // [option("--mode"), literal("help")] — the literal is an option
+    // value, not a standalone positional token at args[0].
+    const usage: Usage = [
+      { type: "option", names: ["--mode"] },
+      { type: "literal", value: "help" },
+    ];
+    assert.deepEqual(extractLeadingLiteralValues(usage), new Set());
+  });
+
+  it("should collect from exclusive branches", () => {
+    const usage: Usage = [{
+      type: "exclusive",
+      terms: [
+        [{ type: "literal", value: "help" }],
+        [{ type: "literal", value: "serve" }],
+      ],
+    }];
+    assert.deepEqual(
+      extractLeadingLiteralValues(usage),
+      new Set(["help", "serve"]),
+    );
+  });
+
+  it("should not collect option-value literals within exclusive branches", () => {
+    const usage: Usage = [{
+      type: "exclusive",
+      terms: [
+        [
+          { type: "option", names: ["--mode"] },
+          { type: "literal", value: "help" },
+        ],
+        [
+          { type: "option", names: ["--mode"] },
+          { type: "literal", value: "serve" },
+        ],
+      ],
+    }];
+    assert.deepEqual(extractLeadingLiteralValues(usage), new Set());
+  });
+
+  it("should stop at positional gates", () => {
+    const usage: Usage = [
+      { type: "argument", metavar: "CMD" as const },
+      { type: "literal", value: "nested" },
+    ];
+    assert.deepEqual(extractLeadingLiteralValues(usage), new Set());
   });
 });
 

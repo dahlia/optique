@@ -7437,33 +7437,45 @@ export function conditional(
     ...allBranchParsers.map((p) => p.priority),
   );
 
-  // Helper: count argument terms in a usage tree.  For exclusive
-  // containers, only the branch with the most arguments counts, since
-  // only one branch is taken at runtime.
-  function countArgumentTerms(terms: Usage): number {
-    let count = 0;
+  // Helper: check whether the usage tree contains any argument or option-
+  // with-metavar terms.  Used to decide whether argument → literal
+  // replacement is safe.
+  function analyzeDiscriminatorUsage(terms: Usage): {
+    readonly argumentCount: number;
+    readonly hasOptionsWithMetavar: boolean;
+  } {
+    let argumentCount = 0;
+    let hasOptionsWithMetavar = false;
     for (const term of terms) {
       if (term.type === "argument") {
-        count++;
+        argumentCount++;
+      } else if (term.type === "option" && term.metavar !== undefined) {
+        hasOptionsWithMetavar = true;
       } else if (term.type === "optional" || term.type === "multiple") {
-        count += countArgumentTerms(term.terms);
+        const inner = analyzeDiscriminatorUsage(term.terms);
+        argumentCount += inner.argumentCount;
+        hasOptionsWithMetavar = hasOptionsWithMetavar ||
+          inner.hasOptionsWithMetavar;
       } else if (term.type === "exclusive") {
-        let max = 0;
+        let maxArgs = 0;
         for (const branch of term.terms) {
-          max = Math.max(max, countArgumentTerms(branch));
+          const inner = analyzeDiscriminatorUsage(branch);
+          maxArgs = Math.max(maxArgs, inner.argumentCount);
+          hasOptionsWithMetavar = hasOptionsWithMetavar ||
+            inner.hasOptionsWithMetavar;
         }
-        count += max;
+        argumentCount += maxArgs;
       }
     }
-    return count;
+    return { argumentCount, hasOptionsWithMetavar };
   }
 
   // Helper to replace metavar/argument with literal value in usage.
   // `replaceArguments` controls whether argument terms are replaced;
-  // it is only true when the discriminator consists of a single
-  // positional token.  Multi-argument discriminators derive the branch
-  // key from combining multiple tokens, so no single argument is
-  // independently equal to the branch key.
+  // it is only true when the discriminator is a pure single-argument
+  // parser with no value-bearing options.  When the discriminator
+  // contains options with metavar, the branch key comes from the
+  // option value and unrelated arguments should not be rewritten.
   function appendLiteralToUsage(
     usage: Usage,
     literalValue: string,
@@ -7512,9 +7524,13 @@ export function conditional(
     return result;
   }
 
-  // Only replace argument terms when the discriminator is a single
-  // positional token.  See https://github.com/dahlia/optique/issues/734
-  const replaceArguments = countArgumentTerms(discriminator.usage) === 1;
+  // Only replace argument terms when the discriminator is a pure
+  // single-argument parser with no value-bearing options.
+  // See https://github.com/dahlia/optique/issues/734
+  const { argumentCount, hasOptionsWithMetavar } = analyzeDiscriminatorUsage(
+    discriminator.usage,
+  );
+  const replaceArguments = argumentCount === 1 && !hasOptionsWithMetavar;
 
   // Build usage: discriminator (with literal value) + exclusive branches
   const branchUsages: Usage[] = branchParsers.map(([key, p]) => [

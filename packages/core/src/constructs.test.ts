@@ -11073,6 +11073,26 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.ok(usageText.includes("slow"));
   });
 
+  it("conditional() with mixed option+argument discriminator does not replace argument", () => {
+    // When the discriminator includes both an option with metavar and
+    // an argument, the branch key comes from the option value, not the
+    // argument.  The argument should not be rewritten to a literal.
+    const discriminator = map(
+      tuple([option("--mode", string()), argument(string())]),
+      ([mode, _]: readonly [string, string]) => mode,
+    );
+    const parser = conditional(discriminator, {
+      help: object({ port: option("--port", integer()) }),
+    });
+    const usageText = formatUsage("app", parser.usage);
+    // The argument should remain as a metavar (e.g., STRING),
+    // not be rewritten to the branch key "help"
+    assert.ok(!usageText.includes("help help"));
+    // The option-value literal "help" should still appear (from the
+    // option metavar → literal replacement)
+    assert.ok(usageText.includes("help"));
+  });
+
   it("conditional() with multi-argument discriminator does not produce literal terms", () => {
     // When the discriminator derives its value from multiple positional
     // tokens, individual arguments are not independently equal to the

@@ -1525,6 +1525,25 @@ describe("runParser", () => {
       );
     });
 
+    it("should not reject option-based conditional branch key against meta command", () => {
+      // The branch key "help" is the value of --mode, never at args[0].
+      // Meta commands only check args[0], so no collision.
+      const parser = conditional(
+        option("--mode", string()),
+        {
+          help: object({ port: option("--port", integer()) }),
+          serve: object({ dir: argument(string()) }),
+        },
+      );
+      runParser(parser, "myapp", ["--mode", "help", "--port", "3000"], {
+        help: {
+          command: true,
+          onShow: () => "HELP",
+        },
+        stderr: () => {},
+      });
+    });
+
     // P2: cross-namespace collision detection
     it("should reject meta command name that looks like an option", () => {
       const parser = object({ name: argument(string()) });

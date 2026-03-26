@@ -497,6 +497,10 @@ export function extractLeadingCommandNames(
  * scoped under that positional token.  It still recurses into `optional`,
  * `multiple`, and `exclusive` containers.
  *
+ * Literals that immediately follow an `option` term are treated as option
+ * values (e.g., from `conditional(option("--mode", …), { … })`), not as
+ * standalone positional tokens, and are therefore skipped.
+ *
  * Known limitation: this function has the same usage-tree ordering caveat
  * as {@link extractLeadingOptionNames}.
  * See https://github.com/dahlia/optique/issues/735
@@ -511,29 +515,44 @@ export function extractLeadingLiteralValues(usage: Usage): Set<string> {
 
   function collectLeading(terms: Usage): void {
     if (!terms || !Array.isArray(terms)) return;
+    let afterOption = false;
     for (const term of terms) {
       switch (term.type) {
         case "literal":
+          if (afterOption) {
+            // This literal is an option value (produced by
+            // appendLiteralToUsage stripping an option's metavar),
+            // not a standalone positional token.
+            afterOption = false;
+            break;
+          }
           values.add(term.value);
-          return; // literal consumes a position; stop scanning siblings
+          return; // positional literal; stop scanning siblings
         case "command":
         case "argument":
           return; // positional token; stop scanning siblings
+        case "option":
+          afterOption = true;
+          break;
         case "optional":
           collectLeading(term.terms);
+          afterOption = false;
           break;
         case "multiple":
           collectLeading(term.terms);
+          afterOption = false;
           if (term.min > 0 && branchConsumesToken(term.terms)) return;
           break;
         case "exclusive":
           for (const branch of term.terms) {
             collectLeading(branch);
           }
+          afterOption = false;
           if (exclusiveConsumesToken(term.terms)) return;
           break;
         default:
-          break; // option, passthrough, ellipsis: skip, continue
+          afterOption = false;
+          break; // passthrough, ellipsis: skip, continue
       }
     }
   }
