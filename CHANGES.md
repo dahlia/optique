@@ -347,6 +347,10 @@ To be released.
     The method now uses `Intl.Locale.toString()` instead of `baseName` to
     preserve the full locale identifier.  [[#317], [#565]]
 
+ -  Fixed `format()` in `macAddress()`, `domain()`, `ipv6()`, `ip()`, and
+    `cidr()` value parsers to return the serialized value instead of the
+    metavar placeholder (e.g., `"MAC"`, `"DOMAIN"`).  [[#318]]
+
  -  Fixed `url()` parser's `suggest()` emitting `://` for non-hierarchical URL
     schemes like `mailto:` and `urn:`.  Suggestions now use `:` for
     non-hierarchical schemes and `://` only for special schemes (`http`,
@@ -1042,6 +1046,7 @@ To be released.
 [#310]: https://github.com/dahlia/optique/issues/310
 [#315]: https://github.com/dahlia/optique/issues/315
 [#317]: https://github.com/dahlia/optique/issues/317
+[#318]: https://github.com/dahlia/optique/issues/318
 [#319]: https://github.com/dahlia/optique/issues/319
 [#320]: https://github.com/dahlia/optique/issues/320
 [#321]: https://github.com/dahlia/optique/issues/321

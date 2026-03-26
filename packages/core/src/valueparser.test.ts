@@ -13642,10 +13642,10 @@ describe("branch coverage regressions", () => {
     const mac = macAddress({ separator: "none" });
     const macResult = mac.parse("aabbccddeeff");
     assert.ok(macResult.success);
-    assert.equal(mac.format("aa:bb:cc:dd:ee:ff"), "MAC");
+    assert.equal(mac.format("aa:bb:cc:dd:ee:ff"), "aa:bb:cc:dd:ee:ff");
 
     const dom = domain();
-    assert.equal(dom.format("example.com"), "DOMAIN");
+    assert.equal(dom.format("example.com"), "example.com");
 
     const ipv6Parser = ipv6({
       errors: {
@@ -13656,7 +13656,7 @@ describe("branch coverage regressions", () => {
     assert.ok(!ipv6Parser.parse("1:2:3:4:5:6:7:8:9").success);
     assert.ok(!ipv6Parser.parse("2001::db8::1").success);
     assert.ok(ipv6Parser.parse("2001:0:0:1:0:0:0:1").success);
-    assert.equal(ipv6Parser.format("::1"), "IPV6");
+    assert.equal(ipv6Parser.format("::1"), "::1");
   });
 
   it("covers ip/cidr format and ipv6 normalization edge branches", () => {
@@ -13667,14 +13667,14 @@ describe("branch coverage regressions", () => {
     });
     const ipFailure = ipParser.parse("not-an-ip");
     assert.ok(!ipFailure.success);
-    assert.equal(ipParser.format("203.0.113.10"), "IP");
+    assert.equal(ipParser.format("203.0.113.10"), "203.0.113.10");
 
     const cidrParser = cidr();
     const cidrResult = cidrParser.parse("192.0.2.0/24");
     assert.ok(cidrResult.success);
     assert.equal(
       cidrParser.format({ address: "192.0.2.0", prefix: 24, version: 4 }),
-      "CIDR",
+      "192.0.2.0/24",
     );
 
     const ipv6Parser = ipv6();
@@ -13858,6 +13858,41 @@ describe("branch coverage regressions", () => {
 
     const result = parser.parse("not-an-ip-literal");
     assert.ok(!result.success);
+  });
+});
+
+describe("format() for network-address value parsers", () => {
+  it("macAddress().format() should return the value, not metavar", () => {
+    const mac = macAddress();
+    assert.equal(mac.format("00:1a:2b:3c:4d:5e"), "00:1a:2b:3c:4d:5e");
+  });
+
+  it("domain().format() should return the value, not metavar", () => {
+    const dom = domain();
+    assert.equal(dom.format("Example.COM"), "Example.COM");
+  });
+
+  it("ipv6().format() should return the value, not metavar", () => {
+    const v6 = ipv6();
+    assert.equal(v6.format("2001:db8::1"), "2001:db8::1");
+  });
+
+  it("ip().format() should return the value, not metavar", () => {
+    const ipParser = ip();
+    assert.equal(ipParser.format("192.0.2.1"), "192.0.2.1");
+    assert.equal(ipParser.format("2001:db8::1"), "2001:db8::1");
+  });
+
+  it("cidr().format() should return CIDR notation, not metavar", () => {
+    const cidrParser = cidr();
+    assert.equal(
+      cidrParser.format({ address: "192.0.2.0", prefix: 24, version: 4 }),
+      "192.0.2.0/24",
+    );
+    assert.equal(
+      cidrParser.format({ address: "2001:db8::", prefix: 48, version: 6 }),
+      "2001:db8::/48",
+    );
   });
 });
 

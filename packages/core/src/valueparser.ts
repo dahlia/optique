@@ -4959,8 +4959,8 @@ export function macAddress(
 
       return { success: true, value: result };
     },
-    format(): string {
-      return metavar;
+    format(value: string): string {
+      return value;
     },
   };
 }
@@ -5316,8 +5316,8 @@ export function domain(
 
       return { success: true, value: result };
     },
-    format(): string {
-      return metavar;
+    format(value: string): string {
+      return value;
     },
   };
 }
@@ -5549,8 +5549,8 @@ export function ipv6(
 
       return { success: true, value: normalized };
     },
-    format(): string {
-      return metavar;
+    format(value: string): string {
+      return value;
     },
   };
 }
@@ -6074,8 +6074,8 @@ export function ip(
       ] as Message;
       return { success: false, error: msg };
     },
-    format(): string {
-      return metavar;
+    format(value: string): string {
+      return value;
     },
   };
 }
@@ -6629,8 +6629,8 @@ export function cidr(
         },
       };
     },
-    format(): string {
-      return metavar;
+    format(value: CidrValue): string {
+      return `${value.address}/${value.prefix}`;
     },
   };
 }
