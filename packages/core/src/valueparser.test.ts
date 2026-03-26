@@ -13642,7 +13642,7 @@ describe("branch coverage regressions", () => {
     const mac = macAddress({ separator: "none" });
     const macResult = mac.parse("aabbccddeeff");
     assert.ok(macResult.success);
-    assert.equal(mac.format("aa:bb:cc:dd:ee:ff"), "aabbccddeeff");
+    assert.equal(mac.format("aa:bb:cc:dd:ee:ff"), "aa:bb:cc:dd:ee:ff");
 
     const dom = domain();
     assert.equal(dom.format("example.com"), "example.com");

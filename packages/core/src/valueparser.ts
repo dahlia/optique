@@ -5034,11 +5034,21 @@ export function macAddress(
       const finalSeparator = outputSeparator ?? inputSeparator ?? ":";
       return { success: true, value: joinOctets(octets, finalSeparator) };
     },
-    format: normalizeMac,
+    format: normalizeMac, // overridden below
   };
-  // normalize uses the full parse() pipeline for validation so that
-  // values parse() would reject are returned unchanged.
+  // Both format and normalize use the full parse() pipeline so that
+  // values parse() would reject are returned unchanged.  This keeps
+  // help text consistent with the runtime default.
   const macParser = parserObj;
+  Object.defineProperty(parserObj, "format", {
+    value(v: string): string {
+      if (typeof v !== "string") return metavar;
+      const result = macParser.parse(v);
+      return result.success ? result.value : v;
+    },
+    configurable: true,
+    enumerable: true,
+  });
   Object.defineProperty(parserObj, "normalize", {
     value(v: string): string {
       if (typeof v !== "string") return v;
@@ -5410,11 +5420,20 @@ export function domain(
       return value.split(".").length >= minLabels ? value.toLowerCase() : value;
     },
   };
-  // normalize uses the full parse() pipeline for validation so that
+  // Both format and normalize use the full parse() pipeline so that
   // values parse() would reject (e.g., "A..B", disallowed TLDs) are
-  // returned unchanged.
+  // returned unchanged, keeping help text consistent with runtime.
   if (lowercase) {
     const domParser = domainParserObj;
+    Object.defineProperty(domainParserObj, "format", {
+      value(v: string): string {
+        if (typeof v !== "string") return metavar;
+        const result = domParser.parse(v);
+        return result.success ? result.value : v;
+      },
+      configurable: true,
+      enumerable: true,
+    });
     Object.defineProperty(domainParserObj, "normalize", {
       value(v: string): string {
         if (typeof v !== "string") return v;
@@ -5660,9 +5679,17 @@ export function ipv6(
       return parseAndNormalizeIpv6(value) ?? value;
     },
   };
-  // normalize uses the full parse() pipeline for validation so that
-  // values parse() would reject (e.g., loopback when allowLoopback is
-  // false) are returned unchanged.
+  // Both format and normalize use parse() for validation, keeping
+  // help text consistent with runtime defaults.
+  Object.defineProperty(ipv6ParserObj, "format", {
+    value(v: string): string {
+      if (typeof v !== "string") return metavar;
+      const result = ipv6ParserObj.parse(v);
+      return result.success ? result.value : v;
+    },
+    configurable: true,
+    enumerable: true,
+  });
   Object.defineProperty(ipv6ParserObj, "normalize", {
     value(v: string): string {
       if (typeof v !== "string") return v;
@@ -6200,6 +6227,15 @@ export function ip(
       return parseAndNormalizeIpv6(value) ?? value;
     },
   };
+  Object.defineProperty(ipParserObj, "format", {
+    value(v: string): string {
+      if (typeof v !== "string") return metavar;
+      const result = ipParserObj.parse(v);
+      return result.success ? result.value : v;
+    },
+    configurable: true,
+    enumerable: true,
+  });
   Object.defineProperty(ipParserObj, "normalize", {
     value(v: string): string {
       if (typeof v !== "string") return v;
@@ -6769,10 +6805,12 @@ export function cidr(
       ) {
         return metavar;
       }
-      const normalizedAddr = value.version === 6
-        ? (parseAndNormalizeIpv6(value.address) ?? value.address)
-        : value.address;
-      return `${normalizedAddr}/${value.prefix}`;
+      // Validate through parse to keep help text consistent with runtime
+      const raw = `${value.address}/${value.prefix}`;
+      const result = cidrParserObj.parse(raw);
+      return result.success
+        ? `${result.value.address}/${result.value.prefix}`
+        : raw;
     },
   };
   Object.defineProperty(cidrParserObj, "normalize", {
@@ -6784,9 +6822,7 @@ export function cidr(
       ) {
         return v;
       }
-      // Use format→parse round-trip for full validation
-      const formatted = cidrParserObj.format(v);
-      if (formatted === metavar) return v;
+      const formatted = `${v.address}/${v.prefix}`;
       const result = cidrParserObj.parse(formatted);
       return result.success ? result.value : v;
     },
