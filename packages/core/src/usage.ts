@@ -578,8 +578,10 @@ function branchConsumesToken(terms: Usage): boolean {
     switch (term.type) {
       case "command":
       case "argument":
-      case "literal":
         return true;
+      case "literal":
+        if (!term.optionValue) return true;
+        break; // option value; not positional
       case "option":
         break; // transparent; continue scanning
       case "optional":
