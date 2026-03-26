@@ -5043,8 +5043,12 @@ export function macAddress(
   Object.defineProperty(parserObj, "format", {
     value(v: string): string {
       if (typeof v !== "string") return metavar;
-      const result = macParser.parse(v);
-      return result.success ? result.value : v;
+      try {
+        const result = macParser.parse(v);
+        return result.success ? result.value : v;
+      } catch {
+        return v;
+      }
     },
     configurable: true,
     enumerable: true,
@@ -5052,8 +5056,12 @@ export function macAddress(
   Object.defineProperty(parserObj, "normalize", {
     value(v: string): string {
       if (typeof v !== "string") return v;
-      const result = macParser.parse(v);
-      return result.success ? result.value : v;
+      try {
+        const result = macParser.parse(v);
+        return result.success ? result.value : v;
+      } catch {
+        return v;
+      }
     },
     configurable: true,
     enumerable: true,
@@ -5428,8 +5436,12 @@ export function domain(
     Object.defineProperty(domainParserObj, "format", {
       value(v: string): string {
         if (typeof v !== "string") return metavar;
-        const result = domParser.parse(v);
-        return result.success ? result.value : v;
+        try {
+          const result = domParser.parse(v);
+          return result.success ? result.value : v;
+        } catch {
+          return v;
+        }
       },
       configurable: true,
       enumerable: true,
@@ -5437,8 +5449,12 @@ export function domain(
     Object.defineProperty(domainParserObj, "normalize", {
       value(v: string): string {
         if (typeof v !== "string") return v;
-        const result = domParser.parse(v);
-        return result.success ? result.value : v;
+        try {
+          const result = domParser.parse(v);
+          return result.success ? result.value : v;
+        } catch {
+          return v;
+        }
       },
       configurable: true,
       enumerable: true,
@@ -5684,8 +5700,12 @@ export function ipv6(
   Object.defineProperty(ipv6ParserObj, "format", {
     value(v: string): string {
       if (typeof v !== "string") return metavar;
-      const result = ipv6ParserObj.parse(v);
-      return result.success ? result.value : v;
+      try {
+        const result = ipv6ParserObj.parse(v);
+        return result.success ? result.value : v;
+      } catch {
+        return v;
+      }
     },
     configurable: true,
     enumerable: true,
@@ -5693,8 +5713,12 @@ export function ipv6(
   Object.defineProperty(ipv6ParserObj, "normalize", {
     value(v: string): string {
       if (typeof v !== "string") return v;
-      const result = ipv6ParserObj.parse(v);
-      return result.success ? result.value : v;
+      try {
+        const result = ipv6ParserObj.parse(v);
+        return result.success ? result.value : v;
+      } catch {
+        return v;
+      }
     },
     configurable: true,
     enumerable: true,
@@ -6230,8 +6254,12 @@ export function ip(
   Object.defineProperty(ipParserObj, "format", {
     value(v: string): string {
       if (typeof v !== "string") return metavar;
-      const result = ipParserObj.parse(v);
-      return result.success ? result.value : v;
+      try {
+        const result = ipParserObj.parse(v);
+        return result.success ? result.value : v;
+      } catch {
+        return v;
+      }
     },
     configurable: true,
     enumerable: true,
@@ -6239,8 +6267,12 @@ export function ip(
   Object.defineProperty(ipParserObj, "normalize", {
     value(v: string): string {
       if (typeof v !== "string") return v;
-      const result = ipParserObj.parse(v);
-      return result.success ? result.value : v;
+      try {
+        const result = ipParserObj.parse(v);
+        return result.success ? result.value : v;
+      } catch {
+        return v;
+      }
     },
     configurable: true,
     enumerable: true,
@@ -6807,10 +6839,14 @@ export function cidr(
       }
       // Validate through parse to keep help text consistent with runtime
       const raw = `${value.address}/${value.prefix}`;
-      const result = cidrParserObj.parse(raw);
-      return result.success
-        ? `${result.value.address}/${result.value.prefix}`
-        : raw;
+      try {
+        const result = cidrParserObj.parse(raw);
+        return result.success
+          ? `${result.value.address}/${result.value.prefix}`
+          : raw;
+      } catch {
+        return raw;
+      }
     },
   };
   Object.defineProperty(cidrParserObj, "normalize", {
@@ -6823,8 +6859,12 @@ export function cidr(
         return v;
       }
       const formatted = `${v.address}/${v.prefix}`;
-      const result = cidrParserObj.parse(formatted);
-      return result.success ? result.value : v;
+      try {
+        const result = cidrParserObj.parse(formatted);
+        return result.success ? result.value : v;
+      } catch {
+        return v;
+      }
     },
     configurable: true,
     enumerable: true,
