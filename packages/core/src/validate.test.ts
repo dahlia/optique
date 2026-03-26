@@ -4,6 +4,7 @@ import {
   escapeControlChars,
   type UserParserNames,
   validateCommandNames,
+  validateLabel,
   validateMetaNameCollisions,
   validateOptionNames,
   validateProgramName,
@@ -714,6 +715,125 @@ describe("validateMetaNameCollisions", () => {
     validateMetaNameCollisions(
       u(new Set(["--completion=bash"])),
       [["command", "completion command", ["--completion"]]],
+    );
+  });
+});
+
+describe("validateLabel", () => {
+  it("should accept valid labels", () => {
+    validateLabel("Options");
+    validateLabel("Connection options");
+    validateLabel("Server config");
+    validateLabel("DB");
+    validateLabel("Paramètres de connexion");
+  });
+
+  it("should reject empty label", () => {
+    assert.throws(
+      () => validateLabel(""),
+      {
+        name: "TypeError",
+        message: "Label must not be empty.",
+      },
+    );
+  });
+
+  it("should reject whitespace-only labels", () => {
+    assert.throws(
+      () => validateLabel("   "),
+      {
+        name: "TypeError",
+        message: /whitespace-only/,
+      },
+    );
+    assert.throws(
+      () => validateLabel("\t"),
+      {
+        name: "TypeError",
+        message: /whitespace-only/,
+      },
+    );
+  });
+
+  it("should reject labels with newlines", () => {
+    assert.throws(
+      () => validateLabel("bad\nlabel"),
+      {
+        name: "TypeError",
+        message: /control characters/,
+      },
+    );
+    assert.throws(
+      () => validateLabel("bad\rlabel"),
+      {
+        name: "TypeError",
+        message: /control characters/,
+      },
+    );
+    assert.throws(
+      () => validateLabel("bad\r\nlabel"),
+      {
+        name: "TypeError",
+        message: /control characters/,
+      },
+    );
+  });
+
+  it("should reject labels with C0 control characters", () => {
+    assert.throws(
+      () => validateLabel("bad\x00label"),
+      {
+        name: "TypeError",
+        message: /control characters/,
+      },
+    );
+    assert.throws(
+      () => validateLabel("bad\x1flabel"),
+      {
+        name: "TypeError",
+        message: /control characters/,
+      },
+    );
+  });
+
+  it("should reject labels with DEL and C1 control characters", () => {
+    assert.throws(
+      () => validateLabel("bad\x7flabel"),
+      {
+        name: "TypeError",
+        message: /control characters/,
+      },
+    );
+    assert.throws(
+      () => validateLabel("bad\x80label"),
+      {
+        name: "TypeError",
+        message: /control characters/,
+      },
+    );
+    assert.throws(
+      () => validateLabel("bad\x9flabel"),
+      {
+        name: "TypeError",
+        message: /control characters/,
+      },
+    );
+  });
+
+  it("should reject labels with Unicode line separators", () => {
+    assert.throws(
+      () => validateLabel("bad\u2028label"),
+      {
+        name: "TypeError",
+        message: /control characters/,
+      },
+    );
+    assert.throws(
+      () => validateLabel("bad\u2029label"),
+      {
+        name: "TypeError",
+        message: /control characters/,
+      },
     );
   });
 });

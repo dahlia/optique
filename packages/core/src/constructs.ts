@@ -130,6 +130,7 @@ import {
   type UsageTerm,
 } from "./usage.ts";
 import { collectLeadingCandidates } from "./usage-internals.ts";
+import { validateLabel } from "./validate.ts";
 
 function createUnexpectedInputErrorWithScopedSuggestions(
   baseError: Message,
@@ -3889,6 +3890,7 @@ export function object<
   const label: string | undefined = typeof labelOrParsers === "string"
     ? labelOrParsers
     : undefined;
+  if (label != null) validateLabel(label);
 
   let parsers: T;
   let options: ObjectOptions = {};
@@ -4794,6 +4796,7 @@ export function tuple<
   const label: string | undefined = typeof labelOrParsers === "string"
     ? labelOrParsers
     : undefined;
+  if (label != null) validateLabel(label);
 
   let parsers: T;
   let options: TupleOptions = {};
@@ -5523,6 +5526,7 @@ export function merge(
 > {
   // Check if first argument is a label
   const label = typeof args[0] === "string" ? args[0] : undefined;
+  if (label != null) validateLabel(label);
 
   // Check if last argument is options
   const lastArg = args[args.length - 1];
@@ -7082,6 +7086,7 @@ export function group<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   options: GroupOptions = {},
 ): Parser<M, TValue, TState> {
+  validateLabel(label);
   const groupParser: Parser<M, TValue, TState> = {
     $mode: parser.$mode,
     $valueType: parser.$valueType,

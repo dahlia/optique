@@ -2223,6 +2223,27 @@ describe("object", () => {
     assert.ok("flag" in parser.initialState);
   });
 
+  it("should reject empty label", () => {
+    assert.throws(
+      () => object("" as never, { flag: option("-f") }),
+      { name: "TypeError", message: "Label must not be empty." },
+    );
+  });
+
+  it("should reject whitespace-only label", () => {
+    assert.throws(
+      () => object("   " as never, { flag: option("-f") }),
+      { name: "TypeError", message: /whitespace-only/ },
+    );
+  });
+
+  it("should reject label with control characters", () => {
+    assert.throws(
+      () => object("bad\nlabel" as never, { flag: option("-f") }),
+      { name: "TypeError", message: /control characters/ },
+    );
+  });
+
   it("should handle parsing failure in nested parser", () => {
     const parser = object({
       port: option("-p", integer({ min: 1 })),
@@ -3273,6 +3294,27 @@ describe("tuple", () => {
     }
   });
 
+  it("should reject empty label", () => {
+    assert.throws(
+      () => tuple("" as never, [option("-f")] as never),
+      { name: "TypeError", message: "Label must not be empty." },
+    );
+  });
+
+  it("should reject whitespace-only label", () => {
+    assert.throws(
+      () => tuple("   " as never, [option("-f")] as never),
+      { name: "TypeError", message: /whitespace-only/ },
+    );
+  });
+
+  it("should reject label with control characters", () => {
+    assert.throws(
+      () => tuple("bad\nlabel" as never, [option("-f")] as never),
+      { name: "TypeError", message: /control characters/ },
+    );
+  });
+
   it("should handle empty tuple", () => {
     const parser = tuple([]);
 
@@ -3847,6 +3889,27 @@ describe("merge", () => {
     const _checkInferredAssignableToExpected: Expected = {} as Inferred;
     void _checkExpectedAssignableToInferred;
     void _checkInferredAssignableToExpected;
+  });
+
+  it("should reject empty label", () => {
+    assert.throws(
+      () => merge("" as never, object({ flag: option("-f") })),
+      { name: "TypeError", message: "Label must not be empty." },
+    );
+  });
+
+  it("should reject whitespace-only label", () => {
+    assert.throws(
+      () => merge("   " as never, object({ flag: option("-f") })),
+      { name: "TypeError", message: /whitespace-only/ },
+    );
+  });
+
+  it("should reject label with control characters", () => {
+    assert.throws(
+      () => merge("bad\nlabel" as never, object({ flag: option("-f") })),
+      { name: "TypeError", message: /control characters/ },
+    );
   });
 
   it("should report type-level arity error for sixteen parsers", () => {
@@ -6375,6 +6438,27 @@ describe("concat", () => {
 });
 
 describe("group", () => {
+  it("should reject empty label", () => {
+    assert.throws(
+      () => group("" as never, object({ flag: option("-f") })),
+      { name: "TypeError", message: "Label must not be empty." },
+    );
+  });
+
+  it("should reject whitespace-only label", () => {
+    assert.throws(
+      () => group("   " as never, object({ flag: option("-f") })),
+      { name: "TypeError", message: /whitespace-only/ },
+    );
+  });
+
+  it("should reject label with control characters", () => {
+    assert.throws(
+      () => group("bad\nlabel" as never, object({ flag: option("-f") })),
+      { name: "TypeError", message: /control characters/ },
+    );
+  });
+
   it("should wrap a parser with identical parsing behavior", () => {
     const baseParser = object({
       verbose: flag("-v", "--verbose"),
