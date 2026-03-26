@@ -3460,6 +3460,59 @@ describe("extractLeadingLiteralValues", () => {
     ];
     assert.deepEqual(extractLeadingLiteralValues(usage), new Set());
   });
+
+  it("should continue past option-value literals to the next standalone literal", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--mode"] },
+      { type: "literal", value: "server", optionValue: true },
+      { type: "literal", value: "help" },
+    ];
+    assert.deepEqual(extractLeadingLiteralValues(usage), new Set(["help"]));
+  });
+
+  it("should continue past option-value literal in required multiple", () => {
+    // multiple(min:1, [option, literal(optionValue)]) should not block
+    // extractLeadingLiteralValues from reaching the subsequent literal.
+    const usage: Usage = [
+      {
+        type: "multiple",
+        min: 1,
+        terms: [
+          { type: "option", names: ["--mode"] },
+          { type: "literal", value: "server", optionValue: true },
+        ],
+      },
+      { type: "literal", value: "help" },
+    ];
+    assert.deepEqual(extractLeadingLiteralValues(usage), new Set(["help"]));
+  });
+});
+
+describe("optionValue gate asymmetry", () => {
+  it("extractLeadingOptionNames should still stop at optionValue literal", () => {
+    // Option-value literals occupy token positions in argv, so they
+    // must remain positional gates for option/command extraction.
+    const usage: Usage = [
+      { type: "option", names: ["--mode"] },
+      { type: "literal", value: "server", optionValue: true },
+      { type: "option", names: ["--port"] },
+    ];
+    // --port is behind the literal gate; only --mode is leading
+    assert.deepEqual(
+      extractLeadingOptionNames(usage),
+      new Set(["--mode"]),
+    );
+  });
+
+  it("extractLeadingCommandNames should still stop at optionValue literal", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--mode"] },
+      { type: "literal", value: "server", optionValue: true },
+      { type: "command", name: "help" },
+    ];
+    // command is behind the literal gate; not collected
+    assert.deepEqual(extractLeadingCommandNames(usage), new Set());
+  });
 });
 
 describe("additional branch coverage", () => {

@@ -544,13 +544,13 @@ export function extractLeadingLiteralValues(usage: Usage): Set<string> {
           break;
         case "multiple":
           collectLeading(term.terms);
-          if (term.min > 0 && branchConsumesToken(term.terms)) return;
+          if (term.min > 0 && branchConsumesToken(term.terms, true)) return;
           break;
         case "exclusive":
           for (const branch of term.terms) {
             collectLeading(branch);
           }
-          if (exclusiveConsumesToken(term.terms)) return;
+          if (exclusiveConsumesToken(term.terms, true)) return;
           break;
         default:
           break; // option, passthrough, ellipsis: skip, continue
@@ -566,13 +566,27 @@ export function extractLeadingLiteralValues(usage: Usage): Set<string> {
  * Checks whether every branch of an exclusive term must consume a positional
  * token.  When true, terms after the exclusive are at position N+1 and should
  * not be considered "leading".
+ *
+ * @param skipOptionValueLiterals When `true`, literals tagged with
+ *   `optionValue` are treated as non-positional.  Only
+ *   `extractLeadingLiteralValues()` passes `true`; the option/command
+ *   extractors use the default (`false`) so that option+value pairs
+ *   still act as positional gates.
  */
-function exclusiveConsumesToken(branches: readonly Usage[]): boolean {
+function exclusiveConsumesToken(
+  branches: readonly Usage[],
+  skipOptionValueLiterals = false,
+): boolean {
   if (branches.length === 0) return false;
-  return branches.every((branch) => branchConsumesToken(branch));
+  return branches.every((branch) =>
+    branchConsumesToken(branch, skipOptionValueLiterals)
+  );
 }
 
-function branchConsumesToken(terms: Usage): boolean {
+function branchConsumesToken(
+  terms: Usage,
+  skipOptionValueLiterals = false,
+): boolean {
   if (!terms || !Array.isArray(terms)) return false;
   for (const term of terms) {
     switch (term.type) {
@@ -580,17 +594,22 @@ function branchConsumesToken(terms: Usage): boolean {
       case "argument":
         return true;
       case "literal":
-        if (!term.optionValue) return true;
-        break; // option value; not positional
+        if (skipOptionValueLiterals && term.optionValue) break;
+        return true;
       case "option":
         break; // transparent; continue scanning
       case "optional":
         break; // optional content doesn't guarantee consumption
       case "multiple":
-        if (term.min > 0 && branchConsumesToken(term.terms)) return true;
+        if (
+          term.min > 0 &&
+          branchConsumesToken(term.terms, skipOptionValueLiterals)
+        ) return true;
         break;
       case "exclusive":
-        if (exclusiveConsumesToken(term.terms)) return true;
+        if (exclusiveConsumesToken(term.terms, skipOptionValueLiterals)) {
+          return true;
+        }
         break;
       default:
         break;
