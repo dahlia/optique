@@ -401,8 +401,11 @@ export function extractLeadingOptionNames(
         case "literal":
           return; // positional token; stop scanning siblings
         case "optional":
+          collectLeading(term.terms);
+          break;
         case "multiple":
           collectLeading(term.terms);
+          if (term.min > 0 && branchConsumesToken(term.terms)) return;
           break;
         case "exclusive":
           for (const branch of term.terms) {
@@ -462,9 +465,12 @@ export function extractLeadingCommandNames(
         case "literal":
           return; // positional token; stop scanning siblings
         case "optional":
+          collectLeading(term.terms);
+          break;
         case "multiple":
           collectLeading(term.terms);
-          break; // continue scanning siblings after optional/multiple
+          if (term.min > 0 && branchConsumesToken(term.terms)) return;
+          break;
         case "exclusive":
           for (const branch of term.terms) {
             collectLeading(branch);
@@ -502,8 +508,10 @@ function branchConsumesToken(terms: Usage): boolean {
       case "option":
         break; // transparent; continue scanning
       case "optional":
-      case "multiple":
         break; // optional content doesn't guarantee consumption
+      case "multiple":
+        if (term.min > 0 && branchConsumesToken(term.terms)) return true;
+        break;
       case "exclusive":
         if (exclusiveConsumesToken(term.terms)) return true;
         break;

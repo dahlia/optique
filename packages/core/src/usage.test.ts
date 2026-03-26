@@ -3281,6 +3281,49 @@ describe("extractLeadingCommandNames", () => {
     );
   });
 
+  it("should stop after required multiple with positional content", () => {
+    // tuple([multiple(argument(string()), { min: 1 }), command("help", ...)])
+    const usage: Usage = [
+      {
+        type: "multiple",
+        terms: [{ type: "argument", metavar: "FILE" }],
+        min: 1,
+      },
+      { type: "command", name: "help" },
+    ];
+    assert.deepEqual(extractLeadingCommandNames(usage), new Set());
+  });
+
+  it("should continue after optional multiple", () => {
+    const usage: Usage = [
+      {
+        type: "multiple",
+        terms: [{ type: "argument", metavar: "FILE" }],
+        min: 0,
+      },
+      { type: "command", name: "help" },
+    ];
+    assert.deepEqual(
+      extractLeadingCommandNames(usage),
+      new Set(["help"]),
+    );
+  });
+
+  it("should continue after required multiple with non-positional content", () => {
+    const usage: Usage = [
+      {
+        type: "multiple",
+        terms: [{ type: "option", names: ["--verbose"] }],
+        min: 1,
+      },
+      { type: "command", name: "help" },
+    ];
+    assert.deepEqual(
+      extractLeadingCommandNames(usage),
+      new Set(["help"]),
+    );
+  });
+
   it("should continue after exclusive where some branches are transparent", () => {
     // Exclusive with option-only branches doesn't consume a position
     const usage: Usage = [

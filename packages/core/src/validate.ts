@@ -271,6 +271,28 @@ export function validateMetaNameCollisions(
             `built-in ${label}.`,
         );
       }
+      // Option-form meta features also match the "name=value" form at
+      // runtime (e.g., --completion=bash).  Check if any user name
+      // starts with "name=" to catch this prefix-based shadowing.
+      if (kind === "option") {
+        const prefix = name + "=";
+        for (const userName of optionNames) {
+          if (userName.startsWith(prefix)) {
+            throw new TypeError(
+              `User-defined option "${userName}" conflicts with the ` +
+                `built-in ${label} (prefix "${prefix}").`,
+            );
+          }
+        }
+        for (const userName of commandNames) {
+          if (userName.startsWith(prefix)) {
+            throw new TypeError(
+              `User-defined command "${userName}" conflicts with the ` +
+                `built-in ${label} (prefix "${prefix}").`,
+            );
+          }
+        }
+      }
     }
   }
 }

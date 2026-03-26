@@ -567,4 +567,48 @@ describe("validateMetaNameCollisions", () => {
       [["command", "help command", ["help"]]],
     );
   });
+
+  // Prefix matching tests (--completion=<shell> form)
+  it("should flag user option matching meta option name= prefix", () => {
+    // flag("--completion=bash") is shadowed by --completion= prefix matching
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          u(new Set(["--completion=bash"])),
+          [["option", "completion option", ["--completion"]]],
+        ),
+      {
+        name: "TypeError",
+        message: /user.*"--completion=bash".*completion option/i,
+      },
+    );
+  });
+
+  it("should flag user command matching meta option name= prefix", () => {
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          {
+            leadingOptions: e,
+            leadingCommands: new Set(["--completion=bash"]),
+            allOptions: e,
+            allCommands: new Set(["--completion=bash"]),
+            allLiterals: e,
+          },
+          [["option", "completion option", ["--completion"]]],
+        ),
+      {
+        name: "TypeError",
+        message: /user.*"--completion=bash".*completion option/i,
+      },
+    );
+  });
+
+  it("should not flag prefix match against meta command entries", () => {
+    // Meta commands use exact match at args[0], not prefix
+    validateMetaNameCollisions(
+      u(new Set(["--completion=bash"])),
+      [["command", "completion command", ["--completion"]]],
+    );
+  });
 });
