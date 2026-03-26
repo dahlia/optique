@@ -881,29 +881,20 @@ export function getDocPageAsync(
   argsOrOptions?: readonly string[] | ParseOptions,
   options?: ParseOptions,
 ): Promise<DocPage | undefined> {
-  if (Array.isArray(argsOrOptions)) {
-    if (parser.$mode === "sync") {
-      return Promise.resolve(
-        getDocPageSyncImpl(
-          parser as Parser<"sync", unknown, unknown>,
-          argsOrOptions,
-          options,
-        ),
-      );
-    }
-    return getDocPageAsyncImpl(parser, argsOrOptions, options);
-  }
-  const resolved = (argsOrOptions as ParseOptions | undefined) ?? options;
+  const args = Array.isArray(argsOrOptions) ? argsOrOptions : [];
+  const opts = Array.isArray(argsOrOptions)
+    ? options
+    : (argsOrOptions as ParseOptions | undefined) ?? options;
   if (parser.$mode === "sync") {
     return Promise.resolve(
       getDocPageSyncImpl(
         parser as Parser<"sync", unknown, unknown>,
-        [],
-        resolved,
+        args,
+        opts,
       ),
     );
   }
-  return getDocPageAsyncImpl(parser, [], resolved);
+  return getDocPageAsyncImpl(parser, args, opts);
 }
 
 /**
@@ -973,25 +964,18 @@ export function getDocPage(
   argsOrOptions?: readonly string[] | ParseOptions,
   options?: ParseOptions,
 ): DocPage | undefined | Promise<DocPage | undefined> {
-  if (Array.isArray(argsOrOptions)) {
-    if (parser.$mode === "sync") {
-      return getDocPageSyncImpl(
-        parser as Parser<"sync", unknown, unknown>,
-        argsOrOptions,
-        options,
-      );
-    }
-    return getDocPageAsyncImpl(parser, argsOrOptions, options);
-  }
-  const resolved = (argsOrOptions as ParseOptions | undefined) ?? options;
+  const args = Array.isArray(argsOrOptions) ? argsOrOptions : [];
+  const opts = Array.isArray(argsOrOptions)
+    ? options
+    : (argsOrOptions as ParseOptions | undefined) ?? options;
   if (parser.$mode === "sync") {
     return getDocPageSyncImpl(
       parser as Parser<"sync", unknown, unknown>,
-      [],
-      resolved,
+      args,
+      opts,
     );
   }
-  return getDocPageAsyncImpl(parser, [], resolved);
+  return getDocPageAsyncImpl(parser, args, opts);
 }
 
 /**
