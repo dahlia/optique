@@ -449,6 +449,22 @@ function injectAnnotationsIntoState<TState>(
  *              to this for sync parsers.
  * @since 0.10.0 Added optional `options` parameter for annotations support.
  */
+
+/**
+ * Returns `true` when the buffer has not changed between iterations,
+ * indicating a parser is stalling without consuming input.
+ */
+function isBufferUnchanged(
+  previous: readonly string[],
+  current: readonly string[],
+): boolean {
+  return (
+    current.length > 0 &&
+    current.length === previous.length &&
+    current.every((item, i) => item === previous[i])
+  );
+}
+
 export function parseSync<T>(
   parser: Parser<"sync", T, unknown>,
   args: readonly string[],
@@ -471,14 +487,7 @@ export function parseSync<T>(
     }
     const previousBuffer = context.buffer;
     context = result.next;
-
-    // If no progress was made (buffer completely unchanged), this indicates
-    // a potential infinite loop where the parser succeeds but doesn't consume input
-    if (
-      context.buffer.length > 0 &&
-      context.buffer.length === previousBuffer.length &&
-      context.buffer.every((item, i) => item === previousBuffer[i])
-    ) {
+    if (isBufferUnchanged(previousBuffer, context.buffer)) {
       return {
         success: false,
         error: message`Unexpected option or argument: ${context.buffer[0]}.`,
@@ -541,14 +550,7 @@ export async function parseAsync<T>(
     }
     const previousBuffer = context.buffer;
     context = result.next;
-
-    // If no progress was made (buffer completely unchanged), this indicates
-    // a potential infinite loop where the parser succeeds but doesn't consume input
-    if (
-      context.buffer.length > 0 &&
-      context.buffer.length === previousBuffer.length &&
-      context.buffer.every((item, i) => item === previousBuffer[i])
-    ) {
+    if (isBufferUnchanged(previousBuffer, context.buffer)) {
       return {
         success: false,
         error: message`Unexpected option or argument: ${context.buffer[0]}.`,
@@ -667,15 +669,7 @@ export function suggestSync<T>(
     }
     const previousBuffer = context.buffer;
     context = result.next;
-
-    // Check for infinite loop (same as in parse function)
-    if (
-      context.buffer.length > 0 &&
-      context.buffer.length === previousBuffer.length &&
-      context.buffer.every((item, i) => item === previousBuffer[i])
-    ) {
-      return [];
-    }
+    if (isBufferUnchanged(previousBuffer, context.buffer)) return [];
   }
 
   // Get suggestions from the parser with the prefix
@@ -733,15 +727,7 @@ export async function suggestAsync<T>(
     }
     const previousBuffer = context.buffer;
     context = result.next;
-
-    // Check for infinite loop (same as in parse function)
-    if (
-      context.buffer.length > 0 &&
-      context.buffer.length === previousBuffer.length &&
-      context.buffer.every((item, i) => item === previousBuffer[i])
-    ) {
-      return [];
-    }
+    if (isBufferUnchanged(previousBuffer, context.buffer)) return [];
   }
 
   // Get suggestions from the parser with the prefix
