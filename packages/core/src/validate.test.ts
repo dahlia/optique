@@ -569,6 +569,26 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
+  it("should flag leading option against meta command (position-aware)", () => {
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          {
+            leadingOptions: new Set(["--version"]),
+            leadingCommands: e,
+            allOptions: e,
+            allCommands: e,
+            allLiterals: e,
+          },
+          [["command", "version command", ["--version"]]],
+        ),
+      {
+        name: "TypeError",
+        message: /user.*option.*"--version".*version command/i,
+      },
+    );
+  });
+
   it("should flag nested option against meta option (scans everywhere)", () => {
     assert.throws(
       () =>
