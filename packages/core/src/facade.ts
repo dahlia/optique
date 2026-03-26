@@ -44,6 +44,11 @@ import {
 import { dispatchByMode } from "./mode-dispatch.ts";
 import { argument, command, constant, flag, option } from "./primitives.ts";
 import {
+  extractCommandNames,
+  extractLeadingCommandNames,
+  extractLeadingOptionNames,
+  extractLiteralValues,
+  extractOptionNames,
   formatUsage,
   type HiddenVisibility,
   type OptionName,
@@ -51,7 +56,12 @@ import {
 } from "./usage.ts";
 import { type DeferredMap, string } from "./valueparser.ts";
 import { type Annotations, injectAnnotations } from "./annotations.ts";
-import { validateCommandNames, validateOptionNames } from "./validate.ts";
+import {
+  type MetaEntry,
+  validateCommandNames,
+  validateMetaNameCollisions,
+  validateOptionNames,
+} from "./validate.ts";
 import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
 
 export type { ParserValuePlaceholder, SourceContext };
@@ -1589,6 +1599,55 @@ export function runParser<
     completionCommandConfig?.names ?? ["completion"];
   const completionOptionNames: readonly string[] =
     completionOptionConfig?.names ?? ["--completion"];
+
+  // Validate meta name collisions (meta-vs-user and meta-vs-meta).
+  // The collision scope is position-aware:
+  //   - Meta "command" entries only match at args[0], so they are checked
+  //     against leading user names.
+  //   - Meta "option" entries use lenient scanners that match anywhere in
+  //     argv, so they are checked against all user names at every depth.
+  const activeMetaEntries: MetaEntry[] = [];
+  if (options.help && helpOptionConfig) {
+    activeMetaEntries.push(["option", "help option", helpOptionNames]);
+  }
+  if (options.help && helpCommandConfig) {
+    activeMetaEntries.push(["command", "help command", helpCommandNames]);
+  }
+  if (options.version && versionOptionConfig) {
+    activeMetaEntries.push(["option", "version option", versionOptionNames]);
+  }
+  if (options.version && versionCommandConfig) {
+    activeMetaEntries.push([
+      "command",
+      "version command",
+      versionCommandNames,
+    ]);
+  }
+  if (options.completion && completionOptionConfig) {
+    activeMetaEntries.push([
+      "option",
+      "completion option",
+      completionOptionNames,
+      true, // completion option also matches "name=value" form at runtime
+    ]);
+  }
+  if (options.completion && completionCommandConfig) {
+    activeMetaEntries.push([
+      "command",
+      "completion command",
+      completionCommandNames,
+    ]);
+  }
+  validateMetaNameCollisions(
+    {
+      leadingOptions: extractLeadingOptionNames(parser.usage, true),
+      leadingCommands: extractLeadingCommandNames(parser.usage, true),
+      allOptions: extractOptionNames(parser.usage, true),
+      allCommands: extractCommandNames(parser.usage, true),
+      allLiterals: extractLiteralValues(parser.usage),
+    },
+    activeMetaEntries,
+  );
 
   // Get available shells (defaults + user-provided)
   const defaultShells: Record<string, ShellCompletion> = {

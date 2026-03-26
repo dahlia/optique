@@ -129,6 +129,203 @@ export function validateCommandNames(
 }
 
 /**
+ * A meta entry describes one active meta feature for collision checking.
+ *
+ * The tuple elements are:
+ *
+ * 1. `kind` — `"command"` if this meta feature matches at `args[0]` only,
+ *    or `"option"` if a lenient scanner matches the name anywhere in `argv`.
+ * 2. `label` — human-readable label for error messages (e.g., `"help option"`).
+ * 3. `names` — the configured name(s) for this meta feature.
+ * 4. `prefixMatch` — when `true`, the runtime also intercepts tokens
+ *    starting with `name=` (e.g., `--completion=bash`).  Only the
+ *    completion option uses this form; help/version use exact matching.
+ *
+ * @since 1.0.0
+ */
+export type MetaEntry = readonly [
+  kind: "command" | "option",
+  label: string,
+  names: readonly string[],
+  prefixMatch?: boolean,
+];
+
+/**
+ * User parser names extracted at different scopes for collision checking.
+ *
+ * @since 1.0.0
+ */
+export interface UserParserNames {
+  /** Option names reachable at the leading position (before any positional
+   *  gate). */
+  readonly leadingOptions: ReadonlySet<string>;
+  /** Command names reachable at the leading position. */
+  readonly leadingCommands: ReadonlySet<string>;
+  /** All option names at any depth. */
+  readonly allOptions: ReadonlySet<string>;
+  /** All command names at any depth. */
+  readonly allCommands: ReadonlySet<string>;
+  /** All literal values at any depth (e.g., conditional discriminator
+   *  values). */
+  readonly allLiterals: ReadonlySet<string>;
+}
+
+/**
+ * Validates that there are no name collisions among meta features
+ * (help, version, completion) and between meta features and user parsers.
+ *
+ * The collision check is *position-aware*:
+ *
+ * - Meta **command** entries match at `args[0]` only, so they are checked
+ *   against *leading* user names (those reachable before any positional gate).
+ * - Meta **option** entries use lenient scanners that match anywhere in
+ *   `argv`, so they are checked against *all* user names at every depth,
+ *   including literal values from conditional discriminators.
+ *
+ * Meta-vs-meta collisions are always checked in a unified namespace,
+ * because a meta command named `"--help"` and a meta option named
+ * `"--help"` both compete for the same token.
+ *
+ * @param userNames User parser names extracted at different scopes.
+ * @param metaEntries Active meta feature entries annotated with their kind.
+ * @throws {TypeError} If any collision or duplicate is detected.
+ * @since 1.0.0
+ */
+export function validateMetaNameCollisions(
+  userNames: UserParserNames,
+  metaEntries: readonly MetaEntry[],
+): void {
+  // 1. Check for duplicates within each meta feature
+  for (const [, label, names] of metaEntries) {
+    const seen = new Set<string>();
+    for (const name of names) {
+      if (seen.has(name)) {
+        throw new TypeError(
+          `${capitalize(label)} has a duplicate name: "${name}"`,
+        );
+      }
+      seen.add(name);
+    }
+  }
+
+  // 2. Check for collisions between any two meta features (unified namespace)
+  const nameToLabel = new Map<string, string>();
+  for (const [, label, names] of metaEntries) {
+    for (const name of names) {
+      const existingLabel = nameToLabel.get(name);
+      if (existingLabel != null) {
+        throw new TypeError(
+          `Name "${name}" is used by both ` +
+            `${existingLabel} and ${label}.`,
+        );
+      }
+      nameToLabel.set(name, label);
+    }
+  }
+  // Also check prefix-based meta/meta collisions: if a prefixMatch
+  // entry (completion option) claims "name=...", other meta names
+  // starting with that prefix would be intercepted at runtime.
+  for (let i = 0; i < metaEntries.length; i++) {
+    const [, label, names, prefixMatch] = metaEntries[i];
+    if (!prefixMatch) continue;
+    for (const name of names) {
+      const prefix = name + "=";
+      for (let j = 0; j < metaEntries.length; j++) {
+        const [, otherLabel, otherNames] = metaEntries[j];
+        for (const otherName of otherNames) {
+          if (i === j && otherName === name) continue;
+          if (!otherName.startsWith(prefix)) continue;
+          throw new TypeError(
+            'The prefix form of name "' + name + '" in ' + label +
+              ' shadows "' + otherName + '" in ' + otherLabel + ".",
+          );
+        }
+      }
+    }
+  }
+
+  // 3. Check for collisions between meta features and user parser.
+  //    The scope depends on the meta feature kind:
+  //    - "command" entries only reach args[0] → check leading user names
+  //    - "option" entries scan entire argv  → check all user names + literals
+  for (const [kind, label, names, prefixMatch] of metaEntries) {
+    const optionNames = kind === "command"
+      ? userNames.leadingOptions
+      : userNames.allOptions;
+    const commandNames = kind === "command"
+      ? userNames.leadingCommands
+      : userNames.allCommands;
+    for (const name of names) {
+      if (optionNames.has(name)) {
+        throw new TypeError(
+          `User-defined option "${name}" conflicts with the ` +
+            `built-in ${label}.`,
+        );
+      }
+      if (commandNames.has(name)) {
+        throw new TypeError(
+          `User-defined command "${name}" conflicts with the ` +
+            `built-in ${label}.`,
+        );
+      }
+      // Literal values (e.g., conditional discriminator values) can be
+      // shadowed by lenient option scanners that match anywhere in argv.
+      //
+      // Known limitations:
+      // - This only checks literals against option-form meta entries.
+      //   Command-form entries are not checked because we lack a
+      //   "leading literals" set.
+      // - appendLiteralToUsage() does not produce literal terms for
+      //   argument-based conditionals, so their branch keys are
+      //   invisible to this check entirely.
+      // See https://github.com/dahlia/optique/issues/734
+      //     https://github.com/dahlia/optique/issues/735
+      if (kind === "option" && userNames.allLiterals.has(name)) {
+        throw new TypeError(
+          `Literal value "${name}" conflicts with the ` +
+            `built-in ${label}.`,
+        );
+      }
+      // Only the completion option matches the "name=value" form at
+      // runtime (e.g., --completion=bash).  Help/version scanners use
+      // exact matching, so --help=foo and --version=foo are valid user
+      // names that should not be flagged.
+      if (prefixMatch) {
+        const prefix = name + "=";
+        for (const userName of optionNames) {
+          if (userName.startsWith(prefix)) {
+            throw new TypeError(
+              `User-defined option "${userName}" conflicts with the ` +
+                `built-in ${label} (prefix "${prefix}").`,
+            );
+          }
+        }
+        for (const userName of commandNames) {
+          if (userName.startsWith(prefix)) {
+            throw new TypeError(
+              `User-defined command "${userName}" conflicts with the ` +
+                `built-in ${label} (prefix "${prefix}").`,
+            );
+          }
+        }
+        for (const literal of userNames.allLiterals) {
+          if (literal.startsWith(prefix)) {
+            throw new TypeError(
+              `Literal value "${literal}" conflicts with the ` +
+                `built-in ${label} (prefix "${prefix}").`,
+            );
+          }
+        }
+      }
+    }
+  }
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
  * Validates a program name at runtime.
  *
  * Program names may contain spaces (e.g., file paths), but must not be empty,

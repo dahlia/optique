@@ -261,6 +261,8 @@ export type Usage = readonly UsageTerm[];
  * multiple, and exclusive terms.
  *
  * @param usage The usage description to extract option names from.
+ * @param includeHidden Whether to include fully hidden options (`hidden: true`)
+ *   in the result.  Defaults to `false`.
  * @returns A set containing all option names found in the usage description.
  *
  * @example
@@ -273,14 +275,17 @@ export type Usage = readonly UsageTerm[];
  * // names = Set(["--verbose", "-v", "--quiet", "-q"])
  * ```
  */
-export function extractOptionNames(usage: Usage): Set<string> {
+export function extractOptionNames(
+  usage: Usage,
+  includeHidden?: boolean,
+): Set<string> {
   const names = new Set<string>();
 
   function traverseUsage(terms: Usage): void {
     if (!terms || !Array.isArray(terms)) return;
     for (const term of terms) {
       if (term.type === "option") {
-        if (isSuggestionHidden(term.hidden)) continue;
+        if (!includeHidden && isSuggestionHidden(term.hidden)) continue;
         for (const name of term.names) {
           names.add(name);
         }
@@ -304,8 +309,10 @@ export function extractOptionNames(usage: Usage): Set<string> {
  * This function recursively traverses the usage structure and collects
  * all command names, similar to {@link extractOptionNames}.
  *
- * @param usage The usage structure to extract command names from
- * @returns A Set of all command names found in the usage structure
+ * @param usage The usage structure to extract command names from.
+ * @param includeHidden Whether to include fully hidden commands
+ *   (`hidden: true`) in the result.  Defaults to `false`.
+ * @returns A set of all command names found in the usage structure.
  *
  * @example
  * ```typescript
@@ -318,14 +325,17 @@ export function extractOptionNames(usage: Usage): Set<string> {
  * ```
  * @since 0.7.0
  */
-export function extractCommandNames(usage: Usage): Set<string> {
+export function extractCommandNames(
+  usage: Usage,
+  includeHidden?: boolean,
+): Set<string> {
   const names = new Set<string>();
 
   function traverseUsage(terms: Usage): void {
     if (!terms || !Array.isArray(terms)) return;
     for (const term of terms) {
       if (term.type === "command") {
-        if (isSuggestionHidden(term.hidden)) continue;
+        if (!includeHidden && isSuggestionHidden(term.hidden)) continue;
         names.add(term.name);
       } else if (term.type === "optional" || term.type === "multiple") {
         traverseUsage(term.terms);
@@ -339,6 +349,215 @@ export function extractCommandNames(usage: Usage): Set<string> {
 
   traverseUsage(usage);
   return names;
+}
+
+/**
+ * Extracts option names that are reachable at the leading token position
+ * (before any command or argument gate).
+ *
+ * Unlike {@link extractOptionNames}, which traverses the entire usage tree,
+ * this function stops scanning a terms array after encountering a `command`,
+ * `argument`, or `literal` term, because subsequent terms are scoped under
+ * that positional token.  It still recurses into `optional`, `multiple`,
+ * and `exclusive` containers, since they represent alternatives or wrappers
+ * at the same position.
+ *
+ * Known limitation: this function infers token positions from the `usage`
+ * tree, which is a display-oriented structure.  Combinators like `tuple()`
+ * and `object()` sort or flatten usage by priority rather than token order,
+ * so the results can be inaccurate—both false positives (e.g., options
+ * appearing before commands due to priority sorting) and false negatives
+ * (e.g., options after commands that are actually parallel peers).
+ * The proper fix is to use `Parser.leadingNames` instead of usage-tree
+ * analysis.  This also cannot detect `conditional(argument(...))`
+ * discriminator values, which never appear in the usage tree.
+ * See https://github.com/dahlia/optique/issues/734 and
+ * https://github.com/dahlia/optique/issues/735
+ *
+ * @param usage The usage description to extract leading option names from.
+ * @param includeHidden Whether to include fully hidden options
+ *   (`hidden: true`) in the result.  Defaults to `false`.
+ * @returns A set of option names reachable at the leading token position.
+ * @since 1.0.0
+ */
+export function extractLeadingOptionNames(
+  usage: Usage,
+  includeHidden?: boolean,
+): Set<string> {
+  const names = new Set<string>();
+
+  function collectLeading(terms: Usage): void {
+    if (!terms || !Array.isArray(terms)) return;
+    for (const term of terms) {
+      switch (term.type) {
+        case "option":
+          if (!includeHidden && isSuggestionHidden(term.hidden)) break;
+          for (const name of term.names) {
+            names.add(name);
+          }
+          break; // options don't consume a position; continue scanning
+        case "command":
+          // See the JSDoc "Known limitation" note and
+          // https://github.com/dahlia/optique/issues/735
+          return; // command consumes a position; stop scanning siblings
+        case "argument":
+        case "literal":
+          return; // positional token; stop scanning siblings
+        case "optional":
+          collectLeading(term.terms);
+          break;
+        case "multiple":
+          collectLeading(term.terms);
+          if (term.min > 0 && branchConsumesToken(term.terms)) return;
+          break;
+        case "exclusive":
+          for (const branch of term.terms) {
+            collectLeading(branch);
+          }
+          if (exclusiveConsumesToken(term.terms)) return;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  collectLeading(usage);
+  return names;
+}
+
+/**
+ * Extracts command names that could match as the first positional token.
+ *
+ * Unlike {@link extractCommandNames}, which traverses the entire usage tree,
+ * this function stops scanning a terms array after encountering a `command`,
+ * `argument`, or `literal` term, because subsequent terms in that array are
+ * scoped under that positional token (reachable only after the leading term
+ * is consumed).  It still recurses into `optional`, `multiple`, and
+ * `exclusive` containers, since they represent alternatives or optional
+ * wrappers at the same token position.
+ *
+ * Known limitation: this function has the same usage-tree ordering and
+ * `conditional(argument(...))` caveats as {@link extractLeadingOptionNames}.
+ * See https://github.com/dahlia/optique/issues/734 and
+ * https://github.com/dahlia/optique/issues/735
+ *
+ * @param usage The usage description to extract leading command names from.
+ * @param includeHidden Whether to include fully hidden commands
+ *   (`hidden: true`) in the result.  Defaults to `false`.
+ * @returns A set of command names that could match at the first token position.
+ * @since 1.0.0
+ */
+export function extractLeadingCommandNames(
+  usage: Usage,
+  includeHidden?: boolean,
+): Set<string> {
+  const names = new Set<string>();
+
+  function collectLeading(terms: Usage): void {
+    if (!terms || !Array.isArray(terms)) return;
+    for (const term of terms) {
+      switch (term.type) {
+        case "command":
+          if (!includeHidden && isSuggestionHidden(term.hidden)) {
+            // Hidden command still consumes a token position, so stop.
+            return;
+          }
+          names.add(term.name);
+          return; // command consumes the first token; stop scanning siblings
+        case "argument":
+        case "literal":
+          return; // positional token; stop scanning siblings
+        case "optional":
+          collectLeading(term.terms);
+          break;
+        case "multiple":
+          collectLeading(term.terms);
+          if (term.min > 0 && branchConsumesToken(term.terms)) return;
+          break;
+        case "exclusive":
+          for (const branch of term.terms) {
+            collectLeading(branch);
+          }
+          if (exclusiveConsumesToken(term.terms)) return;
+          break; // some branches are transparent; continue scanning
+        default:
+          break; // option, passthrough, ellipsis: skip, continue
+      }
+    }
+  }
+
+  collectLeading(usage);
+  return names;
+}
+
+/**
+ * Checks whether every branch of an exclusive term must consume a positional
+ * token.  When true, terms after the exclusive are at position N+1 and should
+ * not be considered "leading".
+ */
+function exclusiveConsumesToken(branches: readonly Usage[]): boolean {
+  if (branches.length === 0) return false;
+  return branches.every((branch) => branchConsumesToken(branch));
+}
+
+function branchConsumesToken(terms: Usage): boolean {
+  if (!terms || !Array.isArray(terms)) return false;
+  for (const term of terms) {
+    switch (term.type) {
+      case "command":
+      case "argument":
+      case "literal":
+        return true;
+      case "option":
+        break; // transparent; continue scanning
+      case "optional":
+        break; // optional content doesn't guarantee consumption
+      case "multiple":
+        if (term.min > 0 && branchConsumesToken(term.terms)) return true;
+        break;
+      case "exclusive":
+        if (exclusiveConsumesToken(term.terms)) return true;
+        break;
+      default:
+        break;
+    }
+  }
+  return false;
+}
+
+/**
+ * Extracts all literal values from a usage description.
+ *
+ * This function recursively traverses the usage tree and collects all
+ * `literal` term values.  Literal values represent fixed strings that
+ * the user must type (e.g., conditional discriminator values like
+ * `"server"` in `conditional(option("--mode", string()), { server: ... })`).
+ *
+ * @param usage The usage description to extract literal values from.
+ * @returns A set of all literal values found in the usage description.
+ * @since 1.0.0
+ */
+export function extractLiteralValues(usage: Usage): Set<string> {
+  const values = new Set<string>();
+
+  function traverseUsage(terms: Usage): void {
+    if (!terms || !Array.isArray(terms)) return;
+    for (const term of terms) {
+      if (term.type === "literal") {
+        values.add(term.value);
+      } else if (term.type === "optional" || term.type === "multiple") {
+        traverseUsage(term.terms);
+      } else if (term.type === "exclusive") {
+        for (const branch of term.terms) {
+          traverseUsage(branch);
+        }
+      }
+    }
+  }
+
+  traverseUsage(usage);
+  return values;
 }
 
 /**

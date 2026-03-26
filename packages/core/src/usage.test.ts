@@ -3,6 +3,9 @@ import {
   cloneUsageTerm,
   extractArgumentMetavars,
   extractCommandNames,
+  extractLeadingCommandNames,
+  extractLeadingOptionNames,
+  extractLiteralValues,
   extractOptionNames,
   formatUsage,
   formatUsageTerm,
@@ -2927,6 +2930,467 @@ describe("extractCommandNames hidden filtering", () => {
     assert.deepEqual(
       result,
       new Set(["usage-only", "doc-only", "help-only"]),
+    );
+  });
+});
+
+describe("extractOptionNames includeHidden", () => {
+  it("should include fully hidden options when includeHidden is true", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--visible"], metavar: "V" },
+      { type: "option", names: ["--hidden"], metavar: "H", hidden: true },
+    ];
+    const result = extractOptionNames(usage, true);
+    assert.deepEqual(result, new Set(["--visible", "--hidden"]));
+  });
+
+  it("should still skip hidden options by default", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--visible"] },
+      { type: "option", names: ["--hidden"], hidden: true },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set(["--visible"]));
+  });
+
+  it("should include hidden options in nested terms", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [
+          { type: "option", names: ["--hidden"], hidden: true },
+        ],
+      },
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "option", names: ["--also-hidden"], hidden: true }],
+        ],
+      },
+    ];
+    const result = extractOptionNames(usage, true);
+    assert.deepEqual(result, new Set(["--hidden", "--also-hidden"]));
+  });
+});
+
+describe("extractCommandNames includeHidden", () => {
+  it("should include fully hidden commands when includeHidden is true", () => {
+    const usage: Usage = [
+      { type: "command", name: "visible" },
+      { type: "command", name: "hidden", hidden: true },
+    ];
+    const result = extractCommandNames(usage, true);
+    assert.deepEqual(result, new Set(["visible", "hidden"]));
+  });
+
+  it("should still skip hidden commands by default", () => {
+    const usage: Usage = [
+      { type: "command", name: "visible" },
+      { type: "command", name: "hidden", hidden: true },
+    ];
+    const result = extractCommandNames(usage);
+    assert.deepEqual(result, new Set(["visible"]));
+  });
+
+  it("should include hidden commands in nested terms", () => {
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "command", name: "hidden", hidden: true }],
+        ],
+      },
+    ];
+    const result = extractCommandNames(usage, true);
+    assert.deepEqual(result, new Set(["hidden"]));
+  });
+});
+
+describe("extractLeadingOptionNames", () => {
+  it("should extract top-level option names", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [{ type: "option", names: ["--verbose", "-v"] }],
+      },
+      {
+        type: "optional",
+        terms: [{ type: "option", names: ["--debug"] }],
+      },
+    ];
+    assert.deepEqual(
+      extractLeadingOptionNames(usage),
+      new Set(["--verbose", "-v", "--debug"]),
+    );
+  });
+
+  it("should not extract options nested after a command", () => {
+    // command("tool", object({ v: flag("--version") }))
+    const usage: Usage = [
+      { type: "command", name: "tool" },
+      {
+        type: "optional",
+        terms: [{ type: "option", names: ["--version"] }],
+      },
+    ];
+    assert.deepEqual(extractLeadingOptionNames(usage), new Set());
+  });
+
+  it("should extract leading options but skip nested ones in exclusive", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [{ type: "option", names: ["--verbose"] }],
+      },
+      {
+        type: "exclusive",
+        terms: [
+          [
+            { type: "command", name: "help" },
+            {
+              type: "optional",
+              terms: [{ type: "option", names: ["--version"] }],
+            },
+          ],
+          [{ type: "command", name: "build" }],
+        ],
+      },
+    ];
+    assert.deepEqual(
+      extractLeadingOptionNames(usage),
+      new Set(["--verbose"]),
+    );
+  });
+
+  it("should stop after argument terms", () => {
+    const usage: Usage = [
+      { type: "argument", metavar: "FILE" },
+      {
+        type: "optional",
+        terms: [{ type: "option", names: ["--format"] }],
+      },
+    ];
+    assert.deepEqual(extractLeadingOptionNames(usage), new Set());
+  });
+
+  it("should stop after literal terms (conditional discriminator)", () => {
+    // conditional(option("--mode", string()), { server: object({ v: flag("--version") }) })
+    // Branch usage: [option("--mode"), literal("server"), option("--version")]
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [
+            { type: "option", names: ["--mode"] },
+            { type: "literal", value: "server" },
+            { type: "option", names: ["--version"] },
+          ],
+        ],
+      },
+    ];
+    // --mode is before the literal → leading; --version is after → NOT leading
+    assert.deepEqual(
+      extractLeadingOptionNames(usage),
+      new Set(["--mode"]),
+    );
+  });
+
+  it("should include hidden options when includeHidden is true", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [{ type: "option", names: ["--hidden"], hidden: true }],
+      },
+    ];
+    assert.deepEqual(extractLeadingOptionNames(usage), new Set());
+    assert.deepEqual(
+      extractLeadingOptionNames(usage, true),
+      new Set(["--hidden"]),
+    );
+  });
+
+  it("should handle empty and null usage", () => {
+    assert.deepEqual(extractLeadingOptionNames([]), new Set());
+    assert.deepEqual(
+      extractLeadingOptionNames(null as unknown as Usage),
+      new Set(),
+    );
+  });
+});
+
+describe("extractLeadingCommandNames", () => {
+  it("should extract top-level command names", () => {
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "command", name: "help" }],
+          [{ type: "command", name: "build" }],
+        ],
+      },
+    ];
+    assert.deepEqual(
+      extractLeadingCommandNames(usage),
+      new Set(["help", "build"]),
+    );
+  });
+
+  it("should not extract nested subcommand names", () => {
+    // command("tool", longestMatch(command("help", ...), command("build", ...)))
+    // usage: [commandTerm("tool"), exclusive([commandTerm("help")], [commandTerm("build")])]
+    const usage: Usage = [
+      { type: "command", name: "tool" },
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "command", name: "help" }],
+          [{ type: "command", name: "build" }],
+        ],
+      },
+    ];
+    assert.deepEqual(
+      extractLeadingCommandNames(usage),
+      new Set(["tool"]),
+    );
+  });
+
+  it("should extract commands inside optional wrappers", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [{ type: "command", name: "help" }],
+      },
+    ];
+    assert.deepEqual(
+      extractLeadingCommandNames(usage),
+      new Set(["help"]),
+    );
+  });
+
+  it("should skip options and continue scanning for commands", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [{ type: "option", names: ["--verbose"] }],
+      },
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "command", name: "help" }],
+          [{ type: "command", name: "build" }],
+        ],
+      },
+    ];
+    assert.deepEqual(
+      extractLeadingCommandNames(usage),
+      new Set(["help", "build"]),
+    );
+  });
+
+  it("should stop after argument terms", () => {
+    const usage: Usage = [
+      { type: "argument", metavar: "FILE" },
+      { type: "command", name: "help" },
+    ];
+    assert.deepEqual(
+      extractLeadingCommandNames(usage),
+      new Set(),
+    );
+  });
+
+  it("should stop after literal terms (conditional discriminator)", () => {
+    // conditional(option("--mode", string()), { server: command("help", object({})) })
+    // Branch usage: [option("--mode"), literal("server"), command("help")]
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [
+            { type: "option", names: ["--mode"] },
+            { type: "literal", value: "server" },
+            { type: "command", name: "help" },
+          ],
+        ],
+      },
+    ];
+    // "help" is after the literal → NOT leading
+    assert.deepEqual(extractLeadingCommandNames(usage), new Set());
+  });
+
+  it("should include hidden commands when includeHidden is true", () => {
+    const usage: Usage = [
+      { type: "command", name: "visible" },
+    ];
+    const usageWithHidden: Usage = [
+      { type: "command", name: "hidden", hidden: true },
+    ];
+    assert.deepEqual(
+      extractLeadingCommandNames(usage),
+      new Set(["visible"]),
+    );
+    assert.deepEqual(
+      extractLeadingCommandNames(usageWithHidden, true),
+      new Set(["hidden"]),
+    );
+  });
+
+  it("should handle empty and null usage", () => {
+    assert.deepEqual(extractLeadingCommandNames([]), new Set());
+    assert.deepEqual(
+      extractLeadingCommandNames(null as unknown as Usage),
+      new Set(),
+    );
+  });
+
+  it("should not extract commands nested inside exclusive branches", () => {
+    // Each exclusive branch: [command("X"), ...innerParser.usage]
+    // Inner commands should not leak out
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [
+            { type: "command", name: "tool" },
+            { type: "command", name: "nested-help" }, // inner parser content
+          ],
+          [{ type: "command", name: "other" }],
+        ],
+      },
+    ];
+    assert.deepEqual(
+      extractLeadingCommandNames(usage),
+      new Set(["tool", "other"]),
+    );
+  });
+
+  it("should stop after exclusive where all branches consume a token", () => {
+    // tuple([or(argument(string()), command("foo", ...)), command("help", ...)])
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "argument", metavar: "ARG" }],
+          [{ type: "command", name: "foo" }],
+        ],
+      },
+      { type: "command", name: "help" }, // position 2, NOT leading
+    ];
+    assert.deepEqual(
+      extractLeadingCommandNames(usage),
+      new Set(["foo"]),
+    );
+  });
+
+  it("should stop after required multiple with positional content", () => {
+    // tuple([multiple(argument(string()), { min: 1 }), command("help", ...)])
+    const usage: Usage = [
+      {
+        type: "multiple",
+        terms: [{ type: "argument", metavar: "FILE" }],
+        min: 1,
+      },
+      { type: "command", name: "help" },
+    ];
+    assert.deepEqual(extractLeadingCommandNames(usage), new Set());
+  });
+
+  it("should continue after optional multiple", () => {
+    const usage: Usage = [
+      {
+        type: "multiple",
+        terms: [{ type: "argument", metavar: "FILE" }],
+        min: 0,
+      },
+      { type: "command", name: "help" },
+    ];
+    assert.deepEqual(
+      extractLeadingCommandNames(usage),
+      new Set(["help"]),
+    );
+  });
+
+  it("should continue after required multiple with non-positional content", () => {
+    const usage: Usage = [
+      {
+        type: "multiple",
+        terms: [{ type: "option", names: ["--verbose"] }],
+        min: 1,
+      },
+      { type: "command", name: "help" },
+    ];
+    assert.deepEqual(
+      extractLeadingCommandNames(usage),
+      new Set(["help"]),
+    );
+  });
+
+  it("should continue after exclusive where some branches are transparent", () => {
+    // Exclusive with option-only branches doesn't consume a position
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "option", names: ["--a"] }],
+          [{ type: "option", names: ["--b"] }],
+        ],
+      },
+      { type: "command", name: "help" },
+    ];
+    assert.deepEqual(
+      extractLeadingCommandNames(usage),
+      new Set(["help"]),
+    );
+  });
+});
+
+describe("extractLiteralValues", () => {
+  it("should extract literal values from the usage tree", () => {
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [
+            { type: "option", names: ["--mode"] },
+            { type: "literal", value: "server" },
+            { type: "command", name: "run" },
+          ],
+          [
+            { type: "option", names: ["--mode"] },
+            { type: "literal", value: "client" },
+            { type: "command", name: "connect" },
+          ],
+        ],
+      },
+    ];
+    assert.deepEqual(
+      extractLiteralValues(usage),
+      new Set(["server", "client"]),
+    );
+  });
+
+  it("should extract literals nested inside optional/multiple", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [{ type: "literal", value: "--help" }],
+      },
+    ];
+    assert.deepEqual(extractLiteralValues(usage), new Set(["--help"]));
+  });
+
+  it("should return empty set when no literals exist", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--verbose"] },
+      { type: "command", name: "build" },
+    ];
+    assert.deepEqual(extractLiteralValues(usage), new Set());
+  });
+
+  it("should handle empty and null usage", () => {
+    assert.deepEqual(extractLiteralValues([]), new Set());
+    assert.deepEqual(
+      extractLiteralValues(null as unknown as Usage),
+      new Set(),
     );
   });
 });
