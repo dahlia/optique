@@ -3823,6 +3823,8 @@ export function object<
  * @returns A {@link Parser} that produces an object with the same keys as
  *          the input, where each value is the result of the corresponding
  *          parser.
+ * @throws {TypeError} If the label is not a string, is empty,
+ *         whitespace-only, or contains control characters.
  */
 export function object<
   T extends { readonly [key: string | symbol]: Parser<Mode, unknown, unknown> },
@@ -3854,6 +3856,8 @@ export function object<
  * @returns A {@link Parser} that produces an object with the same keys as
  *          the input, where each value is the result of the corresponding
  *          parser.
+ * @throws {TypeError} If the label is not a string, is empty,
+ *         whitespace-only, or contains control characters.
  * @since 0.5.0
  */
 export function object<
@@ -4763,6 +4767,8 @@ export function tuple<
  * @returns A {@link Parser} that produces a readonly tuple with the same length
  *          as the input array, where each element is the result of the
  *          corresponding parser.
+ * @throws {TypeError} If the label is not a string, is empty,
+ *         whitespace-only, or contains control characters.
  */
 export function tuple<
   const T extends readonly Parser<Mode, unknown, unknown>[],
@@ -5474,6 +5480,8 @@ export function merge<const TParsers extends MergeParsers>(
  * @returns A parser that merges parsed object fields from all parsers.
  * Type inference is precise for tuple calls up to 15 parser arguments.
  * @throws {TypeError} If no parser arguments are provided.
+ * @throws {TypeError} If the label is not a string, is empty,
+ *         whitespace-only, or contains control characters.
  * @since 0.4.0
  */
 export function merge<const TParsers extends MergeParsers>(
@@ -5492,6 +5500,8 @@ export function merge<const TParsers extends MergeParsers>(
  * @returns A parser that merges parsed object fields from all parsers.
  * Type inference is precise for tuple calls up to 15 parser arguments.
  * @throws {TypeError} If no parser arguments are provided.
+ * @throws {TypeError} If the label is not a string, is empty,
+ *         whitespace-only, or contains control characters.
  * @since 0.7.0
  */
 export function merge<const TParsers extends MergeParsers>(
@@ -7068,6 +7078,8 @@ export function concat(
  * @param options Optional visibility controls for the wrapped parser terms.
  * @returns A new parser that behaves identically to the input parser
  *          but generates documentation within a labeled section.
+ * @throws {TypeError} If the label is not a string, is empty,
+ *         whitespace-only, or contains control characters.
  * @since 0.4.0
  */
 /**
