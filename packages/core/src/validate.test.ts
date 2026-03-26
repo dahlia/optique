@@ -478,7 +478,7 @@ describe("validateMetaNameCollisions", () => {
         ]),
       {
         name: "TypeError",
-        message: /--completion=bash.*help command.*completion option/i,
+        message: /prefix.*"--completion".*shadows.*"--completion=bash"/i,
       },
     );
   });
@@ -505,7 +505,7 @@ describe("validateMetaNameCollisions", () => {
         ]),
       {
         name: "TypeError",
-        message: /--completion=bash.*completion option.*prefix/i,
+        message: /prefix.*"--completion".*shadows.*"--completion=bash"/i,
       },
     );
   });

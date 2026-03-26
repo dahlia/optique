@@ -236,8 +236,8 @@ export function validateMetaNameCollisions(
           if (i === j && otherName === name) continue;
           if (!otherName.startsWith(prefix)) continue;
           throw new TypeError(
-            `Name "${otherName}" (${otherLabel}) is shadowed by ` +
-              `${label} (prefix "${prefix}").`,
+            'The prefix form of name "' + name + '" in ' + label +
+              ' shadows "' + otherName + '" in ' + otherLabel + ".",
           );
         }
       }
