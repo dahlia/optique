@@ -1181,17 +1181,19 @@ export function option<M extends Mode, T>(
     [Symbol.for("Deno.customInspect")]() {
       return `option(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
     },
-    ...(valueParser != null && typeof valueParser.normalize === "function"
-      ? {
-        normalizeValue(
-          value: T | boolean,
-        ): T | boolean {
-          if (typeof value === "boolean") return value;
-          return (valueParser!.normalize as (v: T) => T)(value);
-        },
-      }
-      : {}),
   };
+  // Define normalizeValue as non-enumerable so that ...parser spread in
+  // map() does not propagate the inner normalizer to the mapped type.
+  if (valueParser != null && typeof valueParser.normalize === "function") {
+    Object.defineProperty(result, "normalizeValue", {
+      value(v: T | boolean): T | boolean {
+        if (typeof v === "boolean") return v;
+        return (valueParser!.normalize as (vv: T) => T)(v as T);
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
   // Define placeholder lazily to avoid triggering derived value parser
   // factory functions during parser construction.  Non-enumerable so that
   // ...parser spread in map() does not eagerly evaluate the getter.
@@ -1862,14 +1864,18 @@ export function argument<M extends Mode, T>(
     [Symbol.for("Deno.customInspect")]() {
       return `argument()`;
     },
-    ...(typeof valueParser.normalize === "function"
-      ? {
-        normalizeValue(value: T): T {
-          return (valueParser.normalize as (v: T) => T)(value);
-        },
-      }
-      : {}),
   };
+  // Define normalizeValue as non-enumerable so that ...parser spread in
+  // map() does not propagate the inner normalizer to the mapped type.
+  if (typeof valueParser.normalize === "function") {
+    Object.defineProperty(result, "normalizeValue", {
+      value(v: T): T {
+        return (valueParser.normalize as (vv: T) => T)(v);
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
   // Define placeholder lazily to avoid triggering derived value parser
   // factory functions during parser construction.  Non-enumerable so that
   // ...parser spread in map() does not eagerly evaluate the getter.

@@ -232,7 +232,7 @@ export function optional<M extends Mode, TValue, TState>(
     : undefined;
 
   // Type cast needed due to TypeScript's conditional type limitations with generic M
-  return {
+  const optionalParser = {
     $mode: parser.$mode,
     $valueType: [],
     $stateType: [],
@@ -252,16 +252,6 @@ export function optional<M extends Mode, TValue, TState>(
         shouldDeferCompletion: adaptShouldDeferCompletion<TState>(
           parser.shouldDeferCompletion.bind(parser),
         ),
-      }
-      : {}),
-    // Forward value normalization from inner parser so that withDefault()
-    // can normalize defaults through optional() wrappers.
-    ...(typeof parser.normalizeValue === "function"
-      ? {
-        normalizeValue(value: TValue | undefined): TValue | undefined {
-          if (value == null) return value;
-          return parser.normalizeValue!(value);
-        },
       }
       : {}),
     parse(context: ParserContext<[TState] | undefined>) {
@@ -398,6 +388,20 @@ export function optional<M extends Mode, TValue, TState>(
     // Type assertion needed because TypeScript cannot verify ModeValue<M, T>
     // when M is a generic type parameter. Runtime behavior is correct via mode dispatch.
   } as unknown as Parser<M, TValue | undefined, [TState] | undefined>;
+  // Forward value normalization as non-enumerable so that ...parser spread
+  // in map() does not propagate it to the mapped type.
+  if (typeof parser.normalizeValue === "function") {
+    const innerNormalize = parser.normalizeValue.bind(parser);
+    Object.defineProperty(optionalParser, "normalizeValue", {
+      value(v: TValue | undefined): TValue | undefined {
+        if (v == null) return v;
+        return innerNormalize(v);
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  return optionalParser;
 }
 
 /**
@@ -606,16 +610,6 @@ export function withDefault<
         shouldDeferCompletion: adaptShouldDeferCompletion<TState>(
           parser.shouldDeferCompletion.bind(parser),
         ),
-      }
-      : {}),
-    // Forward value normalization from inner parser.
-    ...(typeof parser.normalizeValue === "function"
-      ? {
-        normalizeValue(value: TValue | TDefault): TValue | TDefault {
-          return parser.normalizeValue!(
-            value as TValue,
-          ) as TValue | TDefault;
-        },
       }
       : {}),
     parse(context: ParserContext<[TState] | undefined>) {
@@ -876,9 +870,23 @@ export function withDefault<
         ? { kind: "unavailable" }
         : { kind: "available", state: state.state[0] };
 
+      let docDefault: TValue | undefined = getDocDefaultValue(
+        upperDefaultValue,
+      );
+      // Normalize the default for documentation so that help text matches
+      // the representation that parse() would produce.
+      if (
+        docDefault != null && typeof parser.normalizeValue === "function"
+      ) {
+        try {
+          docDefault = parser.normalizeValue(docDefault);
+        } catch {
+          // best-effort; sentinel defaults are shown as-is
+        }
+      }
       const fragments = syncParser.getDocFragments(
         innerState,
-        getDocDefaultValue(upperDefaultValue),
+        docDefault,
       );
 
       // If a custom message is provided, replace the default field in all entries
@@ -909,6 +917,17 @@ export function withDefault<
     Object.defineProperty(withDefaultParser, "placeholder", {
       get() {
         return parser.placeholder;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  // Forward value normalization as non-enumerable.
+  if (typeof parser.normalizeValue === "function") {
+    const innerNormalize = parser.normalizeValue.bind(parser);
+    Object.defineProperty(withDefaultParser, "normalizeValue", {
+      value(v: TValue | TDefault): TValue | TDefault {
+        return innerNormalize(v as TValue) as TValue | TDefault;
       },
       configurable: true,
       enumerable: false,
@@ -1712,11 +1731,6 @@ export function nonEmpty<M extends Mode, T, TState>(
     ...(typeof parser.shouldDeferCompletion === "function"
       ? { shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser) }
       : {}),
-    // Forward value normalization from inner parser so that withDefault()
-    // can normalize defaults through nonEmpty() wrappers.
-    ...(typeof parser.normalizeValue === "function"
-      ? { normalizeValue: parser.normalizeValue.bind(parser) }
-      : {}),
     parse(context: ParserContext<TState>) {
       return dispatchByMode(
         parser.$mode,
@@ -1740,6 +1754,14 @@ export function nonEmpty<M extends Mode, T, TState>(
       get() {
         return parser.placeholder;
       },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  // Forward value normalization as non-enumerable.
+  if (typeof parser.normalizeValue === "function") {
+    Object.defineProperty(nonEmptyParser, "normalizeValue", {
+      value: parser.normalizeValue.bind(parser),
       configurable: true,
       enumerable: false,
     });

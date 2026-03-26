@@ -7194,11 +7194,6 @@ export function group<M extends Mode, TValue, TState>(
         shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser),
       }
       : {}),
-    // Forward value normalization from inner parser so that withDefault()
-    // can normalize defaults through group() wrappers.
-    ...(typeof parser.normalizeValue === "function"
-      ? { normalizeValue: parser.normalizeValue.bind(parser) }
-      : {}),
     parse: (context) => parser.parse(context),
     complete: (state) => parser.complete(state),
     suggest: (context, prefix) => {
@@ -7305,6 +7300,14 @@ export function group<M extends Mode, TValue, TState>(
       get() {
         return parser.placeholder;
       },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  // Forward value normalization as non-enumerable.
+  if (typeof parser.normalizeValue === "function") {
+    Object.defineProperty(groupParser, "normalizeValue", {
+      value: parser.normalizeValue.bind(parser),
       configurable: true,
       enumerable: false,
     });

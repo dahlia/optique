@@ -5611,7 +5611,10 @@ export function ipv6(
       return { success: true, value: normalized };
     },
     format(value: string): string {
-      return value;
+      return parseAndNormalizeIpv6(value) ?? value;
+    },
+    normalize(value: string): string {
+      return parseAndNormalizeIpv6(value) ?? value;
     },
   };
 }
@@ -6136,7 +6139,11 @@ export function ip(
       return { success: false, error: msg };
     },
     format(value: string): string {
-      return value;
+      // IPv4 addresses are already canonical; normalize IPv6 addresses
+      return parseAndNormalizeIpv6(value) ?? value;
+    },
+    normalize(value: string): string {
+      return parseAndNormalizeIpv6(value) ?? value;
     },
   };
 }
@@ -6691,7 +6698,18 @@ export function cidr(
       };
     },
     format(value: CidrValue): string {
-      return `${value.address}/${value.prefix}`;
+      const normalizedAddr = value.version === 6
+        ? (parseAndNormalizeIpv6(value.address) ?? value.address)
+        : value.address;
+      return `${normalizedAddr}/${value.prefix}`;
+    },
+    normalize(value: CidrValue): CidrValue {
+      if (value.version !== 6) return value;
+      const normalizedAddr = parseAndNormalizeIpv6(value.address);
+      if (normalizedAddr == null || normalizedAddr === value.address) {
+        return value;
+      }
+      return { ...value, address: normalizedAddr };
     },
   };
 }
