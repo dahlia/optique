@@ -1184,11 +1184,21 @@ export function option<M extends Mode, T>(
   };
   // Define normalizeValue as non-enumerable so that ...parser spread in
   // map() does not propagate the inner normalizer to the mapped type.
-  if (valueParser != null && typeof valueParser.normalize === "function") {
+  // Uses parse() instead of normalize() to ensure validation: defaults
+  // that would fail parse() are returned unchanged (sentinel defaults).
+  if (
+    valueParser != null && typeof valueParser.normalize === "function" &&
+    valueParser.$mode === "sync"
+  ) {
+    const syncValueParser = valueParser as ValueParser<"sync", T>;
     Object.defineProperty(result, "normalizeValue", {
       value(v: T | boolean): T | boolean {
         if (typeof v === "boolean") return v;
-        return (valueParser!.normalize as (vv: T) => T)(v as T);
+        const input = typeof v === "string"
+          ? v
+          : syncValueParser.format(v as T);
+        const parsed = syncValueParser.parse(input);
+        return parsed.success ? parsed.value : v;
       },
       configurable: true,
       enumerable: false,
@@ -1867,10 +1877,17 @@ export function argument<M extends Mode, T>(
   };
   // Define normalizeValue as non-enumerable so that ...parser spread in
   // map() does not propagate the inner normalizer to the mapped type.
-  if (typeof valueParser.normalize === "function") {
+  // Uses parse() instead of normalize() to ensure validation.
+  if (
+    typeof valueParser.normalize === "function" &&
+    valueParser.$mode === "sync"
+  ) {
+    const syncVP = valueParser as ValueParser<"sync", T>;
     Object.defineProperty(result, "normalizeValue", {
       value(v: T): T {
-        return (valueParser.normalize as (vv: T) => T)(v);
+        const input = typeof v === "string" ? v : syncVP.format(v);
+        const parsed = syncVP.parse(input);
+        return parsed.success ? parsed.value : v;
       },
       configurable: true,
       enumerable: false,

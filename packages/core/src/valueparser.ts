@@ -5032,7 +5032,11 @@ export function macAddress(
       return { success: true, value: joinOctets(octets, finalSeparator) };
     },
     format: normalizeMac,
-    normalize: normalizeMac,
+    normalize(value: string): string {
+      // Return non-string sentinel defaults unchanged (not stringified).
+      if (typeof value !== "string") return value;
+      return normalizeMac(value);
+    },
   };
 }
 

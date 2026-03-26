@@ -1509,6 +1509,48 @@ describe("withDefault", () => {
     }
   });
 
+  it("should not normalize defaults that fail parser validation", () => {
+    // domain with allowedTlds: ["com"] should reject "Example.NET"
+    const parser = withDefault(
+      option(
+        "--domain",
+        domain({ lowercase: true, allowedTlds: ["com"] }),
+      ),
+      "Example.NET",
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      // "Example.NET" fails parse (TLD not allowed), so preserved unchanged
+      assert.equal(result.value, "Example.NET");
+    }
+  });
+
+  it("should not normalize MAC defaults with wrong separator", () => {
+    const parser = withDefault(
+      option("--mac", macAddress({ separator: "none" })),
+      "aa:bb:cc:dd:ee:ff",
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      // "aa:bb:cc:dd:ee:ff" fails parse (separator: "none"), preserved
+      assert.equal(result.value, "aa:bb:cc:dd:ee:ff");
+    }
+  });
+
+  it("should preserve non-string sentinel objects in defaults", () => {
+    const parser = withDefault(
+      option("--mac", macAddress()),
+      { kind: "local" } as unknown as string,
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { kind: "local" });
+    }
+  });
+
   it("should normalize defaults through multiple() wrappers", () => {
     const parser = withDefault(
       multiple(option("--domain", domain({ lowercase: true }))),
