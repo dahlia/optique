@@ -449,22 +449,6 @@ function injectAnnotationsIntoState<TState>(
  *              to this for sync parsers.
  * @since 0.10.0 Added optional `options` parameter for annotations support.
  */
-
-/**
- * Returns `true` when the buffer has not changed between iterations,
- * indicating a parser is stalling without consuming input.
- */
-function isBufferUnchanged(
-  previous: readonly string[],
-  current: readonly string[],
-): boolean {
-  return (
-    current.length > 0 &&
-    current.length === previous.length &&
-    current.every((item, i) => item === previous[i])
-  );
-}
-
 export function parseSync<T>(
   parser: Parser<"sync", T, unknown>,
   args: readonly string[],
@@ -507,6 +491,21 @@ export function parseSync<T>(
         : {}),
     }
     : { success: false, error: endResult.error };
+}
+
+/**
+ * Returns `true` when the buffer has not changed between iterations,
+ * indicating a parser is stalling without consuming input.
+ */
+function isBufferUnchanged(
+  previous: readonly string[],
+  current: readonly string[],
+): boolean {
+  return (
+    current.length > 0 &&
+    current.length === previous.length &&
+    current.every((item, i) => item === previous[i])
+  );
 }
 
 /**
