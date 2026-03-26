@@ -2873,6 +2873,7 @@ interface ValueParser<M extends Mode, T> {
   readonly placeholder: T;
   parse(input: string): ModeValue<M, ValueParserResult<T>>;
   format(value: T): string;
+  normalize?(value: T): T;
 }
 ~~~~
 
@@ -2896,6 +2897,13 @@ interface ValueParser<M extends Mode, T> {
 
 `format()`
 :   Converts typed value back to string for display
+
+`normalize()`
+:   Optional.  Canonicalizes a value of type `T` according to the parser's
+    configuration (e.g., case conversion, separator normalization) without
+    re-validating.  When present, `withDefault()` calls this on default
+    values so that runtime defaults match the representation that `parse()`
+    would produce.
 
 ### Basic custom parser
 

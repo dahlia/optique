@@ -234,6 +234,31 @@ Dynamic defaults are useful when:
  -  You want to compute expensive defaults only when needed
  -  The default value might change between invocations
 
+### Default normalization
+
+When the underlying value parser implements `normalize()`, `withDefault()`
+automatically normalizes default values so they match the representation
+that `parse()` would produce.  For example, a `macAddress()` parser
+configured with `case: "lower"` will lowercase a default MAC address:
+
+~~~~ typescript twoslash
+import { withDefault } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { macAddress } from "@optique/core/valueparser";
+import { parse } from "@optique/core/parser";
+// ---cut-before---
+const parser = withDefault(
+  option("--mac", macAddress({ case: "lower", outputSeparator: ":" })),
+  "AA-BB-CC-DD-EE-FF",
+);
+const result = parse(parser, []);
+// When --mac is omitted, the default is normalized to "aa:bb:cc:dd:ee:ff"
+~~~~
+
+Built-in parsers that implement `normalize()` include `macAddress()` (case
+and separator normalization) and `domain()` (lowercase normalization).
+Custom value parsers can implement `normalize()` to opt into this behavior.
+
 ### Error handling
 
 *This API is available since Optique 0.5.0.*

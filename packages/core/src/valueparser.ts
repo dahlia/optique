@@ -60,6 +60,25 @@ export interface ValueParser<M extends Mode = "sync", T = unknown> {
   format(value: T): string;
 
   /**
+   * Normalizes a value of type {@link T} according to this parser's
+   * configuration.  This applies the same canonicalization that
+   * {@link parse} would apply (e.g., case conversion, separator
+   * normalization) without re-validating the input.
+   *
+   * When present, combinators like `withDefault()` call this method on
+   * default values so that runtime defaults match the representation
+   * that {@link parse} would produce.
+   *
+   * Parsers that do not apply any normalization during parsing do not
+   * need to implement this method.
+   *
+   * @param value The value to normalize.
+   * @returns The normalized value.
+   * @since 1.0.0
+   */
+  normalize?(value: T): T;
+
+  /**
    * Provides completion suggestions for values of this type.
    * This is optional and used for shell completion functionality.
    *
@@ -4960,6 +4979,40 @@ export function macAddress(
     format(value: string): string {
       return value;
     },
+    normalize(value: string): string {
+      // Extract octets by splitting on the detected separator
+      let octets: string[];
+      let detectedSep: ":" | "-" | "." | "none";
+      if (value.includes(":")) {
+        octets = value.split(":");
+        detectedSep = ":";
+      } else if (value.includes("-")) {
+        octets = value.split("-");
+        detectedSep = "-";
+      } else if (value.includes(".")) {
+        octets = value.split(".").flatMap((g) => [
+          g.slice(0, 2),
+          g.slice(2),
+        ]);
+        detectedSep = ".";
+      } else {
+        octets = [];
+        for (let i = 0; i < value.length; i += 2) {
+          octets.push(value.slice(i, i + 2));
+        }
+        detectedSep = "none";
+      }
+      octets = octets.map((o) => o.padStart(2, "0"));
+      let sep: ":" | "-" | "." | "none";
+      if (outputSeparator != null) {
+        sep = outputSeparator;
+      } else if (separator !== "any") {
+        sep = separator;
+      } else {
+        sep = detectedSep;
+      }
+      return joinOctets(octets, sep);
+    },
   };
 }
 
@@ -5317,6 +5370,7 @@ export function domain(
     format(value: string): string {
       return value;
     },
+    ...(lowercase ? { normalize: (value: string) => value.toLowerCase() } : {}),
   };
 }
 /**

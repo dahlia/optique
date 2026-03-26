@@ -351,6 +351,19 @@ To be released.
     `cidr()` value parsers to return the serialized value instead of the
     metavar placeholder (e.g., `"MAC"`, `"DOMAIN"`).  [[#318]]
 
+ -  Added `ValueParser.normalize()` optional method for canonicalizing
+    values of type `T` (e.g., MAC address case/separator normalization,
+    domain lowercasing) without re-validating.  [[#318]]
+
+ -  Added `Parser.normalizeValue()` optional method.  Primitive parsers
+    (`option()`, `argument()`) implement this by delegating to
+    `ValueParser.normalize()`.  Combinator wrappers (`optional()`,
+    `withDefault()`) forward it from inner parsers.  [[#318]]
+
+ -  `withDefault()` now normalizes default values through the inner
+    parser's `normalizeValue()` when available, so runtime defaults
+    match the representation that `parse()` would produce.  [[#318]]
+
  -  Fixed `url()` parser's `suggest()` emitting `://` for non-hierarchical URL
     schemes like `mailto:` and `urn:`.  Suggestions now use `:` for
     non-hierarchical schemes and `://` only for special schemes (`http`,

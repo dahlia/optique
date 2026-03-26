@@ -13923,6 +13923,34 @@ describe("format() for network-address value parsers", () => {
   });
 });
 
+describe("ValueParser.normalize()", () => {
+  it("macAddress().normalize() applies case and separator", () => {
+    const mac = macAddress({ case: "upper", outputSeparator: ":" });
+    assert.equal(mac.normalize!("aa-bb-cc-dd-ee-ff"), "AA:BB:CC:DD:EE:FF");
+  });
+
+  it("macAddress().normalize() preserves separator when separator is any", () => {
+    const mac = macAddress();
+    assert.equal(mac.normalize!("aa-bb-cc-dd-ee-ff"), "aa-bb-cc-dd-ee-ff");
+    assert.equal(mac.normalize!("aabb.ccdd.eeff"), "aabb.ccdd.eeff");
+  });
+
+  it("macAddress().normalize() pads shorthand octets", () => {
+    const mac = macAddress({ outputSeparator: "." });
+    assert.equal(mac.normalize!("0:1:2:3:4:5"), "0001.0203.0405");
+  });
+
+  it("domain().normalize() applies lowercase when configured", () => {
+    const dom = domain({ lowercase: true });
+    assert.equal(dom.normalize!("Example.COM"), "example.com");
+  });
+
+  it("domain() has no normalize when lowercase is false", () => {
+    const dom = domain();
+    assert.equal(dom.normalize, undefined);
+  });
+});
+
 describe("checkBooleanOption", () => {
   it("should not throw when options is undefined", () => {
     assert.doesNotThrow(() =>

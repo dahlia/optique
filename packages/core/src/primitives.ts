@@ -1181,6 +1181,16 @@ export function option<M extends Mode, T>(
     [Symbol.for("Deno.customInspect")]() {
       return `option(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
     },
+    ...(valueParser != null && typeof valueParser.normalize === "function"
+      ? {
+        normalizeValue(
+          value: T | boolean,
+        ): T | boolean {
+          if (typeof value === "boolean") return value;
+          return (valueParser!.normalize as (v: T) => T)(value);
+        },
+      }
+      : {}),
   };
   // Define placeholder lazily to avoid triggering derived value parser
   // factory functions during parser construction.  Non-enumerable so that
@@ -1852,6 +1862,13 @@ export function argument<M extends Mode, T>(
     [Symbol.for("Deno.customInspect")]() {
       return `argument()`;
     },
+    ...(typeof valueParser.normalize === "function"
+      ? {
+        normalizeValue(value: T): T {
+          return (valueParser.normalize as (v: T) => T)(value);
+        },
+      }
+      : {}),
   };
   // Define placeholder lazily to avoid triggering derived value parser
   // factory functions during parser construction.  Non-enumerable so that

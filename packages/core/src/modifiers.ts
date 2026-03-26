@@ -254,6 +254,16 @@ export function optional<M extends Mode, TValue, TState>(
         ),
       }
       : {}),
+    // Forward value normalization from inner parser so that withDefault()
+    // can normalize defaults through optional() wrappers.
+    ...(typeof parser.normalizeValue === "function"
+      ? {
+        normalizeValue(value: TValue | undefined): TValue | undefined {
+          if (value == null) return value;
+          return parser.normalizeValue!(value);
+        },
+      }
+      : {}),
     parse(context: ParserContext<[TState] | undefined>) {
       return dispatchByMode(
         parser.$mode,
@@ -598,6 +608,16 @@ export function withDefault<
         ),
       }
       : {}),
+    // Forward value normalization from inner parser.
+    ...(typeof parser.normalizeValue === "function"
+      ? {
+        normalizeValue(value: TValue | TDefault): TValue | TDefault {
+          return parser.normalizeValue!(
+            value as TValue,
+          ) as TValue | TDefault;
+        },
+      }
+      : {}),
     parse(context: ParserContext<[TState] | undefined>) {
       return dispatchByMode(
         parser.$mode,
@@ -606,6 +626,19 @@ export function withDefault<
       );
     },
     complete(state: [TState] | undefined) {
+      // Evaluate the default value (immediate or lazy) and normalize it
+      // through the inner parser's value normalizer when available.
+      function evaluateDefault(): TDefault {
+        const raw = typeof defaultValue === "function"
+          ? (defaultValue as () => TDefault)()
+          : defaultValue;
+        return typeof parser.normalizeValue === "function"
+          ? parser.normalizeValue(
+            raw as unknown as TValue,
+          ) as unknown as TDefault
+          : raw;
+      }
+
       if (!Array.isArray(state)) {
         // If inner parser transforms the dependency value (e.g., map()),
         // we need to delegate to see if the chain actually wants to register.
@@ -632,9 +665,7 @@ export function withDefault<
             // with transforms since they break the dependency chain)
             if (isDependencySourceState(res)) {
               try {
-                const value = typeof defaultValue === "function"
-                  ? (defaultValue as () => TDefault)()
-                  : defaultValue;
+                const value = evaluateDefault();
                 return createDependencySourceState(
                   { success: true, value },
                   res[dependencyId],
@@ -652,9 +683,7 @@ export function withDefault<
             // returned undefined). Return our default value WITHOUT registering
             // the dependency.
             try {
-              const value = typeof defaultValue === "function"
-                ? (defaultValue as () => TDefault)()
-                : defaultValue;
+              const value = evaluateDefault();
               return { success: true, value };
             } catch (error) {
               return {
@@ -671,9 +700,7 @@ export function withDefault<
         // wrapped dependency source, we should register with the default value.
         if (isWrappedDependencySource(parser)) {
           try {
-            const value = typeof defaultValue === "function"
-              ? (defaultValue as () => TDefault)()
-              : defaultValue;
+            const value = evaluateDefault();
             const pendingState = parser[wrappedDependencySourceMarker];
             return createDependencySourceState(
               { success: true, value },
@@ -716,9 +743,7 @@ export function withDefault<
         }
         // No wrapped dependency source - just return the default value.
         try {
-          const value = typeof defaultValue === "function"
-            ? (defaultValue as () => TDefault)()
-            : defaultValue;
+          const value = evaluateDefault();
           return { success: true, value };
         } catch (error) {
           return {
@@ -755,9 +780,7 @@ export function withDefault<
             // (but this shouldn't normally happen since transforms break the chain)
             if (isDependencySourceState(res)) {
               try {
-                const value = typeof defaultValue === "function"
-                  ? (defaultValue as () => TDefault)()
-                  : defaultValue;
+                const value = evaluateDefault();
                 return createDependencySourceState(
                   { success: true, value },
                   res[dependencyId],
@@ -774,9 +797,7 @@ export function withDefault<
             // Inner parser didn't return a DependencySourceState. Return default
             // value WITHOUT registering the dependency.
             try {
-              const value = typeof defaultValue === "function"
-                ? (defaultValue as () => TDefault)()
-                : defaultValue;
+              const value = evaluateDefault();
               return { success: true, value };
             } catch (error) {
               return {
@@ -792,9 +813,7 @@ export function withDefault<
         // Inner parser does NOT transform the dependency value (e.g., optional()).
         // Register the dependency with default value.
         try {
-          const value = typeof defaultValue === "function"
-            ? (defaultValue as () => TDefault)()
-            : defaultValue;
+          const value = evaluateDefault();
           // Return a DependencySourceState with the default value so that
           // dependency resolution can find this value
           return createDependencySourceState(

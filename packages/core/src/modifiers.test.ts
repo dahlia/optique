@@ -33,7 +33,9 @@ import { parse, type Parser, type Suggestion } from "@optique/core/parser";
 import { argument, constant, flag, option } from "@optique/core/primitives";
 import {
   choice,
+  domain,
   integer,
+  macAddress,
   string,
   type ValueParser,
   type ValueParserResult,
@@ -1413,6 +1415,38 @@ describe("withDefault", () => {
     assert.ok(
       suggestions.some((s) => s.kind === "literal" && s.text === "yaml"),
     );
+  });
+
+  it("should normalize default values through the value parser", () => {
+    const mac = macAddress({ case: "lower", outputSeparator: ":" });
+    const parser = withDefault(
+      option("--mac", mac),
+      "AA-BB-CC-DD-EE-FF",
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "aa:bb:cc:dd:ee:ff");
+    }
+  });
+
+  it("should normalize default values for domain with lowercase", () => {
+    const dom = domain({ lowercase: true });
+    const parser = withDefault(option("--domain", dom), "Example.COM");
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "example.com");
+    }
+  });
+
+  it("should not normalize when value parser has no normalize", () => {
+    const parser = withDefault(option("--name", string()), "Hello");
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "Hello");
+    }
   });
 });
 
