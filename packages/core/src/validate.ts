@@ -129,16 +129,6 @@ export function validateCommandNames(
 }
 
 /**
- * Validates a program name at runtime.
- *
- * Program names may contain spaces (e.g., file paths), but must not be empty,
- * whitespace-only, or contain control characters.
- *
- * @param programName The program name to validate.
- * @throws {TypeError} If the value is not a string, is empty,
- *         whitespace-only, or contains control characters.
- */
-/**
  * A meta entry describes one active meta feature for collision checking.
  *
  * The tuple elements are:
@@ -335,6 +325,16 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/**
+ * Validates a program name at runtime.
+ *
+ * Program names may contain spaces (e.g., file paths), but must not be empty,
+ * whitespace-only, or contain control characters.
+ *
+ * @param programName The program name to validate.
+ * @throws {TypeError} If the value is not a string, is empty,
+ *         whitespace-only, or contains control characters.
+ */
 export function validateProgramName(programName: string): void {
   if (typeof programName !== "string") {
     throw new TypeError("Program name must be a string.");

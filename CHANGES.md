@@ -121,6 +121,12 @@ To be released.
     literal values from `conditional()` discriminators.  The completion
     option's `name=value` prefix form is also detected.  [[#227], [#736]]
 
+ -  Added `extractLeadingOptionNames()`, `extractLeadingCommandNames()`, and
+    `extractLiteralValues()` to *@optique/core/usage*.  `extractOptionNames()`
+    and `extractCommandNames()` now accept an optional `includeHidden`
+    parameter for callers that need `hidden: true` terms included in the
+    result.  [[#227], [#736]]
+
  -  *Breaking change:* Added `placeholder` property to `ValueParser` interface
     (required) and `Parser` interface (optional).  Every value parser now
     provides a type-appropriate stand-in value (e.g., `""` for `string()`, `1`

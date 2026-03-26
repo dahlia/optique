@@ -369,7 +369,10 @@ export function extractCommandNames(
  * appearing before commands due to priority sorting) and false negatives
  * (e.g., options after commands that are actually parallel peers).
  * The proper fix is to use `Parser.leadingNames` instead of usage-tree
- * analysis; see https://github.com/dahlia/optique/issues/735
+ * analysis.  This also cannot detect `conditional(argument(...))`
+ * discriminator values, which never appear in the usage tree.
+ * See https://github.com/dahlia/optique/issues/734 and
+ * https://github.com/dahlia/optique/issues/735
  *
  * @param usage The usage description to extract leading option names from.
  * @param includeHidden Whether to include fully hidden options
@@ -434,8 +437,9 @@ export function extractLeadingOptionNames(
  * `exclusive` containers, since they represent alternatives or optional
  * wrappers at the same token position.
  *
- * Known limitation: this function has the same usage-tree ordering caveat
- * as {@link extractLeadingOptionNames}.  See
+ * Known limitation: this function has the same usage-tree ordering and
+ * `conditional(argument(...))` caveats as {@link extractLeadingOptionNames}.
+ * See https://github.com/dahlia/optique/issues/734 and
  * https://github.com/dahlia/optique/issues/735
  *
  * @param usage The usage description to extract leading command names from.

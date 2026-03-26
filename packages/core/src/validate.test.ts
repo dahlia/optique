@@ -341,7 +341,7 @@ describe("validateCommandNames", () => {
 });
 
 describe("validateMetaNameCollisions", () => {
-  const e = new Set<string>();
+  const e: ReadonlySet<string> = new Set<string>();
   // Helper: build UserParserNames with same sets for leading and all
   function u(
     opts: ReadonlySet<string> = e,
