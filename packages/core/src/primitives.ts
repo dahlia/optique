@@ -1184,21 +1184,18 @@ export function option<M extends Mode, T>(
   };
   // Define normalizeValue as non-enumerable so that ...parser spread in
   // map() does not propagate the inner normalizer to the mapped type.
-  // Uses parse() instead of normalize() to ensure validation: defaults
-  // that would fail parse() are returned unchanged (sentinel defaults).
-  if (
-    valueParser != null && typeof valueParser.normalize === "function" &&
-    valueParser.$mode === "sync"
-  ) {
-    const syncValueParser = valueParser as ValueParser<"sync", T>;
+  // Delegates to ValueParser.normalize() directly so that custom parsers
+  // with lossy format() or non-string types are handled correctly.
+  if (valueParser != null && typeof valueParser.normalize === "function") {
+    const normalize = valueParser.normalize.bind(valueParser);
     Object.defineProperty(result, "normalizeValue", {
       value(v: T | boolean): T | boolean {
         if (typeof v === "boolean") return v;
-        const input = typeof v === "string"
-          ? v
-          : syncValueParser.format(v as T);
-        const parsed = syncValueParser.parse(input);
-        return parsed.success ? parsed.value : v;
+        try {
+          return normalize(v as T);
+        } catch {
+          return v;
+        }
       },
       configurable: true,
       enumerable: false,
@@ -1877,17 +1874,15 @@ export function argument<M extends Mode, T>(
   };
   // Define normalizeValue as non-enumerable so that ...parser spread in
   // map() does not propagate the inner normalizer to the mapped type.
-  // Uses parse() instead of normalize() to ensure validation.
-  if (
-    typeof valueParser.normalize === "function" &&
-    valueParser.$mode === "sync"
-  ) {
-    const syncVP = valueParser as ValueParser<"sync", T>;
+  if (typeof valueParser.normalize === "function") {
+    const normalize = valueParser.normalize.bind(valueParser);
     Object.defineProperty(result, "normalizeValue", {
       value(v: T): T {
-        const input = typeof v === "string" ? v : syncVP.format(v);
-        const parsed = syncVP.parse(input);
-        return parsed.success ? parsed.value : v;
+        try {
+          return normalize(v);
+        } catch {
+          return v;
+        }
       },
       configurable: true,
       enumerable: false,

@@ -1509,8 +1509,9 @@ describe("withDefault", () => {
     }
   });
 
-  it("should not normalize defaults that fail parser validation", () => {
-    // domain with allowedTlds: ["com"] should reject "Example.NET"
+  it("should normalize defaults even with restrictive parser options", () => {
+    // normalize() applies canonicalization without full validation,
+    // so allowedTlds is not checked — only structural validity
     const parser = withDefault(
       option(
         "--domain",
@@ -1521,12 +1522,11 @@ describe("withDefault", () => {
     const result = parse(parser, []);
     assert.ok(result.success);
     if (result.success) {
-      // "Example.NET" fails parse (TLD not allowed), so preserved unchanged
-      assert.equal(result.value, "Example.NET");
+      assert.equal(result.value, "example.net");
     }
   });
 
-  it("should not normalize MAC defaults with wrong separator", () => {
+  it("should normalize MAC defaults per configured options", () => {
     const parser = withDefault(
       option("--mac", macAddress({ separator: "none" })),
       "aa:bb:cc:dd:ee:ff",
@@ -1534,8 +1534,8 @@ describe("withDefault", () => {
     const result = parse(parser, []);
     assert.ok(result.success);
     if (result.success) {
-      // "aa:bb:cc:dd:ee:ff" fails parse (separator: "none"), preserved
-      assert.equal(result.value, "aa:bb:cc:dd:ee:ff");
+      // normalize() applies the configured separator (none)
+      assert.equal(result.value, "aabbccddeeff");
     }
   });
 
