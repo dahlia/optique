@@ -4893,7 +4893,8 @@ export function macAddress(
   function normalizeMac(value: string): string {
     // Guard against sentinel defaults of incompatible runtime type
     // (e.g., { kind: "local" } cast as string via withDefault).
-    if (typeof value !== "string") return String(value);
+    // Fall back to metavar for help-text display.
+    if (typeof value !== "string") return metavar;
     let octets: string[];
     let detectedSep: ":" | "-" | "." | "none";
     if (value.includes(":")) {
@@ -5392,7 +5393,7 @@ export function domain(
       return { success: true, value: result };
     },
     format(value: string): string {
-      if (typeof value !== "string") return String(value);
+      if (typeof value !== "string") return metavar;
       if (!lowercase) return value;
       // Only lowercase values that look like domains (enough labels).
       // Sentinel strings like "LOCAL" are returned unchanged.
@@ -5639,7 +5640,7 @@ export function ipv6(
       return { success: true, value: normalized };
     },
     format(value: string): string {
-      if (typeof value !== "string") return String(value);
+      if (typeof value !== "string") return metavar;
       return parseAndNormalizeIpv6(value) ?? value;
     },
     normalize(value: string): string {
@@ -6169,7 +6170,7 @@ export function ip(
       return { success: false, error: msg };
     },
     format(value: string): string {
-      if (typeof value !== "string") return String(value);
+      if (typeof value !== "string") return metavar;
       // IPv4 addresses are already canonical; normalize IPv6 addresses
       return parseAndNormalizeIpv6(value) ?? value;
     },
@@ -6731,7 +6732,7 @@ export function cidr(
     },
     format(value: CidrValue): string {
       if (typeof value !== "object" || value == null || !("address" in value)) {
-        return String(value);
+        return metavar;
       }
       const normalizedAddr = value.version === 6
         ? (parseAndNormalizeIpv6(value.address) ?? value.address)
