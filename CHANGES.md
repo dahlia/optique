@@ -241,6 +241,11 @@ To be released.
     second argument directly, making `getDocPage(parser, { annotations })`
     work without requiring an explicit empty args array.  [[#480], [#739]]
 
+ -  Fixed `getDocPage()`, `getDocPageSync()`, and `getDocPageAsync()` hanging
+    when a parser returns success without consuming input.  The functions now
+    detect no-progress iterations and break out of the loop, matching the
+    existing guards in `parse()` and `suggest()`.  [[#493], [#740]]
+
  -  Fixed `normalizeUsage()` reusing leaf `UsageTerm` objects by reference,
     which caused mutations of the normalized result to propagate back to the
     original usage tree.  [[#504], [#722]]
@@ -1094,6 +1099,7 @@ To be released.
 [#485]: https://github.com/dahlia/optique/issues/485
 [#488]: https://github.com/dahlia/optique/issues/488
 [#490]: https://github.com/dahlia/optique/pull/490
+[#493]: https://github.com/dahlia/optique/issues/493
 [#494]: https://github.com/dahlia/optique/issues/494
 [#497]: https://github.com/dahlia/optique/issues/497
 [#500]: https://github.com/dahlia/optique/issues/500
@@ -1236,6 +1242,7 @@ To be released.
 [#737]: https://github.com/dahlia/optique/pull/737
 [#738]: https://github.com/dahlia/optique/pull/738
 [#739]: https://github.com/dahlia/optique/pull/739
+[#740]: https://github.com/dahlia/optique/pull/740
 
 ### @optique/config
 
