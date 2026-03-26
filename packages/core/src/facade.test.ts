@@ -1276,11 +1276,12 @@ describe("runParser", () => {
       const parser = command("help", object({}));
       assert.throws(
         () =>
-          runParser(parser, "test", ["help"], {
+          runParser(parser, "test", [], {
             help: {
               command: true,
               onShow: () => "HELP",
             },
+            stderr: () => {},
           }),
         {
           name: "TypeError",
@@ -1389,11 +1390,12 @@ describe("runParser", () => {
       const parser = command("version", object({}));
       assert.throws(
         () =>
-          runParser(parser, "test", ["version"], {
+          runParser(parser, "test", [], {
             version: {
               command: true,
               value: "1.0.0",
             },
+            stderr: () => {},
           }),
         {
           name: "TypeError",
@@ -1406,9 +1408,10 @@ describe("runParser", () => {
       const parser = command("completion", object({}));
       assert.throws(
         () =>
-          runParser(parser, "test", ["completion"], {
+          runParser(parser, "test", [], {
             help: { option: true },
             completion: { command: true },
+            stderr: () => {},
           }),
         {
           name: "TypeError",
@@ -1520,11 +1523,12 @@ describe("runParser", () => {
       const parser = command("--help", object({}));
       assert.throws(
         () =>
-          runParser(parser, "test", ["--help"], {
+          runParser(parser, "test", [], {
             help: {
               option: true,
               onShow: () => "HELP",
             },
+            stderr: () => {},
           }),
         {
           name: "TypeError",
@@ -1565,15 +1569,31 @@ describe("runParser", () => {
       );
       assert.throws(
         () =>
-          runParser(parser, "test", ["tool", "--help"], {
+          runParser(parser, "test", [], {
             help: {
               option: true,
               onShow: () => "HELP",
             },
+            stderr: () => {},
           }),
         {
           name: "TypeError",
           message: /user.*"--help".*help option/i,
+        },
+      );
+    });
+
+    it("should reject user option colliding with completion prefix form", () => {
+      const parser = object({ bad: flag("--completion=bash") });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            completion: { option: true },
+            stderr: () => {},
+          }),
+        {
+          name: "TypeError",
+          message: /user.*"--completion=bash".*completion option/i,
         },
       );
     });
