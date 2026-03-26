@@ -115,32 +115,35 @@ To be released.
     parser, making user-defined commands or options unreachable.
 
     The check is position-aware: command-form meta features (which only
-    match at `args[0]`) are compared against leading user names, while
+    match at `args[0]`) are compared against `Parser.leadingNames`, while
     option-form meta features (whose lenient scanners match anywhere in
     `argv`) are compared against all user names at every depth, including
     literal values from `conditional()` discriminators.  The completion
     option's `name=value` prefix form is also detected.  [[#227], [#736]]
 
- -  Added `extractLeadingOptionNames()`, `extractLeadingCommandNames()`, and
-    `extractLiteralValues()` to *@optique/core/usage*.  `extractOptionNames()`
-    and `extractCommandNames()` now accept an optional `includeHidden`
-    parameter for callers that need `hidden: true` terms included in the
-    result.  [[#227], [#736]]
+ -  Added `leadingNames` property to the `Parser` interface.  Each
+    combinator now reports which names (option names, command names) it
+    could match at the first buffer position, computed from its structural
+    semantics rather than the display-oriented `usage` tree.  This replaces
+    the usage-tree-based `extractLeadingOptionNames()`,
+    `extractLeadingCommandNames()`, and `extractLeadingLiteralValues()`,
+    which produced incorrect results for `tuple()` (priority-based
+    sorting), `command()` (inner usage spreading), and `conditional()`
+    (missing literal terms for argument discriminators).  [[#735]]
 
- -  Added `extractLeadingLiteralValues()` to *@optique/core/usage* and
-    `leadingLiterals` to `UserParserNames`.  Meta command collision
-    detection now checks leading literal values (position-aware: command-form
-    meta features check leading literals, option-form check all literals).
-    Argument-based conditional discriminators remain undetected because
-    `map()` is invisible in the usage tree; the proper fix requires
-    direct branch key communication.  [[#734], [#738]]
+ -  Simplified `UserParserNames` interface: replaced `leadingOptions`,
+    `leadingCommands`, and `leadingLiterals` with a single `leadingNames`
+    set.  [[#735]]
+
+ -  Added `extractLiteralValues()` to *@optique/core/usage*.
+    `extractOptionNames()` and `extractCommandNames()` now accept an
+    optional `includeHidden` parameter for callers that need `hidden: true`
+    terms included in the result.  [[#227], [#736]]
 
  -  Added optional `optionValue` property to the `literal` variant of
     `UsageTerm`.  When `true`, the literal was derived from an option's
     metavar by `conditional()` and represents an option value rather than
-    a standalone positional token.  `extractLeadingLiteralValues()` uses
-    this to distinguish option values from real positional literals.
-    [[#734], [#738]]
+    a standalone positional token.  [[#734], [#738]]
 
  -  *Breaking change:* Added `placeholder` property to `ValueParser` interface
     (required) and `Parser` interface (optional).  Every value parser now
@@ -1238,6 +1241,7 @@ To be released.
 [#732]: https://github.com/dahlia/optique/pull/732
 [#733]: https://github.com/dahlia/optique/pull/733
 [#734]: https://github.com/dahlia/optique/issues/734
+[#735]: https://github.com/dahlia/optique/issues/735
 [#736]: https://github.com/dahlia/optique/pull/736
 [#737]: https://github.com/dahlia/optique/pull/737
 [#738]: https://github.com/dahlia/optique/pull/738
