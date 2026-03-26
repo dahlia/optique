@@ -1190,7 +1190,6 @@ export function option<M extends Mode, T>(
     const normalize = valueParser.normalize.bind(valueParser);
     Object.defineProperty(result, "normalizeValue", {
       value(v: T | boolean): T | boolean {
-        if (typeof v === "boolean") return v;
         try {
           return normalize(v as T);
         } catch {
