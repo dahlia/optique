@@ -232,6 +232,24 @@ export function validateMetaNameCollisions(
       nameToLabel.set(name, label);
     }
   }
+  // Also check prefix-based meta/meta collisions: if a prefixMatch
+  // entry (completion option) claims "name=...", other meta names
+  // starting with that prefix would be intercepted at runtime.
+  for (const [, label, names, prefixMatch] of metaEntries) {
+    if (!prefixMatch) continue;
+    for (const name of names) {
+      const prefix = name + "=";
+      for (const [otherName, otherLabel] of nameToLabel) {
+        if (otherLabel === label) continue;
+        if (otherName.startsWith(prefix)) {
+          throw new TypeError(
+            `Name "${otherName}" (${otherLabel}) is shadowed by ` +
+              `${label} (prefix "${prefix}").`,
+          );
+        }
+      }
+    }
+  }
 
   // 3. Check for collisions between meta features and user parser.
   //    The scope depends on the meta feature kind:

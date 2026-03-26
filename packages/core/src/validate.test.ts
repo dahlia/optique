@@ -467,6 +467,30 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
+  // Meta-vs-meta prefix collision tests
+  it("should throw when meta command name matches prefixMatch meta option", () => {
+    // help.command.names = ["--completion=bash"] + completion.option enabled
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(u(), [
+          ["command", "help command", ["--completion=bash"]],
+          ["option", "completion option", ["--completion"], true],
+        ]),
+      {
+        name: "TypeError",
+        message: /--completion=bash.*help command.*completion option/i,
+      },
+    );
+  });
+
+  it("should not prefix-match between meta features without prefixMatch", () => {
+    // help and version don't use prefix matching
+    validateMetaNameCollisions(u(), [
+      ["option", "help option", ["--help"]],
+      ["command", "version command", ["--help=verbose"]],
+    ]);
+  });
+
   // Cross-namespace collision tests
   it("should throw when meta command name collides with meta option name", () => {
     assert.throws(
