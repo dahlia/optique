@@ -4244,7 +4244,7 @@ export function object<
     return { ...error, success: false };
   };
 
-  return {
+  const objectParser = {
     $mode: combinedMode,
     $valueType: [],
     $stateType: [],
@@ -4716,6 +4716,46 @@ export function object<
     { readonly [K in keyof T]: unknown },
     { readonly [K in keyof T]: unknown }
   >;
+
+  // Build composite normalizeValue from field parsers that have normalizers.
+  const fieldNormalizers: [string, (v: unknown) => unknown][] = [];
+  for (const [key, fieldParser] of parserPairs) {
+    if (typeof fieldParser.normalizeValue === "function") {
+      fieldNormalizers.push([
+        key as string,
+        fieldParser.normalizeValue.bind(fieldParser),
+      ]);
+    }
+  }
+  if (fieldNormalizers.length > 0) {
+    type ObjType = { readonly [K in keyof T]: unknown };
+    Object.defineProperty(objectParser, "normalizeValue", {
+      value(obj: ObjType): ObjType {
+        if (typeof obj !== "object" || obj == null) return obj;
+        let changed = false;
+        const result = { ...obj } as Record<string, unknown>;
+        for (const [key, normalize] of fieldNormalizers) {
+          if (key in result) {
+            try {
+              const original = result[key];
+              const normalized = normalize(original);
+              if (normalized !== original) {
+                result[key] = normalized;
+                changed = true;
+              }
+            } catch {
+              // best-effort; skip fields that fail normalization
+            }
+          }
+        }
+        return (changed ? result : obj) as ObjType;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+
+  return objectParser;
 }
 
 /**

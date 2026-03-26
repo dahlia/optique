@@ -1563,6 +1563,20 @@ describe("withDefault", () => {
       assert.deepEqual(result.value, ["example.com"]);
     }
   });
+
+  it("should normalize defaults through object() wrappers", () => {
+    const parser = withDefault(
+      object({
+        domain: option("--domain", domain({ lowercase: true })),
+      }),
+      { domain: "Example.COM" },
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { domain: "example.com" });
+    }
+  });
 });
 
 describe("map", () => {
