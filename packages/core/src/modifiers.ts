@@ -1643,6 +1643,18 @@ export function multiple<M extends Mode, TValue, TState>(
     configurable: true,
     enumerable: false,
   });
+  // Forward value normalization, mapping the inner normalizer over each
+  // array element.  Non-enumerable so map()'s spread does not propagate it.
+  if (typeof parser.normalizeValue === "function") {
+    const innerNormalize = parser.normalizeValue.bind(parser);
+    Object.defineProperty(resultParser, "normalizeValue", {
+      value(values: readonly TValue[]): readonly TValue[] {
+        return values.map((v) => innerNormalize(v));
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
 
   return resultParser;
 }

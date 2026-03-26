@@ -5380,9 +5380,20 @@ export function domain(
       return { success: true, value: result };
     },
     format(value: string): string {
-      return lowercase ? value.toLowerCase() : value;
+      if (!lowercase) return value;
+      // Only lowercase values that look like domains (enough labels).
+      // Sentinel strings like "LOCAL" are returned unchanged.
+      return value.split(".").length >= minLabels ? value.toLowerCase() : value;
     },
-    ...(lowercase ? { normalize: (value: string) => value.toLowerCase() } : {}),
+    ...(lowercase
+      ? {
+        normalize(value: string): string {
+          return value.split(".").length >= minLabels
+            ? value.toLowerCase()
+            : value;
+        },
+      }
+      : {}),
   };
 }
 /**

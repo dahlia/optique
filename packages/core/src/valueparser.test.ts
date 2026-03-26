@@ -13972,6 +13972,12 @@ describe("ValueParser.normalize()", () => {
     assert.equal(dom.normalize!("Example.COM"), "example.com");
   });
 
+  it("domain().normalize() preserves non-domain sentinels", () => {
+    const dom = domain({ lowercase: true });
+    assert.equal(dom.normalize!("LOCAL"), "LOCAL");
+    assert.equal(dom.normalize!("AUTO"), "AUTO");
+  });
+
   it("domain() has no normalize when lowercase is false", () => {
     const dom = domain();
     assert.equal(dom.normalize, undefined);

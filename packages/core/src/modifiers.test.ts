@@ -1496,6 +1496,30 @@ describe("withDefault", () => {
       assert.equal(result.value, "example.com");
     }
   });
+
+  it("should preserve non-domain sentinels in defaults", () => {
+    const parser = withDefault(
+      option("--domain", domain({ lowercase: true })),
+      "LOCAL",
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "LOCAL");
+    }
+  });
+
+  it("should normalize defaults through multiple() wrappers", () => {
+    const parser = withDefault(
+      multiple(option("--domain", domain({ lowercase: true }))),
+      ["Example.COM"],
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["example.com"]);
+    }
+  });
 });
 
 describe("map", () => {
