@@ -525,8 +525,8 @@ function defaultSectionOrder(a: DocSection, b: DocSection): number {
  * @returns A formatted string representation of the documentation page
  * @throws {TypeError} If `programName` is not a string, is empty,
  * whitespace-only, or contains control characters, if any non-empty
- * section's title is empty, whitespace-only, or contains a CR or LF
- * character, or if `maxWidth` is not a finite integer.
+ * section's title is not a string, is empty, whitespace-only, or contains
+ * control characters, or if `maxWidth` is not a finite integer.
  * @throws {RangeError} If any entry needs a description column and `maxWidth`
  * is too small to fit the minimum layout (less than `termIndent + 4`), or if
  * `showChoices.maxItems` is less than `1`.
