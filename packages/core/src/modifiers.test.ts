@@ -1509,9 +1509,9 @@ describe("withDefault", () => {
     }
   });
 
-  it("should normalize defaults even with restrictive parser options", () => {
-    // normalize() applies canonicalization without full validation,
-    // so allowedTlds is not checked — only structural validity
+  it("should preserve defaults that fail parser validation", () => {
+    // normalize() uses parse() internally, so defaults that would
+    // fail validation are returned unchanged
     const parser = withDefault(
       option(
         "--domain",
@@ -1522,11 +1522,11 @@ describe("withDefault", () => {
     const result = parse(parser, []);
     assert.ok(result.success);
     if (result.success) {
-      assert.equal(result.value, "example.net");
+      assert.equal(result.value, "Example.NET");
     }
   });
 
-  it("should normalize MAC defaults per configured options", () => {
+  it("should preserve MAC defaults with wrong separator", () => {
     const parser = withDefault(
       option("--mac", macAddress({ separator: "none" })),
       "aa:bb:cc:dd:ee:ff",
@@ -1534,8 +1534,9 @@ describe("withDefault", () => {
     const result = parse(parser, []);
     assert.ok(result.success);
     if (result.success) {
-      // normalize() applies the configured separator (none)
-      assert.equal(result.value, "aabbccddeeff");
+      // parse() rejects colon-separated input with separator: "none",
+      // so the default is preserved unchanged
+      assert.equal(result.value, "aa:bb:cc:dd:ee:ff");
     }
   });
 

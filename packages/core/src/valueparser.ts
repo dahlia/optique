@@ -4943,7 +4943,7 @@ export function macAddress(
     return joinOctets(octets, sep);
   }
 
-  return {
+  const parserObj: ValueParser<"sync", string> = {
     $mode: "sync",
     metavar,
     get placeholder() {
@@ -5035,12 +5035,20 @@ export function macAddress(
       return { success: true, value: joinOctets(octets, finalSeparator) };
     },
     format: normalizeMac,
-    normalize(value: string): string {
-      // Return non-string sentinel defaults unchanged (not stringified).
-      if (typeof value !== "string") return value;
-      return normalizeMac(value);
-    },
   };
+  // normalize uses the full parse() pipeline for validation so that
+  // values parse() would reject are returned unchanged.
+  const macParser = parserObj;
+  Object.defineProperty(parserObj, "normalize", {
+    value(v: string): string {
+      if (typeof v !== "string") return v;
+      const result = macParser.parse(v);
+      return result.success ? result.value : v;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  return parserObj;
 }
 
 /**
@@ -5256,7 +5264,7 @@ export function domain(
   const subdomainsNotAllowed = options?.errors?.subdomainsNotAllowed;
   const tldNotAllowed = options?.errors?.tldNotAllowed;
 
-  return {
+  const domainParserObj: ValueParser<"sync", string> = {
     $mode: "sync",
     metavar,
     placeholder: options?.placeholder ??
@@ -5401,17 +5409,23 @@ export function domain(
       // Sentinel strings like "LOCAL" are returned unchanged.
       return value.split(".").length >= minLabels ? value.toLowerCase() : value;
     },
-    ...(lowercase
-      ? {
-        normalize(value: string): string {
-          if (typeof value !== "string") return value;
-          return value.split(".").length >= minLabels
-            ? value.toLowerCase()
-            : value;
-        },
-      }
-      : {}),
   };
+  // normalize uses the full parse() pipeline for validation so that
+  // values parse() would reject (e.g., "A..B", disallowed TLDs) are
+  // returned unchanged.
+  if (lowercase) {
+    const domParser = domainParserObj;
+    Object.defineProperty(domainParserObj, "normalize", {
+      value(v: string): string {
+        if (typeof v !== "string") return v;
+        const result = domParser.parse(v);
+        return result.success ? result.value : v;
+      },
+      configurable: true,
+      enumerable: true,
+    });
+  }
+  return domainParserObj;
 }
 /**
  * Options for configuring the IPv6 address value parser.
@@ -5537,7 +5551,7 @@ export function ipv6(
   const errors = options?.errors;
   const metavar = options?.metavar ?? "IPV6";
 
-  return {
+  const ipv6ParserObj: ValueParser<"sync", string> = {
     $mode: "sync",
     metavar,
     placeholder: allowZero ? "::" : allowLoopback ? "::1" : "2001:db8::1",
@@ -5645,11 +5659,20 @@ export function ipv6(
       if (typeof value !== "string") return metavar;
       return parseAndNormalizeIpv6(value) ?? value;
     },
-    normalize(value: string): string {
-      if (typeof value !== "string") return value;
-      return parseAndNormalizeIpv6(value) ?? value;
-    },
   };
+  // normalize uses the full parse() pipeline for validation so that
+  // values parse() would reject (e.g., loopback when allowLoopback is
+  // false) are returned unchanged.
+  Object.defineProperty(ipv6ParserObj, "normalize", {
+    value(v: string): string {
+      if (typeof v !== "string") return v;
+      const result = ipv6ParserObj.parse(v);
+      return result.success ? result.value : v;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  return ipv6ParserObj;
 }
 
 /**
@@ -6088,7 +6111,7 @@ export function ip(
     }
     : undefined;
 
-  return {
+  const ipParserObj: ValueParser<"sync", string> = {
     $mode: "sync",
     metavar,
     placeholder: version === 6
@@ -6176,11 +6199,17 @@ export function ip(
       // IPv4 addresses are already canonical; normalize IPv6 addresses
       return parseAndNormalizeIpv6(value) ?? value;
     },
-    normalize(value: string): string {
-      if (typeof value !== "string") return value;
-      return parseAndNormalizeIpv6(value) ?? value;
-    },
   };
+  Object.defineProperty(ipParserObj, "normalize", {
+    value(v: string): string {
+      if (typeof v !== "string") return v;
+      const result = ipParserObj.parse(v);
+      return result.success ? result.value : v;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  return ipParserObj;
 }
 
 /**
@@ -6466,7 +6495,7 @@ export function cidr(
     }
     : undefined;
 
-  return {
+  const cidrParserObj: ValueParser<"sync", CidrValue> = {
     $mode: "sync",
     metavar,
     get placeholder() {
@@ -6745,20 +6774,24 @@ export function cidr(
         : value.address;
       return `${normalizedAddr}/${value.prefix}`;
     },
-    normalize(value: CidrValue): CidrValue {
-      if (
-        typeof value !== "object" || value == null ||
-        !("address" in value) || !("prefix" in value) ||
-        !("version" in value)
-      ) {
-        return value;
-      }
-      if (value.version !== 6) return value;
-      const normalizedAddr = parseAndNormalizeIpv6(value.address);
-      if (normalizedAddr == null || normalizedAddr === value.address) {
-        return value;
-      }
-      return { ...value, address: normalizedAddr };
-    },
   };
+  Object.defineProperty(cidrParserObj, "normalize", {
+    value(v: CidrValue): CidrValue {
+      if (
+        typeof v !== "object" || v == null ||
+        !("address" in v) || !("prefix" in v) ||
+        !("version" in v)
+      ) {
+        return v;
+      }
+      // Use format→parse round-trip for full validation
+      const formatted = cidrParserObj.format(v);
+      if (formatted === metavar) return v;
+      const result = cidrParserObj.parse(formatted);
+      return result.success ? result.value : v;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  return cidrParserObj;
 }
