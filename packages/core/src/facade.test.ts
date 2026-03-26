@@ -1512,13 +1512,19 @@ describe("runParser", () => {
           serve: object({ dir: argument(string()) }),
         },
       );
-      runParser(parser, "myapp", ["serve", "foo"], {
+      let helpShown = false;
+      const result = runParser(parser, "myapp", ["serve", "foo"], {
         help: {
           command: true,
-          onShow: () => "HELP",
+          onShow: () => {
+            helpShown = true;
+            return "HELP";
+          },
         },
         stderr: () => {},
       });
+      assert.ok(!helpShown);
+      assert.notEqual(result, "HELP");
     });
 
     // P2: cross-namespace collision detection
