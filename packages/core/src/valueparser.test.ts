@@ -13889,6 +13889,17 @@ describe("format() for network-address value parsers", () => {
     assert.equal(mac.format("001a2b3c4d5e"), "001a2b3c4d5e");
   });
 
+  it("macAddress().format() pads shorthand octets correctly", () => {
+    const mac = macAddress();
+    assert.equal(mac.format("0:1:2:3:4:5"), "00:01:02:03:04:05");
+    assert.equal(mac.format("a:b:c:d:e:f"), "0a:0b:0c:0d:0e:0f");
+  });
+
+  it("macAddress().format() handles shorthand with outputSeparator", () => {
+    const mac = macAddress({ outputSeparator: "." });
+    assert.equal(mac.format("0:1:2:3:4:5"), "0001.0203.0405");
+  });
+
   it("macAddress() parse-format round-trips for all separator styles", () => {
     const mac = macAddress();
     for (
