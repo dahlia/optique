@@ -4915,6 +4915,8 @@ export function macAddress(
       octets = groups.flatMap((g) => [g.slice(0, 2), g.slice(2)]);
       detectedSep = ".";
     } else {
+      // No separator: require exactly 12 hex chars (matching parse's noneRegex)
+      if (value.length !== 12) return value;
       octets = [];
       for (let i = 0; i < value.length; i += 2) {
         octets.push(value.slice(i, i + 2));

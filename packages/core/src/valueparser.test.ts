@@ -13962,6 +13962,8 @@ describe("ValueParser.normalize()", () => {
       mac.normalize!("aaa:bbb:ccc:ddd:eee:fff"),
       "aaa:bbb:ccc:ddd:eee:fff",
     );
+    // 11-digit bare hex is invalid (need exactly 12) — should not be rewritten
+    assert.equal(mac.normalize!("aabbccddeef"), "aabbccddeef");
   });
 
   it("macAddress().format() preserves non-MAC strings unchanged", () => {
