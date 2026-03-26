@@ -983,7 +983,9 @@ function getDocPageSyncImpl(
   while (context.buffer.length > 0) {
     const result = parser.parse(context);
     if (!result.success) break;
+    const previousBuffer = context.buffer;
     context = result.next;
+    if (isBufferUnchanged(previousBuffer, context.buffer)) break;
   }
   return buildDocPage(parser, context, args);
 }
@@ -1007,7 +1009,9 @@ async function getDocPageAsyncImpl(
   while (context.buffer.length > 0) {
     const result = await parser.parse(context);
     if (!result.success) break;
+    const previousBuffer = context.buffer;
     context = result.next;
+    if (isBufferUnchanged(previousBuffer, context.buffer)) break;
   }
   return buildDocPage(parser, context, args);
 }
