@@ -235,13 +235,16 @@ export function validateMetaNameCollisions(
   // Also check prefix-based meta/meta collisions: if a prefixMatch
   // entry (completion option) claims "name=...", other meta names
   // starting with that prefix would be intercepted at runtime.
-  for (const [, label, names, prefixMatch] of metaEntries) {
+  for (let i = 0; i < metaEntries.length; i++) {
+    const [, label, names, prefixMatch] = metaEntries[i];
     if (!prefixMatch) continue;
     for (const name of names) {
       const prefix = name + "=";
-      for (const [otherName, otherLabel] of nameToLabel) {
-        if (otherLabel === label) continue;
-        if (otherName.startsWith(prefix)) {
+      for (let j = 0; j < metaEntries.length; j++) {
+        const [, otherLabel, otherNames] = metaEntries[j];
+        for (const otherName of otherNames) {
+          if (i === j && otherName === name) continue;
+          if (!otherName.startsWith(prefix)) continue;
           throw new TypeError(
             `Name "${otherName}" (${otherLabel}) is shadowed by ` +
               `${label} (prefix "${prefix}").`,

@@ -491,6 +491,25 @@ describe("validateMetaNameCollisions", () => {
     ]);
   });
 
+  it("should reject prefix-shadowing aliases within the same meta feature", () => {
+    // completion.option.names = ["--completion", "--completion=bash"]
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(u(), [
+          [
+            "option",
+            "completion option",
+            ["--completion", "--completion=bash"],
+            true,
+          ],
+        ]),
+      {
+        name: "TypeError",
+        message: /--completion=bash.*completion option.*prefix/i,
+      },
+    );
+  });
+
   // Cross-namespace collision tests
   it("should throw when meta command name collides with meta option name", () => {
     assert.throws(
