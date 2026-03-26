@@ -3402,14 +3402,24 @@ describe("extractLeadingLiteralValues", () => {
     assert.deepEqual(extractLeadingLiteralValues(usage), new Set(["help"]));
   });
 
-  it("should not collect literal that follows an option", () => {
-    // [option("--mode"), literal("help")] — the literal is an option
-    // value, not a standalone positional token at args[0].
+  it("should not collect option-value literal (tagged with optionValue)", () => {
+    // appendLiteralToUsage marks literals derived from option metavars
+    // with optionValue: true. These are option values, not positionals.
     const usage: Usage = [
       { type: "option", names: ["--mode"] },
-      { type: "literal", value: "help" },
+      { type: "literal", value: "help", optionValue: true },
     ];
     assert.deepEqual(extractLeadingLiteralValues(usage), new Set());
+  });
+
+  it("should collect standalone literal after a flag", () => {
+    // A literal after a flag (option without metavar) is a real
+    // positional token, not an option value.
+    const usage: Usage = [
+      { type: "option", names: ["--verbose"] },
+      { type: "literal", value: "help" },
+    ];
+    assert.deepEqual(extractLeadingLiteralValues(usage), new Set(["help"]));
   });
 
   it("should collect from exclusive branches", () => {
@@ -3432,11 +3442,11 @@ describe("extractLeadingLiteralValues", () => {
       terms: [
         [
           { type: "option", names: ["--mode"] },
-          { type: "literal", value: "help" },
+          { type: "literal", value: "help", optionValue: true },
         ],
         [
           { type: "option", names: ["--mode"] },
-          { type: "literal", value: "serve" },
+          { type: "literal", value: "serve", optionValue: true },
         ],
       ],
     }];

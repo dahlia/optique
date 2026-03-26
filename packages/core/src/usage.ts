@@ -215,6 +215,14 @@ export type UsageTerm =
      * The literal value that must be provided exactly as written.
      */
     readonly value: string;
+    /**
+     * When `true`, this literal was derived from an option's metavar by
+     * `appendLiteralToUsage()` in `conditional()` and represents an option
+     * value, not a standalone positional token.  Leading-position extractors
+     * use this to distinguish option values from real positional literals.
+     * @since 1.0.0
+     */
+    readonly optionValue?: boolean;
   }
   /**
    * A pass-through term, which represents unrecognized options that are
@@ -497,9 +505,10 @@ export function extractLeadingCommandNames(
  * scoped under that positional token.  It still recurses into `optional`,
  * `multiple`, and `exclusive` containers.
  *
- * Literals that immediately follow an `option` term are treated as option
- * values (e.g., from `conditional(option("--mode", …), { … })`), not as
- * standalone positional tokens, and are therefore skipped.
+ * Literals tagged with `optionValue: true` (produced by
+ * `appendLiteralToUsage()` when rewriting option metavars for
+ * `conditional()` discriminators) are skipped, because they represent
+ * option values rather than standalone positional tokens.
  *
  * Known limitation: this function has the same usage-tree ordering caveat
  * as {@link extractLeadingOptionNames}.
@@ -515,15 +524,14 @@ export function extractLeadingLiteralValues(usage: Usage): Set<string> {
 
   function collectLeading(terms: Usage): void {
     if (!terms || !Array.isArray(terms)) return;
-    let afterOption = false;
     for (const term of terms) {
       switch (term.type) {
         case "literal":
-          if (afterOption) {
+          if (term.optionValue) {
             // This literal is an option value (produced by
             // appendLiteralToUsage stripping an option's metavar),
-            // not a standalone positional token.
-            afterOption = false;
+            // not a standalone positional token.  It does not occupy
+            // a positional slot, so continue scanning siblings.
             break;
           }
           values.add(term.value);
@@ -531,28 +539,21 @@ export function extractLeadingLiteralValues(usage: Usage): Set<string> {
         case "command":
         case "argument":
           return; // positional token; stop scanning siblings
-        case "option":
-          afterOption = true;
-          break;
         case "optional":
           collectLeading(term.terms);
-          afterOption = false;
           break;
         case "multiple":
           collectLeading(term.terms);
-          afterOption = false;
           if (term.min > 0 && branchConsumesToken(term.terms)) return;
           break;
         case "exclusive":
           for (const branch of term.terms) {
             collectLeading(branch);
           }
-          afterOption = false;
           if (exclusiveConsumesToken(term.terms)) return;
           break;
         default:
-          afterOption = false;
-          break; // passthrough, ellipsis: skip, continue
+          break; // option, passthrough, ellipsis: skip, continue
       }
     }
   }

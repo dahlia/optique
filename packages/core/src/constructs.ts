@@ -7450,7 +7450,11 @@ export function conditional(
         // Add option without metavar, then add a literal term
         const { metavar: _, ...optionWithoutMetavar } = term;
         result.push(optionWithoutMetavar);
-        result.push({ type: "literal", value: literalValue });
+        result.push({
+          type: "literal",
+          value: literalValue,
+          optionValue: true,
+        });
       } else if (term.type === "optional") {
         result.push({
           ...term,
