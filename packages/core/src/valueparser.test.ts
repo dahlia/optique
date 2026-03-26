@@ -13882,12 +13882,33 @@ describe("format() for network-address value parsers", () => {
     assert.equal(mac.format("00:1a:2b:3c:4d:5e"), "001a2b3c4d5e");
   });
 
-  it("macAddress() parse-format round-trips", () => {
-    const mac = macAddress({
-      separator: "any",
-      outputSeparator: ".",
-      case: "upper",
-    });
+  it("macAddress().format() preserves separator when separator is any", () => {
+    const mac = macAddress();
+    assert.equal(mac.format("00-1a-2b-3c-4d-5e"), "00-1a-2b-3c-4d-5e");
+    assert.equal(mac.format("001a.2b3c.4d5e"), "001a.2b3c.4d5e");
+    assert.equal(mac.format("001a2b3c4d5e"), "001a2b3c4d5e");
+  });
+
+  it("macAddress() parse-format round-trips for all separator styles", () => {
+    const mac = macAddress();
+    for (
+      const input of [
+        "aa:bb:cc:dd:ee:ff",
+        "aa-bb-cc-dd-ee-ff",
+        "aabb.ccdd.eeff",
+        "aabbccddeeff",
+      ]
+    ) {
+      const parsed = mac.parse(input);
+      assert.ok(parsed.success);
+      if (parsed.success) {
+        assert.equal(mac.format(parsed.value), parsed.value);
+      }
+    }
+  });
+
+  it("macAddress() parse-format round-trips with outputSeparator", () => {
+    const mac = macAddress({ outputSeparator: ".", case: "upper" });
     const parsed = mac.parse("aa:bb:cc:dd:ee:ff");
     assert.ok(parsed.success);
     if (parsed.success) {

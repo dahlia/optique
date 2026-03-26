@@ -4963,7 +4963,23 @@ export function macAddress(
       for (let i = 0; i < hex.length; i += 2) {
         octets.push(hex.slice(i, i + 2).padStart(2, "0"));
       }
-      const sep = outputSeparator ?? (separator === "any" ? ":" : separator);
+      // Determine separator: explicit outputSeparator takes precedence;
+      // when separator is "any", detect from the value to preserve the
+      // style that parse() kept from the original input.
+      let sep: ":" | "-" | "." | "none";
+      if (outputSeparator != null) {
+        sep = outputSeparator;
+      } else if (separator !== "any") {
+        sep = separator;
+      } else if (value.includes(":")) {
+        sep = ":";
+      } else if (value.includes("-")) {
+        sep = "-";
+      } else if (value.includes(".")) {
+        sep = ".";
+      } else {
+        sep = "none";
+      }
       return joinOctets(octets, sep);
     },
   };
