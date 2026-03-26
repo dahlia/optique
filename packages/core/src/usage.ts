@@ -218,8 +218,12 @@ export type UsageTerm =
     /**
      * When `true`, this literal was derived from an option's metavar by
      * `appendLiteralToUsage()` in `conditional()` and represents an option
-     * value, not a standalone positional token.  Leading-position extractors
-     * use this to distinguish option values from real positional literals.
+     * value, not a standalone positional token.
+     * {@link extractLeadingLiteralValues} and the `skipOptionValueLiterals`
+     * mode of `branchConsumesToken()` use this to distinguish option values
+     * from real positional literals.  {@link extractLeadingOptionNames} and
+     * {@link extractLeadingCommandNames} intentionally still treat these
+     * literals as positional gates.
      * @since 1.0.0
      */
     readonly optionValue?: boolean;
