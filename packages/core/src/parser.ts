@@ -836,12 +836,33 @@ function findCommandInExclusive(
  * @returns A {@link DocPage} or `undefined`.
  * @since 0.9.0
  * @since 0.10.0 Added optional `options` parameter for annotations support.
+ * @since 1.0.0 Added overload accepting `options` as the second argument.
  */
 export function getDocPageSync(
   parser: Parser<"sync", unknown, unknown>,
-  args: readonly string[] = [],
+  options: ParseOptions,
+): DocPage | undefined;
+
+export function getDocPageSync(
+  parser: Parser<"sync", unknown, unknown>,
+  args?: readonly string[],
   options?: ParseOptions,
+): DocPage | undefined;
+
+export function getDocPageSync(
+  parser: Parser<"sync", unknown, unknown>,
+  argsOrOptions?: readonly string[] | ParseOptions,
+  optionsParam?: ParseOptions,
 ): DocPage | undefined {
+  let args: readonly string[];
+  let options: ParseOptions | undefined;
+  if (Array.isArray(argsOrOptions)) {
+    args = argsOrOptions;
+    options = optionsParam;
+  } else {
+    args = [];
+    options = argsOrOptions as ParseOptions | undefined;
+  }
   return getDocPageSyncImpl(parser, args, options);
 }
 
@@ -858,12 +879,33 @@ export function getDocPageSync(
  * @returns A Promise of {@link DocPage} or `undefined`.
  * @since 0.9.0
  * @since 0.10.0 Added optional `options` parameter for annotations support.
+ * @since 1.0.0 Added overload accepting `options` as the second argument.
  */
 export function getDocPageAsync(
   parser: Parser<Mode, unknown, unknown>,
-  args: readonly string[] = [],
+  options: ParseOptions,
+): Promise<DocPage | undefined>;
+
+export function getDocPageAsync(
+  parser: Parser<Mode, unknown, unknown>,
+  args?: readonly string[],
   options?: ParseOptions,
+): Promise<DocPage | undefined>;
+
+export function getDocPageAsync(
+  parser: Parser<Mode, unknown, unknown>,
+  argsOrOptions?: readonly string[] | ParseOptions,
+  optionsParam?: ParseOptions,
 ): Promise<DocPage | undefined> {
+  let args: readonly string[];
+  let options: ParseOptions | undefined;
+  if (Array.isArray(argsOrOptions)) {
+    args = argsOrOptions;
+    options = optionsParam;
+  } else {
+    args = [];
+    options = argsOrOptions as ParseOptions | undefined;
+  }
   if (parser.$mode === "sync") {
     return Promise.resolve(
       getDocPageSyncImpl(
@@ -914,22 +956,41 @@ export function getDocPageAsync(
  * ```
  * @since 0.9.0 Updated to support async parsers.
  * @since 0.10.0 Added optional `options` parameter for annotations support.
+ * @since 1.0.0 Added overload accepting `options` as the second argument.
  */
-// Overload: sync parser returns sync result
+// Overload: sync parser, options as 2nd arg
+export function getDocPage(
+  parser: Parser<"sync", unknown, unknown>,
+  options: ParseOptions,
+): DocPage | undefined;
+
+// Overload: async parser, options as 2nd arg
+export function getDocPage(
+  parser: Parser<"async", unknown, unknown>,
+  options: ParseOptions,
+): Promise<DocPage | undefined>;
+
+// Overload: generic mode parser, options as 2nd arg
+export function getDocPage<M extends Mode>(
+  parser: Parser<M, unknown, unknown>,
+  options: ParseOptions,
+): ModeValue<M, DocPage | undefined>;
+
+// Overload: sync parser with args
 export function getDocPage(
   parser: Parser<"sync", unknown, unknown>,
   args?: readonly string[],
   options?: ParseOptions,
 ): DocPage | undefined;
 
-// Overload: async parser returns Promise
+// Overload: async parser with args
 export function getDocPage(
   parser: Parser<"async", unknown, unknown>,
   args?: readonly string[],
   options?: ParseOptions,
 ): Promise<DocPage | undefined>;
 
-// Overload: generic mode parser returns ModeValue
+// Overload: generic mode parser with args
 export function getDocPage<M extends Mode>(
   parser: Parser<M, unknown, unknown>,
   args?: readonly string[],
@@ -939,9 +1000,18 @@ export function getDocPage<M extends Mode>(
 // Implementation
 export function getDocPage(
   parser: Parser<Mode, unknown, unknown>,
-  args: readonly string[] = [],
-  options?: ParseOptions,
+  argsOrOptions?: readonly string[] | ParseOptions,
+  optionsParam?: ParseOptions,
 ): DocPage | undefined | Promise<DocPage | undefined> {
+  let args: readonly string[];
+  let options: ParseOptions | undefined;
+  if (Array.isArray(argsOrOptions)) {
+    args = argsOrOptions;
+    options = optionsParam;
+  } else {
+    args = [];
+    options = argsOrOptions as ParseOptions | undefined;
+  }
   if (parser.$mode === "sync") {
     return getDocPageSyncImpl(
       parser as Parser<"sync", unknown, unknown>,

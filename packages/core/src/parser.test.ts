@@ -29,6 +29,7 @@ import {
   flag,
   option,
 } from "@optique/core/primitives";
+import { getAnnotations } from "@optique/core/annotations";
 import type { Usage } from "@optique/core/usage";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { type DocEntry, formatDocPage } from "@optique/core/doc";
@@ -2476,6 +2477,131 @@ describe("Annotations system", () => {
       annotations: { [testKey]: "doc-async" },
     });
     assert.ok(doc !== undefined);
+  });
+
+  it("should support annotations in getDocPage() with options as second argument", () => {
+    const testKey = Symbol.for("@test/doc-sync-options-as-2nd");
+    const parser: Parser<"sync", string, Record<PropertyKey, unknown>> = {
+      $valueType: [] as const,
+      $stateType: [] as const,
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      initialState: {},
+      parse(_context) {
+        return { success: false as const, consumed: 0, error: message`no` };
+      },
+      complete() {
+        return { success: true as const, value: "ok" };
+      },
+      *suggest() {},
+      getDocFragments(state) {
+        const ann = state.kind === "available"
+          ? getAnnotations(state.state)
+          : undefined;
+        return {
+          fragments: [],
+          footer: [{
+            type: "text" as const,
+            text: String(ann?.[testKey] ?? "none"),
+          }],
+        };
+      },
+    };
+
+    const doc = getDocPage(parser, { annotations: { [testKey]: "injected" } });
+    assert.ok(doc !== undefined);
+    assert.ok(doc!.footer !== undefined);
+    assert.equal(
+      (doc!.footer![0] as { type: "text"; text: string }).text,
+      "injected",
+    );
+  });
+
+  it("should support annotations in getDocPageSync() with options as second argument", () => {
+    const testKey = Symbol.for("@test/doc-sync-fn-options-as-2nd");
+    const parser: Parser<"sync", string, Record<PropertyKey, unknown>> = {
+      $valueType: [] as const,
+      $stateType: [] as const,
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      initialState: {},
+      parse(_context) {
+        return { success: false as const, consumed: 0, error: message`no` };
+      },
+      complete() {
+        return { success: true as const, value: "ok" };
+      },
+      *suggest() {},
+      getDocFragments(state) {
+        const ann = state.kind === "available"
+          ? getAnnotations(state.state)
+          : undefined;
+        return {
+          fragments: [],
+          footer: [{
+            type: "text" as const,
+            text: String(ann?.[testKey] ?? "none"),
+          }],
+        };
+      },
+    };
+
+    const doc = getDocPageSync(parser, {
+      annotations: { [testKey]: "injected" },
+    });
+    assert.ok(doc !== undefined);
+    assert.ok(doc!.footer !== undefined);
+    assert.equal(
+      (doc!.footer![0] as { type: "text"; text: string }).text,
+      "injected",
+    );
+  });
+
+  it("should support annotations in getDocPageAsync() with options as second argument", async () => {
+    const testKey = Symbol.for("@test/doc-async-fn-options-as-2nd");
+    const parser: Parser<"async", string, Record<PropertyKey, unknown>> = {
+      $valueType: [] as const,
+      $stateType: [] as const,
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: {},
+      parse(_context) {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`no`,
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "ok" });
+      },
+      async *suggest() {},
+      getDocFragments(state) {
+        const ann = state.kind === "available"
+          ? getAnnotations(state.state)
+          : undefined;
+        return {
+          fragments: [],
+          footer: [{
+            type: "text" as const,
+            text: String(ann?.[testKey] ?? "none"),
+          }],
+        };
+      },
+    };
+
+    const doc = await getDocPageAsync(parser, {
+      annotations: { [testKey]: "injected" },
+    });
+    assert.ok(doc !== undefined);
+    assert.ok(doc!.footer !== undefined);
+    assert.equal(
+      (doc!.footer![0] as { type: "text"; text: string }).text,
+      "injected",
+    );
   });
 });
 
