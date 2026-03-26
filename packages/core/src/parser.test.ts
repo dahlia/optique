@@ -29,6 +29,7 @@ import {
   flag,
   option,
 } from "@optique/core/primitives";
+import { getAnnotations, type ParseOptions } from "@optique/core/annotations";
 import type { Usage } from "@optique/core/usage";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { type DocEntry, formatDocPage } from "@optique/core/doc";
@@ -2476,6 +2477,292 @@ describe("Annotations system", () => {
       annotations: { [testKey]: "doc-async" },
     });
     assert.ok(doc !== undefined);
+  });
+
+  it("should support annotations in getDocPage() with options as second argument", () => {
+    const testKey = Symbol.for("@test/doc-sync-options-as-2nd");
+    const parser: Parser<"sync", string, Record<PropertyKey, unknown>> = {
+      $valueType: [] as const,
+      $stateType: [] as const,
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      initialState: {},
+      parse(_context) {
+        return { success: false as const, consumed: 0, error: message`no` };
+      },
+      complete() {
+        return { success: true as const, value: "ok" };
+      },
+      *suggest() {},
+      getDocFragments(state) {
+        const ann = state.kind === "available"
+          ? getAnnotations(state.state)
+          : undefined;
+        return {
+          fragments: [],
+          footer: [{
+            type: "text" as const,
+            text: String(ann?.[testKey] ?? "none"),
+          }],
+        };
+      },
+    };
+
+    const doc = getDocPage(parser, { annotations: { [testKey]: "injected" } });
+    assert.ok(doc !== undefined);
+    assert.ok(doc!.footer !== undefined);
+    assert.equal(
+      (doc!.footer![0] as { type: "text"; text: string }).text,
+      "injected",
+    );
+  });
+
+  it("should support annotations in getDocPageSync() with options as second argument", () => {
+    const testKey = Symbol.for("@test/doc-sync-fn-options-as-2nd");
+    const parser: Parser<"sync", string, Record<PropertyKey, unknown>> = {
+      $valueType: [] as const,
+      $stateType: [] as const,
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      initialState: {},
+      parse(_context) {
+        return { success: false as const, consumed: 0, error: message`no` };
+      },
+      complete() {
+        return { success: true as const, value: "ok" };
+      },
+      *suggest() {},
+      getDocFragments(state) {
+        const ann = state.kind === "available"
+          ? getAnnotations(state.state)
+          : undefined;
+        return {
+          fragments: [],
+          footer: [{
+            type: "text" as const,
+            text: String(ann?.[testKey] ?? "none"),
+          }],
+        };
+      },
+    };
+
+    const doc = getDocPageSync(parser, {
+      annotations: { [testKey]: "injected" },
+    });
+    assert.ok(doc !== undefined);
+    assert.ok(doc!.footer !== undefined);
+    assert.equal(
+      (doc!.footer![0] as { type: "text"; text: string }).text,
+      "injected",
+    );
+  });
+
+  it("should support annotations in getDocPageAsync() with options as second argument", async () => {
+    const testKey = Symbol.for("@test/doc-async-fn-options-as-2nd");
+    const parser: Parser<"async", string, Record<PropertyKey, unknown>> = {
+      $valueType: [] as const,
+      $stateType: [] as const,
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: {},
+      parse(_context) {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`no`,
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "ok" });
+      },
+      async *suggest() {},
+      getDocFragments(state) {
+        const ann = state.kind === "available"
+          ? getAnnotations(state.state)
+          : undefined;
+        return {
+          fragments: [],
+          footer: [{
+            type: "text" as const,
+            text: String(ann?.[testKey] ?? "none"),
+          }],
+        };
+      },
+    };
+
+    const doc = await getDocPageAsync(parser, {
+      annotations: { [testKey]: "injected" },
+    });
+    assert.ok(doc !== undefined);
+    assert.ok(doc!.footer !== undefined);
+    assert.equal(
+      (doc!.footer![0] as { type: "text"; text: string }).text,
+      "injected",
+    );
+  });
+
+  it("should preserve options when args is explicitly undefined in getDocPage()", () => {
+    const testKey = Symbol.for("@test/doc-sync-undef-args");
+    const parser: Parser<"sync", string, Record<PropertyKey, unknown>> = {
+      $valueType: [] as const,
+      $stateType: [] as const,
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      initialState: {},
+      parse(_context) {
+        return { success: false as const, consumed: 0, error: message`no` };
+      },
+      complete() {
+        return { success: true as const, value: "ok" };
+      },
+      *suggest() {},
+      getDocFragments(state) {
+        const ann = state.kind === "available"
+          ? getAnnotations(state.state)
+          : undefined;
+        return {
+          fragments: [],
+          footer: [{
+            type: "text" as const,
+            text: String(ann?.[testKey] ?? "none"),
+          }],
+        };
+      },
+    };
+
+    const doc = getDocPage(parser, undefined, {
+      annotations: { [testKey]: "injected" },
+    });
+    assert.ok(doc !== undefined);
+    assert.ok(doc!.footer !== undefined);
+    assert.equal(
+      (doc!.footer![0] as { type: "text"; text: string }).text,
+      "injected",
+    );
+  });
+
+  it("should preserve options when args is explicitly undefined in getDocPageSync()", () => {
+    const testKey = Symbol.for("@test/doc-sync-fn-undef-args");
+    const parser: Parser<"sync", string, Record<PropertyKey, unknown>> = {
+      $valueType: [] as const,
+      $stateType: [] as const,
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      initialState: {},
+      parse(_context) {
+        return { success: false as const, consumed: 0, error: message`no` };
+      },
+      complete() {
+        return { success: true as const, value: "ok" };
+      },
+      *suggest() {},
+      getDocFragments(state) {
+        const ann = state.kind === "available"
+          ? getAnnotations(state.state)
+          : undefined;
+        return {
+          fragments: [],
+          footer: [{
+            type: "text" as const,
+            text: String(ann?.[testKey] ?? "none"),
+          }],
+        };
+      },
+    };
+
+    const doc = getDocPageSync(parser, undefined, {
+      annotations: { [testKey]: "injected" },
+    });
+    assert.ok(doc !== undefined);
+    assert.ok(doc!.footer !== undefined);
+    assert.equal(
+      (doc!.footer![0] as { type: "text"; text: string }).text,
+      "injected",
+    );
+  });
+
+  it("should preserve options when args is explicitly undefined in getDocPageAsync()", async () => {
+    const testKey = Symbol.for("@test/doc-async-fn-undef-args");
+    const parser: Parser<"async", string, Record<PropertyKey, unknown>> = {
+      $valueType: [] as const,
+      $stateType: [] as const,
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: {},
+      parse(_context) {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`no`,
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "ok" });
+      },
+      async *suggest() {},
+      getDocFragments(state) {
+        const ann = state.kind === "available"
+          ? getAnnotations(state.state)
+          : undefined;
+        return {
+          fragments: [],
+          footer: [{
+            type: "text" as const,
+            text: String(ann?.[testKey] ?? "none"),
+          }],
+        };
+      },
+    };
+
+    const doc = await getDocPageAsync(parser, undefined, {
+      annotations: { [testKey]: "injected" },
+    });
+    assert.ok(doc !== undefined);
+    assert.ok(doc!.footer !== undefined);
+    assert.equal(
+      (doc!.footer![0] as { type: "text"; text: string }).text,
+      "injected",
+    );
+  });
+
+  it("should accept ParseOptions | undefined as second argument in getDocPage()", () => {
+    const parser = constant("ok");
+    const opts: ParseOptions | undefined = undefined;
+    const doc = getDocPage(parser, opts);
+    assert.ok(doc !== undefined);
+  });
+
+  it("should accept ParseOptions | undefined as second argument in getDocPageSync()", () => {
+    const parser = constant("ok");
+    const opts: ParseOptions | undefined = undefined;
+    const doc = getDocPageSync(parser, opts);
+    assert.ok(doc !== undefined);
+  });
+
+  it("should accept ParseOptions | undefined as second argument in getDocPageAsync()", async () => {
+    const parser = constant("ok");
+    const opts: ParseOptions | undefined = undefined;
+    const doc = await getDocPageAsync(parser, opts);
+    assert.ok(doc !== undefined);
+  });
+
+  it("should accept union-typed argsOrOptions forwarding", () => {
+    function wrapper(
+      argsOrOptions?: readonly string[] | ParseOptions,
+      options?: ParseOptions,
+    ) {
+      const parser = constant("ok");
+      return getDocPageSync(parser, argsOrOptions, options);
+    }
+    assert.ok(wrapper() !== undefined);
+    assert.ok(wrapper([]) !== undefined);
+    assert.ok(wrapper({ annotations: {} }) !== undefined);
   });
 });
 
