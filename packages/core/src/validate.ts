@@ -364,11 +364,14 @@ export function validateProgramName(programName: string): void {
  * or contain control characters.
  *
  * @param label The label to validate.
- * @throws {TypeError} If the label is empty, whitespace-only, or contains
- *         control characters.
+ * @throws {TypeError} If the label is not a string, is empty,
+ *         whitespace-only, or contains control characters.
  * @since 1.0.0
  */
 export function validateLabel(label: string): void {
+  if (typeof label !== "string") {
+    throw new TypeError("Label must be a string.");
+  }
   if (label === "") {
     throw new TypeError("Label must not be empty.");
   }

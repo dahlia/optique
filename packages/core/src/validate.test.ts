@@ -720,6 +720,16 @@ describe("validateMetaNameCollisions", () => {
 });
 
 describe("validateLabel", () => {
+  it("should reject non-string labels", () => {
+    const expected = {
+      name: "TypeError",
+      message: "Label must be a string.",
+    };
+    assert.throws(() => validateLabel(123 as never), expected);
+    assert.throws(() => validateLabel(null as never), expected);
+    assert.throws(() => validateLabel(undefined as never), expected);
+  });
+
   it("should accept valid labels", () => {
     validateLabel("Options");
     validateLabel("Connection options");
