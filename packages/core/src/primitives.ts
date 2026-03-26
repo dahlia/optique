@@ -2339,6 +2339,15 @@ export function command<M extends Mode, T, TState>(
       return `command(${JSON.stringify(name)})`;
     },
   };
+  // Forward value normalization as non-enumerable so that withDefault()
+  // can normalize defaults through command() wrappers.
+  if (typeof parser.normalizeValue === "function") {
+    Object.defineProperty(result, "normalizeValue", {
+      value: parser.normalizeValue.bind(parser),
+      configurable: true,
+      enumerable: false,
+    });
+  }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
   return result as unknown as Parser<M, T, CommandState<TState>>;
