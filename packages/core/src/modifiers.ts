@@ -1087,6 +1087,10 @@ export function map<M extends Mode, T, U, TState>(
       return parser.getDocFragments(state, undefined);
     },
   } as Parser<M, U, TState>;
+  // Strip any normalizeValue inherited from the inner parser via ...parser
+  // spread.  The inner normalizer operates on type T, not the mapped type U,
+  // so keeping it would corrupt mapped defaults.
+  delete mappedParser.normalizeValue;
   // Lazily compute the mapped placeholder.  Non-enumerable so that
   // further ...parser spreads in downstream wrappers do not eagerly
   // evaluate the getter and trigger inner factory side effects.

@@ -4900,10 +4900,15 @@ export function macAddress(
       octets = value.split("-");
       detectedSep = "-";
     } else if (value.includes(".")) {
-      octets = value.split(".").flatMap((g) => [
-        g.slice(0, 2),
-        g.slice(2),
-      ]);
+      // Cisco format: exactly 3 groups of 4 hex digits
+      const groups = value.split(".");
+      if (
+        groups.length !== 3 ||
+        !groups.every((g) => /^[0-9a-fA-F]{4}$/.test(g))
+      ) {
+        return value;
+      }
+      octets = groups.flatMap((g) => [g.slice(0, 2), g.slice(2)]);
       detectedSep = ".";
     } else {
       octets = [];
