@@ -11093,6 +11093,34 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.ok(usageText.includes("help"));
   });
 
+  it("conditional() should not expose hidden argument discriminator in usage", () => {
+    const parser = conditional(
+      argument(string(), { hidden: true }),
+      {
+        help: object({ port: option("--port", integer()) }),
+        serve: object({ dir: argument(string()) }),
+      },
+    );
+    const usageText = formatUsage("app", parser.usage);
+    // The hidden argument should NOT be exposed as a literal branch key
+    assert.ok(!usageText.includes("help"));
+    assert.ok(!usageText.includes("serve"));
+  });
+
+  it("conditional() with repeated argument discriminator does not produce literal terms", () => {
+    // multiple(argument(...)) consumes multiple tokens; the branch key
+    // is derived from joining them, so no single token equals the key.
+    const discriminator = map(
+      multiple(argument(string()), { min: 1 }),
+      (xs: readonly string[]) => xs.join("-"),
+    );
+    const parser = conditional(discriminator, {
+      "help-me": object({ port: option("--port", integer()) }),
+    });
+    const literals = extractLiteralValues(parser.usage);
+    assert.ok(!literals.has("help-me"));
+  });
+
   it("conditional() with multi-argument discriminator does not produce literal terms", () => {
     // When the discriminator derives its value from multiple positional
     // tokens, individual arguments are not independently equal to the

@@ -7439,35 +7439,52 @@ export function conditional(
 
   // Helper: check whether the usage tree contains any argument or option-
   // with-metavar terms.  Used to decide whether argument → literal
-  // replacement is safe.
-  function analyzeDiscriminatorUsage(terms: Usage): {
+  // replacement is safe.  `insideMultiple` tracks whether we are inside
+  // a `multiple` container, which means the argument consumes more than
+  // one token and the branch key is derived from combining them.
+  function analyzeDiscriminatorUsage(
+    terms: Usage,
+    insideMultiple = false,
+  ): {
     readonly argumentCount: number;
     readonly hasOptionsWithMetavar: boolean;
+    readonly hasRepeatedArgument: boolean;
   } {
     let argumentCount = 0;
     let hasOptionsWithMetavar = false;
+    let hasRepeatedArgument = false;
     for (const term of terms) {
       if (term.type === "argument") {
         argumentCount++;
+        if (insideMultiple) hasRepeatedArgument = true;
       } else if (term.type === "option" && term.metavar !== undefined) {
         hasOptionsWithMetavar = true;
-      } else if (term.type === "optional" || term.type === "multiple") {
-        const inner = analyzeDiscriminatorUsage(term.terms);
+      } else if (term.type === "optional") {
+        const inner = analyzeDiscriminatorUsage(term.terms, insideMultiple);
         argumentCount += inner.argumentCount;
         hasOptionsWithMetavar = hasOptionsWithMetavar ||
           inner.hasOptionsWithMetavar;
+        hasRepeatedArgument = hasRepeatedArgument || inner.hasRepeatedArgument;
+      } else if (term.type === "multiple") {
+        const inner = analyzeDiscriminatorUsage(term.terms, true);
+        argumentCount += inner.argumentCount;
+        hasOptionsWithMetavar = hasOptionsWithMetavar ||
+          inner.hasOptionsWithMetavar;
+        hasRepeatedArgument = hasRepeatedArgument || inner.hasRepeatedArgument;
       } else if (term.type === "exclusive") {
         let maxArgs = 0;
         for (const branch of term.terms) {
-          const inner = analyzeDiscriminatorUsage(branch);
+          const inner = analyzeDiscriminatorUsage(branch, insideMultiple);
           maxArgs = Math.max(maxArgs, inner.argumentCount);
           hasOptionsWithMetavar = hasOptionsWithMetavar ||
             inner.hasOptionsWithMetavar;
+          hasRepeatedArgument = hasRepeatedArgument ||
+            inner.hasRepeatedArgument;
         }
         argumentCount += maxArgs;
       }
     }
-    return { argumentCount, hasOptionsWithMetavar };
+    return { argumentCount, hasOptionsWithMetavar, hasRepeatedArgument };
   }
 
   // Helper to replace metavar/argument with literal value in usage.
@@ -7488,9 +7505,14 @@ export function conditional(
         const { metavar: _, ...optionWithoutMetavar } = term;
         result.push(optionWithoutMetavar);
         result.push({ type: "literal", value: literalValue });
-      } else if (term.type === "argument" && replaceArguments) {
+      } else if (
+        term.type === "argument" && replaceArguments && !term.hidden
+      ) {
         // Replace the entire argument with a literal term—the branch
         // key IS the concrete value for this positional slot.
+        // Hidden arguments are left as-is because the `literal` type
+        // has no `hidden` property; replacing would expose a term the
+        // author explicitly hid.
         result.push({ type: "literal", value: literalValue });
       } else if (term.type === "optional") {
         result.push({
@@ -7527,10 +7549,10 @@ export function conditional(
   // Only replace argument terms when the discriminator is a pure
   // single-argument parser with no value-bearing options.
   // See https://github.com/dahlia/optique/issues/734
-  const { argumentCount, hasOptionsWithMetavar } = analyzeDiscriminatorUsage(
-    discriminator.usage,
-  );
-  const replaceArguments = argumentCount === 1 && !hasOptionsWithMetavar;
+  const { argumentCount, hasOptionsWithMetavar, hasRepeatedArgument } =
+    analyzeDiscriminatorUsage(discriminator.usage);
+  const replaceArguments = argumentCount === 1 && !hasOptionsWithMetavar &&
+    !hasRepeatedArgument;
 
   // Build usage: discriminator (with literal value) + exclusive branches
   const branchUsages: Usage[] = branchParsers.map(([key, p]) => [
