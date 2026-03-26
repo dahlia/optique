@@ -29,7 +29,7 @@ import {
   flag,
   option,
 } from "@optique/core/primitives";
-import { getAnnotations } from "@optique/core/annotations";
+import { getAnnotations, type ParseOptions } from "@optique/core/annotations";
 import type { Usage } from "@optique/core/usage";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { type DocEntry, formatDocPage } from "@optique/core/doc";
@@ -2729,6 +2729,27 @@ describe("Annotations system", () => {
       (doc!.footer![0] as { type: "text"; text: string }).text,
       "injected",
     );
+  });
+
+  it("should accept ParseOptions | undefined as second argument in getDocPage()", () => {
+    const parser = constant("ok");
+    const opts: ParseOptions | undefined = undefined;
+    const doc = getDocPage(parser, opts);
+    assert.ok(doc !== undefined);
+  });
+
+  it("should accept ParseOptions | undefined as second argument in getDocPageSync()", () => {
+    const parser = constant("ok");
+    const opts: ParseOptions | undefined = undefined;
+    const doc = getDocPageSync(parser, opts);
+    assert.ok(doc !== undefined);
+  });
+
+  it("should accept ParseOptions | undefined as second argument in getDocPageAsync()", async () => {
+    const parser = constant("ok");
+    const opts: ParseOptions | undefined = undefined;
+    const doc = await getDocPageAsync(parser, opts);
+    assert.ok(doc !== undefined);
   });
 });
 

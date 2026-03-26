@@ -840,7 +840,7 @@ function findCommandInExclusive(
  */
 export function getDocPageSync(
   parser: Parser<"sync", unknown, unknown>,
-  options: ParseOptions,
+  options?: ParseOptions,
 ): DocPage | undefined;
 
 export function getDocPageSync(
@@ -886,7 +886,7 @@ export function getDocPageSync(
  */
 export function getDocPageAsync(
   parser: Parser<Mode, unknown, unknown>,
-  options: ParseOptions,
+  options?: ParseOptions,
 ): Promise<DocPage | undefined>;
 
 export function getDocPageAsync(
@@ -967,19 +967,19 @@ export function getDocPageAsync(
 // Overload: sync parser, options as 2nd arg
 export function getDocPage(
   parser: Parser<"sync", unknown, unknown>,
-  options: ParseOptions,
+  options?: ParseOptions,
 ): DocPage | undefined;
 
 // Overload: async parser, options as 2nd arg
 export function getDocPage(
   parser: Parser<"async", unknown, unknown>,
-  options: ParseOptions,
+  options?: ParseOptions,
 ): Promise<DocPage | undefined>;
 
 // Overload: generic mode parser, options as 2nd arg
 export function getDocPage<M extends Mode>(
   parser: Parser<M, unknown, unknown>,
-  options: ParseOptions,
+  options?: ParseOptions,
 ): ModeValue<M, DocPage | undefined>;
 
 // Overload: sync parser with args
