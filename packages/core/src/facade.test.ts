@@ -1487,11 +1487,12 @@ describe("runParser", () => {
       );
       assert.throws(
         () =>
-          runParser(parser, "test", ["--mode", "--help"], {
+          runParser(parser, "test", [], {
             help: {
               option: true,
               onShow: () => "HELP",
             },
+            stderr: () => {},
           }),
         {
           name: "TypeError",
@@ -1594,6 +1595,25 @@ describe("runParser", () => {
         {
           name: "TypeError",
           message: /user.*"--completion=bash".*completion option/i,
+        },
+      );
+    });
+
+    it("should reject completion option aliases that collide via = prefix", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            completion: {
+              option: {
+                names: ["--completion", "--completion=bash"] as never,
+              },
+            },
+            stderr: () => {},
+          }),
+        {
+          name: "TypeError",
+          message: /--completion=bash.*completion option.*prefix/i,
         },
       );
     });

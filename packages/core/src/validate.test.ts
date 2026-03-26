@@ -556,6 +556,19 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
+  it("should not flag nested command against meta command (position-aware)", () => {
+    validateMetaNameCollisions(
+      {
+        leadingOptions: e,
+        leadingCommands: e,
+        allOptions: e,
+        allCommands: new Set(["help"]),
+        allLiterals: e,
+      },
+      [["command", "help command", ["help"]]],
+    );
+  });
+
   it("should flag nested option against meta option (scans everywhere)", () => {
     assert.throws(
       () =>
@@ -613,10 +626,18 @@ describe("validateMetaNameCollisions", () => {
 
   // Prefix matching tests (only for entries with prefixMatch: true)
   it("should flag user option matching prefix when prefixMatch is true", () => {
+    // Put --completion=bash only in allOptions (not leading) to prove
+    // that prefix matching checks the all-depth set.
     assert.throws(
       () =>
         validateMetaNameCollisions(
-          u(new Set(["--completion=bash"])),
+          {
+            leadingOptions: e,
+            leadingCommands: e,
+            allOptions: new Set(["--completion=bash"]),
+            allCommands: e,
+            allLiterals: e,
+          },
           [["option", "completion option", ["--completion"], true]],
         ),
       {
@@ -632,7 +653,7 @@ describe("validateMetaNameCollisions", () => {
         validateMetaNameCollisions(
           {
             leadingOptions: e,
-            leadingCommands: new Set(["--completion=bash"]),
+            leadingCommands: e,
             allOptions: e,
             allCommands: new Set(["--completion=bash"]),
             allLiterals: e,
