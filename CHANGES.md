@@ -112,7 +112,14 @@ To be released.
     throws `TypeError` when built-in meta feature names (help, version,
     completion) collide with user-defined parser names or with each other.
     Previously, colliding names were silently shadowed by the built-in meta
-    parser, making user-defined commands or options unreachable.  [[#227]]
+    parser, making user-defined commands or options unreachable.
+
+    The check is position-aware: command-form meta features (which only
+    match at `args[0]`) are compared against leading user names, while
+    option-form meta features (whose lenient scanners match anywhere in
+    `argv`) are compared against all user names at every depth, including
+    literal values from `conditional()` discriminators.  The completion
+    option's `name=value` prefix form is also detected.  [[#227], [#736]]
 
  -  *Breaking change:* Added `placeholder` property to `ValueParser` interface
     (required) and `Parser` interface (optional).  Every value parser now
@@ -1190,6 +1197,7 @@ To be released.
 [#730]: https://github.com/dahlia/optique/pull/730
 [#732]: https://github.com/dahlia/optique/pull/732
 [#733]: https://github.com/dahlia/optique/pull/733
+[#736]: https://github.com/dahlia/optique/pull/736
 
 ### @optique/config
 
