@@ -220,6 +220,12 @@ To be released.
     fragment containing visible entries, and titled sections with only hidden
     entries are omitted entirely.  [[#494], [#720]]
 
+ -  Fixed `getDocPage()`, `getDocPageSync()`, and `getDocPageAsync()` silently
+    misinterpreting a `ParseOptions` object as the `args` array when passed as
+    the second argument.  All three functions now accept `ParseOptions` as the
+    second argument directly, making `getDocPage(parser, { annotations })`
+    work without requiring an explicit empty args array.  [[#480], [#739]]
+
  -  Fixed `normalizeUsage()` reusing leaf `UsageTerm` objects by reference,
     which caused mutations of the normalized result to propagate back to the
     original usage tree.  [[#504], [#722]]
@@ -1069,6 +1075,7 @@ To be released.
 [#472]: https://github.com/dahlia/optique/issues/472
 [#473]: https://github.com/dahlia/optique/issues/473
 [#479]: https://github.com/dahlia/optique/issues/479
+[#480]: https://github.com/dahlia/optique/issues/480
 [#485]: https://github.com/dahlia/optique/issues/485
 [#488]: https://github.com/dahlia/optique/issues/488
 [#490]: https://github.com/dahlia/optique/pull/490
@@ -1211,6 +1218,7 @@ To be released.
 [#733]: https://github.com/dahlia/optique/pull/733
 [#736]: https://github.com/dahlia/optique/pull/736
 [#737]: https://github.com/dahlia/optique/pull/737
+[#739]: https://github.com/dahlia/optique/pull/739
 
 ### @optique/config
 
