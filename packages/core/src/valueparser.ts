@@ -6733,7 +6733,11 @@ export function cidr(
       };
     },
     format(value: CidrValue): string {
-      if (typeof value !== "object" || value == null || !("address" in value)) {
+      if (
+        typeof value !== "object" || value == null ||
+        !("address" in value) || !("prefix" in value) ||
+        !("version" in value)
+      ) {
         return metavar;
       }
       const normalizedAddr = value.version === 6
@@ -6742,7 +6746,11 @@ export function cidr(
       return `${normalizedAddr}/${value.prefix}`;
     },
     normalize(value: CidrValue): CidrValue {
-      if (typeof value !== "object" || value == null || !("version" in value)) {
+      if (
+        typeof value !== "object" || value == null ||
+        !("address" in value) || !("prefix" in value) ||
+        !("version" in value)
+      ) {
         return value;
       }
       if (value.version !== 6) return value;
