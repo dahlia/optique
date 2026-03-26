@@ -4891,6 +4891,9 @@ export function macAddress(
   // structure (e.g., a string sentinel like "local").
   // Shared by both format() and normalize().
   function normalizeMac(value: string): string {
+    // Guard against sentinel defaults of incompatible runtime type
+    // (e.g., { kind: "local" } cast as string via withDefault).
+    if (typeof value !== "string") return String(value);
     let octets: string[];
     let detectedSep: ":" | "-" | "." | "none";
     if (value.includes(":")) {
@@ -5385,6 +5388,7 @@ export function domain(
       return { success: true, value: result };
     },
     format(value: string): string {
+      if (typeof value !== "string") return String(value);
       if (!lowercase) return value;
       // Only lowercase values that look like domains (enough labels).
       // Sentinel strings like "LOCAL" are returned unchanged.
@@ -5393,6 +5397,7 @@ export function domain(
     ...(lowercase
       ? {
         normalize(value: string): string {
+          if (typeof value !== "string") return value;
           return value.split(".").length >= minLabels
             ? value.toLowerCase()
             : value;
@@ -5630,9 +5635,11 @@ export function ipv6(
       return { success: true, value: normalized };
     },
     format(value: string): string {
+      if (typeof value !== "string") return String(value);
       return parseAndNormalizeIpv6(value) ?? value;
     },
     normalize(value: string): string {
+      if (typeof value !== "string") return value;
       return parseAndNormalizeIpv6(value) ?? value;
     },
   };
@@ -6158,10 +6165,12 @@ export function ip(
       return { success: false, error: msg };
     },
     format(value: string): string {
+      if (typeof value !== "string") return String(value);
       // IPv4 addresses are already canonical; normalize IPv6 addresses
       return parseAndNormalizeIpv6(value) ?? value;
     },
     normalize(value: string): string {
+      if (typeof value !== "string") return value;
       return parseAndNormalizeIpv6(value) ?? value;
     },
   };
@@ -6717,12 +6726,18 @@ export function cidr(
       };
     },
     format(value: CidrValue): string {
+      if (typeof value !== "object" || value == null || !("address" in value)) {
+        return String(value);
+      }
       const normalizedAddr = value.version === 6
         ? (parseAndNormalizeIpv6(value.address) ?? value.address)
         : value.address;
       return `${normalizedAddr}/${value.prefix}`;
     },
     normalize(value: CidrValue): CidrValue {
+      if (typeof value !== "object" || value == null || !("version" in value)) {
+        return value;
+      }
       if (value.version !== 6) return value;
       const normalizedAddr = parseAndNormalizeIpv6(value.address);
       if (normalizedAddr == null || normalizedAddr === value.address) {
