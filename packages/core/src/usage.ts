@@ -358,9 +358,18 @@ export function extractCommandNames(
  * Unlike {@link extractOptionNames}, which traverses the entire usage tree,
  * this function stops scanning a terms array after encountering a `command`,
  * `argument`, or `literal` term, because subsequent terms are scoped under
- * that positional token.  It still recurses into `optional`, `multiple`, and `exclusive`
- * containers, since they represent alternatives or wrappers at the same
- * position.
+ * that positional token.  It still recurses into `optional`, `multiple`,
+ * and `exclusive` containers, since they represent alternatives or wrappers
+ * at the same position.
+ *
+ * Known limitation: this function infers token positions from the `usage`
+ * tree, which is a display-oriented structure.  Combinators like `tuple()`
+ * and `object()` sort or flatten usage by priority rather than token order,
+ * so the results can be inaccurate—both false positives (e.g., options
+ * appearing before commands due to priority sorting) and false negatives
+ * (e.g., options after commands that are actually parallel peers).
+ * The proper fix is to use `Parser.leadingNames` instead of usage-tree
+ * analysis; see https://github.com/dahlia/optique/issues/735
  *
  * @param usage The usage description to extract leading option names from.
  * @param includeHidden Whether to include fully hidden options
@@ -385,14 +394,8 @@ export function extractLeadingOptionNames(
           }
           break; // options don't consume a position; continue scanning
         case "command":
-          // Known limitation: stopping here causes false negatives for
-          // combinators like tuple() and object() that flatten usage in
-          // priority order.  In tuple([flag("--help"), command("run")]),
-          // the command (priority 15) appears before the flag (priority 10)
-          // in the usage array, so this scan stops before reaching the
-          // flag.  The flag IS valid at argv[0], but we cannot distinguish
-          // this from a genuinely nested option (e.g., command("run",
-          // flag("--help"))) because both produce identical usage arrays.
+          // See the JSDoc "Known limitation" note and
+          // https://github.com/dahlia/optique/issues/735
           return; // command consumes a position; stop scanning siblings
         case "argument":
         case "literal":
@@ -424,10 +427,13 @@ export function extractLeadingOptionNames(
  * this function stops scanning a terms array after encountering a `command`,
  * `argument`, or `literal` term, because subsequent terms in that array are
  * scoped under that positional token (reachable only after the leading term
- * is consumed).
- * It still recurses into `optional`, `multiple`, and `exclusive` containers,
- * since they represent alternatives or optional wrappers at the same token
- * position.
+ * is consumed).  It still recurses into `optional`, `multiple`, and
+ * `exclusive` containers, since they represent alternatives or optional
+ * wrappers at the same token position.
+ *
+ * Known limitation: this function has the same usage-tree ordering caveat
+ * as {@link extractLeadingOptionNames}.  See
+ * https://github.com/dahlia/optique/issues/735
  *
  * @param usage The usage description to extract leading command names from.
  * @param includeHidden Whether to include fully hidden commands
