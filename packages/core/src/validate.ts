@@ -161,6 +161,9 @@ export interface UserParserNames {
   readonly leadingOptions: ReadonlySet<string>;
   /** Command names reachable at the leading position. */
   readonly leadingCommands: ReadonlySet<string>;
+  /** Literal values reachable at the leading position (e.g., conditional
+   *  discriminator values that appear as the first positional token). */
+  readonly leadingLiterals: ReadonlySet<string>;
   /** All option names at any depth. */
   readonly allOptions: ReadonlySet<string>;
   /** All command names at any depth. */
@@ -268,19 +271,21 @@ export function validateMetaNameCollisions(
             `built-in ${label}.`,
         );
       }
-      // Literal values (e.g., conditional discriminator values) can be
-      // shadowed by lenient option scanners that match anywhere in argv.
+      // Literal values (e.g., conditional discriminator values) can
+      // collide with meta features.  The scope is position-aware:
+      // command-form entries only reach args[0] → check leading literals;
+      // option-form entries scan entire argv → check all literals.
       //
-      // Known limitations:
-      // - This only checks literals against option-form meta entries.
-      //   Command-form entries are not checked because we lack a
-      //   "leading literals" set.
-      // - appendLiteralToUsage() does not produce literal terms for
-      //   argument-based conditionals, so their branch keys are
-      //   invisible to this check entirely.
-      // See https://github.com/dahlia/optique/issues/734
-      //     https://github.com/dahlia/optique/issues/735
-      if (kind === "option" && userNames.allLiterals.has(name)) {
+      // Known limitation: only option-based conditional discriminators
+      // produce literal terms.  Argument-based discriminators do not
+      // because map() is invisible in the usage tree—we cannot tell
+      // whether the branch key is the raw argv token or a transformed
+      // value.  See https://github.com/dahlia/optique/issues/734
+      // and https://github.com/dahlia/optique/issues/735
+      const literalNames = kind === "command"
+        ? userNames.leadingLiterals
+        : userNames.allLiterals;
+      if (literalNames.has(name)) {
         throw new TypeError(
           `Literal value "${name}" conflicts with the ` +
             `built-in ${label}.`,
@@ -308,7 +313,7 @@ export function validateMetaNameCollisions(
             );
           }
         }
-        for (const literal of userNames.allLiterals) {
+        for (const literal of literalNames) {
           if (literal.startsWith(prefix)) {
             throw new TypeError(
               `Literal value "${literal}" conflicts with the ` +

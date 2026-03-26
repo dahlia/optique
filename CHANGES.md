@@ -127,6 +127,21 @@ To be released.
     parameter for callers that need `hidden: true` terms included in the
     result.  [[#227], [#736]]
 
+ -  Added `extractLeadingLiteralValues()` to *@optique/core/usage* and
+    `leadingLiterals` to `UserParserNames`.  Meta command collision
+    detection now checks leading literal values (position-aware: command-form
+    meta features check leading literals, option-form check all literals).
+    Argument-based conditional discriminators remain undetected because
+    `map()` is invisible in the usage tree; the proper fix requires
+    direct branch key communication.  [[#734], [#738]]
+
+ -  Added optional `optionValue` property to the `literal` variant of
+    `UsageTerm`.  When `true`, the literal was derived from an option's
+    metavar by `conditional()` and represents an option value rather than
+    a standalone positional token.  `extractLeadingLiteralValues()` uses
+    this to distinguish option values from real positional literals.
+    [[#734], [#738]]
+
  -  *Breaking change:* Added `placeholder` property to `ValueParser` interface
     (required) and `Parser` interface (optional).  Every value parser now
     provides a type-appropriate stand-in value (e.g., `""` for `string()`, `1`
@@ -1216,8 +1231,10 @@ To be released.
 [#730]: https://github.com/dahlia/optique/pull/730
 [#732]: https://github.com/dahlia/optique/pull/732
 [#733]: https://github.com/dahlia/optique/pull/733
+[#734]: https://github.com/dahlia/optique/issues/734
 [#736]: https://github.com/dahlia/optique/pull/736
 [#737]: https://github.com/dahlia/optique/pull/737
+[#738]: https://github.com/dahlia/optique/pull/738
 [#739]: https://github.com/dahlia/optique/pull/739
 
 ### @optique/config

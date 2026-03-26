@@ -46,6 +46,7 @@ import { argument, command, constant, flag, option } from "./primitives.ts";
 import {
   extractCommandNames,
   extractLeadingCommandNames,
+  extractLeadingLiteralValues,
   extractLeadingOptionNames,
   extractLiteralValues,
   extractOptionNames,
@@ -1642,6 +1643,7 @@ export function runParser<
     {
       leadingOptions: extractLeadingOptionNames(parser.usage, true),
       leadingCommands: extractLeadingCommandNames(parser.usage, true),
+      leadingLiterals: extractLeadingLiteralValues(parser.usage),
       allOptions: extractOptionNames(parser.usage, true),
       allCommands: extractCommandNames(parser.usage, true),
       allLiterals: extractLiteralValues(parser.usage),

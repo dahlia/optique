@@ -352,6 +352,7 @@ describe("validateMetaNameCollisions", () => {
     return {
       leadingOptions: opts,
       leadingCommands: cmds,
+      leadingLiterals: lits,
       allOptions: opts,
       allCommands: cmds,
       allLiterals: lits,
@@ -533,6 +534,7 @@ describe("validateMetaNameCollisions", () => {
           {
             leadingOptions: e,
             leadingCommands: e,
+            leadingLiterals: e,
             allOptions: e,
             allCommands: new Set(["--help"]),
             allLiterals: e,
@@ -549,6 +551,7 @@ describe("validateMetaNameCollisions", () => {
       {
         leadingOptions: e,
         leadingCommands: e,
+        leadingLiterals: e,
         allOptions: new Set(["--version"]),
         allCommands: e,
         allLiterals: e,
@@ -562,6 +565,7 @@ describe("validateMetaNameCollisions", () => {
       {
         leadingOptions: e,
         leadingCommands: e,
+        leadingLiterals: e,
         allOptions: e,
         allCommands: new Set(["help"]),
         allLiterals: e,
@@ -577,6 +581,7 @@ describe("validateMetaNameCollisions", () => {
           {
             leadingOptions: new Set(["--version"]),
             leadingCommands: e,
+            leadingLiterals: e,
             allOptions: e,
             allCommands: e,
             allLiterals: e,
@@ -597,6 +602,7 @@ describe("validateMetaNameCollisions", () => {
           {
             leadingOptions: e,
             leadingCommands: e,
+            leadingLiterals: e,
             allOptions: new Set(["--help"]),
             allCommands: e,
             allLiterals: e,
@@ -614,6 +620,7 @@ describe("validateMetaNameCollisions", () => {
           {
             leadingOptions: e,
             leadingCommands: e,
+            leadingLiterals: e,
             allOptions: e,
             allCommands: new Set(["--help"]),
             allLiterals: e,
@@ -637,11 +644,56 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
-  it("should not flag literal value against meta command", () => {
-    // Meta commands only check args[0]; literals are deeper
+  it("should not flag non-leading literal value against meta command", () => {
+    // Meta commands only match at args[0]; non-leading literals are safe
     validateMetaNameCollisions(
-      u(e, e, new Set(["help"])),
+      {
+        leadingOptions: e,
+        leadingCommands: e,
+        leadingLiterals: e,
+        allOptions: e,
+        allCommands: e,
+        allLiterals: new Set(["help"]),
+      },
       [["command", "help command", ["help"]]],
+    );
+  });
+
+  it("should flag leading literal value colliding with meta command", () => {
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          {
+            leadingOptions: e,
+            leadingCommands: e,
+            leadingLiterals: new Set(["help"]),
+            allOptions: e,
+            allCommands: e,
+            allLiterals: new Set(["help"]),
+          },
+          [["command", "help command", ["help"]]],
+        ),
+      { name: "TypeError", message: /literal.*"help".*help command/i },
+    );
+  });
+
+  it("should flag non-leading literal value colliding with meta option", () => {
+    // Option-form meta entries scan entire argv, so they check allLiterals
+    // even when leadingLiterals is empty.
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          {
+            leadingOptions: e,
+            leadingCommands: e,
+            leadingLiterals: e,
+            allOptions: e,
+            allCommands: e,
+            allLiterals: new Set(["--help"]),
+          },
+          [["option", "help option", ["--help"]]],
+        ),
+      { name: "TypeError", message: /literal.*"--help".*help option/i },
     );
   });
 
@@ -655,6 +707,7 @@ describe("validateMetaNameCollisions", () => {
           {
             leadingOptions: e,
             leadingCommands: e,
+            leadingLiterals: e,
             allOptions: new Set(["--completion=bash"]),
             allCommands: e,
             allLiterals: e,
@@ -675,6 +728,7 @@ describe("validateMetaNameCollisions", () => {
           {
             leadingOptions: e,
             leadingCommands: e,
+            leadingLiterals: e,
             allOptions: e,
             allCommands: new Set(["--completion=bash"]),
             allLiterals: e,
@@ -715,6 +769,44 @@ describe("validateMetaNameCollisions", () => {
     validateMetaNameCollisions(
       u(new Set(["--completion=bash"])),
       [["command", "completion command", ["--completion"]]],
+    );
+  });
+
+  it("should flag literal matching prefix against meta option", () => {
+    // prefixMatch is only meaningful for option-form meta entries
+    // (facade.ts only sets it for the completion option).
+    assert.throws(
+      () =>
+        validateMetaNameCollisions(
+          {
+            leadingOptions: e,
+            leadingCommands: e,
+            leadingLiterals: e,
+            allOptions: e,
+            allCommands: e,
+            allLiterals: new Set(["--completion=bash"]),
+          },
+          [["option", "completion option", ["--completion"], true]],
+        ),
+      {
+        name: "TypeError",
+        message: /literal.*"--completion=bash".*completion option/i,
+      },
+    );
+  });
+
+  it("should not prefix-match literal values when prefixMatch is not set", () => {
+    // help/version use exact matching; --help=verbose is a valid literal
+    validateMetaNameCollisions(
+      {
+        leadingOptions: e,
+        leadingCommands: e,
+        leadingLiterals: e,
+        allOptions: e,
+        allCommands: e,
+        allLiterals: new Set(["--help=verbose"]),
+      },
+      [["option", "help option", ["--help"]]],
     );
   });
 });

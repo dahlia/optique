@@ -215,6 +215,18 @@ export type UsageTerm =
      * The literal value that must be provided exactly as written.
      */
     readonly value: string;
+    /**
+     * When `true`, this literal was derived from an option's metavar by
+     * `appendLiteralToUsage()` in `conditional()` and represents an option
+     * value, not a standalone positional token.
+     * {@link extractLeadingLiteralValues} and the `skipOptionValueLiterals`
+     * mode of `branchConsumesToken()` use this to distinguish option values
+     * from real positional literals.  {@link extractLeadingOptionNames} and
+     * {@link extractLeadingCommandNames} intentionally still treat these
+     * literals as positional gates.
+     * @since 1.0.0
+     */
+    readonly optionValue?: boolean;
   }
   /**
    * A pass-through term, which represents unrecognized options that are
@@ -369,10 +381,8 @@ export function extractCommandNames(
  * appearing before commands due to priority sorting) and false negatives
  * (e.g., options after commands that are actually parallel peers).
  * The proper fix is to use `Parser.leadingNames` instead of usage-tree
- * analysis.  This also cannot detect `conditional(argument(...))`
- * discriminator values, which never appear in the usage tree.
- * See https://github.com/dahlia/optique/issues/734 and
- * https://github.com/dahlia/optique/issues/735
+ * analysis.
+ * See https://github.com/dahlia/optique/issues/735
  *
  * @param usage The usage description to extract leading option names from.
  * @param includeHidden Whether to include fully hidden options
@@ -437,10 +447,9 @@ export function extractLeadingOptionNames(
  * `exclusive` containers, since they represent alternatives or optional
  * wrappers at the same token position.
  *
- * Known limitation: this function has the same usage-tree ordering and
- * `conditional(argument(...))` caveats as {@link extractLeadingOptionNames}.
- * See https://github.com/dahlia/optique/issues/734 and
- * https://github.com/dahlia/optique/issues/735
+ * Known limitation: this function has the same usage-tree ordering caveat
+ * as {@link extractLeadingOptionNames}.
+ * See https://github.com/dahlia/optique/issues/735
  *
  * @param usage The usage description to extract leading command names from.
  * @param includeHidden Whether to include fully hidden commands
@@ -492,32 +501,119 @@ export function extractLeadingCommandNames(
 }
 
 /**
+ * Extracts literal values that could match as the first positional token.
+ *
+ * Unlike {@link extractLiteralValues}, which traverses the entire usage tree,
+ * this function stops scanning a terms array after encountering a `command`,
+ * `argument`, or `literal` term, because subsequent terms in that array are
+ * scoped under that positional token.  It still recurses into `optional`,
+ * `multiple`, and `exclusive` containers.
+ *
+ * Literals tagged with `optionValue: true` (produced by
+ * `appendLiteralToUsage()` when rewriting option metavars for
+ * `conditional()` discriminators) are skipped, because they represent
+ * option values rather than standalone positional tokens.
+ *
+ * Known limitation: this function has the same usage-tree ordering caveat
+ * as {@link extractLeadingOptionNames}.
+ * See https://github.com/dahlia/optique/issues/735
+ *
+ * @param usage The usage description to extract leading literal values from.
+ * @returns A set of literal values that could match at the first token
+ *   position.
+ * @since 1.0.0
+ */
+export function extractLeadingLiteralValues(usage: Usage): Set<string> {
+  const values = new Set<string>();
+
+  function collectLeading(terms: Usage): void {
+    if (!terms || !Array.isArray(terms)) return;
+    for (const term of terms) {
+      switch (term.type) {
+        case "literal":
+          if (term.optionValue) {
+            // This literal is an option value (produced by
+            // appendLiteralToUsage stripping an option's metavar),
+            // not a standalone positional token.  We continue scanning
+            // for other standalone literals that may appear after it.
+            break;
+          }
+          values.add(term.value);
+          return; // positional literal; stop scanning siblings
+        case "command":
+        case "argument":
+          return; // positional token; stop scanning siblings
+        case "optional":
+          collectLeading(term.terms);
+          break;
+        case "multiple":
+          collectLeading(term.terms);
+          if (term.min > 0 && branchConsumesToken(term.terms, true)) return;
+          break;
+        case "exclusive":
+          for (const branch of term.terms) {
+            collectLeading(branch);
+          }
+          if (exclusiveConsumesToken(term.terms, true)) return;
+          break;
+        default:
+          break; // option, passthrough, ellipsis: skip, continue
+      }
+    }
+  }
+
+  collectLeading(usage);
+  return values;
+}
+
+/**
  * Checks whether every branch of an exclusive term must consume a positional
  * token.  When true, terms after the exclusive are at position N+1 and should
  * not be considered "leading".
+ *
+ * @param skipOptionValueLiterals When `true`, literals tagged with
+ *   `optionValue` are treated as non-positional.  Only
+ *   `extractLeadingLiteralValues()` passes `true`; the option/command
+ *   extractors use the default (`false`) so that option+value pairs
+ *   still act as positional gates.
  */
-function exclusiveConsumesToken(branches: readonly Usage[]): boolean {
+function exclusiveConsumesToken(
+  branches: readonly Usage[],
+  skipOptionValueLiterals = false,
+): boolean {
   if (branches.length === 0) return false;
-  return branches.every((branch) => branchConsumesToken(branch));
+  return branches.every((branch) =>
+    branchConsumesToken(branch, skipOptionValueLiterals)
+  );
 }
 
-function branchConsumesToken(terms: Usage): boolean {
+function branchConsumesToken(
+  terms: Usage,
+  skipOptionValueLiterals = false,
+): boolean {
   if (!terms || !Array.isArray(terms)) return false;
   for (const term of terms) {
     switch (term.type) {
       case "command":
       case "argument":
+        return true;
       case "literal":
+        if (skipOptionValueLiterals && term.optionValue) break;
         return true;
       case "option":
         break; // transparent; continue scanning
       case "optional":
         break; // optional content doesn't guarantee consumption
       case "multiple":
-        if (term.min > 0 && branchConsumesToken(term.terms)) return true;
+        if (
+          term.min > 0 &&
+          branchConsumesToken(term.terms, skipOptionValueLiterals)
+        ) return true;
         break;
       case "exclusive":
-        if (exclusiveConsumesToken(term.terms)) return true;
+        if (exclusiveConsumesToken(term.terms, skipOptionValueLiterals)) {
+          return true;
+        }
         break;
       default:
         break;

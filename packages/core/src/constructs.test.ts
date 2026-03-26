@@ -52,7 +52,7 @@ import {
   option,
   passThrough,
 } from "@optique/core/primitives";
-import { formatUsage } from "@optique/core/usage";
+import { extractLiteralValues, formatUsage } from "@optique/core/usage";
 import {
   choice,
   integer,
@@ -11045,6 +11045,23 @@ describe("branch coverage: constructs.ts edge cases", () => {
 
     const usageText = formatUsage("app", parser.usage);
     assert.ok(usageText.length > 0);
+  });
+
+  it("conditional() with argument discriminator does not produce literal terms", () => {
+    // Argument terms are not replaced with literals because map() is
+    // invisible in the usage tree: we cannot tell whether the branch
+    // key is the raw argv token or a transformed value.
+    // See https://github.com/dahlia/optique/issues/734
+    const parser = conditional(
+      argument(string()),
+      {
+        help: object({ port: option("--port", integer()) }),
+        serve: object({ dir: argument(string()) }),
+      },
+    );
+    const literals = extractLiteralValues(parser.usage);
+    assert.ok(!literals.has("help"));
+    assert.ok(!literals.has("serve"));
   });
 
   it("conditional() async complete handles dependency source completion state", async () => {

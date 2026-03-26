@@ -7437,7 +7437,12 @@ export function conditional(
     ...allBranchParsers.map((p) => p.priority),
   );
 
-  // Helper to replace metavar with literal value after the option in usage
+  // Helper to replace metavar with literal value after the option in usage.
+  // Only option terms with metavar are rewritten: the metavar is stripped
+  // and a literal term is appended.  Argument terms are left unchanged
+  // because map() is invisible in the usage tree, so we cannot tell
+  // whether the branch key equals the raw argv token or a transformed
+  // value.  See https://github.com/dahlia/optique/issues/734
   function appendLiteralToUsage(usage: Usage, literalValue: string): Usage {
     const result: UsageTerm[] = [];
     for (const term of usage) {
@@ -7445,7 +7450,11 @@ export function conditional(
         // Add option without metavar, then add a literal term
         const { metavar: _, ...optionWithoutMetavar } = term;
         result.push(optionWithoutMetavar);
-        result.push({ type: "literal", value: literalValue });
+        result.push({
+          type: "literal",
+          value: literalValue,
+          optionValue: true,
+        });
       } else if (term.type === "optional") {
         result.push({
           ...term,

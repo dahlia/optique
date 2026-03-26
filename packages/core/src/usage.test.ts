@@ -4,6 +4,7 @@ import {
   extractArgumentMetavars,
   extractCommandNames,
   extractLeadingCommandNames,
+  extractLeadingLiteralValues,
   extractLeadingOptionNames,
   extractLiteralValues,
   extractOptionNames,
@@ -3392,6 +3393,125 @@ describe("extractLiteralValues", () => {
       extractLiteralValues(null as unknown as Usage),
       new Set(),
     );
+  });
+});
+
+describe("extractLeadingLiteralValues", () => {
+  it("should collect standalone leading literal", () => {
+    const usage: Usage = [{ type: "literal", value: "help" }];
+    assert.deepEqual(extractLeadingLiteralValues(usage), new Set(["help"]));
+  });
+
+  it("should not collect option-value literal (tagged with optionValue)", () => {
+    // appendLiteralToUsage marks literals derived from option metavars
+    // with optionValue: true. These are option values, not positionals.
+    const usage: Usage = [
+      { type: "option", names: ["--mode"] },
+      { type: "literal", value: "help", optionValue: true },
+    ];
+    assert.deepEqual(extractLeadingLiteralValues(usage), new Set());
+  });
+
+  it("should collect standalone literal after a flag", () => {
+    // A literal after a flag (option without metavar) is a real
+    // positional token, not an option value.
+    const usage: Usage = [
+      { type: "option", names: ["--verbose"] },
+      { type: "literal", value: "help" },
+    ];
+    assert.deepEqual(extractLeadingLiteralValues(usage), new Set(["help"]));
+  });
+
+  it("should collect from exclusive branches", () => {
+    const usage: Usage = [{
+      type: "exclusive",
+      terms: [
+        [{ type: "literal", value: "help" }],
+        [{ type: "literal", value: "serve" }],
+      ],
+    }];
+    assert.deepEqual(
+      extractLeadingLiteralValues(usage),
+      new Set(["help", "serve"]),
+    );
+  });
+
+  it("should not collect option-value literals within exclusive branches", () => {
+    const usage: Usage = [{
+      type: "exclusive",
+      terms: [
+        [
+          { type: "option", names: ["--mode"] },
+          { type: "literal", value: "help", optionValue: true },
+        ],
+        [
+          { type: "option", names: ["--mode"] },
+          { type: "literal", value: "serve", optionValue: true },
+        ],
+      ],
+    }];
+    assert.deepEqual(extractLeadingLiteralValues(usage), new Set());
+  });
+
+  it("should stop at positional gates", () => {
+    const usage: Usage = [
+      { type: "argument", metavar: "CMD" as const },
+      { type: "literal", value: "nested" },
+    ];
+    assert.deepEqual(extractLeadingLiteralValues(usage), new Set());
+  });
+
+  it("should continue past option-value literals to the next standalone literal", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--mode"] },
+      { type: "literal", value: "server", optionValue: true },
+      { type: "literal", value: "help" },
+    ];
+    assert.deepEqual(extractLeadingLiteralValues(usage), new Set(["help"]));
+  });
+
+  it("should continue past option-value literal in required multiple", () => {
+    // multiple(min:1, [option, literal(optionValue)]) should not block
+    // extractLeadingLiteralValues from reaching the subsequent literal.
+    const usage: Usage = [
+      {
+        type: "multiple",
+        min: 1,
+        terms: [
+          { type: "option", names: ["--mode"] },
+          { type: "literal", value: "server", optionValue: true },
+        ],
+      },
+      { type: "literal", value: "help" },
+    ];
+    assert.deepEqual(extractLeadingLiteralValues(usage), new Set(["help"]));
+  });
+});
+
+describe("optionValue gate asymmetry", () => {
+  it("extractLeadingOptionNames should still stop at optionValue literal", () => {
+    // Option-value literals occupy token positions in argv, so they
+    // must remain positional gates for option/command extraction.
+    const usage: Usage = [
+      { type: "option", names: ["--mode"] },
+      { type: "literal", value: "server", optionValue: true },
+      { type: "option", names: ["--port"] },
+    ];
+    // --port is behind the literal gate; only --mode is leading
+    assert.deepEqual(
+      extractLeadingOptionNames(usage),
+      new Set(["--mode"]),
+    );
+  });
+
+  it("extractLeadingCommandNames should still stop at optionValue literal", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--mode"] },
+      { type: "literal", value: "server", optionValue: true },
+      { type: "command", name: "help" },
+    ];
+    // command is behind the literal gate; not collected
+    assert.deepEqual(extractLeadingCommandNames(usage), new Set());
   });
 });
 
