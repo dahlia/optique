@@ -4842,6 +4842,30 @@ export function macAddress(
   const dotRegex = /^([0-9a-fA-F]{4})\.([0-9a-fA-F]{4})\.([0-9a-fA-F]{4})$/;
   const noneRegex = /^([0-9a-fA-F]{12})$/;
 
+  // Shared formatting logic: applies case conversion and joins octets with
+  // the given separator.  Used by both parse() and format() to guarantee
+  // consistent normalization.
+  function joinOctets(
+    octets: readonly string[],
+    sep: ":" | "-" | "." | "none",
+  ): string {
+    let formatted: readonly string[] = octets;
+    if (caseOption === "upper") {
+      formatted = octets.map((o) => o.toUpperCase());
+    } else if (caseOption === "lower") {
+      formatted = octets.map((o) => o.toLowerCase());
+    }
+    if (sep === ".") {
+      return [
+        formatted[0] + formatted[1],
+        formatted[2] + formatted[3],
+        formatted[4] + formatted[5],
+      ].join(".");
+    }
+    if (sep === "none") return formatted.join("");
+    return formatted.join(sep);
+  }
+
   return {
     $mode: "sync",
     metavar,
@@ -4929,38 +4953,18 @@ export function macAddress(
       // Zero-pad each octet to canonical two-digit form
       octets = octets.map((o) => o.padStart(2, "0"));
 
-      // Apply case conversion
-      let formattedOctets = octets;
-      if (caseOption === "upper") {
-        formattedOctets = octets.map((octet) => octet.toUpperCase());
-      } else if (caseOption === "lower") {
-        formattedOctets = octets.map((octet) => octet.toLowerCase());
-      }
-
       // Format output based on outputSeparator (or input separator if not specified)
       const finalSeparator = outputSeparator ?? inputSeparator ?? ":";
-
-      let result: string;
-      if (finalSeparator === ":") {
-        result = formattedOctets.join(":");
-      } else if (finalSeparator === "-") {
-        result = formattedOctets.join("-");
-      } else if (finalSeparator === ".") {
-        // Cisco format: 3 groups of 4 hex digits
-        result = [
-          formattedOctets[0] + formattedOctets[1],
-          formattedOctets[2] + formattedOctets[3],
-          formattedOctets[4] + formattedOctets[5],
-        ].join(".");
-      } else {
-        // "none"
-        result = formattedOctets.join("");
-      }
-
-      return { success: true, value: result };
+      return { success: true, value: joinOctets(octets, finalSeparator) };
     },
     format(value: string): string {
-      return value;
+      const hex = value.replace(/[^0-9a-fA-F]/g, "");
+      const octets: string[] = [];
+      for (let i = 0; i < hex.length; i += 2) {
+        octets.push(hex.slice(i, i + 2).padStart(2, "0"));
+      }
+      const sep = outputSeparator ?? (separator === "any" ? ":" : separator);
+      return joinOctets(octets, sep);
     },
   };
 }
@@ -5317,7 +5321,7 @@ export function domain(
       return { success: true, value: result };
     },
     format(value: string): string {
-      return value;
+      return lowercase ? value.toLowerCase() : value;
     },
   };
 }

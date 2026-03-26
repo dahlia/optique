@@ -13642,7 +13642,7 @@ describe("branch coverage regressions", () => {
     const mac = macAddress({ separator: "none" });
     const macResult = mac.parse("aabbccddeeff");
     assert.ok(macResult.success);
-    assert.equal(mac.format("aa:bb:cc:dd:ee:ff"), "aa:bb:cc:dd:ee:ff");
+    assert.equal(mac.format("aa:bb:cc:dd:ee:ff"), "aabbccddeeff");
 
     const dom = domain();
     assert.equal(dom.format("example.com"), "example.com");
@@ -13867,9 +13867,51 @@ describe("format() for network-address value parsers", () => {
     assert.equal(mac.format("00:1a:2b:3c:4d:5e"), "00:1a:2b:3c:4d:5e");
   });
 
+  it("macAddress().format() should normalize with outputSeparator", () => {
+    const mac = macAddress({ outputSeparator: "-" });
+    assert.equal(mac.format("00:1a:2b:3c:4d:5e"), "00-1a-2b-3c-4d-5e");
+  });
+
+  it("macAddress().format() should normalize with case option", () => {
+    const mac = macAddress({ case: "upper" });
+    assert.equal(mac.format("00:1a:2b:3c:4d:5e"), "00:1A:2B:3C:4D:5E");
+  });
+
+  it("macAddress().format() should normalize separator=none", () => {
+    const mac = macAddress({ separator: "none" });
+    assert.equal(mac.format("00:1a:2b:3c:4d:5e"), "001a2b3c4d5e");
+  });
+
+  it("macAddress() parse-format round-trips", () => {
+    const mac = macAddress({
+      separator: "any",
+      outputSeparator: ".",
+      case: "upper",
+    });
+    const parsed = mac.parse("aa:bb:cc:dd:ee:ff");
+    assert.ok(parsed.success);
+    if (parsed.success) {
+      assert.equal(mac.format(parsed.value), parsed.value);
+    }
+  });
+
   it("domain().format() should return the value, not metavar", () => {
     const dom = domain();
     assert.equal(dom.format("Example.COM"), "Example.COM");
+  });
+
+  it("domain().format() should apply lowercase when configured", () => {
+    const dom = domain({ lowercase: true });
+    assert.equal(dom.format("Example.COM"), "example.com");
+  });
+
+  it("domain() parse-format round-trips with lowercase", () => {
+    const dom = domain({ lowercase: true });
+    const parsed = dom.parse("Example.COM");
+    assert.ok(parsed.success);
+    if (parsed.success) {
+      assert.equal(dom.format(parsed.value), parsed.value);
+    }
   });
 
   it("ipv6().format() should return the value, not metavar", () => {
