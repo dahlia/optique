@@ -1053,4 +1053,88 @@ describe("parser.ts coverage branches", () => {
     }
     assert.equal(usage[1].type, "ellipsis");
   });
+
+  it("parseSync: infinite loop detection", () => {
+    const stalling: Parser<"sync", never, number> = {
+      $valueType: [] as readonly never[],
+      $stateType: [] as readonly number[],
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      initialState: 0,
+      parse(context) {
+        return {
+          success: true as const,
+          next: { ...context, state: (context.state as number) + 1 },
+          consumed: [],
+        };
+      },
+      complete() {
+        return { success: true as const, value: null as never };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [], brief: undefined };
+      },
+    };
+    const result = parse(stalling, ["stuck"]);
+    assert.equal(result.success, false);
+  });
+
+  it("getDocPageSync: infinite loop guard", () => {
+    const stalling: Parser<"sync", never, number> = {
+      $valueType: [] as readonly never[],
+      $stateType: [] as readonly number[],
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      initialState: 0,
+      parse(context) {
+        return {
+          success: true as const,
+          next: { ...context, state: (context.state as number) + 1 },
+          consumed: [],
+        };
+      },
+      complete() {
+        return { success: true as const, value: null as never };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [], brief: undefined };
+      },
+    };
+    const result = getDocPageSync(stalling, ["stuck"]);
+    assert.ok(result != null);
+  });
+
+  it("getDocPageAsync: infinite loop guard", async () => {
+    const stalling: Parser<"async", never, number> = {
+      $valueType: [] as readonly never[],
+      $stateType: [] as readonly number[],
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: 0,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, state: (context.state as number) + 1 },
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: null as never,
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [], brief: undefined };
+      },
+    };
+    const result = await getDocPageAsync(stalling, ["stuck"]);
+    assert.ok(result != null);
+  });
 });
