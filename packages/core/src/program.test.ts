@@ -178,7 +178,7 @@ describe("defineProgram", () => {
           parser: option("--name", string()),
           metadata: { name: "" },
         }),
-      TypeError,
+      { name: "TypeError", message: /program name.*empty/i },
     );
   });
 
@@ -189,7 +189,7 @@ describe("defineProgram", () => {
           parser: option("--name", string()),
           metadata: { name: "bad\nname" },
         }),
-      TypeError,
+      { name: "TypeError", message: /program name.*control characters/i },
     );
   });
 
@@ -200,7 +200,7 @@ describe("defineProgram", () => {
           parser: option("--name", string()),
           metadata: { name: 123 as never },
         } as never),
-      TypeError,
+      { name: "TypeError", message: /program name.*string/i },
     );
   });
 });

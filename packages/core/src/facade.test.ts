@@ -5200,7 +5200,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       const parser = object({ name: argument(string()) });
       assert.throws(
         () => runParser(parser, "", ["x"]),
-        TypeError,
+        { name: "TypeError", message: /program name.*empty/i },
       );
     });
 
@@ -5208,7 +5208,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       const parser = object({ name: argument(string()) });
       assert.throws(
         () => runParser(parser, "bad\nname", ["x"]),
-        TypeError,
+        { name: "TypeError", message: /program name.*control characters/i },
       );
     });
 
@@ -5219,7 +5219,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       };
       assert.throws(
         () => runParser(prog, ["x"]),
-        TypeError,
+        { name: "TypeError", message: /program name.*empty/i },
       );
     });
 
@@ -5230,7 +5230,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       } as Program<"sync", { readonly name: string }>;
       assert.throws(
         () => runParser(prog, ["x"]),
-        TypeError,
+        { name: "TypeError", message: /program name.*string/i },
       );
     });
   });
