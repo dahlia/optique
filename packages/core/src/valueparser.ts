@@ -72,6 +72,13 @@ export interface ValueParser<M extends Mode = "sync", T = unknown> {
    * Parsers that do not apply any normalization during parsing do not
    * need to implement this method.
    *
+   * **Limitation:** For dependency-derived value parsers (created via
+   * `deriveFrom()` or `dependency().derive()`), this method uses the
+   * default dependency value to build the inner parser, not the
+   * dependency value resolved during the current parse.  This is the
+   * same trade-off that {@link format} makes.  As a result, defaults
+   * may not be normalized according to a non-default dependency value.
+   *
    * @param value The value to normalize.
    * @returns The normalized value.
    * @since 1.0.0

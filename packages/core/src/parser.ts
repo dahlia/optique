@@ -277,6 +277,11 @@ export interface Parser<
    * by delegating to {@link ValueParser.normalize}.  Combinator wrappers
    * ({@link optional}, {@link withDefault}) forward it from inner parsers.
    *
+   * Exclusive combinators ({@link or}, `longestMatch()`) and
+   * multi-source combinators (`merge()`) intentionally do *not*
+   * implement this method because the active branch or key ownership
+   * is unknown at default time.
+   *
    * @param value The value to normalize.
    * @returns The normalized value.
    * @since 1.0.0

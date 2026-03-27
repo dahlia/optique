@@ -2905,6 +2905,15 @@ interface ValueParser<M extends Mode, T> {
     values so that runtime defaults match the representation that `parse()`
     would produce.
 
+    > [!NOTE]
+    > For dependency-derived value parsers (`deriveFrom()`,
+    > `dependency().derive()`), `normalize()` uses the default dependency
+    > value to build the inner parser, not the dependency value resolved
+    > during the current parse — the same trade-off that `format()` makes.
+    > Exclusive combinators (`or()`, `longestMatch()`) and multi-source
+    > combinators (`merge()`) intentionally do not forward normalization
+    > because the active branch or key ownership is unknown at default time.
+
 ### Basic custom parser
 
 Here's a simple custom parser for IPv4 addresses:

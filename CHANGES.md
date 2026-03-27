@@ -362,7 +362,10 @@ To be released.
 
  -  `withDefault()` now normalizes default values through the inner
     parser's `normalizeValue()` when available, so runtime defaults
-    match the representation that `parse()` would produce.  [[#318]]
+    match the representation that `parse()` would produce.  Exclusive
+    combinators (`or()`, `longestMatch()`) and multi-source combinators
+    (`merge()`) do not forward normalization because the active branch
+    or key ownership is unknown at default time.  [[#318]]
 
  -  Fixed `url()` parser's `suggest()` emitting `://` for non-hierarchical URL
     schemes like `mailto:` and `urn:`.  Suggestions now use `:` for
