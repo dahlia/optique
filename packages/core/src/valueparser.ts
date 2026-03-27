@@ -5718,17 +5718,18 @@ function parseIpv4Octets(
 ): readonly [number, number, number, number] | null {
   const parts = input.split(".");
   if (parts.length !== 4) return null;
-  const octets: number[] = [];
-  for (const part of parts) {
+  const octets: [number, number, number, number] = [0, 0, 0, 0];
+  for (let i = 0; i < 4; i++) {
+    const part = parts[i];
     if (part.length === 0) return null;
     if (part.trim() !== part) return null;
     if (part.length > 1 && part[0] === "0") return null;
     if (!/^[0-9]+$/.test(part)) return null;
     const octet = Number(part);
     if (!Number.isInteger(octet) || octet < 0 || octet > 255) return null;
-    octets.push(octet);
+    octets[i] = octet;
   }
-  return octets as unknown as readonly [number, number, number, number];
+  return octets;
 }
 
 /**
