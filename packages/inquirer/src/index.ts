@@ -1310,6 +1310,15 @@ export function prompt<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
+  // Forward value normalization from inner parser so that withDefault()
+  // can normalize defaults through prompt() wrappers.
+  if (typeof parser.normalizeValue === "function") {
+    Object.defineProperty(promptedParser, "normalizeValue", {
+      value: parser.normalizeValue.bind(parser),
+      configurable: true,
+      enumerable: false,
+    });
+  }
 
   return promptedParser;
 }

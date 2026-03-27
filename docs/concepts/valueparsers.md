@@ -2873,6 +2873,7 @@ interface ValueParser<M extends Mode, T> {
   readonly placeholder: T;
   parse(input: string): ModeValue<M, ValueParserResult<T>>;
   format(value: T): string;
+  normalize?(value: T): T;
 }
 ~~~~
 
@@ -2896,6 +2897,24 @@ interface ValueParser<M extends Mode, T> {
 
 `format()`
 :   Converts typed value back to string for display
+
+`normalize()`
+:   Optional.  Canonicalizes a value of type `T` according to the parser's
+    configuration (e.g., case conversion, separator normalization).
+    Built-in implementations delegate to `parse()` internally and
+    return invalid values unchanged when parsing fails.  When present,
+    `withDefault()` calls this on default
+    values so that runtime defaults match the representation that `parse()`
+    would produce.
+
+    > [!NOTE]
+    > For dependency-derived value parsers (`deriveFrom()`,
+    > `dependency().derive()`), `normalize()` uses the default dependency
+    > value to build the inner parser, not the dependency value resolved
+    > during the current parse — the same trade-off that `format()` makes.
+    > Exclusive combinators (`or()`, `longestMatch()`) and multi-source
+    > combinators (`merge()`) intentionally do not forward normalization
+    > because the active branch or key ownership is unknown at default time.
 
 ### Basic custom parser
 

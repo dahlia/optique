@@ -2450,7 +2450,7 @@ export function or(
     return { ...error, success: false };
   };
 
-  return {
+  const singleResult = {
     $mode: combinedMode,
     $valueType: [],
     $stateType: [],
@@ -2475,7 +2475,7 @@ export function or(
     suggest: createExclusiveSuggest(parsers, combinedMode),
     getDocFragments(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
-      _defaultValue?,
+      _defaultValue?: unknown,
     ) {
       let brief: Message | undefined;
       let description: Message | undefined;
@@ -2518,6 +2518,15 @@ export function or(
       };
     },
   };
+
+  // or() does NOT forward normalizeValue because the active branch is
+  // unknown at default time — normalizing through the wrong branch would
+  // produce values that differ from what parse() returns.
+  return singleResult as Parser<
+    Mode,
+    unknown,
+    [number, ParserResult<unknown>] | undefined
+  >;
 }
 
 /**
@@ -2932,7 +2941,7 @@ export function longestMatch(
     return { ...error, success: false };
   };
 
-  return {
+  const multiResult = {
     $mode: combinedMode,
     $valueType: [],
     $stateType: [],
@@ -2957,7 +2966,7 @@ export function longestMatch(
     suggest: createExclusiveSuggest(parsers, combinedMode),
     getDocFragments(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
-      _defaultValue?,
+      _defaultValue?: unknown,
     ) {
       let brief: Message | undefined;
       let description: Message | undefined;
@@ -3000,6 +3009,15 @@ export function longestMatch(
       };
     },
   };
+
+  // longestMatch() does NOT forward normalizeValue because the winning
+  // branch is unknown at default time — normalizing through the wrong
+  // branch would produce values that differ from what parse() returns.
+  return multiResult as Parser<
+    Mode,
+    unknown,
+    [number, ParserResult<unknown>] | undefined
+  >;
 }
 
 /**
@@ -4244,7 +4262,7 @@ export function object<
     return { ...error, success: false };
   };
 
-  return {
+  const objectParser = {
     $mode: combinedMode,
     $valueType: [],
     $stateType: [],
@@ -4716,6 +4734,49 @@ export function object<
     { readonly [K in keyof T]: unknown },
     { readonly [K in keyof T]: unknown }
   >;
+
+  // Build composite normalizeValue from field parsers that have normalizers.
+  const fieldNormalizers: [string | symbol, (v: unknown) => unknown][] = [];
+  for (const [key, fieldParser] of parserPairs) {
+    if (typeof fieldParser.normalizeValue === "function") {
+      fieldNormalizers.push([
+        key as string | symbol,
+        fieldParser.normalizeValue.bind(fieldParser),
+      ]);
+    }
+  }
+  if (fieldNormalizers.length > 0) {
+    type ObjType = { readonly [K in keyof T]: unknown };
+    Object.defineProperty(objectParser, "normalizeValue", {
+      value(obj: ObjType): ObjType {
+        if (typeof obj !== "object" || obj == null) return obj;
+        let changed = false;
+        let result: Record<string | symbol, unknown> | undefined;
+        for (const [key, normalize] of fieldNormalizers) {
+          if (Object.hasOwn(obj, key)) {
+            try {
+              const original = (obj as Record<string | symbol, unknown>)[key];
+              const normalized = normalize(original);
+              if (normalized !== original) {
+                if (!result) {
+                  result = { ...obj } as Record<string | symbol, unknown>;
+                }
+                result[key] = normalized;
+                changed = true;
+              }
+            } catch {
+              // best-effort; skip fields that fail normalization
+            }
+          }
+        }
+        return (changed ? result : obj) as ObjType;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+
+  return objectParser;
 }
 
 /**
@@ -5096,7 +5157,7 @@ export function tuple<
     };
   };
 
-  return {
+  const tupleParser = {
     $mode: combinedMode,
     $valueType: [],
     $stateType: [],
@@ -5429,6 +5490,45 @@ export function tuple<
     { readonly [K in keyof T]: unknown },
     { readonly [K in keyof T]: unknown }
   >;
+
+  // Build composite normalizeValue from element parsers that have normalizers.
+  const tupleNormalizers: [number, (v: unknown) => unknown][] = [];
+  for (let i = 0; i < parsers.length; i++) {
+    const p = parsers[i];
+    if (typeof p.normalizeValue === "function") {
+      tupleNormalizers.push([i, p.normalizeValue.bind(p)]);
+    }
+  }
+  if (tupleNormalizers.length > 0) {
+    type TupleType = { readonly [K in keyof T]: unknown };
+    Object.defineProperty(tupleParser, "normalizeValue", {
+      value(arr: TupleType): TupleType {
+        if (!Array.isArray(arr)) return arr;
+        let changed = false;
+        let result: unknown[] | undefined;
+        for (const [idx, normalize] of tupleNormalizers) {
+          if (idx < arr.length && Object.hasOwn(arr, idx)) {
+            try {
+              const original = arr[idx];
+              const normalized = normalize(original);
+              if (normalized !== original) {
+                if (!result) result = [...arr];
+                result[idx] = normalized;
+                changed = true;
+              }
+            } catch {
+              // best-effort
+            }
+          }
+        }
+        return (changed ? result : arr) as TupleType;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+
+  return tupleParser;
 }
 
 /**
@@ -5878,7 +5978,7 @@ export function merge(
   // can pre-complete dependency source fields at the outer level.
   const mergedFieldParsers = collectChildFieldParsers(parsers);
 
-  return {
+  const mergeParser = {
     $mode: combinedMode,
     $valueType: [],
     $stateType: [],
@@ -6214,7 +6314,7 @@ export function merge(
     },
     getDocFragments(
       state: DocState<Record<string | symbol, unknown>>,
-      _defaultValue?,
+      _defaultValue?: unknown,
     ) {
       let brief: Message | undefined;
       let description: Message | undefined;
@@ -6306,6 +6406,11 @@ export function merge(
     Record<string | symbol, unknown>,
     Record<string | symbol, unknown>
   >;
+
+  // merge() does NOT forward normalizeValue because children may have
+  // overlapping keys with last-write-wins semantics.  Normalizing through
+  // an earlier child's normalizer would change keys owned by a later child.
+  return mergeParser;
 }
 
 type ConcatParserArity =
@@ -7300,6 +7405,14 @@ export function group<M extends Mode, TValue, TState>(
       get() {
         return parser.placeholder;
       },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  // Forward value normalization as non-enumerable.
+  if (typeof parser.normalizeValue === "function") {
+    Object.defineProperty(groupParser, "normalizeValue", {
+      value: parser.normalizeValue.bind(parser),
       configurable: true,
       enumerable: false,
     });

@@ -763,6 +763,31 @@ function isAsyncModeParser(parser: { readonly $mode: Mode }): boolean {
   return parser.$mode === "async";
 }
 
+/**
+ * Shared helper for derived value parser `normalize()` implementations.
+ * Builds the inner parser from the factory and delegates to its
+ * `normalize()` if available, falling back to the original value on error.
+ */
+function normalizeWithDerivedParser<T>(
+  value: T,
+  getParser: () => ValueParser<Mode, T> | undefined,
+): T {
+  let derivedParser;
+  try {
+    derivedParser = getParser();
+  } catch {
+    return value;
+  }
+  if (derivedParser && typeof derivedParser.normalize === "function") {
+    try {
+      return derivedParser.normalize(value);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
 function createSyncDerivedFromParser<
   Deps extends readonly AnyDependencySource[],
   T,
@@ -870,6 +895,13 @@ function createSyncDerivedFromParser<
         return;
       }
       yield* derivedParser.suggest(prefix);
+    },
+
+    normalize(value: T): T {
+      return normalizeWithDerivedParser(value, () =>
+        options.factory(
+          ...(options.defaultValues() as DependencyValues<Deps>),
+        ));
     },
 
     *[suggestWithDependency](
@@ -987,6 +1019,13 @@ function createAsyncDerivedFromParserFromAsyncFactory<
         return String(value);
       }
       return derivedParser.format(value);
+    },
+
+    normalize(value: T): T {
+      return normalizeWithDerivedParser(value, () =>
+        options.factory(
+          ...(options.defaultValues() as DependencyValues<Deps>),
+        ));
     },
 
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
@@ -1116,6 +1155,13 @@ function createAsyncDerivedFromParserFromSyncFactory<
         return String(value);
       }
       return derivedParser.format(value);
+    },
+
+    normalize(value: T): T {
+      return normalizeWithDerivedParser(value, () =>
+        options.factory(
+          ...(options.defaultValues() as DependencyValues<Deps>),
+        ));
     },
 
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
@@ -1269,6 +1315,13 @@ function createSyncDerivedParser<S, T>(
       return derivedParser.format(value);
     },
 
+    normalize(value: T): T {
+      return normalizeWithDerivedParser(
+        value,
+        () => options.factory(options.defaultValue()),
+      );
+    },
+
     *suggest(prefix: string): Iterable<Suggestion> {
       let derivedParser;
       try {
@@ -1382,6 +1435,10 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
       return derivedParser.format(value);
     },
 
+    // normalize() is intentionally omitted for async-factory variants
+    // because options.factory() returns a Promise, which cannot be
+    // awaited in the synchronous normalize() method.
+
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
       let derivedParser;
       try {
@@ -1486,6 +1543,13 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
         return String(value);
       }
       return derivedParser.format(value);
+    },
+
+    normalize(value: T): T {
+      return normalizeWithDerivedParser(
+        value,
+        () => options.factory(options.defaultValue()),
+      );
     },
 
     async *suggest(prefix: string): AsyncIterable<Suggestion> {

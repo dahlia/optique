@@ -266,6 +266,27 @@ export interface Parser<
    * @since 1.0.0
    */
   shouldDeferCompletion?(state: TState): boolean;
+
+  /**
+   * Normalizes a parsed value according to the underlying value parser's
+   * configuration.  When present, {@link withDefault} calls this method
+   * on default values so that runtime defaults match the representation
+   * that the value parser's `parse()` would produce.
+   *
+   * Primitive parsers ({@link option}, {@link argument}) implement this
+   * by delegating to {@link ValueParser.normalize}.  Combinator wrappers
+   * ({@link optional}, {@link withDefault}) forward it from inner parsers.
+   *
+   * Exclusive combinators ({@link or}, `longestMatch()`) and
+   * multi-source combinators (`merge()`) intentionally do *not*
+   * implement this method because the active branch or key ownership
+   * is unknown at default time.
+   *
+   * @param value The value to normalize.
+   * @returns The normalized value.
+   * @since 1.0.0
+   */
+  normalizeValue?(value: TValue): TValue;
 }
 
 /**

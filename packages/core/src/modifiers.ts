@@ -232,7 +232,7 @@ export function optional<M extends Mode, TValue, TState>(
     : undefined;
 
   // Type cast needed due to TypeScript's conditional type limitations with generic M
-  return {
+  const optionalParser = {
     $mode: parser.$mode,
     $valueType: [],
     $stateType: [],
@@ -388,6 +388,20 @@ export function optional<M extends Mode, TValue, TState>(
     // Type assertion needed because TypeScript cannot verify ModeValue<M, T>
     // when M is a generic type parameter. Runtime behavior is correct via mode dispatch.
   } as unknown as Parser<M, TValue | undefined, [TState] | undefined>;
+  // Forward value normalization as non-enumerable so that ...parser spread
+  // in map() does not propagate it to the mapped type.
+  if (typeof parser.normalizeValue === "function") {
+    const innerNormalize = parser.normalizeValue.bind(parser);
+    Object.defineProperty(optionalParser, "normalizeValue", {
+      value(v: TValue | undefined): TValue | undefined {
+        if (v == null) return v;
+        return innerNormalize(v);
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  return optionalParser;
 }
 
 /**
@@ -606,6 +620,26 @@ export function withDefault<
       );
     },
     complete(state: [TState] | undefined) {
+      // Evaluate the default value (immediate or lazy) and normalize it
+      // through the inner parser's value normalizer when available.
+      function evaluateDefault(): TDefault {
+        const raw = typeof defaultValue === "function"
+          ? (defaultValue as () => TDefault)()
+          : defaultValue;
+        if (typeof parser.normalizeValue === "function") {
+          try {
+            return parser.normalizeValue(
+              raw as unknown as TValue,
+            ) as unknown as TDefault;
+          } catch {
+            // Normalization is best-effort; sentinel defaults whose type
+            // differs from TValue (e.g., union defaults like { kind: "local" })
+            // are returned as-is.
+          }
+        }
+        return raw;
+      }
+
       if (!Array.isArray(state)) {
         // If inner parser transforms the dependency value (e.g., map()),
         // we need to delegate to see if the chain actually wants to register.
@@ -632,9 +666,7 @@ export function withDefault<
             // with transforms since they break the dependency chain)
             if (isDependencySourceState(res)) {
               try {
-                const value = typeof defaultValue === "function"
-                  ? (defaultValue as () => TDefault)()
-                  : defaultValue;
+                const value = evaluateDefault();
                 return createDependencySourceState(
                   { success: true, value },
                   res[dependencyId],
@@ -652,9 +684,7 @@ export function withDefault<
             // returned undefined). Return our default value WITHOUT registering
             // the dependency.
             try {
-              const value = typeof defaultValue === "function"
-                ? (defaultValue as () => TDefault)()
-                : defaultValue;
+              const value = evaluateDefault();
               return { success: true, value };
             } catch (error) {
               return {
@@ -671,9 +701,7 @@ export function withDefault<
         // wrapped dependency source, we should register with the default value.
         if (isWrappedDependencySource(parser)) {
           try {
-            const value = typeof defaultValue === "function"
-              ? (defaultValue as () => TDefault)()
-              : defaultValue;
+            const value = evaluateDefault();
             const pendingState = parser[wrappedDependencySourceMarker];
             return createDependencySourceState(
               { success: true, value },
@@ -716,9 +744,7 @@ export function withDefault<
         }
         // No wrapped dependency source - just return the default value.
         try {
-          const value = typeof defaultValue === "function"
-            ? (defaultValue as () => TDefault)()
-            : defaultValue;
+          const value = evaluateDefault();
           return { success: true, value };
         } catch (error) {
           return {
@@ -755,9 +781,7 @@ export function withDefault<
             // (but this shouldn't normally happen since transforms break the chain)
             if (isDependencySourceState(res)) {
               try {
-                const value = typeof defaultValue === "function"
-                  ? (defaultValue as () => TDefault)()
-                  : defaultValue;
+                const value = evaluateDefault();
                 return createDependencySourceState(
                   { success: true, value },
                   res[dependencyId],
@@ -774,9 +798,7 @@ export function withDefault<
             // Inner parser didn't return a DependencySourceState. Return default
             // value WITHOUT registering the dependency.
             try {
-              const value = typeof defaultValue === "function"
-                ? (defaultValue as () => TDefault)()
-                : defaultValue;
+              const value = evaluateDefault();
               return { success: true, value };
             } catch (error) {
               return {
@@ -792,9 +814,7 @@ export function withDefault<
         // Inner parser does NOT transform the dependency value (e.g., optional()).
         // Register the dependency with default value.
         try {
-          const value = typeof defaultValue === "function"
-            ? (defaultValue as () => TDefault)()
-            : defaultValue;
+          const value = evaluateDefault();
           // Return a DependencySourceState with the default value so that
           // dependency resolution can find this value
           return createDependencySourceState(
@@ -850,9 +870,23 @@ export function withDefault<
         ? { kind: "unavailable" }
         : { kind: "available", state: state.state[0] };
 
+      let docDefault: TValue | undefined = getDocDefaultValue(
+        upperDefaultValue,
+      );
+      // Normalize the default for documentation so that help text matches
+      // the representation that parse() would produce.
+      if (
+        docDefault != null && typeof parser.normalizeValue === "function"
+      ) {
+        try {
+          docDefault = parser.normalizeValue(docDefault);
+        } catch {
+          // best-effort; sentinel defaults are shown as-is
+        }
+      }
       const fragments = syncParser.getDocFragments(
         innerState,
-        getDocDefaultValue(upperDefaultValue),
+        docDefault,
       );
 
       // If a custom message is provided, replace the default field in all entries
@@ -883,6 +917,23 @@ export function withDefault<
     Object.defineProperty(withDefaultParser, "placeholder", {
       get() {
         return parser.placeholder;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  // Forward value normalization as non-enumerable.  Guard with try/catch
+  // because TDefault may be a sentinel type incompatible with the inner
+  // parser's normalizer.
+  if (typeof parser.normalizeValue === "function") {
+    const innerNormalize = parser.normalizeValue.bind(parser);
+    Object.defineProperty(withDefaultParser, "normalizeValue", {
+      value(v: TValue | TDefault): TValue | TDefault {
+        try {
+          return innerNormalize(v as TValue) as TValue | TDefault;
+        } catch {
+          return v;
+        }
       },
       configurable: true,
       enumerable: false,
@@ -1036,6 +1087,10 @@ export function map<M extends Mode, T, U, TState>(
       return parser.getDocFragments(state, undefined);
     },
   } as Parser<M, U, TState>;
+  // Strip any normalizeValue inherited from the inner parser via ...parser
+  // spread.  The inner normalizer operates on type T, not the mapped type U,
+  // so keeping it would corrupt mapped defaults.
+  delete mappedParser.normalizeValue;
   // Lazily compute the mapped placeholder.  Non-enumerable so that
   // further ...parser spreads in downstream wrappers do not eagerly
   // evaluate the getter and trigger inner factory side effects.
@@ -1592,6 +1647,29 @@ export function multiple<M extends Mode, TValue, TState>(
     configurable: true,
     enumerable: false,
   });
+  // Forward value normalization, mapping the inner normalizer over each
+  // array element.  Non-enumerable so map()'s spread does not propagate it.
+  if (typeof parser.normalizeValue === "function") {
+    const innerNormalize = parser.normalizeValue.bind(parser);
+    Object.defineProperty(resultParser, "normalizeValue", {
+      value(values: readonly TValue[]): readonly TValue[] {
+        if (!Array.isArray(values)) return values;
+        let changed = false;
+        const result = values.map((v) => {
+          try {
+            const n = innerNormalize(v);
+            if (n !== v) changed = true;
+            return n;
+          } catch {
+            return v;
+          }
+        });
+        return changed ? result : values;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
 
   return resultParser;
 }
@@ -1709,6 +1787,14 @@ export function nonEmpty<M extends Mode, T, TState>(
       get() {
         return parser.placeholder;
       },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  // Forward value normalization as non-enumerable.
+  if (typeof parser.normalizeValue === "function") {
+    Object.defineProperty(nonEmptyParser, "normalizeValue", {
+      value: parser.normalizeValue.bind(parser),
       configurable: true,
       enumerable: false,
     });

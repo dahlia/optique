@@ -815,6 +815,15 @@ export function bindConfig<
       enumerable: false,
     });
   }
+  // Forward value normalization from inner parser so that withDefault()
+  // can normalize defaults through bindConfig() wrappers.
+  if (typeof parser.normalizeValue === "function") {
+    Object.defineProperty(boundParser, "normalizeValue", {
+      value: parser.normalizeValue.bind(parser),
+      configurable: true,
+      enumerable: false,
+    });
+  }
   return boundParser;
 }
 

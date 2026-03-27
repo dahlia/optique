@@ -13642,10 +13642,10 @@ describe("branch coverage regressions", () => {
     const mac = macAddress({ separator: "none" });
     const macResult = mac.parse("aabbccddeeff");
     assert.ok(macResult.success);
-    assert.equal(mac.format("aa:bb:cc:dd:ee:ff"), "MAC");
+    assert.equal(mac.format("aa:bb:cc:dd:ee:ff"), "aa:bb:cc:dd:ee:ff");
 
     const dom = domain();
-    assert.equal(dom.format("example.com"), "DOMAIN");
+    assert.equal(dom.format("example.com"), "example.com");
 
     const ipv6Parser = ipv6({
       errors: {
@@ -13656,7 +13656,7 @@ describe("branch coverage regressions", () => {
     assert.ok(!ipv6Parser.parse("1:2:3:4:5:6:7:8:9").success);
     assert.ok(!ipv6Parser.parse("2001::db8::1").success);
     assert.ok(ipv6Parser.parse("2001:0:0:1:0:0:0:1").success);
-    assert.equal(ipv6Parser.format("::1"), "IPV6");
+    assert.equal(ipv6Parser.format("::1"), "::1");
   });
 
   it("covers ip/cidr format and ipv6 normalization edge branches", () => {
@@ -13667,14 +13667,14 @@ describe("branch coverage regressions", () => {
     });
     const ipFailure = ipParser.parse("not-an-ip");
     assert.ok(!ipFailure.success);
-    assert.equal(ipParser.format("203.0.113.10"), "IP");
+    assert.equal(ipParser.format("203.0.113.10"), "203.0.113.10");
 
     const cidrParser = cidr();
     const cidrResult = cidrParser.parse("192.0.2.0/24");
     assert.ok(cidrResult.success);
     assert.equal(
       cidrParser.format({ address: "192.0.2.0", prefix: 24, version: 4 }),
-      "CIDR",
+      "192.0.2.0/24",
     );
 
     const ipv6Parser = ipv6();
@@ -13858,6 +13858,169 @@ describe("branch coverage regressions", () => {
 
     const result = parser.parse("not-an-ip-literal");
     assert.ok(!result.success);
+  });
+});
+
+describe("format() for network-address value parsers", () => {
+  it("macAddress().format() should return the value, not metavar", () => {
+    const mac = macAddress();
+    assert.equal(mac.format("00:1a:2b:3c:4d:5e"), "00:1a:2b:3c:4d:5e");
+  });
+
+  it("macAddress() parse-format round-trips for all separator styles", () => {
+    const mac = macAddress();
+    for (
+      const input of [
+        "aa:bb:cc:dd:ee:ff",
+        "aa-bb-cc-dd-ee-ff",
+        "aabb.ccdd.eeff",
+        "aabbccddeeff",
+      ]
+    ) {
+      const parsed = mac.parse(input);
+      assert.ok(parsed.success);
+      if (parsed.success) {
+        assert.equal(mac.format(parsed.value), parsed.value);
+      }
+    }
+  });
+
+  it("macAddress().format() should normalize with configured options", () => {
+    const mac = macAddress({ case: "upper", outputSeparator: ":" });
+    assert.equal(mac.format("aa-bb-cc-dd-ee-ff"), "AA:BB:CC:DD:EE:FF");
+  });
+
+  it("domain().format() should return the value, not metavar", () => {
+    const dom = domain();
+    assert.equal(dom.format("Example.COM"), "Example.COM");
+  });
+
+  it("domain().format() should lowercase when configured", () => {
+    const dom = domain({ lowercase: true });
+    assert.equal(dom.format("Example.COM"), "example.com");
+  });
+
+  it("domain() parse-format round-trips with lowercase", () => {
+    const dom = domain({ lowercase: true });
+    const parsed = dom.parse("Example.COM");
+    assert.ok(parsed.success);
+    if (parsed.success) {
+      assert.equal(dom.format(parsed.value), parsed.value);
+    }
+  });
+
+  it("ipv6().format() should return the value, not metavar", () => {
+    const v6 = ipv6();
+    assert.equal(v6.format("2001:db8::1"), "2001:db8::1");
+  });
+
+  it("ip().format() should return the value, not metavar", () => {
+    const ipParser = ip();
+    assert.equal(ipParser.format("192.0.2.1"), "192.0.2.1");
+    assert.equal(ipParser.format("2001:db8::1"), "2001:db8::1");
+  });
+
+  it("cidr().format() should return CIDR notation, not metavar", () => {
+    const cidrParser = cidr();
+    assert.equal(
+      cidrParser.format({ address: "192.0.2.0", prefix: 24, version: 4 }),
+      "192.0.2.0/24",
+    );
+    assert.equal(
+      cidrParser.format({ address: "2001:db8::", prefix: 48, version: 6 }),
+      "2001:db8::/48",
+    );
+  });
+});
+
+describe("ValueParser.normalize()", () => {
+  it("macAddress().normalize() applies case and separator", () => {
+    const mac = macAddress({ case: "upper", outputSeparator: ":" });
+    assert.equal(mac.normalize!("aa-bb-cc-dd-ee-ff"), "AA:BB:CC:DD:EE:FF");
+  });
+
+  it("macAddress().normalize() preserves separator when separator is any", () => {
+    const mac = macAddress();
+    assert.equal(mac.normalize!("aa-bb-cc-dd-ee-ff"), "aa-bb-cc-dd-ee-ff");
+    assert.equal(mac.normalize!("aabb.ccdd.eeff"), "aabb.ccdd.eeff");
+  });
+
+  it("macAddress().normalize() pads shorthand octets", () => {
+    const mac = macAddress({ outputSeparator: "." });
+    assert.equal(mac.normalize!("0:1:2:3:4:5"), "0001.0203.0405");
+  });
+
+  it("macAddress().normalize() preserves non-MAC strings unchanged", () => {
+    const mac = macAddress({ outputSeparator: ":" });
+    assert.equal(mac.normalize!("local"), "local");
+    assert.equal(mac.normalize!("auto"), "auto");
+    assert.equal(mac.normalize!("foo.bar.baz"), "foo.bar.baz");
+    // Non-Cisco dotted hex strings are preserved
+    assert.equal(mac.normalize!("aaa.bbb.ccc"), "aaa.bbb.ccc");
+    // 3-char octets are invalid — should not be rewritten
+    assert.equal(
+      mac.normalize!("aaa:bbb:ccc:ddd:eee:fff"),
+      "aaa:bbb:ccc:ddd:eee:fff",
+    );
+    // 11-digit bare hex is invalid (need exactly 12) — should not be rewritten
+    assert.equal(mac.normalize!("aabbccddeef"), "aabbccddeef");
+  });
+
+  it("macAddress().format() preserves non-MAC strings unchanged", () => {
+    const mac = macAddress({ outputSeparator: ":" });
+    assert.equal(mac.format("local"), "local");
+  });
+
+  it("domain().normalize() applies lowercase when configured", () => {
+    const dom = domain({ lowercase: true });
+    assert.equal(dom.normalize!("Example.COM"), "example.com");
+  });
+
+  it("domain().normalize() preserves non-domain sentinels", () => {
+    const dom = domain({ lowercase: true });
+    assert.equal(dom.normalize!("LOCAL"), "LOCAL");
+    assert.equal(dom.normalize!("AUTO"), "AUTO");
+  });
+
+  it("domain() has no normalize when lowercase is false", () => {
+    const dom = domain();
+    assert.equal(dom.normalize, undefined);
+  });
+
+  it("ipv6().normalize() compresses non-canonical addresses", () => {
+    const v6 = ipv6();
+    assert.equal(
+      v6.normalize!("2001:0db8:0000:0000:0000:0000:0000:0001"),
+      "2001:db8::1",
+    );
+  });
+
+  it("ipv6().normalize() preserves rejected addresses unchanged", () => {
+    const v6 = ipv6({ allowLoopback: false });
+    assert.equal(v6.normalize!("0:0:0:0:0:0:0:1"), "0:0:0:0:0:0:0:1");
+  });
+
+  it("ip().normalize() compresses IPv6 addresses", () => {
+    const ipParser = ip();
+    assert.equal(
+      ipParser.normalize!("2001:0db8:0000:0000:0000:0000:0000:0001"),
+      "2001:db8::1",
+    );
+    assert.equal(ipParser.normalize!("192.0.2.1"), "192.0.2.1");
+  });
+
+  it("cidr().normalize() compresses IPv6 CIDR addresses", () => {
+    const cidrParser = cidr();
+    const result = cidrParser.normalize!({
+      address: "2001:0db8:0000:0000:0000:0000:0000:0000",
+      prefix: 32,
+      version: 6,
+    });
+    assert.deepEqual(result, {
+      address: "2001:db8::",
+      prefix: 32,
+      version: 6,
+    });
   });
 });
 

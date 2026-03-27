@@ -33,7 +33,9 @@ import { parse, type Parser, type Suggestion } from "@optique/core/parser";
 import { argument, constant, flag, option } from "@optique/core/primitives";
 import {
   choice,
+  domain,
   integer,
+  macAddress,
   string,
   type ValueParser,
   type ValueParserResult,
@@ -1412,6 +1414,192 @@ describe("withDefault", () => {
 
     assert.ok(
       suggestions.some((s) => s.kind === "literal" && s.text === "yaml"),
+    );
+  });
+
+  it("should normalize default values through the value parser", () => {
+    const mac = macAddress({ case: "lower", outputSeparator: ":" });
+    const parser = withDefault(
+      option("--mac", mac),
+      "AA-BB-CC-DD-EE-FF",
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "aa:bb:cc:dd:ee:ff");
+    }
+  });
+
+  it("should normalize default values for domain with lowercase", () => {
+    const dom = domain({ lowercase: true });
+    const parser = withDefault(option("--domain", dom), "Example.COM");
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "example.com");
+    }
+  });
+
+  it("should not normalize when value parser has no normalize", () => {
+    const parser = withDefault(option("--name", string()), "Hello");
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "Hello");
+    }
+  });
+
+  it("should not crash on sentinel defaults of incompatible type", () => {
+    const parser = withDefault(
+      option("--domain", domain({ lowercase: true })),
+      { kind: "local" } as never,
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { kind: "local" });
+    }
+  });
+
+  it("should preserve string sentinel defaults that are not valid values", () => {
+    const parser = withDefault(
+      option("--mac", macAddress({ outputSeparator: ":" })),
+      "local",
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "local");
+    }
+  });
+
+  it("should preserve dotted sentinel defaults for macAddress", () => {
+    const parser = withDefault(
+      option("--mac", macAddress()),
+      "foo.bar.baz",
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "foo.bar.baz");
+    }
+  });
+
+  it("should normalize defaults through nonEmpty() wrappers", () => {
+    const parser = withDefault(
+      nonEmpty(option("--domain", domain({ lowercase: true }))),
+      "Example.COM",
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "example.com");
+    }
+  });
+
+  it("should preserve non-domain sentinels in defaults", () => {
+    const parser = withDefault(
+      option("--domain", domain({ lowercase: true })),
+      "LOCAL",
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "LOCAL");
+    }
+  });
+
+  it("should preserve defaults that fail parser validation", () => {
+    // normalize() uses parse() internally, so defaults that would
+    // fail validation are returned unchanged
+    const parser = withDefault(
+      option(
+        "--domain",
+        domain({ lowercase: true, allowedTlds: ["com"] }),
+      ),
+      "Example.NET",
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "Example.NET");
+    }
+  });
+
+  it("should preserve MAC defaults with wrong separator", () => {
+    const parser = withDefault(
+      option("--mac", macAddress({ separator: "none" })),
+      "aa:bb:cc:dd:ee:ff",
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      // parse() rejects colon-separated input with separator: "none",
+      // so the default is preserved unchanged
+      assert.equal(result.value, "aa:bb:cc:dd:ee:ff");
+    }
+  });
+
+  it("should preserve non-string sentinel objects in defaults", () => {
+    const parser = withDefault(
+      option("--mac", macAddress()),
+      { kind: "local" } as never,
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { kind: "local" });
+    }
+  });
+
+  it("should normalize defaults through multiple() wrappers", () => {
+    const parser = withDefault(
+      multiple(option("--domain", domain({ lowercase: true }))),
+      ["Example.COM"],
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["example.com"]);
+    }
+  });
+
+  it("should normalize defaults through object() wrappers", () => {
+    const parser = withDefault(
+      object({
+        domain: option("--domain", domain({ lowercase: true })),
+      }),
+      { domain: "Example.COM" },
+    );
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { domain: "example.com" });
+    }
+  });
+
+  it("should normalize defaults in help text rendering", () => {
+    const mac = macAddress({ case: "lower", outputSeparator: ":" });
+    const parser = withDefault(option("--mac", mac), "AA:BB:CC:DD:EE:FF");
+    const syncParser = parser as unknown as {
+      getDocFragments(
+        state: { kind: "unavailable" },
+        defaultValue?: unknown,
+      ): { fragments: readonly { default?: unknown }[] };
+    };
+    const doc = syncParser.getDocFragments({ kind: "unavailable" });
+    const entry = doc.fragments.find(
+      (f: { default?: unknown }) => f.default != null,
+    ) as { default?: readonly { type: string; text?: string }[] } | undefined;
+    assert.ok(entry);
+    assert.ok(entry.default);
+    const textPart = entry.default.find(
+      (t: { type: string; text?: string }) => t.type === "value",
+    );
+    assert.ok(textPart);
+    assert.equal(
+      (textPart as unknown as { value: string }).value,
+      "aa:bb:cc:dd:ee:ff",
     );
   });
 });

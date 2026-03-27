@@ -347,6 +347,29 @@ To be released.
     The method now uses `Intl.Locale.toString()` instead of `baseName` to
     preserve the full locale identifier.  [[#317], [#565]]
 
+ -  Fixed `format()` in `macAddress()`, `domain()`, `ipv6()`, `ip()`, and
+    `cidr()` value parsers to return the serialized value instead of the
+    metavar placeholder (e.g., `"MAC"`, `"DOMAIN"`).  [[#318], [#742]]
+
+ -  Added `ValueParser.normalize()` optional method for canonicalizing
+    values of type `T` (e.g., MAC address case/separator normalization,
+    domain lowercasing).  Built-in implementations delegate to `parse()`
+    internally, returning invalid values unchanged.  [[#318], [#742]]
+
+ -  Added `Parser.normalizeValue()` optional method.  Primitive parsers
+    (`option()`, `argument()`) implement this by delegating to
+    `ValueParser.normalize()`.  Value-preserving combinator wrappers
+    (including `optional()`, `withDefault()`, `nonEmpty()`, `group()`,
+    `command()`, `multiple()`, `object()`, `tuple()`) forward it from
+    inner parsers.  [[#318], [#742]]
+
+ -  `withDefault()` now normalizes default values through the inner
+    parser's `normalizeValue()` when available, so runtime defaults
+    match the representation that `parse()` would produce.  Exclusive
+    combinators (`or()`, `longestMatch()`) and multi-source combinators
+    (`merge()`) do not forward normalization because the active branch
+    or key ownership is unknown at default time.  [[#318], [#742]]
+
  -  Fixed `url()` parser's `suggest()` emitting `://` for non-hierarchical URL
     schemes like `mailto:` and `urn:`.  Suggestions now use `:` for
     non-hierarchical schemes and `://` only for special schemes (`http`,
@@ -1042,6 +1065,7 @@ To be released.
 [#310]: https://github.com/dahlia/optique/issues/310
 [#315]: https://github.com/dahlia/optique/issues/315
 [#317]: https://github.com/dahlia/optique/issues/317
+[#318]: https://github.com/dahlia/optique/issues/318
 [#319]: https://github.com/dahlia/optique/issues/319
 [#320]: https://github.com/dahlia/optique/issues/320
 [#321]: https://github.com/dahlia/optique/issues/321
@@ -1254,6 +1278,7 @@ To be released.
 [#739]: https://github.com/dahlia/optique/pull/739
 [#740]: https://github.com/dahlia/optique/pull/740
 [#741]: https://github.com/dahlia/optique/pull/741
+[#742]: https://github.com/dahlia/optique/pull/742
 
 ### @optique/config
 

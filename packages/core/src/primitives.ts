@@ -1182,6 +1182,24 @@ export function option<M extends Mode, T>(
       return `option(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
     },
   };
+  // Define normalizeValue as non-enumerable so that ...parser spread in
+  // map() does not propagate the inner normalizer to the mapped type.
+  // Delegates to ValueParser.normalize() directly so that custom parsers
+  // with lossy format() or non-string types are handled correctly.
+  if (valueParser != null && typeof valueParser.normalize === "function") {
+    const normalize = valueParser.normalize.bind(valueParser);
+    Object.defineProperty(result, "normalizeValue", {
+      value(v: T | boolean): T | boolean {
+        try {
+          return normalize(v as T);
+        } catch {
+          return v;
+        }
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
   // Define placeholder lazily to avoid triggering derived value parser
   // factory functions during parser construction.  Non-enumerable so that
   // ...parser spread in map() does not eagerly evaluate the getter.
@@ -1853,6 +1871,22 @@ export function argument<M extends Mode, T>(
       return `argument()`;
     },
   };
+  // Define normalizeValue as non-enumerable so that ...parser spread in
+  // map() does not propagate the inner normalizer to the mapped type.
+  if (typeof valueParser.normalize === "function") {
+    const normalize = valueParser.normalize.bind(valueParser);
+    Object.defineProperty(result, "normalizeValue", {
+      value(v: T): T {
+        try {
+          return normalize(v);
+        } catch {
+          return v;
+        }
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
   // Define placeholder lazily to avoid triggering derived value parser
   // factory functions during parser construction.  Non-enumerable so that
   // ...parser spread in map() does not eagerly evaluate the getter.
@@ -2316,6 +2350,15 @@ export function command<M extends Mode, T, TState>(
       return `command(${JSON.stringify(name)})`;
     },
   };
+  // Forward value normalization as non-enumerable so that withDefault()
+  // can normalize defaults through command() wrappers.
+  if (typeof parser.normalizeValue === "function") {
+    Object.defineProperty(result, "normalizeValue", {
+      value: parser.normalizeValue.bind(parser),
+      configurable: true,
+      enumerable: false,
+    });
+  }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
   return result as unknown as Parser<M, T, CommandState<TState>>;

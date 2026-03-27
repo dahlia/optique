@@ -60,6 +60,34 @@ export interface ValueParser<M extends Mode = "sync", T = unknown> {
   format(value: T): string;
 
   /**
+   * Normalizes a value of type {@link T} according to this parser's
+   * configuration.  This applies the same canonicalization that
+   * {@link parse} would apply (e.g., case conversion, separator
+   * normalization).  Built-in implementations delegate to {@link parse}
+   * internally, so values that would fail validation are returned
+   * unchanged rather than being canonicalized.
+   *
+   * When present, combinators like `withDefault()` call this method on
+   * default values so that runtime defaults match the representation
+   * that {@link parse} would produce.
+   *
+   * Parsers that do not apply any normalization during parsing do not
+   * need to implement this method.
+   *
+   * **Limitation:** For dependency-derived value parsers (created via
+   * `deriveFrom()` or `dependency().derive()`), this method uses the
+   * default dependency value to build the inner parser, not the
+   * dependency value resolved during the current parse.  This is the
+   * same trade-off that {@link format} makes.  As a result, defaults
+   * may not be normalized according to a non-default dependency value.
+   *
+   * @param value The value to normalize.
+   * @returns The normalized value.
+   * @since 1.0.0
+   */
+  normalize?(value: T): T;
+
+  /**
    * Provides completion suggestions for values of this type.
    * This is optional and used for shell completion functionality.
    *
@@ -4842,7 +4870,89 @@ export function macAddress(
   const dotRegex = /^([0-9a-fA-F]{4})\.([0-9a-fA-F]{4})\.([0-9a-fA-F]{4})$/;
   const noneRegex = /^([0-9a-fA-F]{12})$/;
 
-  return {
+  // Shared formatting logic: applies case conversion and joins octets with
+  // the given separator.  Used by both parse() and format() to guarantee
+  // consistent normalization.
+  function joinOctets(
+    octets: readonly string[],
+    sep: ":" | "-" | "." | "none",
+  ): string {
+    let formatted: readonly string[] = octets;
+    if (caseOption === "upper") {
+      formatted = octets.map((o) => o.toUpperCase());
+    } else if (caseOption === "lower") {
+      formatted = octets.map((o) => o.toLowerCase());
+    }
+    if (sep === ".") {
+      return [
+        formatted[0] + formatted[1],
+        formatted[2] + formatted[3],
+        formatted[4] + formatted[5],
+      ].join(".");
+    }
+    if (sep === "none") return formatted.join("");
+    return formatted.join(sep);
+  }
+
+  // Normalizes a MAC address string by splitting on the detected separator,
+  // padding octets, and re-joining with the configured separator and case.
+  // Returns the value unchanged if it does not have the expected 6-octet
+  // structure (e.g., a string sentinel like "local").
+  // Shared by both format() and normalize().
+  function normalizeMac(value: string): string {
+    // Guard against sentinel defaults of incompatible runtime type
+    // (e.g., { kind: "local" } cast as string via withDefault).
+    // Fall back to metavar for help-text display.
+    if (typeof value !== "string") return metavar;
+    let octets: string[];
+    let detectedSep: ":" | "-" | "." | "none";
+    if (value.includes(":")) {
+      octets = value.split(":");
+      detectedSep = ":";
+    } else if (value.includes("-")) {
+      octets = value.split("-");
+      detectedSep = "-";
+    } else if (value.includes(".")) {
+      // Cisco format: exactly 3 groups of 4 hex digits
+      const groups = value.split(".");
+      if (
+        groups.length !== 3 ||
+        !groups.every((g) => /^[0-9a-fA-F]{4}$/.test(g))
+      ) {
+        return value;
+      }
+      octets = groups.flatMap((g) => [g.slice(0, 2), g.slice(2)]);
+      detectedSep = ".";
+    } else {
+      // No separator: require exactly 12 hex chars (matching parse's noneRegex)
+      if (value.length !== 12) return value;
+      octets = [];
+      for (let i = 0; i < value.length; i += 2) {
+        octets.push(value.slice(i, i + 2));
+      }
+      detectedSep = "none";
+    }
+    // Guard: a valid MAC has exactly 6 hex octets.  If not, the value is
+    // not a MAC address (e.g., a sentinel default) — return it unchanged.
+    if (
+      octets.length !== 6 ||
+      !octets.every((o) => /^[0-9a-fA-F]{1,2}$/.test(o))
+    ) {
+      return value;
+    }
+    octets = octets.map((o) => o.padStart(2, "0"));
+    let sep: ":" | "-" | "." | "none";
+    if (outputSeparator != null) {
+      sep = outputSeparator;
+    } else if (separator !== "any") {
+      sep = separator;
+    } else {
+      sep = detectedSep;
+    }
+    return joinOctets(octets, sep);
+  }
+
+  const parserObj: ValueParser<"sync", string> = {
     $mode: "sync",
     metavar,
     get placeholder() {
@@ -4929,40 +5039,54 @@ export function macAddress(
       // Zero-pad each octet to canonical two-digit form
       octets = octets.map((o) => o.padStart(2, "0"));
 
-      // Apply case conversion
-      let formattedOctets = octets;
-      if (caseOption === "upper") {
-        formattedOctets = octets.map((octet) => octet.toUpperCase());
-      } else if (caseOption === "lower") {
-        formattedOctets = octets.map((octet) => octet.toLowerCase());
-      }
-
       // Format output based on outputSeparator (or input separator if not specified)
       const finalSeparator = outputSeparator ?? inputSeparator ?? ":";
-
-      let result: string;
-      if (finalSeparator === ":") {
-        result = formattedOctets.join(":");
-      } else if (finalSeparator === "-") {
-        result = formattedOctets.join("-");
-      } else if (finalSeparator === ".") {
-        // Cisco format: 3 groups of 4 hex digits
-        result = [
-          formattedOctets[0] + formattedOctets[1],
-          formattedOctets[2] + formattedOctets[3],
-          formattedOctets[4] + formattedOctets[5],
-        ].join(".");
-      } else {
-        // "none"
-        result = formattedOctets.join("");
-      }
-
-      return { success: true, value: result };
+      return { success: true, value: joinOctets(octets, finalSeparator) };
     },
-    format(): string {
-      return metavar;
-    },
+    format: normalizeMac, // overridden below
   };
+  // Both format and normalize use the full parse() pipeline so that
+  // values parse() would reject are returned unchanged.  This keeps
+  // help text consistent with the runtime default.
+  // A recursion guard prevents stack overflow when custom error callbacks
+  // call format()/normalize() on the same parser.
+  const macParser = parserObj;
+  let macParsing = false;
+  Object.defineProperty(parserObj, "format", {
+    value(v: string): string {
+      if (typeof v !== "string") return metavar;
+      if (macParsing) return v;
+      macParsing = true;
+      try {
+        const result = macParser.parse(v);
+        return result.success ? result.value : v;
+      } catch {
+        return v;
+      } finally {
+        macParsing = false;
+      }
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(parserObj, "normalize", {
+    value(v: string): string {
+      if (typeof v !== "string") return v;
+      if (macParsing) return v;
+      macParsing = true;
+      try {
+        const result = macParser.parse(v);
+        return result.success ? result.value : v;
+      } catch {
+        return v;
+      } finally {
+        macParsing = false;
+      }
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  return parserObj;
 }
 
 /**
@@ -5178,7 +5302,7 @@ export function domain(
   const subdomainsNotAllowed = options?.errors?.subdomainsNotAllowed;
   const tldNotAllowed = options?.errors?.tldNotAllowed;
 
-  return {
+  const domainParserObj: ValueParser<"sync", string> = {
     $mode: "sync",
     metavar,
     placeholder: options?.placeholder ??
@@ -5316,10 +5440,56 @@ export function domain(
 
       return { success: true, value: result };
     },
-    format(): string {
-      return metavar;
+    format(value: string): string {
+      if (typeof value !== "string") return metavar;
+      if (!lowercase) return value;
+      // Only lowercase values that look like domains (enough labels).
+      // Sentinel strings like "LOCAL" are returned unchanged.
+      return value.split(".").length >= minLabels ? value.toLowerCase() : value;
     },
   };
+  // Both format and normalize use the full parse() pipeline so that
+  // values parse() would reject (e.g., "A..B", disallowed TLDs) are
+  // returned unchanged, keeping help text consistent with runtime.
+  if (lowercase) {
+    const domParser = domainParserObj;
+    let domParsing = false;
+    Object.defineProperty(domainParserObj, "format", {
+      value(v: string): string {
+        if (typeof v !== "string") return metavar;
+        if (domParsing) return v;
+        domParsing = true;
+        try {
+          const result = domParser.parse(v);
+          return result.success ? result.value : v;
+        } catch {
+          return v;
+        } finally {
+          domParsing = false;
+        }
+      },
+      configurable: true,
+      enumerable: true,
+    });
+    Object.defineProperty(domainParserObj, "normalize", {
+      value(v: string): string {
+        if (typeof v !== "string") return v;
+        if (domParsing) return v;
+        domParsing = true;
+        try {
+          const result = domParser.parse(v);
+          return result.success ? result.value : v;
+        } catch {
+          return v;
+        } finally {
+          domParsing = false;
+        }
+      },
+      configurable: true,
+      enumerable: true,
+    });
+  }
+  return domainParserObj;
 }
 /**
  * Options for configuring the IPv6 address value parser.
@@ -5445,7 +5615,7 @@ export function ipv6(
   const errors = options?.errors;
   const metavar = options?.metavar ?? "IPV6";
 
-  return {
+  const ipv6ParserObj: ValueParser<"sync", string> = {
     $mode: "sync",
     metavar,
     placeholder: allowZero ? "::" : allowLoopback ? "::1" : "2001:db8::1",
@@ -5549,10 +5719,49 @@ export function ipv6(
 
       return { success: true, value: normalized };
     },
-    format(): string {
-      return metavar;
+    format(value: string): string {
+      if (typeof value !== "string") return metavar;
+      return parseAndNormalizeIpv6(value) ?? value;
     },
   };
+  // Both format and normalize use parse() for validation, keeping
+  // help text consistent with runtime defaults.
+  let ipv6Parsing = false;
+  Object.defineProperty(ipv6ParserObj, "format", {
+    value(v: string): string {
+      if (typeof v !== "string") return metavar;
+      if (ipv6Parsing) return v;
+      ipv6Parsing = true;
+      try {
+        const result = ipv6ParserObj.parse(v);
+        return result.success ? result.value : v;
+      } catch {
+        return v;
+      } finally {
+        ipv6Parsing = false;
+      }
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(ipv6ParserObj, "normalize", {
+    value(v: string): string {
+      if (typeof v !== "string") return v;
+      if (ipv6Parsing) return v;
+      ipv6Parsing = true;
+      try {
+        const result = ipv6ParserObj.parse(v);
+        return result.success ? result.value : v;
+      } catch {
+        return v;
+      } finally {
+        ipv6Parsing = false;
+      }
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  return ipv6ParserObj;
 }
 
 /**
@@ -5991,7 +6200,7 @@ export function ip(
     }
     : undefined;
 
-  return {
+  const ipParserObj: ValueParser<"sync", string> = {
     $mode: "sync",
     metavar,
     placeholder: version === 6
@@ -6074,10 +6283,48 @@ export function ip(
       ] as Message;
       return { success: false, error: msg };
     },
-    format(): string {
-      return metavar;
+    format(value: string): string {
+      if (typeof value !== "string") return metavar;
+      // IPv4 addresses are already canonical; normalize IPv6 addresses
+      return parseAndNormalizeIpv6(value) ?? value;
     },
   };
+  let ipParsing = false;
+  Object.defineProperty(ipParserObj, "format", {
+    value(v: string): string {
+      if (typeof v !== "string") return metavar;
+      if (ipParsing) return v;
+      ipParsing = true;
+      try {
+        const result = ipParserObj.parse(v);
+        return result.success ? result.value : v;
+      } catch {
+        return v;
+      } finally {
+        ipParsing = false;
+      }
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(ipParserObj, "normalize", {
+    value(v: string): string {
+      if (typeof v !== "string") return v;
+      if (ipParsing) return v;
+      ipParsing = true;
+      try {
+        const result = ipParserObj.parse(v);
+        return result.success ? result.value : v;
+      } catch {
+        return v;
+      } finally {
+        ipParsing = false;
+      }
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  return ipParserObj;
 }
 
 /**
@@ -6363,7 +6610,7 @@ export function cidr(
     }
     : undefined;
 
-  return {
+  const cidrParserObj: ValueParser<"sync", CidrValue> = {
     $mode: "sync",
     metavar,
     get placeholder() {
@@ -6629,8 +6876,61 @@ export function cidr(
         },
       };
     },
-    format(): string {
-      return metavar;
-    },
+    format: ((_: CidrValue) => metavar) as (value: CidrValue) => string,
   };
+  let cidrParsing = false;
+  Object.defineProperty(cidrParserObj, "format", {
+    value(value: CidrValue): string {
+      if (
+        typeof value !== "object" || value == null ||
+        !("address" in value) || !("prefix" in value) ||
+        !("version" in value)
+      ) {
+        return metavar;
+      }
+      if (cidrParsing) return `${value.address}/${value.prefix}`;
+      cidrParsing = true;
+      try {
+        const raw = `${value.address}/${value.prefix}`;
+        const result = cidrParserObj.parse(raw);
+        return result.success && result.value.version === value.version
+          ? `${result.value.address}/${result.value.prefix}`
+          : raw;
+      } catch {
+        return `${value.address}/${value.prefix}`;
+      } finally {
+        cidrParsing = false;
+      }
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(cidrParserObj, "normalize", {
+    value(v: CidrValue): CidrValue {
+      if (
+        typeof v !== "object" || v == null ||
+        !("address" in v) || !("prefix" in v) ||
+        !("version" in v)
+      ) {
+        return v;
+      }
+      if (cidrParsing) return v;
+      cidrParsing = true;
+      const formatted = `${v.address}/${v.prefix}`;
+      try {
+        const result = cidrParserObj.parse(formatted);
+        if (result.success && result.value.version === v.version) {
+          return result.value;
+        }
+        return v;
+      } catch {
+        return v;
+      } finally {
+        cidrParsing = false;
+      }
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  return cidrParserObj;
 }
