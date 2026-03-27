@@ -2900,8 +2900,10 @@ interface ValueParser<M extends Mode, T> {
 
 `normalize()`
 :   Optional.  Canonicalizes a value of type `T` according to the parser's
-    configuration (e.g., case conversion, separator normalization) without
-    re-validating.  When present, `withDefault()` calls this on default
+    configuration (e.g., case conversion, separator normalization).
+    Built-in implementations delegate to `parse()` internally, so
+    invalid values are returned unchanged.  When present,
+    `withDefault()` calls this on default
     values so that runtime defaults match the representation that `parse()`
     would produce.
 

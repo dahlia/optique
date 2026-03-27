@@ -353,7 +353,8 @@ To be released.
 
  -  Added `ValueParser.normalize()` optional method for canonicalizing
     values of type `T` (e.g., MAC address case/separator normalization,
-    domain lowercasing) without re-validating.  [[#318], [#742]]
+    domain lowercasing).  Built-in implementations delegate to `parse()`
+    internally, so invalid values are returned unchanged.  [[#318], [#742]]
 
  -  Added `Parser.normalizeValue()` optional method.  Primitive parsers
     (`option()`, `argument()`) implement this by delegating to

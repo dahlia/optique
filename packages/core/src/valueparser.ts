@@ -63,7 +63,9 @@ export interface ValueParser<M extends Mode = "sync", T = unknown> {
    * Normalizes a value of type {@link T} according to this parser's
    * configuration.  This applies the same canonicalization that
    * {@link parse} would apply (e.g., case conversion, separator
-   * normalization) without re-validating the input.
+   * normalization).  Built-in implementations delegate to {@link parse}
+   * internally, so values that would fail validation are returned
+   * unchanged rather than being canonicalized.
    *
    * When present, combinators like `withDefault()` call this method on
    * default values so that runtime defaults match the representation
@@ -6905,7 +6907,7 @@ export function cidr(
       const raw = `${value.address}/${value.prefix}`;
       try {
         const result = cidrParserObj.parse(raw);
-        return result.success
+        return result.success && result.value.version === value.version
           ? `${result.value.address}/${result.value.prefix}`
           : raw;
       } catch {
