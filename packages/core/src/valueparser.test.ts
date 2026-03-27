@@ -12002,6 +12002,26 @@ describe("ipv6()", () => {
       assert.ok(result.success);
       assert.strictEqual(result.value, "2001:db8::1");
     });
+
+    it("should reject IPv4-mapped addresses with leading zeros", () => {
+      const parser = ipv6();
+
+      const withLeadingZeros = [
+        "::ffff:01.02.03.04",
+        "::ffff:192.168.001.1",
+        "::ffff:010.0.0.1",
+        "::ffff:192.168.1.01",
+        "::ffff:01.01.01.01",
+      ];
+
+      for (const addr of withLeadingZeros) {
+        const result = parser.parse(addr);
+        assert.ok(
+          !result.success,
+          `Should reject IPv4-mapped IPv6 with leading zeros: ${addr}`,
+        );
+      }
+    });
   });
 });
 
@@ -12198,6 +12218,23 @@ describe("ip()", () => {
       const result = parser.parse("2001:0db8:0000:0000:0000:0000:0000:0001");
       assert.ok(result.success);
       assert.strictEqual(result.value, "2001:db8::1");
+    });
+
+    it("should reject IPv4-mapped addresses with leading zeros", () => {
+      const parser = ip();
+
+      const withLeadingZeros = [
+        "::ffff:01.02.03.04",
+        "::ffff:192.168.001.1",
+      ];
+
+      for (const addr of withLeadingZeros) {
+        const result = parser.parse(addr);
+        assert.ok(
+          !result.success,
+          `Should reject IPv4-mapped IPv6 with leading zeros in ip(): ${addr}`,
+        );
+      }
     });
   });
 
@@ -13116,6 +13153,23 @@ describe("cidr()", () => {
         { type: "value", value: "::ffff:0:0" },
         { type: "text", text: " is the zero address." },
       ]);
+    });
+
+    it("should reject IPv4-mapped CIDR with leading zeros", () => {
+      const parser = cidr();
+
+      const withLeadingZeros = [
+        "::ffff:01.02.03.04/96",
+        "::ffff:192.168.001.1/128",
+      ];
+
+      for (const addr of withLeadingZeros) {
+        const result = parser.parse(addr);
+        assert.ok(
+          !result.success,
+          `Should reject IPv4-mapped CIDR with leading zeros: ${addr}`,
+        );
+      }
     });
 
     it("should snapshot IPv4 restrictions at construction time", () => {

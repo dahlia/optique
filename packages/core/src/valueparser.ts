@@ -2797,71 +2797,14 @@ export function ipv4(options?: Ipv4Options): ValueParser<"sync", string> {
       ? "127.0.0.1"
       : "192.0.2.1",
     parse(input: string): ValueParserResult<string> {
-      // Parse IPv4 address into octets
-      const parts = input.split(".");
-      if (parts.length !== 4) {
+      const octets = parseIpv4Octets(input);
+      if (octets === null) {
         const errorMsg = options?.errors?.invalidIpv4;
         const msg = typeof errorMsg === "function"
           ? errorMsg(input)
           : errorMsg ??
             message`Expected a valid IPv4 address, but got ${input}.`;
         return { success: false, error: msg };
-      }
-
-      const octets: number[] = [];
-      for (const part of parts) {
-        // Check for empty octet
-        if (part.length === 0) {
-          const errorMsg = options?.errors?.invalidIpv4;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg ??
-              message`Expected a valid IPv4 address, but got ${input}.`;
-          return { success: false, error: msg };
-        }
-
-        // Check for whitespace
-        if (part.trim() !== part) {
-          const errorMsg = options?.errors?.invalidIpv4;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg ??
-              message`Expected a valid IPv4 address, but got ${input}.`;
-          return { success: false, error: msg };
-        }
-
-        // Check for leading zeros (except single "0")
-        if (part.length > 1 && part[0] === "0") {
-          const errorMsg = options?.errors?.invalidIpv4;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg ??
-              message`Expected a valid IPv4 address, but got ${input}.`;
-          return { success: false, error: msg };
-        }
-
-        // Reject non-decimal representations (e.g., scientific notation
-        // "192e0", unary plus "+127") that Number() would silently accept
-        if (!/^[0-9]+$/.test(part)) {
-          const errorMsg = options?.errors?.invalidIpv4;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg ??
-              message`Expected a valid IPv4 address, but got ${input}.`;
-          return { success: false, error: msg };
-        }
-
-        const octet = Number(part);
-        if (!Number.isInteger(octet) || octet < 0 || octet > 255) {
-          const errorMsg = options?.errors?.invalidIpv4;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg ??
-              message`Expected a valid IPv4 address, but got ${input}.`;
-          return { success: false, error: msg };
-        }
-
-        octets.push(octet);
       }
 
       const ipAddress = octets.join(".");
@@ -5765,6 +5708,30 @@ export function ipv6(
 }
 
 /**
+ * Parses a dotted-decimal IPv4 string into four validated octets.
+ * Returns null if the input is not a valid strict IPv4 address
+ * (exactly four decimal octets 0–255, no leading zeros, no whitespace,
+ * no non-decimal characters).
+ */
+function parseIpv4Octets(
+  input: string,
+): readonly [number, number, number, number] | null {
+  const parts = input.split(".");
+  if (parts.length !== 4) return null;
+  const octets: number[] = [];
+  for (const part of parts) {
+    if (part.length === 0) return null;
+    if (part.trim() !== part) return null;
+    if (part.length > 1 && part[0] === "0") return null;
+    if (!/^[0-9]+$/.test(part)) return null;
+    const octet = Number(part);
+    if (!Number.isInteger(octet) || octet < 0 || octet > 255) return null;
+    octets.push(octet);
+  }
+  return octets as unknown as readonly [number, number, number, number];
+}
+
+/**
  * Parses and normalizes an IPv6 address to canonical form.
  * Returns null if the input is not a valid IPv6 address.
  */
@@ -5777,11 +5744,9 @@ function parseAndNormalizeIpv6(input: string): string | null {
     const ipv6Part = ipv4MappedMatch[1];
     const ipv4Part = ipv4MappedMatch[2];
 
-    // Parse the IPv4 part
-    const ipv4Octets = ipv4Part.split(".");
-    if (ipv4Octets.length !== 4) return null;
-    const octets = ipv4Octets.map((o) => parseInt(o, 10));
-    if (octets.some((o) => isNaN(o) || o < 0 || o > 255)) return null;
+    // Parse the IPv4 part with strict validation
+    const octets = parseIpv4Octets(ipv4Part);
+    if (octets === null) return null;
 
     // Convert IPv4 to two IPv6 groups
     const group1 = (octets[0] << 8) | octets[1];
