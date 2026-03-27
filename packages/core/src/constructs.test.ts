@@ -11523,13 +11523,27 @@ describe("leadingNames", () => {
     assert.deepEqual(parser.leadingNames, new Set(["--mode"]));
   });
 
-  it("should include default branch names for conditional() with default", () => {
+  it("should include default branch names when discriminator may fail", () => {
+    // option("--mode") may fail (not accepting-any-token), so the default
+    // branch can receive the original buffer and match at position 0
     const parser = conditional(
       option("--mode", string()),
       { server: object({}) },
       command("help", object({})),
     );
     assert.deepEqual(parser.leadingNames, new Set(["--mode", "help"]));
+  });
+
+  it("should exclude default branch names when discriminator is catch-all", () => {
+    // argument() always consumes position 0, so the default branch
+    // only ever sees the remaining buffer (position 1+)
+    const parser = conditional(
+      argument(string()),
+      { server: object({}) },
+      command("help", object({})),
+    );
+    assert.deepEqual(parser.leadingNames, new Set());
+    assert.ok(!parser.leadingNames!.has("help"));
   });
 
   it("should not include nested subcommand names (command wrapping command)", () => {

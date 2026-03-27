@@ -8184,7 +8184,11 @@ export function conditional(
     $stateType: [],
     priority: maxPriority,
     usage,
-    leadingNames: defaultBranch
+    // The default branch sees the original buffer only when the
+    // discriminator fails.  If the discriminator is accepting-any-token
+    // (e.g., argument()), it never fails when there is input, so the
+    // default branch's names are unreachable at position 0.
+    leadingNames: defaultBranch && !discriminator.acceptingAnyToken
       ? unionLeadingNames([discriminator, defaultBranch])
       : discriminator.leadingNames,
     acceptingAnyToken: discriminator.acceptingAnyToken ||
