@@ -5918,7 +5918,7 @@ export function merge(
   // can pre-complete dependency source fields at the outer level.
   const mergedFieldParsers = collectChildFieldParsers(parsers);
 
-  return {
+  const mergeParser = {
     $mode: combinedMode,
     $valueType: [],
     $stateType: [],
@@ -6346,6 +6346,32 @@ export function merge(
     Record<string | symbol, unknown>,
     Record<string | symbol, unknown>
   >;
+
+  // Build composite normalizeValue from sub-parsers that have normalizers.
+  const mergeNormalizers = rawParsers.filter(
+    (p) => typeof p.normalizeValue === "function",
+  );
+  if (mergeNormalizers.length > 0) {
+    type ObjType = Record<string | symbol, unknown>;
+    Object.defineProperty(mergeParser, "normalizeValue", {
+      value(obj: ObjType): ObjType {
+        if (typeof obj !== "object" || obj == null) return obj;
+        let result = obj;
+        for (const sub of mergeNormalizers) {
+          try {
+            result = sub.normalizeValue!(result);
+          } catch {
+            // best-effort
+          }
+        }
+        return result;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+
+  return mergeParser;
 }
 
 type ConcatParserArity =
