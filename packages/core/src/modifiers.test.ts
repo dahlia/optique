@@ -1452,7 +1452,7 @@ describe("withDefault", () => {
   it("should not crash on sentinel defaults of incompatible type", () => {
     const parser = withDefault(
       option("--domain", domain({ lowercase: true })),
-      { kind: "local" } as unknown as string,
+      { kind: "local" } as never,
     );
     const result = parse(parser, []);
     assert.ok(result.success);
@@ -1543,7 +1543,7 @@ describe("withDefault", () => {
   it("should preserve non-string sentinel objects in defaults", () => {
     const parser = withDefault(
       option("--mac", macAddress()),
-      { kind: "local" } as unknown as string,
+      { kind: "local" } as never,
     );
     const result = parse(parser, []);
     assert.ok(result.success);

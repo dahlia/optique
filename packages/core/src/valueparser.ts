@@ -6897,7 +6897,7 @@ export function cidr(
           ? `${result.value.address}/${result.value.prefix}`
           : raw;
       } catch {
-        return metavar;
+        return `${value.address}/${value.prefix}`;
       } finally {
         cidrParsing = false;
       }

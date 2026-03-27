@@ -14016,8 +14016,11 @@ describe("ValueParser.normalize()", () => {
       prefix: 32,
       version: 6,
     });
-    assert.equal(result.address, "2001:db8::");
-    assert.equal(result.prefix, 32);
+    assert.deepEqual(result, {
+      address: "2001:db8::",
+      prefix: 32,
+      version: 6,
+    });
   });
 });
 
