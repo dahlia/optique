@@ -121,15 +121,20 @@ To be released.
     literal values from `conditional()` discriminators.  The completion
     option's `name=value` prefix form is also detected.  [[#227], [#736]]
 
- -  Added `leadingNames` property to the `Parser` interface.  Each
-    combinator now reports which names (option names, command names) it
-    could match at the first buffer position, computed from its structural
-    semantics rather than the display-oriented `usage` tree.  This replaces
-    the usage-tree-based `extractLeadingOptionNames()`,
-    `extractLeadingCommandNames()`, and `extractLeadingLiteralValues()`,
-    which produced incorrect results for `tuple()` (priority-based
-    sorting), `command()` (inner usage spreading), and `conditional()`
-    (missing literal terms for argument discriminators).  [[#735]]
+ -  Added `leadingNames` and `acceptingAnyToken` properties to the `Parser`
+    interface.  Each combinator now reports which names (option names,
+    command names) it could match at the first buffer position, computed
+    from its structural semantics rather than the display-oriented `usage`
+    tree.  Shared-buffer compositions (`tuple()`, `object()`, `merge()`,
+    `concat()`) use priority ordering and `acceptingAnyToken` to exclude
+    names that are unreachable behind a catch-all parser like `argument()`.
+    `conditional()` with a default branch now includes the default branch's
+    leading names.  This replaces the usage-tree-based
+    `extractLeadingOptionNames()`, `extractLeadingCommandNames()`, and
+    `extractLeadingLiteralValues()`, which produced incorrect results for
+    `tuple()` (priority-based sorting), `command()` (inner usage
+    spreading), and `conditional()` (missing literal terms for argument
+    discriminators).  [[#735]]
 
  -  Simplified `UserParserNames` interface: replaced `leadingOptions`,
     `leadingCommands`, and `leadingLiterals` with a single `leadingNames`

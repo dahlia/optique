@@ -947,6 +947,7 @@ describe("prompt()", () => {
         priority: 0,
         usage: [],
         leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: null,
         parse: (context) => ({
           success: true,
@@ -3024,6 +3025,7 @@ describe("prompt()", () => {
         priority: 5,
         usage: [],
         leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: {},
         parse(
           context: ParserContext<{ readonly token?: string }>,
@@ -3125,6 +3127,7 @@ describe("prompt()", () => {
         priority: 5,
         usage: [],
         leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: undefined,
         parse(_context: ParserContext<undefined>) {
           return Promise.resolve({
@@ -3217,6 +3220,7 @@ describe("prompt()", () => {
         priority: 5,
         usage: [],
         leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: {},
         parse(context) {
           return Promise.resolve({
@@ -3574,6 +3578,7 @@ describe("prompt()", () => {
         priority: 1,
         usage: [],
         leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: { tag: "INIT" },
         parse(context) {
           const [head, ...tail] = context.buffer;
@@ -3694,6 +3699,7 @@ describe("prompt()", () => {
             priority: 1,
             usage: [],
             leadingNames: new Set(),
+            acceptingAnyToken: false,
             initialState: undefined,
             parse() {
               return Promise.resolve({
@@ -3817,6 +3823,7 @@ describe("prompt()", () => {
         priority: 1,
         usage: [],
         leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: -7,
         parse(context) {
           seenStates.push(context.state);
@@ -3885,6 +3892,7 @@ describe("prompt()", () => {
         priority: 1,
         usage: [],
         leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: undefined,
         parse(context) {
           const [head, ...rest] = context.buffer;
@@ -3955,6 +3963,7 @@ describe("prompt()", () => {
           priority: 1,
           usage: [],
           leadingNames: new Set(),
+          acceptingAnyToken: false,
           initialState: undefined,
           parse(context) {
             return Promise.resolve({
@@ -4025,6 +4034,7 @@ describe("prompt()", () => {
         priority: 1,
         usage: [],
         leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: new AnnotatedState(),
         parse(context) {
           return Promise.resolve({
@@ -4128,6 +4138,7 @@ describe("prompt()", () => {
         priority: 1,
         usage: [],
         leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: new SharedState(),
         parse(context) {
           return Promise.resolve({
@@ -4207,6 +4218,7 @@ describe("prompt()", () => {
         priority: 1,
         usage: [],
         leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: new MutableAnnotatedState(),
         parse(context) {
           const [head, ...rest] = context.buffer;
@@ -4276,6 +4288,7 @@ describe("prompt()", () => {
         priority: 1,
         usage: [],
         leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: new ThrowingState(),
         parse(context) {
           if (getAnnotations(context.state)?.[marker] === "annotated") {

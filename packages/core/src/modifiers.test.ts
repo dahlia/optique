@@ -1786,6 +1786,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { value: "" },
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -1850,6 +1851,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { value: "" },
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -1912,6 +1914,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { used: false },
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -1976,6 +1979,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         if (getAnnotations(context.state)?.[annotation] !== "ok") {
@@ -2028,6 +2032,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         if (typeof context.state !== "string") {
@@ -2079,6 +2084,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { used: false },
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -2144,6 +2150,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         if (getAnnotations(context.state)?.[annotation] !== "ok") {
@@ -2197,6 +2204,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         if (typeof context.state !== "string") {
@@ -2246,6 +2254,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -2330,6 +2339,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -2375,6 +2385,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -2426,6 +2437,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -2480,6 +2492,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -2543,6 +2556,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse() {
         return {
@@ -2593,6 +2607,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse() {
         return Promise.resolve({
@@ -2643,6 +2658,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse() {
         return Promise.resolve({
@@ -2701,6 +2717,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse() {
         return {
@@ -2769,6 +2786,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse() {
         return {
@@ -2830,6 +2848,7 @@ describe("multiple", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState,
       parse() {
         return {
@@ -3475,6 +3494,7 @@ describe("multiple", () => {
         priority: 0,
         usage: [],
         leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: "",
         parse(context) {
           return {
@@ -4365,6 +4385,7 @@ describe("branch coverage: modifiers edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [transformsDependencyValueMarker]: true as const,
       parse: () =>
@@ -4403,6 +4424,7 @@ describe("branch coverage: modifiers edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [transformsDependencyValueMarker]: true as const,
       parse: () =>
@@ -4437,6 +4459,7 @@ describe("branch coverage: modifiers edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [wrappedDependencySourceMarker]: pending,
       parse: () => ({
@@ -4469,6 +4492,7 @@ describe("branch coverage: modifiers edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [transformsDependencyValueMarker]: true as const,
       parse: () =>
@@ -4527,6 +4551,7 @@ describe("branch coverage: modifiers edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [wrappedDependencySourceMarker]: pending,
       parse: () =>
@@ -4561,6 +4586,7 @@ describe("branch coverage: modifiers edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [wrappedDependencySourceMarker]: pending,
       parse: () =>
@@ -4621,6 +4647,7 @@ describe("branch coverage: modifiers edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [transformsDependencyValueMarker]: true as const,
       parse: () =>
@@ -4659,6 +4686,7 @@ describe("branch coverage: modifiers edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [wrappedDependencySourceMarker]: pending,
       parse: () => ({
@@ -4690,6 +4718,7 @@ describe("branch coverage: modifiers edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [transformsDependencyValueMarker]: true as const,
       parse: () =>
@@ -4743,6 +4772,7 @@ describe("branch coverage: modifiers edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: 0,
       parse(context: {
         readonly buffer: readonly string[];
@@ -4804,6 +4834,7 @@ describe("branch coverage: modifiers edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse: () =>
         Promise.resolve({
@@ -4835,6 +4866,7 @@ describe("branch coverage: modifiers edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [transformsDependencyValueMarker]: true as const,
       parse: () =>
@@ -4878,6 +4910,7 @@ describe("branch coverage: modifiers edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [transformsDependencyValueMarker]: true as const,
       parse: () =>
@@ -4922,6 +4955,7 @@ describe("branch coverage: modifiers edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [wrappedDependencySourceMarker]: pending,
       parse: () => ({

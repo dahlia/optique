@@ -714,6 +714,7 @@ export function bindConfig<
       ? [{ type: "optional", terms: parser.usage }]
       : parser.usage,
     leadingNames: parser.leadingNames,
+    acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
 
     parse: (context) => {

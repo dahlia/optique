@@ -1490,6 +1490,7 @@ describe("getDocPage", () => {
       priority: inner.priority,
       usage: inner.usage,
       leadingNames: inner.leadingNames,
+      acceptingAnyToken: inner.acceptingAnyToken,
       initialState: inner.initialState,
       parse: (ctx) => inner.parse(ctx),
       complete: (state) => inner.complete(state),
@@ -2322,6 +2323,7 @@ describe("Annotations system", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context) {
         return {
@@ -2371,6 +2373,7 @@ describe("Annotations system", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context) {
         const nextState = context.state as Record<PropertyKey, unknown>;
@@ -2444,6 +2447,7 @@ describe("Annotations system", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: 0,
       parse(context) {
         if (context.buffer.length === 0) {
@@ -2492,6 +2496,7 @@ describe("Annotations system", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: {},
       parse(_context) {
         return { success: false as const, consumed: 0, error: message`no` };
@@ -2532,6 +2537,7 @@ describe("Annotations system", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: {},
       parse(_context) {
         return { success: false as const, consumed: 0, error: message`no` };
@@ -2574,6 +2580,7 @@ describe("Annotations system", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: {},
       parse(_context) {
         return Promise.resolve({
@@ -2620,6 +2627,7 @@ describe("Annotations system", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: {},
       parse(_context) {
         return { success: false as const, consumed: 0, error: message`no` };
@@ -2662,6 +2670,7 @@ describe("Annotations system", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: {},
       parse(_context) {
         return { success: false as const, consumed: 0, error: message`no` };
@@ -2704,6 +2713,7 @@ describe("Annotations system", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: {},
       parse(_context) {
         return Promise.resolve({
@@ -3062,6 +3072,7 @@ describe("getDocPage: filter hidden terms from custom DocFragments", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse: (ctx) => ({
         success: true as const,

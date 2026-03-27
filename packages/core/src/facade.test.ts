@@ -1462,26 +1462,21 @@ describe("runParser", () => {
       assert.deepEqual(result, ["server", {}]);
     });
 
-    // All tuple children share the same buffer, so command("help") in the
-    // tuple IS reachable at args[0].  This is a correct collision detection.
-    it("should reject tuple child command that collides with meta command", () => {
+    // The or(argument(), command("foo")) is a catch-all (acceptingAnyToken)
+    // at priority 15, so command("help") at the same priority can never
+    // match at position 0.  No collision should be detected.
+    it("should allow command after catch-all exclusive in tuple", () => {
       const parser = tuple([
         or(argument(string()), command("foo", object({}))),
         command("help", object({})),
       ]);
-      assert.throws(
-        () =>
-          runParser(parser, "test", ["x", "help"], {
-            help: {
-              command: true,
-              onShow: () => "HELP",
-            },
-          }),
-        {
-          name: "TypeError",
-          message: /user.*"help".*help command/i,
+      const result = runParser(parser, "test", ["x", "help"], {
+        help: {
+          command: true,
+          onShow: () => "HELP",
         },
-      );
+      });
+      assert.deepEqual(result, ["x", {}]);
     });
 
     // Literal values shadowed by meta option scanners
@@ -5394,6 +5389,7 @@ describe("runWith", () => {
         priority: 1,
         usage: [],
         leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: undefined,
         parse(context) {
           const value = getAnnotations(context.state)?.[sharedKey];
@@ -6952,6 +6948,7 @@ describe("runWithSync", () => {
         priority: 1,
         usage: [],
         leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: undefined,
         parse(context) {
           const value = getAnnotations(context.state)?.[sharedKey];
@@ -9143,6 +9140,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { value: null },
       parse(context) {
         const [head, ...rest] = context.buffer;
@@ -9199,6 +9197,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { value: null },
       parse(context) {
         const [head, ...rest] = context.buffer;
@@ -9383,6 +9382,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { value: null },
       parse(context) {
         const [head, ...rest] = context.buffer;
@@ -9447,6 +9447,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { value: null },
       parse() {
         throw new Error("Boom.");
@@ -9491,6 +9492,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { value: null },
       parse() {
         throw new Error("Sync boom.");
@@ -9532,6 +9534,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context) {
         return {
@@ -9588,6 +9591,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context) {
         return {
@@ -9642,6 +9646,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { value: null },
       parse(context) {
         const [head, ...rest] = context.buffer;
@@ -9741,6 +9746,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context) {
         return Promise.resolve({
@@ -9841,6 +9847,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -9892,6 +9899,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse() {
         return Promise.resolve({
@@ -10084,6 +10092,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse() {
         return Promise.resolve({

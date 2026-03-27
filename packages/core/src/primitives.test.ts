@@ -5457,6 +5457,7 @@ describe("branch coverage: primitives edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse(_context: ParserContext<null>) {
         return Promise.resolve({
@@ -6015,6 +6016,7 @@ describe("branch coverage: primitives edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse(_context: ParserContext<null>) {
         return Promise.resolve({
@@ -6782,5 +6784,35 @@ describe("leadingNames", () => {
 
   it("should be empty for passThrough()", () => {
     assert.deepEqual(passThrough().leadingNames, new Set());
+  });
+});
+
+describe("acceptingAnyToken", () => {
+  it("should be true for argument()", () => {
+    assert.ok(argument(string()).acceptingAnyToken);
+  });
+
+  it("should be false for option()", () => {
+    assert.ok(!option("--name", string()).acceptingAnyToken);
+  });
+
+  it("should be false for flag()", () => {
+    assert.ok(!flag("--verbose").acceptingAnyToken);
+  });
+
+  it("should be false for command()", () => {
+    assert.ok(!command("help", object({})).acceptingAnyToken);
+  });
+
+  it("should be false for constant()", () => {
+    assert.ok(!constant("x").acceptingAnyToken);
+  });
+
+  it("should be false for fail()", () => {
+    assert.ok(!fail().acceptingAnyToken);
+  });
+
+  it("should be false for passThrough()", () => {
+    assert.ok(!passThrough().acceptingAnyToken);
   });
 });

@@ -148,6 +148,19 @@ export interface Parser<
   readonly leadingNames: ReadonlySet<string>;
 
   /**
+   * Whether this parser unconditionally consumes a token at the first buffer
+   * position, regardless of its content.  When `true`, no sibling parser
+   * with equal or lower priority can match at the same position in a
+   * shared-buffer composition (`tuple()`, `object()`, `merge()`, `concat()`).
+   *
+   * Only `argument()` is inherently accepting-any-token; combinators like
+   * `or()` and `map()` propagate this from their children.
+   *
+   * @since 1.0.0
+   */
+  readonly acceptingAnyToken: boolean;
+
+  /**
    * The initial state for this parser.  This is used to initialize the
    * state when parsing starts.
    */

@@ -240,6 +240,7 @@ export function optional<M extends Mode, TValue, TState>(
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
     leadingNames: parser.leadingNames,
+    acceptingAnyToken: parser.acceptingAnyToken,
     initialState: undefined,
     ...wrappedDependencyMarker,
     // Forward completion deferral hook from inner parser, adapting the
@@ -581,6 +582,7 @@ export function withDefault<
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
     leadingNames: parser.leadingNames,
+    acceptingAnyToken: parser.acceptingAnyToken,
     initialState: undefined,
     ...wrappedDependencyMarker,
     // Forward completion deferral hook from inner parser, adapting the
@@ -1298,6 +1300,7 @@ export function multiple<M extends Mode, TValue, TState>(
     priority: parser.priority,
     usage: [{ type: "multiple", terms: parser.usage, min }],
     leadingNames: parser.leadingNames,
+    acceptingAnyToken: parser.acceptingAnyToken,
     initialState: [] as readonly TState[],
     parse(context: ParserContext<MultipleState>) {
       return dispatchByMode(
@@ -1670,6 +1673,7 @@ export function nonEmpty<M extends Mode, T, TState>(
     priority: parser.priority,
     usage: parser.usage,
     leadingNames: parser.leadingNames,
+    acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
     // Forward shouldDeferCompletion from inner parser so that prompt()
     // can defer through nonEmpty() wrappers.

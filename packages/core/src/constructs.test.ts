@@ -982,6 +982,7 @@ describe("or() - duplicate option handling", () => {
       priority: 10,
       usage: [{ type: "option", names: ["--shared"], metavar: "VALUE" }],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "a-initial",
       parse(context) {
         if (context.buffer[0] === "--shared") {
@@ -1026,6 +1027,7 @@ describe("or() - duplicate option handling", () => {
         { type: "option", names: ["--b"], metavar: "VALUE" },
       ],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "b-initial",
       parse(context) {
         if (
@@ -1670,6 +1672,7 @@ describe("longestMatch()", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse() {
         return {
@@ -1715,6 +1718,7 @@ describe("longestMatch()", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse() {
         return Promise.resolve({
@@ -2389,6 +2393,7 @@ describe("object", () => {
         metavar: "MODE",
       }],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "mode-initial",
       parse(context: ParserContext<string>) {
         return Promise.resolve({
@@ -2460,6 +2465,7 @@ describe("object", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState,
       parse(context: ParserContext<string>) {
         return Promise.resolve({
@@ -3131,6 +3137,7 @@ describe("object() - duplicate option detection", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: new PrivateState(),
       parse(context) {
         return {
@@ -3182,6 +3189,7 @@ describe("object() - duplicate option detection", () => {
       priority: 1,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: childState,
       [Symbol.for("@optique/core/inheritParentAnnotations")]: true,
       parse(context) {
@@ -8440,6 +8448,7 @@ describe("branch coverage: conditional() complete/suggest edges", () => {
       priority: 10,
       usage: [{ type: "option", names: ["--mode"], metavar: "MODE" }],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "init",
       parse: () => ({
         success: true,
@@ -8548,6 +8557,7 @@ describe("branch coverage: conditional() complete/suggest edges", () => {
         }],
       }],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse: () => ({
         success: false,
@@ -8980,6 +8990,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse: (context: ParserContext<unknown>) => ({
         success: true as const,
@@ -9012,6 +9023,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: dep,
       parse: (context: ParserContext<unknown>) => ({
         success: true as const,
@@ -9044,6 +9056,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: dep,
       parse: (context: ParserContext<unknown>) =>
         Promise.resolve({
@@ -9085,6 +9098,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [wrappedDependencySourceMarker]: dep,
       parse: () => ({
@@ -9120,6 +9134,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [wrappedDependencySourceMarker]: dep,
       parse: () =>
@@ -9384,6 +9399,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [wrappedDependencySourceMarker]: dep,
       parse: () => ({
@@ -9418,6 +9434,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [wrappedDependencySourceMarker]: dep,
       parse: () =>
@@ -9455,6 +9472,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [wrappedDependencySourceMarker]: syncDep,
       parse: () => ({
@@ -9486,6 +9504,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [wrappedDependencySourceMarker]: asyncDep,
       parse: () =>
@@ -9533,6 +9552,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse: (_context: ParserContext<undefined>) => ({
         success: false as const,
@@ -10366,6 +10386,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context) {
         return {
@@ -10426,6 +10447,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "seed",
       parse(context: ParserContext<string>) {
         return {
@@ -10450,6 +10472,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<undefined>) {
         return { success: true as const, next: context, consumed: [] };
@@ -10487,6 +10510,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "seed",
       parse(context: ParserContext<string>) {
         return {
@@ -10511,6 +10535,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<undefined>) {
         return { success: true as const, next: context, consumed: [] };
@@ -10575,6 +10600,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "seed",
       parse(context: ParserContext<string>) {
         return Promise.resolve({
@@ -10601,6 +10627,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<undefined>) {
         return Promise.resolve({
@@ -10712,6 +10739,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 5,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse() {
         return { success: false as const, consumed: 0, error: message`fail` };
@@ -10745,6 +10773,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 5,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse() {
         return Promise.resolve({
@@ -10830,6 +10859,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 1,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context) {
         return Promise.resolve({
@@ -10900,6 +10930,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse() {
         return { success: false as const, consumed: 1, error: message`bad` };
@@ -10930,6 +10961,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<undefined>) {
         return { success: true as const, next: context, consumed: [] };
@@ -10949,6 +10981,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 0,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<undefined>) {
         return Promise.resolve({
@@ -11108,6 +11141,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 1,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<unknown>) {
         return Promise.resolve({
@@ -11138,6 +11172,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 1,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<unknown>) {
         return Promise.resolve({
@@ -11173,6 +11208,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 1,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<unknown>) {
         return Promise.resolve({
@@ -11198,6 +11234,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       priority: 1,
       usage: [],
       leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<unknown>) {
         return Promise.resolve({
@@ -11431,12 +11468,26 @@ describe("leadingNames", () => {
     assert.deepEqual(parser.leadingNames, new Set(["--verbose", "help"]));
   });
 
-  it("should be the union of all elements for tuple()", () => {
+  it("should include command names reachable at position 0 for tuple()", () => {
+    // argument has lower priority (5) than command (15), so command
+    // is tried first in the round-robin and CAN match at position 0
     const parser = tuple([
       argument(string()),
       command("help", object({})),
     ]);
     assert.deepEqual(parser.leadingNames, new Set(["help"]));
+  });
+
+  it("should exclude names blocked by a catch-all parser in tuple()", () => {
+    // or(argument, command("foo")) has priority 15 and acceptingAnyToken=true,
+    // so command("help") (also priority 15, but later in order) can never
+    // match at position 0
+    const parser = tuple([
+      or(argument(string()), command("foo", object({}))),
+      command("help", object({})),
+    ]);
+    assert.deepEqual(parser.leadingNames, new Set(["foo"]));
+    assert.ok(!parser.leadingNames.has("help"));
   });
 
   it("should be the union of all parsers for merge()", () => {
@@ -11461,7 +11512,7 @@ describe("leadingNames", () => {
     assert.deepEqual(parser.leadingNames, inner.leadingNames);
   });
 
-  it("should contain only discriminator names for conditional()", () => {
+  it("should contain only discriminator names for conditional() without default", () => {
     const parser = conditional(
       option("--mode", string()),
       {
@@ -11470,6 +11521,15 @@ describe("leadingNames", () => {
       },
     );
     assert.deepEqual(parser.leadingNames, new Set(["--mode"]));
+  });
+
+  it("should include default branch names for conditional() with default", () => {
+    const parser = conditional(
+      option("--mode", string()),
+      { server: object({}) },
+      command("help", object({})),
+    );
+    assert.deepEqual(parser.leadingNames, new Set(["--mode", "help"]));
   });
 
   it("should not include nested subcommand names (command wrapping command)", () => {
@@ -11481,5 +11541,55 @@ describe("leadingNames", () => {
       ),
     );
     assert.deepEqual(parser.leadingNames, new Set(["tool"]));
+  });
+});
+
+describe("acceptingAnyToken", () => {
+  it("should be true for or() when any branch has argument()", () => {
+    const parser = or(argument(string()), command("foo", object({})));
+    assert.ok(parser.acceptingAnyToken);
+  });
+
+  it("should be false for or() when no branch has argument()", () => {
+    const parser = or(command("a", object({})), command("b", object({})));
+    assert.ok(!parser.acceptingAnyToken);
+  });
+
+  it("should be true for object() containing argument()", () => {
+    const parser = object({
+      name: argument(string()),
+      verbose: flag("--verbose"),
+    });
+    assert.ok(parser.acceptingAnyToken);
+  });
+
+  it("should be false for object() with only options", () => {
+    const parser = object({ verbose: flag("--verbose") });
+    assert.ok(!parser.acceptingAnyToken);
+  });
+
+  it("should be true for tuple() containing argument()", () => {
+    const parser = tuple([argument(string()), flag("--verbose")]);
+    assert.ok(parser.acceptingAnyToken);
+  });
+
+  it("should propagate through group()", () => {
+    const inner = object({ name: argument(string()) });
+    assert.ok(group("grp", inner).acceptingAnyToken);
+  });
+
+  it("should reflect discriminator and default for conditional()", () => {
+    const withoutDefault = conditional(
+      option("--mode", string()),
+      { server: object({}) },
+    );
+    assert.ok(!withoutDefault.acceptingAnyToken);
+
+    const withCatchAllDefault = conditional(
+      option("--mode", string()),
+      { server: object({}) },
+      argument(string()),
+    );
+    assert.ok(withCatchAllDefault.acceptingAnyToken);
   });
 });

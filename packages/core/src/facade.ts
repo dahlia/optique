@@ -579,6 +579,7 @@ function combineWithHelpVersion(
       priority: 200, // Very high priority
       usage: helpParsers.helpOption.usage,
       leadingNames: helpParsers.helpOption.leadingNames,
+      acceptingAnyToken: false,
       initialState: null,
 
       parse(context) {
@@ -697,6 +698,7 @@ function combineWithHelpVersion(
       priority: 200, // Very high priority
       usage: versionParsers.versionOption.usage,
       leadingNames: versionParsers.versionOption.leadingNames,
+      acceptingAnyToken: false,
       initialState: null,
 
       parse(context) {

@@ -139,6 +139,7 @@ export function constant<const T>(value: T): Parser<"sync", T, T> {
     priority: 0,
     usage: [],
     leadingNames: EMPTY_LEADING_NAMES,
+    acceptingAnyToken: false,
     initialState: value,
     parse(context) {
       return { success: true, next: context, consumed: [] };
@@ -189,6 +190,7 @@ export function fail<T>(): Parser<"sync", T, undefined> {
     priority: 0,
     usage: [],
     leadingNames: EMPTY_LEADING_NAMES,
+    acceptingAnyToken: false,
     initialState: undefined,
     parse(_context) {
       return {
@@ -790,6 +792,7 @@ export function option<M extends Mode, T>(
         },
     ],
     leadingNames: new Set<string>(optionNames),
+    acceptingAnyToken: false,
     initialState: valueParser == null
       ? { success: true, value: false }
       : isDependencySource(valueParser)
@@ -1343,6 +1346,7 @@ export function flag(
       ...(options.hidden != null && { hidden: options.hidden }),
     }],
     leadingNames: new Set<string>(optionNames),
+    acceptingAnyToken: false,
     initialState: undefined,
     parse(context) {
       if (context.optionsTerminated) {
@@ -1654,6 +1658,7 @@ export function argument<M extends Mode, T>(
     priority: 5,
     usage: [term],
     leadingNames: EMPTY_LEADING_NAMES,
+    acceptingAnyToken: true,
     initialState: undefined,
     parse(
       context: ParserContext<
@@ -2086,6 +2091,7 @@ export function command<M extends Mode, T, TState>(
       ...parser.usage,
     ],
     leadingNames: new Set([name]),
+    acceptingAnyToken: false,
     initialState: undefined,
     parse(context: ParserContext<CommandState<TState>>) {
       // Handle different states
@@ -2423,6 +2429,7 @@ export function passThrough(
       ...(options.hidden != null && { hidden: options.hidden }),
     }],
     leadingNames: EMPTY_LEADING_NAMES,
+    acceptingAnyToken: false,
     initialState: [],
 
     parse(context) {
