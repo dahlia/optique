@@ -1577,6 +1577,22 @@ describe("withDefault", () => {
       assert.deepEqual(result.value, { domain: "example.com" });
     }
   });
+
+  it("should normalize defaults in help text rendering", () => {
+    const mac = macAddress({ case: "lower", outputSeparator: ":" });
+    const parser = withDefault(option("--mac", mac), "AA:BB:CC:DD:EE:FF");
+    const syncParser = parser as unknown as {
+      getDocFragments(
+        state: { kind: "unavailable" },
+        defaultValue?: unknown,
+      ): { fragments: readonly { default?: unknown }[] };
+    };
+    const doc = syncParser.getDocFragments({ kind: "unavailable" });
+    const entry = doc.fragments.find(
+      (f: { default?: unknown }) => f.default != null,
+    );
+    assert.ok(entry);
+  });
 });
 
 describe("map", () => {

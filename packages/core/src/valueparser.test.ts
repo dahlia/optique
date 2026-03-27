@@ -13986,6 +13986,39 @@ describe("ValueParser.normalize()", () => {
     const dom = domain();
     assert.equal(dom.normalize, undefined);
   });
+
+  it("ipv6().normalize() compresses non-canonical addresses", () => {
+    const v6 = ipv6();
+    assert.equal(
+      v6.normalize!("2001:0db8:0000:0000:0000:0000:0000:0001"),
+      "2001:db8::1",
+    );
+  });
+
+  it("ipv6().normalize() preserves rejected addresses unchanged", () => {
+    const v6 = ipv6({ allowLoopback: false });
+    assert.equal(v6.normalize!("0:0:0:0:0:0:0:1"), "0:0:0:0:0:0:0:1");
+  });
+
+  it("ip().normalize() compresses IPv6 addresses", () => {
+    const ipParser = ip();
+    assert.equal(
+      ipParser.normalize!("2001:0db8:0000:0000:0000:0000:0000:0001"),
+      "2001:db8::1",
+    );
+    assert.equal(ipParser.normalize!("192.0.2.1"), "192.0.2.1");
+  });
+
+  it("cidr().normalize() compresses IPv6 CIDR addresses", () => {
+    const cidrParser = cidr();
+    const result = cidrParser.normalize!({
+      address: "2001:0db8:0000:0000:0000:0000:0000:0000",
+      prefix: 32,
+      version: 6,
+    });
+    assert.equal(result.address, "2001:db8::");
+    assert.equal(result.prefix, 32);
+  });
 });
 
 describe("checkBooleanOption", () => {
