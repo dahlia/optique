@@ -136,12 +136,18 @@ export interface Parser<
   readonly usage: Usage;
 
   /**
-   * Names (command names, option names) that this parser could match at
-   * the first buffer position.  Used by `runParser()` to detect collisions
-   * with built-in meta features (help, version, completion).
+   * Names that this parser could match at the first buffer position.
+   * Used by `runParser()` to detect collisions with built-in meta
+   * features (help, version, completion).
    *
-   * Each combinator computes this from its structural semantics rather than
-   * from the display-oriented {@link usage} tree.
+   * Each built-in combinator computes this from its structural semantics.
+   * Custom parser implementations must include every fixed token that
+   * the parser accepts at `argv[0]` — command names, option names, and
+   * literal values alike.  For example, a parser whose usage declares
+   * `{ type: "literal", value: "serve" }` should include `"serve"` in
+   * this set.  Parsers that accept *any* token (like `argument()`) should
+   * return an empty set and set {@link acceptingAnyToken} to `true`
+   * instead.
    *
    * @since 1.0.0
    */
