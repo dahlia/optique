@@ -1011,6 +1011,11 @@ To be released.
     values with a `TypeError`.  Previously, invalid names were only caught
     during help/error output formatting.  [[#428], [#743]]
 
+ -  Fixed nested `optional()` wrappers rendering double brackets (`[[...]]`)
+    in help usage output.  Parsers like `optional(optional(option(...)))` and
+    `withDefault(optional(option(...)), ...)` now correctly display single
+    brackets (`[...]`).  [[#290], [#745]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -1063,6 +1068,7 @@ To be released.
 [#264]: https://github.com/dahlia/optique/issues/264
 [#275]: https://github.com/dahlia/optique/issues/275
 [#279]: https://github.com/dahlia/optique/issues/279
+[#290]: https://github.com/dahlia/optique/issues/290
 [#294]: https://github.com/dahlia/optique/issues/294
 [#296]: https://github.com/dahlia/optique/issues/296
 [#300]: https://github.com/dahlia/optique/issues/300
@@ -1286,6 +1292,7 @@ To be released.
 [#741]: https://github.com/dahlia/optique/pull/741
 [#742]: https://github.com/dahlia/optique/pull/742
 [#743]: https://github.com/dahlia/optique/pull/743
+[#745]: https://github.com/dahlia/optique/pull/745
 
 ### @optique/config
 

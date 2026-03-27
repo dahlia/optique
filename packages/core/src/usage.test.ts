@@ -219,7 +219,7 @@ describe("formatUsage", () => {
         },
       ];
       const result = formatUsage("test", usage);
-      assert.equal(result, "test [[FILE]]");
+      assert.equal(result, "test [FILE]");
     });
   });
 
@@ -1871,7 +1871,7 @@ describe("normalizeUsage", () => {
   });
 
   describe("optional terms", () => {
-    it("should normalize nested optional terms", () => {
+    it("should flatten nested optional terms", () => {
       const usage: Usage = [
         {
           type: "optional",
@@ -1887,7 +1887,55 @@ describe("normalizeUsage", () => {
       const expected: Usage = [
         {
           type: "optional",
+          terms: [{ type: "argument", metavar: "FILE" }],
+        },
+      ];
+      assert.deepEqual(result, expected);
+    });
+
+    it("should flatten deeply nested optional terms", () => {
+      const usage: Usage = [
+        {
+          type: "optional",
+          terms: [{
+            type: "optional",
+            terms: [{
+              type: "optional",
+              terms: [{ type: "argument", metavar: "FILE" }],
+            }],
+          }],
+        },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        {
+          type: "optional",
+          terms: [{ type: "argument", metavar: "FILE" }],
+        },
+      ];
+      assert.deepEqual(result, expected);
+    });
+
+    it("should not flatten optional with multiple inner terms", () => {
+      const usage: Usage = [
+        {
+          type: "optional",
           terms: [
+            {
+              type: "optional",
+              terms: [{ type: "argument", metavar: "FILE" }],
+            },
+            { type: "option", names: ["--verbose"] },
+          ],
+        },
+      ];
+      const result = normalizeUsage(usage);
+      // normalizeUsage sorts: options before arguments
+      const expected: Usage = [
+        {
+          type: "optional",
+          terms: [
+            { type: "option", names: ["--verbose"] },
             {
               type: "optional",
               terms: [{ type: "argument", metavar: "FILE" }],

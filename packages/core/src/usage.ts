@@ -595,6 +595,9 @@ export function formatUsage(
  *    nested exclusive terms into their parent exclusive term to avoid
  *    redundant nesting. For example, an exclusive term containing another
  *    exclusive term will have its nested terms flattened into the parent.
+ *    Similarly, nested optional terms are collapsed:
+ *    `optional(optional(X))` becomes `optional(X)` when the outer optional
+ *    contains only a single inner optional term.
  *
  * 3. *Sorting*: Reorders terms to improve readability by placing:
  *    - Commands (subcommands) first
@@ -607,8 +610,8 @@ export function formatUsage(
  *
  * @param usage The usage description to normalize.
  * @returns A normalized usage description with degenerate terms removed,
- *          nested exclusive terms flattened, and remaining terms sorted for
- *          optimal readability.
+ *          nested exclusive and optional terms flattened, and remaining
+ *          terms sorted for optimal readability.
  */
 export function normalizeUsage(usage: Usage): Usage {
   const terms = usage.map(normalizeUsageTerm).filter(isNonDegenerateTerm);
@@ -629,7 +632,11 @@ export function normalizeUsage(usage: Usage): Usage {
 
 function normalizeUsageTerm(term: UsageTerm): UsageTerm {
   if (term.type === "optional") {
-    return { type: "optional", terms: normalizeUsage(term.terms) };
+    const normalized = normalizeUsage(term.terms);
+    if (normalized.length === 1 && normalized[0].type === "optional") {
+      return normalized[0];
+    }
+    return { type: "optional", terms: normalized };
   } else if (term.type === "multiple") {
     return {
       type: "multiple",
