@@ -403,3 +403,25 @@ export function validateLabel(label: string): void {
     );
   }
 }
+
+/**
+ * Validates that all source contexts have unique
+ * {@link import("./context.ts").SourceContext.id | id} values.
+ *
+ * @param contexts The source contexts to validate.
+ * @throws {TypeError} If two or more contexts share the same id.
+ * @since 1.0.0
+ */
+export function validateContextIds(
+  contexts: readonly { readonly id: symbol }[],
+): void {
+  const seen = new Set<symbol>();
+  for (const context of contexts) {
+    if (seen.has(context.id)) {
+      throw new TypeError(
+        `Duplicate SourceContext id: ${String(context.id)}`,
+      );
+    }
+    seen.add(context.id);
+  }
+}

@@ -111,7 +111,9 @@ export interface SourceContext<TRequiredOptions = void> {
    * Unique identifier for this context.
    *
    * This symbol is typically the same as the annotation key used by parsers
-   * that consume this context's data.
+   * that consume this context's data.  Passing multiple contexts with the
+   * same id to {@link runWith}, {@link runWithSync}, or {@link runWithAsync}
+   * throws a `TypeError`.
    */
   readonly id: symbol;
 

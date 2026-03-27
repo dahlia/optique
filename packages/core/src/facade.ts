@@ -57,6 +57,7 @@ import { type Annotations, injectAnnotations } from "./annotations.ts";
 import {
   type MetaEntry,
   validateCommandNames,
+  validateContextIds,
   validateMetaNameCollisions,
   validateOptionNames,
   validateProgramName,
@@ -3003,6 +3004,8 @@ export type ContextOptionsParam<
  * @param contexts Source contexts to use (priority: earlier overrides later).
  * @param options Run options including args, help, version, etc.
  * @returns Promise that resolves to the parsed result.
+ * @throws {TypeError} If two or more contexts share the same
+ * {@link SourceContext.id}.
  * @since 0.10.0
  *
  * @example
@@ -3053,6 +3056,8 @@ export async function runWith<
   }
 
   try {
+    validateContextIds(contexts);
+
     // Early exit: skip context processing for help/version/completion
     if (needsEarlyExit(args, options)) {
       if (parser.$mode === "async") {
@@ -3212,6 +3217,8 @@ export async function runWith<
  * @returns The parsed result.
  * @throws {TypeError} If an async parser is passed at runtime.  Use
  * {@link runWith} or {@link runWithAsync} for async parsers.
+ * @throws {TypeError} If two or more contexts share the same
+ * {@link SourceContext.id}.
  * @throws {Error} If any context returns a Promise or if a context's
  * `[Symbol.asyncDispose]` returns a Promise.
  * @since 0.10.0
@@ -3244,6 +3251,8 @@ export function runWithSync<
   }
 
   try {
+    validateContextIds(contexts);
+
     // Early exit: skip context processing for help/version/completion
     if (needsEarlyExit(args, options)) {
       return runParser(parser, programName, args, options);
@@ -3332,6 +3341,8 @@ export function runWithSync<
  * @param contexts Source contexts to use (priority: earlier overrides later).
  * @param options Run options including args, help, version, etc.
  * @returns Promise that resolves to the parsed result.
+ * @throws {TypeError} If two or more contexts share the same
+ * {@link SourceContext.id}.
  * @since 0.10.0
  */
 export function runWithAsync<
