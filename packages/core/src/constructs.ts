@@ -2450,7 +2450,7 @@ export function or(
     return { ...error, success: false };
   };
 
-  return {
+  const singleResult = {
     $mode: combinedMode,
     $valueType: [],
     $stateType: [],
@@ -2475,7 +2475,7 @@ export function or(
     suggest: createExclusiveSuggest(parsers, combinedMode),
     getDocFragments(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
-      _defaultValue?,
+      _defaultValue?: unknown,
     ) {
       let brief: Message | undefined;
       let description: Message | undefined;
@@ -2518,6 +2518,20 @@ export function or(
       };
     },
   };
+
+  // Forward normalizeValue from the single inner parser.
+  if (typeof parsers[0].normalizeValue === "function") {
+    Object.defineProperty(singleResult, "normalizeValue", {
+      value: parsers[0].normalizeValue.bind(parsers[0]),
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  return singleResult as Parser<
+    Mode,
+    unknown,
+    [number, ParserResult<unknown>] | undefined
+  >;
 }
 
 /**
@@ -2932,7 +2946,7 @@ export function longestMatch(
     return { ...error, success: false };
   };
 
-  return {
+  const multiResult = {
     $mode: combinedMode,
     $valueType: [],
     $stateType: [],
@@ -2957,7 +2971,7 @@ export function longestMatch(
     suggest: createExclusiveSuggest(parsers, combinedMode),
     getDocFragments(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
-      _defaultValue?,
+      _defaultValue?: unknown,
     ) {
       let brief: Message | undefined;
       let description: Message | undefined;
@@ -3000,6 +3014,35 @@ export function longestMatch(
       };
     },
   };
+
+  // Forward normalizeValue from child parsers that have normalizers.
+  // For exclusive parsers, try each child's normalizer — the first one
+  // that produces a different value wins.
+  const exclusiveNormalizers = parsers.filter(
+    (p) => typeof p.normalizeValue === "function",
+  );
+  if (exclusiveNormalizers.length > 0) {
+    Object.defineProperty(multiResult, "normalizeValue", {
+      value(v: unknown): unknown {
+        for (const sub of exclusiveNormalizers) {
+          try {
+            const normalized = sub.normalizeValue!(v);
+            if (normalized !== v) return normalized;
+          } catch {
+            // best-effort
+          }
+        }
+        return v;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  return multiResult as Parser<
+    Mode,
+    unknown,
+    [number, ParserResult<unknown>] | undefined
+  >;
 }
 
 /**
@@ -6254,7 +6297,7 @@ export function merge(
     },
     getDocFragments(
       state: DocState<Record<string | symbol, unknown>>,
-      _defaultValue?,
+      _defaultValue?: unknown,
     ) {
       let brief: Message | undefined;
       let description: Message | undefined;

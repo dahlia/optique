@@ -6861,7 +6861,12 @@ export function cidr(
       const formatted = `${v.address}/${v.prefix}`;
       try {
         const result = cidrParserObj.parse(formatted);
-        return result.success ? result.value : v;
+        // Preserve the original if parse changed the version
+        // (e.g., mismatched version field in caller-supplied default)
+        if (result.success && result.value.version === v.version) {
+          return result.value;
+        }
+        return v;
       } catch {
         return v;
       }
