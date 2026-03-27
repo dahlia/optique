@@ -6480,6 +6480,28 @@ describe("runWith", () => {
       );
     });
   });
+
+  describe("duplicate context id validation", () => {
+    it("should reject duplicate context ids", async () => {
+      const shared = Symbol.for("@test/dup-runWith");
+      const ctx1: SourceContext = {
+        id: shared,
+        getAnnotations: () => ({ [shared]: "one" }),
+      };
+      const ctx2: SourceContext = {
+        id: shared,
+        getAnnotations: () => ({ [shared]: "two" }),
+      };
+
+      await assert.rejects(
+        () => runWith(constant("ok"), "test", [ctx1, ctx2], { args: [] }),
+        {
+          name: "TypeError",
+          message: /Duplicate SourceContext id/,
+        },
+      );
+    });
+  });
 });
 
 describe("runWithSync", () => {
@@ -7105,6 +7127,28 @@ describe("runWithSync", () => {
       const opts = receivedOptions as Record<string, unknown>;
       assert.equal(opts.help, "ctx-help");
       assert.equal(opts.programName, "ctx-program");
+    });
+  });
+
+  describe("duplicate context id validation", () => {
+    it("should reject duplicate context ids", () => {
+      const shared = Symbol.for("@test/dup-runWithSync");
+      const ctx1: SourceContext = {
+        id: shared,
+        getAnnotations: () => ({ [shared]: "one" }),
+      };
+      const ctx2: SourceContext = {
+        id: shared,
+        getAnnotations: () => ({ [shared]: "two" }),
+      };
+
+      assert.throws(
+        () => runWithSync(constant("ok"), "test", [ctx1, ctx2], { args: [] }),
+        {
+          name: "TypeError",
+          message: /Duplicate SourceContext id/,
+        },
+      );
     });
   });
 });
@@ -8832,6 +8876,28 @@ describe("runWithAsync", () => {
       assert.ok(
         helpOutput.includes("--version"),
         `--version should appear in the Meta section, got:\n${helpOutput}`,
+      );
+    });
+  });
+
+  describe("duplicate context id validation", () => {
+    it("should reject duplicate context ids", async () => {
+      const shared = Symbol.for("@test/dup-runWithAsync");
+      const ctx1: SourceContext = {
+        id: shared,
+        getAnnotations: () => ({ [shared]: "one" }),
+      };
+      const ctx2: SourceContext = {
+        id: shared,
+        getAnnotations: () => ({ [shared]: "two" }),
+      };
+
+      await assert.rejects(
+        () => runWithAsync(constant("ok"), "test", [ctx1, ctx2], { args: [] }),
+        {
+          name: "TypeError",
+          message: /Duplicate SourceContext id/,
+        },
       );
     });
   });

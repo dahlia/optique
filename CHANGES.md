@@ -273,6 +273,10 @@ To be released.
     APIs now validate `parser.$mode` at runtime and throw `TypeError` if the
     parser is not synchronous.  [[#279], [#676]]
 
+ -  Fixed `runWith()`, `runWithSync()`, and `runWithAsync()` silently accepting
+    multiple source contexts with the same `id`.  Duplicate ids now throw a
+    `TypeError` instead of producing order-dependent results.  [[#495], [#746]]
+
  -  Fixed `optional()` and `withDefault()` crashing when the parser's state
     is an annotation-injected object instead of `undefined`.  The state
     discrimination in `modifiers.ts` now uses `Array.isArray(state)` to
@@ -1146,6 +1150,7 @@ To be released.
 [#490]: https://github.com/dahlia/optique/pull/490
 [#493]: https://github.com/dahlia/optique/issues/493
 [#494]: https://github.com/dahlia/optique/issues/494
+[#495]: https://github.com/dahlia/optique/issues/495
 [#497]: https://github.com/dahlia/optique/issues/497
 [#500]: https://github.com/dahlia/optique/issues/500
 [#504]: https://github.com/dahlia/optique/issues/504
@@ -1293,6 +1298,7 @@ To be released.
 [#742]: https://github.com/dahlia/optique/pull/742
 [#743]: https://github.com/dahlia/optique/pull/743
 [#745]: https://github.com/dahlia/optique/pull/745
+[#746]: https://github.com/dahlia/optique/pull/746
 
 ### @optique/config
 

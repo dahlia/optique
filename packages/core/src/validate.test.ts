@@ -4,6 +4,7 @@ import {
   escapeControlChars,
   type UserParserNames,
   validateCommandNames,
+  validateContextIds,
   validateLabel,
   validateMetaNameCollisions,
   validateOptionNames,
@@ -894,5 +895,71 @@ describe("validateLabel", () => {
         message: /control characters/,
       },
     );
+  });
+});
+
+describe("validateContextIds", () => {
+  it("should accept an empty array", () => {
+    validateContextIds([]);
+  });
+
+  it("should accept contexts with distinct ids", () => {
+    validateContextIds([
+      { id: Symbol.for("@test/a") },
+      { id: Symbol.for("@test/b") },
+      { id: Symbol.for("@test/c") },
+    ]);
+  });
+
+  it("should throw TypeError for duplicate ids", () => {
+    const shared = Symbol.for("@test/dup");
+    assert.throws(
+      () =>
+        validateContextIds([
+          { id: shared },
+          { id: shared },
+        ]),
+      {
+        name: "TypeError",
+        message: /Duplicate SourceContext id/,
+      },
+    );
+  });
+
+  it("should identify the duplicate id in the error message", () => {
+    const shared = Symbol.for("@test/identified");
+    assert.throws(
+      () =>
+        validateContextIds([
+          { id: Symbol.for("@test/unique") },
+          { id: shared },
+          { id: shared },
+        ]),
+      {
+        name: "TypeError",
+        message: /Symbol\(@test\/identified\)/,
+      },
+    );
+  });
+
+  it("should detect duplicates from Symbol.for with same key", () => {
+    assert.throws(
+      () =>
+        validateContextIds([
+          { id: Symbol.for("@test/same-key") },
+          { id: Symbol.for("@test/same-key") },
+        ]),
+      {
+        name: "TypeError",
+        message: /Duplicate SourceContext id/,
+      },
+    );
+  });
+
+  it("should not treat distinct Symbol() calls as duplicates", () => {
+    validateContextIds([
+      { id: Symbol("@test/local") },
+      { id: Symbol("@test/local") },
+    ]);
   });
 });
