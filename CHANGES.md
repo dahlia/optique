@@ -349,23 +349,23 @@ To be released.
 
  -  Fixed `format()` in `macAddress()`, `domain()`, `ipv6()`, `ip()`, and
     `cidr()` value parsers to return the serialized value instead of the
-    metavar placeholder (e.g., `"MAC"`, `"DOMAIN"`).  [[#318]]
+    metavar placeholder (e.g., `"MAC"`, `"DOMAIN"`).  [[#318], [#742]]
 
  -  Added `ValueParser.normalize()` optional method for canonicalizing
     values of type `T` (e.g., MAC address case/separator normalization,
-    domain lowercasing) without re-validating.  [[#318]]
+    domain lowercasing) without re-validating.  [[#318], [#742]]
 
  -  Added `Parser.normalizeValue()` optional method.  Primitive parsers
     (`option()`, `argument()`) implement this by delegating to
     `ValueParser.normalize()`.  Combinator wrappers (`optional()`,
-    `withDefault()`) forward it from inner parsers.  [[#318]]
+    `withDefault()`) forward it from inner parsers.  [[#318], [#742]]
 
  -  `withDefault()` now normalizes default values through the inner
     parser's `normalizeValue()` when available, so runtime defaults
     match the representation that `parse()` would produce.  Exclusive
     combinators (`or()`, `longestMatch()`) and multi-source combinators
     (`merge()`) do not forward normalization because the active branch
-    or key ownership is unknown at default time.  [[#318]]
+    or key ownership is unknown at default time.  [[#318], [#742]]
 
  -  Fixed `url()` parser's `suggest()` emitting `://` for non-hierarchical URL
     schemes like `mailto:` and `urn:`.  Suggestions now use `:` for
@@ -1275,6 +1275,7 @@ To be released.
 [#739]: https://github.com/dahlia/optique/pull/739
 [#740]: https://github.com/dahlia/optique/pull/740
 [#741]: https://github.com/dahlia/optique/pull/741
+[#742]: https://github.com/dahlia/optique/pull/742
 
 ### @optique/config
 
