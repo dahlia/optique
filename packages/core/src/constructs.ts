@@ -2519,10 +2519,24 @@ export function or(
     },
   };
 
-  // Forward normalizeValue from the single inner parser.
-  if (typeof parsers[0].normalizeValue === "function") {
+  // Forward normalizeValue from child parsers that have normalizers.
+  // Try each branch's normalizer; use the first that changes the value.
+  const orNormalizers = parsers.filter(
+    (p) => typeof p.normalizeValue === "function",
+  );
+  if (orNormalizers.length > 0) {
     Object.defineProperty(singleResult, "normalizeValue", {
-      value: parsers[0].normalizeValue.bind(parsers[0]),
+      value(v: unknown): unknown {
+        for (const sub of orNormalizers) {
+          try {
+            const normalized = sub.normalizeValue!(v);
+            if (normalized !== v) return normalized;
+          } catch {
+            // best-effort
+          }
+        }
+        return v;
+      },
       configurable: true,
       enumerable: false,
     });

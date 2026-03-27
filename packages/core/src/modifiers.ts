@@ -1653,7 +1653,13 @@ export function multiple<M extends Mode, TValue, TState>(
     const innerNormalize = parser.normalizeValue.bind(parser);
     Object.defineProperty(resultParser, "normalizeValue", {
       value(values: readonly TValue[]): readonly TValue[] {
-        return values.map((v) => innerNormalize(v));
+        let changed = false;
+        const result = values.map((v) => {
+          const n = innerNormalize(v);
+          if (n !== v) changed = true;
+          return n;
+        });
+        return changed ? result : values;
       },
       configurable: true,
       enumerable: false,
