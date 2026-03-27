@@ -297,8 +297,12 @@ export function value(value: string): MessageTerm {
  *               string representations of consecutive values.
  *               For example, `["42", "hello"]`.
  * @returns A {@link MessageTerm} representing the list of values.
+ * @throws {TypeError} If the values array is empty.
  */
 export function values(values: readonly string[]): MessageTerm {
+  if (values.length === 0) {
+    throw new TypeError("values must not be empty.");
+  }
   return { type: "values", values: [...values] };
 }
 
@@ -447,6 +451,7 @@ export interface ValueSetOptions {
  * @param values The list of values to format.
  * @param options Optional formatting options including locale and list type.
  * @returns A {@link Message} with alternating value and text terms.
+ * @throws {TypeError} If the values array is empty.
  * @since 0.9.0
  */
 export function valueSet(
@@ -454,7 +459,7 @@ export function valueSet(
   options?: ValueSetOptions,
 ): Message {
   if (values.length === 0) {
-    return [];
+    throw new TypeError("values must not be empty.");
   }
 
   const formatter = new Intl.ListFormat(

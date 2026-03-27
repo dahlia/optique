@@ -199,6 +199,13 @@ describe("message term constructors", () => {
     assert.deepEqual(term.values, ["foo", "bar", "baz"]);
   });
 
+  it("should throw TypeError for empty values array", () => {
+    assert.throws(
+      () => values([]),
+      TypeError,
+    );
+  });
+
   it("should create envVar term", () => {
     const term = envVar("API_URL");
     assert.equal(term.type, "envVar");
@@ -1088,10 +1095,11 @@ describe("valueSet", () => {
     assert.deepEqual(msg[4], { type: "value", value: "info" });
   });
 
-  it("should handle empty array", () => {
-    const msg = valueSet([]);
-    assert.ok(Array.isArray(msg));
-    assert.equal(msg.length, 0);
+  it("should throw TypeError for empty array", () => {
+    assert.throws(
+      () => valueSet([]),
+      TypeError,
+    );
   });
 
   it("should handle single element", () => {
@@ -1435,7 +1443,7 @@ describe("property-based tests", () => {
     fc.assert(
       fc.property(
         fc.array(nonEmptySingleLineStringArbitrary, {
-          minLength: 0,
+          minLength: 1,
           maxLength: 8,
         }),
         fc.option(fc.constantFrom("en", "ko", "fr"), { nil: undefined }),
@@ -1461,11 +1469,7 @@ describe("property-based tests", () => {
             .map((term) => term.value);
 
           assert.deepEqual(extractedValues, valuesInput);
-          if (valuesInput.length === 0) {
-            assert.deepEqual(msg, []);
-          } else {
-            assert.ok(msg.length > 0);
-          }
+          assert.ok(msg.length > 0);
         },
       ),
       propertyParameters,
