@@ -10408,6 +10408,40 @@ describe("socketAddress()", () => {
         { type: "text", text: "." },
       ]);
     });
+
+    it("should use generic format error for bare separator", () => {
+      // ":" is just a bare separator with no host or port.
+      // Should get the generic format error, not a hostname error
+      // for the empty string.
+      const parser = socketAddress({ requirePort: true });
+
+      const result = parser.parse(":");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: ":" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: ":" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should use generic format error for bare custom separator", () => {
+      const parser = socketAddress({
+        separator: "-",
+        requirePort: true,
+      });
+
+      const result = parser.parse("-");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "-" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "-" },
+        { type: "text", text: "." },
+      ]);
+    });
   });
 });
 

@@ -4195,7 +4195,9 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
-        return { success: false, error: trailingSepHostError.error };
+        if (trailingSepHostError.hostPart !== "") {
+          return { success: false, error: trailingSepHostError.error };
+        }
       }
 
       // When port is not required but no default exists, and the whole
