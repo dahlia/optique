@@ -200,8 +200,10 @@ which includes any annotations passed to `parse()`. By calling
 it as a fallback. The `required` parameter controls whether a missing value
 (both from CLI and config) should be treated as an error.
 
-Two metadata properties help `runParser()` detect collisions with built-in
-meta features (help, version, completion):
+Custom parsers must implement two metadata properties.  `leadingNames`
+enables `runParser()` to detect collisions with built-in meta features
+(help, version, completion), while `acceptingAnyToken` controls parser
+composition semantics:
 
 `leadingNames`
 :   The set of fixed tokens that this parser accepts at `argv[0]`.
