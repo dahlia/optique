@@ -400,9 +400,11 @@ export function gitBranch(
         }
         return {
           success: false,
-          error: message`Branch ${
-            value(input)
-          } does not exist. Available branches: ${valueSet(branches)}`,
+          error: branches.length > 0
+            ? message`Branch ${
+              value(input)
+            } does not exist. Available branches: ${valueSet(branches)}`
+            : message`Branch ${value(input)} does not exist.`,
         };
       } catch (error) {
         const fallback = message`Failed to list branches. Ensure ${
@@ -507,9 +509,11 @@ export function gitRemoteBranch(
             }
             return {
               success: false,
-              error: message`Remote ${
-                value(remote)
-              } does not exist. Available remotes: ${valueSet(names)}`,
+              error: names.length > 0
+                ? message`Remote ${
+                  value(remote)
+                } does not exist. Available remotes: ${valueSet(names)}`
+                : message`Remote ${value(remote)} does not exist.`,
             };
           }
         }
@@ -518,11 +522,13 @@ export function gitRemoteBranch(
         }
         return {
           success: false,
-          error: message`Remote branch ${
-            value(input)
-          } does not exist on remote ${value(remote)}. Available branches: ${
-            valueSet(branches)
-          }`,
+          error: branches.length > 0
+            ? message`Remote branch ${value(input)} does not exist on remote ${
+              value(remote)
+            }. Available branches: ${valueSet(branches)}`
+            : message`Remote branch ${value(input)} does not exist on remote ${
+              value(remote)
+            }.`,
         };
       } catch (error) {
         const fallback =
@@ -582,9 +588,11 @@ export function gitTag(
         }
         return {
           success: false,
-          error: message`Tag ${value(input)} does not exist. Available tags: ${
-            valueSet(tags)
-          }`,
+          error: tags.length > 0
+            ? message`Tag ${value(input)} does not exist. Available tags: ${
+              valueSet(tags)
+            }`
+            : message`Tag ${value(input)} does not exist.`,
         };
       } catch (error) {
         const fallback = message`Failed to list tags. Ensure ${
@@ -642,9 +650,11 @@ export function gitRemote(
         }
         return {
           success: false,
-          error: message`Remote ${
-            value(input)
-          } does not exist. Available remotes: ${valueSet(names)}`,
+          error: names.length > 0
+            ? message`Remote ${
+              value(input)
+            } does not exist. Available remotes: ${valueSet(names)}`
+            : message`Remote ${value(input)} does not exist.`,
         };
       } catch (error) {
         const fallback = message`Failed to list remotes. Ensure ${
