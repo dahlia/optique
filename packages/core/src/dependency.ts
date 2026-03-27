@@ -872,6 +872,26 @@ function createSyncDerivedFromParser<
       yield* derivedParser.suggest(prefix);
     },
 
+    normalize(value: T): T {
+      let derivedParser;
+      try {
+        const sourceValues = options.defaultValues();
+        derivedParser = options.factory(
+          ...(sourceValues as DependencyValues<Deps>),
+        );
+      } catch {
+        return value;
+      }
+      if (typeof derivedParser.normalize === "function") {
+        try {
+          return derivedParser.normalize(value);
+        } catch {
+          return value;
+        }
+      }
+      return value;
+    },
+
     *[suggestWithDependency](
       prefix: string,
       dependencyValue: DependencyValues<Deps>,
@@ -987,6 +1007,26 @@ function createAsyncDerivedFromParserFromAsyncFactory<
         return String(value);
       }
       return derivedParser.format(value);
+    },
+
+    normalize(value: T): T {
+      let derivedParser;
+      try {
+        const sourceValues = options.defaultValues();
+        derivedParser = options.factory(
+          ...(sourceValues as DependencyValues<Deps>),
+        );
+      } catch {
+        return value;
+      }
+      if (typeof derivedParser.normalize === "function") {
+        try {
+          return derivedParser.normalize(value);
+        } catch {
+          return value;
+        }
+      }
+      return value;
     },
 
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
@@ -1116,6 +1156,26 @@ function createAsyncDerivedFromParserFromSyncFactory<
         return String(value);
       }
       return derivedParser.format(value);
+    },
+
+    normalize(value: T): T {
+      let derivedParser;
+      try {
+        const sourceValues = options.defaultValues();
+        derivedParser = options.factory(
+          ...(sourceValues as DependencyValues<Deps>),
+        );
+      } catch {
+        return value;
+      }
+      if (typeof derivedParser.normalize === "function") {
+        try {
+          return derivedParser.normalize(value);
+        } catch {
+          return value;
+        }
+      }
+      return value;
     },
 
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
@@ -1269,6 +1329,24 @@ function createSyncDerivedParser<S, T>(
       return derivedParser.format(value);
     },
 
+    normalize(value: T): T {
+      let derivedParser;
+      try {
+        const sourceValue = options.defaultValue();
+        derivedParser = options.factory(sourceValue);
+      } catch {
+        return value;
+      }
+      if (typeof derivedParser.normalize === "function") {
+        try {
+          return derivedParser.normalize(value);
+        } catch {
+          return value;
+        }
+      }
+      return value;
+    },
+
     *suggest(prefix: string): Iterable<Suggestion> {
       let derivedParser;
       try {
@@ -1382,6 +1460,24 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
       return derivedParser.format(value);
     },
 
+    normalize(value: T): T {
+      let derivedParser;
+      try {
+        const sourceValue = options.defaultValue();
+        derivedParser = options.factory(sourceValue);
+      } catch {
+        return value;
+      }
+      if (typeof derivedParser.normalize === "function") {
+        try {
+          return derivedParser.normalize(value);
+        } catch {
+          return value;
+        }
+      }
+      return value;
+    },
+
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
       let derivedParser;
       try {
@@ -1486,6 +1582,24 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
         return String(value);
       }
       return derivedParser.format(value);
+    },
+
+    normalize(value: T): T {
+      let derivedParser;
+      try {
+        const sourceValue = options.defaultValue();
+        derivedParser = options.factory(sourceValue);
+      } catch {
+        return value;
+      }
+      if (typeof derivedParser.normalize === "function") {
+        try {
+          return derivedParser.normalize(value);
+        } catch {
+          return value;
+        }
+      }
+      return value;
     },
 
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
