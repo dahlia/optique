@@ -4241,8 +4241,18 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
+        // Only surface the split-host error when the whole input is not
+        // a valid hostname.  When the separator can appear inside
+        // hostnames (e.g., "-", "to"), a split may place the boundary
+        // at a position the user did not intend.  Checking the whole
+        // input disambiguates: if it is a valid hostname, the split was
+        // likely wrong and the generic format error is more appropriate.
         if (firstHostError.hostPart !== "") {
-          return { success: false, error: firstHostError.error };
+          const wholeInputIsHost = hostOnlyResult?.success ??
+            parseHost(trimmed).success;
+          if (!wholeInputIsHost) {
+            return { success: false, error: firstHostError.error };
+          }
         }
       }
 

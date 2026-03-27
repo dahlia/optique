@@ -10374,6 +10374,40 @@ describe("socketAddress()", () => {
         { type: "text", text: "Custom error" },
       ]);
     });
+
+    it("should not propagate split-host error when whole input is a valid hostname", () => {
+      // "db--80" with separator "-" splits as host "db-" (invalid
+      // trailing hyphen) + port "80" (valid).  But "db--80" is a valid
+      // single-label hostname, so the split was likely wrong.  The
+      // generic format error should be returned instead.
+      const parser = socketAddress({ separator: "-", requirePort: true });
+
+      const result = parser.parse("db--80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "-" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "db--80" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should propagate split-host error when whole input is also invalid", () => {
+      // "bad..host:80" splits as host "bad..host" (empty label) + port
+      // "80" (valid).  The whole input "bad..host:80" is also invalid as
+      // a hostname (contains colon).  The specific host error is more
+      // informative than the generic format error.
+      const parser = socketAddress({ requirePort: true });
+
+      const result = parser.parse("bad..host:80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a valid hostname, but got " },
+        { type: "value", value: "bad..host" },
+        { type: "text", text: "." },
+      ]);
+    });
   });
 });
 
