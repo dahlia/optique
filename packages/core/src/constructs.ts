@@ -6359,7 +6359,15 @@ export function merge(
         let result = obj;
         for (const sub of mergeNormalizers) {
           try {
-            result = sub.normalizeValue!(result);
+            const normalized = sub.normalizeValue!(result);
+            // Merge normalized fields back, preserving sibling fields
+            // that this child's normalizer may not know about.
+            if (
+              normalized !== result && typeof normalized === "object" &&
+              normalized != null
+            ) {
+              result = { ...result, ...normalized };
+            }
           } catch {
             // best-effort
           }
