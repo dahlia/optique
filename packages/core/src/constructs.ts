@@ -5154,7 +5154,7 @@ export function tuple<
     };
   };
 
-  return {
+  const tupleParser = {
     $mode: combinedMode,
     $valueType: [],
     $stateType: [],
@@ -5487,6 +5487,44 @@ export function tuple<
     { readonly [K in keyof T]: unknown },
     { readonly [K in keyof T]: unknown }
   >;
+
+  // Build composite normalizeValue from element parsers that have normalizers.
+  const tupleNormalizers: [number, (v: unknown) => unknown][] = [];
+  for (let i = 0; i < parsers.length; i++) {
+    const p = parsers[i];
+    if (typeof p.normalizeValue === "function") {
+      tupleNormalizers.push([i, p.normalizeValue.bind(p)]);
+    }
+  }
+  if (tupleNormalizers.length > 0) {
+    type TupleType = { readonly [K in keyof T]: unknown };
+    Object.defineProperty(tupleParser, "normalizeValue", {
+      value(arr: TupleType): TupleType {
+        if (!Array.isArray(arr)) return arr;
+        let changed = false;
+        const result = [...arr];
+        for (const [idx, normalize] of tupleNormalizers) {
+          if (idx < result.length) {
+            try {
+              const original = result[idx];
+              const normalized = normalize(original);
+              if (normalized !== original) {
+                result[idx] = normalized;
+                changed = true;
+              }
+            } catch {
+              // best-effort
+            }
+          }
+        }
+        return (changed ? result : arr) as TupleType;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+
+  return tupleParser;
 }
 
 /**
