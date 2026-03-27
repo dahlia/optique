@@ -134,11 +134,11 @@ To be released.
     `extractLeadingLiteralValues()`, which produced incorrect results for
     `tuple()` (priority-based sorting), `command()` (inner usage
     spreading), and `conditional()` (missing literal terms for argument
-    discriminators).  [[#735]]
+    discriminators).  [[#735], [#741]]
 
  -  Simplified `UserParserNames` interface: replaced `leadingOptions`,
     `leadingCommands`, and `leadingLiterals` with a single `leadingNames`
-    set.  [[#735]]
+    set.  [[#735], [#741]]
 
  -  Added `extractLiteralValues()` to *@optique/core/usage*.
     `extractOptionNames()` and `extractCommandNames()` now accept an
@@ -1252,6 +1252,7 @@ To be released.
 [#738]: https://github.com/dahlia/optique/pull/738
 [#739]: https://github.com/dahlia/optique/pull/739
 [#740]: https://github.com/dahlia/optique/pull/740
+[#741]: https://github.com/dahlia/optique/pull/741
 
 ### @optique/config
 
