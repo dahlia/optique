@@ -763,6 +763,31 @@ function isAsyncModeParser(parser: { readonly $mode: Mode }): boolean {
   return parser.$mode === "async";
 }
 
+/**
+ * Shared helper for derived value parser `normalize()` implementations.
+ * Builds the inner parser from the factory and delegates to its
+ * `normalize()` if available, falling back to the original value on error.
+ */
+function normalizeWithDerivedParser<T>(
+  value: T,
+  getParser: () => ValueParser<Mode, T> | undefined,
+): T {
+  let derivedParser;
+  try {
+    derivedParser = getParser();
+  } catch {
+    return value;
+  }
+  if (derivedParser && typeof derivedParser.normalize === "function") {
+    try {
+      return derivedParser.normalize(value);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
 function createSyncDerivedFromParser<
   Deps extends readonly AnyDependencySource[],
   T,
@@ -873,23 +898,10 @@ function createSyncDerivedFromParser<
     },
 
     normalize(value: T): T {
-      let derivedParser;
-      try {
-        const sourceValues = options.defaultValues();
-        derivedParser = options.factory(
-          ...(sourceValues as DependencyValues<Deps>),
-        );
-      } catch {
-        return value;
-      }
-      if (typeof derivedParser.normalize === "function") {
-        try {
-          return derivedParser.normalize(value);
-        } catch {
-          return value;
-        }
-      }
-      return value;
+      return normalizeWithDerivedParser(value, () =>
+        options.factory(
+          ...(options.defaultValues() as DependencyValues<Deps>),
+        ));
     },
 
     *[suggestWithDependency](
@@ -1010,23 +1022,10 @@ function createAsyncDerivedFromParserFromAsyncFactory<
     },
 
     normalize(value: T): T {
-      let derivedParser;
-      try {
-        const sourceValues = options.defaultValues();
-        derivedParser = options.factory(
-          ...(sourceValues as DependencyValues<Deps>),
-        );
-      } catch {
-        return value;
-      }
-      if (typeof derivedParser.normalize === "function") {
-        try {
-          return derivedParser.normalize(value);
-        } catch {
-          return value;
-        }
-      }
-      return value;
+      return normalizeWithDerivedParser(value, () =>
+        options.factory(
+          ...(options.defaultValues() as DependencyValues<Deps>),
+        ));
     },
 
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
@@ -1314,21 +1313,10 @@ function createSyncDerivedParser<S, T>(
     },
 
     normalize(value: T): T {
-      let derivedParser;
-      try {
-        const sourceValue = options.defaultValue();
-        derivedParser = options.factory(sourceValue);
-      } catch {
-        return value;
-      }
-      if (typeof derivedParser.normalize === "function") {
-        try {
-          return derivedParser.normalize(value);
-        } catch {
-          return value;
-        }
-      }
-      return value;
+      return normalizeWithDerivedParser(
+        value,
+        () => options.factory(options.defaultValue()),
+      );
     },
 
     *suggest(prefix: string): Iterable<Suggestion> {
@@ -1555,21 +1543,10 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
     },
 
     normalize(value: T): T {
-      let derivedParser;
-      try {
-        const sourceValue = options.defaultValue();
-        derivedParser = options.factory(sourceValue);
-      } catch {
-        return value;
-      }
-      if (typeof derivedParser.normalize === "function") {
-        try {
-          return derivedParser.normalize(value);
-        } catch {
-          return value;
-        }
-      }
-      return value;
+      return normalizeWithDerivedParser(
+        value,
+        () => options.factory(options.defaultValue()),
+      );
     },
 
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
