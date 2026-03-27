@@ -3972,12 +3972,12 @@ export function socketAddress(
       let firstHostError:
         | { readonly hostPart: string; readonly error: Message }
         | undefined;
-      // Set when a split produces a non-empty host but an all-digit port
-      // part that fails validation (e.g., out of range).  This prevents
-      // the host-only fallback from silently masking port typos — even
-      // when the host part itself is invalid (e.g., "db--70000" where
-      // host "db-" has a trailing hyphen).
-      let validHostNumericPortInvalid = false;
+      // Set to the port parser's error when a split produces a non-empty
+      // host but an all-digit port part that fails validation (e.g., out
+      // of range).  This prevents the host-only fallback from silently
+      // masking port typos — even when the host part itself is invalid
+      // (e.g., "db--70000" where host "db-" has a trailing hyphen).
+      let validHostInvalidPortError: Message | undefined;
       // The validated host from the rightmost split with an empty port
       // part (trailing separator).  Used as a fallback when the whole
       // input is not a valid hostname by itself (e.g., "localhost:" where
@@ -4045,7 +4045,7 @@ export function socketAddress(
               firstHostError = { hostPart, error: hostResult.error };
             }
           } else if (
-            !validHostNumericPortInvalid &&
+            validHostInvalidPortError === undefined &&
             hostPart !== "" &&
             /^[0-9]+$/.test(portPart)
           ) {
@@ -4070,10 +4070,10 @@ export function socketAddress(
                   firstHostError = { hostPart, error: hostResult.error };
                 }
               } else {
-                validHostNumericPortInvalid = true;
+                validHostInvalidPortError = portResult.error;
               }
             } else {
-              validHostNumericPortInvalid = true;
+              validHostInvalidPortError = portResult.error;
             }
           } else if (
             (firstHostError === undefined ||
@@ -4102,7 +4102,7 @@ export function socketAddress(
 
       // If a split had a valid host but a recognizably-invalid numeric
       // port, reject before trying host-only.
-      if (validHostNumericPortInvalid) {
+      if (validHostInvalidPortError !== undefined) {
         const errorMsg = options?.errors?.invalidFormat;
         if (errorMsg) {
           const msg = typeof errorMsg === "function"
@@ -4110,11 +4110,7 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
-        return {
-          success: false,
-          error:
-            message`Expected a socket address in format host${separator}port, but got ${input}.`,
-        };
+        return { success: false, error: validHostInvalidPortError };
       }
 
       // If a split found a valid port but an IP-shaped invalid host,
@@ -4199,17 +4195,7 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
-        if (
-          looksLikeIpv4(trailingSepHostError.hostPart) ||
-          looksLikeAltIpv4Literal(trailingSepHostError.hostPart)
-        ) {
-          return { success: false, error: trailingSepHostError.error };
-        }
-        return {
-          success: false,
-          error:
-            message`Expected a socket address in format host${separator}port, but got ${input}.`,
-        };
+        return { success: false, error: trailingSepHostError.error };
       }
 
       // When port is not required but no default exists, and the whole
@@ -4254,6 +4240,9 @@ export function socketAddress(
             ? errorMsg(input)
             : errorMsg;
           return { success: false, error: msg };
+        }
+        if (firstHostError.hostPart !== "") {
+          return { success: false, error: firstHostError.error };
         }
       }
 

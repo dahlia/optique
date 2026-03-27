@@ -9268,31 +9268,36 @@ describe("socketAddress()", () => {
       ]);
     });
 
-    it("should use socket-level format error for non-IP malformed host", () => {
+    it("should use socket-level format error for empty host", () => {
       const parser = socketAddress({
         defaultPort: 80,
         host: { type: "both" },
       });
 
       // Empty host gets socket-level error, not host parser error
-      const result1 = parser.parse(":8080");
-      assert.ok(!result1.success);
-      assert.deepStrictEqual(result1.error, [
+      const result = parser.parse(":8080");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
         { type: "text", text: "Expected a socket address in format host" },
         { type: "value", value: ":" },
         { type: "text", text: "port, but got " },
         { type: "value", value: ":8080" },
         { type: "text", text: "." },
       ]);
+    });
 
-      // Invalid hostname gets socket-level error
-      const result2 = parser.parse("-invalid.com:80");
-      assert.ok(!result2.success);
-      assert.deepStrictEqual(result2.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "value", value: ":" },
-        { type: "text", text: "port, but got " },
-        { type: "value", value: "-invalid.com:80" },
+    it("should propagate hostname error for non-IP malformed host", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both" },
+      });
+
+      // Invalid hostname gets the specific hostname parser error
+      const result = parser.parse("-invalid.com:80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a valid hostname, but got " },
+        { type: "value", value: "-invalid.com" },
         { type: "text", text: "." },
       ]);
     });
@@ -9929,16 +9934,20 @@ describe("socketAddress()", () => {
 
     it("should reject when split has valid host but invalid numeric port", () => {
       // "db-70000" should NOT be silently accepted as a hostname.
-      // The port part "70000" is all digits → user intended a port → error.
+      // The port part "70000" is all digits → user intended a port →
+      // specific port error.
       const parser = socketAddress({ separator: "-", defaultPort: 80 });
 
       const result = parser.parse("db-70000");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "value", value: "-" },
-        { type: "text", text: "port, but got " },
-        { type: "value", value: "db-70000" },
+        {
+          type: "text",
+          text: "Expected a port number less than or equal to ",
+        },
+        { type: "text", text: "65,535" },
+        { type: "text", text: ", but got " },
+        { type: "value", value: "70000" },
         { type: "text", text: "." },
       ]);
     });
@@ -9963,16 +9972,20 @@ describe("socketAddress()", () => {
     it("should reject doubled-separator inputs with invalid numeric port", () => {
       // "db--70000" has host "db-" (invalid trailing hyphen) + port
       // "70000".  The all-digit suffix is still a port typo even though
-      // the host part at that split point is invalid.
+      // the host part at that split point is invalid.  The specific port
+      // error should surface.
       const parser = socketAddress({ separator: "-", defaultPort: 80 });
 
       const result = parser.parse("db--70000");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "value", value: "-" },
-        { type: "text", text: "port, but got " },
-        { type: "value", value: "db--70000" },
+        {
+          type: "text",
+          text: "Expected a port number less than or equal to ",
+        },
+        { type: "text", text: "65,535" },
+        { type: "text", text: ", but got " },
+        { type: "value", value: "70000" },
         { type: "text", text: "." },
       ]);
     });
@@ -10012,14 +10025,17 @@ describe("socketAddress()", () => {
       const parser = socketAddress({ separator: "to", requirePort: true });
 
       // "dbto70000" has a valid host + all-digit invalid port.
-      // Error should be about invalid format, not "missing port".
+      // Error should be about invalid port, not "missing port".
       const result = parser.parse("dbto70000");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "value", value: "to" },
-        { type: "text", text: "port, but got " },
-        { type: "value", value: "dbto70000" },
+        {
+          type: "text",
+          text: "Expected a port number less than or equal to ",
+        },
+        { type: "text", text: "65,535" },
+        { type: "text", text: ", but got " },
+        { type: "value", value: "70000" },
         { type: "text", text: "." },
       ]);
     });
@@ -10224,6 +10240,138 @@ describe("socketAddress()", () => {
           type: "text",
           text: " appears to be a non-standard IPv4 address notation.",
         },
+      ]);
+    });
+  });
+
+  describe("sub-parser error propagation", () => {
+    it("should propagate port min error instead of generic format error", () => {
+      const parser = socketAddress({ port: { min: 1024 } });
+
+      const result = parser.parse("localhost:80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a port number greater than or equal to ",
+        },
+        { type: "text", text: "1,024" },
+        { type: "text", text: ", but got " },
+        { type: "value", value: "80" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should propagate hostname localhostNotAllowed error", () => {
+      const parser = socketAddress({
+        host: {
+          type: "hostname",
+          hostname: { allowLocalhost: false },
+        },
+      });
+
+      const result = parser.parse("localhost:80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Hostname 'localhost' is not allowed." },
+      ]);
+    });
+
+    it("should propagate IP allowPrivate error", () => {
+      const parser = socketAddress({
+        host: {
+          type: "ip",
+          ip: { allowPrivate: false },
+        },
+      });
+
+      const result = parser.parse("192.168.1.1:80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "192.168.1.1" },
+        { type: "text", text: " is a private IP address." },
+      ]);
+    });
+
+    it("should propagate localhostNotAllowed for trailing separator", () => {
+      const parser = socketAddress({
+        host: {
+          type: "hostname",
+          hostname: { allowLocalhost: false },
+        },
+        requirePort: true,
+      });
+
+      const result = parser.parse("localhost:");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Hostname 'localhost' is not allowed." },
+      ]);
+    });
+
+    it("should propagate disallowWellKnown port error", () => {
+      const parser = socketAddress({
+        port: { disallowWellKnown: true },
+      });
+
+      const result = parser.parse("localhost:80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Port " },
+        { type: "value", value: "80" },
+        {
+          type: "text",
+          text:
+            " is a well-known port (1-1023) and may require elevated privileges.",
+        },
+      ]);
+    });
+
+    it("should propagate localhostNotAllowed in both mode", () => {
+      const parser = socketAddress({
+        host: {
+          type: "both",
+          hostname: { allowLocalhost: false },
+        },
+      });
+
+      const result = parser.parse("localhost:80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Hostname 'localhost' is not allowed." },
+      ]);
+    });
+
+    it("should prefer custom invalidFormat over sub-parser errors", () => {
+      const parser = socketAddress({
+        host: {
+          type: "hostname",
+          hostname: { allowLocalhost: false },
+        },
+        errors: {
+          invalidFormat: message`Custom error`,
+        },
+      });
+
+      const result = parser.parse("localhost:80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Custom error" },
+      ]);
+    });
+
+    it("should prefer custom invalidFormat over port sub-parser errors", () => {
+      const parser = socketAddress({
+        port: { min: 1024 },
+        errors: {
+          invalidFormat: message`Custom error`,
+        },
+      });
+
+      const result = parser.parse("localhost:80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Custom error" },
       ]);
     });
   });
