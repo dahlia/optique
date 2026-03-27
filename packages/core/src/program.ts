@@ -115,6 +115,8 @@ export interface Program<M extends Mode, T> {
  * @template T - The type of value produced by the parser.
  * @param program - The program definition with parser and metadata.
  * @returns The same program object with inferred types.
+ * @throws {TypeError} If `program.metadata.name` is not a string, is empty,
+ *         is whitespace-only, or contains control characters.
  *
  * @example
  * ```typescript
