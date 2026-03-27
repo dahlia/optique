@@ -5194,6 +5194,46 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.equal(versionOutput, "1.0.0");
     });
   });
+
+  describe("program name validation", () => {
+    it("should reject empty program name (old API)", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () => runParser(parser, "", ["x"]),
+        TypeError,
+      );
+    });
+
+    it("should reject program name with control characters (old API)", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () => runParser(parser, "bad\nname", ["x"]),
+        TypeError,
+      );
+    });
+
+    it("should reject empty metadata name (Program API)", () => {
+      const prog: Program<"sync", { readonly name: string }> = {
+        parser: object({ name: argument(string()) }),
+        metadata: { name: "" },
+      };
+      assert.throws(
+        () => runParser(prog, ["x"]),
+        TypeError,
+      );
+    });
+
+    it("should reject non-string metadata name (Program API)", () => {
+      const prog = {
+        parser: object({ name: argument(string()) }),
+        metadata: { name: 123 as never },
+      } as Program<"sync", { readonly name: string }>;
+      assert.throws(
+        () => runParser(prog, ["x"]),
+        TypeError,
+      );
+    });
+  });
 });
 
 describe("runWith", () => {

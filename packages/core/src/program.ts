@@ -12,6 +12,7 @@
 
 import type { Message } from "./message.ts";
 import type { Mode, Parser } from "./parser.ts";
+import { validateProgramName } from "./validate.ts";
 
 /**
  * Metadata for a CLI program.
@@ -142,5 +143,6 @@ export interface Program<M extends Mode, T> {
 export function defineProgram<M extends Mode, T>(
   program: Program<M, T>,
 ): Program<M, T> {
+  validateProgramName(program.metadata.name);
   return program;
 }

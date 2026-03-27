@@ -59,6 +59,7 @@ import {
   validateCommandNames,
   validateMetaNameCollisions,
   validateOptionNames,
+  validateProgramName,
 } from "./validate.ts";
 import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
 
@@ -1516,6 +1517,8 @@ export function runParser<
     args = argsOrOptions as readonly string[];
     options = optionsParam ?? {};
   }
+
+  validateProgramName(programName);
 
   // Extract all options first
   const {

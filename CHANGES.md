@@ -1006,6 +1006,11 @@ To be released.
     contain control characters now throw `TypeError` immediately instead of
     producing broken help output.  [[#404], [#737]]
 
+ -  `runParser()` and `defineProgram()` now validate program names up front,
+    rejecting empty strings, strings with control characters, and non-string
+    values with a `TypeError`.  Previously, invalid names were only caught
+    during help/error output formatting.  [[#428], [#743]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -1119,6 +1124,7 @@ To be released.
 [#406]: https://github.com/dahlia/optique/issues/406
 [#407]: https://github.com/dahlia/optique/issues/407
 [#425]: https://github.com/dahlia/optique/issues/425
+[#428]: https://github.com/dahlia/optique/issues/428
 [#429]: https://github.com/dahlia/optique/issues/429
 [#431]: https://github.com/dahlia/optique/issues/431
 [#432]: https://github.com/dahlia/optique/issues/432
@@ -1279,6 +1285,7 @@ To be released.
 [#740]: https://github.com/dahlia/optique/pull/740
 [#741]: https://github.com/dahlia/optique/pull/741
 [#742]: https://github.com/dahlia/optique/pull/742
+[#743]: https://github.com/dahlia/optique/pull/743
 
 ### @optique/config
 

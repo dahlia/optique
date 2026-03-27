@@ -772,12 +772,12 @@ describe("Program-based API", () => {
   });
 
   it("rejects empty name from Program metadata", () => {
-    const prog = defineProgram({
-      parser: object({}),
-      metadata: { name: "" },
-    });
     assert.throws(
-      () => generateManPage(prog, { section: 1 }),
+      () =>
+        defineProgram({
+          parser: object({}),
+          metadata: { name: "" },
+        }),
       TypeError,
     );
   });
