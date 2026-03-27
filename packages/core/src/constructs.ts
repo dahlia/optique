@@ -61,6 +61,63 @@ type CombineObjectModes<
     : never
 >;
 
+/**
+ * A shared empty set used as the `leadingNames` value for parsers that
+ * do not match any specific name at the first buffer position.
+ */
+const EMPTY_LEADING_NAMES: ReadonlySet<string> = new Set();
+
+interface LeadingNameSource {
+  readonly leadingNames: ReadonlySet<string>;
+  readonly acceptingAnyToken: boolean;
+  readonly priority: number;
+}
+
+/**
+ * Computes the union of `leadingNames` from all given parsers.
+ * Used for alternative combinators (`or()`, `longestMatch()`) where all
+ * branches compete independently.
+ */
+function unionLeadingNames(
+  parsers: readonly LeadingNameSource[],
+): ReadonlySet<string> {
+  const names = new Set<string>();
+  for (const p of parsers) {
+    for (const name of p.leadingNames) names.add(name);
+  }
+  return names.size === 0 ? EMPTY_LEADING_NAMES : names;
+}
+
+/**
+ * Computes `leadingNames` for shared-buffer compositions (`tuple()`,
+ * `object()`, `merge()`, `concat()`).
+ *
+ * Children are processed in descending priority order (matching the
+ * round-robin parse loop).  Once a child with `acceptingAnyToken` is
+ * encountered, no lower-priority children can match at position 0, so
+ * their names are excluded.
+ */
+function sharedBufferLeadingNames(
+  parsers: readonly LeadingNameSource[],
+): ReadonlySet<string> {
+  const sorted = parsers.toSorted((a, b) => b.priority - a.priority);
+  const names = new Set<string>();
+  let positionalBlocked = false;
+  for (const p of sorted) {
+    if (p.leadingNames) {
+      for (const name of p.leadingNames) {
+        // After a catch-all positional parser (e.g., argument()), only
+        // option-like names remain reachable because argument() rejects
+        // tokens that start with "-".
+        if (positionalBlocked && !name.startsWith("-")) continue;
+        names.add(name);
+      }
+    }
+    if (p.acceptingAnyToken) positionalBlocked = true;
+  }
+  return names.size === 0 ? EMPTY_LEADING_NAMES : names;
+}
+
 const inheritParentAnnotationsKey = Symbol.for(
   "@optique/core/inheritParentAnnotations",
 );
@@ -2399,6 +2456,8 @@ export function or(
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
     usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
+    leadingNames: unionLeadingNames(parsers),
+    acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
     initialState: undefined,
     complete: createExclusiveComplete(
       parsers,
@@ -2879,6 +2938,8 @@ export function longestMatch(
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
     usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
+    leadingNames: unionLeadingNames(parsers),
+    acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
     initialState: undefined,
     complete: createExclusiveComplete(
       parsers,
@@ -4193,6 +4254,8 @@ export function object<
       parserPairs.flatMap(([_, p]) => p.usage),
       options.hidden,
     ),
+    leadingNames: sharedBufferLeadingNames(parserPairs.map(([_, p]) => p)),
+    acceptingAnyToken: parserPairs.some(([_, p]) => p.acceptingAnyToken),
     get initialState(): {
       readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U3)
         ? U3
@@ -5040,6 +5103,8 @@ export function tuple<
     usage: parsers
       .toSorted((a, b) => b.priority - a.priority)
       .flatMap((p) => p.usage),
+    leadingNames: sharedBufferLeadingNames(parsers),
+    acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
     priority: parsers.length > 0
       ? Math.max(...parsers.map((p) => p.priority))
       : 0,
@@ -5823,6 +5888,8 @@ export function merge(
       parsers.flatMap((p) => p.usage),
       options.hidden,
     ),
+    leadingNames: sharedBufferLeadingNames(parsers),
+    acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
     initialState,
     parse(context: ParserContext<MergeState>) {
       if (isAsync) {
@@ -6927,6 +6994,8 @@ export function concat(
       ? Math.max(...parsers.map((p) => p.priority))
       : 0,
     usage: parsers.flatMap((p) => p.usage),
+    leadingNames: sharedBufferLeadingNames(parsers),
+    acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
     initialState,
     parse(context) {
       if (isAsync) {
@@ -7105,6 +7174,8 @@ export function group<M extends Mode, TValue, TState>(
     $stateType: parser.$stateType,
     priority: parser.priority,
     usage: applyHiddenToUsage(parser.usage, options.hidden),
+    leadingNames: parser.leadingNames,
+    acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
     // Forward field parser pairs from inner parser so that merge()
     // can pre-complete dependency source fields from grouped children.
@@ -8122,6 +8193,19 @@ export function conditional(
     $stateType: [],
     priority: maxPriority,
     usage,
+    // The default branch receives the original buffer both when the
+    // discriminator fails outright AND when it succeeds but its value
+    // does not match any branch key.  In either case the default
+    // branch's leading names are reachable at position 0.
+    leadingNames: defaultBranch
+      ? unionLeadingNames([discriminator, defaultBranch])
+      : discriminator.leadingNames,
+    // A catch-all default branch makes the conditional consume any
+    // positional token at argv[0], because the default branch reparses
+    // the original buffer when the discriminator does not select a
+    // concrete branch.  The discriminator's own catch-all status does
+    // not matter here: it only routes to branches, not to the default.
+    acceptingAnyToken: defaultBranch?.acceptingAnyToken ?? false,
     initialState,
 
     parse(context) {

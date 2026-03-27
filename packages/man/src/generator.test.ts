@@ -323,6 +323,8 @@ describe("generateManPageSync()", () => {
       parse() {},
       $mode: "invalid",
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       getDocFragments() {
         return { fragments: [] };
@@ -359,6 +361,8 @@ describe("generateManPageSync()", () => {
       $stateType: [] as readonly null[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse() {
         return {
@@ -393,6 +397,8 @@ describe("generateManPageSync()", () => {
       $stateType: [] as readonly null[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse() {
         return Promise.resolve({
@@ -427,6 +433,8 @@ describe("generateManPageSync()", () => {
       $stateType: [] as readonly null[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse() {
         return Promise.resolve({
@@ -519,6 +527,8 @@ describe("generateManPageAsync()", () => {
       $stateType: [] as readonly null[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse() {
         return Promise.resolve({
@@ -557,6 +567,8 @@ describe("generateManPage() mode dispatch", () => {
       $stateType: [] as readonly null[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse() {
         return Promise.resolve({

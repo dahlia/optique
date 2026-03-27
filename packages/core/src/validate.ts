@@ -156,14 +156,9 @@ export type MetaEntry = readonly [
  * @since 1.0.0
  */
 export interface UserParserNames {
-  /** Option names reachable at the leading position (before any positional
-   *  gate). */
-  readonly leadingOptions: ReadonlySet<string>;
-  /** Command names reachable at the leading position. */
-  readonly leadingCommands: ReadonlySet<string>;
-  /** Literal values reachable at the leading position (e.g., conditional
-   *  discriminator values that appear as the first positional token). */
-  readonly leadingLiterals: ReadonlySet<string>;
+  /** Names (option names, command names) reachable at the first buffer
+   *  position.  A flat set from {@link Parser.leadingNames}. */
+  readonly leadingNames: ReadonlySet<string>;
   /** All option names at any depth. */
   readonly allOptions: ReadonlySet<string>;
   /** All command names at any depth. */
@@ -249,76 +244,92 @@ export function validateMetaNameCollisions(
 
   // 3. Check for collisions between meta features and user parser.
   //    The scope depends on the meta feature kind:
-  //    - "command" entries only reach args[0] → check leading user names
-  //    - "option" entries scan entire argv  → check all user names + literals
+  //    - "command" entries only reach args[0] → check leadingNames +
+  //      allOptions/allCommands for classification
+  //    - "option" entries scan entire argv → check all user names + literals
   for (const [kind, label, names, prefixMatch] of metaEntries) {
-    const optionNames = kind === "command"
-      ? userNames.leadingOptions
-      : userNames.allOptions;
-    const commandNames = kind === "command"
-      ? userNames.leadingCommands
-      : userNames.allCommands;
     for (const name of names) {
-      if (optionNames.has(name)) {
-        throw new TypeError(
-          `User-defined option "${name}" conflicts with the ` +
-            `built-in ${label}.`,
-        );
+      if (kind === "command") {
+        // Command-form meta entries only match at args[0], so check
+        // the flat leadingNames set.  Classify by cross-referencing
+        // with allOptions/allCommands for accurate error messages.
+        if (userNames.leadingNames.has(name)) {
+          if (userNames.allOptions.has(name)) {
+            throw new TypeError(
+              `User-defined option "${name}" conflicts with the ` +
+                `built-in ${label}.`,
+            );
+          } else if (userNames.allCommands.has(name)) {
+            throw new TypeError(
+              `User-defined command "${name}" conflicts with the ` +
+                `built-in ${label}.`,
+            );
+          } else if (userNames.allLiterals.has(name)) {
+            throw new TypeError(
+              `Literal value "${name}" conflicts with the ` +
+                `built-in ${label}.`,
+            );
+          } else {
+            throw new TypeError(
+              `User-defined name "${name}" conflicts with the ` +
+                `built-in ${label}.`,
+            );
+          }
+        }
+      } else {
+        // Option-form meta entries scan entire argv, so check all
+        // user names at every depth.
+        if (userNames.allOptions.has(name)) {
+          throw new TypeError(
+            `User-defined option "${name}" conflicts with the ` +
+              `built-in ${label}.`,
+          );
+        }
+        if (userNames.allCommands.has(name)) {
+          throw new TypeError(
+            `User-defined command "${name}" conflicts with the ` +
+              `built-in ${label}.`,
+          );
+        }
+        if (userNames.allLiterals.has(name)) {
+          throw new TypeError(
+            `Literal value "${name}" conflicts with the ` +
+              `built-in ${label}.`,
+          );
+        }
       }
-      if (commandNames.has(name)) {
-        throw new TypeError(
-          `User-defined command "${name}" conflicts with the ` +
-            `built-in ${label}.`,
-        );
-      }
-      // Literal values (e.g., conditional discriminator values) can
-      // collide with meta features.  The scope is position-aware:
-      // command-form entries only reach args[0] → check leading literals;
-      // option-form entries scan entire argv → check all literals.
-      //
-      // Known limitation: only option-based conditional discriminators
-      // produce literal terms.  Argument-based discriminators do not
-      // because map() is invisible in the usage tree—we cannot tell
-      // whether the branch key is the raw argv token or a transformed
-      // value.  See https://github.com/dahlia/optique/issues/734
-      // and https://github.com/dahlia/optique/issues/735
-      const literalNames = kind === "command"
-        ? userNames.leadingLiterals
-        : userNames.allLiterals;
-      if (literalNames.has(name)) {
-        throw new TypeError(
-          `Literal value "${name}" conflicts with the ` +
-            `built-in ${label}.`,
-        );
-      }
-      // Only the completion option matches the "name=value" form at
-      // runtime (e.g., --completion=bash).  Help/version scanners use
-      // exact matching, so --help=foo and --version=foo are valid user
-      // names that should not be flagged.
       if (prefixMatch) {
         const prefix = name + "=";
-        for (const userName of optionNames) {
-          if (userName.startsWith(prefix)) {
-            throw new TypeError(
-              `User-defined option "${userName}" conflicts with the ` +
-                `built-in ${label} (prefix "${prefix}").`,
-            );
-          }
-        }
-        for (const userName of commandNames) {
-          if (userName.startsWith(prefix)) {
-            throw new TypeError(
-              `User-defined command "${userName}" conflicts with the ` +
-                `built-in ${label} (prefix "${prefix}").`,
-            );
-          }
-        }
-        for (const literal of literalNames) {
-          if (literal.startsWith(prefix)) {
-            throw new TypeError(
-              `Literal value "${literal}" conflicts with the ` +
-                `built-in ${label} (prefix "${prefix}").`,
-            );
+        const checkSets = kind === "command" ? [userNames.leadingNames] : [
+          userNames.allOptions,
+          userNames.allCommands,
+          userNames.allLiterals,
+        ];
+        for (const nameSet of checkSets) {
+          for (const userName of nameSet) {
+            if (!userName.startsWith(prefix)) continue;
+            // Classify the name for the error message
+            if (userNames.allOptions.has(userName)) {
+              throw new TypeError(
+                `User-defined option "${userName}" conflicts with the ` +
+                  `built-in ${label} (prefix "${prefix}").`,
+              );
+            } else if (userNames.allCommands.has(userName)) {
+              throw new TypeError(
+                `User-defined command "${userName}" conflicts with the ` +
+                  `built-in ${label} (prefix "${prefix}").`,
+              );
+            } else if (userNames.allLiterals.has(userName)) {
+              throw new TypeError(
+                `Literal value "${userName}" conflicts with the ` +
+                  `built-in ${label} (prefix "${prefix}").`,
+              );
+            } else {
+              throw new TypeError(
+                `User-defined name "${userName}" conflicts with the ` +
+                  `built-in ${label} (prefix "${prefix}").`,
+              );
+            }
           }
         }
       }

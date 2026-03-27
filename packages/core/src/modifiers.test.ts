@@ -30,7 +30,7 @@ import {
   WithDefaultError,
 } from "@optique/core/modifiers";
 import { parse, type Parser, type Suggestion } from "@optique/core/parser";
-import { argument, constant, option } from "@optique/core/primitives";
+import { argument, constant, flag, option } from "@optique/core/primitives";
 import {
   choice,
   integer,
@@ -1785,6 +1785,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { value: "" },
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -1848,6 +1850,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { value: "" },
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -1909,6 +1913,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { used: false },
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -1972,6 +1978,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         if (getAnnotations(context.state)?.[annotation] !== "ok") {
@@ -2023,6 +2031,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         if (typeof context.state !== "string") {
@@ -2073,6 +2083,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { used: false },
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -2137,6 +2149,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         if (getAnnotations(context.state)?.[annotation] !== "ok") {
@@ -2189,6 +2203,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         if (typeof context.state !== "string") {
@@ -2237,6 +2253,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -2320,6 +2338,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -2364,6 +2384,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -2414,6 +2436,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -2467,6 +2491,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -2529,6 +2555,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse() {
         return {
@@ -2578,6 +2606,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse() {
         return Promise.resolve({
@@ -2627,6 +2657,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse() {
         return Promise.resolve({
@@ -2684,6 +2716,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse() {
         return {
@@ -2751,6 +2785,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse() {
         return {
@@ -2811,6 +2847,8 @@ describe("multiple", () => {
       $stateType: [] as const,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState,
       parse() {
         return {
@@ -3455,6 +3493,8 @@ describe("multiple", () => {
         $stateType: [] as const,
         priority: 0,
         usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: "",
         parse(context) {
           return {
@@ -4344,6 +4384,8 @@ describe("branch coverage: modifiers edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [transformsDependencyValueMarker]: true as const,
       parse: () =>
@@ -4381,6 +4423,8 @@ describe("branch coverage: modifiers edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [transformsDependencyValueMarker]: true as const,
       parse: () =>
@@ -4414,6 +4458,8 @@ describe("branch coverage: modifiers edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [wrappedDependencySourceMarker]: pending,
       parse: () => ({
@@ -4445,6 +4491,8 @@ describe("branch coverage: modifiers edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [transformsDependencyValueMarker]: true as const,
       parse: () =>
@@ -4502,6 +4550,8 @@ describe("branch coverage: modifiers edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [wrappedDependencySourceMarker]: pending,
       parse: () =>
@@ -4535,6 +4585,8 @@ describe("branch coverage: modifiers edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [wrappedDependencySourceMarker]: pending,
       parse: () =>
@@ -4594,6 +4646,8 @@ describe("branch coverage: modifiers edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [transformsDependencyValueMarker]: true as const,
       parse: () =>
@@ -4631,6 +4685,8 @@ describe("branch coverage: modifiers edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [wrappedDependencySourceMarker]: pending,
       parse: () => ({
@@ -4661,6 +4717,8 @@ describe("branch coverage: modifiers edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [transformsDependencyValueMarker]: true as const,
       parse: () =>
@@ -4713,6 +4771,8 @@ describe("branch coverage: modifiers edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: 0,
       parse(context: {
         readonly buffer: readonly string[];
@@ -4773,6 +4833,8 @@ describe("branch coverage: modifiers edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "",
       parse: () =>
         Promise.resolve({
@@ -4803,6 +4865,8 @@ describe("branch coverage: modifiers edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [transformsDependencyValueMarker]: true as const,
       parse: () =>
@@ -4845,6 +4909,8 @@ describe("branch coverage: modifiers edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [transformsDependencyValueMarker]: true as const,
       parse: () =>
@@ -4888,6 +4954,8 @@ describe("branch coverage: modifiers edge cases", () => {
       $stateType: undefined,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       [wrappedDependencySourceMarker]: pending,
       parse: () => ({
@@ -5096,5 +5164,66 @@ describe("shouldDeferCompletion forwarding", () => {
       assert.equal(inner.receivedStates.length, 1);
       assert.deepEqual(inner.receivedStates[0], otherState);
     });
+  });
+});
+
+describe("leadingNames", () => {
+  it("should forward from inner parser for optional()", () => {
+    const inner = flag("--verbose");
+    assert.deepEqual(optional(inner).leadingNames, inner.leadingNames);
+  });
+
+  it("should forward from inner parser for withDefault()", () => {
+    const inner = option("--name", string());
+    assert.deepEqual(
+      withDefault(inner, "default").leadingNames,
+      inner.leadingNames,
+    );
+  });
+
+  it("should forward from inner parser for map()", () => {
+    const inner = option("--count", integer());
+    assert.deepEqual(
+      map(inner, (n) => n * 2).leadingNames,
+      inner.leadingNames,
+    );
+  });
+
+  it("should forward from inner parser for multiple()", () => {
+    const inner = option("--file", string());
+    assert.deepEqual(multiple(inner).leadingNames, inner.leadingNames);
+  });
+
+  it("should forward from inner parser for nonEmpty()", () => {
+    const inner = multiple(option("--tag", string()));
+    assert.deepEqual(nonEmpty(inner).leadingNames, inner.leadingNames);
+  });
+});
+
+describe("acceptingAnyToken", () => {
+  it("should be false for optional() even with catch-all inner", () => {
+    assert.ok(!optional(argument(string())).acceptingAnyToken);
+  });
+
+  it("should be false for withDefault() even with catch-all inner", () => {
+    assert.ok(!withDefault(argument(string()), "x").acceptingAnyToken);
+  });
+
+  it("should be false for multiple(min=0) even with catch-all inner", () => {
+    assert.ok(!multiple(argument(string())).acceptingAnyToken);
+  });
+
+  it("should propagate for multiple(min>0) with catch-all inner", () => {
+    assert.ok(multiple(argument(string()), { min: 1 }).acceptingAnyToken);
+  });
+
+  it("should propagate through map()", () => {
+    assert.ok(map(argument(string()), (s) => s.length).acceptingAnyToken);
+  });
+
+  it("should propagate through nonEmpty()", () => {
+    assert.ok(
+      nonEmpty(multiple(argument(string()), { min: 1 })).acceptingAnyToken,
+    );
   });
 });

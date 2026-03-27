@@ -28,6 +28,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { called: false },
       parse(context) {
         return Promise.resolve({
@@ -81,6 +83,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: 1,
       parse(context) {
         return Promise.resolve({
@@ -127,6 +131,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "sync",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse() {
         return {
@@ -153,6 +159,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: 0,
       parse() {
         return Promise.resolve({
@@ -201,6 +209,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "sync",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: 1,
       parse(context) {
         return {
@@ -228,6 +238,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: 2,
       parse(context) {
         return Promise.resolve({
@@ -292,6 +304,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse() {
         return Promise.resolve({
@@ -322,6 +336,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: "init",
       parse(context) {
         return Promise.resolve({
@@ -352,6 +368,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: 0,
       parse(context) {
         return Promise.resolve({
@@ -382,6 +400,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "sync",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse() {
         return {
@@ -413,6 +433,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "sync",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: 0,
       parse(context) {
         return {
@@ -440,6 +462,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse() {
         return Promise.resolve({
@@ -474,6 +498,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: 0,
       parse(context) {
         return Promise.resolve({
@@ -517,6 +543,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse(context) {
         capturedState = context.state;
@@ -558,6 +586,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "sync",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse() {
         return {
@@ -597,6 +627,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse() {
         return Promise.resolve({
@@ -643,6 +675,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "sync",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse() {
         return {
@@ -682,6 +716,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse() {
         return Promise.resolve({
@@ -733,6 +769,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "sync",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: 123,
       parse() {
         return { success: false as const, consumed: 0, error: message`stop` };
@@ -758,6 +796,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: 456,
       parse() {
         return Promise.resolve({
@@ -828,6 +868,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "sync",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { base: "sync" },
       parse() {
         return { success: false as const, consumed: 0, error: message`stop` };
@@ -853,6 +895,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { base: "async" },
       parse() {
         return Promise.resolve({
@@ -1061,6 +1105,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "sync",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: 0,
       parse(context) {
         return {
@@ -1088,6 +1134,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "sync",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: 0,
       parse(context) {
         return {
@@ -1115,6 +1163,8 @@ describe("parser.ts coverage branches", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: 0,
       parse(context) {
         return Promise.resolve({

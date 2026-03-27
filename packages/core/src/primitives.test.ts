@@ -5456,6 +5456,8 @@ describe("branch coverage: primitives edge cases", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse(_context: ParserContext<null>) {
         return Promise.resolve({
@@ -6013,6 +6015,8 @@ describe("branch coverage: primitives edge cases", () => {
       $mode: "async",
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: null,
       parse(_context: ParserContext<null>) {
         return Promise.resolve({
@@ -6733,5 +6737,82 @@ describe("branch coverage: primitives edge cases", () => {
         "custom invalid state",
       );
     }
+  });
+});
+
+describe("leadingNames", () => {
+  it("should be empty for constant()", () => {
+    assert.deepEqual(constant("x").leadingNames, new Set());
+  });
+
+  it("should be empty for fail()", () => {
+    assert.deepEqual(fail().leadingNames, new Set());
+  });
+
+  it("should contain all option names for option()", () => {
+    assert.deepEqual(
+      option("-v", "--verbose", string()).leadingNames,
+      new Set(["-v", "--verbose"]),
+    );
+  });
+
+  it("should contain all flag names for flag()", () => {
+    assert.deepEqual(
+      flag("-d", "--debug").leadingNames,
+      new Set(["-d", "--debug"]),
+    );
+  });
+
+  it("should be empty for argument()", () => {
+    assert.deepEqual(argument(string()).leadingNames, new Set());
+  });
+
+  it("should contain only the command name for command()", () => {
+    assert.deepEqual(
+      command("help", object({})).leadingNames,
+      new Set(["help"]),
+    );
+  });
+
+  it("should not include inner parser names for command()", () => {
+    const parser = command(
+      "tool",
+      command("help", object({})),
+    );
+    assert.deepEqual(parser.leadingNames, new Set(["tool"]));
+  });
+
+  it("should be empty for passThrough()", () => {
+    assert.deepEqual(passThrough().leadingNames, new Set());
+  });
+});
+
+describe("acceptingAnyToken", () => {
+  it("should be true for argument()", () => {
+    assert.ok(argument(string()).acceptingAnyToken);
+  });
+
+  it("should be false for option()", () => {
+    assert.ok(!option("--name", string()).acceptingAnyToken);
+  });
+
+  it("should be false for flag()", () => {
+    assert.ok(!flag("--verbose").acceptingAnyToken);
+  });
+
+  it("should be false for command()", () => {
+    assert.ok(!command("help", object({})).acceptingAnyToken);
+  });
+
+  it("should be false for constant()", () => {
+    assert.ok(!constant("x").acceptingAnyToken);
+  });
+
+  it("should be false for fail()", () => {
+    assert.ok(!fail().acceptingAnyToken);
+  });
+
+  it("should be false for passThrough()", () => {
+    assert.ok(!passThrough().acceptingAnyToken);
   });
 });

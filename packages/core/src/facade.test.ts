@@ -1462,14 +1462,14 @@ describe("runParser", () => {
       assert.deepEqual(result, ["server", {}]);
     });
 
-    // Exclusive that consumes a token should not leak subsequent commands
-    it("should allow command after token-consuming exclusive", () => {
-      // tuple([or(argument(string()), command("foo", ...)), command("help", ...)])
+    // The or(argument(), command("foo")) is a catch-all (acceptingAnyToken)
+    // at priority 15, so command("help") at the same priority can never
+    // match at position 0.  No collision should be detected.
+    it("should allow command after catch-all exclusive in tuple", () => {
       const parser = tuple([
         or(argument(string()), command("foo", object({}))),
         command("help", object({})),
       ]);
-      // "help" is at position 2 (after exclusive consumes position 1)
       const result = runParser(parser, "test", ["x", "help"], {
         help: {
           command: true,
@@ -5388,6 +5388,8 @@ describe("runWith", () => {
         $stateType: [] as readonly (string | undefined)[],
         priority: 1,
         usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: undefined,
         parse(context) {
           const value = getAnnotations(context.state)?.[sharedKey];
@@ -6945,6 +6947,8 @@ describe("runWithSync", () => {
         $stateType: [] as readonly (string | undefined)[],
         priority: 1,
         usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: undefined,
         parse(context) {
           const value = getAnnotations(context.state)?.[sharedKey];
@@ -9135,6 +9139,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as unknown as readonly { value: string | null }[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { value: null },
       parse(context) {
         const [head, ...rest] = context.buffer;
@@ -9190,6 +9196,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as unknown as readonly { value: string | null }[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { value: null },
       parse(context) {
         const [head, ...rest] = context.buffer;
@@ -9373,6 +9381,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as unknown as readonly { value: string | null }[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { value: null },
       parse(context) {
         const [head, ...rest] = context.buffer;
@@ -9436,6 +9446,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as unknown as readonly { value: string | null }[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { value: null },
       parse() {
         throw new Error("Boom.");
@@ -9479,6 +9491,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as unknown as readonly { value: string | null }[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { value: null },
       parse() {
         throw new Error("Sync boom.");
@@ -9519,6 +9533,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as never,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context) {
         return {
@@ -9574,6 +9590,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as never,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context) {
         return {
@@ -9627,6 +9645,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as unknown as readonly { value: string | null }[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: { value: null },
       parse(context) {
         const [head, ...rest] = context.buffer;
@@ -9725,6 +9745,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as never,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context) {
         return Promise.resolve({
@@ -9824,6 +9846,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as never,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse(context) {
         const [head, ...tail] = context.buffer;
@@ -9874,6 +9898,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as never,
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse() {
         return Promise.resolve({
@@ -10065,6 +10091,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       $stateType: [] as unknown as readonly undefined[],
       priority: 0,
       usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
       initialState: undefined,
       parse() {
         return Promise.resolve({

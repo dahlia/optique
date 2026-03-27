@@ -946,6 +946,8 @@ describe("prompt()", () => {
         $stateType: [],
         priority: 0,
         usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: null,
         parse: (context) => ({
           success: true,
@@ -3022,6 +3024,8 @@ describe("prompt()", () => {
         $stateType: [] as readonly { token?: string }[],
         priority: 5,
         usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: {},
         parse(
           context: ParserContext<{ readonly token?: string }>,
@@ -3122,6 +3126,8 @@ describe("prompt()", () => {
         $stateType: [] as readonly undefined[],
         priority: 5,
         usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: undefined,
         parse(_context: ParserContext<undefined>) {
           return Promise.resolve({
@@ -3213,6 +3219,8 @@ describe("prompt()", () => {
         $stateType: [] as readonly { [annotationKey]?: unknown }[],
         priority: 5,
         usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: {},
         parse(context) {
           return Promise.resolve({
@@ -3569,6 +3577,8 @@ describe("prompt()", () => {
         $stateType: [] as readonly { tag: string }[],
         priority: 1,
         usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: { tag: "INIT" },
         parse(context) {
           const [head, ...tail] = context.buffer;
@@ -3688,6 +3698,8 @@ describe("prompt()", () => {
             $stateType: [] as readonly unknown[],
             priority: 1,
             usage: [],
+            leadingNames: new Set(),
+            acceptingAnyToken: false,
             initialState: undefined,
             parse() {
               return Promise.resolve({
@@ -3810,6 +3822,8 @@ describe("prompt()", () => {
         $stateType: [] as readonly number[],
         priority: 1,
         usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: -7,
         parse(context) {
           seenStates.push(context.state);
@@ -3877,6 +3891,8 @@ describe("prompt()", () => {
         $stateType: [] as readonly (string | undefined)[],
         priority: 1,
         usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: undefined,
         parse(context) {
           const [head, ...rest] = context.buffer;
@@ -3946,6 +3962,8 @@ describe("prompt()", () => {
           $stateType: [] as readonly (string | undefined)[],
           priority: 1,
           usage: [],
+          leadingNames: new Set(),
+          acceptingAnyToken: false,
           initialState: undefined,
           parse(context) {
             return Promise.resolve({
@@ -4015,6 +4033,8 @@ describe("prompt()", () => {
         $stateType: [] as readonly AnnotatedState[],
         priority: 1,
         usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: new AnnotatedState(),
         parse(context) {
           return Promise.resolve({
@@ -4117,6 +4137,8 @@ describe("prompt()", () => {
         $stateType: [] as readonly SharedState[],
         priority: 1,
         usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: new SharedState(),
         parse(context) {
           return Promise.resolve({
@@ -4195,6 +4217,8 @@ describe("prompt()", () => {
         $stateType: [] as readonly MutableAnnotatedState[],
         priority: 1,
         usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: new MutableAnnotatedState(),
         parse(context) {
           const [head, ...rest] = context.buffer;
@@ -4263,6 +4287,8 @@ describe("prompt()", () => {
         $stateType: [] as readonly ThrowingState[],
         priority: 1,
         usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: new ThrowingState(),
         parse(context) {
           if (getAnnotations(context.state)?.[marker] === "annotated") {

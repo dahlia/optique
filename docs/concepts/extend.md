@@ -159,6 +159,8 @@ function configOption(
     $mode: "sync",
     priority: 0,
     usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
     initialState: undefined,
 
     parse: (context) => ({
@@ -197,6 +199,27 @@ which includes any annotations passed to `parse()`. By calling
 `getAnnotations(state)`, the parser can access the configuration data and use
 it as a fallback. The `required` parameter controls whether a missing value
 (both from CLI and config) should be treated as an error.
+
+Custom parsers must implement two metadata properties.  `leadingNames`
+enables `runParser()` to detect collisions with built-in meta features
+(help, version, completion), while `acceptingAnyToken` controls parser
+composition semantics:
+
+`leadingNames`
+:   The set of fixed tokens that this parser accepts at `argv[0]`.
+    Include every command name, option name, or literal value that
+    the parser matches as its first token.  If the parser accepts
+    *any positional* token (like `argument()`), use an empty set and
+    set `acceptingAnyToken` instead.  Built-in combinators compute
+    this automatically.
+
+`acceptingAnyToken`
+:   Set to `true` when the parser unconditionally consumes the first
+    positional token regardless of its value.  This tells shared-buffer
+    compositions (`tuple()`, `object()`, etc.) that sibling parsers
+    with equal or lower priority cannot match at the same position
+    for positional (non-option) tokens.
+    Most custom parsers should set this to `false`.
 
 
 Use cases

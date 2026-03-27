@@ -136,6 +136,46 @@ export interface Parser<
   readonly usage: Usage;
 
   /**
+   * Names that this parser could match at the first buffer position.
+   * Used by `runParser()` to detect collisions with built-in meta
+   * features (help, version, completion).
+   *
+   * Each built-in combinator computes this from its structural semantics.
+   * Custom parser implementations must include every fixed token that
+   * the parser accepts at `argv[0]` — command names, option names, and
+   * literal values alike.  For example, a parser whose usage declares
+   * `{ type: "literal", value: "serve" }` should include `"serve"` in
+   * this set.  Parsers that accept *any* token (like `argument()`) should
+   * return an empty set and set {@link acceptingAnyToken} to `true`
+   * instead.
+   *
+   * @since 1.0.0
+   */
+  readonly leadingNames: ReadonlySet<string>;
+
+  /**
+   * Whether this parser unconditionally consumes any positional token at
+   * the first buffer position.  A parser with this flag accepts any
+   * non-option token but may still reject option-like tokens (those
+   * starting with `"-"`).
+   *
+   * In shared-buffer compositions (`tuple()`, `object()`, `merge()`,
+   * `concat()`), a catch-all parser blocks positional names (command
+   * names) from lower-priority siblings but does not block option-like
+   * names.  In `conditional()`, option-like names from the default
+   * branch remain reachable even when the discriminator is a catch-all.
+   *
+   * Only `argument()` is inherently accepting-any-token; combinators
+   * like `or()` and `map()` propagate this from their children.
+   * Wrappers that can succeed without consuming (`optional()`,
+   * `withDefault()`, `multiple()` with `min = 0`) always set this
+   * to `false`.
+   *
+   * @since 1.0.0
+   */
+  readonly acceptingAnyToken: boolean;
+
+  /**
    * The initial state for this parser.  This is used to initialize the
    * state when parsing starts.
    */
