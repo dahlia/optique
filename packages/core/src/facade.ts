@@ -3055,9 +3055,9 @@ export async function runWith<
     );
   }
 
-  validateContextIds(contexts);
-
   try {
+    validateContextIds(contexts);
+
     // Early exit: skip context processing for help/version/completion
     if (needsEarlyExit(args, options)) {
       if (parser.$mode === "async") {
@@ -3250,9 +3250,9 @@ export function runWithSync<
     return runParser(parser, programName, args, options);
   }
 
-  validateContextIds(contexts);
-
   try {
+    validateContextIds(contexts);
+
     // Early exit: skip context processing for help/version/completion
     if (needsEarlyExit(args, options)) {
       return runParser(parser, programName, args, options);
