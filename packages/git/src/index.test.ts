@@ -1469,7 +1469,7 @@ describe("git parsers", () => {
           errors: {
             notFound: (input, available) =>
               message`Custom error: ${input} not found. Try: ${
-                available ? valueSet(available) : "none"
+                valueSet(available ?? [], "none")
               }`,
           },
         });
@@ -1595,7 +1595,7 @@ describe("git parsers", () => {
           errors: {
             notFound: (input, available) =>
               message`Branch ${input} not found on origin. Available: ${
-                available ? valueSet(available) : "none"
+                valueSet(available ?? [], "none")
               }`,
           },
         });
@@ -1643,7 +1643,7 @@ describe("git parsers", () => {
           errors: {
             remoteNotFound: (remote, availableRemotes) =>
               message`No such remote ${remote}. Try: ${
-                valueSet(availableRemotes)
+                valueSet(availableRemotes, "none")
               }`,
           },
         });

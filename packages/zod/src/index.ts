@@ -289,6 +289,7 @@ function preConvertBoolean(
     success: false,
     error: message`Invalid Boolean value: ${input}. Expected one of ${
       valueSet([...BOOL_TRUE_LITERALS, ...BOOL_FALSE_LITERALS], {
+        fallback: "",
         locale: "en-US",
       })
     }.`,

@@ -788,7 +788,10 @@ describe("formatDocPage", () => {
         entries: [{
           term: { type: "option", names: ["--format"] },
           description: [{ type: "text", text: "Output format" }],
-          choices: valueSet(["json", "yaml", "xml"], { type: "unit" }),
+          choices: valueSet(["json", "yaml", "xml"], {
+            fallback: "",
+            type: "unit",
+          }),
         }],
       }],
     };
@@ -804,7 +807,10 @@ describe("formatDocPage", () => {
         entries: [{
           term: { type: "option", names: ["--format"] },
           description: [{ type: "text", text: "Output format" }],
-          choices: valueSet(["json", "yaml", "xml"], { type: "unit" }),
+          choices: valueSet(["json", "yaml", "xml"], {
+            fallback: "",
+            type: "unit",
+          }),
         }],
       }],
     };
@@ -820,7 +826,10 @@ describe("formatDocPage", () => {
         entries: [{
           term: { type: "option", names: ["--format"] },
           description: [{ type: "text", text: "Output format" }],
-          choices: valueSet(["json", "yaml", "xml"], { type: "unit" }),
+          choices: valueSet(["json", "yaml", "xml"], {
+            fallback: "",
+            type: "unit",
+          }),
         }],
       }],
     };
@@ -835,7 +844,7 @@ describe("formatDocPage", () => {
         entries: [{
           term: { type: "option", names: ["--format"] },
           description: [{ type: "text", text: "Output format" }],
-          choices: valueSet(["json", "yaml"], { type: "unit" }),
+          choices: valueSet(["json", "yaml"], { fallback: "", type: "unit" }),
         }],
       }],
     };
@@ -852,7 +861,7 @@ describe("formatDocPage", () => {
         entries: [{
           term: { type: "option", names: ["--format"] },
           description: [{ type: "text", text: "Output format" }],
-          choices: valueSet(["json", "yaml"], { type: "unit" }),
+          choices: valueSet(["json", "yaml"], { fallback: "", type: "unit" }),
         }],
       }],
     };
@@ -868,7 +877,10 @@ describe("formatDocPage", () => {
       sections: [{
         entries: [{
           term: { type: "option", names: ["--level"] },
-          choices: valueSet(["debug", "info", "warn"], { type: "unit" }),
+          choices: valueSet(["debug", "info", "warn"], {
+            fallback: "",
+            type: "unit",
+          }),
         }],
       }],
     };
@@ -934,7 +946,10 @@ describe("formatDocPage", () => {
           term: { type: "option", names: ["--format"] },
           description: [{ type: "text", text: "Output format" }],
           default: [{ type: "text", text: "json" }],
-          choices: valueSet(["json", "yaml", "xml"], { type: "unit" }),
+          choices: valueSet(["json", "yaml", "xml"], {
+            fallback: "",
+            type: "unit",
+          }),
         }],
       }],
     };
@@ -960,7 +975,7 @@ describe("formatDocPage", () => {
         entries: [{
           term: { type: "option", names: ["--format"] },
           description: [{ type: "text", text: "Output format" }],
-          choices: valueSet(["json", "yaml"], { type: "unit" }),
+          choices: valueSet(["json", "yaml"], { fallback: "", type: "unit" }),
         }],
       }],
     };
@@ -1232,7 +1247,7 @@ describe("formatDocPage", () => {
             ],
             choices: valueSet(
               ["deno", "pnpm", "bun", "yarn", "npm"],
-              { type: "unit" },
+              { fallback: "", type: "unit" },
             ),
           }],
         }],
@@ -1316,7 +1331,7 @@ describe("formatDocPage", () => {
             default: [{ type: "text", text: "hono" }],
             choices: valueSet(
               ["hono", "nitro", "next", "elysia", "express"],
-              { type: "unit" },
+              { fallback: "", type: "unit" },
             ),
           }],
         }],
@@ -1400,7 +1415,7 @@ describe("formatDocPage", () => {
             ],
             choices: valueSet(
               ["deno", "pnpm", "bun", "yarn", "npm"],
-              { type: "unit" },
+              { fallback: "", type: "unit" },
             ),
           }],
         }],
@@ -1438,7 +1453,7 @@ describe("formatDocPage", () => {
             ],
             choices: valueSet(
               ["trace", "debug", "info", "warn", "error"],
-              { type: "unit" },
+              { fallback: "", type: "unit" },
             ),
           }],
         }],
@@ -1524,7 +1539,7 @@ describe("formatDocPage", () => {
         sections: [{
           entries: [{
             term: { type: "option", names: ["--option"] },
-            choices: valueSet(["aaaaaaaaa"], { type: "unit" }),
+            choices: valueSet(["aaaaaaaaa"], { fallback: "", type: "unit" }),
           }],
         }],
       };
@@ -1575,7 +1590,7 @@ describe("formatDocPage", () => {
             description: [{ type: "text", text: "Output format" }],
             choices: valueSet(
               ["json", "yaml", "toml", "xml", "csv", "tsv", "html", "markdown"],
-              { type: "unit" },
+              { fallback: "", type: "unit" },
             ),
           }],
         }],
@@ -1603,7 +1618,7 @@ describe("formatDocPage", () => {
             default: [{ type: "text", text: "json" }],
             choices: valueSet(
               ["json", "yaml", "toml", "xml", "csv", "tsv", "html", "markdown"],
-              { type: "unit" },
+              { fallback: "", type: "unit" },
             ),
           }],
         }],
@@ -2102,7 +2117,7 @@ describe("formatDocPage", () => {
           entries: [{
             term: { type: "argument", metavar: "X" },
             description: [{ type: "text", text: "d" }],
-            choices: valueSet(["a", "b"]),
+            choices: valueSet(["a", "b"], ""),
           }],
         }],
       };
@@ -2129,7 +2144,7 @@ describe("formatDocPage", () => {
           entries: [{
             term: { type: "argument", metavar: "X" },
             description: [{ type: "text", text: "d" }],
-            choices: valueSet(["a", "b"]),
+            choices: valueSet(["a", "b"], ""),
           }],
         }],
       };
@@ -2236,7 +2251,7 @@ describe("formatDocPage", () => {
           entries: [{
             term: { type: "argument", metavar: "X" },
             description: [{ type: "text", text: "d" }],
-            choices: valueSet(["a"]),
+            choices: valueSet(["a"], ""),
           }],
         }],
       };
@@ -2322,7 +2337,7 @@ describe("formatDocPage", () => {
           entries: [{
             term: { type: "argument", metavar: "X" },
             description: [{ type: "text", text: "d" }],
-            choices: valueSet(["a"]),
+            choices: valueSet(["a"], ""),
           }],
         }],
       };
@@ -2433,7 +2448,7 @@ describe("branch coverage: doc.ts edge cases", () => {
       sections: [{
         entries: [{
           term: { type: "option", names: ["--fmt"] },
-          choices: valueSet(["json", "yaml", "csv"]),
+          choices: valueSet(["json", "yaml", "csv"], ""),
         }],
       }],
     };
@@ -2455,7 +2470,7 @@ describe("branch coverage: doc.ts edge cases", () => {
             "cyan",
             "magenta",
             "yellow",
-          ]),
+          ], ""),
         }],
       }],
     };
@@ -2472,7 +2487,7 @@ describe("branch coverage: doc.ts edge cases", () => {
       sections: [{
         entries: [{
           term: { type: "option", names: ["--color"] },
-          choices: valueSet(["red", "green", "blue"]),
+          choices: valueSet(["red", "green", "blue"], ""),
         }],
       }],
     };
@@ -2493,7 +2508,7 @@ describe("branch coverage: doc.ts edge cases", () => {
       sections: [{
         entries: [{
           term: { type: "option", names: ["--color"] },
-          choices: valueSet(["red", "green", "blue"]),
+          choices: valueSet(["red", "green", "blue"], ""),
         }],
       }],
     };

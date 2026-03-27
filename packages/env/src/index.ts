@@ -545,7 +545,10 @@ export function bool(options: BoolOptions = {}): ValueParser<"sync", boolean> {
             ? options.errors.invalidFormat(input)
             : options.errors.invalidFormat)
           : message`Invalid Boolean value: ${input}. Expected one of ${
-            valueSet([...TRUE_LITERALS, ...FALSE_LITERALS], { locale: "en-US" })
+            valueSet([...TRUE_LITERALS, ...FALSE_LITERALS], {
+              fallback: "",
+              locale: "en-US",
+            })
           }`,
       };
     },

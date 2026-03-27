@@ -403,7 +403,7 @@ export function gitBranch(
           error: branches.length > 0
             ? message`Branch ${
               value(input)
-            } does not exist. Available branches: ${valueSet(branches)}`
+            } does not exist. Available branches: ${valueSet(branches, "")}`
             : message`Branch ${value(input)} does not exist.`,
         };
       } catch (error) {
@@ -512,7 +512,7 @@ export function gitRemoteBranch(
               error: names.length > 0
                 ? message`Remote ${
                   value(remote)
-                } does not exist. Available remotes: ${valueSet(names)}`
+                } does not exist. Available remotes: ${valueSet(names, "")}`
                 : message`Remote ${value(remote)} does not exist.`,
             };
           }
@@ -525,7 +525,7 @@ export function gitRemoteBranch(
           error: branches.length > 0
             ? message`Remote branch ${value(input)} does not exist on remote ${
               value(remote)
-            }. Available branches: ${valueSet(branches)}`
+            }. Available branches: ${valueSet(branches, "")}`
             : message`Remote branch ${value(input)} does not exist on remote ${
               value(remote)
             }.`,
@@ -590,7 +590,7 @@ export function gitTag(
           success: false,
           error: tags.length > 0
             ? message`Tag ${value(input)} does not exist. Available tags: ${
-              valueSet(tags)
+              valueSet(tags, "")
             }`
             : message`Tag ${value(input)} does not exist.`,
         };
@@ -653,7 +653,7 @@ export function gitRemote(
           error: names.length > 0
             ? message`Remote ${
               value(input)
-            } does not exist. Available remotes: ${valueSet(names)}`
+            } does not exist. Available remotes: ${valueSet(names, "")}`
             : message`Remote ${value(input)} does not exist.`,
         };
       } catch (error) {

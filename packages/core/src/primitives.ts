@@ -1164,7 +1164,7 @@ export function option<M extends Mode, T>(
         valueParser?.choices != null && valueParser.choices.length > 0
           ? valueSet(
             valueParser.choices.map((c) => valueParser.format(c)),
-            { type: "unit" },
+            { fallback: "", type: "unit" },
           )
           : undefined;
       const fragments: readonly DocFragment[] = [{
@@ -1860,7 +1860,7 @@ export function argument<M extends Mode, T>(
         valueParser.choices != null && valueParser.choices.length > 0
           ? valueSet(
             valueParser.choices.map((c) => valueParser.format(c)),
-            { type: "unit" },
+            { fallback: "", type: "unit" },
           )
           : undefined;
       const fragments: readonly DocFragment[] = [{

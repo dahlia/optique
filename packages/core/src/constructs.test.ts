@@ -2683,7 +2683,7 @@ describe("object", () => {
       assert.ok(formatEntry.choices != null, "choices should be present");
       assert.deepEqual(
         formatEntry.choices,
-        valueSet(["json", "yaml", "xml"], { type: "unit" }),
+        valueSet(["json", "yaml", "xml"], { fallback: "", type: "unit" }),
       );
     });
 
@@ -2710,7 +2710,7 @@ describe("object", () => {
       assert.ok(actionEntry.choices != null, "choices should be present");
       assert.deepEqual(
         actionEntry.choices,
-        valueSet(["start", "stop"], { type: "unit" }),
+        valueSet(["start", "stop"], { fallback: "", type: "unit" }),
       );
     });
 
@@ -2802,7 +2802,7 @@ describe("object", () => {
       assert.ok(depthEntry.choices != null, "choices should be present");
       assert.deepEqual(
         depthEntry.choices,
-        valueSet(["8", "10", "12"], { type: "unit" }),
+        valueSet(["8", "10", "12"], { fallback: "", type: "unit" }),
       );
     });
   });

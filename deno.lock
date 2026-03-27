@@ -29,6 +29,7 @@
     "npm:hongdown@0.3.4": "0.3.4",
     "npm:hongdown@0.3.7": "0.3.7",
     "npm:hongdown@0.3.8": "0.3.8",
+    "npm:isomorphic-git@*": "1.36.1",
     "npm:isomorphic-git@^1.36.1": "1.36.1",
     "npm:markdownlint-cli2@*": "0.20.0",
     "npm:markdownlint-cli2@0.20": "0.20.0",
