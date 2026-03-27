@@ -9253,6 +9253,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         priority: 0,
         usage: [],
         leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: dep,
         parse: () => ({
           success: true as const,
@@ -9345,6 +9346,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         priority: 0,
         usage: [],
         leadingNames: new Set(),
+        acceptingAnyToken: false,
         initialState: dep,
         parse: () =>
           Promise.resolve({
