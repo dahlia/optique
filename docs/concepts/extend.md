@@ -159,6 +159,8 @@ function configOption(
     $mode: "sync",
     priority: 0,
     usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
     initialState: undefined,
 
     parse: (context) => ({
