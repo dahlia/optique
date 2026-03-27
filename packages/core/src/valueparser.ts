@@ -5055,7 +5055,7 @@ export function macAddress(
   Object.defineProperty(parserObj, "format", {
     value(v: string): string {
       if (typeof v !== "string") return metavar;
-      if (macParsing) return normalizeMac(v);
+      if (macParsing) return v;
       macParsing = true;
       try {
         const result = macParser.parse(v);
@@ -5072,7 +5072,7 @@ export function macAddress(
   Object.defineProperty(parserObj, "normalize", {
     value(v: string): string {
       if (typeof v !== "string") return v;
-      if (macParsing) return normalizeMac(v);
+      if (macParsing) return v;
       macParsing = true;
       try {
         const result = macParser.parse(v);
@@ -5454,12 +5454,10 @@ export function domain(
   if (lowercase) {
     const domParser = domainParserObj;
     let domParsing = false;
-    const domFallback = (v: string) =>
-      v.split(".").length >= minLabels ? v.toLowerCase() : v;
     Object.defineProperty(domainParserObj, "format", {
       value(v: string): string {
         if (typeof v !== "string") return metavar;
-        if (domParsing) return domFallback(v);
+        if (domParsing) return v;
         domParsing = true;
         try {
           const result = domParser.parse(v);
@@ -5476,7 +5474,7 @@ export function domain(
     Object.defineProperty(domainParserObj, "normalize", {
       value(v: string): string {
         if (typeof v !== "string") return v;
-        if (domParsing) return domFallback(v);
+        if (domParsing) return v;
         domParsing = true;
         try {
           const result = domParser.parse(v);
@@ -5729,11 +5727,10 @@ export function ipv6(
   // Both format and normalize use parse() for validation, keeping
   // help text consistent with runtime defaults.
   let ipv6Parsing = false;
-  const ipv6Fallback = (v: string) => parseAndNormalizeIpv6(v) ?? v;
   Object.defineProperty(ipv6ParserObj, "format", {
     value(v: string): string {
       if (typeof v !== "string") return metavar;
-      if (ipv6Parsing) return ipv6Fallback(v);
+      if (ipv6Parsing) return v;
       ipv6Parsing = true;
       try {
         const result = ipv6ParserObj.parse(v);
@@ -5750,7 +5747,7 @@ export function ipv6(
   Object.defineProperty(ipv6ParserObj, "normalize", {
     value(v: string): string {
       if (typeof v !== "string") return v;
-      if (ipv6Parsing) return ipv6Fallback(v);
+      if (ipv6Parsing) return v;
       ipv6Parsing = true;
       try {
         const result = ipv6ParserObj.parse(v);
@@ -6293,11 +6290,10 @@ export function ip(
     },
   };
   let ipParsing = false;
-  const ipFallback = (v: string) => parseAndNormalizeIpv6(v) ?? v;
   Object.defineProperty(ipParserObj, "format", {
     value(v: string): string {
       if (typeof v !== "string") return metavar;
-      if (ipParsing) return ipFallback(v);
+      if (ipParsing) return v;
       ipParsing = true;
       try {
         const result = ipParserObj.parse(v);
@@ -6314,7 +6310,7 @@ export function ip(
   Object.defineProperty(ipParserObj, "normalize", {
     value(v: string): string {
       if (typeof v !== "string") return v;
-      if (ipParsing) return ipFallback(v);
+      if (ipParsing) return v;
       ipParsing = true;
       try {
         const result = ipParserObj.parse(v);
@@ -6880,19 +6876,9 @@ export function cidr(
         },
       };
     },
-    format: ((value: CidrValue): string => {
-      return `${(value as { address?: string })?.address ?? ""}/${
-        (value as { prefix?: number })?.prefix ?? ""
-      }`;
-    }) as (value: CidrValue) => string, // overridden below
+    format: ((_: CidrValue) => metavar) as (value: CidrValue) => string,
   };
   let cidrParsing = false;
-  const cidrFormatFallback = (v: CidrValue): string => {
-    const addr = v.version === 6
-      ? (parseAndNormalizeIpv6(v.address) ?? v.address)
-      : v.address;
-    return `${addr}/${v.prefix}`;
-  };
   Object.defineProperty(cidrParserObj, "format", {
     value(value: CidrValue): string {
       if (
@@ -6902,7 +6888,7 @@ export function cidr(
       ) {
         return metavar;
       }
-      if (cidrParsing) return cidrFormatFallback(value);
+      if (cidrParsing) return `${value.address}/${value.prefix}`;
       cidrParsing = true;
       const raw = `${value.address}/${value.prefix}`;
       try {
