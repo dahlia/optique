@@ -1414,11 +1414,13 @@ function validateVersionValue(value: unknown): string {
  * @param options Configuration options for output formatting and callbacks.
  * @returns The parsed result value, or the return value of `onHelp`/`onError`
  *          callbacks.
- * @throws {TypeError} If `options.version.value` is not a non-empty string
- *          without ASCII control characters, or if any meta command/option
- *          name is empty, whitespace-only, contains whitespace or control
- *          characters, or (for option names) lacks a valid prefix (`--`,
- *          `-`, `/`, or `+`).
+ * @throws {TypeError} If `programName` (or `program.metadata.name`) is not
+ *          a string, is empty, is whitespace-only, or contains control
+ *          characters.  Also thrown if `options.version.value` is not a
+ *          non-empty string without ASCII control characters, or if any
+ *          meta command/option name is empty, whitespace-only, contains
+ *          whitespace or control characters, or (for option names) lacks a
+ *          valid prefix (`--`, `-`, `/`, or `+`).
  * @throws {RunParserError} When parsing fails and no `onError` callback is
  *          provided.
  * @since 0.10.0 Added support for {@link Program} objects.
