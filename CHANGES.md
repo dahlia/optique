@@ -354,12 +354,14 @@ To be released.
  -  Added `ValueParser.normalize()` optional method for canonicalizing
     values of type `T` (e.g., MAC address case/separator normalization,
     domain lowercasing).  Built-in implementations delegate to `parse()`
-    internally, so invalid values are returned unchanged.  [[#318], [#742]]
+    internally, returning invalid values unchanged.  [[#318], [#742]]
 
  -  Added `Parser.normalizeValue()` optional method.  Primitive parsers
     (`option()`, `argument()`) implement this by delegating to
-    `ValueParser.normalize()`.  Combinator wrappers (`optional()`,
-    `withDefault()`) forward it from inner parsers.  [[#318], [#742]]
+    `ValueParser.normalize()`.  Value-preserving combinator wrappers
+    (including `optional()`, `withDefault()`, `nonEmpty()`, `group()`,
+    `command()`, `multiple()`, `object()`, `tuple()`) forward it from
+    inner parsers.  [[#318], [#742]]
 
  -  `withDefault()` now normalizes default values through the inner
     parser's `normalizeValue()` when available, so runtime defaults

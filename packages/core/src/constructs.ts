@@ -4736,11 +4736,11 @@ export function object<
   >;
 
   // Build composite normalizeValue from field parsers that have normalizers.
-  const fieldNormalizers: [string, (v: unknown) => unknown][] = [];
+  const fieldNormalizers: [string | symbol, (v: unknown) => unknown][] = [];
   for (const [key, fieldParser] of parserPairs) {
     if (typeof fieldParser.normalizeValue === "function") {
       fieldNormalizers.push([
-        key as string,
+        key as string | symbol,
         fieldParser.normalizeValue.bind(fieldParser),
       ]);
     }
@@ -4751,14 +4751,16 @@ export function object<
       value(obj: ObjType): ObjType {
         if (typeof obj !== "object" || obj == null) return obj;
         let changed = false;
-        let result: Record<string, unknown> | undefined;
+        let result: Record<string | symbol, unknown> | undefined;
         for (const [key, normalize] of fieldNormalizers) {
           if (Object.hasOwn(obj, key)) {
             try {
-              const original = (obj as Record<string, unknown>)[key];
+              const original = (obj as Record<string | symbol, unknown>)[key];
               const normalized = normalize(original);
               if (normalized !== original) {
-                if (!result) result = { ...obj } as Record<string, unknown>;
+                if (!result) {
+                  result = { ...obj } as Record<string | symbol, unknown>;
+                }
                 result[key] = normalized;
                 changed = true;
               }
