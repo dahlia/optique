@@ -297,6 +297,11 @@ To be released.
     such as `allowPrivate: false`.  The embedded IPv4 address is now checked
     against the configured IPv4 restrictions.  [[#339], [#721]]
 
+ -  Fixed `ipv6()`, `ip()`, and `cidr()` accepting IPv4-mapped IPv6 addresses
+    with leading-zero octets (e.g., `::ffff:01.02.03.04`).  The embedded IPv4
+    portion now uses the same strict octet validation as `ipv4()`.
+    [[#393], [#744]]
+
  -  Fixed `hostname()` accepting dotted all-numeric strings (e.g.,
     `192.168.0.1`, `999.999.999.999`) that resemble IPv4 addresses rather
     than DNS hostnames.  This also affects `socketAddress()` with
@@ -1126,6 +1131,7 @@ To be released.
 [#387]: https://github.com/dahlia/optique/issues/387
 [#388]: https://github.com/dahlia/optique/issues/388
 [#389]: https://github.com/dahlia/optique/issues/389
+[#393]: https://github.com/dahlia/optique/issues/393
 [#395]: https://github.com/dahlia/optique/issues/395
 [#396]: https://github.com/dahlia/optique/issues/396
 [#401]: https://github.com/dahlia/optique/issues/401
@@ -1297,6 +1303,7 @@ To be released.
 [#741]: https://github.com/dahlia/optique/pull/741
 [#742]: https://github.com/dahlia/optique/pull/742
 [#743]: https://github.com/dahlia/optique/pull/743
+[#744]: https://github.com/dahlia/optique/pull/744
 [#745]: https://github.com/dahlia/optique/pull/745
 [#746]: https://github.com/dahlia/optique/pull/746
 
