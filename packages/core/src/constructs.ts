@@ -2519,28 +2519,9 @@ export function or(
     },
   };
 
-  // Forward normalizeValue from child parsers that have normalizers.
-  // Try each branch's normalizer; use the first that changes the value.
-  const orNormalizers = parsers.filter(
-    (p) => typeof p.normalizeValue === "function",
-  );
-  if (orNormalizers.length > 0) {
-    Object.defineProperty(singleResult, "normalizeValue", {
-      value(v: unknown): unknown {
-        for (const sub of orNormalizers) {
-          try {
-            const normalized = sub.normalizeValue!(v);
-            if (normalized !== v) return normalized;
-          } catch {
-            // best-effort
-          }
-        }
-        return v;
-      },
-      configurable: true,
-      enumerable: false,
-    });
-  }
+  // or() does NOT forward normalizeValue because the active branch is
+  // unknown at default time — normalizing through the wrong branch would
+  // produce values that differ from what parse() returns.
   return singleResult as Parser<
     Mode,
     unknown,
@@ -3029,29 +3010,9 @@ export function longestMatch(
     },
   };
 
-  // Forward normalizeValue from child parsers that have normalizers.
-  // For exclusive parsers, try each child's normalizer — the first one
-  // that produces a different value wins.
-  const exclusiveNormalizers = parsers.filter(
-    (p) => typeof p.normalizeValue === "function",
-  );
-  if (exclusiveNormalizers.length > 0) {
-    Object.defineProperty(multiResult, "normalizeValue", {
-      value(v: unknown): unknown {
-        for (const sub of exclusiveNormalizers) {
-          try {
-            const normalized = sub.normalizeValue!(v);
-            if (normalized !== v) return normalized;
-          } catch {
-            // best-effort
-          }
-        }
-        return v;
-      },
-      configurable: true,
-      enumerable: false,
-    });
-  }
+  // longestMatch() does NOT forward normalizeValue because the winning
+  // branch is unknown at default time — normalizing through the wrong
+  // branch would produce values that differ from what parse() returns.
   return multiResult as Parser<
     Mode,
     unknown,
@@ -6404,38 +6365,9 @@ export function merge(
     Record<string | symbol, unknown>
   >;
 
-  // Build composite normalizeValue from sub-parsers that have normalizers.
-  const mergeNormalizers = rawParsers.filter(
-    (p) => typeof p.normalizeValue === "function",
-  );
-  if (mergeNormalizers.length > 0) {
-    type ObjType = Record<string | symbol, unknown>;
-    Object.defineProperty(mergeParser, "normalizeValue", {
-      value(obj: ObjType): ObjType {
-        if (typeof obj !== "object" || obj == null) return obj;
-        let result = obj;
-        for (const sub of mergeNormalizers) {
-          try {
-            const normalized = sub.normalizeValue!(result);
-            // Merge normalized fields back, preserving sibling fields
-            // that this child's normalizer may not know about.
-            if (
-              normalized !== result && typeof normalized === "object" &&
-              normalized != null
-            ) {
-              result = { ...result, ...normalized };
-            }
-          } catch {
-            // best-effort
-          }
-        }
-        return result;
-      },
-      configurable: true,
-      enumerable: false,
-    });
-  }
-
+  // merge() does NOT forward normalizeValue because children may have
+  // overlapping keys with last-write-wins semantics.  Normalizing through
+  // an earlier child's normalizer would change keys owned by a later child.
   return mergeParser;
 }
 
