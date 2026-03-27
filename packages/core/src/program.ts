@@ -12,6 +12,7 @@
 
 import type { Message } from "./message.ts";
 import type { Mode, Parser } from "./parser.ts";
+import { validateProgramName } from "./validate.ts";
 
 /**
  * Metadata for a CLI program.
@@ -114,6 +115,8 @@ export interface Program<M extends Mode, T> {
  * @template T - The type of value produced by the parser.
  * @param program - The program definition with parser and metadata.
  * @returns The same program object with inferred types.
+ * @throws {TypeError} If `program.metadata.name` is not a string, is empty,
+ *         is whitespace-only, or contains control characters.
  *
  * @example
  * ```typescript
@@ -142,5 +145,6 @@ export interface Program<M extends Mode, T> {
 export function defineProgram<M extends Mode, T>(
   program: Program<M, T>,
 ): Program<M, T> {
+  validateProgramName(program.metadata.name);
   return program;
 }

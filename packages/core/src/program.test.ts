@@ -170,4 +170,37 @@ describe("defineProgram", () => {
     // Should return the same object (identity function)
     assert.equal(result, input);
   });
+
+  test("should reject an empty program name", () => {
+    assert.throws(
+      () =>
+        defineProgram({
+          parser: option("--name", string()),
+          metadata: { name: "" },
+        }),
+      { name: "TypeError", message: /program name.*empty/i },
+    );
+  });
+
+  test("should reject a program name with control characters", () => {
+    assert.throws(
+      () =>
+        defineProgram({
+          parser: option("--name", string()),
+          metadata: { name: "bad\nname" },
+        }),
+      { name: "TypeError", message: /program name.*control characters/i },
+    );
+  });
+
+  test("should reject a non-string program name", () => {
+    assert.throws(
+      () =>
+        defineProgram({
+          parser: option("--name", string()),
+          metadata: { name: 123 as never },
+        } as never),
+      { name: "TypeError", message: /program name.*string/i },
+    );
+  });
 });
