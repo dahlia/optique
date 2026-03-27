@@ -102,9 +102,18 @@ function sharedBufferLeadingNames(
 ): ReadonlySet<string> {
   const sorted = parsers.toSorted((a, b) => b.priority - a.priority);
   const names = new Set<string>();
+  let positionalBlocked = false;
   for (const p of sorted) {
-    for (const name of p.leadingNames) names.add(name);
-    if (p.acceptingAnyToken) break;
+    if (p.leadingNames) {
+      for (const name of p.leadingNames) {
+        // After a catch-all positional parser (e.g., argument()), only
+        // option-like names remain reachable because argument() rejects
+        // tokens that start with "-".
+        if (positionalBlocked && !name.startsWith("-")) continue;
+        names.add(name);
+      }
+    }
+    if (p.acceptingAnyToken) positionalBlocked = true;
   }
   return names.size === 0 ? EMPTY_LEADING_NAMES : names;
 }
@@ -8184,13 +8193,24 @@ export function conditional(
     $stateType: [],
     priority: maxPriority,
     usage,
-    // The default branch sees the original buffer only when the
-    // discriminator fails.  If the discriminator is accepting-any-token
-    // (e.g., argument()), it never fails when there is input, so the
-    // default branch's names are unreachable at position 0.
-    leadingNames: defaultBranch && !discriminator.acceptingAnyToken
-      ? unionLeadingNames([discriminator, defaultBranch])
-      : discriminator.leadingNames,
+    // The default branch sees the original buffer when the discriminator
+    // fails.  A catch-all discriminator (e.g., argument()) still rejects
+    // option-like tokens, so option names from the default branch remain
+    // reachable at position 0.
+    leadingNames: (() => {
+      const names = new Set<string>(discriminator.leadingNames ?? []);
+      if (defaultBranch?.leadingNames) {
+        if (discriminator.acceptingAnyToken) {
+          // Only option-like names pass through a positional catch-all
+          for (const name of defaultBranch.leadingNames) {
+            if (name.startsWith("-")) names.add(name);
+          }
+        } else {
+          for (const name of defaultBranch.leadingNames) names.add(name);
+        }
+      }
+      return names.size === 0 ? EMPTY_LEADING_NAMES : names;
+    })(),
     acceptingAnyToken: discriminator.acceptingAnyToken ||
       (defaultBranch?.acceptingAnyToken ?? false),
     initialState,

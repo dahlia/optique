@@ -154,13 +154,22 @@ export interface Parser<
   readonly leadingNames: ReadonlySet<string>;
 
   /**
-   * Whether this parser unconditionally consumes a token at the first buffer
-   * position, regardless of its content.  When `true`, no sibling parser
-   * with equal or lower priority can match at the same position in a
-   * shared-buffer composition (`tuple()`, `object()`, `merge()`, `concat()`).
+   * Whether this parser unconditionally consumes any positional token at
+   * the first buffer position.  A parser with this flag accepts any
+   * non-option token but may still reject option-like tokens (those
+   * starting with `"-"`).
    *
-   * Only `argument()` is inherently accepting-any-token; combinators like
-   * `or()` and `map()` propagate this from their children.
+   * In shared-buffer compositions (`tuple()`, `object()`, `merge()`,
+   * `concat()`), a catch-all parser blocks positional names (command
+   * names) from lower-priority siblings but does not block option-like
+   * names.  In `conditional()`, option-like names from the default
+   * branch remain reachable even when the discriminator is a catch-all.
+   *
+   * Only `argument()` is inherently accepting-any-token; combinators
+   * like `or()` and `map()` propagate this from their children.
+   * Wrappers that can succeed without consuming (`optional()`,
+   * `withDefault()`, `multiple()` with `min = 0`) always set this
+   * to `false`.
    *
    * @since 1.0.0
    */

@@ -240,7 +240,9 @@ export function optional<M extends Mode, TValue, TState>(
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
     leadingNames: parser.leadingNames,
-    acceptingAnyToken: parser.acceptingAnyToken,
+    // optional/withDefault can succeed without consuming, so the inner
+    // parser's catch-all status does not apply to the wrapper.
+    acceptingAnyToken: false,
     initialState: undefined,
     ...wrappedDependencyMarker,
     // Forward completion deferral hook from inner parser, adapting the
@@ -582,7 +584,9 @@ export function withDefault<
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
     leadingNames: parser.leadingNames,
-    acceptingAnyToken: parser.acceptingAnyToken,
+    // optional/withDefault can succeed without consuming, so the inner
+    // parser's catch-all status does not apply to the wrapper.
+    acceptingAnyToken: false,
     initialState: undefined,
     ...wrappedDependencyMarker,
     // Forward completion deferral hook from inner parser, adapting the
@@ -1300,7 +1304,9 @@ export function multiple<M extends Mode, TValue, TState>(
     priority: parser.priority,
     usage: [{ type: "multiple", terms: parser.usage, min }],
     leadingNames: parser.leadingNames,
-    acceptingAnyToken: parser.acceptingAnyToken,
+    // multiple(min=0) can succeed without consuming, so only propagate
+    // catch-all status when at least one match is required.
+    acceptingAnyToken: min > 0 && (parser.acceptingAnyToken ?? false),
     initialState: [] as readonly TState[],
     parse(context: ParserContext<MultipleState>) {
       return dispatchByMode(

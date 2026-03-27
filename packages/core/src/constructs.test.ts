@@ -11490,6 +11490,16 @@ describe("leadingNames", () => {
     assert.ok(!parser.leadingNames.has("help"));
   });
 
+  it("should keep option names after catch-all in tuple()", () => {
+    // argument() blocks positional names but not option-like names
+    const parser = tuple([
+      or(argument(string()), command("foo", object({}))),
+      flag("--verbose"),
+    ]);
+    assert.ok(parser.leadingNames.has("--verbose"));
+    assert.ok(parser.leadingNames.has("foo"));
+  });
+
   it("should be the union of all parsers for merge()", () => {
     const parser = merge(
       object({ verbose: flag("--verbose") }),
@@ -11534,16 +11544,22 @@ describe("leadingNames", () => {
     assert.deepEqual(parser.leadingNames, new Set(["--mode", "help"]));
   });
 
-  it("should exclude default branch names when discriminator is catch-all", () => {
-    // argument() always consumes position 0, so the default branch
-    // only ever sees the remaining buffer (position 1+)
-    const parser = conditional(
+  it("should exclude positional default names but keep option names when discriminator is catch-all", () => {
+    // argument() consumes any positional token but rejects options,
+    // so option-like default branch names are still reachable
+    const withCommand = conditional(
       argument(string()),
       { server: object({}) },
       command("help", object({})),
     );
-    assert.deepEqual(parser.leadingNames, new Set());
-    assert.ok(!parser.leadingNames!.has("help"));
+    assert.deepEqual(withCommand.leadingNames, new Set());
+
+    const withFlag = conditional(
+      argument(string()),
+      { server: object({}) },
+      flag("--probe"),
+    );
+    assert.deepEqual(withFlag.leadingNames, new Set(["--probe"]));
   });
 
   it("should not include nested subcommand names (command wrapping command)", () => {

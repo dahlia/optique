@@ -5199,3 +5199,31 @@ describe("leadingNames", () => {
     assert.deepEqual(nonEmpty(inner).leadingNames, inner.leadingNames);
   });
 });
+
+describe("acceptingAnyToken", () => {
+  it("should be false for optional() even with catch-all inner", () => {
+    assert.ok(!optional(argument(string())).acceptingAnyToken);
+  });
+
+  it("should be false for withDefault() even with catch-all inner", () => {
+    assert.ok(!withDefault(argument(string()), "x").acceptingAnyToken);
+  });
+
+  it("should be false for multiple(min=0) even with catch-all inner", () => {
+    assert.ok(!multiple(argument(string())).acceptingAnyToken);
+  });
+
+  it("should propagate for multiple(min>0) with catch-all inner", () => {
+    assert.ok(multiple(argument(string()), { min: 1 }).acceptingAnyToken);
+  });
+
+  it("should propagate through map()", () => {
+    assert.ok(map(argument(string()), (s) => s.length).acceptingAnyToken);
+  });
+
+  it("should propagate through nonEmpty()", () => {
+    assert.ok(
+      nonEmpty(multiple(argument(string()), { min: 1 })).acceptingAnyToken,
+    );
+  });
+});
