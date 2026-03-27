@@ -264,6 +264,11 @@ export function validateMetaNameCollisions(
               `User-defined command "${name}" conflicts with the ` +
                 `built-in ${label}.`,
             );
+          } else if (userNames.allLiterals.has(name)) {
+            throw new TypeError(
+              `Literal value "${name}" conflicts with the ` +
+                `built-in ${label}.`,
+            );
           } else {
             throw new TypeError(
               `User-defined name "${name}" conflicts with the ` +
