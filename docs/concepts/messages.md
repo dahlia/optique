@@ -314,10 +314,10 @@ const choices = ["error", "warn", "info", "debug"];
 const input = "invalid";
 
 // Format as conjunction: "error", "warn", "info" and "debug"
-const errorMsg = message`Invalid log level: ${input}. Valid levels: ${valueSet(choices)}.`;
+const errorMsg = message`Invalid log level: ${input}. Valid levels: ${valueSet(choices, "")}.`;
 
 // Format as disjunction: "error", "warn", "info" or "debug"
-const altMsg = message`Expected ${valueSet(choices, { type: "disjunction" })}.`;
+const altMsg = message`Expected ${valueSet(choices, { fallback: "", type: "disjunction" })}.`;
 ~~~~
 
 Each choice appears with proper formatting:
@@ -342,17 +342,24 @@ import { message, valueSet } from "@optique/core/message";
 const choices = ["error", "warn", "info"];
 
 // Korean disjunction: "error", "warn" 또는 "info"
-const koreanMsg = message`${valueSet(choices, { locale: "ko", type: "disjunction" })} 중 하나여야 합니다.`;
+const koreanMsg = message`${valueSet(choices, { fallback: "", locale: "ko", type: "disjunction" })} 중 하나여야 합니다.`;
 
 // Japanese conjunction: "error"、"warn"、"info"
-const japaneseMsg = message`${valueSet(choices, { locale: "ja" })}のいずれかを指定してください。`;
+const japaneseMsg = message`${valueSet(choices, { fallback: "", locale: "ja" })}のいずれかを指定してください。`;
 ~~~~
 
-The `valueSet()` function accepts the following options:
+The `valueSet()` function requires a second parameter that specifies
+what to display when the values array is empty.  This can be a simple
+fallback string (e.g., `""` or `"(none)"`) or an options object with
+a `fallback` field and optional formatting options:
+
+`fallback`
+:   The text to return when the values array is empty.  An empty string
+    produces an empty message (no output).
 
 `locale`
-:   The locale(s) to use for formatting. Can be a string, array of strings,
-    `Intl.Locale` object, or array of `Intl.Locale` objects. Defaults to the
+:   The locale(s) to use for formatting.  Can be a string, array of strings,
+    `Intl.Locale` object, or array of `Intl.Locale` objects.  Defaults to the
     system locale.
 
 `type`
