@@ -10442,6 +10442,49 @@ describe("socketAddress()", () => {
         { type: "text", text: "." },
       ]);
     });
+
+    it("should not surface IP error for hostname-like input in ip mode with ambiguous separator", () => {
+      // "foo-80" with separator "-" and host type "ip" splits as
+      // host "foo" (invalid IP) + port 80.  But "foo-80" is a
+      // syntactically valid hostname, so the split is ambiguous.
+      // Generic format error should be used, not the IP error.
+      const parser = socketAddress({
+        separator: "-",
+        requirePort: true,
+        host: { type: "ip" },
+      });
+
+      const result = parser.parse("foo-80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "-" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "foo-80" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should not surface IP error for trailing separator in ip mode with ambiguous separator", () => {
+      // "autoto" with separator "to" and host type "ip" has a
+      // trailing "to" giving host "auto" (invalid IP).  But
+      // "autoto" is a valid hostname, so the split is ambiguous.
+      const parser = socketAddress({
+        separator: "to",
+        requirePort: true,
+        host: { type: "ip" },
+      });
+
+      const result = parser.parse("autoto");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "to" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "autoto" },
+        { type: "text", text: "." },
+      ]);
+    });
   });
 });
 

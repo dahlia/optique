@@ -4195,7 +4195,10 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
-        if (trailingSepHostError.hostPart !== "") {
+        if (
+          trailingSepHostError.hostPart !== "" &&
+          !hostnameParser.parse(trimmed).success
+        ) {
           return { success: false, error: trailingSepHostError.error };
         }
       }
@@ -4244,15 +4247,16 @@ export function socketAddress(
           return { success: false, error: msg };
         }
         // Only surface the split-host error when the whole input is not
-        // a valid hostname.  When the separator can appear inside
-        // hostnames (e.g., "-", "to"), a split may place the boundary
-        // at a position the user did not intend.  Checking the whole
-        // input disambiguates: if it is a valid hostname, the split was
-        // likely wrong and the generic format error is more appropriate.
+        // a syntactically valid hostname.  When the separator can appear
+        // inside hostnames (e.g., "-", "to"), a split may place the
+        // boundary at a position the user did not intend.  Checking the
+        // whole input disambiguates: if it is a valid hostname, the
+        // split was likely wrong and the generic format error is more
+        // appropriate.  The check uses hostnameParser directly instead
+        // of parseHost() so that host-type restrictions (e.g.,
+        // type: "ip") do not affect the syntactic disambiguation.
         if (firstHostError.hostPart !== "") {
-          const wholeInputIsHost = hostOnlyResult?.success ??
-            parseHost(trimmed).success;
-          if (!wholeInputIsHost) {
+          if (!hostnameParser.parse(trimmed).success) {
             return { success: false, error: firstHostError.error };
           }
         }
