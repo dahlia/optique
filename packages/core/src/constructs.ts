@@ -8200,8 +8200,10 @@ export function conditional(
     leadingNames: defaultBranch
       ? unionLeadingNames([discriminator, defaultBranch])
       : discriminator.leadingNames,
-    acceptingAnyToken: discriminator.acceptingAnyToken ||
-      (defaultBranch?.acceptingAnyToken ?? false),
+    // conditional() can fail without consuming (e.g., discriminator
+    // consumes but its value has no matching branch and the default
+    // branch rejects), so it is never a reliable catch-all.
+    acceptingAnyToken: false,
     initialState,
 
     parse(context) {

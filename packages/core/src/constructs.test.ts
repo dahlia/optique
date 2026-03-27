@@ -11609,7 +11609,10 @@ describe("acceptingAnyToken", () => {
     assert.ok(group("grp", inner).acceptingAnyToken);
   });
 
-  it("should reflect discriminator and default for conditional()", () => {
+  it("should always be false for conditional()", () => {
+    // conditional() can fail without consuming (discriminator succeeds
+    // but no branch matches and default rejects), so it is never a
+    // reliable catch-all.
     const withoutDefault = conditional(
       option("--mode", string()),
       { server: object({}) },
@@ -11621,6 +11624,12 @@ describe("acceptingAnyToken", () => {
       { server: object({}) },
       argument(string()),
     );
-    assert.ok(withCatchAllDefault.acceptingAnyToken);
+    assert.ok(!withCatchAllDefault.acceptingAnyToken);
+
+    const withCatchAllDiscriminator = conditional(
+      argument(string()),
+      { server: object({}) },
+    );
+    assert.ok(!withCatchAllDiscriminator.acceptingAnyToken);
   });
 });

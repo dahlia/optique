@@ -207,15 +207,16 @@ meta features (help, version, completion):
 :   The set of fixed tokens that this parser accepts at `argv[0]`.
     Include every command name, option name, or literal value that
     the parser matches as its first token.  If the parser accepts
-    *any* token (like `argument()`), use an empty set and set
-    `acceptingAnyToken` instead.  Built-in combinators compute this
-    automatically.
+    *any positional* token (like `argument()`), use an empty set and
+    set `acceptingAnyToken` instead.  Built-in combinators compute
+    this automatically.
 
 `acceptingAnyToken`
 :   Set to `true` when the parser unconditionally consumes the first
-    token regardless of its content.  This tells shared-buffer
+    positional token regardless of its value.  This tells shared-buffer
     compositions (`tuple()`, `object()`, etc.) that sibling parsers
-    with equal or lower priority cannot match at the same position.
+    with equal or lower priority cannot match at the same position
+    for positional (non-option) tokens.
     Most custom parsers should set this to `false`.
 
 
