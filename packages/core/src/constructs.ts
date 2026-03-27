@@ -8193,24 +8193,13 @@ export function conditional(
     $stateType: [],
     priority: maxPriority,
     usage,
-    // The default branch sees the original buffer when the discriminator
-    // fails.  A catch-all discriminator (e.g., argument()) still rejects
-    // option-like tokens, so option names from the default branch remain
-    // reachable at position 0.
-    leadingNames: (() => {
-      const names = new Set<string>(discriminator.leadingNames ?? []);
-      if (defaultBranch?.leadingNames) {
-        if (discriminator.acceptingAnyToken) {
-          // Only option-like names pass through a positional catch-all
-          for (const name of defaultBranch.leadingNames) {
-            if (name.startsWith("-")) names.add(name);
-          }
-        } else {
-          for (const name of defaultBranch.leadingNames) names.add(name);
-        }
-      }
-      return names.size === 0 ? EMPTY_LEADING_NAMES : names;
-    })(),
+    // The default branch receives the original buffer both when the
+    // discriminator fails outright AND when it succeeds but its value
+    // does not match any branch key.  In either case the default
+    // branch's leading names are reachable at position 0.
+    leadingNames: defaultBranch
+      ? unionLeadingNames([discriminator, defaultBranch])
+      : discriminator.leadingNames,
     acceptingAnyToken: discriminator.acceptingAnyToken ||
       (defaultBranch?.acceptingAnyToken ?? false),
     initialState,

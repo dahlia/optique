@@ -11544,15 +11544,16 @@ describe("leadingNames", () => {
     assert.deepEqual(parser.leadingNames, new Set(["--mode", "help"]));
   });
 
-  it("should exclude positional default names but keep option names when discriminator is catch-all", () => {
-    // argument() consumes any positional token but rejects options,
-    // so option-like default branch names are still reachable
+  it("should include all default branch names regardless of discriminator", () => {
+    // Even when the discriminator is a catch-all (argument()), the
+    // default branch receives the original buffer when the discriminator
+    // value does not match any branch key.
     const withCommand = conditional(
       argument(string()),
       { server: object({}) },
       command("help", object({})),
     );
-    assert.deepEqual(withCommand.leadingNames, new Set());
+    assert.deepEqual(withCommand.leadingNames, new Set(["help"]));
 
     const withFlag = conditional(
       argument(string()),
