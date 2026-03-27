@@ -4751,13 +4751,14 @@ export function object<
       value(obj: ObjType): ObjType {
         if (typeof obj !== "object" || obj == null) return obj;
         let changed = false;
-        const result = { ...obj } as Record<string, unknown>;
+        let result: Record<string, unknown> | undefined;
         for (const [key, normalize] of fieldNormalizers) {
-          if (key in result) {
+          if (Object.hasOwn(obj, key)) {
             try {
-              const original = result[key];
+              const original = (obj as Record<string, unknown>)[key];
               const normalized = normalize(original);
               if (normalized !== original) {
+                if (!result) result = { ...obj } as Record<string, unknown>;
                 result[key] = normalized;
                 changed = true;
               }
@@ -5502,13 +5503,14 @@ export function tuple<
       value(arr: TupleType): TupleType {
         if (!Array.isArray(arr)) return arr;
         let changed = false;
-        const result = [...arr];
+        let result: unknown[] | undefined;
         for (const [idx, normalize] of tupleNormalizers) {
-          if (idx < result.length) {
+          if (idx < arr.length && Object.hasOwn(arr, idx)) {
             try {
-              const original = result[idx];
+              const original = arr[idx];
               const normalized = normalize(original);
               if (normalized !== original) {
+                if (!result) result = [...arr];
                 result[idx] = normalized;
                 changed = true;
               }
