@@ -1009,9 +1009,25 @@ function createAsyncDerivedFromParserFromAsyncFactory<
       return derivedParser.format(value);
     },
 
-    // normalize() is intentionally omitted for async-factory variants
-    // because options.factory() returns a Promise, which cannot be
-    // awaited in the synchronous normalize() method.
+    normalize(value: T): T {
+      let derivedParser;
+      try {
+        const sourceValues = options.defaultValues();
+        derivedParser = options.factory(
+          ...(sourceValues as DependencyValues<Deps>),
+        );
+      } catch {
+        return value;
+      }
+      if (typeof derivedParser.normalize === "function") {
+        try {
+          return derivedParser.normalize(value);
+        } catch {
+          return value;
+        }
+      }
+      return value;
+    },
 
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
       let derivedParser;
