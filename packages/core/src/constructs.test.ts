@@ -11510,12 +11510,34 @@ describe("leadingNames", () => {
     assert.deepEqual(parser.leadingNames, new Set(["--verbose", "help"]));
   });
 
+  it("should block positional names after catch-all in merge()", () => {
+    const parser = merge(
+      object({ name: or(argument(string()), command("foo", object({}))) }),
+      object({ cmd: command("help", object({})) }),
+      object({ verbose: flag("--verbose") }),
+    );
+    assert.ok(parser.leadingNames.has("foo"));
+    assert.ok(parser.leadingNames.has("--verbose"));
+    assert.ok(!parser.leadingNames.has("help"));
+  });
+
   it("should be the union of all parsers for concat()", () => {
     const parser = concat(
       tuple([flag("--verbose")]),
       tuple([command("help", object({}))]),
     );
     assert.deepEqual(parser.leadingNames, new Set(["--verbose", "help"]));
+  });
+
+  it("should block positional names after catch-all in concat()", () => {
+    const parser = concat(
+      tuple([or(argument(string()), command("foo", object({})))]),
+      tuple([command("help", object({}))]),
+      tuple([flag("--verbose")]),
+    );
+    assert.ok(parser.leadingNames.has("foo"));
+    assert.ok(parser.leadingNames.has("--verbose"));
+    assert.ok(!parser.leadingNames.has("help"));
   });
 
   it("should forward from inner parser for group()", () => {
@@ -11611,23 +11633,23 @@ describe("acceptingAnyToken", () => {
     assert.ok(group("grp", inner).acceptingAnyToken);
   });
 
-  it("should always be false for conditional()", () => {
-    // conditional() can fail without consuming (discriminator succeeds
-    // but no branch matches and default rejects), so it is never a
-    // reliable catch-all.
+  it("should reflect default branch for conditional()", () => {
     const withoutDefault = conditional(
       option("--mode", string()),
       { server: object({}) },
     );
     assert.ok(!withoutDefault.acceptingAnyToken);
 
+    // A catch-all default branch makes the conditional consume any
+    // positional token, because the default reparses the original buffer.
     const withCatchAllDefault = conditional(
       option("--mode", string()),
       { server: object({}) },
       argument(string()),
     );
-    assert.ok(!withCatchAllDefault.acceptingAnyToken);
+    assert.ok(withCatchAllDefault.acceptingAnyToken);
 
+    // The discriminator's catch-all status alone does not matter.
     const withCatchAllDiscriminator = conditional(
       argument(string()),
       { server: object({}) },

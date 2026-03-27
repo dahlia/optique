@@ -122,8 +122,9 @@ To be released.
     option's `name=value` prefix form is also detected.  [[#227], [#736]]
 
  -  Added `leadingNames` and `acceptingAnyToken` properties to the `Parser`
-    interface.  Each combinator now reports which names (option names,
-    command names) it could match at the first buffer position, computed
+    interface.  Each combinator now reports which leading tokens (option
+    names, command names, and literal values) it could match at the first
+    buffer position, computed
     from its structural semantics rather than the display-oriented `usage`
     tree.  Shared-buffer compositions (`tuple()`, `object()`, `merge()`,
     `concat()`) use priority ordering and `acceptingAnyToken` to exclude

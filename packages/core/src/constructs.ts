@@ -8200,10 +8200,12 @@ export function conditional(
     leadingNames: defaultBranch
       ? unionLeadingNames([discriminator, defaultBranch])
       : discriminator.leadingNames,
-    // conditional() can fail without consuming (e.g., discriminator
-    // consumes but its value has no matching branch and the default
-    // branch rejects), so it is never a reliable catch-all.
-    acceptingAnyToken: false,
+    // A catch-all default branch makes the conditional consume any
+    // positional token at argv[0], because the default branch reparses
+    // the original buffer when the discriminator does not select a
+    // concrete branch.  The discriminator's own catch-all status does
+    // not matter here: it only routes to branches, not to the default.
+    acceptingAnyToken: defaultBranch?.acceptingAnyToken ?? false,
     initialState,
 
     parse(context) {
