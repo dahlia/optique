@@ -1032,10 +1032,15 @@ To be released.
     `withDefault(optional(option(...)), ...)` now correctly display single
     brackets (`[...]`).  [[#290], [#745]]
 
- -  `values()` and `valueSet()` now throw `TypeError` when given an empty
-    array.  Previously, empty arrays produced zero message terms, which caused
-    surrounding prose in `message` templates to collapse into malformed
-    sentences (e.g., “Expected one of .”).  [[#492]]
+ -  *Breaking change:* `valueSet()` now requires a second parameter: either
+    a fallback string or an options object with a `fallback` field.  When the
+    values array is empty, the fallback text is returned as a single text term
+    (an empty fallback string produces an empty `Message`).  This prevents
+    surrounding prose in `message` templates from collapsing into malformed
+    sentences (e.g., “Expected one of .”).  [[#492], [#747]]
+
+ -  `values()` now throws `TypeError` when given an empty array.
+    [[#492], [#747]]
 
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
@@ -1320,6 +1325,7 @@ To be released.
 [#744]: https://github.com/dahlia/optique/pull/744
 [#745]: https://github.com/dahlia/optique/pull/745
 [#746]: https://github.com/dahlia/optique/pull/746
+[#747]: https://github.com/dahlia/optique/pull/747
 [#748]: https://github.com/dahlia/optique/pull/748
 
 ### @optique/config
@@ -1537,7 +1543,7 @@ environment variable integration via source contexts.  [[#86], [#135]]
 
  -  Fixed error messages for `gitBranch()`, `gitRemoteBranch()`, `gitTag()`,
     and `gitRemote()` to omit the “Available …” suffix when the list is
-    empty, instead of producing malformed sentences.  [[#492]]
+    empty, instead of producing malformed sentences.  [[#492], [#747]]
 
 [#284]: https://github.com/dahlia/optique/issues/284
 [#308]: https://github.com/dahlia/optique/issues/308
