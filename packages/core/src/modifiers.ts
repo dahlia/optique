@@ -1656,9 +1656,13 @@ export function multiple<M extends Mode, TValue, TState>(
         if (!Array.isArray(values)) return values;
         let changed = false;
         const result = values.map((v) => {
-          const n = innerNormalize(v);
-          if (n !== v) changed = true;
-          return n;
+          try {
+            const n = innerNormalize(v);
+            if (n !== v) changed = true;
+            return n;
+          } catch {
+            return v;
+          }
         });
         return changed ? result : values;
       },

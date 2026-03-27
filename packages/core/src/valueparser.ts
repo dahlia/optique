@@ -6890,14 +6890,14 @@ export function cidr(
       }
       if (cidrParsing) return `${value.address}/${value.prefix}`;
       cidrParsing = true;
-      const raw = `${value.address}/${value.prefix}`;
       try {
+        const raw = `${value.address}/${value.prefix}`;
         const result = cidrParserObj.parse(raw);
         return result.success && result.value.version === value.version
           ? `${result.value.address}/${result.value.prefix}`
           : raw;
       } catch {
-        return raw;
+        return metavar;
       } finally {
         cidrParsing = false;
       }

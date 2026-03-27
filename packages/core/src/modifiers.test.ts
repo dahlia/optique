@@ -1590,8 +1590,17 @@ describe("withDefault", () => {
     const doc = syncParser.getDocFragments({ kind: "unavailable" });
     const entry = doc.fragments.find(
       (f: { default?: unknown }) => f.default != null,
-    );
+    ) as { default?: readonly { type: string; text?: string }[] } | undefined;
     assert.ok(entry);
+    assert.ok(entry.default);
+    const textPart = entry.default.find(
+      (t: { type: string; text?: string }) => t.type === "value",
+    );
+    assert.ok(textPart);
+    assert.equal(
+      (textPart as unknown as { value: string }).value,
+      "aa:bb:cc:dd:ee:ff",
+    );
   });
 });
 
