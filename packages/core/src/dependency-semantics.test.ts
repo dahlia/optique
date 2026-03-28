@@ -787,9 +787,7 @@ describe("E. Sync/async parity", () => {
     const args = ["--env", "prod", "--log", "warn"] as const;
     const syncResult = parseSync(parser, args);
     const asyncResult = await parseAsync(parser, args);
-    assert.ok(syncResult.success);
-    assert.ok(asyncResult.success);
-    assert.deepEqual(syncResult.value, asyncResult.value);
+    assert.deepEqual(syncResult, asyncResult);
   });
 
   test("E.2 merge() deriveFrom(multi) — sync and async produce identical results", async () => {
@@ -813,9 +811,7 @@ describe("E. Sync/async parity", () => {
     ] as const;
     const syncResult = parseSync(parser, args);
     const asyncResult = await parseAsync(parser, args);
-    assert.ok(syncResult.success);
-    assert.ok(asyncResult.success);
-    assert.deepEqual(syncResult.value, asyncResult.value);
+    assert.deepEqual(syncResult, asyncResult);
   });
 
   test("E.3 suggest — sync and async produce identical suggestions", async () => {
@@ -828,10 +824,7 @@ describe("E. Sync/async parity", () => {
     const args = ["--env", "prod", "--log", ""] as const;
     const syncSuggestions = suggestSync(parser, args);
     const asyncSuggestions = await suggestAsync(parser, args);
-    assert.deepEqual(
-      literalTexts(syncSuggestions),
-      literalTexts(asyncSuggestions),
-    );
+    assert.deepEqual(syncSuggestions, asyncSuggestions);
   });
 
   test("E.4 withDefault(source) — sync and async produce identical results", async () => {
@@ -844,8 +837,6 @@ describe("E. Sync/async parity", () => {
     const args = ["--log", "info"] as const;
     const syncResult = parseSync(parser, args);
     const asyncResult = await parseAsync(parser, args);
-    assert.ok(syncResult.success);
-    assert.ok(asyncResult.success);
-    assert.deepEqual(syncResult.value, asyncResult.value);
+    assert.deepEqual(syncResult, asyncResult);
   });
 });
