@@ -202,7 +202,7 @@ describe("message term constructors", () => {
   it("should throw TypeError for empty values array", () => {
     assert.throws(
       () => values([]),
-      TypeError,
+      { name: "TypeError", message: /empty/ },
     );
   });
 
@@ -1131,12 +1131,12 @@ describe("valueSet", () => {
     assert.throws(
       // deno-lint-ignore no-explicit-any
       () => (valueSet as any)([]),
-      TypeError,
+      { name: "TypeError", message: /fallback/ },
     );
     assert.throws(
       // deno-lint-ignore no-explicit-any
       () => (valueSet as any)([], { locale: "en" }),
-      TypeError,
+      { name: "TypeError", message: /fallback/ },
     );
   });
 
