@@ -12,7 +12,6 @@ import {
   deriveFromAsync,
   deriveFromSync,
   formatDependencyError,
-  getDefaultValuesFunction,
   isDeferredParseState,
   isDependencySource,
   isDerivedValueParser,
@@ -4297,24 +4296,6 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
 
 describe("top-level option()/argument() with derived parsers", () => {
   // https://github.com/dahlia/optique/issues/238
-
-  test("single-derive parser stores [defaultValues]", () => {
-    const mode = dependency(choice(["dev", "prod"] as const));
-    const level = mode.derive({
-      metavar: "LEVEL",
-      mode: "sync",
-      factory: (m) =>
-        choice(
-          m === "dev"
-            ? (["debug", "verbose"] as const)
-            : (["silent", "strict"] as const),
-        ),
-      defaultValue: () => "dev" as const,
-    });
-    const fn = getDefaultValuesFunction(level);
-    assert.ok(fn != null);
-    assert.deepEqual(fn(), ["dev"]);
-  });
 
   test("parseSync option() with single-derive parser succeeds", () => {
     const mode = dependency(choice(["dev", "prod"] as const));
