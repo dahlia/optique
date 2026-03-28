@@ -106,6 +106,16 @@ describe("extractDependencyMetadata", () => {
     assert.ok(!result.success);
   });
 
+  test("single-source derive() exposes getDefaultDependencyValues", () => {
+    const env = createEnvSource();
+    const logLevel = createDerivedLogLevel(env);
+    const metadata = extractDependencyMetadata(logLevel);
+    assert.ok(metadata?.derived !== undefined);
+    assert.ok(metadata.derived.getDefaultDependencyValues !== undefined);
+    const defaults = metadata.derived.getDefaultDependencyValues();
+    assert.deepStrictEqual(defaults, ["dev"]);
+  });
+
   test("derived capability from deriveFrom has multiple IDs", () => {
     const env = createEnvSource();
     const region = createEnvSource();
