@@ -3993,6 +3993,10 @@ export function socketAddress(
     },
     parse(input: string): ValueParserResult<SocketAddressValue> {
       const trimmed = input.trim();
+      // Left-trimmed input preserves trailing content so that whitespace
+      // separators (e.g., " ", "\t") at the end are not silently removed
+      // before the separator search.
+      const searchInput = input.trimStart();
       const canOmitPort = defaultPort !== undefined && !requirePort;
 
       // Step 1: Try splitting at separator occurrences, rightmost first.
@@ -4023,19 +4027,25 @@ export function socketAddress(
         | undefined;
       // Whether any separator occurrence was found in the input at all.
       let anySeparatorFound = false;
-      let searchFrom = trimmed.length;
+      // True when a trailing separator was found in the region that
+      // input.trim() would have removed (i.e., trailing whitespace).
+      // When set, the host-only path must not take priority because the
+      // trimmed input only appears to be a valid hostname — the trailing
+      // separator was destroyed by trimming, not genuinely absent.
+      let trailingSepInTrimmedRegion = false;
+      let searchFrom = searchInput.length;
       while (searchFrom > 0) {
-        const separatorIndex = trimmed.lastIndexOf(
+        const separatorIndex = searchInput.lastIndexOf(
           separator,
           searchFrom - 1,
         );
         if (separatorIndex === -1) break;
         anySeparatorFound = true;
 
-        const hostPart = trimmed.substring(0, separatorIndex);
-        const portPart = trimmed.substring(
+        const hostPart = searchInput.substring(0, separatorIndex).trim();
+        const portPart = searchInput.substring(
           separatorIndex + separator.length,
-        );
+        ).trim();
 
         if (portPart === "") {
           // Trailing separator — potential omitted port.  Record the
@@ -4044,6 +4054,9 @@ export function socketAddress(
           if (
             trailingSepHost === undefined && trailingSepHostError === undefined
           ) {
+            if (separatorIndex + separator.length > trimmed.length) {
+              trailingSepInTrimmedRegion = true;
+            }
             const hostResult = parseHost(hostPart);
             if (hostResult.success) {
               trailingSepHost = hostResult.value;
@@ -4226,7 +4239,9 @@ export function socketAddress(
         trailingSepHostError !== undefined
       ) {
         hostOnlyResult = parseHost(trimmed);
-        if (canOmitPort && hostOnlyResult.success) {
+        if (
+          canOmitPort && hostOnlyResult.success && !trailingSepInTrimmedRegion
+        ) {
           return {
             success: true,
             value: { host: hostOnlyResult.value, port: defaultPort! },
@@ -4234,20 +4249,19 @@ export function socketAddress(
         }
       }
 
-      // If the whole input is not a valid hostname but a trailing
-      // separator produced a valid host, treat as omitted port
-      // (e.g., "localhost:" → host "localhost" with default port).
+      // If the whole input is not a valid hostname (or the trailing
+      // separator was in the whitespace-trimmed region) but a trailing
+      // separator produced a valid host, the user explicitly typed the
+      // separator but left the port empty (e.g., "localhost:").  This is
+      // always a missing-port error — even when defaultPort is set —
+      // because the explicit separator signals intent to specify a port.
+      // Host-only input *without* a separator (e.g., "localhost") is
+      // handled above and correctly uses defaultPort.
       if (
         trailingSepHost !== undefined &&
         hostOnlyResult !== undefined &&
-        !hostOnlyResult.success
+        (!hostOnlyResult.success || trailingSepInTrimmedRegion)
       ) {
-        if (canOmitPort) {
-          return {
-            success: true,
-            value: { host: trailingSepHost, port: defaultPort! },
-          };
-        }
         const errorMsg = options?.errors?.missingPort;
         const msg = typeof errorMsg === "function"
           ? errorMsg(input)
@@ -4262,7 +4276,7 @@ export function socketAddress(
       if (
         trailingSepHostError !== undefined &&
         hostOnlyResult !== undefined &&
-        !hostOnlyResult.success
+        (!hostOnlyResult.success || trailingSepInTrimmedRegion)
       ) {
         const errorMsg = options?.errors?.invalidFormat;
         if (errorMsg) {

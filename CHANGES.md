@@ -367,6 +367,13 @@ To be released.
     the default format error message (e.g., `host":"port` instead of
     `host:port`).  [[#324], [#758]]
 
+ -  Fixed `socketAddress()` treating a trailing separator with no port
+    (e.g., `"localhost:"`) as valid host-only input when `defaultPort` is set.
+    The trailing separator now correctly fails with a missing-port error, since
+    the explicit separator signals intent to specify a port.  Host-only input
+    without a separator (e.g., `"localhost"`) continues to use the default
+    port.  [[#325], [#759]]
+
  -  Fixed `hostname()` accepting case variants of `localhost` (e.g.,
     `LOCALHOST`, `LocalHost`) and wildcard-localhost forms (e.g.,
     `*.localhost`) when `allowLocalhost` is set to `false`.  DNS hostnames
@@ -1144,6 +1151,7 @@ To be released.
 [#322]: https://github.com/dahlia/optique/issues/322
 [#323]: https://github.com/dahlia/optique/issues/323
 [#324]: https://github.com/dahlia/optique/issues/324
+[#325]: https://github.com/dahlia/optique/issues/325
 [#327]: https://github.com/dahlia/optique/issues/327
 [#330]: https://github.com/dahlia/optique/issues/330
 [#332]: https://github.com/dahlia/optique/issues/332
@@ -1369,6 +1377,7 @@ To be released.
 [#756]: https://github.com/dahlia/optique/pull/756
 [#757]: https://github.com/dahlia/optique/pull/757
 [#758]: https://github.com/dahlia/optique/pull/758
+[#759]: https://github.com/dahlia/optique/pull/759
 
 ### @optique/config
 
