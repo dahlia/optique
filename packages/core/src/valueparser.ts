@@ -4268,11 +4268,12 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
+        const trailingHostIsDegenerate = separatorIsHostChar
+          ? trailingSepHostError.hostPart.replaceAll(separator, "") === ""
+          : trailingSepHostError.hostPart.includes(separator);
         if (
           trailingSepHostError.hostPart !== "" &&
-          !(separatorIsHostChar
-            ? trailingSepHostError.hostPart.replaceAll(separator, "") === ""
-            : trailingSepHostError.hostPart.includes(separator)) &&
+          !trailingHostIsDegenerate &&
           !disambiguationParser.parse(trimmed).success
         ) {
           return { success: false, error: trailingSepHostError.error };
@@ -4322,16 +4323,23 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
-        // Only surface the split-host error when:
-        // 1. The hostPart is non-empty (not a bare-separator artifact)
-        // 2. The hostPart does not contain the separator (otherwise
-        //    the input has multiple separators and this split went
-        //    through the wrong position, e.g., "foo:80:90")
-        // 3. The whole input is not a valid hostname under the
-        //    disambiguation parser (otherwise the split is ambiguous)
+        // Only surface the split-host error when the hostPart is
+        // non-empty, not a degenerate separator artifact, and the
+        // whole input is not a valid hostname (which would make the
+        // split ambiguous).
+        //
+        // The degenerate check depends on whether the separator can
+        // appear inside hostnames: for host-compatible separators
+        // (e.g., "-"), only pure-separator hostParts like "-" are
+        // degenerate; for non-host-compatible separators (e.g., ":"),
+        // any hostPart containing the separator is an artifact from
+        // a multi-separator input like "foo:80:90".
+        const hostPartIsDegenerate = separatorIsHostChar
+          ? firstHostError.hostPart.replaceAll(separator, "") === ""
+          : firstHostError.hostPart.includes(separator);
         if (
           firstHostError.hostPart !== "" &&
-          !firstHostError.hostPart.includes(separator) &&
+          !hostPartIsDegenerate &&
           !disambiguationParser.parse(trimmed).success
         ) {
           return { success: false, error: firstHostError.error };
