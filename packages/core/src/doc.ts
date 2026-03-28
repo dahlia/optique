@@ -1124,7 +1124,9 @@ function ansiAwareRightPad(
   length: number,
   char: string = " ",
 ): string {
-  const visibleWidth = getDisplayWidth(text);
+  // Padding is appended at the end, so only the last line's width
+  // matters for deciding how many spaces to add.
+  const visibleWidth = lastLineVisibleLength(text);
   if (visibleWidth >= length) {
     return text;
   }
