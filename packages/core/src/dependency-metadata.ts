@@ -18,6 +18,7 @@ import {
   isDependencySource,
   isDerivedValueParser,
   parseWithDependency,
+  singleDefaultValue,
   suggestWithDependency,
 } from "./dependency.ts";
 import type { Mode, ValueParser, ValueParserResult } from "./valueparser.ts";
@@ -159,12 +160,19 @@ export function extractDependencyMetadata<M extends Mode, T>(
       ? valueParser[dependencyIds]!
       : [valueParser[dependencyId]];
 
-    // Get default values function if available
-    const defaultValuesFn = defaultValues in valueParser
-      ? (valueParser[defaultValues] as
-        | (() => readonly unknown[])
-        | undefined)
-      : undefined;
+    // Get default values function if available.
+    // Multi-source (deriveFrom): uses [defaultValues] → () => readonly unknown[]
+    // Single-source (derive):    uses [singleDefaultValue] → () => S
+    let defaultValuesFn: (() => readonly unknown[]) | undefined;
+    if (defaultValues in valueParser && valueParser[defaultValues] != null) {
+      defaultValuesFn = valueParser[defaultValues] as () => readonly unknown[];
+    } else if (
+      singleDefaultValue in valueParser &&
+      valueParser[singleDefaultValue] != null
+    ) {
+      const singleFn = valueParser[singleDefaultValue] as () => unknown;
+      defaultValuesFn = () => [singleFn()];
+    }
 
     // Build replayParse from parseWithDependency
     const parser = valueParser;

@@ -116,6 +116,29 @@ describe("extractDependencyMetadata", () => {
     assert.deepStrictEqual(defaults, ["dev"]);
   });
 
+  test("single-source derive() default is not double-evaluated", () => {
+    const env = createEnvSource();
+    let callCount = 0;
+    const derived = env.derive({
+      metavar: "X" as NonEmptyString,
+      mode: "sync",
+      factory: (e: Env) => choice([e], { metavar: "X" as NonEmptyString }),
+      defaultValue: (): Env => {
+        callCount++;
+        return "dev";
+      },
+    });
+    // parse() calls defaultValue() once for the preliminary result.
+    derived.parse("dev");
+    const countAfterParse = callCount;
+    // getDefaultDependencyValues() calls it again — but NOT during parse.
+    const metadata = extractDependencyMetadata(derived);
+    assert.ok(metadata?.derived?.getDefaultDependencyValues !== undefined);
+    metadata.derived.getDefaultDependencyValues();
+    // parse() should have called it exactly once, not twice.
+    assert.equal(countAfterParse, 1);
+  });
+
   test("derived capability from deriveFrom has multiple IDs", () => {
     const env = createEnvSource();
     const region = createEnvSource();

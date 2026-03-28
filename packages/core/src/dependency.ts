@@ -51,6 +51,19 @@ export const defaultValues: unique symbol = Symbol.for(
 );
 
 /**
+ * A unique symbol used to store the single default value thunk on derived
+ * parsers created by {@link DependencySource.derive}.  Unlike
+ * {@link defaultValues} (which `createDeferredParseState` reads eagerly),
+ * this symbol is only read by the dependency-metadata bridge so that
+ * single-source defaults are accessible without double evaluation.
+ * @internal
+ * @since 1.0.0
+ */
+export const singleDefaultValue: unique symbol = Symbol.for(
+  "@optique/core/dependency/singleDefaultValue",
+);
+
+/**
  * A unique symbol used to access the parseWithDependency method on derived parsers.
  * @since 0.10.0
  */
@@ -466,6 +479,15 @@ export interface DerivedValueParser<
    * @internal
    */
   readonly [defaultValues]?: () => readonly unknown[];
+
+  /**
+   * The single default value thunk for single-source derived parsers.
+   * Read by the dependency-metadata bridge; not consumed by
+   * `createDeferredParseState()`.
+   * @internal
+   * @since 1.0.0
+   */
+  readonly [singleDefaultValue]?: () => S;
 
   /**
    * Parses the input using the actual dependency value instead of the default.
@@ -1260,7 +1282,7 @@ function createSyncDerivedParser<S, T>(
     },
     [derivedValueParserMarker]: true,
     [dependencyId]: sourceId,
-    [defaultValues]: () => [options.defaultValue()],
+    [singleDefaultValue]: options.defaultValue,
 
     parse(input: string): ValueParserResult<T> {
       let derivedParser;
@@ -1389,7 +1411,7 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
     },
     [derivedValueParserMarker]: true,
     [dependencyId]: sourceId,
-    [defaultValues]: () => [options.defaultValue()],
+    [singleDefaultValue]: options.defaultValue,
 
     parse(input: string): Promise<ValueParserResult<T>> {
       let derivedParser;
@@ -1503,7 +1525,7 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
     },
     [derivedValueParserMarker]: true,
     [dependencyId]: sourceId,
-    [defaultValues]: () => [options.defaultValue()],
+    [singleDefaultValue]: options.defaultValue,
 
     parse(input: string): Promise<ValueParserResult<T>> {
       let derivedParser;
