@@ -1126,6 +1126,20 @@ describe("valueSet", () => {
     assert.deepEqual(msg[0], { type: "value", value: "a" });
   });
 
+  it("should throw TypeError when called without fallback", () => {
+    // Runtime validation for JavaScript callers or old compiled code
+    assert.throws(
+      // deno-lint-ignore no-explicit-any
+      () => (valueSet as any)([]),
+      TypeError,
+    );
+    assert.throws(
+      // deno-lint-ignore no-explicit-any
+      () => (valueSet as any)([], { locale: "en" }),
+      TypeError,
+    );
+  });
+
   it("should handle single element", () => {
     const msg = valueSet(["only"], { fallback: "", locale: "en" });
     assert.ok(Array.isArray(msg));

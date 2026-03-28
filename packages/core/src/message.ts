@@ -470,12 +470,23 @@ export interface ValueSetOptions {
  *                          object including the fallback and formatting
  *                          options such as locale and list type.
  * @returns A {@link Message} with alternating value and text terms.
+ * @throws {TypeError} If the fallback parameter is missing or invalid.
  * @since 0.9.0
  */
 export function valueSet(
   values: readonly string[],
   fallbackOrOptions: string | ValueSetOptions,
 ): Message {
+  if (
+    fallbackOrOptions == null ||
+    (typeof fallbackOrOptions !== "string" &&
+      typeof fallbackOrOptions.fallback !== "string")
+  ) {
+    throw new TypeError(
+      "valueSet() requires a fallback string or an options object with" +
+        " a fallback field.",
+    );
+  }
   const options: ValueSetOptions = typeof fallbackOrOptions === "string"
     ? { fallback: fallbackOrOptions }
     : fallbackOrOptions;
