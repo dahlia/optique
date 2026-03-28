@@ -10712,6 +10712,42 @@ describe("socketAddress()", () => {
         { type: "text", text: " characters)." },
       ]);
     });
+
+    it("should propagate host error with dot separator for dotted hosts", () => {
+      // When separator is ".", dotted hosts like "192.168.1.1"
+      // inherently contain the separator.  The degenerate-host guard
+      // should not suppress error propagation for these.
+      const parser = socketAddress({
+        separator: ".",
+        requirePort: true,
+        host: { type: "ip", ip: { allowPrivate: false } },
+      });
+
+      const result = parser.parse("192.168.1.1.");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "192.168.1.1" },
+        { type: "text", text: " is a private IP address." },
+      ]);
+    });
+
+    it("should prefer custom invalidFormat when both host and port fail", () => {
+      const parser = socketAddress({
+        host: {
+          type: "both",
+          ip: { allowPrivate: false },
+        },
+        errors: {
+          invalidFormat: message`Custom error`,
+        },
+      });
+
+      const result = parser.parse("192.168.1.1:70000");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Custom error" },
+      ]);
+    });
   });
 });
 

@@ -4145,7 +4145,7 @@ export function socketAddress(
         if (
           firstHostError !== undefined &&
           firstHostError.hostPart !== "" &&
-          !firstHostError.hostPart.includes(separator) &&
+          firstHostError.hostPart.replaceAll(separator, "") !== "" &&
           !disambiguationParser.parse(trimmed).success
         ) {
           return { success: false, error: firstHostError.error };
@@ -4247,7 +4247,7 @@ export function socketAddress(
         }
         if (
           trailingSepHostError.hostPart !== "" &&
-          !trailingSepHostError.hostPart.includes(separator) &&
+          trailingSepHostError.hostPart.replaceAll(separator, "") !== "" &&
           !disambiguationParser.parse(trimmed).success
         ) {
           return { success: false, error: trailingSepHostError.error };
@@ -4306,7 +4306,7 @@ export function socketAddress(
         // format error is more appropriate.
         if (
           firstHostError.hostPart !== "" &&
-          !firstHostError.hostPart.includes(separator) &&
+          firstHostError.hostPart.replaceAll(separator, "") !== "" &&
           !disambiguationParser.parse(trimmed).success
         ) {
           return { success: false, error: firstHostError.error };
