@@ -1184,6 +1184,30 @@ export function map<M extends Mode, T, U, TState>(
     );
     if (composed?.derived != null) {
       const innerReplay = composed.derived.replayParse;
+      // Mirror map().complete() deferred handling: strip deferredKeys
+      // (the inner shape is invalidated by the transform) and catch
+      // transform errors for deferred placeholders.
+      const applyMappedReplay = (
+        r: ValueParserResult<unknown>,
+      ): ValueParserResult<unknown> => {
+        if (!r.success) return r;
+        if (r.deferred) {
+          try {
+            return {
+              success: true as const,
+              value: transform(r.value as T),
+              deferred: true as const,
+            };
+          } catch {
+            return {
+              success: true as const,
+              value: undefined as unknown as U,
+              deferred: true as const,
+            };
+          }
+        }
+        return { success: true as const, value: transform(r.value as T) };
+      };
       composed = {
         ...composed,
         derived: {
@@ -1193,14 +1217,9 @@ export function map<M extends Mode, T, U, TState>(
             depValues: readonly unknown[],
           ) => {
             const result = innerReplay(rawInput, depValues);
-            if (result instanceof Promise) {
-              return result.then((r) =>
-                r.success ? { ...r, value: transform(r.value as T) } : r
-              );
-            }
-            return result.success
-              ? { ...result, value: transform(result.value as T) }
-              : result;
+            return result instanceof Promise
+              ? result.then(applyMappedReplay)
+              : applyMappedReplay(result);
           },
         },
       };
