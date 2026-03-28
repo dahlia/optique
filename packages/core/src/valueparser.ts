@@ -3841,6 +3841,12 @@ export function socketAddress(
     metavar: "HOST",
   });
 
+  // A hostname parser with default options, used only for split
+  // disambiguation.  It ignores user hostname restrictions so that
+  // host-type or hostname-policy settings do not affect whether a
+  // split is considered ambiguous.
+  const syntaxHostnameCheck = hostname({ metavar: "HOST" });
+
   // Create port parser
   const portParser = port({
     ...options?.port,
@@ -4197,7 +4203,7 @@ export function socketAddress(
         }
         if (
           trailingSepHostError.hostPart !== "" &&
-          !hostnameParser.parse(trimmed).success
+          !syntaxHostnameCheck.parse(trimmed).success
         ) {
           return { success: false, error: trailingSepHostError.error };
         }
@@ -4252,11 +4258,12 @@ export function socketAddress(
         // boundary at a position the user did not intend.  Checking the
         // whole input disambiguates: if it is a valid hostname, the
         // split was likely wrong and the generic format error is more
-        // appropriate.  The check uses hostnameParser directly instead
-        // of parseHost() so that host-type restrictions (e.g.,
-        // type: "ip") do not affect the syntactic disambiguation.
+        // appropriate.  The check uses syntaxHostnameCheck (a hostname
+        // parser with default options) so that neither host-type
+        // restrictions (e.g., type: "ip") nor user hostname policies
+        // (e.g., maxLength) affect the syntactic disambiguation.
         if (firstHostError.hostPart !== "") {
-          if (!hostnameParser.parse(trimmed).success) {
+          if (!syntaxHostnameCheck.parse(trimmed).success) {
             return { success: false, error: firstHostError.error };
           }
         }

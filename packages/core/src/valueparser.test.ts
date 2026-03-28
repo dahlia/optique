@@ -10485,6 +10485,29 @@ describe("socketAddress()", () => {
         { type: "text", text: "." },
       ]);
     });
+
+    it("should not let hostname policy options affect disambiguation in ip mode", () => {
+      // hostname.maxLength is documented as applying only to
+      // hostname/both mode.  It should not affect disambiguation
+      // in ip mode.  "foo-80" is syntactically a valid hostname
+      // (length 6 > maxLength 1), so the split is ambiguous and
+      // the generic format error should be returned.
+      const parser = socketAddress({
+        separator: "-",
+        requirePort: true,
+        host: { type: "ip", hostname: { maxLength: 1 } },
+      });
+
+      const result = parser.parse("foo-80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "-" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "foo-80" },
+        { type: "text", text: "." },
+      ]);
+    });
   });
 });
 
