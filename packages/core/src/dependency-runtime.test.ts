@@ -171,6 +171,21 @@ describe("createDependencyFingerprint", () => {
     const fp = createDependencyFingerprint([undefined, "a"]);
     assert.equal(typeof fp, "string");
   });
+
+  test("distinct symbols with same description produce different fingerprints", () => {
+    const sym1 = Symbol("test");
+    const sym2 = Symbol("test");
+    const fp1 = createDependencyFingerprint([sym1]);
+    const fp2 = createDependencyFingerprint([sym2]);
+    assert.notEqual(fp1, fp2);
+  });
+
+  test("same symbol instance produces same fingerprint", () => {
+    const sym = Symbol("test");
+    const fp1 = createDependencyFingerprint([sym]);
+    const fp2 = createDependencyFingerprint([sym]);
+    assert.equal(fp1, fp2);
+  });
 });
 
 describe("createReplayKey", () => {
@@ -179,6 +194,27 @@ describe("createReplayKey", () => {
     assert.deepStrictEqual(key.path, ["env"]);
     assert.equal(key.rawInput, "prod");
     assert.equal(typeof key.dependencyFingerprint, "string");
+  });
+
+  test("symbol path segments do not alias", () => {
+    const sym1 = Symbol("field");
+    const sym2 = Symbol("field");
+    const runtime = createDependencyRuntimeContext();
+    const key1 = createReplayKey([sym1], "val", ["dep"]);
+    const key2 = createReplayKey([sym2], "val", ["dep"]);
+    const result1: ValueParserResult<string> = {
+      success: true,
+      value: "first",
+    };
+    const result2: ValueParserResult<string> = {
+      success: true,
+      value: "second",
+    };
+    runtime.setReplayResult(key1, result1);
+    runtime.setReplayResult(key2, result2);
+    // Each symbol-keyed path should get its own cache entry.
+    assert.deepStrictEqual(runtime.getReplayResult(key1), result1);
+    assert.deepStrictEqual(runtime.getReplayResult(key2), result2);
   });
 });
 
@@ -273,6 +309,32 @@ describe("fillMissingSourceDefaults", () => {
     }];
     fillMissingSourceDefaults(nodes, runtime);
     assert.equal(runtime.getSource(sourceId), "prod");
+  });
+
+  test("does not fill default when node matched explicit input", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            preservesSourceValue: true,
+            getMissingSourceValue: () => ({
+              success: true as const,
+              value: "dev",
+            }),
+          },
+        },
+      },
+      state: { success: false, error: "invalid value" },
+      matched: true,
+    }];
+    fillMissingSourceDefaults(nodes, runtime);
+    // The source had explicit input that failed — default must not be applied.
+    assert.ok(!runtime.hasSource(sourceId));
   });
 });
 

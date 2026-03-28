@@ -16,6 +16,25 @@ import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
 import { isDependencySourceState } from "./dependency.ts";
 
 // =============================================================================
+// Symbol serialization
+// =============================================================================
+
+// Per-instance counter so that distinct symbols with the same description
+// serialize to different strings.  Uses a WeakMap so that the same symbol
+// always produces the same key within a process lifetime.
+const symbolIds = new WeakMap<symbol, string>();
+let symbolCounter = 0;
+
+function stableSymbolKey(sym: symbol): string {
+  let id = symbolIds.get(sym);
+  if (id === undefined) {
+    id = `sym:${symbolCounter++}`;
+    symbolIds.set(sym, id);
+  }
+  return id;
+}
+
+// =============================================================================
 // Types
 // =============================================================================
 
@@ -103,6 +122,14 @@ export interface RuntimeNode {
 
   /** The parser's current state. */
   readonly state: unknown;
+
+  /**
+   * Whether the parser consumed explicit input during parsing.
+   * When `true`, the parser's state reflects user-provided input (which
+   * may have failed validation).  Missing-source defaults must not override
+   * explicit parse failures.
+   */
+  readonly matched?: boolean;
 }
 
 /**
@@ -236,7 +263,7 @@ function resolveRequest(
 
 function serializeReplayKey(key: ReplayKey): string {
   const pathStr = key.path.map((p) =>
-    typeof p === "symbol" ? p.toString() : String(p)
+    typeof p === "symbol" ? stableSymbolKey(p) : String(p)
   ).join("\0");
   return `${pathStr}\x01${key.rawInput}\x01${key.dependencyFingerprint}`;
 }
@@ -299,7 +326,7 @@ export function createDependencyFingerprint(
     if (typeof v === "string") return `s:${v}`;
     if (typeof v === "number") return `d:${v}`;
     if (typeof v === "boolean") return `b:${v}`;
-    if (typeof v === "symbol") return `y:${v.toString()}`;
+    if (typeof v === "symbol") return `y:${stableSymbolKey(v)}`;
     try {
       return `j:${JSON.stringify(v)}`;
     } catch {
@@ -382,6 +409,10 @@ export function fillMissingSourceDefaults(
     const meta = node.parser.dependencyMetadata;
     if (meta?.source == null) continue;
     if (runtime.hasSource(meta.source.sourceId)) continue;
+    // Do not override explicit parse failures with defaults.  If the
+    // parser consumed input (matched === true), the user explicitly
+    // provided a value that failed validation.
+    if (node.matched === true) continue;
     if (meta.source.getMissingSourceValue == null) continue;
 
     const result = meta.source.getMissingSourceValue();
