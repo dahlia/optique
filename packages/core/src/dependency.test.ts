@@ -12,6 +12,7 @@ import {
   deriveFromAsync,
   deriveFromSync,
   formatDependencyError,
+  getDefaultValuesFunction,
   isDeferredParseState,
   isDependencySource,
   isDerivedValueParser,
@@ -20,7 +21,13 @@ import {
 } from "./dependency.ts";
 import { message } from "./message.ts";
 import type { NonEmptyString } from "./nonempty.ts";
-import { parseAsync, parseSync, type Suggestion } from "./parser.ts";
+import {
+  parseAsync,
+  parseSync,
+  suggestAsync,
+  type Suggestion,
+  suggestSync,
+} from "./parser.ts";
 import {
   choice,
   integer,
@@ -29,7 +36,7 @@ import {
   type ValueParserResult,
 } from "./valueparser.ts";
 import { conditional, merge, object, or, tuple } from "./constructs.ts";
-import { command, constant, option } from "./primitives.ts";
+import { argument, command, constant, option } from "./primitives.ts";
 import { map, multiple, optional, withDefault } from "./modifiers.ts";
 import * as fc from "fast-check";
 
@@ -4285,5 +4292,160 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
     });
     assert.equal(factoryCalls, 0);
     assert.equal(derived.$mode, "async");
+  });
+});
+
+describe("top-level option()/argument() with derived parsers", () => {
+  // https://github.com/dahlia/optique/issues/238
+
+  test("single-derive parser stores [defaultValues]", () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (m) =>
+        choice(
+          m === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const fn = getDefaultValuesFunction(level);
+    assert.ok(fn != null);
+    assert.deepEqual(fn(), ["dev"]);
+  });
+
+  test("parseSync option() with single-derive parser succeeds", () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (m) =>
+        choice(
+          m === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = option("--level", level);
+    const result = parseSync(parser, ["--level", "debug"]);
+    assert.ok(result.success);
+    assert.equal(result.value, "debug");
+  });
+
+  test("parseSync argument() with single-derive parser succeeds", () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (m) =>
+        choice(
+          m === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = argument(level);
+    const result = parseSync(parser, ["verbose"]);
+    assert.ok(result.success);
+    assert.equal(result.value, "verbose");
+  });
+
+  test("parseSync argument() rejects invalid value for default dependency", () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (m) =>
+        choice(
+          m === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = argument(level);
+    const result = parseSync(parser, ["silent"]);
+    assert.ok(!result.success);
+  });
+
+  test("parseAsync option() with single-derive parser succeeds", async () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (m) =>
+        choice(
+          m === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = option("--level", level);
+    const result = await parseAsync(parser, ["--level", "debug"]);
+    assert.ok(result.success);
+    assert.equal(result.value, "debug");
+  });
+
+  test("deriveFrom with option() at top level succeeds", () => {
+    const env = dependency(choice(["local", "remote"] as const));
+    const port = dependency(integer({ metavar: "PORT" }));
+    const config = deriveFromSync({
+      metavar: "CONFIG",
+      dependencies: [env, port] as const,
+      factory: (e, _p) =>
+        choice(
+          e === "local"
+            ? (["dev.json", "test.json"] as const)
+            : (["prod.json", "staging.json"] as const),
+        ),
+      defaultValues: () => ["local" as const, 8080 as const] as const,
+    });
+    const parser = option("--config", config);
+    const result = parseSync(parser, ["--config", "dev.json"]);
+    assert.ok(result.success);
+    assert.equal(result.value, "dev.json");
+  });
+
+  test("suggestSync argument() with single-derive parser", () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (m) =>
+        choice(
+          m === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = argument(level);
+    const suggestions = suggestSync(parser, ["d"]);
+    const texts = suggestions.map((s) => "text" in s ? s.text : "");
+    assert.ok(texts.includes("debug"));
+  });
+
+  test("suggestAsync option() with single-derive parser", async () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (m) =>
+        choice(
+          m === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = option("--level", level);
+    const suggestions = await suggestAsync(parser, ["--level", "d"]);
+    const texts = suggestions.map((s) => "text" in s ? s.text : "");
+    assert.ok(texts.includes("debug"));
   });
 });
