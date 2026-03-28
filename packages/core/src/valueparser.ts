@@ -3841,11 +3841,16 @@ export function socketAddress(
     metavar: "HOST",
   });
 
-  // A hostname parser with default options, used only for split
-  // disambiguation.  It ignores user hostname restrictions so that
-  // host-type or hostname-policy settings do not affect whether a
-  // split is considered ambiguous.
-  const syntaxHostnameCheck = hostname({ metavar: "HOST" });
+  // A maximally permissive hostname parser used only for split
+  // disambiguation.  It accepts any syntactically valid hostname
+  // (including wildcards and underscores) so that neither host-type
+  // restrictions nor user hostname policies affect whether a split
+  // is considered ambiguous.
+  const syntaxHostnameCheck = hostname({
+    metavar: "HOST",
+    allowWildcard: true,
+    allowUnderscore: true,
+  });
 
   // Create port parser
   const portParser = port({

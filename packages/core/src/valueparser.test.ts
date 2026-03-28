@@ -10508,6 +10508,46 @@ describe("socketAddress()", () => {
         { type: "text", text: "." },
       ]);
     });
+
+    it("should not surface split-host error for wildcard hostnames with ambiguous separator", () => {
+      // "*.example--80" is a valid hostname under allowWildcard.
+      // The split "*.example-" + "80" is ambiguous, so the generic
+      // format error should be returned.
+      const parser = socketAddress({
+        separator: "-",
+        requirePort: true,
+        host: { type: "hostname", hostname: { allowWildcard: true } },
+      });
+
+      const result = parser.parse("*.example--80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "-" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "*.example--80" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should not surface split-host error for underscore hostnames with ambiguous separator", () => {
+      // "_service--80" is a valid hostname under allowUnderscore.
+      const parser = socketAddress({
+        separator: "-",
+        requirePort: true,
+        host: { type: "hostname", hostname: { allowUnderscore: true } },
+      });
+
+      const result = parser.parse("_service--80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "-" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "_service--80" },
+        { type: "text", text: "." },
+      ]);
+    });
   });
 });
 
