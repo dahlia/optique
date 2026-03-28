@@ -10748,6 +10748,23 @@ describe("socketAddress()", () => {
         { type: "text", text: "Custom error" },
       ]);
     });
+
+    it("should return socket-level format error for non-numeric port suffix", () => {
+      // "abc" does not match the /^[0-9]+$/ gate, so port() is
+      // never consulted.  The generic format error is the correct
+      // and intentional outcome.
+      const parser = socketAddress({ requirePort: true });
+
+      const result = parser.parse("localhost:abc");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: ":" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "localhost:abc" },
+        { type: "text", text: "." },
+      ]);
+    });
   });
 });
 
