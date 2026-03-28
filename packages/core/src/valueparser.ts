@@ -4054,7 +4054,7 @@ export function socketAddress(
           if (
             trailingSepHost === undefined && trailingSepHostError === undefined
           ) {
-            if (separatorIndex >= trimmed.length) {
+            if (separatorIndex + separator.length > trimmed.length) {
               trailingSepInTrimmedRegion = true;
             }
             const hostResult = parseHost(hostPart);

@@ -10203,6 +10203,23 @@ describe("socketAddress()", () => {
       assert.strictEqual(result.value.port, 80);
     });
 
+    it("should reject trailing multi-char separator overlapping trimmed region", () => {
+      // "exampleto " with separator "to " — the separator spans indices
+      // 7-9 and the trailing space at index 9 is in the whitespace-
+      // trimmed region.  The overlap means the match depends on the
+      // trailing whitespace, so it should be treated as a trailing
+      // separator, not host-only.
+      const parser = socketAddress({ separator: "to ", defaultPort: 80 });
+      const result = parser.parse("exampleto ");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Port number is required but was not specified.",
+        },
+      ]);
+    });
+
     it("should prefer host-only over trailing separator when input is a valid hostname", () => {
       const parser = socketAddress({ separator: "to", defaultPort: 80 });
 
