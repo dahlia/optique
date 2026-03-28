@@ -254,7 +254,7 @@ To be released.
  -  Fixed `formatMessage()`, `formatUsage()`, and `formatDocPage()` measuring
     string width using JavaScript `.length` (UTF-16 code units) instead of
     terminal display width.  East Asian wide characters, combining marks, and
-    emoji now wrap and align correctly.  [[#509]]
+    emoji now wrap and align correctly.  [[#509], [#757]]
 
  -  Fixed `getDocPage()` preserving hidden terms from custom `DocFragments`
     instead of filtering them.  `buildDocPage()` now filters out entries whose
@@ -1367,6 +1367,7 @@ To be released.
 [#749]: https://github.com/dahlia/optique/pull/749
 [#751]: https://github.com/dahlia/optique/issues/751
 [#756]: https://github.com/dahlia/optique/pull/756
+[#757]: https://github.com/dahlia/optique/pull/757
 [#758]: https://github.com/dahlia/optique/pull/758
 
 ### @optique/config
