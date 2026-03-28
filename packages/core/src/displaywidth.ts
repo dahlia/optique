@@ -35,6 +35,10 @@ const zeroWidthRegex = /^[\p{Cf}\p{Mn}\p{Me}]+$/u;
 // or emoji with variation selector 16 (U+FE0F).
 const emojiPresentationRegex = /\p{Emoji_Presentation}/u;
 const emojiWithVS16Regex = /\p{Emoji}\uFE0F/u;
+// Keycap sequences: [0-9#*] + optional VS16 + U+20E3 (combining enclosing
+// keycap).  VS16 may be absent in some encodings but the sequence still
+// renders as a 2-column emoji keycap in terminals.
+const keycapEmojiRegex = /^[#*0-9]\uFE0F?\u20E3$/u;
 // VS15 (U+FE0E) requests text presentation, overriding emoji default.
 const textPresentationRegex = /\uFE0E/u;
 // Regional indicator symbols used in flag sequences (U+1F1E6–U+1F1FF)
@@ -63,10 +67,11 @@ function graphemeWidth(grapheme: string): number {
   // VS15 (U+FE0E) explicitly requests text presentation, so it overrides
   // Emoji_Presentation and forces width 1.
   if (
-    !textPresentationRegex.test(grapheme) &&
-    (emojiPresentationRegex.test(grapheme) ||
-      emojiWithVS16Regex.test(grapheme) ||
-      regionalIndicatorRegex.test(grapheme))
+    keycapEmojiRegex.test(grapheme) ||
+    (!textPresentationRegex.test(grapheme) &&
+      (emojiPresentationRegex.test(grapheme) ||
+        emojiWithVS16Regex.test(grapheme) ||
+        regionalIndicatorRegex.test(grapheme)))
   ) {
     return 2;
   }

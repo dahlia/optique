@@ -178,6 +178,15 @@ describe("getDisplayWidth", () => {
     it("should count emoji followed by text correctly", () => {
       assert.equal(getDisplayWidth("👨‍👩‍👧‍👦 x"), 4);
     });
+
+    it("should count keycap emoji as 2 columns", () => {
+      // With VS16
+      assert.equal(getDisplayWidth("1\uFE0F\u20E3"), 2);
+      // Without VS16
+      assert.equal(getDisplayWidth("1\u20E3"), 2);
+      assert.equal(getDisplayWidth("#\u20E3"), 2);
+      assert.equal(getDisplayWidth("*\u20E3"), 2);
+    });
   });
 
   describe("ANSI escape codes", () => {
