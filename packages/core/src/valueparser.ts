@@ -3841,6 +3841,37 @@ export function socketAddress(
     metavar: "HOST",
   });
 
+  // Parser used to decide whether a split is ambiguous: if the
+  // whole input is accepted as a hostname by this parser, the
+  // separator might be part of the hostname and the split error
+  // would be misleading.
+  //
+  // In "hostname" and "both" modes the user's own hostnameParser
+  // is the right authority — its policy restrictions (maxLength,
+  // allowUnderscore, etc.) determine which strings are valid
+  // hostnames, so they should also determine split ambiguity.
+  //
+  // In "ip" mode hostname options are irrelevant, so a maximally
+  // permissive syntax check is used instead to avoid leaking
+  // hostname policy into IP-only parsing.
+  const disambiguationParser = hostType === "ip"
+    ? hostname({
+      metavar: "HOST",
+      allowWildcard: true,
+      allowUnderscore: true,
+      maxLength: Math.max(253, options?.host?.hostname?.maxLength ?? 0),
+    })
+    : hostnameParser;
+
+  // Whether the separator consists of characters that can appear
+  // inside valid hostnames (letters, digits, dot, hyphen).  When
+  // true, a hostPart containing the separator might be a legitimate
+  // dotted or hyphenated host, so only pure-separator hostParts are
+  // treated as degenerate.  When false (e.g., ":" or " "), any
+  // hostPart containing the separator is a structural artifact from
+  // a multi-separator input like "foo:80:90".
+  const separatorIsHostChar = /^[a-zA-Z0-9._-]+$/.test(separator);
+
   // Create port parser
   const portParser = port({
     ...options?.port,
@@ -3972,12 +4003,12 @@ export function socketAddress(
       let firstHostError:
         | { readonly hostPart: string; readonly error: Message }
         | undefined;
-      // Set when a split produces a non-empty host but an all-digit port
-      // part that fails validation (e.g., out of range).  This prevents
-      // the host-only fallback from silently masking port typos — even
-      // when the host part itself is invalid (e.g., "db--70000" where
-      // host "db-" has a trailing hyphen).
-      let validHostNumericPortInvalid = false;
+      // Set to the port parser's error when a split produces a non-empty
+      // host but an all-digit port part that fails validation (e.g., out
+      // of range).  This prevents the host-only fallback from silently
+      // masking port typos — even when the host part itself is invalid
+      // (e.g., "db--70000" where host "db-" has a trailing hyphen).
+      let validHostInvalidPortError: Message | undefined;
       // The validated host from the rightmost split with an empty port
       // part (trailing separator).  Used as a fallback when the whole
       // input is not a valid hostname by itself (e.g., "localhost:" where
@@ -4045,7 +4076,7 @@ export function socketAddress(
               firstHostError = { hostPart, error: hostResult.error };
             }
           } else if (
-            !validHostNumericPortInvalid &&
+            validHostInvalidPortError === undefined &&
             hostPart !== "" &&
             /^[0-9]+$/.test(portPart)
           ) {
@@ -4070,10 +4101,18 @@ export function socketAddress(
                   firstHostError = { hostPart, error: hostResult.error };
                 }
               } else {
-                validHostNumericPortInvalid = true;
+                validHostInvalidPortError = portResult.error;
               }
             } else {
-              validHostNumericPortInvalid = true;
+              // Always record the port error to prevent the host-only
+              // fallback from silently masking port typos.  Also
+              // validate the host so that host policy errors (e.g.,
+              // allowLocalhost: false) can take priority later.
+              validHostInvalidPortError = portResult.error;
+              const hostResult = parseHost(hostPart);
+              if (!hostResult.success && firstHostError === undefined) {
+                firstHostError = { hostPart, error: hostResult.error };
+              }
             }
           } else if (
             (firstHostError === undefined ||
@@ -4102,7 +4141,7 @@ export function socketAddress(
 
       // If a split had a valid host but a recognizably-invalid numeric
       // port, reject before trying host-only.
-      if (validHostNumericPortInvalid) {
+      if (validHostInvalidPortError !== undefined) {
         const errorMsg = options?.errors?.invalidFormat;
         if (errorMsg) {
           const msg = typeof errorMsg === "function"
@@ -4110,11 +4149,41 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
-        return {
-          success: false,
-          error:
-            message`Expected a socket address in format host${separator}port, but got ${input}.`,
-        };
+        // When both host and port failed on the same split, prefer the
+        // host error (more fundamental) over the port error, unless the
+        // hostPart is a degenerate separator artifact.  For non-host-
+        // compatible separators (e.g., ":"), any hostPart containing
+        // the separator is an artifact from a multi-separator input
+        // like "foo:80:70000".  For host-compatible separators (e.g.,
+        // "-"), only pure-separator hostParts are degenerate — a
+        // hostPart like "_foo-bar" legitimately contains the separator
+        // and its host error should propagate.
+        if (firstHostError !== undefined && firstHostError.hostPart !== "") {
+          const portSplitHostIsDegenerate = separatorIsHostChar
+            ? firstHostError.hostPart.replaceAll(separator, "") === ""
+            : firstHostError.hostPart.includes(separator);
+          if (portSplitHostIsDegenerate) {
+            return {
+              success: false,
+              error:
+                message`Expected a socket address in format host${separator}port, but got ${input}.`,
+            };
+          }
+          if (!disambiguationParser.parse(trimmed).success) {
+            return { success: false, error: firstHostError.error };
+          }
+        }
+        // When the whole input is a valid hostname under the
+        // disambiguation parser, the split is ambiguous and the port
+        // error would be misleading.  Return the generic format error.
+        if (disambiguationParser.parse(trimmed).success) {
+          return {
+            success: false,
+            error:
+              message`Expected a socket address in format host${separator}port, but got ${input}.`,
+          };
+        }
+        return { success: false, error: validHostInvalidPortError };
       }
 
       // If a split found a valid port but an IP-shaped invalid host,
@@ -4199,17 +4268,16 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
+        const trailingHostIsDegenerate = separatorIsHostChar
+          ? trailingSepHostError.hostPart.replaceAll(separator, "") === ""
+          : trailingSepHostError.hostPart.includes(separator);
         if (
-          looksLikeIpv4(trailingSepHostError.hostPart) ||
-          looksLikeAltIpv4Literal(trailingSepHostError.hostPart)
+          trailingSepHostError.hostPart !== "" &&
+          !trailingHostIsDegenerate &&
+          !disambiguationParser.parse(trimmed).success
         ) {
           return { success: false, error: trailingSepHostError.error };
         }
-        return {
-          success: false,
-          error:
-            message`Expected a socket address in format host${separator}port, but got ${input}.`,
-        };
       }
 
       // When port is not required but no default exists, and the whole
@@ -4254,6 +4322,27 @@ export function socketAddress(
             ? errorMsg(input)
             : errorMsg;
           return { success: false, error: msg };
+        }
+        // Only surface the split-host error when the hostPart is
+        // non-empty, not a degenerate separator artifact, and the
+        // whole input is not a valid hostname (which would make the
+        // split ambiguous).
+        //
+        // The degenerate check depends on whether the separator can
+        // appear inside hostnames: for host-compatible separators
+        // (e.g., "-"), only pure-separator hostParts like "-" are
+        // degenerate; for non-host-compatible separators (e.g., ":"),
+        // any hostPart containing the separator is an artifact from
+        // a multi-separator input like "foo:80:90".
+        const hostPartIsDegenerate = separatorIsHostChar
+          ? firstHostError.hostPart.replaceAll(separator, "") === ""
+          : firstHostError.hostPart.includes(separator);
+        if (
+          firstHostError.hostPart !== "" &&
+          !hostPartIsDegenerate &&
+          !disambiguationParser.parse(trimmed).success
+        ) {
+          return { success: false, error: firstHostError.error };
         }
       }
 

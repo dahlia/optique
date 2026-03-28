@@ -333,6 +333,15 @@ To be released.
     treating the full input as a hostname only when no valid split exists.
     [[#360], [#726]]
 
+ -  Fixed `socketAddress()` hiding specific host and port validation errors
+    behind a generic format error.  When sub-parsers like `hostname()`,
+    `ipv4()`, or `port()` reject a value for a specific reason (e.g.,
+    “Hostname ‘localhost’ is not allowed.”, “Expected a port number greater
+    than or equal to 1,024”), the specific error is now propagated instead
+    of being replaced with “Expected a socket address in format host:port”.
+    Custom `errors.invalidFormat` still takes precedence when configured.
+    [[#322], [#749]]
+
  -  Fixed `hostname()` accepting case variants of `localhost` (e.g.,
     `LOCALHOST`, `LocalHost`) and wildcard-localhost forms (e.g.,
     `*.localhost`) when `allowLocalhost` is set to `false`.  DNS hostnames
@@ -1107,6 +1116,7 @@ To be released.
 [#319]: https://github.com/dahlia/optique/issues/319
 [#320]: https://github.com/dahlia/optique/issues/320
 [#321]: https://github.com/dahlia/optique/issues/321
+[#322]: https://github.com/dahlia/optique/issues/322
 [#323]: https://github.com/dahlia/optique/issues/323
 [#327]: https://github.com/dahlia/optique/issues/327
 [#330]: https://github.com/dahlia/optique/issues/330
@@ -1327,6 +1337,7 @@ To be released.
 [#746]: https://github.com/dahlia/optique/pull/746
 [#747]: https://github.com/dahlia/optique/pull/747
 [#748]: https://github.com/dahlia/optique/pull/748
+[#749]: https://github.com/dahlia/optique/pull/749
 
 ### @optique/config
 
