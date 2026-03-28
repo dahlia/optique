@@ -21,6 +21,7 @@ import {
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as fc from "fast-check";
+import { getDisplayWidth } from "./displaywidth.ts";
 
 describe("message template function", () => {
   it("should create message with text only", () => {
@@ -633,6 +634,14 @@ describe("formatMessage", () => {
       const formatted = formatMessage(msg, { quotes: false, maxWidth: 9 });
       const lines = formatted.split("\n");
       assert.equal(lines.length, 2);
+      for (const line of lines) {
+        assert.ok(
+          getDisplayWidth(line) <= 9,
+          `Line display width exceeds 9: "${line}" (${
+            getDisplayWidth(line)
+          } columns)`,
+        );
+      }
     });
 
     it("should not wrap Korean text when it fits", () => {
@@ -640,6 +649,7 @@ describe("formatMessage", () => {
       // "한글" = 4 display columns, maxWidth = 4
       const formatted = formatMessage(msg, { quotes: false, maxWidth: 4 });
       assert.ok(!formatted.includes("\n"));
+      assert.equal(getDisplayWidth(formatted), 4);
     });
 
     it("should wrap combining marks based on display width", () => {
@@ -648,6 +658,7 @@ describe("formatMessage", () => {
       const formatted = formatMessage(msg, { quotes: false, maxWidth: 5 });
       // "e\u0301 e\u0301 e\u0301" = 5 columns, should fit in one line
       assert.ok(!formatted.includes("\n"));
+      assert.equal(getDisplayWidth(formatted), 5);
     });
 
     it("should wrap emoji based on display width", () => {
@@ -658,6 +669,14 @@ describe("formatMessage", () => {
       const formatted = formatMessage(msg, { quotes: false, maxWidth: 5 });
       const lines = formatted.split("\n");
       assert.equal(lines.length, 2);
+      for (const line of lines) {
+        assert.ok(
+          getDisplayWidth(line) <= 5,
+          `Line display width exceeds 5: "${line}" (${
+            getDisplayWidth(line)
+          } columns)`,
+        );
+      }
     });
 
     it("should handle ZWJ emoji sequences", () => {
@@ -665,6 +684,7 @@ describe("formatMessage", () => {
       // "👨‍👩‍👧‍👦" = 2 columns, " " = 1, "x" = 1, total = 4
       const formatted = formatMessage(msg, { quotes: false, maxWidth: 5 });
       assert.ok(!formatted.includes("\n"));
+      assert.equal(getDisplayWidth(formatted), 4);
     });
   });
 

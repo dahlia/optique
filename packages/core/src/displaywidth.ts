@@ -25,9 +25,11 @@ export function getDisplayWidth(text: string): number {
   return width;
 }
 
-// A standalone format char (Cf), nonspacing mark (Mn), or enclosing
-// mark (Me) occupies zero terminal columns.
-const zeroWidthRegex = /^[\p{Cf}\p{Mn}\p{Me}]$/u;
+// A grapheme consisting entirely of format chars (Cf), nonspacing
+// marks (Mn), or enclosing marks (Me) occupies zero terminal columns.
+// The + quantifier handles clusters of consecutive combining marks that
+// Intl.Segmenter groups into a single grapheme.
+const zeroWidthRegex = /^[\p{Cf}\p{Mn}\p{Me}]+$/u;
 
 // Matches grapheme clusters that contain emoji presentation characters
 // or emoji with variation selector 16 (U+FE0F).

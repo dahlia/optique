@@ -230,6 +230,11 @@ describe("getDisplayWidth", () => {
       assert.equal(getDisplayWidth("\u0301"), 0); // combining acute
     });
 
+    it("should not count multi-code-point combining mark clusters", () => {
+      // Intl.Segmenter groups consecutive combining marks as one grapheme
+      assert.equal(getDisplayWidth("\u0301\u0300"), 0);
+    });
+
     it("should not count soft hyphen", () => {
       assert.equal(getDisplayWidth("\u00AD"), 0);
     });
