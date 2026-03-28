@@ -22,6 +22,8 @@ import {
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
 import { dispatchByMode } from "./mode-dispatch.ts";
+import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
+import type { DependencyRuntimeContext } from "./dependency-runtime.ts";
 
 export type { ParseOptions };
 
@@ -296,6 +298,15 @@ export interface Parser<
    * @since 1.0.0
    */
   normalizeValue?(value: TValue): TValue;
+
+  /**
+   * Internal dependency metadata describing this parser's dependency
+   * capabilities.  Used by the dependency runtime to resolve dependencies
+   * without relying on state-shape protocols.
+   * @internal
+   * @since 1.0.0
+   */
+  readonly dependencyMetadata?: ParserDependencyMetadata;
 }
 
 /**
@@ -366,6 +377,14 @@ export interface ExecutionContext {
    * @since 0.10.0
    */
   readonly dependencyRegistry?: DependencyRegistryLike;
+
+  /**
+   * The dependency runtime context for dependency resolution.
+   * Coexists with `dependencyRegistry` during the transition period.
+   * @internal
+   * @since 1.0.0
+   */
+  readonly dependencyRuntime?: DependencyRuntimeContext;
 }
 
 /**
