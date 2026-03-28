@@ -101,11 +101,11 @@ function resolveTopLevelDeferred<T>(
   if (defaults == null || defaults.length === 0) {
     return state.preliminaryResult;
   }
-  // For single-dep parsers the dependency value is the first default;
-  // for multi-dep parsers (deriveFrom) it is the full defaults array.
-  const depValue = state.dependencyIds != null && state.dependencyIds.length > 1
-    ? defaults
-    : defaults[0];
+  // deriveFrom() stores dependencyIds on the deferred state and its
+  // [parseWithDependency] expects the full defaults tuple (even when the
+  // tuple has a single element).  Single .derive() leaves dependencyIds
+  // undefined and expects a scalar value.
+  const depValue = state.dependencyIds != null ? defaults : defaults[0];
   return state.parser[parseWithDependency](state.rawInput, depValue);
 }
 

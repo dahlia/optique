@@ -4411,6 +4411,25 @@ describe("top-level option()/argument() with derived parsers", () => {
     assert.equal(result.value, "dev.json");
   });
 
+  test("deriveFrom with single dependency at top level succeeds", () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = deriveFromSync({
+      metavar: "LEVEL",
+      dependencies: [mode] as const,
+      factory: (m) =>
+        choice(
+          m === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValues: () => ["dev" as const] as const,
+    });
+    const parser = option("--level", level);
+    const result = parseSync(parser, ["--level", "debug"]);
+    assert.ok(result.success);
+    assert.equal(result.value, "debug");
+  });
+
   test("suggestSync argument() with single-derive parser", () => {
     const mode = dependency(choice(["dev", "prod"] as const));
     const level = mode.derive({
