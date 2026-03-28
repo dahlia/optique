@@ -88,24 +88,29 @@ export interface InputTrace {
 const symbolKeys = new Map<symbol, string>();
 let symbolCounter = 0;
 
+/** Length-prefix a raw segment so that no delimiter escaping is needed. */
+function lengthPrefix(s: string): string {
+  return `${s.length}:${s}`;
+}
+
 function serializeKey(key: PropertyKey): string {
-  if (typeof key === "string") return `s:${key}`;
-  if (typeof key === "number") return `n:${key}`;
+  if (typeof key === "string") return lengthPrefix(`s${key}`);
+  if (typeof key === "number") return lengthPrefix(`n${key}`);
   // Registered symbols have a globally unique key via Symbol.keyFor().
   const registeredKey = Symbol.keyFor(key as symbol);
-  if (registeredKey !== undefined) return `r:${registeredKey}`;
+  if (registeredKey !== undefined) return lengthPrefix(`r${registeredKey}`);
   // Non-registered symbols get a per-instance counter-based id.
   let id = symbolKeys.get(key as symbol);
   if (id === undefined) {
-    id = `y:${symbolCounter++}`;
+    id = `y${symbolCounter++}`;
     symbolKeys.set(key as symbol, id);
   }
-  return id;
+  return lengthPrefix(id);
 }
 
 function serializePath(path: readonly PropertyKey[]): string {
   if (path.length === 0) return "";
-  return path.map(serializeKey).join("\0");
+  return path.map(serializeKey).join("");
 }
 
 // ---------------------------------------------------------------------------

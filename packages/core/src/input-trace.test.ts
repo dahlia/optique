@@ -169,4 +169,16 @@ describe("InputTrace", () => {
     assert.deepStrictEqual(trace.get([reg]), entry1);
     assert.deepStrictEqual(trace.get([local]), entry2);
   });
+
+  test("keys containing NUL do not collide with multi-segment paths", () => {
+    const entry1 = makeEntry("option-value", "single");
+    const entry2 = makeEntry("option-value", "multi");
+    // A single segment with embedded NUL + type prefix must not alias
+    // a two-segment path that would match if using naive NUL-joining.
+    const trace = createInputTrace()
+      .set(["a\0sb"], entry1)
+      .set(["a", "b"], entry2);
+    assert.deepStrictEqual(trace.get(["a\0sb"]), entry1);
+    assert.deepStrictEqual(trace.get(["a", "b"]), entry2);
+  });
 });

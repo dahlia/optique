@@ -272,15 +272,22 @@ function resolveRequest(
   return { kind, values, usedDefaults };
 }
 
+/** Length-prefix a segment so that no delimiter escaping is needed. */
+function lengthPrefix(s: string): string {
+  return `${s.length}:${s}`;
+}
+
 function serializePathSegment(p: PropertyKey): string {
-  if (typeof p === "string") return `s:${p}`;
-  if (typeof p === "number") return `n:${p}`;
-  return stableSymbolKey(p as symbol);
+  if (typeof p === "string") return lengthPrefix(`s${p}`);
+  if (typeof p === "number") return lengthPrefix(`n${p}`);
+  return lengthPrefix(stableSymbolKey(p as symbol));
 }
 
 function serializeReplayKey(key: ReplayKey): string {
-  const pathStr = key.path.map(serializePathSegment).join("\0");
-  return `${pathStr}\x01${key.rawInput}\x01${key.dependencyFingerprint}`;
+  const pathStr = key.path.map(serializePathSegment).join("");
+  return `${pathStr}\x01${
+    lengthPrefix(key.rawInput)
+  }\x01${key.dependencyFingerprint}`;
 }
 
 // =============================================================================
@@ -335,19 +342,32 @@ export function createDependencyRuntimeContext(
 export function createDependencyFingerprint(
   values: readonly unknown[],
 ): string {
-  return values.map((v) => {
-    if (v === undefined) return "u:";
-    if (v === null) return "n:";
-    if (typeof v === "string") return `s:${v}`;
-    if (typeof v === "number") return `d:${v}`;
-    if (typeof v === "boolean") return `b:${v}`;
-    if (typeof v === "symbol") return `y:${stableSymbolKey(v)}`;
-    try {
-      return `j:${JSON.stringify(v)}`;
-    } catch {
-      return `o:${String(v)}`;
+  return values.map(fingerprintValue).join("\x00");
+}
+
+// Per-object identity counter for fingerprinting non-primitive values.
+// Using reference identity avoids lossy JSON.stringify (which maps Map,
+// Set, class instances, etc. to '{}').  Same reference → same fingerprint;
+// different reference → different fingerprint (conservative but never stale).
+const objectIds = new WeakMap<object, number>();
+let objectIdCounter = 0;
+
+function fingerprintValue(v: unknown): string {
+  if (v === undefined) return "u:";
+  if (v === null) return "n:";
+  if (typeof v === "string") return `s:${v}`;
+  if (typeof v === "number") return `d:${v}`;
+  if (typeof v === "boolean") return `b:${v}`;
+  if (typeof v === "symbol") return `y:${stableSymbolKey(v)}`;
+  if (typeof v === "object") {
+    let id = objectIds.get(v);
+    if (id === undefined) {
+      id = objectIdCounter++;
+      objectIds.set(v, id);
     }
-  }).join("\x00");
+    return `o:${id}`;
+  }
+  return `?:${String(v)}`;
 }
 
 /**

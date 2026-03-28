@@ -187,6 +187,21 @@ describe("createDependencyFingerprint", () => {
     const fp2 = createDependencyFingerprint([sym]);
     assert.equal(fp1, fp2);
   });
+
+  test("distinct objects produce different fingerprints", () => {
+    const map1 = new Map([["a", 1]]);
+    const map2 = new Map([["b", 2]]);
+    const fp1 = createDependencyFingerprint([map1]);
+    const fp2 = createDependencyFingerprint([map2]);
+    assert.notEqual(fp1, fp2);
+  });
+
+  test("same object reference produces same fingerprint", () => {
+    const obj = { x: 1 };
+    const fp1 = createDependencyFingerprint([obj]);
+    const fp2 = createDependencyFingerprint([obj]);
+    assert.equal(fp1, fp2);
+  });
 });
 
 describe("createReplayKey", () => {
