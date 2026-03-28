@@ -251,6 +251,11 @@ To be released.
     a spurious leading newline (or double newline) when an oversize term that
     exceeds `maxWidth` is already at the start of a new line.  [[#497], [#730]]
 
+ -  Fixed `formatMessage()`, `formatUsage()`, and `formatDocPage()` measuring
+    string width using JavaScript `.length` (UTF-16 code units) instead of
+    terminal display width.  East Asian wide characters, combining marks, and
+    emoji now wrap and align correctly.  [[#509]]
+
  -  Fixed `getDocPage()` preserving hidden terms from custom `DocFragments`
     instead of filtering them.  `buildDocPage()` now filters out entries whose
     terms are doc-hidden before assembling the final `DocPage`.  Additionally,
@@ -1214,6 +1219,7 @@ To be released.
 [#506]: https://github.com/dahlia/optique/issues/506
 [#507]: https://github.com/dahlia/optique/issues/507
 [#508]: https://github.com/dahlia/optique/issues/508
+[#509]: https://github.com/dahlia/optique/issues/509
 [#512]: https://github.com/dahlia/optique/pull/512
 [#513]: https://github.com/dahlia/optique/issues/513
 [#516]: https://github.com/dahlia/optique/issues/516
