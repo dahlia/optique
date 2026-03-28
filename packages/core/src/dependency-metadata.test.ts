@@ -73,7 +73,7 @@ describe("extractDependencyMetadata", () => {
     assert.equal(metadata.derived, undefined);
   });
 
-  test("extractSourceValue extracts from DependencySourceState", () => {
+  test("extractSourceValue returns result from DependencySourceState", () => {
     const env = createEnvSource();
     const metadata = extractDependencyMetadata(env);
     assert.ok(metadata?.source?.extractSourceValue !== undefined);
@@ -81,10 +81,13 @@ describe("extractDependencyMetadata", () => {
       { success: true, value: "prod" },
       metadata.source.sourceId,
     );
-    assert.equal(metadata.source.extractSourceValue(sourceState), "prod");
+    const result = metadata.source.extractSourceValue(sourceState);
+    assert.ok(result !== undefined);
+    assert.ok(result.success);
+    if (result.success) assert.equal(result.value, "prod");
   });
 
-  test("extractSourceValue returns undefined for failed parse", () => {
+  test("extractSourceValue returns failed result for failed parse", () => {
     const env = createEnvSource();
     const metadata = extractDependencyMetadata(env);
     assert.ok(metadata?.source?.extractSourceValue !== undefined);
@@ -92,7 +95,23 @@ describe("extractDependencyMetadata", () => {
       { success: false, error: undefined! },
       metadata.source.sourceId,
     );
-    assert.equal(metadata.source.extractSourceValue(sourceState), undefined);
+    const result = metadata.source.extractSourceValue(sourceState);
+    assert.ok(result !== undefined);
+    assert.ok(!result.success);
+  });
+
+  test("extractSourceValue preserves successful undefined value", () => {
+    const env = createEnvSource();
+    const metadata = extractDependencyMetadata(env);
+    assert.ok(metadata?.source?.extractSourceValue !== undefined);
+    const sourceState = createDependencySourceState(
+      { success: true, value: undefined },
+      metadata.source.sourceId,
+    );
+    const result = metadata.source.extractSourceValue(sourceState);
+    assert.ok(result !== undefined);
+    assert.ok(result.success);
+    if (result.success) assert.equal(result.value, undefined);
   });
 
   test("extractSourceValue returns undefined for non-source state", () => {
@@ -235,7 +254,9 @@ describe("composeDependencyMetadata", () => {
       composed.source.sourceId,
     );
     // optional wraps state in [state]
-    assert.equal(composed.source.extractSourceValue([sourceState]), "prod");
+    const result = composed.source.extractSourceValue([sourceState]);
+    assert.ok(result !== undefined && result.success);
+    if (result.success) assert.equal(result.value, "prod");
     // undefined inner state (not provided)
     assert.equal(composed.source.extractSourceValue(undefined), undefined);
   });
@@ -252,7 +273,9 @@ describe("composeDependencyMetadata", () => {
       { success: true, value: "prod" },
       composed.source.sourceId,
     );
-    assert.equal(composed.source.extractSourceValue([sourceState]), "prod");
+    const result = composed.source.extractSourceValue([sourceState]);
+    assert.ok(result !== undefined && result.success);
+    if (result.success) assert.equal(result.value, "prod");
   });
 
   test("map extractSourceValue extracts pre-transform value", () => {
@@ -266,7 +289,9 @@ describe("composeDependencyMetadata", () => {
       composed.source.sourceId,
     );
     // map does not wrap state — inner state is passed through
-    assert.equal(composed.source.extractSourceValue(sourceState), "prod");
+    const result = composed.source.extractSourceValue(sourceState);
+    assert.ok(result !== undefined && result.success);
+    if (result.success) assert.equal(result.value, "prod");
   });
 
   test("withDefault on source adds getMissingSourceValue", () => {

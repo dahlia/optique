@@ -10,6 +10,7 @@
  * @since 1.0.0
  * @module
  */
+import { message } from "./message.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
@@ -88,6 +89,25 @@ export interface DependencyResolution {
 
   /** For each position, whether the value came from a default. */
   readonly usedDefaults: readonly boolean[];
+}
+
+/**
+ * A failure that occurred while evaluating a missing-source default.
+ * Returned by `fillMissingSourceDefaults()` so the caller can propagate
+ * the error instead of silently treating the source as absent.
+ *
+ * @internal
+ * @since 1.0.0
+ */
+export interface SourceDefaultFailure {
+  /** The source that failed. */
+  readonly sourceId: symbol;
+
+  /** The path of the node. */
+  readonly path: readonly PropertyKey[];
+
+  /** The failed result or error message. */
+  readonly error: ValueParserResult<unknown>;
 }
 
 /**
@@ -414,9 +434,12 @@ export function collectExplicitSourceValues(
     if (meta?.source == null) continue;
     if (meta.source.extractSourceValue == null) continue;
 
-    const value = meta.source.extractSourceValue(node.state);
-    if (value !== undefined) {
-      runtime.registerSource(meta.source.sourceId, value, "cli");
+    const result = meta.source.extractSourceValue(node.state);
+    // undefined = state doesn't contain a source result (unpopulated).
+    // { success: false } = source was provided but failed validation.
+    // { success: true, value } = source value (value may be undefined).
+    if (result != null && result.success) {
+      runtime.registerSource(meta.source.sourceId, result.value, "cli");
     }
   }
 }
@@ -425,15 +448,22 @@ export function collectExplicitSourceValues(
  * Fills missing source defaults for source parsers whose state is
  * unpopulated.
  *
+ * Returns an array of failures for sources whose default evaluation
+ * failed (either threw or returned `{ success: false }`).  The caller
+ * should propagate these so that dependent parsers see the real error
+ * instead of silently treating the source as absent.
+ *
  * @param nodes The runtime nodes to inspect.
  * @param runtime The dependency runtime context.
+ * @returns Failures from default evaluation (empty if all succeeded).
  * @internal
  * @since 1.0.0
  */
 export function fillMissingSourceDefaults(
   nodes: readonly RuntimeNode[],
   runtime: DependencyRuntimeContext,
-): void {
+): readonly SourceDefaultFailure[] {
+  const failures: SourceDefaultFailure[] = [];
   for (const node of nodes) {
     const meta = node.parser.dependencyMetadata;
     if (meta?.source == null) continue;
@@ -447,12 +477,23 @@ export function fillMissingSourceDefaults(
     if (!meta.source.preservesSourceValue) continue;
     if (meta.source.getMissingSourceValue == null) continue;
 
-    let result;
+    let result:
+      | ValueParserResult<unknown>
+      | Promise<ValueParserResult<unknown>>;
     try {
       result = meta.source.getMissingSourceValue();
-    } catch {
-      // Default thunk may throw (dynamic defaults with validation).
-      // Convert to a failed result, matching withDefault.complete().
+    } catch (e) {
+      // Default thunk threw — report as failure matching
+      // withDefault.complete() contract.
+      const msg = e instanceof Error ? e.message : String(e);
+      failures.push({
+        sourceId: meta.source.sourceId,
+        path: node.path,
+        error: {
+          success: false,
+          error: message`Default value evaluation failed: ${msg}`,
+        },
+      });
       continue;
     }
     // Only handle sync results here; async handled by async variant
@@ -463,8 +504,16 @@ export function fillMissingSourceDefaults(
         result.value,
         "default",
       );
+    } else {
+      // Default thunk returned a failure — propagate it.
+      failures.push({
+        sourceId: meta.source.sourceId,
+        path: node.path,
+        error: result,
+      });
     }
   }
+  return failures;
 }
 
 /**
@@ -489,8 +538,16 @@ export function replayDerivedParser(
 
   // Use snapshotted defaults from the node (captured at parse time) to
   // avoid re-evaluating dynamic getDefaultDependencyValues() thunks.
-  const defaults = node.defaultDependencyValues ??
-    meta.derived.getDefaultDependencyValues?.();
+  // Guard the fallback call since validating default thunks may throw.
+  let defaults = node.defaultDependencyValues;
+  if (defaults == null && meta.derived.getDefaultDependencyValues != null) {
+    try {
+      defaults = meta.derived.getDefaultDependencyValues();
+    } catch {
+      // Default thunk threw — treat as unresolved.
+      return undefined;
+    }
+  }
 
   const resolution = runtime.resolveDependencies({
     dependencyIds: meta.derived.dependencyIds,
@@ -535,8 +592,15 @@ export async function replayDerivedParserAsync(
 
   // Use snapshotted defaults from the node (captured at parse time) to
   // avoid re-evaluating dynamic getDefaultDependencyValues() thunks.
-  const defaults = node.defaultDependencyValues ??
-    meta.derived.getDefaultDependencyValues?.();
+  // Guard the fallback call since validating default thunks may throw.
+  let defaults = node.defaultDependencyValues;
+  if (defaults == null && meta.derived.getDefaultDependencyValues != null) {
+    try {
+      defaults = meta.derived.getDefaultDependencyValues();
+    } catch {
+      return undefined;
+    }
+  }
 
   const resolution = runtime.resolveDependencies({
     dependencyIds: meta.derived.dependencyIds,

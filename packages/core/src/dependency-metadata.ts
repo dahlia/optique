@@ -42,17 +42,20 @@ export interface DependencySourceCapability {
   readonly sourceId: symbol;
 
   /**
-   * Extracts the dependency source value from the parser's state.
+   * Extracts the dependency source parse result from the parser's state.
    *
    * Each wrapper composes this method to handle its state shape:
    * - plain source: reads from `DependencySourceState`
    * - `optional()` / `withDefault()`: unwraps `[innerState]` first
    * - `map()`: reads the pre-transform value from inner state
    *
-   * Returns `undefined` if the state does not contain a successful
-   * source value (e.g., unpopulated, failed parse, or wrong shape).
+   * Returns the `ValueParserResult` (which may be successful with any
+   * value including `undefined`, or failed), or `undefined` if the state
+   * does not contain a source result at all (unpopulated / wrong shape).
    */
-  readonly extractSourceValue: (state: unknown) => unknown | undefined;
+  readonly extractSourceValue: (
+    state: unknown,
+  ) => ValueParserResult<unknown> | undefined;
 
   /**
    * When present, provides a missing-source value (e.g., from a
@@ -234,23 +237,25 @@ export function extractDependencyMetadata<M extends Mode, T>(
 // =============================================================================
 
 /**
- * Extracts a source value from a bare `DependencySourceState`.
+ * Extracts the source parse result from a bare `DependencySourceState`.
  * Used as the base `extractSourceValue` for plain dependency sources.
  */
-function extractFromBareState(state: unknown): unknown | undefined {
+function extractFromBareState(
+  state: unknown,
+): ValueParserResult<unknown> | undefined {
   if (!isDependencySourceState(state)) return undefined;
-  return state.result.success ? state.result.value : undefined;
+  return state.result;
 }
+
+type ExtractFn = (state: unknown) => ValueParserResult<unknown> | undefined;
 
 /**
  * Wraps an inner `extractSourceValue` to unwrap `[innerState]` first.
  * Used by `optional()` and `withDefault()` which wrap state in a
  * single-element array.
  */
-function unwrapArrayThenExtract(
-  innerExtract: (state: unknown) => unknown | undefined,
-): (state: unknown) => unknown | undefined {
-  return (state: unknown): unknown | undefined => {
+function unwrapArrayThenExtract(innerExtract: ExtractFn): ExtractFn {
+  return (state: unknown): ValueParserResult<unknown> | undefined => {
     if (Array.isArray(state) && state.length === 1) {
       return innerExtract(state[0]);
     }

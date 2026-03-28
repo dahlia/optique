@@ -270,13 +270,17 @@ describe("createReplayKey", () => {
 // =============================================================================
 
 /** Helper: creates a bare extractSourceValue for tests. */
-function bareExtract(state: unknown): unknown | undefined {
+function bareExtract(
+  state: unknown,
+): ValueParserResult<unknown> | undefined {
   if (!isDependencySourceState(state)) return undefined;
-  return state.result.success ? state.result.value : undefined;
+  return state.result;
 }
 
 /** Helper: wraps extractSourceValue to unwrap [state] first. */
-function unwrappingExtract(state: unknown): unknown | undefined {
+function unwrappingExtract(
+  state: unknown,
+): ValueParserResult<unknown> | undefined {
   if (Array.isArray(state) && state.length === 1) {
     return bareExtract(state[0]);
   }
@@ -495,9 +499,12 @@ describe("fillMissingSourceDefaults", () => {
       },
       state: undefined,
     }];
-    // Should not throw — converts to skip, matching withDefault.complete().
-    fillMissingSourceDefaults(nodes, runtime);
+    // Should not throw — returns the failure so the caller can propagate it.
+    const failures = fillMissingSourceDefaults(nodes, runtime);
     assert.ok(!runtime.hasSource(sourceId));
+    assert.equal(failures.length, 1);
+    assert.equal(failures[0].sourceId, sourceId);
+    assert.ok(!failures[0].error.success);
   });
 });
 
