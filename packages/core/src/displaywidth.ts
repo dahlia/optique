@@ -118,12 +118,14 @@ function isEastAsianWide(cp: number): boolean {
     (cp >= 0x268A && cp <= 0x268F) ||
     // CJK Radicals Supplement, Kangxi Radicals
     (cp >= 0x2E80 && cp <= 0x2FDF) ||
-    // Ideographic Description Characters, CJK Symbols and Punctuation,
+    // Ideographic Description Characters, CJK Symbols and Punctuation
+    // (U+303F IDEOGRAPHIC HALF FILL CHARACTER is EAW=N, so stop at 303E)
+    (cp >= 0x2FF0 && cp <= 0x303E) ||
     // Hiragana, Katakana, Bopomofo, Hangul Compatibility Jamo, Kanbun,
     // Bopomofo Extended, CJK Strokes, Katakana Phonetic Extensions,
     // Enclosed CJK, CJK Compatibility, CJK Extension A,
     // Yijing Hexagram Symbols (U+4DC0–4DFF), CJK Unified Ideographs
-    (cp >= 0x2FF0 && cp <= 0x9FFF) ||
+    (cp >= 0x3041 && cp <= 0x9FFF) ||
     // Yi Syllables, Yi Radicals
     (cp >= 0xA000 && cp <= 0xA4CF) ||
     // Hangul Jamo Extended-A

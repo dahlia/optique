@@ -99,6 +99,11 @@ describe("getDisplayWidth", () => {
       assert.equal(getDisplayWidth("\u268A"), 2); // ⚊ MONOGRAM FOR YANG
     });
 
+    it("should count Ideographic Half Fill Character as 1 column", () => {
+      // U+303F has East_Asian_Width=N despite being in the CJK Symbols block
+      assert.equal(getDisplayWidth("\u303F"), 1);
+    });
+
     it("should count SMP East Asian scripts as 2 columns each", () => {
       assert.equal(getDisplayWidth("\u{1B000}"), 2); // 𛀀 Kana Supplement
       assert.equal(getDisplayWidth("\u{17000}"), 2); // 𗀀 Tangut
