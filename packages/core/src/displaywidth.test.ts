@@ -52,6 +52,15 @@ describe("getDisplayWidth", () => {
       assert.equal(getDisplayWidth("ｶﾀｶﾅ"), 4);
     });
 
+    it("should count halfwidth katakana with dakuten as 2 columns", () => {
+      // ｶﾞ = U+FF76 + U+FF9E (voiced), ﾊﾟ = U+FF8A + U+FF9F (semi-voiced)
+      // Intl.Segmenter groups these as single graphemes, but both code
+      // points occupy their own terminal column.
+      assert.equal(getDisplayWidth("ｶﾞ"), 2);
+      assert.equal(getDisplayWidth("ﾊﾟ"), 2);
+      assert.equal(getDisplayWidth("ｶﾞﾊﾟ"), 4);
+    });
+
     it("should count Hangul Jamo Extended-B as 1 column each", () => {
       // U+D7B0–U+D7FF are trailing jamo with East_Asian_Width=N
       assert.equal(getDisplayWidth("\uD7CB"), 1);

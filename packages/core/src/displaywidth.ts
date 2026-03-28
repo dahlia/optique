@@ -61,9 +61,18 @@ function graphemeWidth(grapheme: string): number {
   }
 
   // East Asian Wide and Fullwidth characters
-  if (isEastAsianWide(cp)) return 2;
+  let width = isEastAsianWide(cp) ? 2 : 1;
 
-  return 1;
+  // Halfwidth katakana voiced sound mark (U+FF9E ﾞ) and semi-voiced
+  // sound mark (U+FF9F ﾟ) are grouped into the preceding kana's
+  // grapheme cluster by Intl.Segmenter, but unlike true combining marks
+  // each one occupies its own terminal column.
+  for (let i = 1; i < grapheme.length; i++) {
+    const c = grapheme.charCodeAt(i);
+    if (c === 0xFF9E || c === 0xFF9F) width += 1;
+  }
+
+  return width;
 }
 
 // Characters that occupy two terminal columns.
