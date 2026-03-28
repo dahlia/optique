@@ -126,6 +126,13 @@ export interface ReplayKey {
 
   /** A stable fingerprint of the dependency values used. */
   readonly dependencyFingerprint: string;
+
+  /**
+   * A per-parser identity string that disambiguates different derived
+   * parsers sharing the same path (e.g., alternative branches).
+   * @since 1.0.0
+   */
+  readonly parserFingerprint: string;
 }
 
 /**
@@ -152,6 +159,7 @@ export interface RuntimeNode {
    * When `true`, the parser's state reflects user-provided input (which
    * may have failed validation).  Missing-source defaults must not override
    * explicit parse failures.
+   * @since 1.0.0
    */
   readonly matched?: boolean;
 
@@ -160,6 +168,7 @@ export interface RuntimeNode {
    * Constructs should populate this at node creation time (once) to
    * avoid re-evaluating dynamic `getDefaultDependencyValues()` thunks
    * at replay time.
+   * @since 1.0.0
    */
   readonly defaultDependencyValues?: readonly unknown[];
 }
@@ -336,7 +345,7 @@ function serializeReplayKey(key: ReplayKey): string {
   const pathStr = key.path.map(serializePathSegment).join("");
   return `${pathStr}\x01${
     lengthPrefix(key.rawInput)
-  }\x01${key.dependencyFingerprint}`;
+  }\x01${key.dependencyFingerprint}\x01${key.parserFingerprint}`;
 }
 
 // =============================================================================
@@ -438,15 +447,35 @@ function fingerprintValue(v: unknown): string {
  * @internal
  * @since 1.0.0
  */
+// deno-lint-ignore ban-types
+const parserIds = new WeakMap<Function, number>();
+let parserIdCounter = 0;
+
+/** Get a stable identity string for a replayParse function reference. */
+// deno-lint-ignore ban-types
+function getParserFingerprint(replayParse: Function): string {
+  let id = parserIds.get(replayParse);
+  if (id === undefined) {
+    id = parserIdCounter++;
+    parserIds.set(replayParse, id);
+  }
+  return `p:${id}`;
+}
+
 export function createReplayKey(
   path: readonly PropertyKey[],
   rawInput: string,
   dependencyValues: readonly unknown[],
+  // deno-lint-ignore ban-types
+  replayParse?: Function,
 ): ReplayKey {
   return {
     path,
     rawInput,
     dependencyFingerprint: createDependencyFingerprint(dependencyValues),
+    parserFingerprint: replayParse != null
+      ? getParserFingerprint(replayParse)
+      : "",
   };
 }
 
@@ -658,7 +687,12 @@ export function replayDerivedParser(
   if (resolution.kind === "partial") return undefined;
 
   // Check replay cache
-  const key = createReplayKey(node.path, rawInput, resolution.values);
+  const key = createReplayKey(
+    node.path,
+    rawInput,
+    resolution.values,
+    meta.derived.replayParse,
+  );
   const cached = runtime.getReplayResult(key);
   if (cached != null) return cached;
 
@@ -711,7 +745,12 @@ export async function replayDerivedParserAsync(
   if (resolution.kind === "partial") return undefined;
 
   // Check replay cache
-  const key = createReplayKey(node.path, rawInput, resolution.values);
+  const key = createReplayKey(
+    node.path,
+    rawInput,
+    resolution.values,
+    meta.derived.replayParse,
+  );
   const cached = runtime.getReplayResult(key);
   if (cached != null) return cached;
 

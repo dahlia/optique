@@ -1175,12 +1175,38 @@ export function map<M extends Mode, T, U, TState>(
     });
   }
   // Compose dependency metadata: mark transform and clear
-  // preservesSourceValue.
+  // preservesSourceValue.  Wrap replayParse to apply the map transform
+  // so that replayed values match what complete() would produce.
   if (parser.dependencyMetadata != null) {
-    const composed = composeDependencyMetadata(
+    let composed = composeDependencyMetadata(
       parser.dependencyMetadata,
       "map",
     );
+    if (composed?.derived != null) {
+      const innerReplay = composed.derived.replayParse;
+      composed = {
+        ...composed,
+        derived: {
+          ...composed.derived,
+          replayParse: (
+            rawInput: string,
+            depValues: readonly unknown[],
+          ) => {
+            const result = innerReplay(rawInput, depValues);
+            if (result instanceof Promise) {
+              return result.then((r) =>
+                r.success
+                  ? { success: true as const, value: transform(r.value as T) }
+                  : r
+              );
+            }
+            return result.success
+              ? { success: true as const, value: transform(result.value as T) }
+              : result;
+          },
+        },
+      };
+    }
     if (composed != null) {
       (mappedParser as unknown as Record<string, unknown>).dependencyMetadata =
         composed;
