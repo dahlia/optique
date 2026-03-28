@@ -1,10 +1,10 @@
-// CSI sequences: ESC [ params letter
+// CSI sequences: ESC [ params final-byte
 //   params may use ; (standard) or : (sub-parameters, e.g., truecolor)
-// OSC 8 hyperlinks: ESC ]8; params ; uri ST
-//   params may be empty (;;) or contain key=value (;id=foo;)
-//   terminated by ESC \ (ST) or BEL (\x07)
+//   final byte range is 0x40–0x7E (@ through ~) per ECMA-48
+// OSC sequences: ESC ] ... (BEL | ESC \)
+//   covers OSC 8 hyperlinks, window title, and all other OSC types
 const ansiRegex = // deno-lint-ignore no-control-regex
-  /\x1B\[[0-9;:]*[a-zA-Z]|\x1B\]8;[^;]*;[^\x1B\x07]*(?:\x1B\\|\x07)/g;
+  /\x1B(?:\[[0-9;:]*[@-~]|\][^\x1B\x07]*(?:\x1B\\|\x07))/g;
 
 const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 

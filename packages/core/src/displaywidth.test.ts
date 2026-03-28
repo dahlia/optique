@@ -227,6 +227,19 @@ describe("getDisplayWidth", () => {
         4,
       );
     });
+
+    it("should ignore CSI sequences with non-letter final bytes", () => {
+      // \x1b[11~ is F1 function key, ~ is a valid CSI final byte
+      assert.equal(getDisplayWidth("\x1b[11~hello"), 5);
+      // \x1b[2@ is CSI Insert, @ is a valid CSI final byte
+      assert.equal(getDisplayWidth("\x1b[2@hello"), 5);
+    });
+
+    it("should ignore generic OSC sequences", () => {
+      // OSC 0: set window title
+      assert.equal(getDisplayWidth("\x1b]0;My Title\x07hello"), 5);
+      assert.equal(getDisplayWidth("\x1b]2;My Title\x1b\\hello"), 5);
+    });
   });
 
   describe("zero-width characters", () => {
