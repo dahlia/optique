@@ -115,6 +115,17 @@ describe("getDisplayWidth", () => {
       assert.equal(getDisplayWidth("\u2714"), 1); // ✔ heavy check
       assert.equal(getDisplayWidth("\u25B6"), 1); // ▶ play button
       assert.equal(getDisplayWidth("\u27A1"), 1); // ➡ right arrow
+      // With VS16 they become emoji presentation → 2 columns
+      assert.equal(getDisplayWidth("\u2702\uFE0F"), 2);
+      assert.equal(getDisplayWidth("\u2714\uFE0F"), 2);
+    });
+
+    it("should count VS15 text-presented emoji as 1 column", () => {
+      // VS15 (U+FE0E) requests text presentation, overriding the default
+      // emoji presentation.  ⌚ (U+231A) has Emoji_Presentation=Yes but
+      // with VS15 it should be 1 column.
+      assert.equal(getDisplayWidth("\u231A"), 2); // default emoji
+      assert.equal(getDisplayWidth("\u231A\uFE0E"), 1); // text presentation
     });
   });
 

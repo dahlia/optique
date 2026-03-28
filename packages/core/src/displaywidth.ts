@@ -35,6 +35,8 @@ const zeroWidthRegex = /^[\p{Cf}\p{Mn}\p{Me}]+$/u;
 // or emoji with variation selector 16 (U+FE0F).
 const emojiPresentationRegex = /\p{Emoji_Presentation}/u;
 const emojiWithVS16Regex = /\p{Emoji}\uFE0F/u;
+// VS15 (U+FE0E) requests text presentation, overriding emoji default.
+const textPresentationRegex = /\uFE0E/u;
 // Regional indicator symbols used in flag sequences (U+1F1E6–U+1F1FF)
 const regionalIndicatorRegex = /[\u{1F1E6}-\u{1F1FF}]/u;
 
@@ -57,11 +59,14 @@ function graphemeWidth(grapheme: string): number {
   // standalone combining accents, and all similar invisible marks.
   if (zeroWidthRegex.test(grapheme)) return 0;
 
-  // Emoji: check for emoji presentation, VS16, or regional indicators
+  // Emoji: check for emoji presentation, VS16, or regional indicators.
+  // VS15 (U+FE0E) explicitly requests text presentation, so it overrides
+  // Emoji_Presentation and forces width 1.
   if (
-    emojiPresentationRegex.test(grapheme) ||
-    emojiWithVS16Regex.test(grapheme) ||
-    regionalIndicatorRegex.test(grapheme)
+    !textPresentationRegex.test(grapheme) &&
+    (emojiPresentationRegex.test(grapheme) ||
+      emojiWithVS16Regex.test(grapheme) ||
+      regionalIndicatorRegex.test(grapheme))
   ) {
     return 2;
   }
