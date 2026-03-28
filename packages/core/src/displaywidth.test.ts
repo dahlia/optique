@@ -171,8 +171,17 @@ describe("getDisplayWidth", () => {
       assert.equal(getDisplayWidth("\n"), 0);
     });
 
-    it("should not count tab", () => {
-      assert.equal(getDisplayWidth("\t"), 0);
+    it("should count tab as 1 column", () => {
+      // Actual terminal tab width varies (1–8 columns depending on
+      // cursor position and tab-stop settings), but 1 is the minimum
+      // safe lower bound.  Treating it as 0 would break maxWidth.
+      assert.equal(getDisplayWidth("\t"), 1);
+      assert.equal(getDisplayWidth("a\tb"), 3);
+    });
+
+    it("should not count other C0 controls", () => {
+      assert.equal(getDisplayWidth("\x07"), 0); // BEL
+      assert.equal(getDisplayWidth("\x0D"), 0); // CR
     });
   });
 

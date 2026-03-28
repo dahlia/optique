@@ -31,7 +31,12 @@ function graphemeWidth(grapheme: string): number {
   const cp = grapheme.codePointAt(0);
   if (cp == null) return 0;
 
-  // Control characters (C0, DEL, C1)
+  // Tab: actual terminal width depends on cursor position and tab-stop
+  // settings (1–8 columns), but 1 is the minimum safe lower bound.
+  // Treating it as 0 would let lines silently exceed maxWidth.
+  if (cp === 0x09) return 1;
+
+  // Other control characters (C0, DEL, C1)
   if (cp < 0x20 || (cp >= 0x7F && cp < 0xA0)) return 0;
 
   // Zero-width characters
