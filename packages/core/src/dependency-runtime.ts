@@ -265,10 +265,14 @@ function resolveRequest(
   return { kind, values, usedDefaults };
 }
 
+function serializePathSegment(p: PropertyKey): string {
+  if (typeof p === "string") return `s:${p}`;
+  if (typeof p === "number") return `n:${p}`;
+  return stableSymbolKey(p as symbol);
+}
+
 function serializeReplayKey(key: ReplayKey): string {
-  const pathStr = key.path.map((p) =>
-    typeof p === "symbol" ? stableSymbolKey(p) : String(p)
-  ).join("\0");
+  const pathStr = key.path.map(serializePathSegment).join("\0");
   return `${pathStr}\x01${key.rawInput}\x01${key.dependencyFingerprint}`;
 }
 

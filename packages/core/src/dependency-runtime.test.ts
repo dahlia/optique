@@ -229,6 +229,24 @@ describe("createReplayKey", () => {
     runtime.setReplayResult(key, result);
     assert.deepStrictEqual(runtime.getReplayResult(key), result);
   });
+
+  test("numeric and string path segments do not alias", () => {
+    const runtime = createDependencyRuntimeContext();
+    const keyNum = createReplayKey([0], "val", ["dep"]);
+    const keyStr = createReplayKey(["0"], "val", ["dep"]);
+    const result1: ValueParserResult<string> = {
+      success: true,
+      value: "from-tuple",
+    };
+    const result2: ValueParserResult<string> = {
+      success: true,
+      value: "from-object",
+    };
+    runtime.setReplayResult(keyNum, result1);
+    runtime.setReplayResult(keyStr, result2);
+    assert.deepStrictEqual(runtime.getReplayResult(keyNum), result1);
+    assert.deepStrictEqual(runtime.getReplayResult(keyStr), result2);
+  });
 });
 
 // =============================================================================
