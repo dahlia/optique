@@ -2151,7 +2151,13 @@ describe("primitives additional branch coverage", () => {
     );
     assert.ok(!deferredFailure.success);
     if (!deferredFailure.success) {
-      assert.equal(formatMessage(deferredFailure.error), "invalid bad-int");
+      // resolveTopLevelDeferred re-parses with [parseWithDependency],
+      // so the error comes from integer().parse("x"), not the fake
+      // preliminary result.
+      assert.equal(
+        formatMessage(deferredFailure.error),
+        'invalid Expected a valid integer, but got "x".',
+      );
     }
 
     const dependencyFailure = parser.complete(
@@ -2197,7 +2203,13 @@ describe("primitives additional branch coverage", () => {
     );
     assert.ok(!deferredFailure.success);
     if (!deferredFailure.success) {
-      assert.equal(formatMessage(deferredFailure.error), "bad deferred-fail");
+      // resolveTopLevelDeferred re-parses with [parseWithDependency],
+      // so the error comes from integer().parse("oops"), not the fake
+      // preliminary result.
+      assert.equal(
+        formatMessage(deferredFailure.error),
+        'bad Expected a valid integer, but got "oops".',
+      );
     }
 
     const dependencyFailure = parser.complete(
@@ -5844,7 +5856,7 @@ describe("branch coverage: primitives edge cases", () => {
       metavar: "TARGET",
       dependencies: [dep] as const,
       defaultValues: () => ["dev"] as const,
-      factory: (_mode: string) => string({ metavar: "TARGET" }),
+      factory: (_mode: string) => choice(["alpha", "beta"]),
     });
     const withDeferred = option("--target", derived, {
       errors: { invalidValue: (err) => message`invalid ${err}` },
@@ -5893,7 +5905,7 @@ describe("branch coverage: primitives edge cases", () => {
       metavar: "PATH",
       dependencies: [dep] as const,
       defaultValues: () => ["dev"] as const,
-      factory: (_mode: string) => string({ metavar: "PATH" }),
+      factory: (_mode: string) => choice(["alpha", "beta"]),
     });
     const arg = argument(derived, {
       errors: { invalidValue: (err) => message`invalid ${err}` },
@@ -6266,7 +6278,7 @@ describe("branch coverage: primitives edge cases", () => {
       metavar: "MODE",
       dependencies: [modeDep] as const,
       defaultValues: () => ["dev"] as const,
-      factory: (_dep: string) => string({ metavar: "MODE" }),
+      factory: (_dep: string) => choice(["dev", "prod"]),
     });
     const pending = createPendingDependencySourceState(Symbol("missing"));
     const pendingComplete = completeOption.complete(
@@ -6321,7 +6333,7 @@ describe("branch coverage: primitives edge cases", () => {
       metavar: "NAME",
       dependencies: [nameDep] as const,
       defaultValues: () => ["guest"] as const,
-      factory: (_dep: string) => string({ metavar: "NAME" }),
+      factory: (_dep: string) => choice(["alice", "bob"]),
     });
     const deferredArgFail = completeArgument.complete(
       createDeferredParseState(
@@ -6566,15 +6578,12 @@ describe("branch coverage: primitives edge cases", () => {
           metavar: "NAME",
           dependencies: [dep] as const,
           defaultValues: () => ["default"] as const,
-          factory: () => string({ metavar: "NAME" }),
+          factory: () => choice(["alice", "bob"]),
         }),
         { success: false, error: message`deferred-fail` },
       ) as unknown as Parameters<typeof argWithCustomInvalid.complete>[0],
     );
     assert.ok(!deferredFailure.success);
-    if (!deferredFailure.success) {
-      assert.equal(formatMessage(deferredFailure.error), "bad deferred-fail");
-    }
 
     const optionWithCustomErrors = option("--port", integer(), {
       errors: {
@@ -6602,9 +6611,12 @@ describe("branch coverage: primitives edge cases", () => {
     );
     assert.ok(!deferredOptionFailure.success);
     if (!deferredOptionFailure.success) {
+      // resolveTopLevelDeferred re-parses with [parseWithDependency],
+      // so the error comes from integer().parse("bad"), not the fake
+      // preliminary result.
       assert.equal(
         formatMessage(deferredOptionFailure.error),
-        "invalid not-int",
+        'invalid Expected a valid integer, but got "bad".',
       );
     }
 

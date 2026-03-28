@@ -3650,7 +3650,12 @@ function collectDependencyValues(
   if (registry.has(depId)) {
     return registry.get(depId);
   }
-  return null; // Dependency not found
+  // Fall back to default value if available
+  const defaults = deferredState.defaultValues;
+  if (defaults && defaults.length > 0) {
+    return defaults[0];
+  }
+  return null; // Dependency not found, no default
 }
 
 /**

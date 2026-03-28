@@ -1260,6 +1260,7 @@ function createSyncDerivedParser<S, T>(
     },
     [derivedValueParserMarker]: true,
     [dependencyId]: sourceId,
+    [defaultValues]: () => [options.defaultValue()],
 
     parse(input: string): ValueParserResult<T> {
       let derivedParser;
@@ -1388,6 +1389,7 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
     },
     [derivedValueParserMarker]: true,
     [dependencyId]: sourceId,
+    [defaultValues]: () => [options.defaultValue()],
 
     parse(input: string): Promise<ValueParserResult<T>> {
       let derivedParser;
@@ -1501,6 +1503,7 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
     },
     [derivedValueParserMarker]: true,
     [dependencyId]: sourceId,
+    [defaultValues]: () => [options.defaultValue()],
 
     parse(input: string): Promise<ValueParserResult<T>> {
       let derivedParser;
