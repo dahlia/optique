@@ -4149,29 +4149,29 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
-        // When the host part from this split contains the separator,
-        // the input has multiple separators and this split went through
-        // the wrong position (e.g., "foo:80:90" split as "foo:80" +
-        // "90").  Both the host and port errors from this split are
-        // suspect artifacts, so return the generic format error.
-        if (
-          firstHostError !== undefined &&
-          firstHostError.hostPart.includes(separator)
-        ) {
-          return {
-            success: false,
-            error:
-              message`Expected a socket address in format host${separator}port, but got ${input}.`,
-          };
-        }
-        // When the host also failed validation, prefer the host error
-        // over the port error — the host problem is more fundamental.
-        if (
-          firstHostError !== undefined &&
-          firstHostError.hostPart !== "" &&
-          !disambiguationParser.parse(trimmed).success
-        ) {
-          return { success: false, error: firstHostError.error };
+        // When both host and port failed on the same split, prefer the
+        // host error (more fundamental) over the port error, unless the
+        // hostPart is a degenerate separator artifact.  For non-host-
+        // compatible separators (e.g., ":"), any hostPart containing
+        // the separator is an artifact from a multi-separator input
+        // like "foo:80:70000".  For host-compatible separators (e.g.,
+        // "-"), only pure-separator hostParts are degenerate — a
+        // hostPart like "_foo-bar" legitimately contains the separator
+        // and its host error should propagate.
+        if (firstHostError !== undefined && firstHostError.hostPart !== "") {
+          const portSplitHostIsDegenerate = separatorIsHostChar
+            ? firstHostError.hostPart.replaceAll(separator, "") === ""
+            : firstHostError.hostPart.includes(separator);
+          if (portSplitHostIsDegenerate) {
+            return {
+              success: false,
+              error:
+                message`Expected a socket address in format host${separator}port, but got ${input}.`,
+            };
+          }
+          if (!disambiguationParser.parse(trimmed).success) {
+            return { success: false, error: firstHostError.error };
+          }
         }
         // When the whole input is a valid hostname under the
         // disambiguation parser, the split is ambiguous and the port
