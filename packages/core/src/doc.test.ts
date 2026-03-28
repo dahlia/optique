@@ -11,6 +11,7 @@ import {
 import { message, valueSet } from "@optique/core/message";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { getDisplayWidth } from "./displaywidth.ts";
 
 describe("formatDocPage", () => {
   it("should format a minimal page with only sections", () => {
@@ -1214,10 +1215,6 @@ describe("formatDocPage", () => {
     });
   });
 
-  // Helper: strip ANSI escape codes to measure visible line width
-  // deno-lint-ignore no-control-regex
-  const stripAnsi = (s: string) => s.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
-
   describe("maxWidth with showDefault and showChoices", () => {
     // Issue #132: when a term is wider than termWidth (default: 26), the
     // description column starts further right than descColumnWidth assumes,
@@ -1261,8 +1258,10 @@ describe("formatDocPage", () => {
 
       for (const line of result.split("\n")) {
         assert.ok(
-          line.length <= 100,
-          `Line exceeds maxWidth 100: "${line}" (${line.length} chars)`,
+          getDisplayWidth(line) <= 100,
+          `Line exceeds maxWidth 100: "${line}" (${
+            getDisplayWidth(line)
+          } columns)`,
         );
       }
     });
@@ -1304,8 +1303,10 @@ describe("formatDocPage", () => {
 
       for (const line of result.split("\n")) {
         assert.ok(
-          line.length <= 80,
-          `Line exceeds maxWidth 80: "${line}" (${line.length} chars)`,
+          getDisplayWidth(line) <= 80,
+          `Line exceeds maxWidth 80: "${line}" (${
+            getDisplayWidth(line)
+          } columns)`,
         );
       }
     });
@@ -1346,8 +1347,10 @@ describe("formatDocPage", () => {
 
       for (const line of result.split("\n")) {
         assert.ok(
-          line.length <= 100,
-          `Line exceeds maxWidth 100: "${line}" (${line.length} chars)`,
+          getDisplayWidth(line) <= 100,
+          `Line exceeds maxWidth 100: "${line}" (${
+            getDisplayWidth(line)
+          } columns)`,
         );
       }
     });
@@ -1386,8 +1389,10 @@ describe("formatDocPage", () => {
 
       for (const line of result.split("\n")) {
         assert.ok(
-          line.length <= 80,
-          `Line exceeds maxWidth 80: "${line}" (${line.length} chars)`,
+          getDisplayWidth(line) <= 80,
+          `Line exceeds maxWidth 80: "${line}" (${
+            getDisplayWidth(line)
+          } columns)`,
         );
       }
       // Description must have wrapped onto a new line
@@ -1428,10 +1433,10 @@ describe("formatDocPage", () => {
       });
 
       for (const line of result.split("\n")) {
-        const visibleLength = stripAnsi(line).length;
+        const visibleWidth = getDisplayWidth(line);
         assert.ok(
-          visibleLength <= 100,
-          `Line visible length exceeds maxWidth 100: ${visibleLength} chars`,
+          visibleWidth <= 100,
+          `Line visible width exceeds maxWidth 100: ${visibleWidth} columns`,
         );
       }
     });
@@ -1467,8 +1472,10 @@ describe("formatDocPage", () => {
 
       for (const line of result.split("\n")) {
         assert.ok(
-          line.length <= 80,
-          `Line exceeds maxWidth 80: "${line}" (${line.length} chars)`,
+          getDisplayWidth(line) <= 80,
+          `Line exceeds maxWidth 80: "${line}" (${
+            getDisplayWidth(line)
+          } columns)`,
         );
       }
     });
@@ -1511,8 +1518,10 @@ describe("formatDocPage", () => {
 
       for (const line of result.split("\n")) {
         assert.ok(
-          line.length <= 80,
-          `Line exceeds maxWidth 80: "${line}" (${line.length} chars)`,
+          getDisplayWidth(line) <= 80,
+          `Line exceeds maxWidth 80: "${line}" (${
+            getDisplayWidth(line)
+          } columns)`,
         );
       }
       // With the fix the description must have wrapped
@@ -1552,8 +1561,10 @@ describe("formatDocPage", () => {
 
       for (const line of result.split("\n")) {
         assert.ok(
-          line.length <= 50,
-          `Line exceeds maxWidth 50: "${line}" (${line.length} chars)`,
+          getDisplayWidth(line) <= 50,
+          `Line exceeds maxWidth 50: "${line}" (${
+            getDisplayWidth(line)
+          } columns)`,
         );
       }
     });
@@ -1576,8 +1587,10 @@ describe("formatDocPage", () => {
 
       for (const line of result.split("\n")) {
         assert.ok(
-          line.length <= 50,
-          `Line exceeds maxWidth 50: "${line}" (${line.length} chars)`,
+          getDisplayWidth(line) <= 50,
+          `Line exceeds maxWidth 50: "${line}" (${
+            getDisplayWidth(line)
+          } columns)`,
         );
       }
     });
@@ -1603,8 +1616,10 @@ describe("formatDocPage", () => {
 
       for (const line of result.split("\n")) {
         assert.ok(
-          line.length <= 60,
-          `Line exceeds maxWidth 60: "${line}" (${line.length} chars)`,
+          getDisplayWidth(line) <= 60,
+          `Line exceeds maxWidth 60: "${line}" (${
+            getDisplayWidth(line)
+          } columns)`,
         );
       }
     });
@@ -1632,8 +1647,10 @@ describe("formatDocPage", () => {
 
       for (const line of result.split("\n")) {
         assert.ok(
-          line.length <= 60,
-          `Line exceeds maxWidth 60: "${line}" (${line.length} chars)`,
+          getDisplayWidth(line) <= 60,
+          `Line exceeds maxWidth 60: "${line}" (${
+            getDisplayWidth(line)
+          } columns)`,
         );
       }
     });
@@ -1812,8 +1829,10 @@ describe("formatDocPage", () => {
     ): void {
       for (const line of result.split("\n")) {
         assert.ok(
-          line.length <= maxWidth,
-          `Line exceeds maxWidth ${maxWidth}: "${line}" (${line.length} chars)`,
+          getDisplayWidth(line) <= maxWidth,
+          `Line exceeds maxWidth ${maxWidth}: "${line}" (${
+            getDisplayWidth(line)
+          } columns)`,
         );
       }
     }
@@ -2360,6 +2379,56 @@ describe("formatDocPage", () => {
         showChoices: { label: "v: " },
       });
       assertLinesWithinMaxWidth(result, 13);
+    });
+  });
+
+  describe("Unicode display width", () => {
+    it("should align CJK terms correctly", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "한글" },
+            description: [{ type: "text", text: "설명" }],
+          }],
+        }],
+      };
+      // "한글" = 4 display columns.  Verify the term is padded correctly.
+      const result = formatDocPage("app", page, { maxWidth: 20 });
+      assert.ok(result.includes("한글"));
+      assert.ok(result.includes("설명"));
+    });
+
+    it("should respect maxWidth with CJK content", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "한글" },
+            description: [{ type: "text", text: "설명 설명 설명" }],
+          }],
+        }],
+      };
+      const result = formatDocPage("앱", page, { maxWidth: 20 });
+      for (const line of result.split("\n")) {
+        assert.ok(
+          getDisplayWidth(line) <= 20,
+          `Line display width exceeds 20: "${line}" (${
+            getDisplayWidth(line)
+          } columns)`,
+        );
+      }
+    });
+
+    it("should handle emoji in descriptions", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "FILE" },
+            description: [{ type: "text", text: "😀 description" }],
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { maxWidth: 30 });
+      assert.ok(result.includes("😀"));
     });
   });
 });

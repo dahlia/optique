@@ -1,3 +1,4 @@
+import { getDisplayWidth } from "./displaywidth.ts";
 import {
   cloneMessage,
   formatMessage,
@@ -629,7 +630,7 @@ export function formatDocPage(
         const prefix = typeof options.showDefault === "object"
           ? options.showDefault.prefix ?? " ["
           : " [";
-        minDescWidth = Math.max(minDescWidth, prefix.length);
+        minDescWidth = Math.max(minDescWidth, getDisplayWidth(prefix));
       }
       if (
         options.showChoices &&
@@ -643,7 +644,7 @@ export function formatDocPage(
           : "choices: ";
         minDescWidth = Math.max(
           minDescWidth,
-          prefix.length + label.length,
+          getDisplayWidth(prefix) + getDisplayWidth(label),
         );
       }
     }
@@ -667,15 +668,16 @@ export function formatDocPage(
     // The first line needs "Usage: " (7) + programName.  Continuation
     // lines are indented by 7 chars and need enough room for the widest
     // atomic term segment.  To avoid over-restricting for intentionally
-    // long terms, the term width is capped at programName.length + 7;
+    // long terms, the term width is capped at programNameWidth + 7;
     // the 7 matches the continuation indent, so terms fitting within
     // the first line's total width are guaranteed not to overflow.
+    const programNameWidth = getDisplayWidth(programName);
     const usageMin = page.usage != null
       ? 7 + Math.max(
-        programName.length,
+        programNameWidth,
         Math.min(
           maxVisibleAtomicWidth(page.usage),
-          programName.length + 7,
+          programNameWidth + 7,
         ),
       )
       : 1;
@@ -846,15 +848,17 @@ export function formatDocPage(
         // continues correctly from the current line position.
         // effectiveLastW adds the extra physical offset for the first line
         // when the term extends past termWidth.
+        const prefixWidth = getDisplayWidth(prefix);
+        const suffixWidth = getDisplayWidth(suffix);
         let defaultStartWidth: number | undefined;
         if (descColumnWidth != null) {
           const lastW = lastLineVisibleLength(description);
           const effectiveLastW = lastW + currentExtraOffset();
-          if (effectiveLastW + prefix.length >= descColumnWidth) {
+          if (effectiveLastW + prefixWidth >= descColumnWidth) {
             description += "\n";
-            defaultStartWidth = prefix.length;
+            defaultStartWidth = prefixWidth;
           } else {
-            defaultStartWidth = effectiveLastW + prefix.length;
+            defaultStartWidth = effectiveLastW + prefixWidth;
           }
         }
 
@@ -865,7 +869,7 @@ export function formatDocPage(
         // a subtype of MessageFormatOptions, the call below remains
         // type-safe.
         //
-        // maxWidth is reduced by suffix.length so that the closing suffix
+        // maxWidth is reduced by suffixWidth so that the closing suffix
         // (e.g. "]") can always be appended without exceeding descColumnWidth.
         const defaultFormatOptions: MessageFormatOptions & {
           readonly startWidth?: number;
@@ -874,7 +878,7 @@ export function formatDocPage(
           quotes: !options.colors,
           maxWidth: descColumnWidth == null
             ? undefined
-            : descColumnWidth - suffix.length,
+            : descColumnWidth - suffixWidth,
           startWidth: defaultStartWidth,
         };
         const defaultContent = formatMessage(
@@ -931,11 +935,14 @@ export function formatDocPage(
         // continues correctly from the current line position.
         // effectiveLastW adds the extra physical offset for the first line
         // when the term extends past termWidth.
+        const choicesPrefixWidth = getDisplayWidth(prefix);
+        const choicesSuffixWidth = getDisplayWidth(suffix);
+        const choicesLabelWidth = getDisplayWidth(label);
         let choicesStartWidth: number | undefined;
         if (descColumnWidth != null) {
           const lastW = lastLineVisibleLength(description);
           const effectiveLastW = lastW + currentExtraOffset();
-          const prefixLabelLen = prefix.length + label.length;
+          const prefixLabelLen = choicesPrefixWidth + choicesLabelWidth;
           if (effectiveLastW + prefixLabelLen >= descColumnWidth) {
             description += "\n";
             choicesStartWidth = prefixLabelLen;
@@ -948,8 +955,9 @@ export function formatDocPage(
         // startWidth is passed via a typed variable rather than an inline
         // object literal.
         //
-        // maxWidth is reduced by suffix.length so that the closing suffix
-        // (e.g. ")") can always be appended without exceeding descColumnWidth.
+        // maxWidth is reduced by choicesSuffixWidth so that the closing
+        // suffix (e.g. ")") can always be appended without exceeding
+        // descColumnWidth.
         const choicesFormatOptions: MessageFormatOptions & {
           readonly startWidth?: number;
         } = {
@@ -957,7 +965,7 @@ export function formatDocPage(
           quotes: false,
           maxWidth: descColumnWidth == null
             ? undefined
-            : descColumnWidth - suffix.length,
+            : descColumnWidth - choicesSuffixWidth,
           startWidth: choicesStartWidth,
         };
         const choicesDisplay = formatMessage(
@@ -1050,22 +1058,22 @@ function maxVisibleAtomicWidth(usage: Usage): number {
     switch (term.type) {
       case "argument":
         if (!isUsageHidden(term.hidden)) {
-          max = Math.max(max, term.metavar.length);
+          max = Math.max(max, getDisplayWidth(term.metavar));
         }
         break;
       case "option":
         if (!isUsageHidden(term.hidden) && term.names.length > 0) {
           for (const name of term.names) {
-            max = Math.max(max, name.length);
+            max = Math.max(max, getDisplayWidth(name));
           }
           if (term.metavar != null) {
-            max = Math.max(max, term.metavar.length);
+            max = Math.max(max, getDisplayWidth(term.metavar));
           }
         }
         break;
       case "command":
         if (!isUsageHidden(term.hidden)) {
-          max = Math.max(max, term.name.length);
+          max = Math.max(max, getDisplayWidth(term.name));
         }
         break;
       case "passthrough":
@@ -1100,7 +1108,7 @@ function maxVisibleAtomicWidth(usage: Usage): number {
         break;
       case "literal":
         if (term.value !== "") {
-          max = Math.max(max, term.value.length);
+          max = Math.max(max, getDisplayWidth(term.value));
         }
         break;
       case "ellipsis":
@@ -1111,23 +1119,20 @@ function maxVisibleAtomicWidth(usage: Usage): number {
   return max;
 }
 
-// deno-lint-ignore no-control-regex
-const ansiEscapeCodeRegex = /\x1B\[[0-9;]*[a-zA-Z]/g;
-
 function ansiAwareRightPad(
   text: string,
   length: number,
   char: string = " ",
 ): string {
-  const strippedText = text.replace(ansiEscapeCodeRegex, "");
-  if (strippedText.length >= length) {
+  const visibleWidth = getDisplayWidth(text);
+  if (visibleWidth >= length) {
     return text;
   }
-  return text + char.repeat(length - strippedText.length);
+  return text + char.repeat(length - visibleWidth);
 }
 
 function lastLineVisibleLength(text: string): number {
   const lastNewline = text.lastIndexOf("\n");
   const lastLine = lastNewline === -1 ? text : text.slice(lastNewline + 1);
-  return lastLine.replace(ansiEscapeCodeRegex, "").length;
+  return getDisplayWidth(lastLine);
 }
