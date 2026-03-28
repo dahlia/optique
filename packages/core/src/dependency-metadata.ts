@@ -16,6 +16,7 @@ import {
   dependencyId,
   dependencyIds,
   isDependencySource,
+  isDependencySourceState,
   isDerivedValueParser,
   parseWithDependency,
   singleDefaultValue,
@@ -39,6 +40,19 @@ export interface DependencySourceCapability {
 
   /** The unique dependency source identifier. */
   readonly sourceId: symbol;
+
+  /**
+   * Extracts the dependency source value from the parser's state.
+   *
+   * Each wrapper composes this method to handle its state shape:
+   * - plain source: reads from `DependencySourceState`
+   * - `optional()` / `withDefault()`: unwraps `[innerState]` first
+   * - `map()`: reads the pre-transform value from inner state
+   *
+   * Returns `undefined` if the state does not contain a successful
+   * source value (e.g., unpopulated, failed parse, or wrong shape).
+   */
+  readonly extractSourceValue: (state: unknown) => unknown | undefined;
 
   /**
    * When present, provides a missing-source value (e.g., from a
@@ -148,6 +162,7 @@ export function extractDependencyMetadata<M extends Mode, T>(
       source: {
         kind: "source",
         sourceId: valueParser[dependencyId],
+        extractSourceValue: extractFromBareState,
         preservesSourceValue: true,
       },
     };
@@ -215,6 +230,36 @@ export function extractDependencyMetadata<M extends Mode, T>(
 }
 
 // =============================================================================
+// Source value extraction helpers
+// =============================================================================
+
+/**
+ * Extracts a source value from a bare `DependencySourceState`.
+ * Used as the base `extractSourceValue` for plain dependency sources.
+ */
+function extractFromBareState(state: unknown): unknown | undefined {
+  if (!isDependencySourceState(state)) return undefined;
+  return state.result.success ? state.result.value : undefined;
+}
+
+/**
+ * Wraps an inner `extractSourceValue` to unwrap `[innerState]` first.
+ * Used by `optional()` and `withDefault()` which wrap state in a
+ * single-element array.
+ */
+function unwrapArrayThenExtract(
+  innerExtract: (state: unknown) => unknown | undefined,
+): (state: unknown) => unknown | undefined {
+  return (state: unknown): unknown | undefined => {
+    if (Array.isArray(state) && state.length === 1) {
+      return innerExtract(state[0]);
+    }
+    // Also try the bare state in case it's already unwrapped.
+    return innerExtract(state);
+  };
+}
+
+// =============================================================================
 // Composition: modify metadata through modifier wrappers
 // =============================================================================
 
@@ -258,23 +303,49 @@ export function composeDependencyMetadata(
   if (inner === undefined) return undefined;
 
   switch (wrapperKind) {
-    case "optional":
-      return inner;
-
-    case "withDefault": {
-      if (inner.source != null && inner.source.preservesSourceValue) {
+    case "optional": {
+      if (inner.source?.extractSourceValue != null) {
         return {
           ...inner,
           source: {
             ...inner.source,
-            getMissingSourceValue: options?.defaultValue,
+            extractSourceValue: unwrapArrayThenExtract(
+              inner.source.extractSourceValue,
+            ),
           },
         };
       }
       return inner;
     }
 
+    case "withDefault": {
+      const wrappedExtract = inner.source?.extractSourceValue != null
+        ? unwrapArrayThenExtract(inner.source.extractSourceValue)
+        : undefined;
+      if (inner.source != null && inner.source.preservesSourceValue) {
+        return {
+          ...inner,
+          source: {
+            ...inner.source,
+            ...(wrappedExtract != null && {
+              extractSourceValue: wrappedExtract,
+            }),
+            getMissingSourceValue: options?.defaultValue,
+          },
+        };
+      }
+      if (wrappedExtract != null && inner.source != null) {
+        return {
+          ...inner,
+          source: { ...inner.source, extractSourceValue: wrappedExtract },
+        };
+      }
+      return inner;
+    }
+
     case "map": {
+      // map() does not wrap state — it passes through the inner state
+      // unchanged.  extractSourceValue is inherited as-is from inner.
       const result: ParserDependencyMetadata = {
         ...inner,
         transform: { transformsSourceValue: true },

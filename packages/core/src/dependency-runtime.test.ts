@@ -19,6 +19,7 @@ import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
 import {
   createDependencySourceState,
   DependencyRegistry,
+  isDependencySourceState,
 } from "./dependency.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 
@@ -253,8 +254,22 @@ describe("createReplayKey", () => {
 // Shared runtime helpers
 // =============================================================================
 
+/** Helper: creates a bare extractSourceValue for tests. */
+function bareExtract(state: unknown): unknown | undefined {
+  if (!isDependencySourceState(state)) return undefined;
+  return state.result.success ? state.result.value : undefined;
+}
+
+/** Helper: wraps extractSourceValue to unwrap [state] first. */
+function unwrappingExtract(state: unknown): unknown | undefined {
+  if (Array.isArray(state) && state.length === 1) {
+    return bareExtract(state[0]);
+  }
+  return bareExtract(state);
+}
+
 describe("collectExplicitSourceValues", () => {
-  test("registers source values from DependencySourceState", () => {
+  test("registers source values via extractSourceValue", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
     const sourceState = createDependencySourceState(
@@ -268,11 +283,38 @@ describe("collectExplicitSourceValues", () => {
           source: {
             kind: "source",
             sourceId,
+            extractSourceValue: bareExtract,
             preservesSourceValue: true,
           },
         },
       },
       state: sourceState,
+    }];
+    collectExplicitSourceValues(nodes, runtime);
+    assert.ok(runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), "prod");
+  });
+
+  test("registers source from optional-wrapped state", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const sourceState = createDependencySourceState(
+      { success: true, value: "prod" } as ValueParserResult<string>,
+      sourceId,
+    );
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            extractSourceValue: unwrappingExtract,
+            preservesSourceValue: true,
+          },
+        },
+      },
+      state: [sourceState], // optional() wraps in [state]
     }];
     collectExplicitSourceValues(nodes, runtime);
     assert.ok(runtime.hasSource(sourceId));
@@ -289,6 +331,26 @@ describe("collectExplicitSourceValues", () => {
     collectExplicitSourceValues(nodes, runtime);
     // Nothing registered — no error
   });
+
+  test("skips nodes without extractSourceValue", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            preservesSourceValue: true,
+          } as ParserDependencyMetadata["source"] & { kind: "source" },
+        },
+      },
+      state: undefined,
+    }];
+    collectExplicitSourceValues(nodes, runtime);
+    assert.ok(!runtime.hasSource(sourceId));
+  });
 });
 
 describe("fillMissingSourceDefaults", () => {
@@ -302,6 +364,7 @@ describe("fillMissingSourceDefaults", () => {
           source: {
             kind: "source",
             sourceId,
+            extractSourceValue: bareExtract,
             preservesSourceValue: true,
             getMissingSourceValue: () => ({
               success: true as const,
@@ -328,6 +391,7 @@ describe("fillMissingSourceDefaults", () => {
           source: {
             kind: "source",
             sourceId,
+            extractSourceValue: bareExtract,
             preservesSourceValue: true,
             getMissingSourceValue: () => ({
               success: true as const,
@@ -352,6 +416,7 @@ describe("fillMissingSourceDefaults", () => {
           source: {
             kind: "source",
             sourceId,
+            extractSourceValue: bareExtract,
             preservesSourceValue: true,
             getMissingSourceValue: () => ({
               success: true as const,
@@ -378,6 +443,7 @@ describe("fillMissingSourceDefaults", () => {
           source: {
             kind: "source",
             sourceId,
+            extractSourceValue: bareExtract,
             preservesSourceValue: false,
             getMissingSourceValue: () => ({
               success: true as const,
@@ -404,6 +470,7 @@ describe("fillMissingSourceDefaults", () => {
           source: {
             kind: "source",
             sourceId,
+            extractSourceValue: bareExtract,
             preservesSourceValue: true,
             getMissingSourceValue: () => {
               throw new Error("env not configured");

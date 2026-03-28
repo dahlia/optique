@@ -13,7 +13,6 @@
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
-import { isDependencySourceState } from "./dependency.ts";
 
 // =============================================================================
 // Symbol serialization
@@ -385,17 +384,11 @@ export function collectExplicitSourceValues(
   for (const node of nodes) {
     const meta = node.parser.dependencyMetadata;
     if (meta?.source == null) continue;
+    if (meta.source.extractSourceValue == null) continue;
 
-    // Check if the state is a DependencySourceState
-    if (isDependencySourceState(node.state)) {
-      const result = node.state.result;
-      if (result.success) {
-        runtime.registerSource(
-          meta.source.sourceId,
-          result.value,
-          "cli",
-        );
-      }
+    const value = meta.source.extractSourceValue(node.state);
+    if (value !== undefined) {
+      runtime.registerSource(meta.source.sourceId, value, "cli");
     }
   }
 }
