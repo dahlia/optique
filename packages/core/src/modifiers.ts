@@ -1195,13 +1195,11 @@ export function map<M extends Mode, T, U, TState>(
             const result = innerReplay(rawInput, depValues);
             if (result instanceof Promise) {
               return result.then((r) =>
-                r.success
-                  ? { success: true as const, value: transform(r.value as T) }
-                  : r
+                r.success ? { ...r, value: transform(r.value as T) } : r
               );
             }
             return result.success
-              ? { success: true as const, value: transform(result.value as T) }
+              ? { ...result, value: transform(result.value as T) }
               : result;
           },
         },
