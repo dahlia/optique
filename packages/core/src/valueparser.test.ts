@@ -10159,6 +10159,50 @@ describe("socketAddress()", () => {
       ]);
     });
 
+    it("should reject trailing whitespace separator with defaultPort", () => {
+      const parser = socketAddress({ separator: " ", defaultPort: 80 });
+
+      // "localhost " has a trailing " " separator with empty port.
+      const result = parser.parse("localhost ");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Port number is required but was not specified.",
+        },
+      ]);
+    });
+
+    it("should reject trailing tab separator with defaultPort", () => {
+      const parser = socketAddress({ separator: "\t", defaultPort: 80 });
+      const result = parser.parse("localhost\t");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Port number is required but was not specified.",
+        },
+      ]);
+    });
+
+    it("should still parse whitespace separator with explicit port", () => {
+      const parser = socketAddress({ separator: " ", defaultPort: 80 });
+      const result = parser.parse("localhost 8080");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "localhost");
+      assert.strictEqual(result.value.port, 8080);
+    });
+
+    it("should accept host-only with whitespace separator when no separator in input", () => {
+      const parser = socketAddress({ separator: " ", defaultPort: 80 });
+
+      // "localhost" has no space separator — host-only input.
+      const result = parser.parse("localhost");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "localhost");
+      assert.strictEqual(result.value.port, 80);
+    });
+
     it("should prefer host-only over trailing separator when input is a valid hostname", () => {
       const parser = socketAddress({ separator: "to", defaultPort: 80 });
 
