@@ -17,6 +17,7 @@ import {
   suggestWithDependency,
 } from "./dependency.ts";
 import { annotateFreshArray, getAnnotations } from "./annotations.ts";
+import { extractDependencyMetadata } from "./dependency-metadata.ts";
 import type { DocFragment } from "./doc.ts";
 import { dispatchIterableByMode } from "./mode-dispatch.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
@@ -1229,6 +1230,13 @@ export function option<M extends Mode, T>(
       writable: false,
     });
   }
+  // Populate dependency metadata from the value parser's old-protocol markers.
+  if (valueParser != null) {
+    const depMeta = extractDependencyMetadata(valueParser);
+    if (depMeta != null) {
+      (result as Record<string, unknown>).dependencyMetadata = depMeta;
+    }
+  }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
   // At runtime, the isAsync flag ensures correct behavior:
@@ -1913,6 +1921,11 @@ export function argument<M extends Mode, T>(
     configurable: true,
     enumerable: false,
   });
+  // Populate dependency metadata from the value parser's old-protocol markers.
+  const depMeta = extractDependencyMetadata(valueParser);
+  if (depMeta != null) {
+    (result as Record<string, unknown>).dependencyMetadata = depMeta;
+  }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
   return result as unknown as Parser<M, T, ValueParserResult<T> | undefined>;

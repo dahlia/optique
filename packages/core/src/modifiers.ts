@@ -1,3 +1,4 @@
+import { composeDependencyMetadata } from "./dependency-metadata.ts";
 import { formatMessage, type Message, message, text } from "./message.ts";
 import {
   createDependencySourceState,
@@ -405,6 +406,17 @@ export function optional<M extends Mode, TValue, TState>(
       configurable: true,
       enumerable: false,
     });
+  }
+  // Propagate dependency metadata unchanged.
+  if (parser.dependencyMetadata != null) {
+    const composed = composeDependencyMetadata(
+      parser.dependencyMetadata,
+      "optional",
+    );
+    if (composed != null) {
+      (optionalParser as unknown as Record<string, unknown>)
+        .dependencyMetadata = composed;
+    }
   }
   return optionalParser;
 }
@@ -947,6 +959,26 @@ export function withDefault<
       enumerable: false,
     });
   }
+  // Compose dependency metadata: add getMissingSourceValue if the inner
+  // parser preserves a dependency source.
+  if (parser.dependencyMetadata != null) {
+    const composed = composeDependencyMetadata(
+      parser.dependencyMetadata,
+      "withDefault",
+      {
+        defaultValue: () => {
+          const v = typeof defaultValue === "function"
+            ? (defaultValue as () => TDefault)()
+            : defaultValue;
+          return { success: true as const, value: v };
+        },
+      },
+    );
+    if (composed != null) {
+      (withDefaultParser as unknown as Record<string, unknown>)
+        .dependencyMetadata = composed;
+    }
+  }
   return withDefaultParser;
 }
 
@@ -1117,6 +1149,18 @@ export function map<M extends Mode, T, U, TState>(
       configurable: true,
       enumerable: false,
     });
+  }
+  // Compose dependency metadata: mark transform and clear
+  // preservesSourceValue.
+  if (parser.dependencyMetadata != null) {
+    const composed = composeDependencyMetadata(
+      parser.dependencyMetadata,
+      "map",
+    );
+    if (composed != null) {
+      (mappedParser as unknown as Record<string, unknown>).dependencyMetadata =
+        composed;
+    }
   }
   return mappedParser;
 }
