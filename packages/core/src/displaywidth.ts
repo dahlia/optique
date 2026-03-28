@@ -61,12 +61,12 @@ function graphemeWidth(grapheme: string): number {
   return 1;
 }
 
+// East Asian Wide (W) and Fullwidth (F) ranges from UAX #11.
+// https://www.unicode.org/reports/tr11/
 function isEastAsianWide(cp: number): boolean {
   return (
-    // Hangul Jamo
+    // Hangul Jamo (leading consonants, U+1100–U+115F)
     (cp >= 0x1100 && cp <= 0x115F) ||
-    // Hangul Jamo Extended-B (trailing jamo)
-    (cp >= 0xD7B0 && cp <= 0xD7FF) ||
     // CJK Radicals Supplement, Kangxi Radicals
     (cp >= 0x2E80 && cp <= 0x2FDF) ||
     // Ideographic Description Characters, CJK Symbols and Punctuation
@@ -88,8 +88,11 @@ function isEastAsianWide(cp: number): boolean {
     (cp >= 0xAC00 && cp <= 0xD7AF) ||
     // CJK Compatibility Ideographs
     (cp >= 0xF900 && cp <= 0xFAFF) ||
-    // Vertical Forms, CJK Compatibility Forms, Small Form Variants
-    (cp >= 0xFE10 && cp <= 0xFE6F) ||
+    // Vertical Forms (U+FE10–FE19)
+    (cp >= 0xFE10 && cp <= 0xFE19) ||
+    // CJK Compatibility Forms, Small Form Variants (U+FE30–FE6F)
+    // (excludes Combining Half Marks U+FE20–FE2F which are EAW=N)
+    (cp >= 0xFE30 && cp <= 0xFE6F) ||
     // Fullwidth Forms (excluding halfwidth range)
     (cp >= 0xFF01 && cp <= 0xFF60) ||
     // Fullwidth Signs

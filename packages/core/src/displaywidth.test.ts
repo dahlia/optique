@@ -51,6 +51,20 @@ describe("getDisplayWidth", () => {
       // U+FF76 etc. - halfwidth katakana are narrow
       assert.equal(getDisplayWidth("ｶﾀｶﾅ"), 4);
     });
+
+    it("should count Hangul Jamo Extended-B as 1 column each", () => {
+      // U+D7B0–U+D7FF are trailing jamo with East_Asian_Width=N
+      assert.equal(getDisplayWidth("\uD7CB"), 1);
+      assert.equal(getDisplayWidth("\uD7CB \uD7CB"), 3);
+    });
+
+    it("should not count Combining Half Marks as wide", () => {
+      // U+FE20–U+FE2F are combining marks with East_Asian_Width=N.
+      // Combined with a base character, they merge into a single grapheme.
+      assert.equal(getDisplayWidth("a\uFE20"), 1);
+      // Standalone, they should not be treated as width 2.
+      assert.equal(getDisplayWidth("\uFE20"), 1);
+    });
   });
 
   describe("combining marks", () => {
