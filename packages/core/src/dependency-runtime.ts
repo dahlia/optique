@@ -389,7 +389,12 @@ export function createDependencyRuntimeContext(
 export function createDependencyFingerprint(
   values: readonly unknown[],
 ): string {
-  return values.map(fingerprintValue).join("\x00");
+  // Length-prefix each component so that values containing the join
+  // character cannot collide with multi-value boundaries.
+  return values.map((v) => {
+    const raw = fingerprintValue(v);
+    return `${raw.length}:${raw}`;
+  }).join("");
 }
 
 // Per-object identity counter for fingerprinting non-primitive values.
