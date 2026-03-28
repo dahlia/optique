@@ -972,12 +972,14 @@ export function withDefault<
             v = typeof defaultValue === "function"
               ? (defaultValue as () => TDefault)()
               : defaultValue;
-          } catch {
+          } catch (e) {
             // Dynamic default thunks may throw (validation, env checks).
-            // Match withDefault.complete() which converts to a failed result.
+            // Preserve the original error message, matching
+            // withDefault.complete() which surfaces the thrown message.
+            const msg = e instanceof Error ? e.message : String(e);
             return {
               success: false as const,
-              error: message`Default value evaluation failed.`,
+              error: message`${msg}`,
             };
           }
           // Normalize the default value to match what the inner parser's

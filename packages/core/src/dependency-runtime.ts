@@ -499,9 +499,10 @@ export function fillMissingSourceDefaults(
     const meta = node.parser.dependencyMetadata;
     if (meta?.source == null) continue;
     if (runtime.hasSource(meta.source.sourceId)) continue;
-    // Do not override explicit parse failures with defaults.  If the
-    // parser consumed input (matched === true), the user explicitly
-    // provided a value that failed validation.
+    // Do not override explicit parse failures with defaults.
+    if (runtime.isSourceFailed(meta.source.sourceId)) continue;
+    // Also skip if the node's matched flag is set (belt-and-suspenders
+    // for cases where the caller didn't run collectExplicitSourceValues).
     if (node.matched === true) continue;
     // A map() transform breaks source identity — the default value
     // would be the pre-transform value, not what the parser produces.
