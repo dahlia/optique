@@ -3863,6 +3863,15 @@ export function socketAddress(
     })
     : hostnameParser;
 
+  // Whether the separator consists of characters that can appear
+  // inside valid hostnames (letters, digits, dot, hyphen).  When
+  // true, a hostPart containing the separator might be a legitimate
+  // dotted or hyphenated host, so only pure-separator hostParts are
+  // treated as degenerate.  When false (e.g., ":" or " "), any
+  // hostPart containing the separator is a structural artifact from
+  // a multi-separator input like "foo:80:90".
+  const separatorIsHostChar = /^[a-zA-Z0-9._-]+$/.test(separator);
+
   // Create port parser
   const portParser = port({
     ...options?.port,
@@ -4140,12 +4149,26 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
+        // When the host part from this split contains the separator,
+        // the input has multiple separators and this split went through
+        // the wrong position (e.g., "foo:80:90" split as "foo:80" +
+        // "90").  Both the host and port errors from this split are
+        // suspect artifacts, so return the generic format error.
+        if (
+          firstHostError !== undefined &&
+          firstHostError.hostPart.includes(separator)
+        ) {
+          return {
+            success: false,
+            error:
+              message`Expected a socket address in format host${separator}port, but got ${input}.`,
+          };
+        }
         // When the host also failed validation, prefer the host error
         // over the port error — the host problem is more fundamental.
         if (
           firstHostError !== undefined &&
           firstHostError.hostPart !== "" &&
-          firstHostError.hostPart.replaceAll(separator, "") !== "" &&
           !disambiguationParser.parse(trimmed).success
         ) {
           return { success: false, error: firstHostError.error };
@@ -4247,7 +4270,9 @@ export function socketAddress(
         }
         if (
           trailingSepHostError.hostPart !== "" &&
-          trailingSepHostError.hostPart.replaceAll(separator, "") !== "" &&
+          !(separatorIsHostChar
+            ? trailingSepHostError.hostPart.replaceAll(separator, "") === ""
+            : trailingSepHostError.hostPart.includes(separator)) &&
           !disambiguationParser.parse(trimmed).success
         ) {
           return { success: false, error: trailingSepHostError.error };
@@ -4297,16 +4322,16 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
-        // Only surface the split-host error when the whole input is not
-        // a valid hostname under the disambiguation parser.  When the
-        // separator can appear inside hostnames (e.g., "-", "to"), a
-        // split may place the boundary at a position the user did not
-        // intend.  Checking the whole input disambiguates: if it is a
-        // valid hostname, the split was likely wrong and the generic
-        // format error is more appropriate.
+        // Only surface the split-host error when:
+        // 1. The hostPart is non-empty (not a bare-separator artifact)
+        // 2. The hostPart does not contain the separator (otherwise
+        //    the input has multiple separators and this split went
+        //    through the wrong position, e.g., "foo:80:90")
+        // 3. The whole input is not a valid hostname under the
+        //    disambiguation parser (otherwise the split is ambiguous)
         if (
           firstHostError.hostPart !== "" &&
-          firstHostError.hostPart.replaceAll(separator, "") !== "" &&
+          !firstHostError.hostPart.includes(separator) &&
           !disambiguationParser.parse(trimmed).success
         ) {
           return { success: false, error: firstHostError.error };
