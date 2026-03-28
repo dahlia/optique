@@ -10,6 +10,10 @@
  * @since 1.0.0
  * @module
  */
+import {
+  isDeferredParseState,
+  isPendingDependencySourceState,
+} from "./dependency.ts";
 import { message } from "./message.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import type { ValueParserResult } from "./valueparser.ts";
@@ -761,4 +765,161 @@ export async function replayDerivedParserAsync(
 
   runtime.setReplayResult(key, result);
   return result;
+}
+
+// =============================================================================
+// Bridge helpers for construct migration
+// =============================================================================
+
+/**
+ * Extracts `rawInput` from a parser state that may contain a
+ * {@link DeferredParseState}.  During the transition period, primitives
+ * still produce `DeferredParseState` with `rawInput`.
+ *
+ * Handles direct `DeferredParseState` and array-wrapped
+ * `[DeferredParseState]` (from optional/withDefault wrappers).
+ *
+ * @param state The parser state to inspect.
+ * @returns The raw input string, or `undefined` if the state does not
+ *   contain a `DeferredParseState`.
+ * @internal
+ * @since 1.0.0
+ */
+export function extractRawInputFromState(state: unknown): string | undefined {
+  if (state == null) return undefined;
+  if (typeof state !== "object") return undefined;
+
+  // Direct DeferredParseState
+  if (isDeferredParseState(state)) return state.rawInput;
+
+  // Array-wrapped: [DeferredParseState] from optional/withDefault
+  if (
+    Array.isArray(state) &&
+    state.length === 1 &&
+    isDeferredParseState(state[0])
+  ) {
+    return state[0].rawInput;
+  }
+
+  return undefined;
+}
+
+/**
+ * Determines whether a parser state represents an explicit match (the user
+ * provided input) rather than an initial/pending state.
+ */
+function isMatchedState(
+  fieldState: unknown,
+  parser: { readonly initialState?: unknown },
+): boolean {
+  if (fieldState === undefined) return false;
+  // PendingDependencySourceState in an array means the option was not provided
+  if (
+    Array.isArray(fieldState) &&
+    fieldState.length === 1 &&
+    isPendingDependencySourceState(fieldState[0])
+  ) {
+    return false;
+  }
+  // Bare PendingDependencySourceState
+  if (isPendingDependencySourceState(fieldState)) return false;
+  // If state equals the parser's initialState, it was not matched
+  if (fieldState === parser.initialState) return false;
+  return true;
+}
+
+/**
+ * Snapshots `defaultDependencyValues` from derived metadata, or returns
+ * `undefined` if not a derived parser or if the thunk fails.
+ */
+function snapshotDefaults(
+  meta: ParserDependencyMetadata | undefined,
+): readonly unknown[] | undefined {
+  if (meta?.derived?.getDefaultDependencyValues == null) return undefined;
+  try {
+    return meta.derived.getDefaultDependencyValues();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Builds {@link RuntimeNode}s from field→parser pairs and a state record.
+ *
+ * Used by `object()` and `merge()` constructs.
+ *
+ * @param pairs Field→parser pairs.
+ * @param state The state record keyed by field name.
+ * @param parentPath Optional parent path prefix.
+ * @returns An array of runtime nodes.
+ * @internal
+ * @since 1.0.0
+ */
+export function buildRuntimeNodesFromPairs(
+  pairs: ReadonlyArray<
+    readonly [
+      PropertyKey,
+      {
+        readonly dependencyMetadata?: ParserDependencyMetadata;
+        readonly initialState?: unknown;
+      },
+    ]
+  >,
+  state: Record<PropertyKey, unknown>,
+  parentPath?: readonly PropertyKey[],
+): RuntimeNode[] {
+  const prefix = parentPath ?? [];
+  const nodes: RuntimeNode[] = [];
+  for (const [field, parser] of pairs) {
+    const fieldState = Object.hasOwn(state, field) ||
+        (typeof field === "symbol" && field in state)
+      ? state[field as string | symbol]
+      : undefined;
+    nodes.push({
+      path: [...prefix, field],
+      parser,
+      state: fieldState,
+      matched: isMatchedState(fieldState, parser),
+      defaultDependencyValues: snapshotDefaults(parser.dependencyMetadata),
+    });
+  }
+  return nodes;
+}
+
+/**
+ * Builds {@link RuntimeNode}s from a parser array and a state array.
+ *
+ * Used by `tuple()` and `concat()` constructs.
+ *
+ * @param parsers The child parsers.
+ * @param stateArray The state array (one element per parser).
+ * @param parentPath Optional parent path prefix.
+ * @returns An array of runtime nodes.
+ * @internal
+ * @since 1.0.0
+ */
+export function buildRuntimeNodesFromArray(
+  parsers: ReadonlyArray<
+    {
+      readonly dependencyMetadata?: ParserDependencyMetadata;
+      readonly initialState?: unknown;
+    }
+  >,
+  stateArray: readonly unknown[],
+  parentPath?: readonly PropertyKey[],
+): RuntimeNode[] {
+  const prefix = parentPath ?? [];
+  const nodes: RuntimeNode[] = [];
+  for (let i = 0; i < parsers.length; i++) {
+    const parser = parsers[i];
+    const elemState = i < stateArray.length ? stateArray[i] : undefined;
+    nodes.push({
+      path: [...prefix, i],
+      parser,
+      state: elemState,
+      matched: isMatchedState(elemState, parser),
+      defaultDependencyValues: snapshotDefaults(parser.dependencyMetadata),
+    });
+  }
+  return nodes;
 }
