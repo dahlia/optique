@@ -533,6 +533,45 @@ describe("replayDerivedParser", () => {
     );
     assert.equal(result, undefined);
   });
+
+  test("uses snapshotted defaults instead of re-evaluating thunk", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    // Source is missing — resolution should use defaults.
+    let thunkCalls = 0;
+    const metadata: ParserDependencyMetadata = {
+      derived: {
+        kind: "derived",
+        dependencyIds: [sourceId],
+        getDefaultDependencyValues: () => {
+          thunkCalls++;
+          return [`call-${thunkCalls}`];
+        },
+        replayParse: (_raw: string, deps: readonly unknown[]) => ({
+          success: true as const,
+          value: `parsed-${deps[0]}`,
+        }),
+      },
+    };
+    // Provide snapshotted defaults on the node.
+    const result = replayDerivedParser(
+      {
+        path: ["level"],
+        parser: { dependencyMetadata: metadata },
+        state: {},
+        defaultDependencyValues: ["snapshotted-dev"],
+      },
+      "warn",
+      runtime,
+    );
+    // Should use the snapshotted value, not call the thunk.
+    assert.equal(thunkCalls, 0);
+    assert.ok(result !== undefined);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "parsed-snapshotted-dev");
+    }
+  });
 });
 
 describe("replayDerivedParserAsync", () => {

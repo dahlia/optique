@@ -133,6 +133,14 @@ export interface RuntimeNode {
    * explicit parse failures.
    */
   readonly matched?: boolean;
+
+  /**
+   * Snapshotted default dependency values for derived parsers.
+   * Constructs should populate this at node creation time (once) to
+   * avoid re-evaluating dynamic `getDefaultDependencyValues()` thunks
+   * at replay time.
+   */
+  readonly defaultDependencyValues?: readonly unknown[];
 }
 
 /**
@@ -459,9 +467,14 @@ export function replayDerivedParser(
   const meta = node.parser.dependencyMetadata;
   if (meta?.derived == null) return undefined;
 
+  // Use snapshotted defaults from the node (captured at parse time) to
+  // avoid re-evaluating dynamic getDefaultDependencyValues() thunks.
+  const defaults = node.defaultDependencyValues ??
+    meta.derived.getDefaultDependencyValues?.();
+
   const resolution = runtime.resolveDependencies({
     dependencyIds: meta.derived.dependencyIds,
-    defaultValues: meta.derived.getDefaultDependencyValues?.(),
+    defaultValues: defaults,
   });
 
   if (resolution.kind === "missing") return undefined;
@@ -500,9 +513,14 @@ export async function replayDerivedParserAsync(
   const meta = node.parser.dependencyMetadata;
   if (meta?.derived == null) return undefined;
 
+  // Use snapshotted defaults from the node (captured at parse time) to
+  // avoid re-evaluating dynamic getDefaultDependencyValues() thunks.
+  const defaults = node.defaultDependencyValues ??
+    meta.derived.getDefaultDependencyValues?.();
+
   const resolution = runtime.resolveDependencies({
     dependencyIds: meta.derived.dependencyIds,
-    defaultValues: meta.derived.getDefaultDependencyValues?.(),
+    defaultValues: defaults,
   });
 
   if (resolution.kind === "missing") return undefined;
