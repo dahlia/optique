@@ -360,7 +360,7 @@ To be released.
 
  -  Fixed `socketAddress()` rendering the separator as a quoted value in
     the default format error message (e.g., `host":"port` instead of
-    `host:port`).  [[#324]]
+    `host:port`).  [[#324], [#758]]
 
  -  Fixed `hostname()` accepting case variants of `localhost` (e.g.,
     `LOCALHOST`, `LocalHost`) and wildcard-localhost forms (e.g.,
@@ -1361,6 +1361,7 @@ To be released.
 [#749]: https://github.com/dahlia/optique/pull/749
 [#751]: https://github.com/dahlia/optique/issues/751
 [#756]: https://github.com/dahlia/optique/pull/756
+[#758]: https://github.com/dahlia/optique/pull/758
 
 ### @optique/config
 
