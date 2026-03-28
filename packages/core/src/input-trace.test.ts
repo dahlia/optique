@@ -179,4 +179,23 @@ describe("InputTrace", () => {
     const trace = createInputTrace().set([], entry);
     assert.deepStrictEqual(trace.get([]), entry);
   });
+
+  test("registered symbol path keys (Symbol.for)", () => {
+    const sym = Symbol.for("optique.test.registered");
+    const entry = makeEntry("option-value", "val");
+    const trace = createInputTrace().set([sym], entry);
+    assert.deepStrictEqual(trace.get([sym]), entry);
+  });
+
+  test("registered and non-registered symbols do not collide", () => {
+    const reg = Symbol.for("optique.test.name");
+    const local = Symbol("optique.test.name");
+    const entry1 = makeEntry("option-value", "reg");
+    const entry2 = makeEntry("option-value", "local");
+    const trace = createInputTrace()
+      .set([reg], entry1)
+      .set([local], entry2);
+    assert.deepStrictEqual(trace.get([reg]), entry1);
+    assert.deepStrictEqual(trace.get([local]), entry2);
+  });
 });

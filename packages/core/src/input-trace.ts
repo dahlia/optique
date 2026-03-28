@@ -94,13 +94,18 @@ export interface InputTrace {
 
 // Symbol registry: maps each symbol to a stable string key so that
 // identical symbol instances always produce the same serialized path.
-const symbolKeys = new WeakMap<symbol, string>();
+// Uses Map (not WeakMap) because WeakMap rejects registered symbols
+// created with Symbol.for().
+const symbolKeys = new Map<symbol, string>();
 let symbolCounter = 0;
 
 function serializeKey(key: PropertyKey): string {
   if (typeof key === "string") return `s:${key}`;
   if (typeof key === "number") return `n:${key}`;
-  // Symbol — use a stable counter-based id per instance
+  // Registered symbols have a globally unique key via Symbol.keyFor().
+  const registeredKey = Symbol.keyFor(key as symbol);
+  if (registeredKey !== undefined) return `r:${registeredKey}`;
+  // Non-registered symbols get a per-instance counter-based id.
   let id = symbolKeys.get(key as symbol);
   if (id === undefined) {
     id = `y:${symbolCounter++}`;
