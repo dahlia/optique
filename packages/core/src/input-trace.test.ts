@@ -124,35 +124,6 @@ describe("InputTrace", () => {
     assert.notStrictEqual(trace, deleted);
   });
 
-  test("child scoping: entries set via child", () => {
-    const entry = makeEntry("option-value", "prod");
-    const trace = createInputTrace();
-    const child = trace.child("config");
-    const childUpdated = child.set(["env"], entry);
-    // Child's entry is at ["env"] from child's perspective
-    assert.deepStrictEqual(childUpdated.get(["env"]), entry);
-  });
-
-  test("child scoping: parent sees child entries with prefix", () => {
-    const entry = makeEntry("option-value", "prod");
-    const parent = createInputTrace();
-    const child = parent.child("config");
-    const childUpdated = child.set(["env"], entry);
-    // From parent's perspective, entry is at ["config", "env"]
-    // But child is a scoped view, not a shared mutable reference.
-    // The child returns a new trace scoped to "config".
-    assert.deepStrictEqual(childUpdated.get(["env"]), entry);
-  });
-
-  test("child of child nesting", () => {
-    const entry = makeEntry("option-value", "8080");
-    const trace = createInputTrace()
-      .child("server")
-      .child("http")
-      .set(["port"], entry);
-    assert.deepStrictEqual(trace.get(["port"]), entry);
-  });
-
   test("numeric path keys", () => {
     const entry = makeEntry("argument-value", "first");
     const trace = createInputTrace().set([0], entry);

@@ -75,17 +75,6 @@ export interface InputTrace {
    * @returns A new `InputTrace` without the entry.
    */
   delete(path: readonly PropertyKey[]): InputTrace;
-
-  /**
-   * Returns a scoped view of this trace prefixed by the given path segment.
-   *
-   * Entries set on the child trace are stored under `[pathSegment, ...]`
-   * from the child's perspective.
-   *
-   * @param pathSegment The path segment to scope by.
-   * @returns A new `InputTrace` scoped to the given segment.
-   */
-  child(pathSegment: PropertyKey): InputTrace;
 }
 
 // ---------------------------------------------------------------------------
@@ -125,41 +114,25 @@ function serializePath(path: readonly PropertyKey[]): string {
 
 class InputTraceImpl implements InputTrace {
   readonly #entries: ReadonlyMap<string, TraceEntry>;
-  readonly #prefix: readonly PropertyKey[];
 
-  constructor(
-    entries?: ReadonlyMap<string, TraceEntry>,
-    prefix?: readonly PropertyKey[],
-  ) {
+  constructor(entries?: ReadonlyMap<string, TraceEntry>) {
     this.#entries = entries ?? new Map();
-    this.#prefix = prefix ?? [];
-  }
-
-  #fullPath(path: readonly PropertyKey[]): readonly PropertyKey[] {
-    return this.#prefix.length === 0 ? path : [...this.#prefix, ...path];
   }
 
   get(path: readonly PropertyKey[]): TraceEntry | undefined {
-    return this.#entries.get(serializePath(this.#fullPath(path)));
+    return this.#entries.get(serializePath(path));
   }
 
   set(path: readonly PropertyKey[], entry: TraceEntry): InputTrace {
     const copy = new Map(this.#entries);
-    copy.set(serializePath(this.#fullPath(path)), entry);
-    return new InputTraceImpl(copy, this.#prefix);
+    copy.set(serializePath(path), entry);
+    return new InputTraceImpl(copy);
   }
 
   delete(path: readonly PropertyKey[]): InputTrace {
     const copy = new Map(this.#entries);
-    copy.delete(serializePath(this.#fullPath(path)));
-    return new InputTraceImpl(copy, this.#prefix);
-  }
-
-  child(pathSegment: PropertyKey): InputTrace {
-    return new InputTraceImpl(
-      this.#entries,
-      [...this.#prefix, pathSegment],
-    );
+    copy.delete(serializePath(path));
+    return new InputTraceImpl(copy);
   }
 }
 
