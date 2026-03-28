@@ -13,7 +13,6 @@ import {
   isDependencySourceState,
   isDerivedValueParser,
   isPendingDependencySourceState,
-  parseWithDependency,
   type PendingDependencySourceState,
   suggestWithDependency,
 } from "./dependency.ts";
@@ -85,28 +84,6 @@ function createOptionParseState<M extends Mode, T>(
     return createDependencySourceState(parseResult, valueParser[dependencyId]);
   }
   return parseResult;
-}
-
-/**
- * Resolves a {@link DeferredParseState} using default dependency values.
- * This is used when `option()` or `argument()` are at the top level (not
- * inside a construct like `object()`), where no dependency registry is
- * available to provide actual dependency values.
- * @internal
- */
-function resolveTopLevelDeferred<T>(
-  state: DeferredParseState<T>,
-): ValueParserResult<T> | Promise<ValueParserResult<T>> {
-  const defaults = state.defaultValues;
-  if (defaults == null || defaults.length === 0) {
-    return state.preliminaryResult;
-  }
-  // deriveFrom() stores dependencyIds on the deferred state and its
-  // [parseWithDependency] expects the full defaults tuple (even when the
-  // tuple has a single element).  Single .derive() leaves dependencyIds
-  // undefined and expects a scalar value.
-  const depValue = state.dependencyIds != null ? defaults : defaults[0];
-  return state.parser[parseWithDependency](state.rawInput, depValue);
 }
 
 import {
@@ -1112,33 +1089,21 @@ export function option<M extends Mode, T>(
             : message`Missing option ${eOptionNames(optionNames)}.`,
         };
       }
-      // Handle DeferredParseState: resolve using default dependency values.
-      // At the construct level (object(), tuple(), etc.), deferred states are
-      // resolved before complete() is called, so this branch is only reached
-      // at the top level.
+      // Handle DeferredParseState: use the preliminary result that was
+      // already computed with default dependency values during parse().
+      // At the construct level (object(), tuple(), etc.), deferred states
+      // are resolved before complete() is called, so this branch is only
+      // reached at the top level where no registry is available.
       if (isDeferredParseState<T>(state)) {
-        const resolved = resolveTopLevelDeferred(state);
-        if (resolved instanceof Promise) {
-          return resolved.then((result) => {
-            if (result.success) return result;
-            return {
-              success: false as const,
-              error: options.errors?.invalidValue
-                ? (typeof options.errors.invalidValue === "function"
-                  ? options.errors.invalidValue(result.error)
-                  : options.errors.invalidValue)
-                : message`${eOptionNames(optionNames)}: ${result.error}`,
-            };
-          });
-        }
-        if (resolved.success) return resolved;
+        const preliminaryResult = state.preliminaryResult;
+        if (preliminaryResult.success) return preliminaryResult;
         return {
           success: false,
           error: options.errors?.invalidValue
             ? (typeof options.errors.invalidValue === "function"
-              ? options.errors.invalidValue(resolved.error)
+              ? options.errors.invalidValue(preliminaryResult.error)
               : options.errors.invalidValue)
-            : message`${eOptionNames(optionNames)}: ${resolved.error}`,
+            : message`${eOptionNames(optionNames)}: ${preliminaryResult.error}`,
         };
       }
       // Handle DependencySourceState: extract the underlying result.
@@ -1813,33 +1778,23 @@ export function argument<M extends Mode, T>(
             }, but too few arguments.`,
         };
       }
-      // Handle DeferredParseState: resolve using default dependency values.
-      // At the construct level (object(), tuple(), etc.), deferred states are
-      // resolved before complete() is called, so this branch is only reached
-      // at the top level.
+      // Handle DeferredParseState: use the preliminary result that was
+      // already computed with default dependency values during parse().
+      // At the construct level (object(), tuple(), etc.), deferred states
+      // are resolved before complete() is called, so this branch is only
+      // reached at the top level where no registry is available.
       if (isDeferredParseState<T>(state)) {
-        const resolved = resolveTopLevelDeferred(state);
-        if (resolved instanceof Promise) {
-          return resolved.then((result) => {
-            if (result.success) return result;
-            return {
-              success: false as const,
-              error: options.errors?.invalidValue
-                ? (typeof options.errors.invalidValue === "function"
-                  ? options.errors.invalidValue(result.error)
-                  : options.errors.invalidValue)
-                : message`${metavar(valueParser.metavar)}: ${result.error}`,
-            };
-          });
-        }
-        if (resolved.success) return resolved;
+        const preliminaryResult = state.preliminaryResult;
+        if (preliminaryResult.success) return preliminaryResult;
         return {
           success: false,
           error: options.errors?.invalidValue
             ? (typeof options.errors.invalidValue === "function"
-              ? options.errors.invalidValue(resolved.error)
+              ? options.errors.invalidValue(preliminaryResult.error)
               : options.errors.invalidValue)
-            : message`${metavar(valueParser.metavar)}: ${resolved.error}`,
+            : message`${
+              metavar(valueParser.metavar)
+            }: ${preliminaryResult.error}`,
         };
       }
       // Handle DependencySourceState: extract the underlying result.
