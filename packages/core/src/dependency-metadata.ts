@@ -172,9 +172,14 @@ export function extractDependencyMetadata<M extends Mode, T>(
   }
 
   if (isDerivedValueParser(valueParser)) {
+    // deriveFrom() sets [dependencyIds]; derive() only sets [dependencyId].
+    // This distinction matters for parseWithDependency: derive() expects
+    // a scalar value, deriveFrom() expects a tuple (even with one element).
+    const isMultiSource = dependencyIds in valueParser &&
+      valueParser[dependencyIds] != null;
+
     // Collect all dependency IDs
-    const allIds: readonly symbol[] = dependencyIds in valueParser &&
-        valueParser[dependencyIds] != null
+    const allIds: readonly symbol[] = isMultiSource
       ? valueParser[dependencyIds]!
       : [valueParser[dependencyId]];
 
@@ -198,9 +203,8 @@ export function extractDependencyMetadata<M extends Mode, T>(
       rawInput: string,
       depValues: readonly unknown[],
     ): ValueParserResult<unknown> | Promise<ValueParserResult<unknown>> => {
-      // For single-dependency parsers, pass the single value directly.
-      // For multi-dependency parsers, pass the tuple.
-      const depArg = allIds.length === 1 ? depValues[0] : depValues;
+      // derive() expects a scalar; deriveFrom() expects the full tuple.
+      const depArg = isMultiSource ? depValues : depValues[0];
       return parser[parseWithDependency](rawInput, depArg);
     };
 
@@ -213,7 +217,7 @@ export function extractDependencyMetadata<M extends Mode, T>(
         prefix: string,
         depValues: readonly unknown[],
       ): Iterable<Suggestion> | AsyncIterable<Suggestion> => {
-        const depArg = allIds.length === 1 ? depValues[0] : depValues;
+        const depArg = isMultiSource ? depValues : depValues[0];
         return suggestFn(prefix, depArg);
       }
       : undefined;

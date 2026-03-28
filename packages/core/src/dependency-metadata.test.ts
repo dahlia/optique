@@ -193,6 +193,32 @@ describe("extractDependencyMetadata", () => {
     assert.equal(countAfterParse, 1);
   });
 
+  test("deriveFrom single-dep replayParse passes tuple, not scalar", () => {
+    const env = createEnvSource();
+    // deriveFrom with a single dependency — factory receives a tuple [Env]
+    const derived = deriveFrom({
+      metavar: "URL" as NonEmptyString,
+      mode: "sync",
+      dependencies: [env] as const,
+      factory: (e: Env) =>
+        choice([`https://${e}.example.com`], {
+          metavar: "URL" as NonEmptyString,
+        }),
+      defaultValues: (): [Env] => ["dev"],
+    });
+    const metadata = extractDependencyMetadata(derived);
+    assert.ok(metadata?.derived !== undefined);
+    // Replay should pass the full tuple ["dev"], not just "dev".
+    // If it passes "dev" (a scalar), the factory would receive "d"
+    // as its first arg since spread treats a string as an iterable.
+    const result = metadata.derived.replayParse(
+      "https://dev.example.com",
+      ["dev"],
+    );
+    assert.ok(!(result instanceof Promise));
+    assert.ok(result.success);
+  });
+
   test("derived capability from deriveFrom has multiple IDs", () => {
     const env = createEnvSource();
     const region = createEnvSource();

@@ -372,6 +372,45 @@ describe("collectExplicitSourceValues", () => {
   });
 });
 
+describe("collectExplicitSourceValues — failed sources", () => {
+  test("marks failed source so defaults do not override", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const sourceState = createDependencySourceState(
+      { success: false, error: undefined! } as ValueParserResult<string>,
+      sourceId,
+    );
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            extractSourceValue: bareExtract,
+            preservesSourceValue: true,
+          },
+        },
+      },
+      state: sourceState,
+    }];
+    collectExplicitSourceValues(nodes, runtime);
+    // Source failed — should NOT be registered as a value.
+    assert.ok(!runtime.hasSource(sourceId));
+    // But should be marked as failed.
+    assert.ok(runtime.isSourceFailed(sourceId));
+
+    // Derived parser with defaults should NOT resolve against defaults
+    // when the source explicitly failed.
+    const resolution = runtime.resolveDependencies({
+      dependencyIds: [sourceId],
+      defaultValues: ["dev"],
+    });
+    // Failed source blocks default fallback — resolution stays unresolved.
+    assert.notEqual(resolution.kind, "resolved");
+  });
+});
+
 describe("fillMissingSourceDefaults", () => {
   test("fills default for missing source", () => {
     const runtime = createDependencyRuntimeContext();

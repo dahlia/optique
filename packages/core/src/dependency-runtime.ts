@@ -198,6 +198,18 @@ export interface DependencyRuntimeContext {
     result: ValueParserResult<unknown>,
   ): void;
 
+  /**
+   * Mark a source as explicitly failed (user provided input that did
+   * not pass validation).  Derived parsers should not fall back to
+   * defaults for failed sources.
+   */
+  markSourceFailed(sourceId: symbol): void;
+
+  /**
+   * Check if a source was explicitly attempted but failed validation.
+   */
+  isSourceFailed(sourceId: symbol): boolean;
+
   /** Resolve dependencies for suggestions (same semantics as resolve). */
   getSuggestionDependencies(request: DependencyRequest): DependencyResolution;
 }
@@ -209,6 +221,7 @@ export interface DependencyRuntimeContext {
 class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
   readonly registry: DependencyRegistryLike;
   readonly #replayCache = new Map<string, ValueParserResult<unknown>>();
+  readonly #failedSources = new Set<symbol>();
 
   constructor(registry: DependencyRegistryLike) {
     this.registry = registry;
@@ -245,6 +258,14 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
     this.#replayCache.set(serializeReplayKey(key), result);
   }
 
+  markSourceFailed(sourceId: symbol): void {
+    this.#failedSources.add(sourceId);
+  }
+
+  isSourceFailed(sourceId: symbol): boolean {
+    return this.#failedSources.has(sourceId);
+  }
+
   getSuggestionDependencies(request: DependencyRequest): DependencyResolution {
     return resolveRequest(this, request);
   }
@@ -265,6 +286,11 @@ function resolveRequest(
       values.push(ctx.getSource(id));
       usedDefaults.push(false);
       resolvedCount++;
+    } else if (ctx.isSourceFailed(id)) {
+      // Source was explicitly provided but failed validation.
+      // Do not fall back to defaults — treat as unresolvable.
+      values.push(undefined);
+      usedDefaults.push(false);
     } else if (
       request.defaultValues != null && i < request.defaultValues.length
     ) {
@@ -438,8 +464,13 @@ export function collectExplicitSourceValues(
     // undefined = state doesn't contain a source result (unpopulated).
     // { success: false } = source was provided but failed validation.
     // { success: true, value } = source value (value may be undefined).
-    if (result != null && result.success) {
+    if (result == null) continue;
+    if (result.success) {
       runtime.registerSource(meta.source.sourceId, result.value, "cli");
+    } else {
+      // Mark the source as explicitly failed so that derived parsers
+      // do not fall back to defaults for this source.
+      runtime.markSourceFailed(meta.source.sourceId);
     }
   }
 }
