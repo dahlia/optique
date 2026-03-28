@@ -978,7 +978,7 @@ describe("Unicode display width in formatUsage", () => {
     // "앱" = 2 display columns.  With maxWidth 7, "앱 FILE" = 2+1+4 = 7,
     // fits on one line.
     const result = formatUsage("앱", usage, { maxWidth: 7 });
-    assert.ok(!result.includes("\n"));
+    assert.equal(result, "앱 FILE");
   });
 
   it("should wrap CJK program name at correct width", () => {
@@ -987,7 +987,7 @@ describe("Unicode display width in formatUsage", () => {
     ];
     // "앱" = 2 display columns.  With maxWidth 6, "앱 FILE" = 7 > 6, wraps.
     const result = formatUsage("앱", usage, { maxWidth: 6 });
-    assert.ok(result.includes("\n"));
+    assert.equal(result, "앱\nFILE");
   });
 
   it("should account for CJK metavar width", () => {
@@ -996,7 +996,7 @@ describe("Unicode display width in formatUsage", () => {
     ];
     // "app 한글" = 3+1+4 = 8.  With maxWidth 8, fits on one line.
     const result = formatUsage("app", usage, { maxWidth: 8 });
-    assert.ok(!result.includes("\n"));
+    assert.equal(result, "app 한글");
   });
 
   it("should wrap CJK metavar at correct width", () => {
@@ -1005,7 +1005,7 @@ describe("Unicode display width in formatUsage", () => {
     ];
     // "app 한글" = 8.  With maxWidth 7, wraps.
     const result = formatUsage("app", usage, { maxWidth: 7 });
-    assert.ok(result.includes("\n"));
+    assert.equal(result, "app\n한글");
   });
 });
 

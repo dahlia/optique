@@ -251,10 +251,10 @@ To be released.
     a spurious leading newline (or double newline) when an oversize term that
     exceeds `maxWidth` is already at the start of a new line.  [[#497], [#730]]
 
- -  Fixed `formatMessage()`, `formatUsage()`, and `formatDocPage()` measuring
-    string width using JavaScript `.length` (UTF-16 code units) instead of
-    terminal display width.  East Asian wide characters, combining marks, and
-    emoji now wrap and align correctly.  [[#509], [#757]]
+ -  Fixed `formatMessage()`, `formatUsage()`, and `formatDocPage()` previously
+    measuring string width using JavaScript `.length` (UTF-16 code units).
+    They now use terminal display width, so East Asian wide characters,
+    combining marks, and emoji wrap and align correctly.  [[#509], [#757]]
 
  -  Fixed `getDocPage()` preserving hidden terms from custom `DocFragments`
     instead of filtering them.  `buildDocPage()` now filters out entries whose
