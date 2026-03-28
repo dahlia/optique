@@ -121,6 +121,12 @@ function isEastAsianWide(cp: number): boolean {
     (cp >= 0xFF01 && cp <= 0xFF60) ||
     // Fullwidth Signs
     (cp >= 0xFFE0 && cp <= 0xFFE6) ||
+    // Ideographic Symbols, Tangut, Tangut Components,
+    // Khitan Small Script, Tangut Supplement (contiguous)
+    (cp >= 0x16FE0 && cp <= 0x18D7F) ||
+    // Kana Extended-B, Kana Supplement, Kana Extended-A,
+    // Small Kana Extension, Nushu (contiguous)
+    (cp >= 0x1AFF0 && cp <= 0x1B2FF) ||
     // Enclosed CJK, Tortoise Shell Brackets, Circled & Rounded Symbols
     (cp >= 0x1F200 && cp <= 0x1F202) ||
     (cp >= 0x1F210 && cp <= 0x1F23B) ||

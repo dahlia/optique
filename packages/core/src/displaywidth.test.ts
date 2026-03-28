@@ -90,6 +90,13 @@ describe("getDisplayWidth", () => {
       assert.equal(getDisplayWidth("\u268A"), 2); // ⚊ MONOGRAM FOR YANG
     });
 
+    it("should count SMP East Asian scripts as 2 columns each", () => {
+      assert.equal(getDisplayWidth("\u{1B000}"), 2); // 𛀀 Kana Supplement
+      assert.equal(getDisplayWidth("\u{17000}"), 2); // 𗀀 Tangut
+      assert.equal(getDisplayWidth("\u{18D00}"), 2); // Tangut Supplement
+      assert.equal(getDisplayWidth("\u{1B170}"), 2); // 𛅰 Nushu
+    });
+
     it("should count text-style EAW=W dingbats as 1 column", () => {
       // Characters like ✂ (U+2702), ✔ (U+2714), ▶ (U+25B6) have
       // East_Asian_Width=W in the Unicode standard, but most terminal
