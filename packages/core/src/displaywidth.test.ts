@@ -68,11 +68,11 @@ describe("getDisplayWidth", () => {
     });
 
     it("should not count Combining Half Marks as wide", () => {
-      // U+FE20–U+FE2F are combining marks with East_Asian_Width=N.
+      // U+FE20–U+FE2F are combining marks (Mn) with East_Asian_Width=N.
       // Combined with a base character, they merge into a single grapheme.
       assert.equal(getDisplayWidth("a\uFE20"), 1);
-      // Standalone, they should not be treated as width 2.
-      assert.equal(getDisplayWidth("\uFE20"), 1);
+      // Standalone combining marks are zero-width.
+      assert.equal(getDisplayWidth("\uFE20"), 0);
     });
 
     it("should count CJK angle brackets as 2 columns each", () => {
@@ -186,6 +186,22 @@ describe("getDisplayWidth", () => {
         4,
       );
     });
+
+    it("should ignore truecolor SGR with colon sub-parameters", () => {
+      assert.equal(
+        getDisplayWidth("\x1b[38:2:255:0:0mhello\x1b[0m"),
+        5,
+      );
+    });
+
+    it("should ignore OSC 8 hyperlinks with params", () => {
+      assert.equal(
+        getDisplayWidth(
+          "\x1b]8;id=foo;http://example.com\x1b\\link\x1b]8;;\x1b\\",
+        ),
+        4,
+      );
+    });
   });
 
   describe("zero-width characters", () => {
@@ -199,6 +215,23 @@ describe("getDisplayWidth", () => {
 
     it("should not count zero-width space", () => {
       assert.equal(getDisplayWidth("\u200B"), 0);
+    });
+
+    it("should not count word joiner", () => {
+      assert.equal(getDisplayWidth("\u2060"), 0);
+    });
+
+    it("should not count bidi marks", () => {
+      assert.equal(getDisplayWidth("\u200E"), 0); // LRM
+      assert.equal(getDisplayWidth("\u200F"), 0); // RLM
+    });
+
+    it("should not count standalone combining marks", () => {
+      assert.equal(getDisplayWidth("\u0301"), 0); // combining acute
+    });
+
+    it("should not count soft hyphen", () => {
+      assert.equal(getDisplayWidth("\u00AD"), 0);
     });
   });
 

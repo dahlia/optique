@@ -1,5 +1,10 @@
+// CSI sequences: ESC [ params letter
+//   params may use ; (standard) or : (sub-parameters, e.g., truecolor)
+// OSC 8 hyperlinks: ESC ]8; params ; uri ST
+//   params may be empty (;;) or contain key=value (;id=foo;)
+//   terminated by ESC \ (ST) or BEL (\x07)
 const ansiRegex = // deno-lint-ignore no-control-regex
-  /\x1B\[[0-9;]*[a-zA-Z]|\x1B\]8;;[^\x1B\x07]*(?:\x1B\\|\x07)/g;
+  /\x1B\[[0-9;:]*[a-zA-Z]|\x1B\]8;[^;]*;[^\x1B\x07]*(?:\x1B\\|\x07)/g;
 
 const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
@@ -20,6 +25,10 @@ export function getDisplayWidth(text: string): number {
   return width;
 }
 
+// A standalone format char (Cf), nonspacing mark (Mn), or enclosing
+// mark (Me) occupies zero terminal columns.
+const zeroWidthRegex = /^[\p{Cf}\p{Mn}\p{Me}]$/u;
+
 // Matches grapheme clusters that contain emoji presentation characters
 // or emoji with variation selector 16 (U+FE0F).
 const emojiPresentationRegex = /\p{Emoji_Presentation}/u;
@@ -39,17 +48,12 @@ function graphemeWidth(grapheme: string): number {
   // Other control characters (C0, DEL, C1)
   if (cp < 0x20 || (cp >= 0x7F && cp < 0xA0)) return 0;
 
-  // Zero-width characters
-  if (
-    cp === 0x200B || // zero-width space
-    cp === 0x200C || // zero-width non-joiner
-    cp === 0x200D || // zero-width joiner
-    cp === 0xFEFF || // BOM / zero-width no-break space
-    (cp >= 0xFE00 && cp <= 0xFE0F) || // variation selectors 1-16
-    (cp >= 0xE0100 && cp <= 0xE01EF) // variation selectors 17-256
-  ) {
-    return 0;
-  }
+  // Zero-width: format characters (Cf), nonspacing marks (Mn), and
+  // enclosing marks (Me).  When these appear as standalone graphemes
+  // they occupy no terminal columns.  This covers ZWJ, ZWNJ, BOM,
+  // variation selectors, bidi marks, word joiner, soft hyphen,
+  // standalone combining accents, and all similar invisible marks.
+  if (zeroWidthRegex.test(grapheme)) return 0;
 
   // Emoji: check for emoji presentation, VS16, or regional indicators
   if (
