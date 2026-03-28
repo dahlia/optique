@@ -1,3 +1,4 @@
+import { composeDependencyMetadata } from "./dependency-metadata.ts";
 import { formatMessage, type Message, message, text } from "./message.ts";
 import {
   createDependencySourceState,
@@ -405,6 +406,17 @@ export function optional<M extends Mode, TValue, TState>(
       configurable: true,
       enumerable: false,
     });
+  }
+  // Compose dependency metadata for the optional wrapper.
+  if (parser.dependencyMetadata != null) {
+    const composed = composeDependencyMetadata(
+      parser.dependencyMetadata,
+      "optional",
+    );
+    if (composed != null) {
+      (optionalParser as unknown as Record<string, unknown>)
+        .dependencyMetadata = composed;
+    }
   }
   return optionalParser;
 }
@@ -947,6 +959,50 @@ export function withDefault<
       enumerable: false,
     });
   }
+  // Compose dependency metadata: add getMissingSourceValue if the inner
+  // parser preserves a dependency source.
+  if (parser.dependencyMetadata != null) {
+    const composed = composeDependencyMetadata(
+      parser.dependencyMetadata,
+      "withDefault",
+      {
+        defaultValue: () => {
+          let v: TDefault;
+          try {
+            v = typeof defaultValue === "function"
+              ? (defaultValue as () => TDefault)()
+              : defaultValue;
+          } catch (e) {
+            // Dynamic default thunks may throw (validation, env checks).
+            // Preserve the structured errorMessage from WithDefaultError,
+            // matching withDefault.complete() which surfaces it directly.
+            const error = e instanceof WithDefaultError
+              ? e.errorMessage
+              : message`${e instanceof Error ? e.message : String(e)}`;
+            return { success: false as const, error };
+          }
+          // Normalize the default value to match what the inner parser's
+          // value parser would produce, so that dependency source values
+          // are consistent regardless of whether they came from explicit
+          // input or a default.
+          if (typeof parser.normalizeValue === "function") {
+            try {
+              v = parser.normalizeValue(v as unknown as TValue) as
+                & TValue
+                & TDefault;
+            } catch {
+              // Normalization may fail for sentinel types; keep raw value.
+            }
+          }
+          return { success: true as const, value: v };
+        },
+      },
+    );
+    if (composed != null) {
+      (withDefaultParser as unknown as Record<string, unknown>)
+        .dependencyMetadata = composed;
+    }
+  }
   return withDefaultParser;
 }
 
@@ -1117,6 +1173,61 @@ export function map<M extends Mode, T, U, TState>(
       configurable: true,
       enumerable: false,
     });
+  }
+  // Compose dependency metadata: mark transform and clear
+  // preservesSourceValue.  Wrap replayParse to apply the map transform
+  // so that replayed values match what complete() would produce.
+  if (parser.dependencyMetadata != null) {
+    let composed = composeDependencyMetadata(
+      parser.dependencyMetadata,
+      "map",
+    );
+    if (composed?.derived != null) {
+      const innerReplay = composed.derived.replayParse;
+      // Mirror map().complete() deferred handling: strip deferredKeys
+      // (the inner shape is invalidated by the transform) and catch
+      // transform errors for deferred placeholders.
+      const applyMappedReplay = (
+        r: ValueParserResult<unknown>,
+      ): ValueParserResult<unknown> => {
+        if (!r.success) return r;
+        if (r.deferred) {
+          try {
+            return {
+              success: true as const,
+              value: transform(r.value as T),
+              deferred: true as const,
+            };
+          } catch {
+            return {
+              success: true as const,
+              value: undefined as unknown as U,
+              deferred: true as const,
+            };
+          }
+        }
+        return { success: true as const, value: transform(r.value as T) };
+      };
+      composed = {
+        ...composed,
+        derived: {
+          ...composed.derived,
+          replayParse: (
+            rawInput: string,
+            depValues: readonly unknown[],
+          ) => {
+            const result = innerReplay(rawInput, depValues);
+            return result instanceof Promise
+              ? result.then(applyMappedReplay)
+              : applyMappedReplay(result);
+          },
+        },
+      };
+    }
+    if (composed != null) {
+      (mappedParser as unknown as Record<string, unknown>).dependencyMetadata =
+        composed;
+    }
   }
   return mappedParser;
 }
