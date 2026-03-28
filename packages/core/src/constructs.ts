@@ -3531,7 +3531,9 @@ function collectChildFieldParsers(
  *
  * The original state is NOT modified; only the registry is populated.
  * @internal
+ * @deprecated Will be removed in a future cleanup pass.
  */
+// deno-lint-ignore no-unused-vars
 function preCompleteAndRegisterDependencies(
   state: Record<string | symbol, unknown>,
   fieldParserPairs: ReadonlyArray<
@@ -3592,7 +3594,9 @@ function preCompleteAndRegisterDependencies(
 /**
  * Async version of {@link preCompleteAndRegisterDependencies}.
  * @internal
+ * @deprecated Will be removed in a future cleanup pass.
  */
+// deno-lint-ignore no-unused-vars
 async function preCompleteAndRegisterDependenciesAsync(
   state: Record<string | symbol, unknown>,
   fieldParserPairs: ReadonlyArray<
@@ -5957,23 +5961,54 @@ export function merge(
       if (!isAsync) {
         // Pre-complete dependency source fields from child parsers so that
         // env/config-backed dependency values are visible across merged
-        // children.  The original state is NOT modified; dependency values
-        // are registered in a registry that is passed to
-        // resolveDeferredParseStates.
-        // See: https://github.com/dahlia/optique/issues/681
+        // Phase 1: Build dependency runtime and collect/fill source values.
+        // Pre-complete bindConfig/bindEnv sources via old-protocol bridge.
+        const runtime = exec?.dependencyRuntime ??
+          createDependencyRuntimeContext(exec?.dependencyRegistry);
+        const childExec: ExecutionContext = {
+          ...exec,
+          dependencyRuntime: runtime,
+        } as ExecutionContext;
         const childFieldPairs = collectChildFieldParsers(syncParsers);
-        const registry = new DependencyRegistry();
-        preCompleteAndRegisterDependencies(
-          state as Record<string | symbol, unknown>,
-          childFieldPairs,
-          registry,
-          exec,
-        );
+        // Pre-complete Case 4 (bindConfig/bindEnv) for child field parsers.
+        if (state && typeof state === "object") {
+          for (const [field, fieldParser] of childFieldPairs) {
+            const fieldState = (state as Record<string | symbol, unknown>)[
+              field as string | symbol
+            ];
+            if (
+              fieldState != null &&
+              !Array.isArray(fieldState) &&
+              !isDependencySourceState(fieldState) &&
+              (isWrappedDependencySource(fieldParser) ||
+                isPendingDependencySourceState(fieldParser.initialState))
+            ) {
+              const annotatedState = getAnnotatedFieldState(
+                state,
+                field as string | symbol,
+                fieldParser,
+              );
+              const completed = fieldParser.complete(
+                annotatedState,
+                childExec,
+              );
+              const depState = wrapAsDependencySourceState(
+                completed,
+                fieldParser,
+              );
+              if (depState) {
+                registerCompletedDependency(depState, runtime.registry);
+              }
+            }
+          }
+        }
 
-        // Resolve deferred parse states across the entire merged state.
-        // This ensures dependencies from one merged parser are available to
-        // derived parsers in other merged parsers.
-        const resolvedState = resolveDeferredParseStates(state, registry);
+        // Phase 2: Resolve deferred parse states across the entire merged
+        // state using the dependency runtime.
+        const resolvedState = resolveStateWithRuntime(
+          state,
+          runtime,
+        ) as MergeState;
 
         const object: MergeState = {};
         const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
@@ -5981,13 +6016,16 @@ export function merge(
         for (let i = 0; i < syncParsers.length; i++) {
           const parser = syncParsers[i];
           const parserState = extractCompleteState(parser, resolvedState, i);
-          const result = parser.complete(
-            parserState as Parameters<typeof parser.complete>[0],
-            exec,
+          const result = unwrapCompleteResult(
+            parser.complete(
+              parserState as Parameters<typeof parser.complete>[0],
+              childExec,
+            ),
           );
           if (!result.success) return result;
-          for (const field in result.value) {
-            object[field] = result.value[field];
+          const resultValue = result.value as MergeState;
+          for (const field in resultValue) {
+            object[field] = resultValue[field];
             // When a later child overwrites a key that an earlier child
             // marked as deferred, clear the stale marker so that
             // prepareParsedForContexts() does not strip the real value.
@@ -6026,24 +6064,52 @@ export function merge(
 
       // For async mode, complete asynchronously
       return (async () => {
-        // Pre-complete dependency source fields from child parsers.
-        // See: https://github.com/dahlia/optique/issues/681
+        // Phase 1: Build dependency runtime.
+        const runtime = exec?.dependencyRuntime ??
+          createDependencyRuntimeContext(exec?.dependencyRegistry);
+        const childExec: ExecutionContext = {
+          ...exec,
+          dependencyRuntime: runtime,
+        } as ExecutionContext;
         const childFieldPairs = collectChildFieldParsers(parsers);
-        const registry = new DependencyRegistry();
-        await preCompleteAndRegisterDependenciesAsync(
-          state as Record<string | symbol, unknown>,
-          childFieldPairs,
-          registry,
-          exec,
-        );
+        if (state && typeof state === "object") {
+          for (const [field, fieldParser] of childFieldPairs) {
+            const fieldState = (state as Record<string | symbol, unknown>)[
+              field as string | symbol
+            ];
+            if (
+              fieldState != null &&
+              !Array.isArray(fieldState) &&
+              !isDependencySourceState(fieldState) &&
+              (isWrappedDependencySource(fieldParser) ||
+                isPendingDependencySourceState(fieldParser.initialState))
+            ) {
+              const annotatedState = getAnnotatedFieldState(
+                state,
+                field as string | symbol,
+                fieldParser,
+              );
+              const completed = await fieldParser.complete(
+                annotatedState,
+                childExec,
+              );
+              const depState = wrapAsDependencySourceState(
+                completed,
+                fieldParser,
+              );
+              if (depState) {
+                registerCompletedDependency(depState, runtime.registry);
+              }
+            }
+          }
+        }
 
-        // Resolve deferred parse states across the entire merged state.
-        // This ensures dependencies from one merged parser are available to
-        // derived parsers in other merged parsers.
-        const resolvedState = await resolveDeferredParseStatesAsync(
+        // Phase 2: Resolve deferred parse states across the entire merged
+        // state using the dependency runtime.
+        const resolvedState = await resolveStateWithRuntimeAsync(
           state,
-          registry,
-        );
+          runtime,
+        ) as MergeState;
 
         const object: MergeState = {};
         const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
@@ -6051,13 +6117,16 @@ export function merge(
         for (let i = 0; i < parsers.length; i++) {
           const parser = parsers[i];
           const parserState = extractCompleteState(parser, resolvedState, i);
-          const result = await parser.complete(
-            parserState as Parameters<typeof parser.complete>[0],
-            exec,
+          const result = unwrapCompleteResult(
+            await parser.complete(
+              parserState as Parameters<typeof parser.complete>[0],
+              childExec,
+            ),
           );
           if (!result.success) return result;
-          for (const field in result.value) {
-            object[field] = result.value[field];
+          const resultValue = result.value as MergeState;
+          for (const field in resultValue) {
+            object[field] = resultValue[field];
             // When a later child overwrites a key that an earlier child
             // marked as deferred, clear the stale marker so that
             // prepareParsedForContexts() does not strip the real value.
@@ -6138,32 +6207,23 @@ export function merge(
 
       if (isAsync) {
         return (async function* () {
-          // Build dependency registry inside the async generator so we can
-          // await async pre-completion of env/config-backed dependency sources.
-          // See: https://github.com/dahlia/optique/issues/681
-          const registry = context.dependencyRegistry
-            ? context.dependencyRegistry.clone()
-            : new DependencyRegistry();
+          // Build dependency runtime via metadata.
+          const runtime = createDependencyRuntimeContext(
+            context.dependencyRegistry?.clone(),
+          );
           const childFieldPairs = collectChildFieldParsers(parsers);
           if (context.state && typeof context.state === "object") {
-            await preCompleteAndRegisterDependenciesAsync(
-              context.state as Record<string | symbol, unknown>,
-              childFieldPairs,
-              registry,
-              context.exec,
-            );
-            collectDependencies(context.state, registry);
-          } else {
-            await completeDependencySourceDefaultsAsync(
-              context,
-              childFieldPairs,
-              registry,
-              context.exec,
-            );
+            resolveStateWithRuntime(context.state, runtime);
           }
+          await completeDependencySourceDefaultsAsync(
+            context,
+            childFieldPairs,
+            runtime.registry,
+            context.exec,
+          );
           const contextWithRegistry = {
             ...context,
-            dependencyRegistry: registry,
+            dependencyRegistry: runtime.registry,
           };
 
           const suggestions: Suggestion[] = [];
@@ -6194,34 +6254,24 @@ export function merge(
         })();
       }
 
-      // Build dependency registry from the full merged state so that
-      // derived parsers in one sub-parser can see dependency sources
-      // from another sub-parser.  Clone any caller-supplied registry
-      // to preserve custom DependencyRegistryLike implementations:
-      const registry = context.dependencyRegistry
-        ? context.dependencyRegistry.clone()
-        : new DependencyRegistry();
-      // Pre-complete env/config-backed dependency source fields from child
-      // parsers so their values are registered for derived parsers.
-      // See: https://github.com/dahlia/optique/issues/681
+      // Build dependency runtime via metadata.
+      const runtime = createDependencyRuntimeContext(
+        context.dependencyRegistry?.clone(),
+      );
       const childFieldPairs = collectChildFieldParsers(syncParsers);
       if (context.state && typeof context.state === "object") {
-        preCompleteAndRegisterDependencies(
-          context.state as Record<string | symbol, unknown>,
-          childFieldPairs,
-          registry,
-          context.exec,
-        );
-        collectDependencies(context.state, registry);
-      } else {
-        completeDependencySourceDefaults(
-          context,
-          childFieldPairs,
-          registry,
-          context.exec,
-        );
+        resolveStateWithRuntime(context.state, runtime);
       }
-      const contextWithRegistry = { ...context, dependencyRegistry: registry };
+      completeDependencySourceDefaults(
+        context,
+        childFieldPairs,
+        runtime.registry,
+        context.exec,
+      );
+      const contextWithRegistry = {
+        ...context,
+        dependencyRegistry: runtime.registry,
+      };
 
       return (function* () {
         const suggestions: Suggestion[] = [];
