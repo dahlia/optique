@@ -83,7 +83,9 @@ function graphemeWidth(grapheme: string): number {
   // sound mark (U+FF9F ﾟ) are grouped into the preceding kana's
   // grapheme cluster by Intl.Segmenter, but unlike true combining marks
   // each one occupies its own terminal column.
-  for (let i = 1; i < grapheme.length; i++) {
+  // Skip past the first code point: supplementary characters (> U+FFFF)
+  // occupy two UTF-16 code units (a surrogate pair), so start at index 2.
+  for (let i = cp > 0xFFFF ? 2 : 1; i < grapheme.length; i++) {
     const c = grapheme.charCodeAt(i);
     if (c === 0xFF9E || c === 0xFF9F) width += 1;
   }
