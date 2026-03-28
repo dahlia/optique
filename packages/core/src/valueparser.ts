@@ -4165,8 +4165,9 @@ export function socketAddress(
           if (portSplitHostIsDegenerate) {
             return {
               success: false,
-              error:
-                message`Expected a socket address in format host${separator}port, but got ${input}.`,
+              error: message`Expected a socket address in format host${
+                text(separator)
+              }port, but got ${input}.`,
             };
           }
           if (!disambiguationParser.parse(trimmed).success) {
@@ -4179,8 +4180,9 @@ export function socketAddress(
         if (disambiguationParser.parse(trimmed).success) {
           return {
             success: false,
-            error:
-              message`Expected a socket address in format host${separator}port, but got ${input}.`,
+            error: message`Expected a socket address in format host${
+              text(separator)
+            }port, but got ${input}.`,
           };
         }
         return { success: false, error: validHostInvalidPortError };
@@ -4363,8 +4365,9 @@ export function socketAddress(
 
       return {
         success: false,
-        error:
-          message`Expected a socket address in format host${separator}port, but got ${input}.`,
+        error: message`Expected a socket address in format host${
+          text(separator)
+        }port, but got ${input}.`,
       };
     },
     format(value: SocketAddressValue): string {

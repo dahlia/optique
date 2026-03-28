@@ -358,6 +358,10 @@ To be released.
     Custom `errors.invalidFormat` still takes precedence when configured.
     [[#322], [#749]]
 
+ -  Fixed `socketAddress()` rendering the separator as a quoted value in
+    the default format error message (e.g., `host":"port` instead of
+    `host:port`).  [[#324]]
+
  -  Fixed `hostname()` accepting case variants of `localhost` (e.g.,
     `LOCALHOST`, `LocalHost`) and wildcard-localhost forms (e.g.,
     `*.localhost`) when `allowLocalhost` is set to `false`.  DNS hostnames
@@ -1134,6 +1138,7 @@ To be released.
 [#321]: https://github.com/dahlia/optique/issues/321
 [#322]: https://github.com/dahlia/optique/issues/322
 [#323]: https://github.com/dahlia/optique/issues/323
+[#324]: https://github.com/dahlia/optique/issues/324
 [#327]: https://github.com/dahlia/optique/issues/327
 [#330]: https://github.com/dahlia/optique/issues/330
 [#332]: https://github.com/dahlia/optique/issues/332
