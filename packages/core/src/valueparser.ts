@@ -4235,19 +4235,17 @@ export function socketAddress(
       }
 
       // If the whole input is not a valid hostname but a trailing
-      // separator produced a valid host, treat as omitted port
-      // (e.g., "localhost:" → host "localhost" with default port).
+      // separator produced a valid host, the user explicitly typed the
+      // separator but left the port empty (e.g., "localhost:").  This is
+      // always a missing-port error — even when defaultPort is set —
+      // because the explicit separator signals intent to specify a port.
+      // Host-only input *without* a separator (e.g., "localhost") is
+      // handled above and correctly uses defaultPort.
       if (
         trailingSepHost !== undefined &&
         hostOnlyResult !== undefined &&
         !hostOnlyResult.success
       ) {
-        if (canOmitPort) {
-          return {
-            success: true,
-            value: { host: trailingSepHost, port: defaultPort! },
-          };
-        }
         const errorMsg = options?.errors?.missingPort;
         const msg = typeof errorMsg === "function"
           ? errorMsg(input)
