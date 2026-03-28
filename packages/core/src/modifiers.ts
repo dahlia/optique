@@ -407,7 +407,7 @@ export function optional<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
-  // Propagate dependency metadata unchanged.
+  // Compose dependency metadata for the optional wrapper.
   if (parser.dependencyMetadata != null) {
     const composed = composeDependencyMetadata(
       parser.dependencyMetadata,

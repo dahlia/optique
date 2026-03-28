@@ -253,7 +253,7 @@ describe("extractDependencyMetadata", () => {
 // =============================================================================
 
 describe("composeDependencyMetadata", () => {
-  test("optional clears preservesSourceValue and getMissingSourceValue", () => {
+  test("optional preserves preservesSourceValue and getMissingSourceValue", () => {
     const env = createEnvSource();
     const inner = extractDependencyMetadata(env);
     assert.ok(inner !== undefined);
@@ -261,14 +261,13 @@ describe("composeDependencyMetadata", () => {
     assert.ok(composed !== undefined);
     assert.equal(composed.source?.kind, inner.source?.kind);
     assert.equal(composed.source?.sourceId, inner.source?.sourceId);
-    // optional means "omission suppresses the source entirely"
-    assert.ok(!composed.source?.preservesSourceValue);
-    assert.equal(composed.source?.getMissingSourceValue, undefined);
+    // optional is a passthrough for source metadata
+    assert.ok(composed.source?.preservesSourceValue);
     assert.equal(composed.derived, undefined);
     assert.equal(composed.transform, undefined);
   });
 
-  test("withDefault(optional(source)) does not add getMissingSourceValue", () => {
+  test("withDefault(optional(source)) adds getMissingSourceValue", () => {
     const env = createEnvSource();
     const inner = extractDependencyMetadata(env);
     assert.ok(inner !== undefined);
@@ -280,12 +279,12 @@ describe("composeDependencyMetadata", () => {
       { defaultValue: () => ({ success: true as const, value: "dev" }) },
     );
     assert.ok(afterDefault !== undefined);
-    // withDefault should NOT add getMissingSourceValue because optional
-    // already cleared preservesSourceValue.
-    assert.equal(afterDefault.source?.getMissingSourceValue, undefined);
+    // withDefault(optional(source)) should register the default for
+    // dependency resolution (regression test C.4).
+    assert.ok(afterDefault.source?.getMissingSourceValue !== undefined);
   });
 
-  test("optional(withDefault(source)) clears getMissingSourceValue", () => {
+  test("optional(withDefault(source)) preserves getMissingSourceValue", () => {
     const env = createEnvSource();
     const inner = extractDependencyMetadata(env);
     assert.ok(inner !== undefined);
@@ -295,7 +294,9 @@ describe("composeDependencyMetadata", () => {
     assert.ok(afterDefault?.source?.getMissingSourceValue !== undefined);
     const afterOptional = composeDependencyMetadata(afterDefault, "optional");
     assert.ok(afterOptional !== undefined);
-    assert.equal(afterOptional.source?.getMissingSourceValue, undefined);
+    // optional(withDefault(source)) should preserve the inner default for
+    // dependency resolution (regression test C.3).
+    assert.ok(afterOptional.source?.getMissingSourceValue !== undefined);
   });
 
   test("optional extractSourceValue unwraps [state]", () => {

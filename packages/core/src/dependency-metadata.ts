@@ -289,7 +289,7 @@ export interface WithDefaultCompositionOptions {
 /**
  * Composes dependency metadata through a modifier wrapper.
  *
- * - `"optional"`: preserves inner metadata unchanged.
+ * - `"optional"`: composes `extractSourceValue` with array unwrapping.
  * - `"withDefault"`: adds `getMissingSourceValue` if the inner parser
  *   preserves a dependency source.
  * - `"map"`: sets `transformsSourceValue` and clears
@@ -313,23 +313,17 @@ export function composeDependencyMetadata(
 
   switch (wrapperKind) {
     case "optional": {
-      if (inner.source != null) {
+      if (
+        inner.source != null && inner.source.extractSourceValue != null
+      ) {
         return {
           ...inner,
           source: {
             ...inner.source,
             // optional() wraps state in [state]
-            ...(inner.source.extractSourceValue != null && {
-              extractSourceValue: unwrapArrayThenExtract(
-                inner.source.extractSourceValue,
-              ),
-            }),
-            // Omission means "no source at all", not "source with
-            // default".  Clear missing-source defaults and mark source
-            // as not preserved so that withDefault(optional(source))
-            // does not re-add a default.
-            preservesSourceValue: false,
-            getMissingSourceValue: undefined,
+            extractSourceValue: unwrapArrayThenExtract(
+              inner.source.extractSourceValue,
+            ),
           },
         };
       }
