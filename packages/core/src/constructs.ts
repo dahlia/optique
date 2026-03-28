@@ -6875,16 +6875,19 @@ export function concat(
   ): CompleteResult => {
     const stateArray = state as unknown[];
 
-    // Phase 1: Build a combined state object for dependency resolution
-    // This allows DependencySourceState from one tuple to be used by
-    // DeferredParseState in another tuple.
-    const combinedState: Record<number, unknown> = {};
-    for (let i = 0; i < stateArray.length; i++) {
-      combinedState[i] = stateArray[i];
-    }
+    // Phase 1: Build dependency runtime and collect/fill source values.
+    const runtime = exec?.dependencyRuntime ??
+      createDependencyRuntimeContext(exec?.dependencyRegistry);
+    const childExec: ExecutionContext = {
+      ...exec,
+      dependencyRuntime: runtime,
+    } as ExecutionContext;
 
-    // Phase 2: Resolve deferred parse states across all tuples
-    const resolvedCombinedState = resolveDeferredParseStates(combinedState);
+    // Phase 2: Resolve deferred parse states across all tuples using runtime.
+    const resolvedArray = resolveStateWithRuntime(
+      stateArray,
+      runtime,
+    ) as unknown[];
 
     // Phase 3: Complete each parser with resolved state
     const results: unknown[] = [];
@@ -6892,8 +6895,13 @@ export function concat(
     let hasDeferred = false;
     for (let i = 0; i < syncParsers.length; i++) {
       const parser = syncParsers[i];
-      const parserState = resolvedCombinedState[i];
-      const result = parser.complete(parserState, exec);
+      const parserState = prepareStateForCompletion(
+        resolvedArray[i],
+        parser,
+      );
+      const result = unwrapCompleteResult(
+        parser.complete(parserState, childExec),
+      );
       if (!result.success) return result;
 
       // Flatten the tuple results, remapping deferred keys to the
@@ -6955,16 +6963,19 @@ export function concat(
   ): Promise<CompleteResult> => {
     const stateArray = state as unknown[];
 
-    // Phase 1: Build a combined state object for dependency resolution
-    const combinedState: Record<number, unknown> = {};
-    for (let i = 0; i < stateArray.length; i++) {
-      combinedState[i] = stateArray[i];
-    }
+    // Phase 1: Build dependency runtime and collect/fill source values.
+    const runtime = exec?.dependencyRuntime ??
+      createDependencyRuntimeContext(exec?.dependencyRegistry);
+    const childExec: ExecutionContext = {
+      ...exec,
+      dependencyRuntime: runtime,
+    } as ExecutionContext;
 
-    // Phase 2: Resolve deferred parse states across all tuples
-    const resolvedCombinedState = await resolveDeferredParseStatesAsync(
-      combinedState,
-    );
+    // Phase 2: Resolve deferred parse states across all tuples using runtime.
+    const resolvedArray = await resolveStateWithRuntimeAsync(
+      stateArray,
+      runtime,
+    ) as unknown[];
 
     // Phase 3: Complete each parser with resolved state
     const results: unknown[] = [];
@@ -6972,8 +6983,13 @@ export function concat(
     let hasDeferred = false;
     for (let i = 0; i < parsers.length; i++) {
       const parser = parsers[i];
-      const parserState = resolvedCombinedState[i];
-      const result = await parser.complete(parserState, exec);
+      const parserState = prepareStateForCompletion(
+        resolvedArray[i],
+        parser,
+      );
+      const result = unwrapCompleteResult(
+        await parser.complete(parserState, childExec),
+      );
       if (!result.success) return result;
 
       // Flatten the tuple results, remapping deferred keys to the
