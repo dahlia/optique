@@ -1,3 +1,4 @@
+import { getDisplayWidth } from "./displaywidth.ts";
 import type { NonEmptyString } from "./nonempty.ts";
 
 /**
@@ -639,7 +640,7 @@ export function formatMessage(
             while (true) {
               const match = wordPattern.exec(paragraph);
               if (match == null) break;
-              yield { text: match[0], width: match[0].length };
+              yield { text: match[0], width: getDisplayWidth(match[0]) };
             }
           }
         } else {
@@ -654,7 +655,7 @@ export function formatMessage(
             while (true) {
               const match = wordPattern.exec(normalizedText);
               if (match == null) break;
-              yield { text: match[0], width: match[0].length };
+              yield { text: match[0], width: getDisplayWidth(match[0]) };
             }
           }
         }
@@ -664,7 +665,7 @@ export function formatMessage(
           text: useColors
             ? `\x1b[3m${name}${resetSequence}` // Italic for option names
             : name,
-          width: name.length,
+          width: getDisplayWidth(name),
         };
       } else if (term.type === "optionNames") {
         const names = term.optionNames.map((name) =>
@@ -677,7 +678,7 @@ export function formatMessage(
             text: useColors
               ? `\x1b[3m${name}${resetSequence}` // Italic for option names
               : name,
-            width: name.length,
+            width: getDisplayWidth(name),
           };
           i++;
         }
@@ -687,7 +688,7 @@ export function formatMessage(
           text: useColors
             ? `\x1b[1m${metavar}${resetSequence}` // Bold for metavariables
             : metavar,
-          width: metavar.length,
+          width: getDisplayWidth(metavar),
         };
       } else if (term.type === "value") {
         const value = useQuotes ? `${JSON.stringify(term.value)}` : term.value;
@@ -695,7 +696,7 @@ export function formatMessage(
           text: useColors
             ? `\x1b[32m${value}${resetSequence}` // Green for values
             : value,
-          width: value.length,
+          width: getDisplayWidth(value),
         };
       } else if (term.type === "values") {
         for (let i = 0; i < term.values.length; i++) {
@@ -711,7 +712,7 @@ export function formatMessage(
                 ? `${value}${resetSequence}`
                 : value
               : value,
-            width: value.length,
+            width: getDisplayWidth(value),
           };
         }
       } else if (term.type === "envVar") {
@@ -720,7 +721,7 @@ export function formatMessage(
           text: useColors
             ? `\x1b[1;4m${envVar}${resetSequence}` // Bold and underlined for environment variables
             : envVar,
-          width: envVar.length,
+          width: getDisplayWidth(envVar),
         };
       } else if (term.type === "commandLine") {
         const cmd = useQuotes ? `\`${term.commandLine}\`` : term.commandLine;
@@ -728,7 +729,7 @@ export function formatMessage(
           text: useColors
             ? `\x1b[36m${cmd}${resetSequence}` // Cyan for command-line examples
             : cmd,
-          width: cmd.length,
+          width: getDisplayWidth(cmd),
         };
       } else if (term.type === "lineBreak") {
         // Explicit hard line break
@@ -744,12 +745,12 @@ export function formatMessage(
             `\x1b]8;;${urlString}\x1b\\${displayText}\x1b]8;;\x1b\\${resetSuffix}`;
           yield {
             text: hyperlink,
-            width: displayText.length,
+            width: getDisplayWidth(displayText),
           };
         } else {
           yield {
             text: displayText,
-            width: displayText.length,
+            width: getDisplayWidth(displayText),
           };
         }
       } else {

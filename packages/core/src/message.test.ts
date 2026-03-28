@@ -625,6 +625,49 @@ describe("formatMessage", () => {
     assert.ok(lines.length >= 2);
   });
 
+  describe("Unicode display width", () => {
+    it("should wrap Korean text based on display width", () => {
+      const msg: Message = [text("한글 한글 한글")];
+      // Each "한글" = 4 display columns.  With maxWidth 9, two words
+      // fit ("한글 한글" = 4+1+4 = 9) but three do not.
+      const formatted = formatMessage(msg, { quotes: false, maxWidth: 9 });
+      const lines = formatted.split("\n");
+      assert.equal(lines.length, 2);
+    });
+
+    it("should not wrap Korean text when it fits", () => {
+      const msg: Message = [text("한글")];
+      // "한글" = 4 display columns, maxWidth = 4
+      const formatted = formatMessage(msg, { quotes: false, maxWidth: 4 });
+      assert.ok(!formatted.includes("\n"));
+    });
+
+    it("should wrap combining marks based on display width", () => {
+      // "e\u0301" = 1 display column each
+      const msg: Message = [text("e\u0301 e\u0301 e\u0301")];
+      const formatted = formatMessage(msg, { quotes: false, maxWidth: 5 });
+      // "e\u0301 e\u0301 e\u0301" = 5 columns, should fit in one line
+      assert.ok(!formatted.includes("\n"));
+    });
+
+    it("should wrap emoji based on display width", () => {
+      const msg: Message = [text("😀 😀 😀")];
+      // Each "😀" = 2 columns.  "😀 " = 3 columns.  With maxWidth 5,
+      // "😀 😀" doesn't fit (3+3=6 > 5), so second emoji wraps,
+      // then "😀 😀" (3+2=5 <= 5) fits on the second line.
+      const formatted = formatMessage(msg, { quotes: false, maxWidth: 5 });
+      const lines = formatted.split("\n");
+      assert.equal(lines.length, 2);
+    });
+
+    it("should handle ZWJ emoji sequences", () => {
+      const msg: Message = [text("👨‍👩‍👧‍👦 x")];
+      // "👨‍👩‍👧‍👦" = 2 columns, " " = 1, "x" = 1, total = 4
+      const formatted = formatMessage(msg, { quotes: false, maxWidth: 5 });
+      assert.ok(!formatted.includes("\n"));
+    });
+  });
+
   describe("resetSuffix functionality", () => {
     it("should apply resetSuffix after ANSI reset sequences", () => {
       const msg: Message = [
