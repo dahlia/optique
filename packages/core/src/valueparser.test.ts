@@ -9269,19 +9269,20 @@ describe("socketAddress()", () => {
     });
 
     it("should render separator as plain text in format error", () => {
-      for (const separator of [":", " ", "  ", " to "]) {
+      for (const separator of [":", " ", "  ", " to ", "\n", "\t"]) {
         const parser = socketAddress({ separator, defaultPort: 80 });
         const result = parser.parse("-bad");
         assert.ok(!result.success);
-        // separator should be embedded in "host<sep>port" text term
+        const escaped = JSON.stringify(separator).slice(1, -1);
+        // separator should be embedded as escaped text in format example
         const formatTerm = result.error.find(
           (t: { type: string; text?: string }) =>
             t.type === "text" &&
-            t.text === `host${separator}port`,
+            t.text === `host${escaped}port`,
         );
         assert.ok(
           formatTerm !== undefined,
-          `expected text term "host${separator}port" for separator ${
+          `expected text term "host${escaped}port" for separator ${
             JSON.stringify(separator)
           }`,
         );

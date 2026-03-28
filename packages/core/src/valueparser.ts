@@ -3825,6 +3825,7 @@ export function socketAddress(
       }.`,
     );
   }
+  const formatExample = `host${JSON.stringify(separator).slice(1, -1)}port`;
   const metavar = options?.metavar ?? `HOST${separator}PORT`;
   ensureNonEmptyString(metavar);
   const defaultPort = options?.defaultPort;
@@ -4166,7 +4167,7 @@ export function socketAddress(
             return {
               success: false,
               error: message`Expected a socket address in format ${
-                text(`host${separator}port`)
+                text(formatExample)
               }, but got ${input}.`,
             };
           }
@@ -4181,7 +4182,7 @@ export function socketAddress(
           return {
             success: false,
             error: message`Expected a socket address in format ${
-              text(`host${separator}port`)
+              text(formatExample)
             }, but got ${input}.`,
           };
         }
@@ -4366,7 +4367,7 @@ export function socketAddress(
       return {
         success: false,
         error: message`Expected a socket address in format ${
-          text(`host${separator}port`)
+          text(formatExample)
         }, but got ${input}.`,
       };
     },
