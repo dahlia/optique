@@ -10159,6 +10159,22 @@ describe("socketAddress()", () => {
       ]);
     });
 
+    it("should pass the original input to function missingPort for trailing separator", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        errors: {
+          missingPort: (input) => message`Port is missing from ${input}.`,
+        },
+      });
+      const result = parser.parse("localhost:");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Port is missing from " },
+        { type: "value", value: "localhost:" },
+        { type: "text", text: "." },
+      ]);
+    });
+
     it("should reject trailing whitespace separator with defaultPort", () => {
       const parser = socketAddress({ separator: " ", defaultPort: 80 });
 
