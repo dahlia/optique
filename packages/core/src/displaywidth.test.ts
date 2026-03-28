@@ -77,6 +77,19 @@ describe("getDisplayWidth", () => {
       assert.equal(getDisplayWidth("\u{1F240}"), 2);
     });
 
+    it("should count Yijing Hexagram Symbols as 2 columns each", () => {
+      // U+4DC0–U+4DFF sit between CJK Extension A and CJK Unified
+      assert.equal(getDisplayWidth("\u4DC0"), 2); // ䷀ HEXAGRAM FOR THE CREATIVE HEAVEN
+      assert.equal(getDisplayWidth("\u4DFF"), 2);
+    });
+
+    it("should count Trigrams and Monogram/Digram symbols as 2 columns", () => {
+      // U+2630–U+2637 Trigrams, U+268A–U+268F Monogram/Digram Symbols
+      // CJK-origin symbols that terminals render as 2 columns
+      assert.equal(getDisplayWidth("\u2630"), 2); // ☰ TRIGRAM FOR HEAVEN
+      assert.equal(getDisplayWidth("\u268A"), 2); // ⚊ MONOGRAM FOR YANG
+    });
+
     it("should count text-style EAW=W dingbats as 1 column", () => {
       // Characters like ✂ (U+2702), ✔ (U+2714), ▶ (U+25B6) have
       // East_Asian_Width=W in the Unicode standard, but most terminal
@@ -144,9 +157,16 @@ describe("getDisplayWidth", () => {
       assert.equal(getDisplayWidth("\x1b[1m\x1b[32mhello\x1b[0m"), 5);
     });
 
-    it("should ignore OSC 8 hyperlinks", () => {
+    it("should ignore OSC 8 hyperlinks terminated with ST", () => {
       assert.equal(
         getDisplayWidth("\x1b]8;;http://example.com\x1b\\link\x1b]8;;\x1b\\"),
+        4,
+      );
+    });
+
+    it("should ignore OSC 8 hyperlinks terminated with BEL", () => {
+      assert.equal(
+        getDisplayWidth("\x1b]8;;http://example.com\x07link\x1b]8;;\x07"),
         4,
       );
     });

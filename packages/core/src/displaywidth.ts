@@ -1,5 +1,5 @@
 const ansiRegex = // deno-lint-ignore no-control-regex
-  /\x1B\[[0-9;]*[a-zA-Z]|\x1B\]8;;[^\x1B]*\x1B\\/g;
+  /\x1B\[[0-9;]*[a-zA-Z]|\x1B\]8;;[^\x1B\x07]*(?:\x1B\\|\x07)/g;
 
 const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
@@ -92,19 +92,18 @@ function isEastAsianWide(cp: number): boolean {
     (cp >= 0x1100 && cp <= 0x115F) ||
     // Left/Right-Pointing Angle Bracket (deprecated CJK, U+2329–232A)
     (cp >= 0x2329 && cp <= 0x232A) ||
+    // Trigrams (U+2630–2637), Monogram/Digram Symbols (U+268A–268F)
+    // CJK-origin Yijing symbols that terminals render as 2 columns
+    (cp >= 0x2630 && cp <= 0x2637) ||
+    (cp >= 0x268A && cp <= 0x268F) ||
     // CJK Radicals Supplement, Kangxi Radicals
     (cp >= 0x2E80 && cp <= 0x2FDF) ||
-    // Ideographic Description Characters, CJK Symbols and Punctuation
-    (cp >= 0x2FF0 && cp <= 0x303E) ||
-    // Hiragana, Katakana, Bopomofo, Hangul Compatibility Jamo,
-    // Kanbun, Bopomofo Extended, CJK Strokes,
-    // Katakana Phonetic Extensions, Enclosed CJK Letters and Months,
-    // CJK Compatibility
-    (cp >= 0x3041 && cp <= 0x33FF) ||
-    // CJK Unified Ideographs Extension A
-    (cp >= 0x3400 && cp <= 0x4DBF) ||
-    // CJK Unified Ideographs
-    (cp >= 0x4E00 && cp <= 0x9FFF) ||
+    // Ideographic Description Characters, CJK Symbols and Punctuation,
+    // Hiragana, Katakana, Bopomofo, Hangul Compatibility Jamo, Kanbun,
+    // Bopomofo Extended, CJK Strokes, Katakana Phonetic Extensions,
+    // Enclosed CJK, CJK Compatibility, CJK Extension A,
+    // Yijing Hexagram Symbols (U+4DC0–4DFF), CJK Unified Ideographs
+    (cp >= 0x2FF0 && cp <= 0x9FFF) ||
     // Yi Syllables, Yi Radicals
     (cp >= 0xA000 && cp <= 0xA4CF) ||
     // Hangul Jamo Extended-A
