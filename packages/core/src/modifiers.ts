@@ -974,13 +974,12 @@ export function withDefault<
               : defaultValue;
           } catch (e) {
             // Dynamic default thunks may throw (validation, env checks).
-            // Preserve the original error message, matching
-            // withDefault.complete() which surfaces the thrown message.
-            const msg = e instanceof Error ? e.message : String(e);
-            return {
-              success: false as const,
-              error: message`${msg}`,
-            };
+            // Preserve the structured errorMessage from WithDefaultError,
+            // matching withDefault.complete() which surfaces it directly.
+            const error = e instanceof WithDefaultError
+              ? e.errorMessage
+              : message`${e instanceof Error ? e.message : String(e)}`;
+            return { success: false as const, error };
           }
           // Normalize the default value to match what the inner parser's
           // value parser would produce, so that dependency source values

@@ -83,9 +83,9 @@ export interface InputTrace {
 
 // Symbol registry: maps each symbol to a stable string key so that
 // identical symbol instances always produce the same serialized path.
-// Uses Map (not WeakMap) because WeakMap rejects registered symbols
-// created with Symbol.for().
-const symbolKeys = new Map<symbol, string>();
+// Registered symbols are handled by Symbol.keyFor() and never enter
+// this map, so WeakMap is safe and avoids retaining local symbols.
+const symbolKeys = new WeakMap<symbol, string>();
 let symbolCounter = 0;
 
 /** Length-prefix a raw segment so that no delimiter escaping is needed. */

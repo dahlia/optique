@@ -20,9 +20,10 @@ import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
 // =============================================================================
 
 // Per-instance counter so that distinct symbols with the same description
-// serialize to different strings.  Uses Map (not WeakMap) because WeakMap
-// rejects registered symbols created with Symbol.for().
-const symbolIds = new Map<symbol, string>();
+// serialize to different strings.  Registered symbols are handled by
+// Symbol.keyFor() and never enter this map, so WeakMap is safe here
+// and avoids retaining local symbols across parse sessions.
+const symbolIds = new WeakMap<symbol, string>();
 let symbolCounter = 0;
 
 function stableSymbolKey(sym: symbol): string {
@@ -402,7 +403,11 @@ function fingerprintValue(v: unknown): string {
   if (v === undefined) return "u:";
   if (v === null) return "n:";
   if (typeof v === "string") return `s:${v}`;
-  if (typeof v === "number") return `d:${v}`;
+  if (typeof v === "number") {
+    // Object.is distinguishes 0 from -0; String() does not.
+    if (Object.is(v, -0)) return "d:-0";
+    return `d:${v}`;
+  }
   if (typeof v === "boolean") return `b:${v}`;
   if (typeof v === "symbol") return `y:${stableSymbolKey(v)}`;
   if (typeof v === "object") {
