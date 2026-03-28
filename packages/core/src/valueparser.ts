@@ -3841,17 +3841,27 @@ export function socketAddress(
     metavar: "HOST",
   });
 
-  // A maximally permissive hostname parser used only for split
-  // disambiguation.  It accepts any syntactically valid hostname
-  // (including wildcards, underscores, and enlarged maxLength) so
-  // that neither host-type restrictions nor user hostname policies
-  // affect whether a split is considered ambiguous.
-  const syntaxHostnameCheck = hostname({
-    metavar: "HOST",
-    allowWildcard: true,
-    allowUnderscore: true,
-    maxLength: Math.max(253, options?.host?.hostname?.maxLength ?? 0),
-  });
+  // Parser used to decide whether a split is ambiguous: if the
+  // whole input is accepted as a hostname by this parser, the
+  // separator might be part of the hostname and the split error
+  // would be misleading.
+  //
+  // In "hostname" and "both" modes the user's own hostnameParser
+  // is the right authority — its policy restrictions (maxLength,
+  // allowUnderscore, etc.) determine which strings are valid
+  // hostnames, so they should also determine split ambiguity.
+  //
+  // In "ip" mode hostname options are irrelevant, so a maximally
+  // permissive syntax check is used instead to avoid leaking
+  // hostname policy into IP-only parsing.
+  const disambiguationParser = hostType === "ip"
+    ? hostname({
+      metavar: "HOST",
+      allowWildcard: true,
+      allowUnderscore: true,
+      maxLength: Math.max(253, options?.host?.hostname?.maxLength ?? 0),
+    })
+    : hostnameParser;
 
   // Create port parser
   const portParser = port({
@@ -4085,7 +4095,15 @@ export function socketAddress(
                 validHostInvalidPortError = portResult.error;
               }
             } else {
+              // Always record the port error to prevent the host-only
+              // fallback from silently masking port typos.  Also
+              // validate the host so that host policy errors (e.g.,
+              // allowLocalhost: false) can take priority later.
               validHostInvalidPortError = portResult.error;
+              const hostResult = parseHost(hostPart);
+              if (!hostResult.success && firstHostError === undefined) {
+                firstHostError = { hostPart, error: hostResult.error };
+              }
             }
           } else if (
             (firstHostError === undefined ||
@@ -4122,10 +4140,20 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
-        // When the whole input is a syntactically valid hostname, the
-        // split is ambiguous and the port error would be misleading.
-        // Return the generic format error instead.
-        if (syntaxHostnameCheck.parse(trimmed).success) {
+        // When the host also failed validation, prefer the host error
+        // over the port error — the host problem is more fundamental.
+        if (
+          firstHostError !== undefined &&
+          firstHostError.hostPart !== "" &&
+          !firstHostError.hostPart.includes(separator) &&
+          !disambiguationParser.parse(trimmed).success
+        ) {
+          return { success: false, error: firstHostError.error };
+        }
+        // When the whole input is a valid hostname under the
+        // disambiguation parser, the split is ambiguous and the port
+        // error would be misleading.  Return the generic format error.
+        if (disambiguationParser.parse(trimmed).success) {
           return {
             success: false,
             error:
@@ -4220,7 +4248,7 @@ export function socketAddress(
         if (
           trailingSepHostError.hostPart !== "" &&
           !trailingSepHostError.hostPart.includes(separator) &&
-          !syntaxHostnameCheck.parse(trimmed).success
+          !disambiguationParser.parse(trimmed).success
         ) {
           return { success: false, error: trailingSepHostError.error };
         }
@@ -4270,19 +4298,16 @@ export function socketAddress(
           return { success: false, error: msg };
         }
         // Only surface the split-host error when the whole input is not
-        // a syntactically valid hostname.  When the separator can appear
-        // inside hostnames (e.g., "-", "to"), a split may place the
-        // boundary at a position the user did not intend.  Checking the
-        // whole input disambiguates: if it is a valid hostname, the
-        // split was likely wrong and the generic format error is more
-        // appropriate.  The check uses syntaxHostnameCheck (a hostname
-        // parser with default options) so that neither host-type
-        // restrictions (e.g., type: "ip") nor user hostname policies
-        // (e.g., maxLength) affect the syntactic disambiguation.
+        // a valid hostname under the disambiguation parser.  When the
+        // separator can appear inside hostnames (e.g., "-", "to"), a
+        // split may place the boundary at a position the user did not
+        // intend.  Checking the whole input disambiguates: if it is a
+        // valid hostname, the split was likely wrong and the generic
+        // format error is more appropriate.
         if (
           firstHostError.hostPart !== "" &&
           !firstHostError.hostPart.includes(separator) &&
-          !syntaxHostnameCheck.parse(trimmed).success
+          !disambiguationParser.parse(trimmed).success
         ) {
           return { success: false, error: firstHostError.error };
         }

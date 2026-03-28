@@ -10625,12 +10625,12 @@ describe("socketAddress()", () => {
     });
 
     it("should still propagate port error for unambiguous separator", () => {
-      // "localhost:70000" with separator ":": colons never appear
+      // "example.com:70000" with separator ":": colons never appear
       // in hostnames, so the split is unambiguous.  The specific
       // port error should be returned.
       const parser = socketAddress({ requirePort: true });
 
-      const result = parser.parse("localhost:70000");
+      const result = parser.parse("example.com:70000");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
         {
@@ -10641,6 +10641,75 @@ describe("socketAddress()", () => {
         { type: "text", text: ", but got " },
         { type: "value", value: "70000" },
         { type: "text", text: "." },
+      ]);
+    });
+
+    it("should prioritize host error over port error when both fail", () => {
+      // "localhost:70000" with allowLocalhost: false.  Both host and
+      // port are invalid, but the host error is more fundamental —
+      // fixing the port still leaves a rejected host.
+      const parser = socketAddress({
+        requirePort: true,
+        host: {
+          type: "hostname",
+          hostname: { allowLocalhost: false },
+        },
+      });
+
+      const result = parser.parse("localhost:70000");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Hostname 'localhost' is not allowed." },
+      ]);
+    });
+
+    it("should propagate host error for disallowed underscore with ambiguous separator", () => {
+      // "_host-80" with allowUnderscore: false.  The user's parser
+      // rejects "_host-80" as a hostname, so the split is unambiguous.
+      const parser = socketAddress({
+        separator: "-",
+        requirePort: true,
+        host: {
+          type: "hostname",
+          hostname: { allowUnderscore: false },
+        },
+      });
+
+      const result = parser.parse("_host-80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Hostname ",
+        },
+        { type: "value", value: "_host" },
+        {
+          type: "text",
+          text: " contains underscore, which is not allowed.",
+        },
+      ]);
+    });
+
+    it("should propagate host error for maxLength violation with ambiguous separator", () => {
+      // "foobar-80" with maxLength: 5.  "foobar-80" exceeds 5 chars,
+      // so the user's parser rejects it.  The split is unambiguous.
+      const parser = socketAddress({
+        separator: "-",
+        requirePort: true,
+        host: {
+          type: "hostname",
+          hostname: { maxLength: 5 },
+        },
+      });
+
+      const result = parser.parse("foobar-80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Hostname " },
+        { type: "value", value: "foobar" },
+        { type: "text", text: " is too long (maximum " },
+        { type: "text", text: "5" },
+        { type: "text", text: " characters)." },
       ]);
     });
   });
