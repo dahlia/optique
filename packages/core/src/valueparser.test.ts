@@ -9289,7 +9289,7 @@ describe("socketAddress()", () => {
         // separator should never appear as a value term
         const hasValueSep = result.error.some(
           (t: { type: string; value?: string }) =>
-            t.type === "value" && t.value === separator.trim(),
+            t.type === "value" && t.value === separator,
         );
         assert.ok(
           !hasValueSep,
