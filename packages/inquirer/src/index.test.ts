@@ -7,6 +7,7 @@ import {
   injectAnnotations,
 } from "@optique/core/annotations";
 import { group, object } from "@optique/core/constructs";
+import { dependency } from "@optique/core/dependency";
 import type { SourceContext } from "@optique/core/context";
 import type { DocFragments } from "@optique/core/doc";
 import { runWith } from "@optique/core/facade";
@@ -4442,5 +4443,89 @@ describe("prompt()", () => {
       assert.ok(!invalid.success);
       assert.equal(promptCalls, 0);
     });
+  });
+});
+
+// https://github.com/dahlia/optique/issues/751
+describe("prompt() with dependency sources", () => {
+  const mode = dependency(choice(["dev", "prod"] as const));
+  const level = mode.derive({
+    metavar: "LEVEL",
+    mode: "sync",
+    factory: (value: "dev" | "prod") =>
+      choice(
+        value === "dev"
+          ? (["debug", "verbose"] as const)
+          : (["silent", "strict"] as const),
+      ),
+    defaultValue: () => "dev" as const,
+  });
+
+  it("CLI-provided dependency source resolves to derived parser", async () => {
+    const parser = object({
+      mode: prompt(option("--mode", mode), {
+        type: "select",
+        message: "Select mode:",
+        choices: ["dev", "prod"],
+        prompter: () =>
+          Promise.reject(new Error("Prompt should not be called")),
+      }),
+      level: option("--level", level),
+    });
+    // CLI provides both --mode and --level; prompt should not be called
+    const result = await parseAsync(parser, [
+      "--mode",
+      "prod",
+      "--level",
+      "silent",
+    ]);
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "prod");
+    assert.equal(result.value.level, "silent");
+  });
+
+  it("CLI-provided dependency source rejects invalid derived value", async () => {
+    const parser = object({
+      mode: prompt(option("--mode", mode), {
+        type: "select",
+        message: "Select mode:",
+        choices: ["dev", "prod"],
+        prompter: () =>
+          Promise.reject(new Error("Prompt should not be called")),
+      }),
+      level: option("--level", level),
+    });
+    // "debug" is not valid for prod
+    const result = await parseAsync(parser, [
+      "--mode",
+      "prod",
+      "--level",
+      "debug",
+    ]);
+    assert.ok(!result.success);
+  });
+
+  // Note: prompted values are not currently registered as dependency
+  // sources.  When the CLI omits the source option and prompt()
+  // provides the value interactively, the derived parser falls back
+  // to its defaultValue instead of using the prompted value.
+  // This gap is tracked in https://github.com/dahlia/optique/issues/750
+  it("prompted dependency source uses default for derived parser", async () => {
+    const parser = object({
+      mode: prompt(option("--mode", mode), {
+        type: "select",
+        message: "Select mode:",
+        choices: ["dev", "prod"],
+        prompter: () => Promise.resolve("prod"),
+      }),
+      level: option("--level", level),
+    });
+    // --mode not provided; prompt returns "prod" but the derived parser
+    // uses its defaultValue ("dev") since prompted values don't register
+    // as dependency sources
+    const result = await parseAsync(parser, ["--level", "debug"]);
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "prod");
+    assert.equal(result.value.level, "debug");
   });
 });

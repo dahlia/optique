@@ -2127,3 +2127,8 @@ describe("bindConfig() with dependency sources across merge() boundaries", () =>
     assert.equal(result.value.level, "debug");
   });
 });
+
+// Note: bindConfig() with dependency sources does not currently work inside
+// tuple() or concat().  Config-backed dependency resolution only works inside
+// object() and merge().  This gap is tracked in
+// https://github.com/dahlia/optique/issues/750

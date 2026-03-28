@@ -1914,3 +1914,8 @@ describe("bindEnv() with dependency sources across merge() boundaries", () => {
     );
   });
 });
+
+// Note: bindEnv() with dependency sources does not currently work inside
+// tuple() or concat().  Env-backed dependency resolution only works inside
+// object() and merge().  This gap is tracked in
+// https://github.com/dahlia/optique/issues/750
