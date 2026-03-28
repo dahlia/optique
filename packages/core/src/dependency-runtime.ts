@@ -327,7 +327,9 @@ function lengthPrefix(s: string): string {
 function serializePathSegment(p: PropertyKey): string {
   if (typeof p === "string") return lengthPrefix(`s${p}`);
   if (typeof p === "number") return lengthPrefix(`n${p}`);
-  return lengthPrefix(stableSymbolKey(p as symbol));
+  // Prefix with "y" so that a symbol like sym:0 does not collide
+  // with a string like "ym:0" (which would also become "sym:0").
+  return lengthPrefix(`y${stableSymbolKey(p as symbol)}`);
 }
 
 function serializeReplayKey(key: ReplayKey): string {
@@ -548,6 +550,62 @@ export function fillMissingSourceDefaults(
       );
     } else {
       // Default thunk returned a failure — propagate it.
+      failures.push({
+        sourceId: meta.source.sourceId,
+        path: node.path,
+        error: result,
+      });
+    }
+  }
+  return failures;
+}
+
+/**
+ * Async version of {@link fillMissingSourceDefaults}.
+ * Awaits async `getMissingSourceValue` results.
+ *
+ * @param nodes The runtime nodes to inspect.
+ * @param runtime The dependency runtime context.
+ * @returns Failures from default evaluation (empty if all succeeded).
+ * @internal
+ * @since 1.0.0
+ */
+export async function fillMissingSourceDefaultsAsync(
+  nodes: readonly RuntimeNode[],
+  runtime: DependencyRuntimeContext,
+): Promise<readonly SourceDefaultFailure[]> {
+  const failures: SourceDefaultFailure[] = [];
+  for (const node of nodes) {
+    const meta = node.parser.dependencyMetadata;
+    if (meta?.source == null) continue;
+    if (runtime.hasSource(meta.source.sourceId)) continue;
+    if (runtime.isSourceFailed(meta.source.sourceId)) continue;
+    if (node.matched === true) continue;
+    if (!meta.source.preservesSourceValue) continue;
+    if (meta.source.getMissingSourceValue == null) continue;
+
+    let result: ValueParserResult<unknown>;
+    try {
+      result = await meta.source.getMissingSourceValue();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      failures.push({
+        sourceId: meta.source.sourceId,
+        path: node.path,
+        error: {
+          success: false,
+          error: message`Default value evaluation failed: ${msg}`,
+        },
+      });
+      continue;
+    }
+    if (result.success) {
+      runtime.registerSource(
+        meta.source.sourceId,
+        result.value,
+        "default",
+      );
+    } else {
       failures.push({
         sourceId: meta.source.sourceId,
         path: node.path,

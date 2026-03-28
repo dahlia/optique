@@ -11,6 +11,7 @@ import {
   createDependencyRuntimeContext,
   createReplayKey,
   fillMissingSourceDefaults,
+  fillMissingSourceDefaultsAsync,
   replayDerivedParser,
   replayDerivedParserAsync,
   type RuntimeNode,
@@ -544,6 +545,63 @@ describe("fillMissingSourceDefaults", () => {
     assert.equal(failures.length, 1);
     assert.equal(failures[0].sourceId, sourceId);
     assert.ok(!failures[0].error.success);
+  });
+});
+
+describe("fillMissingSourceDefaultsAsync", () => {
+  test("awaits async getMissingSourceValue", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            extractSourceValue: bareExtract,
+            preservesSourceValue: true,
+            getMissingSourceValue: () =>
+              Promise.resolve({
+                success: true as const,
+                value: "async-dev",
+              }),
+          },
+        },
+      },
+      state: undefined,
+    }];
+    const failures = await fillMissingSourceDefaultsAsync(nodes, runtime);
+    assert.equal(failures.length, 0);
+    assert.ok(runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), "async-dev");
+  });
+
+  test("propagates async default failure", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            extractSourceValue: bareExtract,
+            preservesSourceValue: true,
+            getMissingSourceValue: () =>
+              Promise.resolve({
+                success: false as const,
+                error: undefined!,
+              }),
+          },
+        },
+      },
+      state: undefined,
+    }];
+    const failures = await fillMissingSourceDefaultsAsync(nodes, runtime);
+    assert.equal(failures.length, 1);
+    assert.ok(!runtime.hasSource(sourceId));
   });
 });
 
