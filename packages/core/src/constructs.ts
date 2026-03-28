@@ -155,6 +155,31 @@ function unwrapCompleteResult(
 }
 
 /**
+ * Prepares a field state for completion by wrapping `undefined` state
+ * with the parser's initial pending dependency state when needed.
+ *
+ * In the old protocol, when a parser has a `PendingDependencySourceState`
+ * as its initial state and the field state is `undefined` (option not
+ * provided), the construct wraps it as `[initialState]` so that
+ * `withDefault().complete()` can detect the pending dependency and
+ * return a `DependencySourceState` with the default value.
+ * @internal
+ */
+function prepareStateForCompletion(
+  fieldState: unknown,
+  parser: Parser<Mode, unknown, unknown>,
+): unknown {
+  if (fieldState !== undefined) return fieldState;
+  if (isPendingDependencySourceState(parser.initialState)) {
+    return [parser.initialState];
+  }
+  if (isWrappedDependencySource(parser)) {
+    return [parser[wrappedDependencySourceMarker]];
+  }
+  return fieldState;
+}
+
+/**
  * Returns the field state with parent annotations inherited, respecting
  * the parser's {@link inheritParentAnnotationsKey} flag.  This is the
  * same logic as {@link createFieldStateGetter} inside `object()` but
@@ -5191,97 +5216,39 @@ export function tuple<
         () => {
           const stateArray = state as unknown[];
 
-          // Phase 1: Pre-complete elements with PendingDependencySourceState
-          const preCompletedState: unknown[] = [];
-          for (let i = 0; i < syncParsers.length; i++) {
-            const elementState = stateArray[i];
-            const elementParser = syncParsers[i];
+          // Phase 1: Build dependency runtime and collect/fill source values.
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec: ExecutionContext = {
+            ...exec,
+            dependencyRuntime: runtime,
+          } as ExecutionContext;
+          const nodes = buildRuntimeNodesFromPairs(
+            syncParsers.map((p, i) => [i, p] as const),
+            Object.fromEntries(stateArray.map((s, i) => [i, s])),
+            exec?.path,
+          );
+          collectExplicitSourceValues(nodes, runtime);
+          fillMissingSourceDefaults(nodes, runtime);
 
-            // Case 1: state is [PendingDependencySourceState] (option was not provided)
-            if (
-              Array.isArray(elementState) &&
-              elementState.length === 1 &&
-              isPendingDependencySourceState(elementState[0])
-            ) {
-              // Call complete to get DependencySourceState with default value
-              const completed = elementParser.complete(elementState, exec);
-              preCompletedState[i] = completed;
-            } // Case 2: state is undefined but parser's initialState is PendingDependencySourceState
-            else if (
-              elementState === undefined &&
-              isPendingDependencySourceState(elementParser.initialState)
-            ) {
-              // Call complete with [initialState] to get DependencySourceState
-              const completed = elementParser.complete([
-                elementParser.initialState,
-              ], exec);
-              preCompletedState[i] = completed;
-            } // Case 3: state is undefined and parser has wrappedDependencySourceMarker
-            else if (
-              elementState === undefined &&
-              isWrappedDependencySource(elementParser)
-            ) {
-              const pendingState = elementParser[wrappedDependencySourceMarker];
-              const completed = elementParser.complete([pendingState], exec);
-              preCompletedState[i] = completed;
-            } else {
-              preCompletedState[i] = elementState;
-            }
-          }
+          // Phase 2: Resolve all DeferredParseState in the state array.
+          const resolvedArray = resolveStateWithRuntime(
+            stateArray,
+            runtime,
+          ) as unknown[];
 
-          // Phase 2: Resolve any deferred parse states with actual dependency values
-          const resolvedState = resolveDeferredParseStates(preCompletedState);
-          const resolvedArray = resolvedState as unknown[];
-
-          // Phase 3: Complete remaining elements
+          // Phase 3: Complete each element using resolved state.
           const result: unknown[] = [];
           const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
           let hasDeferred = false;
-
           for (let i = 0; i < syncParsers.length; i++) {
-            const elementResolvedState = resolvedArray[i];
             const elementParser = syncParsers[i];
-            const originalElementState = stateArray[i];
-
-            // Check if this element was pre-completed
-            const wasPreCompletedCase1 = Array.isArray(originalElementState) &&
-              originalElementState.length === 1 &&
-              isPendingDependencySourceState(originalElementState[0]);
-            const wasPreCompletedCase2 = originalElementState === undefined &&
-              isPendingDependencySourceState(elementParser.initialState);
-            const wasPreCompletedCase3 = originalElementState === undefined &&
-              isWrappedDependencySource(elementParser);
-
-            if (
-              isDependencySourceState(elementResolvedState) &&
-              (wasPreCompletedCase1 || wasPreCompletedCase2 ||
-                wasPreCompletedCase3)
-            ) {
-              // This is a pre-completed withDefault element. Extract the value directly.
-              const depResult = elementResolvedState.result;
-              if (depResult.success) {
-                result[i] = depResult.value;
-                if (depResult.deferred) {
-                  if (depResult.deferredKeys) {
-                    deferredKeys.set(i, depResult.deferredKeys);
-                  } else if (
-                    depResult.value == null ||
-                    typeof depResult.value !== "object"
-                  ) {
-                    deferredKeys.set(i, null);
-                  } else {
-                    hasDeferred = true;
-                  }
-                }
-              } else {
-                return { success: false as const, error: depResult.error };
-              }
-              continue;
-            }
-
-            const valueResult = elementParser.complete(
-              elementResolvedState,
-              exec,
+            const elementState = prepareStateForCompletion(
+              resolvedArray[i],
+              elementParser,
+            );
+            const valueResult = unwrapCompleteResult(
+              elementParser.complete(elementState, childExec),
             );
             if (valueResult.success) {
               result[i] = valueResult.value;
@@ -5319,103 +5286,39 @@ export function tuple<
         async () => {
           const stateArray = state as unknown[];
 
-          // Phase 1: Pre-complete elements with PendingDependencySourceState
-          const preCompletedState: unknown[] = [];
-          for (let i = 0; i < parsers.length; i++) {
-            const elementState = stateArray[i];
-            const elementParser = parsers[i];
-
-            // Case 1: state is [PendingDependencySourceState] (option was not provided)
-            if (
-              Array.isArray(elementState) &&
-              elementState.length === 1 &&
-              isPendingDependencySourceState(elementState[0])
-            ) {
-              const completed = await elementParser.complete(
-                elementState,
-                exec,
-              );
-              preCompletedState[i] = completed;
-            } // Case 2: state is undefined but parser's initialState is PendingDependencySourceState
-            else if (
-              elementState === undefined &&
-              isPendingDependencySourceState(elementParser.initialState)
-            ) {
-              const completed = await elementParser.complete([
-                elementParser.initialState,
-              ], exec);
-              preCompletedState[i] = completed;
-            } // Case 3: state is undefined and parser has wrappedDependencySourceMarker
-            else if (
-              elementState === undefined &&
-              isWrappedDependencySource(elementParser)
-            ) {
-              const pendingState = elementParser[wrappedDependencySourceMarker];
-              const completed = await elementParser.complete(
-                [pendingState],
-                exec,
-              );
-              preCompletedState[i] = completed;
-            } else {
-              preCompletedState[i] = elementState;
-            }
-          }
-
-          // Phase 2: Resolve any deferred parse states with actual dependency values
-          const resolvedState = await resolveDeferredParseStatesAsync(
-            preCompletedState,
+          // Phase 1: Build dependency runtime and collect/fill source values.
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec: ExecutionContext = {
+            ...exec,
+            dependencyRuntime: runtime,
+          } as ExecutionContext;
+          const nodes = buildRuntimeNodesFromPairs(
+            parsers.map((p, i) => [i, p] as const),
+            Object.fromEntries(stateArray.map((s, i) => [i, s])),
+            exec?.path,
           );
-          const resolvedArray = resolvedState as unknown[];
+          collectExplicitSourceValues(nodes, runtime);
+          await fillMissingSourceDefaultsAsync(nodes, runtime);
 
-          // Phase 3: Complete remaining elements
+          // Phase 2: Resolve all DeferredParseState in the state array.
+          const resolvedArray = await resolveStateWithRuntimeAsync(
+            stateArray,
+            runtime,
+          ) as unknown[];
+
+          // Phase 3: Complete each element using resolved state.
           const result: unknown[] = [];
           const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
           let hasDeferred = false;
-
           for (let i = 0; i < parsers.length; i++) {
-            const elementResolvedState = resolvedArray[i];
             const elementParser = parsers[i];
-            const originalElementState = stateArray[i];
-
-            // Check if this element was pre-completed
-            const wasPreCompletedCase1 = Array.isArray(originalElementState) &&
-              originalElementState.length === 1 &&
-              isPendingDependencySourceState(originalElementState[0]);
-            const wasPreCompletedCase2 = originalElementState === undefined &&
-              isPendingDependencySourceState(elementParser.initialState);
-            const wasPreCompletedCase3 = originalElementState === undefined &&
-              isWrappedDependencySource(elementParser);
-
-            if (
-              isDependencySourceState(elementResolvedState) &&
-              (wasPreCompletedCase1 || wasPreCompletedCase2 ||
-                wasPreCompletedCase3)
-            ) {
-              // This is a pre-completed withDefault element. Extract the value directly.
-              const depResult = elementResolvedState.result;
-              if (depResult.success) {
-                result[i] = depResult.value;
-                if (depResult.deferred) {
-                  if (depResult.deferredKeys) {
-                    deferredKeys.set(i, depResult.deferredKeys);
-                  } else if (
-                    depResult.value == null ||
-                    typeof depResult.value !== "object"
-                  ) {
-                    deferredKeys.set(i, null);
-                  } else {
-                    hasDeferred = true;
-                  }
-                }
-              } else {
-                return { success: false as const, error: depResult.error };
-              }
-              continue;
-            }
-
-            const valueResult = await elementParser.complete(
-              elementResolvedState,
-              exec,
+            const elementState = prepareStateForCompletion(
+              resolvedArray[i],
+              elementParser,
+            );
+            const valueResult = unwrapCompleteResult(
+              await elementParser.complete(elementState, childExec),
             );
             if (valueResult.success) {
               result[i] = valueResult.value;

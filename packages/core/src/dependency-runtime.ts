@@ -834,16 +834,19 @@ function resolveSingleDeferred(
   deferred: DeferredParseState<unknown>,
   runtime: DependencyRuntimeContext,
 ): ValueParserResult<unknown> {
-  const depIds = deferred.dependencyIds ?? [deferred.dependencyId];
+  // deriveFrom() sets dependencyIds (always an array).
+  // derive() only sets dependencyId (single value).
+  const isMultiDep = deferred.dependencyIds != null &&
+    deferred.dependencyIds.length > 0;
+  const depIds = isMultiDep ? deferred.dependencyIds! : [deferred.dependencyId];
   const resolution = runtime.resolveDependencies({
     dependencyIds: depIds,
     defaultValues: deferred.defaultValues,
   });
   if (resolution.kind !== "resolved") return deferred.preliminaryResult;
 
-  const depValue = depIds.length === 1
-    ? resolution.values[0]
-    : resolution.values;
+  // deriveFrom always passes values as an array; derive passes a single value.
+  const depValue = isMultiDep ? resolution.values : resolution.values[0];
   const result = deferred.parser[parseWithDependency](
     deferred.rawInput,
     depValue,
@@ -992,16 +995,18 @@ async function resolveDeferredInStateAsync(
 
   if (isDeferredParseState(state)) {
     const deferred = state;
-    const depIds = deferred.dependencyIds ?? [deferred.dependencyId];
+    const isMultiDep = deferred.dependencyIds != null &&
+      deferred.dependencyIds.length > 0;
+    const depIds = isMultiDep
+      ? deferred.dependencyIds!
+      : [deferred.dependencyId];
     const resolution = runtime.resolveDependencies({
       dependencyIds: depIds,
       defaultValues: deferred.defaultValues,
     });
     if (resolution.kind !== "resolved") return deferred.preliminaryResult;
 
-    const depValue = depIds.length === 1
-      ? resolution.values[0]
-      : resolution.values;
+    const depValue = isMultiDep ? resolution.values : resolution.values[0];
     return Promise.resolve(
       deferred.parser[parseWithDependency](deferred.rawInput, depValue),
     );
