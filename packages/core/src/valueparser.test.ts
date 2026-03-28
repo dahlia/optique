@@ -9269,28 +9269,32 @@ describe("socketAddress()", () => {
     });
 
     it("should render separator as plain text in format error", () => {
-      for (const separator of [":", " ", " to "]) {
+      for (const separator of [":", " ", "  ", " to "]) {
         const parser = socketAddress({ separator, defaultPort: 80 });
         const result = parser.parse("-bad");
         assert.ok(!result.success);
-        // separator should be a text term, not a value term
+        // separator should be embedded in "host<sep>port" text term
+        const formatTerm = result.error.find(
+          (t: { type: string; text?: string }) =>
+            t.type === "text" &&
+            t.text === `host${separator}port`,
+        );
+        assert.ok(
+          formatTerm !== undefined,
+          `expected text term "host${separator}port" for separator ${
+            JSON.stringify(separator)
+          }`,
+        );
+        // separator should never appear as a value term
         const hasValueSep = result.error.some(
           (t: { type: string; value?: string }) =>
             t.type === "value" && t.value === separator.trim(),
         );
         assert.ok(
           !hasValueSep,
-          `separator "${separator}" should not appear as a value term`,
-        );
-        const hasTextSep = result.error.some(
-          (t: { type: string; text?: string }) =>
-            t.type === "text" &&
-            t.text !== undefined &&
-            t.text.includes(separator),
-        );
-        assert.ok(
-          hasTextSep,
-          `separator "${separator}" should appear within a text term`,
+          `separator ${
+            JSON.stringify(separator)
+          } should not appear as a value term`,
         );
       }
     });
@@ -9305,9 +9309,9 @@ describe("socketAddress()", () => {
       const result = parser.parse(":8080");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "text", text: ":" },
-        { type: "text", text: "port, but got " },
+        { type: "text", text: "Expected a socket address in format " },
+        { type: "text", text: "host:port" },
+        { type: "text", text: ", but got " },
         { type: "value", value: ":8080" },
         { type: "text", text: "." },
       ]);
@@ -9890,9 +9894,9 @@ describe("socketAddress()", () => {
       const result = parser.parse("toronto");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "text", text: "to" },
-        { type: "text", text: "port, but got " },
+        { type: "text", text: "Expected a socket address in format " },
+        { type: "text", text: "hosttoport" },
+        { type: "text", text: ", but got " },
         { type: "value", value: "toronto" },
         { type: "text", text: "." },
       ]);
@@ -9970,9 +9974,9 @@ describe("socketAddress()", () => {
       const result = parser.parse("db-70000");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "text", text: "-" },
-        { type: "text", text: "port, but got " },
+        { type: "text", text: "Expected a socket address in format " },
+        { type: "text", text: "host-port" },
+        { type: "text", text: ", but got " },
         { type: "value", value: "db-70000" },
         { type: "text", text: "." },
       ]);
@@ -10006,9 +10010,9 @@ describe("socketAddress()", () => {
       const result = parser.parse("db--70000");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "text", text: "-" },
-        { type: "text", text: "port, but got " },
+        { type: "text", text: "Expected a socket address in format " },
+        { type: "text", text: "host-port" },
+        { type: "text", text: ", but got " },
         { type: "value", value: "db--70000" },
         { type: "text", text: "." },
       ]);
@@ -10054,9 +10058,9 @@ describe("socketAddress()", () => {
       const result = parser.parse("dbto70000");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "text", text: "to" },
-        { type: "text", text: "port, but got " },
+        { type: "text", text: "Expected a socket address in format " },
+        { type: "text", text: "hosttoport" },
+        { type: "text", text: ", but got " },
         { type: "value", value: "dbto70000" },
         { type: "text", text: "." },
       ]);
@@ -10131,9 +10135,9 @@ describe("socketAddress()", () => {
       // Should be invalidFormat (separator found, no valid split),
       // NOT the alt-IPv4 error for "0177.0.0.1".
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "text", text: "to" },
-        { type: "text", text: "port, but got " },
+        { type: "text", text: "Expected a socket address in format " },
+        { type: "text", text: "hosttoport" },
+        { type: "text", text: ", but got " },
         { type: "value", value: "0177.0.0.1to" },
         { type: "text", text: "." },
       ]);
@@ -10407,9 +10411,9 @@ describe("socketAddress()", () => {
       const result = parser.parse("db--80");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "text", text: "-" },
-        { type: "text", text: "port, but got " },
+        { type: "text", text: "Expected a socket address in format " },
+        { type: "text", text: "host-port" },
+        { type: "text", text: ", but got " },
         { type: "value", value: "db--80" },
         { type: "text", text: "." },
       ]);
@@ -10440,9 +10444,9 @@ describe("socketAddress()", () => {
       const result = parser.parse(":");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "text", text: ":" },
-        { type: "text", text: "port, but got " },
+        { type: "text", text: "Expected a socket address in format " },
+        { type: "text", text: "host:port" },
+        { type: "text", text: ", but got " },
         { type: "value", value: ":" },
         { type: "text", text: "." },
       ]);
@@ -10457,9 +10461,9 @@ describe("socketAddress()", () => {
       const result = parser.parse("-");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "text", text: "-" },
-        { type: "text", text: "port, but got " },
+        { type: "text", text: "Expected a socket address in format " },
+        { type: "text", text: "host-port" },
+        { type: "text", text: ", but got " },
         { type: "value", value: "-" },
         { type: "text", text: "." },
       ]);
@@ -10479,9 +10483,9 @@ describe("socketAddress()", () => {
       const result = parser.parse("foo-80");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "text", text: "-" },
-        { type: "text", text: "port, but got " },
+        { type: "text", text: "Expected a socket address in format " },
+        { type: "text", text: "host-port" },
+        { type: "text", text: ", but got " },
         { type: "value", value: "foo-80" },
         { type: "text", text: "." },
       ]);
@@ -10500,9 +10504,9 @@ describe("socketAddress()", () => {
       const result = parser.parse("autoto");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "text", text: "to" },
-        { type: "text", text: "port, but got " },
+        { type: "text", text: "Expected a socket address in format " },
+        { type: "text", text: "hosttoport" },
+        { type: "text", text: ", but got " },
         { type: "value", value: "autoto" },
         { type: "text", text: "." },
       ]);
@@ -10523,9 +10527,9 @@ describe("socketAddress()", () => {
       const result = parser.parse("foo-80");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "text", text: "-" },
-        { type: "text", text: "port, but got " },
+        { type: "text", text: "Expected a socket address in format " },
+        { type: "text", text: "host-port" },
+        { type: "text", text: ", but got " },
         { type: "value", value: "foo-80" },
         { type: "text", text: "." },
       ]);
@@ -10545,9 +10549,9 @@ describe("socketAddress()", () => {
         const result = parser.parse("*.example--80");
         assert.ok(!result.success);
         assert.deepStrictEqual(result.error, [
-          { type: "text", text: "Expected a socket address in format host" },
-          { type: "text", text: "-" },
-          { type: "text", text: "port, but got " },
+          { type: "text", text: "Expected a socket address in format " },
+          { type: "text", text: "host-port" },
+          { type: "text", text: ", but got " },
           { type: "value", value: "*.example--80" },
           { type: "text", text: "." },
         ]);
@@ -10566,9 +10570,9 @@ describe("socketAddress()", () => {
         const result = parser.parse("_service--80");
         assert.ok(!result.success);
         assert.deepStrictEqual(result.error, [
-          { type: "text", text: "Expected a socket address in format host" },
-          { type: "text", text: "-" },
-          { type: "text", text: "port, but got " },
+          { type: "text", text: "Expected a socket address in format " },
+          { type: "text", text: "host-port" },
+          { type: "text", text: ", but got " },
           { type: "value", value: "_service--80" },
           { type: "text", text: "." },
         ]);
@@ -10593,9 +10597,9 @@ describe("socketAddress()", () => {
         const result = parser.parse(input);
         assert.ok(!result.success);
         assert.deepStrictEqual(result.error, [
-          { type: "text", text: "Expected a socket address in format host" },
-          { type: "text", text: "-" },
-          { type: "text", text: "port, but got " },
+          { type: "text", text: "Expected a socket address in format " },
+          { type: "text", text: "host-port" },
+          { type: "text", text: ", but got " },
           { type: "value", value: input },
           { type: "text", text: "." },
         ]);
@@ -10610,9 +10614,9 @@ describe("socketAddress()", () => {
       const result = parser.parse("::80");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "text", text: ":" },
-        { type: "text", text: "port, but got " },
+        { type: "text", text: "Expected a socket address in format " },
+        { type: "text", text: "host:port" },
+        { type: "text", text: ", but got " },
         { type: "value", value: "::80" },
         { type: "text", text: "." },
       ]);
@@ -10627,9 +10631,9 @@ describe("socketAddress()", () => {
       const result = parser.parse("--80");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "text", text: "-" },
-        { type: "text", text: "port, but got " },
+        { type: "text", text: "Expected a socket address in format " },
+        { type: "text", text: "host-port" },
+        { type: "text", text: ", but got " },
         { type: "value", value: "--80" },
         { type: "text", text: "." },
       ]);
@@ -10649,9 +10653,9 @@ describe("socketAddress()", () => {
       const result = parser.parse("foo-70000");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "text", text: "-" },
-        { type: "text", text: "port, but got " },
+        { type: "text", text: "Expected a socket address in format " },
+        { type: "text", text: "host-port" },
+        { type: "text", text: ", but got " },
         { type: "value", value: "foo-70000" },
         { type: "text", text: "." },
       ]);
@@ -10795,9 +10799,9 @@ describe("socketAddress()", () => {
       const result = parser.parse("localhost:abc");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format host" },
-        { type: "text", text: ":" },
-        { type: "text", text: "port, but got " },
+        { type: "text", text: "Expected a socket address in format " },
+        { type: "text", text: "host:port" },
+        { type: "text", text: ", but got " },
         { type: "value", value: "localhost:abc" },
         { type: "text", text: "." },
       ]);
