@@ -3843,13 +3843,14 @@ export function socketAddress(
 
   // A maximally permissive hostname parser used only for split
   // disambiguation.  It accepts any syntactically valid hostname
-  // (including wildcards and underscores) so that neither host-type
-  // restrictions nor user hostname policies affect whether a split
-  // is considered ambiguous.
+  // (including wildcards, underscores, and enlarged maxLength) so
+  // that neither host-type restrictions nor user hostname policies
+  // affect whether a split is considered ambiguous.
   const syntaxHostnameCheck = hostname({
     metavar: "HOST",
     allowWildcard: true,
     allowUnderscore: true,
+    maxLength: Math.max(253, options?.host?.hostname?.maxLength ?? 0),
   });
 
   // Create port parser

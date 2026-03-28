@@ -10548,6 +10548,31 @@ describe("socketAddress()", () => {
         { type: "text", text: "." },
       ]);
     });
+
+    it("should respect enlarged maxLength in disambiguation", () => {
+      // A multi-label hostname longer than 253 chars is valid when
+      // maxLength is raised.  The disambiguation check should
+      // respect this so the input is treated as an ambiguous
+      // hostname-like token.  (Single labels are limited to 63 chars
+      // by RFC 1123 regardless of maxLength.)
+      const base = "aa" + ".aa".repeat(84); // 254 chars, 85 labels
+      const input = `${base}--80`; // 258 chars
+      const parser = socketAddress({
+        separator: "-",
+        requirePort: true,
+        host: { type: "hostname", hostname: { maxLength: 300 } },
+      });
+
+      const result = parser.parse(input);
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "-" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: input },
+        { type: "text", text: "." },
+      ]);
+    });
   });
 });
 
