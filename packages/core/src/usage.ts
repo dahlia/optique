@@ -1,3 +1,4 @@
+import { getDisplayWidth } from "./displaywidth.ts";
 import type { NonEmptyString } from "./nonempty.ts";
 import { validateProgramName } from "./validate.ts";
 
@@ -542,7 +543,7 @@ export function formatUsage(
   }
 
   let output = options.colors ? `\x1b[1m${programName}\x1b[0m` : programName;
-  let lineWidth = programName.length;
+  let lineWidth = getDisplayWidth(programName);
   let first = true;
   for (const { text, width } of formatUsageTerms(usage, options)) {
     if (first) {
@@ -902,18 +903,18 @@ function* formatUsageTermInternal(
       text: options?.colors
         ? `\x1b[4m${term.metavar}\x1b[0m` // Underlined
         : term.metavar,
-      width: term.metavar.length,
+      width: getDisplayWidth(term.metavar),
     };
   } else if (term.type === "option") {
     if (options?.onlyShortestOptions) {
       const shortestName = term.names.reduce((a, b) =>
-        a.length <= b.length ? a : b
+        getDisplayWidth(a) <= getDisplayWidth(b) ? a : b
       );
       yield {
         text: options?.colors
           ? `\x1b[3m${shortestName}\x1b[0m` // Italic
           : shortestName,
-        width: shortestName.length,
+        width: getDisplayWidth(shortestName),
       };
     } else {
       let i = 0;
@@ -923,14 +924,14 @@ function* formatUsageTermInternal(
             text: options?.colors
               ? `\x1b[2m${optionsSeparator}\x1b[0m`
               : optionsSeparator, // Dim
-            width: optionsSeparator.length,
+            width: getDisplayWidth(optionsSeparator),
           };
         }
         yield {
           text: options?.colors
             ? `\x1b[3m${optionName}\x1b[0m` // Italic
             : optionName,
-          width: optionName.length,
+          width: getDisplayWidth(optionName),
         };
         i++;
       }
@@ -943,7 +944,7 @@ function* formatUsageTermInternal(
           text: options?.colors
             ? `\x1b[4m\x1b[2m${term.metavar}\x1b[0m` // Dim & underlined
             : term.metavar,
-          width: term.metavar.length,
+          width: getDisplayWidth(term.metavar),
         };
       }
     }
@@ -952,7 +953,7 @@ function* formatUsageTermInternal(
       text: options?.colors
         ? `\x1b[1m${term.name}\x1b[0m` // Bold
         : term.name,
-      width: term.name.length,
+      width: getDisplayWidth(term.name),
     };
   } else if (term.type === "optional") {
     yield {
@@ -1010,7 +1011,7 @@ function* formatUsageTermInternal(
     // Literal values are displayed as-is without special formatting
     yield {
       text: term.value,
-      width: term.value.length,
+      width: getDisplayWidth(term.value),
     };
   } else if (term.type === "passthrough") {
     // Pass-through options are displayed with a special format
