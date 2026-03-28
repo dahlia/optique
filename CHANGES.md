@@ -603,6 +603,12 @@ To be released.
     `suggest()` yields empty suggestions instead of propagating the
     exception.  [[#224], [#531]]
 
+ -  Fixed `option()` and `argument()` to properly resolve derived parser
+    dependencies when used at the top level (outside `object()`, `tuple()`,
+    etc.).  Previously, top-level usage fell back to the preliminary parse
+    result rather than running the dependency resolution pipeline with
+    default values.  [[#238], [#748]]
+
  -  The `integer()` parser in number mode now rejects values outside the safe
     integer range (`Number.MIN_SAFE_INTEGER` to `Number.MAX_SAFE_INTEGER`).
     Previously, such values were silently rounded, losing precision.  A new
@@ -1059,6 +1065,7 @@ To be released.
 [#228]: https://github.com/dahlia/optique/issues/228
 [#229]: https://github.com/dahlia/optique/issues/229
 [#235]: https://github.com/dahlia/optique/issues/235
+[#238]: https://github.com/dahlia/optique/issues/238
 [#240]: https://github.com/dahlia/optique/issues/240
 [#241]: https://github.com/dahlia/optique/issues/241
 [#242]: https://github.com/dahlia/optique/issues/242
@@ -1306,6 +1313,7 @@ To be released.
 [#744]: https://github.com/dahlia/optique/pull/744
 [#745]: https://github.com/dahlia/optique/pull/745
 [#746]: https://github.com/dahlia/optique/pull/746
+[#748]: https://github.com/dahlia/optique/pull/748
 
 ### @optique/config
 
