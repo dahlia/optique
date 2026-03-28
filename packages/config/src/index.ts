@@ -16,7 +16,12 @@ import type {
   ParserValuePlaceholder,
   SourceContext,
 } from "@optique/core/context";
-import type { Parser, ParserResult, Result } from "@optique/core/parser";
+import type {
+  ExecutionContext,
+  Parser,
+  ParserResult,
+  Result,
+} from "@optique/core/parser";
 import { annotationKey, getAnnotations } from "@optique/core/annotations";
 import { message } from "@optique/core/message";
 import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
@@ -694,7 +699,10 @@ export function bindConfig<
       configBindStateKey in value;
   }
 
-  function shouldDeferPromptUntilConfigResolves(state: unknown): boolean {
+  function shouldDeferPromptUntilConfigResolves(
+    state: unknown,
+    _exec?: ExecutionContext,
+  ): boolean {
     const annotations = getAnnotations(state);
     return annotations?.[options.context.id] === phase1ConfigAnnotationMarker;
   }
@@ -785,11 +793,11 @@ export function bindConfig<
       );
     },
 
-    complete: (state) => {
+    complete: (state, exec?) => {
       // Check if we have a CLI value from parse phase using the branded
       // type guard instead of an unsafe `as unknown as` cast.
       if (isConfigBindState(state) && state.hasCliValue) {
-        return parser.complete(state.cliState!);
+        return parser.complete(state.cliState!, exec);
       }
 
       // No CLI value, check config

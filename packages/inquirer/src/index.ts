@@ -25,6 +25,7 @@ import {
   unwrapInjectedAnnotationWrapper,
 } from "@optique/core/annotations";
 import type {
+  ExecutionContext,
   Mode,
   ModeValue,
   Parser,
@@ -137,9 +138,10 @@ const inheritParentAnnotationsKey = Symbol.for(
 function shouldDeferPrompt(
   parser: Parser<Mode, unknown, unknown>,
   state: unknown,
+  exec?: ExecutionContext,
 ): boolean {
   return typeof parser.shouldDeferCompletion === "function" &&
-    parser.shouldDeferCompletion(state) === true;
+    parser.shouldDeferCompletion(state, exec) === true;
 }
 
 function deferredPromptResult<TValue>(
@@ -912,6 +914,7 @@ export function prompt<M extends Mode, TValue, TState>(
   function usePromptOrDefer(
     state: unknown,
     result: ValueParserResult<TValue>,
+    exec?: ExecutionContext,
   ): Promise<ValueParserResult<TValue>> {
     if (result.success) {
       return Promise.resolve(result);
@@ -921,7 +924,7 @@ export function prompt<M extends Mode, TValue, TState>(
     // a placeholder.  Wrappers that forward shouldDeferCompletion without
     // forwarding placeholder would otherwise fall through to executePrompt
     // and prompt interactively during phase 1.
-    if (!shouldDeferPrompt(parser, state)) return executePrompt();
+    if (!shouldDeferPrompt(parser, state, exec)) return executePrompt();
     let ph: TValue | undefined;
     try {
       ph = "placeholder" in parser ? parser.placeholder as TValue : undefined;
@@ -1028,13 +1031,13 @@ export function prompt<M extends Mode, TValue, TState>(
       return Promise.resolve(processResult(result));
     },
 
-    complete: (state): Promise<ValueParserResult<TValue>> => {
+    complete: (state, exec?): Promise<ValueParserResult<TValue>> => {
       if (isPromptBindState(state) && state.hasCliValue) {
         // Inner parser consumed CLI tokens — delegate to it directly.
         const r = withAnnotatedInnerState(
           state,
           state.cliState!,
-          (annotatedInnerState) => parser.complete(annotatedInnerState),
+          (annotatedInnerState) => parser.complete(annotatedInnerState, exec),
         );
         if (r instanceof Promise) {
           return r as Promise<ValueParserResult<TValue>>;
@@ -1083,15 +1086,19 @@ export function prompt<M extends Mode, TValue, TState>(
           const annotatedR = withAnnotatedInnerState(
             state,
             effectiveInitialState,
-            (annotatedInnerState) => parser.complete(annotatedInnerState),
+            (annotatedInnerState) => parser.complete(annotatedInnerState, exec),
           );
           const usePromptOrDeferSentinel = (
             res: ValueParserResult<TValue>,
           ): Promise<ValueParserResult<TValue>> => {
             if (res.success && res.value === undefined) {
-              return usePromptOrDefer(state, { success: false, error: [] });
+              return usePromptOrDefer(
+                state,
+                { success: false, error: [] },
+                exec,
+              );
             }
-            return usePromptOrDefer(state, res);
+            return usePromptOrDefer(state, res, exec);
           };
           const cachedResult = annotatedR instanceof Promise
             ? (annotatedR as Promise<ValueParserResult<TValue>>).then(
@@ -1187,13 +1194,13 @@ export function prompt<M extends Mode, TValue, TState>(
               ) {
                 return executePrompt();
               }
-              return usePromptOrDefer(state, res);
+              return usePromptOrDefer(state, res, exec);
             };
             // Complete from the parse-produced state, not initialState.
             const completeState = parseResult.success
               ? parseResult.next.state
               : effectiveInitialState;
-            const completeR = parser.complete(completeState);
+            const completeR = parser.complete(completeState, exec);
             if (completeR instanceof Promise) {
               return (completeR as Promise<ValueParserResult<TValue>>).then(
                 handleCompleteResult,
@@ -1237,12 +1244,12 @@ export function prompt<M extends Mode, TValue, TState>(
           ) {
             return executePrompt();
           }
-          return usePromptOrDefer(state, result);
+          return usePromptOrDefer(state, result, exec);
         };
         const r = withAnnotatedInnerState(
           state,
           cliState as TState,
-          (annotatedInnerState) => parser.complete(annotatedInnerState),
+          (annotatedInnerState) => parser.complete(annotatedInnerState, exec),
         );
         if (r instanceof Promise) {
           return (r as Promise<ValueParserResult<TValue>>).then(
@@ -1252,7 +1259,7 @@ export function prompt<M extends Mode, TValue, TState>(
         return useCompleteResultOrPrompt(r as ValueParserResult<TValue>);
       }
 
-      if (shouldDeferPrompt(parser, state)) {
+      if (shouldDeferPrompt(parser, state, exec)) {
         let ph: TValue | undefined;
         try {
           ph = "placeholder" in parser

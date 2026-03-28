@@ -3,6 +3,7 @@ import type { Annotations, SourceContext } from "@optique/core/context";
 import { envVar, type Message, message, valueSet } from "@optique/core/message";
 import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
 import type {
+  ExecutionContext,
   Mode,
   ModeValue,
   Parser,
@@ -363,9 +364,9 @@ export function bindEnv<
       );
     },
 
-    complete: (state) => {
+    complete: (state, exec?) => {
       if (isEnvBindState(state) && state.hasCliValue) {
-        return parser.complete(state.cliState!);
+        return parser.complete(state.cliState!, exec);
       }
 
       return getEnvOrDefault(
@@ -374,13 +375,17 @@ export function bindEnv<
         parser.$mode,
         parser,
         isEnvBindState(state) ? state.cliState : undefined,
+        exec,
       );
     },
 
     suggest: parser.suggest,
     ...(typeof deferPromptUntilConfigResolves === "function"
       ? {
-        shouldDeferCompletion: deferPromptUntilConfigResolves.bind(parser),
+        shouldDeferCompletion: (
+          state: TState,
+          exec?: ExecutionContext,
+        ) => deferPromptUntilConfigResolves.call(parser, state, exec),
       }
       : {}),
     getDocFragments(state, upperDefaultValue?) {
@@ -417,6 +422,7 @@ function getEnvOrDefault<M extends Mode, TValue>(
   mode: M,
   innerParser?: Parser<M, TValue, unknown>,
   innerState?: unknown,
+  exec?: ExecutionContext,
 ): ModeValue<M, Result<TValue>> {
   const annotations = getAnnotations(state);
   // Read from the per-instance context id so that the correct source is
@@ -463,7 +469,7 @@ function getEnvOrDefault<M extends Mode, TValue>(
   // layer has a value.
   if (innerParser != null) {
     const completeState = innerState ?? innerParser.initialState;
-    return wrapForMode(mode, innerParser.complete(completeState));
+    return wrapForMode(mode, innerParser.complete(completeState, exec));
   }
 
   return wrapForMode(mode, {
