@@ -198,13 +198,20 @@ export interface Parser<
    * message.
    * @param state The current state of the parser, which may contain accumulated
    *              data or context needed to produce the final value.
+   * @param exec Optional shared execution context.  When provided, gives the
+   *             parser access to cross-cutting runtime data such as the current
+   *             execution phase and dependency registry.
    * @returns A result object indicating success or failure of
    *          the transformation.  If successful, it should contain
    *          the parsed value of type {@link TValue}.  If not applicable,
    *          it should return an error message.
    *          In async mode, returns a Promise that resolves to the result.
+   * @since 1.0.0 Added optional `exec` parameter.
    */
-  complete(state: TState): ModeValue<M, ValueParserResult<TValue>>;
+  complete(
+    state: TState,
+    exec?: ExecutionContext,
+  ): ModeValue<M, ValueParserResult<TValue>>;
 
   /**
    * Generates next-step suggestions based on the current context
@@ -262,10 +269,12 @@ export interface Parser<
    * source) has resolved.
    *
    * @param state The current parser state.
+   * @param exec Optional shared execution context.
    * @returns `true` if completion should be deferred.
    * @since 1.0.0
+   * @since 1.0.0 Added optional `exec` parameter.
    */
-  shouldDeferCompletion?(state: TState): boolean;
+  shouldDeferCompletion?(state: TState, exec?: ExecutionContext): boolean;
 
   /**
    * Normalizes a parsed value according to the underlying value parser's
@@ -290,10 +299,95 @@ export interface Parser<
 }
 
 /**
+ * Parser-local frame data containing the input buffer and parser state.
+ * This represents the per-parser progress during parsing, separated from
+ * cross-cutting execution context.
+ * @template TState The type of the state used during parsing.
+ * @since 1.0.0
+ */
+export interface ParseFrame<TState> {
+  /**
+   * The array of input strings that the parser is currently processing.
+   */
+  readonly buffer: readonly string[];
+
+  /**
+   * The current state of the parser, which is used to track
+   * the progress of parsing and any accumulated data.
+   */
+  readonly state: TState;
+
+  /**
+   * A flag indicating whether no more options should be parsed and instead
+   * the remaining input should be treated as positional arguments.
+   */
+  readonly optionsTerminated: boolean;
+}
+
+/**
+ * The phase of the execution pipeline.
+ * @since 1.0.0
+ */
+export type ExecutionPhase =
+  | "parse"
+  | "precomplete"
+  | "resolve"
+  | "complete"
+  | "suggest";
+
+/**
+ * Shared execution context carrying cross-cutting runtime data.
+ * This includes information that is shared across all parsers in a parse
+ * tree, such as usage information, dependency registries, and the current
+ * execution phase.
+ * @since 1.0.0
+ */
+export interface ExecutionContext {
+  /**
+   * Usage information for the entire parser tree.
+   */
+  readonly usage: Usage;
+
+  /**
+   * The current phase of the execution pipeline.
+   */
+  readonly phase: ExecutionPhase;
+
+  /**
+   * The path from the root to the current parser in the parse tree.
+   * Used by constructs to track the current position during dependency
+   * resolution and completion.
+   */
+  readonly path: readonly PropertyKey[];
+
+  /**
+   * A registry containing resolved dependency values from DependencySource
+   * parsers.
+   * @since 0.10.0
+   */
+  readonly dependencyRegistry?: DependencyRegistryLike;
+}
+
+/**
  * The context of the parser, which includes the input buffer and the state.
+ *
+ * `ParserContext` provides structured access to shared execution context
+ * via {@link exec}, and flat access to all fields for backward
+ * compatibility.
+ *
  * @template TState The type of the state used during parsing.
  */
 export interface ParserContext<TState> {
+  /**
+   * Shared execution context (usage, phase, path, dependencyRegistry).
+   *
+   * Present when the context was created via {@link createParserContext}.
+   * Later runtime work will make this field required.
+   *
+   * @since 1.0.0
+   */
+  readonly exec?: ExecutionContext;
+
   /**
    * The array of input strings that the parser is currently processing.
    */
@@ -330,6 +424,32 @@ export interface ParserContext<TState> {
    * @since 0.10.0
    */
   readonly dependencyRegistry?: DependencyRegistryLike;
+}
+
+/**
+ * Creates a {@link ParserContext} from a {@link ParseFrame} and an
+ * {@link ExecutionContext}.  The returned object provides both structured
+ * access (`frame`, `exec`) and flat access (`buffer`, `state`, etc.)
+ * for backward compatibility.
+ *
+ * @template TState The type of the state used during parsing.
+ * @param frame Parser-local frame data.
+ * @param exec Shared execution context.
+ * @returns A {@link ParserContext} instance.
+ * @since 1.0.0
+ */
+export function createParserContext<TState>(
+  frame: ParseFrame<TState>,
+  exec: ExecutionContext,
+): ParserContext<TState> {
+  return {
+    exec,
+    buffer: frame.buffer,
+    state: frame.state,
+    optionsTerminated: frame.optionsTerminated,
+    usage: exec.usage,
+    dependencyRegistry: exec.dependencyRegistry,
+  };
 }
 
 /**
@@ -519,12 +639,15 @@ export function parseSync<T>(
   const shouldUnwrapAnnotatedValue = options?.annotations != null ||
     isInjectedAnnotationWrapper(parser.initialState);
 
-  let context: ParserContext<unknown> = {
-    buffer: args,
-    optionsTerminated: false,
-    state: initialState,
+  const exec: ExecutionContext = {
     usage: parser.usage,
+    phase: "parse",
+    path: [],
   };
+  let context: ParserContext<unknown> = createParserContext(
+    { buffer: args, state: initialState, optionsTerminated: false },
+    exec,
+  );
   do {
     const result = parser.parse(context);
     if (!result.success) {
@@ -539,7 +662,8 @@ export function parseSync<T>(
       };
     }
   } while (context.buffer.length > 0);
-  const endResult = parser.complete(context.state);
+  const completeExec: ExecutionContext = { ...exec, phase: "complete" };
+  const endResult = parser.complete(context.state, completeExec);
   return endResult.success
     ? {
       success: true,
@@ -597,12 +721,15 @@ export async function parseAsync<T>(
   const shouldUnwrapAnnotatedValue = options?.annotations != null ||
     isInjectedAnnotationWrapper(parser.initialState);
 
-  let context: ParserContext<unknown> = {
-    buffer: args,
-    optionsTerminated: false,
-    state: initialState,
+  const exec: ExecutionContext = {
     usage: parser.usage,
+    phase: "parse",
+    path: [],
   };
+  let context: ParserContext<unknown> = createParserContext(
+    { buffer: args, state: initialState, optionsTerminated: false },
+    exec,
+  );
   do {
     const result = await parser.parse(context);
     if (!result.success) {
@@ -617,7 +744,8 @@ export async function parseAsync<T>(
       };
     }
   } while (context.buffer.length > 0);
-  const endResult = await parser.complete(context.state);
+  const completeExec: ExecutionContext = { ...exec, phase: "complete" };
+  const endResult = await parser.complete(context.state, completeExec);
   return endResult.success
     ? {
       success: true,
@@ -712,12 +840,10 @@ export function suggestSync<T>(
 
   const initialState = injectAnnotationsIntoState(parser.initialState, options);
 
-  let context: ParserContext<unknown> = {
-    buffer: allButLast,
-    optionsTerminated: false,
-    state: initialState,
-    usage: parser.usage,
-  };
+  let context: ParserContext<unknown> = createParserContext(
+    { buffer: allButLast, state: initialState, optionsTerminated: false },
+    { usage: parser.usage, phase: "suggest", path: [] },
+  );
 
   // Parse up to the prefix
   while (context.buffer.length > 0) {
@@ -766,12 +892,10 @@ export async function suggestAsync<T>(
 
   const initialState = injectAnnotationsIntoState(parser.initialState, options);
 
-  let context: ParserContext<unknown> = {
-    buffer: allButLast,
-    optionsTerminated: false,
-    state: initialState,
-    usage: parser.usage,
-  };
+  let context: ParserContext<unknown> = createParserContext(
+    { buffer: allButLast, state: initialState, optionsTerminated: false },
+    { usage: parser.usage, phase: "suggest", path: [] },
+  );
 
   // Parse up to the prefix
   while (context.buffer.length > 0) {

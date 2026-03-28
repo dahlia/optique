@@ -10,6 +10,22 @@ To be released.
 
 ### @optique/core
 
+ -  Added `ParseFrame`, `ExecutionContext`, and `ExecutionPhase` types to
+    support the separation of parser-local state from shared execution
+    context.  `ParserContext` now includes an optional `exec` field for
+    accessing the shared execution context.  [[#751], [#756]]
+
+ -  `Parser.complete()` and `Parser.shouldDeferCompletion()` now accept an
+    optional `ExecutionContext` parameter.  All built-in parser
+    implementations (`option()`, `argument()`, `optional()`, `withDefault()`,
+    `map()`, `object()`, `tuple()`, `merge()`, `concat()`, etc.) forward
+    this parameter through the call chain.  Existing implementations without
+    the parameter continue to work.  [[#751], [#756]]
+
+ -  Added `createParserContext()` factory function for constructing
+    `ParserContext` from a `ParseFrame` and an `ExecutionContext`.
+    [[#751], [#756]]
+
  -  Added generalized APIs to `SourceContext` and `Parser` interfaces so that
     packages like *@optique/config* and *@optique/inquirer* can integrate with
     core through public interfaces instead of `Symbol.for()` + `Reflect.get()`
@@ -1338,6 +1354,8 @@ To be released.
 [#747]: https://github.com/dahlia/optique/pull/747
 [#748]: https://github.com/dahlia/optique/pull/748
 [#749]: https://github.com/dahlia/optique/pull/749
+[#751]: https://github.com/dahlia/optique/issues/751
+[#756]: https://github.com/dahlia/optique/pull/756
 
 ### @optique/config
 

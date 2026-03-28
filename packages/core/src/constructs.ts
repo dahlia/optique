@@ -33,6 +33,7 @@ import {
 import type {
   CombineModes,
   DocState,
+  ExecutionContext,
   InferValue,
   Mode,
   ModeIterable,
@@ -614,10 +615,11 @@ function createExclusiveComplete(
   mode: Mode,
 ): (
   state: ExclusiveState,
+  exec?: ExecutionContext,
 ) => ValueParserResult<unknown> | Promise<ValueParserResult<unknown>> {
   // Cast to sync parsers for sync operations
   const syncParsers = parsers as Parser<"sync", unknown, unknown>[];
-  return (state) => {
+  return (state, exec?) => {
     if (state == null) {
       return {
         success: false,
@@ -631,9 +633,12 @@ function createExclusiveComplete(
 
     return dispatchByMode(
       mode,
-      () => syncParsers[i].complete(result.next.state),
+      () => syncParsers[i].complete(result.next.state, exec),
       async () => {
-        const completeResult = await parsers[i].complete(result.next.state);
+        const completeResult = await parsers[i].complete(
+          result.next.state,
+          exec,
+        );
         return completeResult;
       },
     );
@@ -3118,7 +3123,12 @@ function* suggestObjectSync<
   // unpopulated, so that their default values get registered in the registry.
   // This mirrors Phase 1 of the parse-time dependency resolution in object().
   // See: https://github.com/dahlia/optique/issues/186
-  completeDependencySourceDefaults(context, parserPairs, registry);
+  completeDependencySourceDefaults(
+    context,
+    parserPairs,
+    registry,
+    context.exec,
+  );
 
   // Create context with dependency registry for child parsers
   const contextWithRegistry = { ...context, dependencyRegistry: registry };
@@ -3192,7 +3202,12 @@ async function* suggestObjectAsync<
   // Pre-complete dependency sources wrapped in withDefault() whose state is
   // unpopulated, so that their default values get registered in the registry.
   // See: https://github.com/dahlia/optique/issues/186
-  await completeDependencySourceDefaultsAsync(context, parserPairs, registry);
+  await completeDependencySourceDefaultsAsync(
+    context,
+    parserPairs,
+    registry,
+    context.exec,
+  );
 
   // Create context with dependency registry for child parsers
   const contextWithRegistry = { ...context, dependencyRegistry: registry };
@@ -3332,6 +3347,7 @@ function completeDependencySourceDefaults(
     readonly [string | symbol, Parser<Mode, unknown, unknown>]
   >,
   registry: DependencyRegistryLike,
+  exec?: ExecutionContext,
 ): void {
   for (
     const { parser, state } of pendingDependencyDefaults(
@@ -3339,7 +3355,7 @@ function completeDependencySourceDefaults(
       parserPairs,
     )
   ) {
-    const completed = parser.complete(state);
+    const completed = parser.complete(state, exec);
     const depState = wrapAsDependencySourceState(completed, parser);
     if (depState) registerCompletedDependency(depState, registry);
   }
@@ -3394,6 +3410,7 @@ async function completeDependencySourceDefaultsAsync(
     readonly [string | symbol, Parser<Mode, unknown, unknown>]
   >,
   registry: DependencyRegistryLike,
+  exec?: ExecutionContext,
 ): Promise<void> {
   for (
     const { parser, state } of pendingDependencyDefaults(
@@ -3401,7 +3418,7 @@ async function completeDependencySourceDefaultsAsync(
       parserPairs,
     )
   ) {
-    const completed = await parser.complete(state);
+    const completed = await parser.complete(state, exec);
     const depState = wrapAsDependencySourceState(completed, parser);
     if (depState) registerCompletedDependency(depState, registry);
   }
@@ -3449,6 +3466,7 @@ function preCompleteAndRegisterDependencies(
     readonly [string | symbol, Parser<Mode, unknown, unknown>]
   >,
   registry: DependencyRegistryLike,
+  exec?: ExecutionContext,
 ): void {
   for (const [field, fieldParser] of fieldParserPairs) {
     const fieldState = state[field];
@@ -3461,20 +3479,20 @@ function preCompleteAndRegisterDependencies(
       fieldState.length === 1 &&
       isPendingDependencySourceState(fieldState[0])
     ) {
-      completed = fieldParser.complete(fieldState);
+      completed = fieldParser.complete(fieldState, exec);
     } // Case 2: state is undefined but parser's initialState is PendingDependencySourceState
     else if (
       fieldState === undefined &&
       isPendingDependencySourceState(fieldParser.initialState)
     ) {
-      completed = fieldParser.complete([fieldParser.initialState]);
+      completed = fieldParser.complete([fieldParser.initialState], exec);
     } // Case 3: state is undefined and parser has wrappedDependencySourceMarker
     else if (
       fieldState === undefined &&
       isWrappedDependencySource(fieldParser)
     ) {
       const pendingState = fieldParser[wrappedDependencySourceMarker];
-      completed = fieldParser.complete([pendingState]);
+      completed = fieldParser.complete([pendingState], exec);
     } // Case 4: non-null/non-array state, parser contains dependency source
     // (e.g., bindEnv/bindConfig wrapper state)
     else if (
@@ -3489,7 +3507,7 @@ function preCompleteAndRegisterDependencies(
         field,
         fieldParser,
       );
-      completed = fieldParser.complete(annotatedFieldState);
+      completed = fieldParser.complete(annotatedFieldState, exec);
     } else {
       continue;
     }
@@ -3509,6 +3527,7 @@ async function preCompleteAndRegisterDependenciesAsync(
     readonly [string | symbol, Parser<Mode, unknown, unknown>]
   >,
   registry: DependencyRegistryLike,
+  exec?: ExecutionContext,
 ): Promise<void> {
   for (const [field, fieldParser] of fieldParserPairs) {
     const fieldState = state[field];
@@ -3520,18 +3539,21 @@ async function preCompleteAndRegisterDependenciesAsync(
       fieldState.length === 1 &&
       isPendingDependencySourceState(fieldState[0])
     ) {
-      completed = await fieldParser.complete(fieldState);
+      completed = await fieldParser.complete(fieldState, exec);
     } else if (
       fieldState === undefined &&
       isPendingDependencySourceState(fieldParser.initialState)
     ) {
-      completed = await fieldParser.complete([fieldParser.initialState]);
+      completed = await fieldParser.complete(
+        [fieldParser.initialState],
+        exec,
+      );
     } else if (
       fieldState === undefined &&
       isWrappedDependencySource(fieldParser)
     ) {
       const pendingState = fieldParser[wrappedDependencySourceMarker];
-      completed = await fieldParser.complete([pendingState]);
+      completed = await fieldParser.complete([pendingState], exec);
     } else if (
       fieldState != null &&
       !Array.isArray(fieldState) &&
@@ -3544,7 +3566,7 @@ async function preCompleteAndRegisterDependenciesAsync(
         field,
         fieldParser,
       );
-      completed = await fieldParser.complete(annotatedFieldState);
+      completed = await fieldParser.complete(annotatedFieldState, exec);
     } else {
       continue;
     }
@@ -4170,7 +4192,7 @@ export function object<
       for (const [field, parser] of parserPairs) {
         const fieldState = getFieldState(field, parser);
         const completeResult = (parser as Parser<"sync", unknown, unknown>)
-          .complete(fieldState);
+          .complete(fieldState, context.exec);
         if (!completeResult.success) {
           allCanComplete = false;
           break;
@@ -4248,7 +4270,7 @@ export function object<
       const getFieldState = createFieldStateGetter(context.state);
       for (const [field, parser] of parserPairs) {
         const fieldState = getFieldState(field, parser);
-        const completeResult = await parser.complete(fieldState);
+        const completeResult = await parser.complete(fieldState, context.exec);
         if (!completeResult.success) {
           allCanComplete = false;
           break;
@@ -4299,7 +4321,10 @@ export function object<
         () => parseAsync(context),
       );
     },
-    complete(state: { readonly [K in keyof T]: unknown }) {
+    complete(
+      state: { readonly [K in keyof T]: unknown },
+      exec?: ExecutionContext,
+    ) {
       return dispatchByMode(
         combinedMode,
         () => {
@@ -4327,7 +4352,7 @@ export function object<
               isPendingDependencySourceState(fieldState[0])
             ) {
               // Call complete to get DependencySourceState with default value
-              const completed = fieldParser.complete(fieldState);
+              const completed = fieldParser.complete(fieldState, exec);
               // The result might be a DependencySourceState (from withDefault)
               preCompletedState[fieldKey] = completed;
               preCompletedKeys.add(fieldKey);
@@ -4340,7 +4365,7 @@ export function object<
               // Call complete with [initialState] to get DependencySourceState
               const completed = fieldParser.complete([
                 fieldParser.initialState,
-              ]);
+              ], exec);
               preCompletedState[fieldKey] = completed;
               preCompletedKeys.add(fieldKey);
             } // Case 3: state is undefined and parser has wrappedDependencySourceMarker
@@ -4355,7 +4380,7 @@ export function object<
               // Call complete with [PendingDependencySourceState] to trigger withDefault's
               // special handling that returns DependencySourceState with the default value
               const pendingState = fieldParser[wrappedDependencySourceMarker];
-              const completed = fieldParser.complete([pendingState]);
+              const completed = fieldParser.complete([pendingState], exec);
               // Only use the pre-completed result if it's a DependencySourceState.
               // If the wrapper returns a regular result (e.g., optional returning undefined),
               // keep the original state so Phase 3 handles it normally.
@@ -4389,7 +4414,10 @@ export function object<
                 isPendingDependencySourceState(fieldParser.initialState))
             ) {
               const annotatedFieldState = getFieldState(field, fieldParser);
-              const completed = fieldParser.complete(annotatedFieldState);
+              const completed = fieldParser.complete(
+                annotatedFieldState,
+                exec,
+              );
               const depState = wrapAsDependencySourceState(
                 completed,
                 fieldParser,
@@ -4461,7 +4489,7 @@ export function object<
             const completionState = fieldResolvedState === undefined
               ? getCompletionFieldState(field, fieldParser)
               : fieldResolvedState;
-            const valueResult = fieldParser.complete(completionState);
+            const valueResult = fieldParser.complete(completionState, exec);
             if (valueResult.success) {
               (result as Record<string | symbol, unknown>)[fieldKey] =
                 valueResult.value;
@@ -4518,7 +4546,7 @@ export function object<
               isPendingDependencySourceState(fieldState[0])
             ) {
               // Call complete to get DependencySourceState with default value
-              const completed = await fieldParser.complete(fieldState);
+              const completed = await fieldParser.complete(fieldState, exec);
               // The result might be a DependencySourceState (from withDefault)
               preCompletedState[fieldKey] = completed;
               preCompletedKeys.add(fieldKey);
@@ -4531,7 +4559,7 @@ export function object<
               // Call complete with [initialState] to get DependencySourceState
               const completed = await fieldParser.complete([
                 fieldParser.initialState,
-              ]);
+              ], exec);
               preCompletedState[fieldKey] = completed;
               preCompletedKeys.add(fieldKey);
             } // Case 3: state is undefined and parser has wrappedDependencySourceMarker
@@ -4546,7 +4574,10 @@ export function object<
               // Call complete with [PendingDependencySourceState] to trigger withDefault's
               // special handling that returns DependencySourceState with the default value
               const pendingState = fieldParser[wrappedDependencySourceMarker];
-              const completed = await fieldParser.complete([pendingState]);
+              const completed = await fieldParser.complete(
+                [pendingState],
+                exec,
+              );
               // Only use the pre-completed result if it's a DependencySourceState.
               // If the wrapper returns a regular result (e.g., optional returning undefined),
               // keep the original state so Phase 3 handles it normally.
@@ -4566,7 +4597,10 @@ export function object<
                 isPendingDependencySourceState(fieldParser.initialState))
             ) {
               const annotatedFieldState = getFieldState(field, fieldParser);
-              const completed = await fieldParser.complete(annotatedFieldState);
+              const completed = await fieldParser.complete(
+                annotatedFieldState,
+                exec,
+              );
               const depState = wrapAsDependencySourceState(
                 completed,
                 fieldParser,
@@ -4634,7 +4668,10 @@ export function object<
             const completionState = fieldResolvedState === undefined
               ? getCompletionFieldState(field, fieldParser)
               : fieldResolvedState;
-            const valueResult = await fieldParser.complete(completionState);
+            const valueResult = await fieldParser.complete(
+              completionState,
+              exec,
+            );
             if (valueResult.success) {
               (result as Record<string | symbol, unknown>)[fieldKey] =
                 valueResult.value;
@@ -5186,7 +5223,7 @@ export function tuple<
         () => parseAsync(context),
       );
     },
-    complete(state: TupleState) {
+    complete(state: TupleState, exec?: ExecutionContext) {
       return dispatchByMode(
         combinedMode,
         () => {
@@ -5205,7 +5242,7 @@ export function tuple<
               isPendingDependencySourceState(elementState[0])
             ) {
               // Call complete to get DependencySourceState with default value
-              const completed = elementParser.complete(elementState);
+              const completed = elementParser.complete(elementState, exec);
               preCompletedState[i] = completed;
             } // Case 2: state is undefined but parser's initialState is PendingDependencySourceState
             else if (
@@ -5215,7 +5252,7 @@ export function tuple<
               // Call complete with [initialState] to get DependencySourceState
               const completed = elementParser.complete([
                 elementParser.initialState,
-              ]);
+              ], exec);
               preCompletedState[i] = completed;
             } // Case 3: state is undefined and parser has wrappedDependencySourceMarker
             else if (
@@ -5223,7 +5260,7 @@ export function tuple<
               isWrappedDependencySource(elementParser)
             ) {
               const pendingState = elementParser[wrappedDependencySourceMarker];
-              const completed = elementParser.complete([pendingState]);
+              const completed = elementParser.complete([pendingState], exec);
               preCompletedState[i] = completed;
             } else {
               preCompletedState[i] = elementState;
@@ -5280,7 +5317,10 @@ export function tuple<
               continue;
             }
 
-            const valueResult = elementParser.complete(elementResolvedState);
+            const valueResult = elementParser.complete(
+              elementResolvedState,
+              exec,
+            );
             if (valueResult.success) {
               result[i] = valueResult.value;
               if (valueResult.deferred) {
@@ -5329,7 +5369,10 @@ export function tuple<
               elementState.length === 1 &&
               isPendingDependencySourceState(elementState[0])
             ) {
-              const completed = await elementParser.complete(elementState);
+              const completed = await elementParser.complete(
+                elementState,
+                exec,
+              );
               preCompletedState[i] = completed;
             } // Case 2: state is undefined but parser's initialState is PendingDependencySourceState
             else if (
@@ -5338,7 +5381,7 @@ export function tuple<
             ) {
               const completed = await elementParser.complete([
                 elementParser.initialState,
-              ]);
+              ], exec);
               preCompletedState[i] = completed;
             } // Case 3: state is undefined and parser has wrappedDependencySourceMarker
             else if (
@@ -5346,7 +5389,10 @@ export function tuple<
               isWrappedDependencySource(elementParser)
             ) {
               const pendingState = elementParser[wrappedDependencySourceMarker];
-              const completed = await elementParser.complete([pendingState]);
+              const completed = await elementParser.complete(
+                [pendingState],
+                exec,
+              );
               preCompletedState[i] = completed;
             } else {
               preCompletedState[i] = elementState;
@@ -5407,6 +5453,7 @@ export function tuple<
 
             const valueResult = await elementParser.complete(
               elementResolvedState,
+              exec,
             );
             if (valueResult.success) {
               result[i] = valueResult.value;
@@ -6002,7 +6049,7 @@ export function merge(
       }
       return parseSync(context);
     },
-    complete(state: MergeState) {
+    complete(state: MergeState, exec?: ExecutionContext) {
       // Helper function to extract parser state for completion
       const extractCompleteState = (
         parser: Parser<Mode, MergeState, MergeState>,
@@ -6055,6 +6102,7 @@ export function merge(
           state as Record<string | symbol, unknown>,
           childFieldPairs,
           registry,
+          exec,
         );
 
         // Resolve deferred parse states across the entire merged state.
@@ -6070,6 +6118,7 @@ export function merge(
           const parserState = extractCompleteState(parser, resolvedState, i);
           const result = parser.complete(
             parserState as Parameters<typeof parser.complete>[0],
+            exec,
           );
           if (!result.success) return result;
           for (const field in result.value) {
@@ -6120,6 +6169,7 @@ export function merge(
           state as Record<string | symbol, unknown>,
           childFieldPairs,
           registry,
+          exec,
         );
 
         // Resolve deferred parse states across the entire merged state.
@@ -6138,6 +6188,7 @@ export function merge(
           const parserState = extractCompleteState(parser, resolvedState, i);
           const result = await parser.complete(
             parserState as Parameters<typeof parser.complete>[0],
+            exec,
           );
           if (!result.success) return result;
           for (const field in result.value) {
@@ -6234,6 +6285,7 @@ export function merge(
               context.state as Record<string | symbol, unknown>,
               childFieldPairs,
               registry,
+              context.exec,
             );
             collectDependencies(context.state, registry);
           } else {
@@ -6241,6 +6293,7 @@ export function merge(
               context,
               childFieldPairs,
               registry,
+              context.exec,
             );
           }
           const contextWithRegistry = {
@@ -6292,10 +6345,16 @@ export function merge(
           context.state as Record<string | symbol, unknown>,
           childFieldPairs,
           registry,
+          context.exec,
         );
         collectDependencies(context.state, registry);
       } else {
-        completeDependencySourceDefaults(context, childFieldPairs, registry);
+        completeDependencySourceDefaults(
+          context,
+          childFieldPairs,
+          registry,
+          context.exec,
+        );
       }
       const contextWithRegistry = { ...context, dependencyRegistry: registry };
 
@@ -6945,7 +7004,10 @@ export function concat(
   type CompleteResult = ValueParserResult<readonly unknown[]>;
 
   // Sync complete implementation
-  const completeSync = (state: readonly unknown[]): CompleteResult => {
+  const completeSync = (
+    state: readonly unknown[],
+    exec?: ExecutionContext,
+  ): CompleteResult => {
     const stateArray = state as unknown[];
 
     // Phase 1: Build a combined state object for dependency resolution
@@ -6966,7 +7028,7 @@ export function concat(
     for (let i = 0; i < syncParsers.length; i++) {
       const parser = syncParsers[i];
       const parserState = resolvedCombinedState[i];
-      const result = parser.complete(parserState);
+      const result = parser.complete(parserState, exec);
       if (!result.success) return result;
 
       // Flatten the tuple results, remapping deferred keys to the
@@ -7024,6 +7086,7 @@ export function concat(
   // Async complete implementation
   const completeAsync = async (
     state: readonly unknown[],
+    exec?: ExecutionContext,
   ): Promise<CompleteResult> => {
     const stateArray = state as unknown[];
 
@@ -7045,7 +7108,7 @@ export function concat(
     for (let i = 0; i < parsers.length; i++) {
       const parser = parsers[i];
       const parserState = resolvedCombinedState[i];
-      const result = await parser.complete(parserState);
+      const result = await parser.complete(parserState, exec);
       if (!result.success) return result;
 
       // Flatten the tuple results, remapping deferred keys to the
@@ -7113,11 +7176,11 @@ export function concat(
       }
       return parseSync(context);
     },
-    complete(state) {
+    complete(state, exec?) {
       if (isAsync) {
-        return completeAsync(state);
+        return completeAsync(state, exec);
       }
-      return completeSync(state);
+      return completeSync(state, exec);
     },
     suggest(context, prefix) {
       if (isAsync) {
@@ -7305,7 +7368,7 @@ export function group<M extends Mode, TValue, TState>(
       }
       : {}),
     parse: (context) => parser.parse(context),
-    complete: (state) => parser.complete(state),
+    complete: (state, exec?) => parser.complete(state, exec),
     suggest: (context, prefix) => {
       if (options.hidden === true) {
         return dispatchIterableByMode(
@@ -7755,6 +7818,7 @@ export function conditional(
       // Complete discriminator to get the value
       const completionResult = syncDiscriminator.complete(
         discriminatorResult.next.state,
+        context.exec,
       );
 
       if (completionResult.success) {
@@ -7886,6 +7950,7 @@ export function conditional(
       // Complete discriminator to get the value
       const completionResult = await discriminator.complete(
         discriminatorResult.next.state,
+        context.exec,
       );
 
       if (completionResult.success) {
@@ -7976,7 +8041,10 @@ export function conditional(
   >;
 
   // Sync complete implementation
-  const completeSync = (state: ConditionalState<string>): CompleteResult => {
+  const completeSync = (
+    state: ConditionalState<string>,
+    exec?: ExecutionContext,
+  ): CompleteResult => {
     const syncDiscriminator = discriminator as Parser<"sync", string, unknown>;
     const syncDefaultBranch = defaultBranch as
       | Parser<"sync", unknown, unknown>
@@ -7991,7 +8059,7 @@ export function conditional(
       // If we have default branch, use it
       if (syncDefaultBranch !== undefined) {
         const branchState = state.branchState ?? syncDefaultBranch.initialState;
-        const defaultResult = syncDefaultBranch.complete(branchState);
+        const defaultResult = syncDefaultBranch.complete(branchState, exec);
         if (!defaultResult.success) {
           return defaultResult;
         }
@@ -8032,6 +8100,7 @@ export function conditional(
     // First, complete the discriminator to get DependencySourceState if applicable
     const discriminatorCompleteResult = syncDiscriminator.complete(
       state.discriminatorState,
+      exec,
     );
     // discriminatorCompleteResult may be { success: true, value: ... } or DependencySourceState
 
@@ -8045,7 +8114,7 @@ export function conditional(
     const resolvedCombinedState = resolveDeferredParseStates(combinedState);
     const resolvedBranchState = resolvedCombinedState._branch;
 
-    const branchResult = branchParser.complete(resolvedBranchState);
+    const branchResult = branchParser.complete(resolvedBranchState, exec);
 
     if (!branchResult.success) {
       // Add context to error message
@@ -8105,13 +8174,14 @@ export function conditional(
   // Async complete implementation
   const completeAsync = async (
     state: ConditionalState<string>,
+    exec?: ExecutionContext,
   ): Promise<CompleteResult> => {
     // No branch selected yet
     if (state.selectedBranch === undefined) {
       // If we have default branch, use it
       if (defaultBranch !== undefined) {
         const branchState = state.branchState ?? defaultBranch.initialState;
-        const defaultResult = await defaultBranch.complete(branchState);
+        const defaultResult = await defaultBranch.complete(branchState, exec);
         if (!defaultResult.success) {
           return defaultResult;
         }
@@ -8152,6 +8222,7 @@ export function conditional(
     // First, complete the discriminator to get DependencySourceState if applicable
     const discriminatorCompleteResult = await discriminator.complete(
       state.discriminatorState,
+      exec,
     );
 
     // To propagate dependency from discriminator to branch:
@@ -8166,7 +8237,10 @@ export function conditional(
     );
     const resolvedBranchState = resolvedCombinedState._branch;
 
-    const branchResult = await branchParser.complete(resolvedBranchState);
+    const branchResult = await branchParser.complete(
+      resolvedBranchState,
+      exec,
+    );
 
     if (!branchResult.success) {
       // Add context to error message
@@ -8333,11 +8407,11 @@ export function conditional(
       return parseSync(context);
     },
 
-    complete(state) {
+    complete(state, exec?) {
       if (isAsync) {
-        return completeAsync(state);
+        return completeAsync(state, exec);
       }
-      return completeSync(state);
+      return completeSync(state, exec);
     },
 
     suggest(context, prefix) {

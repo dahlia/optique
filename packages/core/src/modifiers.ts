@@ -24,6 +24,7 @@ import {
 } from "./mode-dispatch.ts";
 import type {
   DocState,
+  ExecutionContext,
   Mode,
   ModeValue,
   Parser,
@@ -138,19 +139,19 @@ function processOptionalStyleResult<TState>(
  * @internal
  */
 function adaptShouldDeferCompletion<TState>(
-  innerCheck: (state: TState) => boolean,
-): (state: [TState] | undefined) => boolean {
-  return (state: [TState] | undefined): boolean => {
+  innerCheck: (state: TState, exec?: ExecutionContext) => boolean,
+): (state: [TState] | undefined, exec?: ExecutionContext) => boolean {
+  return (state: [TState] | undefined, exec?: ExecutionContext): boolean => {
     if (Array.isArray(state)) {
       const inner = getAnnotations(state) != null &&
           state[0] != null &&
           typeof state[0] === "object"
         ? inheritAnnotations(state, state[0]) as TState
         : state[0];
-      return innerCheck(inner);
+      return innerCheck(inner, exec);
     }
     if (state != null && typeof state === "object") {
-      return innerCheck(state as unknown as TState);
+      return innerCheck(state as unknown as TState, exec);
     }
     return false;
   };
@@ -261,7 +262,7 @@ export function optional<M extends Mode, TValue, TState>(
         () => parseOptionalStyleAsync(context, parser),
       );
     },
-    complete(state: [TState] | undefined) {
+    complete(state: [TState] | undefined, exec?: ExecutionContext) {
       // If state was not wrapped (inner parser didn't match) and this
       // optional wraps a dependency source:
       if (!Array.isArray(state)) {
@@ -273,11 +274,15 @@ export function optional<M extends Mode, TValue, TState>(
           return dispatchByMode(
             parser.$mode,
             () =>
-              syncParser.complete([wrappedPendingState] as unknown as TState),
+              syncParser.complete(
+                [wrappedPendingState] as unknown as TState,
+                exec,
+              ),
             // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
             () =>
               parser.complete(
                 [wrappedPendingState] as unknown as TState,
+                exec,
               ) as Promise<ValueParserResult<TValue | undefined>>,
           );
         }
@@ -295,9 +300,9 @@ export function optional<M extends Mode, TValue, TState>(
           > => {
             const innerResult = dispatchByMode(
               parser.$mode,
-              () => syncParser.complete(state as unknown as TState),
+              () => syncParser.complete(state as unknown as TState, exec),
               () =>
-                parser.complete(state as unknown as TState) as Promise<
+                parser.complete(state as unknown as TState, exec) as Promise<
                   ValueParserResult<TValue | undefined>
                 >,
             );
@@ -332,10 +337,10 @@ export function optional<M extends Mode, TValue, TState>(
           // right format [PendingDependencySourceState])
           return dispatchByMode(
             parser.$mode,
-            () => syncParser.complete(state as unknown as TState),
+            () => syncParser.complete(state as unknown as TState, exec),
             // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
             () =>
-              parser.complete(state as unknown as TState) as Promise<
+              parser.complete(state as unknown as TState, exec) as Promise<
                 ValueParserResult<TValue | undefined>
               >,
           );
@@ -356,10 +361,10 @@ export function optional<M extends Mode, TValue, TState>(
         : state[0];
       return dispatchByMode(
         parser.$mode,
-        () => syncParser.complete(innerElement as TState),
+        () => syncParser.complete(innerElement as TState, exec),
         // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
         () =>
-          parser.complete(innerElement as TState) as Promise<
+          parser.complete(innerElement as TState, exec) as Promise<
             ValueParserResult<TValue | undefined>
           >,
       );
@@ -619,7 +624,7 @@ export function withDefault<
         () => parseOptionalStyleAsync(context, parser),
       );
     },
-    complete(state: [TState] | undefined) {
+    complete(state: [TState] | undefined, exec?: ExecutionContext) {
       // Evaluate the default value (immediate or lazy) and normalize it
       // through the inner parser's value normalizer when available.
       function evaluateDefault(): TDefault {
@@ -651,10 +656,13 @@ export function withDefault<
           // we should NOT register the dependency.
           const innerResult = dispatchByMode(
             parser.$mode,
-            () => syncParser.complete(undefined as unknown as TState),
+            () => syncParser.complete(undefined as unknown as TState, exec),
             // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
             () =>
-              parser.complete(undefined as unknown as TState) as Promise<
+              parser.complete(
+                undefined as unknown as TState,
+                exec,
+              ) as Promise<
                 ValueParserResult<TValue>
               >,
           );
@@ -726,9 +734,9 @@ export function withDefault<
         ) {
           const innerResult = dispatchByMode(
             parser.$mode,
-            () => syncParser.complete(state as unknown as TState),
+            () => syncParser.complete(state as unknown as TState, exec),
             () =>
-              parser.complete(state as unknown as TState) as Promise<
+              parser.complete(state as unknown as TState, exec) as Promise<
                 ValueParserResult<TValue>
               >,
           );
@@ -767,10 +775,10 @@ export function withDefault<
         if (transformsDependencyValue(parser)) {
           const innerResult = dispatchByMode(
             parser.$mode,
-            () => syncParser.complete(state as unknown as TState),
+            () => syncParser.complete(state as unknown as TState, exec),
             // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
             () =>
-              parser.complete(state as unknown as TState) as Promise<
+              parser.complete(state as unknown as TState, exec) as Promise<
                 ValueParserResult<TValue>
               >,
           );
@@ -842,10 +850,10 @@ export function withDefault<
         : state[0];
       return dispatchByMode(
         parser.$mode,
-        () => syncParser.complete(innerElement as TState),
+        () => syncParser.complete(innerElement as TState, exec),
         // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
         () =>
-          parser.complete(innerElement as TState) as Promise<
+          parser.complete(innerElement as TState, exec) as Promise<
             ValueParserResult<TValue | TDefault>
           >,
       );
@@ -1021,10 +1029,13 @@ export function map<M extends Mode, T, U, TState>(
   parser: Parser<M, T, TState>,
   transform: (value: T) => U,
 ): Parser<M, U, TState> {
-  const complete = (state: TState): ModeValue<M, ValueParserResult<U>> => {
+  const complete = (
+    state: TState,
+    exec?: ExecutionContext,
+  ): ModeValue<M, ValueParserResult<U>> => {
     return mapModeValue(
       parser.$mode,
-      parser.complete(state),
+      parser.complete(state, exec),
       (result) => {
         if (!result.success) return result;
         if (result.deferred) {
@@ -1183,14 +1194,15 @@ export function multiple<M extends Mode, TValue, TState>(
   const unwrapInjectedWrapper = unwrapInjectedAnnotationWrapper;
   const completeSyncWithUnwrappedFallback = (
     state: TState,
+    exec?: ExecutionContext,
   ): ReturnType<typeof syncParser.complete> => {
     try {
-      return syncParser.complete(state);
+      return syncParser.complete(state, exec);
     } catch (error) {
       if (!isInjectedAnnotationWrapper(state)) {
         throw error;
       }
-      return syncParser.complete(unwrapInjectedWrapper(state));
+      return syncParser.complete(unwrapInjectedWrapper(state), exec);
     }
   };
   const parseSyncWithUnwrappedFallback = (
@@ -1221,14 +1233,15 @@ export function multiple<M extends Mode, TValue, TState>(
   };
   const completeAsyncWithUnwrappedFallback = async (
     state: TState,
+    exec?: ExecutionContext,
   ): Promise<Awaited<ReturnType<typeof parser.complete>>> => {
     try {
-      return await parser.complete(state);
+      return await parser.complete(state, exec);
     } catch (error) {
       if (!isInjectedAnnotationWrapper(state)) {
         throw error;
       }
-      return await parser.complete(unwrapInjectedWrapper(state));
+      return await parser.complete(unwrapInjectedWrapper(state), exec);
     }
   };
   const parseAsyncWithUnwrappedFallback = async (
@@ -1370,7 +1383,7 @@ export function multiple<M extends Mode, TValue, TState>(
         () => parseAsync(context),
       );
     },
-    complete(state: MultipleState) {
+    complete(state: MultipleState, exec?: ExecutionContext) {
       return dispatchByMode(
         parser.$mode,
         () => {
@@ -1381,6 +1394,7 @@ export function multiple<M extends Mode, TValue, TState>(
           for (let i = 0; i < state.length; i++) {
             const valueResult = completeSyncWithUnwrappedFallback(
               state[i] as TState,
+              exec,
             );
             if (valueResult.success) {
               const unwrappedValue = unwrapInjectedWrapper(valueResult.value);
@@ -1408,7 +1422,7 @@ export function multiple<M extends Mode, TValue, TState>(
         async () => {
           // Async complete - use Promise.all for parallel execution
           const results = await Promise.all(
-            state.map((s) => completeAsyncWithUnwrappedFallback(s)),
+            state.map((s) => completeAsyncWithUnwrappedFallback(s, exec)),
           );
           const values: TValue[] = [];
           const deferredIndices = new Map<PropertyKey, DeferredMap | null>();
@@ -1771,8 +1785,8 @@ export function nonEmpty<M extends Mode, T, TState>(
         () => parseAsync(context),
       );
     },
-    complete(state: TState) {
-      return parser.complete(state);
+    complete(state: TState, exec?: ExecutionContext) {
+      return parser.complete(state, exec);
     },
     suggest(context: ParserContext<TState>, prefix: string) {
       return parser.suggest(context, prefix);

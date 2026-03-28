@@ -97,6 +97,7 @@ import {
 } from "./message.ts";
 import type {
   DocState,
+  ExecutionContext,
   Mode,
   Parser,
   ParserContext,
@@ -145,7 +146,7 @@ export function constant<const T>(value: T): Parser<"sync", T, T> {
     parse(context) {
       return { success: true, next: context, consumed: [] };
     },
-    complete(state) {
+    complete(state, _exec?: ExecutionContext) {
       return { success: true, value: state };
     },
     suggest(_context, _prefix) {
@@ -200,7 +201,7 @@ export function fail<T>(): Parser<"sync", T, undefined> {
         error: message`No value provided.`,
       };
     },
-    complete(_state) {
+    complete(_state, _exec?: ExecutionContext) {
       return {
         success: false,
         error: message`No value provided.`,
@@ -1066,6 +1067,7 @@ export function option<M extends Mode, T>(
         | DeferredParseState<T>
         | PendingDependencySourceState
         | undefined,
+      _exec?: ExecutionContext,
     ) {
       if (state == null) {
         return valueParser == null ? { success: true, value: false } : {
@@ -1523,7 +1525,7 @@ export function flag(
         ),
       };
     },
-    complete(state) {
+    complete(state, _exec?: ExecutionContext) {
       if (state == null) {
         return {
           success: false,
@@ -1768,7 +1770,10 @@ export function argument<M extends Mode, T>(
         consumed: context.buffer.slice(0, i + 1),
       };
     },
-    complete(state: ValueParserResult<T> | DeferredParseState<T> | undefined) {
+    complete(
+      state: ValueParserResult<T> | DeferredParseState<T> | undefined,
+      _exec?: ExecutionContext,
+    ) {
       if (state == null) {
         return {
           success: false,
@@ -2249,7 +2254,7 @@ export function command<M extends Mode, T, TState>(
         error: options.errors?.invalidState ?? message`Invalid command state.`,
       };
     },
-    complete(state: CommandState<TState>) {
+    complete(state: CommandState<TState>, exec?: ExecutionContext) {
       if (typeof state === "undefined") {
         return {
           success: false,
@@ -2271,20 +2276,20 @@ export function command<M extends Mode, T, TState>(
             parseResultOrPromise as Promise<ParserResult<TState>>
           ).then((parseResult) => {
             if (parseResult.success) {
-              return parser.complete(parseResult.next.state);
+              return parser.complete(parseResult.next.state, exec);
             }
-            return parser.complete(parser.initialState);
+            return parser.complete(parser.initialState, exec);
           });
         }
         const parseResult = parseResultOrPromise as ParserResult<TState>;
         if (parseResult.success) {
-          return parser.complete(parseResult.next.state);
+          return parser.complete(parseResult.next.state, exec);
         }
         // If parse fails, fallback to completing with initial state
-        return parser.complete(parser.initialState);
+        return parser.complete(parser.initialState, exec);
       } else if (state[0] === "parsing") {
         // Delegate to inner parser
-        return parser.complete(state[1]);
+        return parser.complete(state[1], exec);
       }
       // Should never reach here
       return {
@@ -2606,7 +2611,7 @@ export function passThrough(
       };
     },
 
-    complete(state) {
+    complete(state, _exec?: ExecutionContext) {
       if (getAnnotations(state) == null) {
         return { success: true, value: state };
       }
