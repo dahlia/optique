@@ -216,6 +216,19 @@ describe("createReplayKey", () => {
     assert.deepStrictEqual(runtime.getReplayResult(key1), result1);
     assert.deepStrictEqual(runtime.getReplayResult(key2), result2);
   });
+
+  test("registered symbol paths (Symbol.for) do not throw", () => {
+    const sym = Symbol.for("optique.test.field");
+    const runtime = createDependencyRuntimeContext();
+    const key = createReplayKey([sym], "val", ["dep"]);
+    const result: ValueParserResult<string> = {
+      success: true,
+      value: "ok",
+    };
+    // Must not throw TypeError for registered symbols.
+    runtime.setReplayResult(key, result);
+    assert.deepStrictEqual(runtime.getReplayResult(key), result);
+  });
 });
 
 // =============================================================================
@@ -334,6 +347,56 @@ describe("fillMissingSourceDefaults", () => {
     }];
     fillMissingSourceDefaults(nodes, runtime);
     // The source had explicit input that failed — default must not be applied.
+    assert.ok(!runtime.hasSource(sourceId));
+  });
+
+  test("skips defaults when preservesSourceValue is false (map())", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            preservesSourceValue: false,
+            getMissingSourceValue: () => ({
+              success: true as const,
+              value: "dev",
+            }),
+          },
+          transform: { transformsSourceValue: true },
+        },
+      },
+      state: undefined,
+    }];
+    fillMissingSourceDefaults(nodes, runtime);
+    // map() breaks source identity — default must not be registered.
+    assert.ok(!runtime.hasSource(sourceId));
+  });
+
+  test("handles throwing default thunks gracefully", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            preservesSourceValue: true,
+            getMissingSourceValue: () => {
+              throw new Error("env not configured");
+            },
+          },
+        },
+      },
+      state: undefined,
+    }];
+    // Should not throw — converts to skip, matching withDefault.complete().
+    fillMissingSourceDefaults(nodes, runtime);
     assert.ok(!runtime.hasSource(sourceId));
   });
 });

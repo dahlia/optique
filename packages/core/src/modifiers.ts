@@ -967,9 +967,19 @@ export function withDefault<
       "withDefault",
       {
         defaultValue: () => {
-          let v = typeof defaultValue === "function"
-            ? (defaultValue as () => TDefault)()
-            : defaultValue;
+          let v: TDefault;
+          try {
+            v = typeof defaultValue === "function"
+              ? (defaultValue as () => TDefault)()
+              : defaultValue;
+          } catch {
+            // Dynamic default thunks may throw (validation, env checks).
+            // Match withDefault.complete() which converts to a failed result.
+            return {
+              success: false as const,
+              error: message`Default value evaluation failed.`,
+            };
+          }
           // Normalize the default value to match what the inner parser's
           // value parser would produce, so that dependency source values
           // are consistent regardless of whether they came from explicit

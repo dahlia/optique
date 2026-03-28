@@ -20,12 +20,16 @@ import { isDependencySourceState } from "./dependency.ts";
 // =============================================================================
 
 // Per-instance counter so that distinct symbols with the same description
-// serialize to different strings.  Uses a WeakMap so that the same symbol
-// always produces the same key within a process lifetime.
-const symbolIds = new WeakMap<symbol, string>();
+// serialize to different strings.  Uses Map (not WeakMap) because WeakMap
+// rejects registered symbols created with Symbol.for().
+const symbolIds = new Map<symbol, string>();
 let symbolCounter = 0;
 
 function stableSymbolKey(sym: symbol): string {
+  // Registered symbols have a globally unique key via Symbol.keyFor().
+  const registeredKey = Symbol.keyFor(sym);
+  if (registeredKey !== undefined) return `reg:${registeredKey}`;
+  // Non-registered symbols get a per-instance counter-based id.
   let id = symbolIds.get(sym);
   if (id === undefined) {
     id = `sym:${symbolCounter++}`;
@@ -413,9 +417,19 @@ export function fillMissingSourceDefaults(
     // parser consumed input (matched === true), the user explicitly
     // provided a value that failed validation.
     if (node.matched === true) continue;
+    // A map() transform breaks source identity — the default value
+    // would be the pre-transform value, not what the parser produces.
+    if (!meta.source.preservesSourceValue) continue;
     if (meta.source.getMissingSourceValue == null) continue;
 
-    const result = meta.source.getMissingSourceValue();
+    let result;
+    try {
+      result = meta.source.getMissingSourceValue();
+    } catch {
+      // Default thunk may throw (dynamic defaults with validation).
+      // Convert to a failed result, matching withDefault.complete().
+      continue;
+    }
     // Only handle sync results here; async handled by async variant
     if (result instanceof Promise) continue;
     if (result.success) {
