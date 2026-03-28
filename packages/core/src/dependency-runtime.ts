@@ -11,8 +11,12 @@
  * @module
  */
 import {
+  type DeferredParseState,
+  dependencyId as dependencyIdSymbol,
   isDeferredParseState,
+  isDependencySourceState,
   isPendingDependencySourceState,
+  parseWithDependency,
 } from "./dependency.ts";
 import { message } from "./message.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
@@ -802,6 +806,231 @@ export function extractRawInputFromState(state: unknown): string | undefined {
   }
 
   return undefined;
+}
+
+// =============================================================================
+// Recursive state resolution with the dependency runtime
+// =============================================================================
+
+/**
+ * Checks if a value is a plain object (not a class instance) for the
+ * purpose of recursive state traversal.
+ */
+function isPlainObject(
+  value: unknown,
+): value is Record<string | symbol, unknown> {
+  if (typeof value !== "object" || value === null) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Resolves a single {@link DeferredParseState} using the dependency runtime.
+ *
+ * Returns the replay result if all dependencies are available, or the
+ * preliminary result if dependencies are missing.
+ */
+function resolveSingleDeferred(
+  deferred: DeferredParseState<unknown>,
+  runtime: DependencyRuntimeContext,
+): ValueParserResult<unknown> {
+  const depIds = deferred.dependencyIds ?? [deferred.dependencyId];
+  const resolution = runtime.resolveDependencies({
+    dependencyIds: depIds,
+    defaultValues: deferred.defaultValues,
+  });
+  if (resolution.kind !== "resolved") return deferred.preliminaryResult;
+
+  const depValue = depIds.length === 1
+    ? resolution.values[0]
+    : resolution.values;
+  const result = deferred.parser[parseWithDependency](
+    deferred.rawInput,
+    depValue,
+  );
+  if (result instanceof Promise) return deferred.preliminaryResult;
+  return result;
+}
+
+/**
+ * Recursively collects dependency source values from `DependencySourceState`
+ * objects found in the state tree and registers them in the runtime.
+ *
+ * This must run BEFORE deferred resolution so that all source values
+ * are available when replaying derived parsers.
+ */
+function collectSourcesFromState(
+  state: unknown,
+  runtime: DependencyRuntimeContext,
+  visited: WeakSet<object> = new WeakSet<object>(),
+): void {
+  if (state == null || typeof state !== "object") return;
+  if (visited.has(state)) return;
+  visited.add(state);
+
+  if (isDependencySourceState(state)) {
+    const depId = state[dependencyIdSymbol];
+    const result = state.result;
+    if (result.success && depId != null) {
+      // Always overwrite so that later values win (e.g., multiple()
+      // where the last tag value should be used as the dependency).
+      runtime.registerSource(depId, result.value, "cli");
+    }
+    return;
+  }
+
+  // Skip DeferredParseState internals (they contain parser references, not sources)
+  if (isDeferredParseState(state)) return;
+
+  if (Array.isArray(state)) {
+    for (const item of state) {
+      collectSourcesFromState(item, runtime, visited);
+    }
+    return;
+  }
+
+  if (isPlainObject(state)) {
+    for (const key of Reflect.ownKeys(state)) {
+      collectSourcesFromState(state[key], runtime, visited);
+    }
+  }
+}
+
+/**
+ * Recursively resolves all {@link DeferredParseState} objects in a state
+ * tree using the dependency runtime (sync).
+ *
+ * Performs a two-pass traversal:
+ *  1. Collect all {@link DependencySourceState} values into the runtime.
+ *  2. Resolve all {@link DeferredParseState} using the populated runtime.
+ *
+ * This replaces the old `resolveDeferredParseStates` with runtime-based
+ * resolution.  Only traverses plain objects and arrays; class instances
+ * and primitives are returned as-is.
+ *
+ * @param state The state tree to resolve.
+ * @param runtime The dependency runtime context.
+ * @returns The resolved state tree.
+ * @internal
+ * @since 1.0.0
+ */
+export function resolveStateWithRuntime(
+  state: unknown,
+  runtime: DependencyRuntimeContext,
+): unknown {
+  // Pass 1: Collect all DependencySourceState values into the runtime.
+  collectSourcesFromState(state, runtime);
+  // Pass 2: Resolve all DeferredParseState using the populated runtime.
+  return resolveDeferredInState(state, runtime);
+}
+
+/** Pass 2 helper: recursively replace DeferredParseState with resolved values. */
+function resolveDeferredInState(
+  state: unknown,
+  runtime: DependencyRuntimeContext,
+  visited: WeakSet<object> = new WeakSet<object>(),
+): unknown {
+  if (state == null) return state;
+
+  if (typeof state === "object") {
+    if (visited.has(state)) return state;
+    visited.add(state);
+  }
+
+  if (isDeferredParseState(state)) {
+    return resolveSingleDeferred(state, runtime);
+  }
+
+  if (isDependencySourceState(state)) return state;
+
+  if (Array.isArray(state)) {
+    return state.map((item) => resolveDeferredInState(item, runtime, visited));
+  }
+
+  if (isPlainObject(state)) {
+    const resolved: Record<string | symbol, unknown> = {};
+    for (const key of Reflect.ownKeys(state)) {
+      resolved[key] = resolveDeferredInState(state[key], runtime, visited);
+    }
+    return resolved;
+  }
+
+  return state;
+}
+
+/**
+ * Async version of {@link resolveStateWithRuntime}.
+ *
+ * @param state The state tree to resolve.
+ * @param runtime The dependency runtime context.
+ * @returns The resolved state tree.
+ * @internal
+ * @since 1.0.0
+ */
+export function resolveStateWithRuntimeAsync(
+  state: unknown,
+  runtime: DependencyRuntimeContext,
+): Promise<unknown> {
+  // Pass 1: Collect all DependencySourceState values into the runtime.
+  collectSourcesFromState(state, runtime);
+  // Pass 2: Resolve all DeferredParseState using the populated runtime.
+  return resolveDeferredInStateAsync(state, runtime);
+}
+
+/** Async pass 2 helper. */
+async function resolveDeferredInStateAsync(
+  state: unknown,
+  runtime: DependencyRuntimeContext,
+  visited: WeakSet<object> = new WeakSet<object>(),
+): Promise<unknown> {
+  if (state == null) return state;
+
+  if (typeof state === "object") {
+    if (visited.has(state)) return state;
+    visited.add(state);
+  }
+
+  if (isDeferredParseState(state)) {
+    const deferred = state;
+    const depIds = deferred.dependencyIds ?? [deferred.dependencyId];
+    const resolution = runtime.resolveDependencies({
+      dependencyIds: depIds,
+      defaultValues: deferred.defaultValues,
+    });
+    if (resolution.kind !== "resolved") return deferred.preliminaryResult;
+
+    const depValue = depIds.length === 1
+      ? resolution.values[0]
+      : resolution.values;
+    return Promise.resolve(
+      deferred.parser[parseWithDependency](deferred.rawInput, depValue),
+    );
+  }
+
+  if (isDependencySourceState(state)) return state;
+
+  if (Array.isArray(state)) {
+    return Promise.all(
+      state.map((item) => resolveDeferredInStateAsync(item, runtime, visited)),
+    );
+  }
+
+  if (isPlainObject(state)) {
+    const resolved: Record<string | symbol, unknown> = {};
+    const keys = Reflect.ownKeys(state);
+    await Promise.all(
+      keys.map(async (key) => {
+        resolved[key] = await resolveDeferredInStateAsync(
+          state[key],
+          runtime,
+          visited,
+        );
+      }),
+    );
+    return resolved;
+  }
+
+  return state;
 }
 
 /**
