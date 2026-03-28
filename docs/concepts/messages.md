@@ -358,7 +358,7 @@ a `fallback` field and optional formatting options:
     produces an empty message (no output).
 
 `locale`
-:   The locale(s) to use for formatting.  Can be a string, array of strings,
+:   The locale(s) to use for formatting.  It can be a string, array of strings,
     `Intl.Locale` object, or array of `Intl.Locale` objects.  Defaults to the
     system locale.
 
