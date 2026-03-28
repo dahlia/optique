@@ -61,12 +61,32 @@ function graphemeWidth(grapheme: string): number {
   return 1;
 }
 
-// East Asian Wide (W) and Fullwidth (F) ranges from UAX #11.
-// https://www.unicode.org/reports/tr11/
+// Characters that occupy two terminal columns.
+//
+// This table targets *terminal display width*, not the Unicode
+// East_Asian_Width (EAW) property verbatim.  The two diverge for about
+// 30 "text-style emoji" code points (e.g., U+2702 ✂, U+2714 ✔,
+// U+25B6 ▶) that have EAW=W but are rendered as a single column by
+// virtually every modern terminal emulator unless followed by VS16
+// (U+FE0F).  Treating them as 2 columns would *worsen* alignment in
+// real terminal output, so we intentionally follow observed terminal
+// behavior instead.  The VS16 case is already handled: the emoji
+// detection above matches `\p{Emoji}\uFE0F` and returns width 2.
+//
+// All contiguous CJK/Hangul/Fullwidth blocks, the two deprecated CJK
+// angle brackets (U+2329–232A), and the Enclosed CJK / Tortoise Shell
+// Bracket ranges in the SMP (U+1F200–1F265) are included because
+// terminals universally render them as two columns.
+//
+// References:
+//   UAX #11  https://www.unicode.org/reports/tr11/
+//   EastAsianWidth.txt (Unicode 16.0)
 function isEastAsianWide(cp: number): boolean {
   return (
     // Hangul Jamo (leading consonants, U+1100–U+115F)
     (cp >= 0x1100 && cp <= 0x115F) ||
+    // Left/Right-Pointing Angle Bracket (deprecated CJK, U+2329–232A)
+    (cp >= 0x2329 && cp <= 0x232A) ||
     // CJK Radicals Supplement, Kangxi Radicals
     (cp >= 0x2E80 && cp <= 0x2FDF) ||
     // Ideographic Description Characters, CJK Symbols and Punctuation
@@ -97,9 +117,15 @@ function isEastAsianWide(cp: number): boolean {
     (cp >= 0xFF01 && cp <= 0xFF60) ||
     // Fullwidth Signs
     (cp >= 0xFFE0 && cp <= 0xFFE6) ||
+    // Enclosed CJK, Tortoise Shell Brackets, Circled & Rounded Symbols
+    (cp >= 0x1F200 && cp <= 0x1F202) ||
+    (cp >= 0x1F210 && cp <= 0x1F23B) ||
+    (cp >= 0x1F240 && cp <= 0x1F248) ||
+    (cp >= 0x1F250 && cp <= 0x1F251) ||
+    (cp >= 0x1F260 && cp <= 0x1F265) ||
     // CJK Unified Ideographs Extension B through F
-    (cp >= 0x20000 && cp <= 0x2FFFF) ||
+    (cp >= 0x20000 && cp <= 0x2FFFD) ||
     // CJK Unified Ideographs Extension G+
-    (cp >= 0x30000 && cp <= 0x3FFFF)
+    (cp >= 0x30000 && cp <= 0x3FFFD)
   );
 }

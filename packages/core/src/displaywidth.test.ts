@@ -65,6 +65,28 @@ describe("getDisplayWidth", () => {
       // Standalone, they should not be treated as width 2.
       assert.equal(getDisplayWidth("\uFE20"), 1);
     });
+
+    it("should count CJK angle brackets as 2 columns each", () => {
+      // U+2329 LEFT-POINTING ANGLE BRACKET, U+232A RIGHT-POINTING
+      assert.equal(getDisplayWidth("\u2329\u232A"), 4);
+    });
+
+    it("should count Enclosed CJK squares as 2 columns each", () => {
+      // U+1F210 SQUARED CJK UNIFIED IDEOGRAPH-624B etc.
+      assert.equal(getDisplayWidth("\u{1F210}"), 2);
+      assert.equal(getDisplayWidth("\u{1F240}"), 2);
+    });
+
+    it("should count text-style EAW=W dingbats as 1 column", () => {
+      // Characters like ✂ (U+2702), ✔ (U+2714), ▶ (U+25B6) have
+      // East_Asian_Width=W in the Unicode standard, but most terminal
+      // emulators display them as 1 column without VS16.  We follow
+      // terminal behavior, not the EAW property.
+      assert.equal(getDisplayWidth("\u2702"), 1); // ✂ scissors
+      assert.equal(getDisplayWidth("\u2714"), 1); // ✔ heavy check
+      assert.equal(getDisplayWidth("\u25B6"), 1); // ▶ play button
+      assert.equal(getDisplayWidth("\u27A1"), 1); // ➡ right arrow
+    });
   });
 
   describe("combining marks", () => {
