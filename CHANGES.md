@@ -340,7 +340,7 @@ To be released.
     than or equal to 1,024”), the specific error is now propagated instead
     of being replaced with “Expected a socket address in format host:port”.
     Custom `errors.invalidFormat` still takes precedence when configured.
-    [[#322]]
+    [[#322], [#749]]
 
  -  Fixed `hostname()` accepting case variants of `localhost` (e.g.,
     `LOCALHOST`, `LocalHost`) and wildcard-localhost forms (e.g.,
@@ -1337,6 +1337,7 @@ To be released.
 [#746]: https://github.com/dahlia/optique/pull/746
 [#747]: https://github.com/dahlia/optique/pull/747
 [#748]: https://github.com/dahlia/optique/pull/748
+[#749]: https://github.com/dahlia/optique/pull/749
 
 ### @optique/config
 
