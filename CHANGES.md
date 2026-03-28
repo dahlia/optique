@@ -603,11 +603,12 @@ To be released.
     `suggest()` yields empty suggestions instead of propagating the
     exception.  [[#224], [#531]]
 
- -  Fixed `option()` and `argument()` to properly resolve derived parser
-    dependencies when used at the top level (outside `object()`, `tuple()`,
-    etc.).  Previously, top-level usage fell back to the preliminary parse
-    result rather than running the dependency resolution pipeline with
-    default values.  [[#238], [#748]]
+ -  Fixed dependency-value collection for single-dependency derived parsers
+    (from `.derive()`) inside constructs like `object()`, `tuple()`, etc.
+    When the dependency source was absent from the registry,
+    `collectDependencyValues()` now falls back to stored default values,
+    matching the behavior that the multi-dependency path (from
+    `deriveFrom()`) already had.  [[#238], [#748]]
 
  -  The `integer()` parser in number mode now rejects values outside the safe
     integer range (`Number.MIN_SAFE_INTEGER` to `Number.MAX_SAFE_INTEGER`).
