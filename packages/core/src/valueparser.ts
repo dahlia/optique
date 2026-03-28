@@ -4122,6 +4122,16 @@ export function socketAddress(
             : errorMsg;
           return { success: false, error: msg };
         }
+        // When the whole input is a syntactically valid hostname, the
+        // split is ambiguous and the port error would be misleading.
+        // Return the generic format error instead.
+        if (syntaxHostnameCheck.parse(trimmed).success) {
+          return {
+            success: false,
+            error:
+              message`Expected a socket address in format host${separator}port, but got ${input}.`,
+          };
+        }
         return { success: false, error: validHostInvalidPortError };
       }
 
@@ -4209,6 +4219,7 @@ export function socketAddress(
         }
         if (
           trailingSepHostError.hostPart !== "" &&
+          !trailingSepHostError.hostPart.includes(separator) &&
           !syntaxHostnameCheck.parse(trimmed).success
         ) {
           return { success: false, error: trailingSepHostError.error };
@@ -4268,10 +4279,12 @@ export function socketAddress(
         // parser with default options) so that neither host-type
         // restrictions (e.g., type: "ip") nor user hostname policies
         // (e.g., maxLength) affect the syntactic disambiguation.
-        if (firstHostError.hostPart !== "") {
-          if (!syntaxHostnameCheck.parse(trimmed).success) {
-            return { success: false, error: firstHostError.error };
-          }
+        if (
+          firstHostError.hostPart !== "" &&
+          !firstHostError.hostPart.includes(separator) &&
+          !syntaxHostnameCheck.parse(trimmed).success
+        ) {
+          return { success: false, error: firstHostError.error };
         }
       }
 

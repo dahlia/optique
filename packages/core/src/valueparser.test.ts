@@ -9934,20 +9934,19 @@ describe("socketAddress()", () => {
 
     it("should reject when split has valid host but invalid numeric port", () => {
       // "db-70000" should NOT be silently accepted as a hostname.
-      // The port part "70000" is all digits → user intended a port →
-      // specific port error.
+      // The port part "70000" is all digits → user intended a port.
+      // But since the separator "-" can appear in hostnames and the
+      // whole input is a valid hostname, the split is ambiguous.
+      // The generic format error is returned.
       const parser = socketAddress({ separator: "-", defaultPort: 80 });
 
       const result = parser.parse("db-70000");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        {
-          type: "text",
-          text: "Expected a port number less than or equal to ",
-        },
-        { type: "text", text: "65,535" },
-        { type: "text", text: ", but got " },
-        { type: "value", value: "70000" },
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "-" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "db-70000" },
         { type: "text", text: "." },
       ]);
     });
@@ -9972,20 +9971,18 @@ describe("socketAddress()", () => {
     it("should reject doubled-separator inputs with invalid numeric port", () => {
       // "db--70000" has host "db-" (invalid trailing hyphen) + port
       // "70000".  The all-digit suffix is still a port typo even though
-      // the host part at that split point is invalid.  The specific port
-      // error should surface.
+      // the host part at that split point is invalid.  But since the
+      // whole input is a valid hostname, the split is ambiguous and
+      // the generic format error is returned.
       const parser = socketAddress({ separator: "-", defaultPort: 80 });
 
       const result = parser.parse("db--70000");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        {
-          type: "text",
-          text: "Expected a port number less than or equal to ",
-        },
-        { type: "text", text: "65,535" },
-        { type: "text", text: ", but got " },
-        { type: "value", value: "70000" },
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "-" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "db--70000" },
         { type: "text", text: "." },
       ]);
     });
@@ -10025,17 +10022,15 @@ describe("socketAddress()", () => {
       const parser = socketAddress({ separator: "to", requirePort: true });
 
       // "dbto70000" has a valid host + all-digit invalid port.
-      // Error should be about invalid port, not "missing port".
+      // But since "dbto70000" is a valid hostname and the separator
+      // "to" can appear in hostnames, the split is ambiguous.
       const result = parser.parse("dbto70000");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        {
-          type: "text",
-          text: "Expected a port number less than or equal to ",
-        },
-        { type: "text", text: "65,535" },
-        { type: "text", text: ", but got " },
-        { type: "value", value: "70000" },
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "to" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "dbto70000" },
         { type: "text", text: "." },
       ]);
     });
@@ -10570,6 +10565,81 @@ describe("socketAddress()", () => {
         { type: "value", value: "-" },
         { type: "text", text: "port, but got " },
         { type: "value", value: input },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should use generic format error for repeated default separator", () => {
+      // "::80" splits as host ":" + port 80, but ":" is just a
+      // separator artifact.  The generic format error is correct.
+      const parser = socketAddress({ requirePort: true });
+
+      const result = parser.parse("::80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: ":" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "::80" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should use generic format error for repeated custom separator", () => {
+      const parser = socketAddress({
+        separator: "-",
+        requirePort: true,
+      });
+
+      const result = parser.parse("--80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "-" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "--80" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should not surface port error for ambiguous separator when whole input is a hostname", () => {
+      // "foo-70000" with separator "-": the port 70000 is out of
+      // range, but "foo-70000" is also a valid hostname.  The split
+      // is ambiguous — same as "foo-80" — so the generic format
+      // error should be returned, not the port error.
+      const parser = socketAddress({
+        separator: "-",
+        requirePort: true,
+        host: { type: "ip" },
+      });
+
+      const result = parser.parse("foo-70000");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a socket address in format host" },
+        { type: "value", value: "-" },
+        { type: "text", text: "port, but got " },
+        { type: "value", value: "foo-70000" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should still propagate port error for unambiguous separator", () => {
+      // "localhost:70000" with separator ":": colons never appear
+      // in hostnames, so the split is unambiguous.  The specific
+      // port error should be returned.
+      const parser = socketAddress({ requirePort: true });
+
+      const result = parser.parse("localhost:70000");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a port number less than or equal to ",
+        },
+        { type: "text", text: "65,535" },
+        { type: "text", text: ", but got " },
+        { type: "value", value: "70000" },
         { type: "text", text: "." },
       ]);
     });
