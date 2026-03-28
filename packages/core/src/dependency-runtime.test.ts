@@ -1,0 +1,355 @@
+/**
+ * Unit tests for DependencyRuntimeContext and shared runtime helpers.
+ *
+ * Part of https://github.com/dahlia/optique/issues/752
+ */
+import { describe, test } from "node:test";
+import * as assert from "node:assert/strict";
+import {
+  collectExplicitSourceValues,
+  createDependencyFingerprint,
+  createDependencyRuntimeContext,
+  createReplayKey,
+  fillMissingSourceDefaults,
+  replayDerivedParser,
+  replayDerivedParserAsync,
+  type RuntimeNode,
+} from "./dependency-runtime.ts";
+import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
+import {
+  createDependencySourceState,
+  DependencyRegistry,
+} from "./dependency.ts";
+import type { ValueParserResult } from "./valueparser.ts";
+
+// =============================================================================
+// DependencyRuntimeContext
+// =============================================================================
+
+describe("DependencyRuntimeContext", () => {
+  test("registerSource and getSource roundtrip", () => {
+    const runtime = createDependencyRuntimeContext();
+    const id = Symbol("env");
+    runtime.registerSource(id, "prod", "cli");
+    assert.ok(runtime.hasSource(id));
+    assert.equal(runtime.getSource(id), "prod");
+  });
+
+  test("hasSource returns false for unregistered", () => {
+    const runtime = createDependencyRuntimeContext();
+    assert.ok(!runtime.hasSource(Symbol("missing")));
+  });
+
+  test("getSource returns undefined for unregistered", () => {
+    const runtime = createDependencyRuntimeContext();
+    assert.equal(runtime.getSource(Symbol("missing")), undefined);
+  });
+
+  test("registerSource with different origins", () => {
+    const runtime = createDependencyRuntimeContext();
+    const id1 = Symbol("a");
+    const id2 = Symbol("b");
+    const id3 = Symbol("c");
+    runtime.registerSource(id1, "v1", "cli");
+    runtime.registerSource(id2, "v2", "default");
+    runtime.registerSource(id3, "v3", "config");
+    assert.equal(runtime.getSource(id1), "v1");
+    assert.equal(runtime.getSource(id2), "v2");
+    assert.equal(runtime.getSource(id3), "v3");
+  });
+
+  test("resolveDependencies: all present -> resolved", () => {
+    const runtime = createDependencyRuntimeContext();
+    const id1 = Symbol("env");
+    const id2 = Symbol("region");
+    runtime.registerSource(id1, "prod", "cli");
+    runtime.registerSource(id2, "us-east", "cli");
+    const result = runtime.resolveDependencies({
+      dependencyIds: [id1, id2],
+    });
+    assert.equal(result.kind, "resolved");
+    assert.deepStrictEqual(result.values, ["prod", "us-east"]);
+    assert.deepStrictEqual(result.usedDefaults, [false, false]);
+  });
+
+  test("resolveDependencies: missing with defaults -> resolved", () => {
+    const runtime = createDependencyRuntimeContext();
+    const id1 = Symbol("env");
+    const id2 = Symbol("region");
+    runtime.registerSource(id1, "prod", "cli");
+    // id2 is missing
+    const result = runtime.resolveDependencies({
+      dependencyIds: [id1, id2],
+      defaultValues: ["dev", "us-west"],
+    });
+    assert.equal(result.kind, "resolved");
+    assert.deepStrictEqual(result.values, ["prod", "us-west"]);
+    assert.deepStrictEqual(result.usedDefaults, [false, true]);
+  });
+
+  test("resolveDependencies: no deps and no defaults -> missing", () => {
+    const runtime = createDependencyRuntimeContext();
+    const id = Symbol("env");
+    const result = runtime.resolveDependencies({
+      dependencyIds: [id],
+    });
+    assert.equal(result.kind, "missing");
+    assert.equal(result.values.length, 1);
+    assert.equal(result.values[0], undefined);
+  });
+
+  test("resolveDependencies: partial -> partial", () => {
+    const runtime = createDependencyRuntimeContext();
+    const id1 = Symbol("env");
+    const id2 = Symbol("region");
+    runtime.registerSource(id1, "prod", "cli");
+    // id2 missing, no defaults provided for it
+    const result = runtime.resolveDependencies({
+      dependencyIds: [id1, id2],
+    });
+    assert.equal(result.kind, "partial");
+    assert.deepStrictEqual(result.values, ["prod", undefined]);
+  });
+
+  test("getReplayResult / setReplayResult caching", () => {
+    const runtime = createDependencyRuntimeContext();
+    const key = createReplayKey(["env"], "prod", ["prod"]);
+    assert.equal(runtime.getReplayResult(key), undefined);
+    const result: ValueParserResult<string> = {
+      success: true,
+      value: "prod",
+    };
+    runtime.setReplayResult(key, result);
+    assert.deepStrictEqual(runtime.getReplayResult(key), result);
+  });
+
+  test("getSuggestionDependencies mirrors resolveDependencies", () => {
+    const runtime = createDependencyRuntimeContext();
+    const id = Symbol("env");
+    runtime.registerSource(id, "prod", "cli");
+    const result = runtime.getSuggestionDependencies({
+      dependencyIds: [id],
+    });
+    assert.equal(result.kind, "resolved");
+    assert.deepStrictEqual(result.values, ["prod"]);
+  });
+
+  test("wraps existing DependencyRegistryLike", () => {
+    const registry = new DependencyRegistry();
+    const id = Symbol("env");
+    registry.set(id, "prod");
+    const runtime = createDependencyRuntimeContext(registry);
+    assert.ok(runtime.hasSource(id));
+    assert.equal(runtime.getSource(id), "prod");
+  });
+});
+
+// =============================================================================
+// createDependencyFingerprint / createReplayKey
+// =============================================================================
+
+describe("createDependencyFingerprint", () => {
+  test("same values produce same fingerprint", () => {
+    const fp1 = createDependencyFingerprint(["prod", "us-east"]);
+    const fp2 = createDependencyFingerprint(["prod", "us-east"]);
+    assert.equal(fp1, fp2);
+  });
+
+  test("different values produce different fingerprint", () => {
+    const fp1 = createDependencyFingerprint(["prod", "us-east"]);
+    const fp2 = createDependencyFingerprint(["dev", "us-west"]);
+    assert.notEqual(fp1, fp2);
+  });
+
+  test("order matters", () => {
+    const fp1 = createDependencyFingerprint(["a", "b"]);
+    const fp2 = createDependencyFingerprint(["b", "a"]);
+    assert.notEqual(fp1, fp2);
+  });
+
+  test("handles undefined values", () => {
+    const fp = createDependencyFingerprint([undefined, "a"]);
+    assert.equal(typeof fp, "string");
+  });
+});
+
+describe("createReplayKey", () => {
+  test("creates key with fingerprint", () => {
+    const key = createReplayKey(["env"], "prod", ["prod"]);
+    assert.deepStrictEqual(key.path, ["env"]);
+    assert.equal(key.rawInput, "prod");
+    assert.equal(typeof key.dependencyFingerprint, "string");
+  });
+});
+
+// =============================================================================
+// Shared runtime helpers
+// =============================================================================
+
+describe("collectExplicitSourceValues", () => {
+  test("registers source values from DependencySourceState", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const sourceState = createDependencySourceState(
+      { success: true, value: "prod" } as ValueParserResult<string>,
+      sourceId,
+    );
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            preservesSourceValue: true,
+          },
+        },
+      },
+      state: sourceState,
+    }];
+    collectExplicitSourceValues(nodes, runtime);
+    assert.ok(runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), "prod");
+  });
+
+  test("skips nodes without source metadata", () => {
+    const runtime = createDependencyRuntimeContext();
+    const nodes: RuntimeNode[] = [{
+      path: ["file"],
+      parser: { dependencyMetadata: undefined },
+      state: { success: true, value: "test.txt" },
+    }];
+    collectExplicitSourceValues(nodes, runtime);
+    // Nothing registered — no error
+  });
+});
+
+describe("fillMissingSourceDefaults", () => {
+  test("fills default for missing source", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            preservesSourceValue: true,
+            getMissingSourceValue: () => ({
+              success: true as const,
+              value: "dev",
+            }),
+          },
+        },
+      },
+      state: undefined,
+    }];
+    fillMissingSourceDefaults(nodes, runtime);
+    assert.ok(runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), "dev");
+  });
+
+  test("does not overwrite existing source", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    runtime.registerSource(sourceId, "prod", "cli");
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            preservesSourceValue: true,
+            getMissingSourceValue: () => ({
+              success: true as const,
+              value: "dev",
+            }),
+          },
+        },
+      },
+      state: undefined,
+    }];
+    fillMissingSourceDefaults(nodes, runtime);
+    assert.equal(runtime.getSource(sourceId), "prod");
+  });
+});
+
+describe("replayDerivedParser", () => {
+  test("replays sync derived parser", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    runtime.registerSource(sourceId, "prod", "cli");
+    const metadata: ParserDependencyMetadata = {
+      derived: {
+        kind: "derived",
+        dependencyIds: [sourceId],
+        replayParse: (_raw: string, deps: readonly unknown[]) => ({
+          success: true as const,
+          value: `parsed-${deps[0]}`,
+        }),
+      },
+    };
+    const result = replayDerivedParser(
+      { path: ["level"], parser: { dependencyMetadata: metadata }, state: {} },
+      "warn",
+      runtime,
+    );
+    assert.ok(result !== undefined);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "parsed-prod");
+    }
+  });
+
+  test("returns undefined when dependencies unresolved", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const metadata: ParserDependencyMetadata = {
+      derived: {
+        kind: "derived",
+        dependencyIds: [sourceId],
+        replayParse: (_raw: string, deps: readonly unknown[]) => ({
+          success: true as const,
+          value: `parsed-${deps[0]}`,
+        }),
+      },
+    };
+    const result = replayDerivedParser(
+      { path: ["level"], parser: { dependencyMetadata: metadata }, state: {} },
+      "warn",
+      runtime,
+    );
+    assert.equal(result, undefined);
+  });
+});
+
+describe("replayDerivedParserAsync", () => {
+  test("replays async derived parser", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    runtime.registerSource(sourceId, "prod", "cli");
+    const metadata: ParserDependencyMetadata = {
+      derived: {
+        kind: "derived",
+        dependencyIds: [sourceId],
+        replayParse: (_raw: string, deps: readonly unknown[]) =>
+          Promise.resolve({
+            success: true as const,
+            value: `async-${deps[0]}`,
+          }),
+      },
+    };
+    const result = await replayDerivedParserAsync(
+      { path: ["level"], parser: { dependencyMetadata: metadata }, state: {} },
+      "warn",
+      runtime,
+    );
+    assert.ok(result !== undefined);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "async-prod");
+    }
+  });
+});
