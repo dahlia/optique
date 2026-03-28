@@ -14,7 +14,14 @@ To be released.
     support the separation of parser-local state from shared execution
     context.  `ParserContext` now includes an optional `exec` field for
     accessing the shared execution context.
-    [[#750], [#751], [#752], [#756], [#760]]
+    [[#750], [#751], [#752], [#753], [#756], [#760]]
+
+ -  Shared-buffer constructs (`object()`, `tuple()`, `concat()`, `merge()`)
+    now use a centralized dependency runtime for source collection, default
+    filling, and derived-parser replay, instead of the old state-type
+    inspection protocol.  The runtime is shared across nested constructs
+    via `ExecutionContext.dependencyRuntime`.  User-facing behavior is
+    unchanged.  [[#750], [#753]]
 
  -  `Parser.complete()` and `Parser.shouldDeferCompletion()` now accept an
     optional `ExecutionContext` parameter.  All built-in parser
@@ -1377,6 +1384,7 @@ To be released.
 [#750]: https://github.com/dahlia/optique/issues/750
 [#751]: https://github.com/dahlia/optique/issues/751
 [#752]: https://github.com/dahlia/optique/issues/752
+[#753]: https://github.com/dahlia/optique/issues/753
 [#756]: https://github.com/dahlia/optique/pull/756
 [#757]: https://github.com/dahlia/optique/pull/757
 [#758]: https://github.com/dahlia/optique/pull/758

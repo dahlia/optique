@@ -6449,14 +6449,14 @@ function buildSuggestRegistry(
   stateArray: unknown[] | undefined;
 } {
   const stateArray = preParsedContext.state as unknown[] | undefined;
-  const registry = preParsedContext.dependencyRegistry
-    ? preParsedContext.dependencyRegistry.clone()
-    : new DependencyRegistry();
+  const runtime = createDependencyRuntimeContext(
+    preParsedContext.dependencyRegistry?.clone(),
+  );
   if (stateArray && Array.isArray(stateArray)) {
-    collectDependencies(stateArray, registry);
+    resolveStateWithRuntime(stateArray, runtime);
   }
   return {
-    context: { ...preParsedContext, dependencyRegistry: registry },
+    context: { ...preParsedContext, dependencyRegistry: runtime.registry },
     stateArray,
   };
 }
