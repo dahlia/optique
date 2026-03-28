@@ -967,9 +967,22 @@ export function withDefault<
       "withDefault",
       {
         defaultValue: () => {
-          const v = typeof defaultValue === "function"
+          let v = typeof defaultValue === "function"
             ? (defaultValue as () => TDefault)()
             : defaultValue;
+          // Normalize the default value to match what the inner parser's
+          // value parser would produce, so that dependency source values
+          // are consistent regardless of whether they came from explicit
+          // input or a default.
+          if (typeof parser.normalizeValue === "function") {
+            try {
+              v = parser.normalizeValue(v as unknown as TValue) as
+                & TValue
+                & TDefault;
+            } catch {
+              // Normalization may fail for sentinel types; keep raw value.
+            }
+          }
           return { success: true as const, value: v };
         },
       },
