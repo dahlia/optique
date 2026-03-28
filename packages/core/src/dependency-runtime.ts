@@ -408,11 +408,14 @@ export function createDependencyFingerprint(
   }).join("");
 }
 
-// Per-object identity counter for fingerprinting non-primitive values.
+// Per-reference identity counter for fingerprinting non-primitive values.
 // Using reference identity avoids lossy JSON.stringify (which maps Map,
-// Set, class instances, etc. to '{}').  Same reference → same fingerprint;
-// different reference → different fingerprint (conservative but never stale).
-const objectIds = new WeakMap<object, number>();
+// Set, class instances, etc. to '{}') and also handles functions (which
+// String() collapses for identical source text).  Same reference → same
+// fingerprint; different reference → different fingerprint (conservative
+// but never stale).
+// deno-lint-ignore ban-types
+const objectIds = new WeakMap<object | Function, number>();
 let objectIdCounter = 0;
 
 function fingerprintValue(v: unknown): string {
@@ -426,11 +429,11 @@ function fingerprintValue(v: unknown): string {
   }
   if (typeof v === "boolean") return `b:${v}`;
   if (typeof v === "symbol") return `y:${stableSymbolKey(v)}`;
-  if (typeof v === "object") {
-    let id = objectIds.get(v);
+  if (typeof v === "object" || typeof v === "function") {
+    let id = objectIds.get(v as object);
     if (id === undefined) {
       id = objectIdCounter++;
-      objectIds.set(v, id);
+      objectIds.set(v as object, id);
     }
     return `o:${id}`;
   }
