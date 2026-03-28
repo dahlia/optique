@@ -297,8 +297,12 @@ export function value(value: string): MessageTerm {
  *               string representations of consecutive values.
  *               For example, `["42", "hello"]`.
  * @returns A {@link MessageTerm} representing the list of values.
+ * @throws {TypeError} If the values array is empty.
  */
 export function values(values: readonly string[]): MessageTerm {
+  if (values.length === 0) {
+    throw new TypeError("values must not be empty.");
+  }
   return { type: "values", values: [...values] };
 }
 
@@ -416,6 +420,16 @@ export interface ValueSetOptions {
    * @default `"long"`
    */
   readonly style?: "long" | "short" | "narrow";
+
+  /**
+   * A fallback text to return when the values array is empty.  When provided
+   * and the values array is empty, a {@link Message} containing a single text
+   * term with this string is returned instead of an empty {@link Message}.
+   * An empty string produces an empty {@link Message}.
+   *
+   * @since 1.0.0
+   */
+  readonly fallback: string;
 }
 
 /**
@@ -428,33 +442,58 @@ export interface ValueSetOptions {
  * to be styled independently while respecting the locale's list formatting
  * conventions.
  *
+ * A fallback must be provided for when the values array is empty.  This can
+ * be either a simple string (shorthand) or an options object with a
+ * `fallback` field.  When the values array is empty, the fallback text
+ * is returned as a single text term.  An empty fallback string produces
+ * an empty {@link Message}.
+ *
  * @example
  * ```typescript
  * // English conjunction (default): "error", "warn", and "info"
- * const msg1 = message`Expected one of ${valueSet(["error", "warn", "info"])}.`;
+ * const msg1 = message`Expected one of ${
+ *   valueSet(["error", "warn", "info"], "")
+ * }.`;
  *
  * // English disjunction: "error", "warn", or "info"
  * const msg2 = message`Expected ${
- *   valueSet(["error", "warn", "info"], { type: "disjunction" })
+ *   valueSet(["error", "warn", "info"], { fallback: "", type: "disjunction" })
  * }.`;
  *
- * // Korean disjunction: "error", "warn" 또는 "info"
- * const msg3 = message`${
- *   valueSet(["error", "warn", "info"], { locale: "ko", type: "disjunction" })
- * } 중 하나여야 합니다.`;
+ * // Fallback for empty list:
+ * const msg3 = message`Expected one of ${valueSet([], "(none)")}.`;
+ * // → "Expected one of (none)."
  * ```
  *
  * @param values The list of values to format.
- * @param options Optional formatting options including locale and list type.
+ * @param fallbackOrOptions A fallback string for empty lists, or an options
+ *                          object including the fallback and formatting
+ *                          options such as locale and list type.
  * @returns A {@link Message} with alternating value and text terms.
+ * @throws {TypeError} If the fallback parameter is missing or invalid.
  * @since 0.9.0
  */
 export function valueSet(
   values: readonly string[],
-  options?: ValueSetOptions,
+  fallbackOrOptions: string | ValueSetOptions,
 ): Message {
+  if (
+    fallbackOrOptions == null ||
+    (typeof fallbackOrOptions !== "string" &&
+      typeof fallbackOrOptions.fallback !== "string")
+  ) {
+    throw new TypeError(
+      "valueSet() requires a fallback string or an options object with" +
+        " a fallback field.",
+    );
+  }
+  const options: ValueSetOptions = typeof fallbackOrOptions === "string"
+    ? { fallback: fallbackOrOptions }
+    : fallbackOrOptions;
   if (values.length === 0) {
-    return [];
+    return options.fallback === ""
+      ? []
+      : [{ type: "text", text: options.fallback }];
   }
 
   const formatter = new Intl.ListFormat(

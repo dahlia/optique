@@ -199,6 +199,13 @@ describe("message term constructors", () => {
     assert.deepEqual(term.values, ["foo", "bar", "baz"]);
   });
 
+  it("should throw TypeError for empty values array", () => {
+    assert.throws(
+      () => values([]),
+      { name: "TypeError", message: /empty/ },
+    );
+  });
+
   it("should create envVar term", () => {
     const term = envVar("API_URL");
     assert.equal(term.type, "envVar");
@@ -1061,7 +1068,10 @@ ${commandLine("myapp status")}        Show status`;
 
 describe("valueSet", () => {
   it("should format list with conjunction by default", () => {
-    const msg = valueSet(["error", "warn", "info"], { locale: "en" });
+    const msg = valueSet(["error", "warn", "info"], {
+      fallback: "",
+      locale: "en",
+    });
 
     // Should have 5 terms: value, text(", "), value, text(", and "), value
     assert.ok(Array.isArray(msg));
@@ -1075,6 +1085,7 @@ describe("valueSet", () => {
 
   it("should format list with disjunction", () => {
     const msg = valueSet(["error", "warn", "info"], {
+      fallback: "",
       locale: "en",
       type: "disjunction",
     });
@@ -1088,21 +1099,56 @@ describe("valueSet", () => {
     assert.deepEqual(msg[4], { type: "value", value: "info" });
   });
 
-  it("should handle empty array", () => {
-    const msg = valueSet([]);
+  it("should return empty array for empty input with empty fallback", () => {
+    const msg = valueSet([], "");
     assert.ok(Array.isArray(msg));
     assert.equal(msg.length, 0);
   });
 
+  it("should return fallback text for empty input", () => {
+    const msg = valueSet([], "(none)");
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 1);
+    assert.deepEqual(msg[0], { type: "text", text: "(none)" });
+  });
+
+  it("should return fallback text from options for empty input", () => {
+    const msg = valueSet([], { fallback: "(없음)", locale: "ko" });
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 1);
+    assert.deepEqual(msg[0], { type: "text", text: "(없음)" });
+  });
+
+  it("should ignore fallback when values are non-empty", () => {
+    const msg = valueSet(["a"], "(none)");
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 1);
+    assert.deepEqual(msg[0], { type: "value", value: "a" });
+  });
+
+  it("should throw TypeError when called without fallback", () => {
+    // Runtime validation for JavaScript callers or old compiled code
+    assert.throws(
+      // deno-lint-ignore no-explicit-any
+      () => (valueSet as any)([]),
+      { name: "TypeError", message: /fallback/ },
+    );
+    assert.throws(
+      // deno-lint-ignore no-explicit-any
+      () => (valueSet as any)([], { locale: "en" }),
+      { name: "TypeError", message: /fallback/ },
+    );
+  });
+
   it("should handle single element", () => {
-    const msg = valueSet(["only"], { locale: "en" });
+    const msg = valueSet(["only"], { fallback: "", locale: "en" });
     assert.ok(Array.isArray(msg));
     assert.equal(msg.length, 1);
     assert.deepEqual(msg[0], { type: "value", value: "only" });
   });
 
   it("should handle two elements", () => {
-    const msg = valueSet(["first", "second"], { locale: "en" });
+    const msg = valueSet(["first", "second"], { fallback: "", locale: "en" });
 
     // Should have 3 terms: value, text(" and "), value
     assert.ok(Array.isArray(msg));
@@ -1114,6 +1160,7 @@ describe("valueSet", () => {
 
   it("should handle two elements with disjunction", () => {
     const msg = valueSet(["first", "second"], {
+      fallback: "",
       locale: "en",
       type: "disjunction",
     });
@@ -1127,6 +1174,7 @@ describe("valueSet", () => {
 
   it("should work with Korean locale", () => {
     const msg = valueSet(["error", "warn", "info"], {
+      fallback: "",
       locale: "ko",
       type: "disjunction",
     });
@@ -1147,7 +1195,7 @@ describe("valueSet", () => {
 
   it("should accept Intl.Locale object", () => {
     const locale = new Intl.Locale("en-US");
-    const msg = valueSet(["a", "b"], { locale });
+    const msg = valueSet(["a", "b"], { fallback: "", locale });
 
     assert.ok(Array.isArray(msg));
     assert.equal(msg.length, 3);
@@ -1156,14 +1204,14 @@ describe("valueSet", () => {
   });
 
   it("should accept array of locales", () => {
-    const msg = valueSet(["a", "b"], { locale: ["en-US", "en"] });
+    const msg = valueSet(["a", "b"], { fallback: "", locale: ["en-US", "en"] });
 
     assert.ok(Array.isArray(msg));
     assert.equal(msg.length, 3);
   });
 
   it("should work without options (use system default)", () => {
-    const msg = valueSet(["a", "b", "c"]);
+    const msg = valueSet(["a", "b", "c"], "");
 
     // Should produce valid output with system default locale
     assert.ok(Array.isArray(msg));
@@ -1174,7 +1222,9 @@ describe("valueSet", () => {
   });
 
   it("should integrate with message template", () => {
-    const msg = message`Expected ${valueSet(["a", "b"], { locale: "en" })}.`;
+    const msg = message`Expected ${
+      valueSet(["a", "b"], { fallback: "", locale: "en" })
+    }.`;
 
     const formatted = formatMessage(msg, { quotes: true });
     assert.equal(formatted, 'Expected "a" and "b".');
@@ -1182,7 +1232,11 @@ describe("valueSet", () => {
 
   it("should integrate with message template using disjunction", () => {
     const msg = message`Expected one of ${
-      valueSet(["error", "warn", "info"], { locale: "en", type: "disjunction" })
+      valueSet(["error", "warn", "info"], {
+        fallback: "",
+        locale: "en",
+        type: "disjunction",
+      })
     }.`;
 
     const formatted = formatMessage(msg, { quotes: true });
@@ -1435,7 +1489,7 @@ describe("property-based tests", () => {
     fc.assert(
       fc.property(
         fc.array(nonEmptySingleLineStringArbitrary, {
-          minLength: 0,
+          minLength: 1,
           maxLength: 8,
         }),
         fc.option(fc.constantFrom("en", "ko", "fr"), { nil: undefined }),
@@ -1455,17 +1509,18 @@ describe("property-based tests", () => {
           type: "conjunction" | "disjunction" | "unit",
           style: "long" | "short" | "narrow",
         ) => {
-          const msg = valueSet(valuesInput, { locale, type, style });
+          const msg = valueSet(valuesInput, {
+            fallback: "",
+            locale,
+            type,
+            style,
+          });
           const extractedValues = msg
             .filter((term) => term.type === "value")
             .map((term) => term.value);
 
           assert.deepEqual(extractedValues, valuesInput);
-          if (valuesInput.length === 0) {
-            assert.deepEqual(msg, []);
-          } else {
-            assert.ok(msg.length > 0);
-          }
+          assert.ok(msg.length > 0);
         },
       ),
       propertyParameters,

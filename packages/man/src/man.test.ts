@@ -1400,7 +1400,10 @@ describe("formatDocPageAsMan()", () => {
         {
           term: { type: "option", names: ["--format"], metavar: "FMT" },
           description: message`Output format.`,
-          choices: valueSet(["json", "yaml", "xml"], { type: "unit" }),
+          choices: valueSet(["json", "yaml", "xml"], {
+            fallback: "",
+            type: "unit",
+          }),
         },
       ],
     };

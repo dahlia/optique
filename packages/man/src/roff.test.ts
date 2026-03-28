@@ -251,9 +251,11 @@ describe("formatMessageAsRoff()", () => {
     assert.equal(formatMessageAsRoff(msg), '"a\\(dqb" "c\\(dqd"');
   });
 
-  it("formats empty values", () => {
-    const msg = [values([])];
-    assert.equal(formatMessageAsRoff(msg), "");
+  it("rejects empty values", () => {
+    assert.throws(
+      () => values([]),
+      TypeError,
+    );
   });
 
   it("formats envVar in bold", () => {

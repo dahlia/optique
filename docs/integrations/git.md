@@ -356,7 +356,7 @@ const parser = gitBranch({
   errors: {
     notFound: (input, available) =>
       message`Branch ${input} not found. Available: ${
-        available ? valueSet(available) : "none"
+        valueSet(available ?? [], "none")
       }`,
     listFailed: (dir) =>
       message`Cannot read git repository at ${dir}`,

@@ -802,7 +802,7 @@ function formatDefaultChoiceError(
     return message`No valid choices are configured, but got ${input}.`;
   }
   return message`Expected one of ${
-    valueSet(choiceStrings, { locale: "en-US" })
+    valueSet(choiceStrings, { fallback: "", locale: "en-US" })
   }, but got ${input}.`;
 }
 
@@ -1586,7 +1586,10 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
               { type: "text", text: "URL protocol " },
               { type: "value", value: url.protocol },
               { type: "text", text: " is not allowed. Allowed protocols: " },
-              ...valueSet(originalProtocols!, { locale: "en-US" }),
+              ...valueSet(originalProtocols!, {
+                fallback: "",
+                locale: "en-US",
+              }),
               { type: "text", text: "." },
             ] as Message,
         };
@@ -3617,7 +3620,7 @@ export function email(
                 { type: "text", text: "Email domain " },
                 { type: "value", value: domain },
                 { type: "text", text: " is not allowed. Allowed domains: " },
-                ...valueSet(allowedDomains, { locale: "en-US" }),
+                ...valueSet(allowedDomains, { fallback: "", locale: "en-US" }),
                 { type: "text", text: "." },
               ] as Message;
               return { success: false, error: msg };
@@ -3659,7 +3662,7 @@ export function email(
               { type: "text", text: "Email domain " },
               { type: "value", value: domain },
               { type: "text", text: " is not allowed. Allowed domains: " },
-              ...valueSet(allowedDomains, { locale: "en-US" }),
+              ...valueSet(allowedDomains, { fallback: "", locale: "en-US" }),
               { type: "text", text: "." },
             ] as Message;
             return { success: false, error: msg };
@@ -5371,7 +5374,7 @@ export function domain(
             { type: "text", text: "Top-level domain " },
             { type: "value", value: tld },
             { type: "text", text: " is not allowed. Allowed TLDs: " },
-            ...valueSet(allowedTlds, { locale: "en-US" }),
+            ...valueSet(allowedTlds, { fallback: "", locale: "en-US" }),
             { type: "text", text: "." },
           ] as Message;
           return { success: false, error: msg };
