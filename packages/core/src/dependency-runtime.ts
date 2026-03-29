@@ -856,13 +856,13 @@ function resolveSingleDeferred(
 }
 
 /**
- * Recursively collects dependency source values from `DependencySourceState`
+ * Recursively collects dependency source values from {@link DependencySourceState}
  * objects found in the state tree and registers them in the runtime.
  *
  * This must run BEFORE deferred resolution so that all source values
  * are available when replaying derived parsers.
  */
-function collectSourcesFromState(
+export function collectSourcesFromState(
   state: unknown,
   runtime: DependencyRuntimeContext,
   visited: WeakSet<object> = new WeakSet<object>(),

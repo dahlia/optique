@@ -13,6 +13,7 @@ import {
 import {
   buildRuntimeNodesFromPairs,
   collectExplicitSourceValues,
+  collectSourcesFromState,
   createDependencyRuntimeContext,
   fillMissingSourceDefaults,
   fillMissingSourceDefaultsAsync,
@@ -3176,8 +3177,10 @@ function* suggestObjectSync<
 
   // Collect dependency sources from the state tree (handles nested
   // DependencySourceState inside arrays, e.g., multiple()).
+  // Only harvest sources — do NOT replay deferred parsers, which
+  // would trigger async parseWithDependency calls and drop promises.
   if (context.state && typeof context.state === "object") {
-    resolveStateWithRuntime(context.state, runtime);
+    collectSourcesFromState(context.state, runtime);
   }
 
   // Pre-complete bindConfig/bindEnv source parsers (old-protocol bridge).
@@ -3269,7 +3272,7 @@ async function* suggestObjectAsync<
 
   // Collect dependency sources from state tree + pre-complete bindConfig/bindEnv.
   if (context.state && typeof context.state === "object") {
-    resolveStateWithRuntime(context.state, runtime);
+    collectSourcesFromState(context.state, runtime);
   }
   await completeDependencySourceDefaultsAsync(
     context,
@@ -6147,7 +6150,7 @@ export function merge(
           );
           const childFieldPairs = collectChildFieldParsers(parsers);
           if (context.state && typeof context.state === "object") {
-            resolveStateWithRuntime(context.state, runtime);
+            collectSourcesFromState(context.state, runtime);
           }
           await completeDependencySourceDefaultsAsync(
             context,
@@ -6194,7 +6197,7 @@ export function merge(
       );
       const childFieldPairs = collectChildFieldParsers(syncParsers);
       if (context.state && typeof context.state === "object") {
-        resolveStateWithRuntime(context.state, runtime);
+        collectSourcesFromState(context.state, runtime);
       }
       completeDependencySourceDefaults(
         context,
@@ -6387,7 +6390,7 @@ function buildSuggestRegistry(
     preParsedContext.dependencyRegistry?.clone(),
   );
   if (stateArray && Array.isArray(stateArray)) {
-    resolveStateWithRuntime(stateArray, runtime);
+    collectSourcesFromState(stateArray, runtime);
   }
   return {
     context: { ...preParsedContext, dependencyRegistry: runtime.registry },
