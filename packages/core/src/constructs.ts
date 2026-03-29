@@ -3530,10 +3530,14 @@ function collectChildFieldParsers(
  * PendingDependencySourceState in arrays and wrappedDependencySourceMarker.
  *
  * The original state is NOT modified; only the registry is populated.
+ *
+ * Used by the new dependency runtime path as an old-protocol bridge:
+ * not all wrappers (e.g., `bindConfig`, `bindEnv`) compose
+ * `dependencyMetadata` yet, so metadata-based source collection alone
+ * cannot register all dependency values.  This function fills the gap
+ * by inspecting old-protocol markers on the parsers.
  * @internal
- * @deprecated Will be removed in a future cleanup pass.
  */
-// deno-lint-ignore no-unused-vars
 function preCompleteAndRegisterDependencies(
   state: Record<string | symbol, unknown>,
   fieldParserPairs: ReadonlyArray<
@@ -3545,30 +3549,45 @@ function preCompleteAndRegisterDependencies(
   for (const [field, fieldParser] of fieldParserPairs) {
     const fieldState = state[field];
 
-    let completed: unknown;
-
-    // Case 1: state is [PendingDependencySourceState]
+    // Cases 1-3: pre-complete dependency sources that weren't provided.
+    // Only register when complete() returns an actual DependencySourceState
+    // (not force-wrapped), because wrappers like map() may intentionally
+    // return a plain result that should NOT be registered as a source value.
     if (
       Array.isArray(fieldState) &&
       fieldState.length === 1 &&
       isPendingDependencySourceState(fieldState[0])
     ) {
-      completed = fieldParser.complete(fieldState, exec);
-    } // Case 2: state is undefined but parser's initialState is PendingDependencySourceState
-    else if (
+      // Case 1: state is [PendingDependencySourceState]
+      const completed = fieldParser.complete(fieldState, exec);
+      if (isDependencySourceState(completed)) {
+        registerCompletedDependency(completed, registry);
+      }
+    } else if (
       fieldState === undefined &&
       isPendingDependencySourceState(fieldParser.initialState)
     ) {
-      completed = fieldParser.complete([fieldParser.initialState], exec);
-    } // Case 3: state is undefined and parser has wrappedDependencySourceMarker
-    else if (
+      // Case 2: undefined state, parser.initialState is PendingDependencySourceState
+      const completed = fieldParser.complete(
+        [fieldParser.initialState],
+        exec,
+      );
+      if (isDependencySourceState(completed)) {
+        registerCompletedDependency(completed, registry);
+      }
+    } else if (
       fieldState === undefined &&
       isWrappedDependencySource(fieldParser)
     ) {
+      // Case 3: undefined state, parser has wrappedDependencySourceMarker
       const pendingState = fieldParser[wrappedDependencySourceMarker];
-      completed = fieldParser.complete([pendingState], exec);
+      const completed = fieldParser.complete([pendingState], exec);
+      if (isDependencySourceState(completed)) {
+        registerCompletedDependency(completed, registry);
+      }
     } // Case 4: non-null/non-array state, parser contains dependency source
-    // (e.g., bindEnv/bindConfig wrapper state)
+    // (e.g., bindEnv/bindConfig wrapper state).  Force-wrap the result
+    // because these wrappers return plain Results, not DependencySourceState.
     else if (
       fieldState != null &&
       !Array.isArray(fieldState) &&
@@ -3581,22 +3600,17 @@ function preCompleteAndRegisterDependencies(
         field,
         fieldParser,
       );
-      completed = fieldParser.complete(annotatedFieldState, exec);
-    } else {
-      continue;
+      const completed = fieldParser.complete(annotatedFieldState, exec);
+      const depState = wrapAsDependencySourceState(completed, fieldParser);
+      if (depState) registerCompletedDependency(depState, registry);
     }
-
-    const depState = wrapAsDependencySourceState(completed, fieldParser);
-    if (depState) registerCompletedDependency(depState, registry);
   }
 }
 
 /**
  * Async version of {@link preCompleteAndRegisterDependencies}.
  * @internal
- * @deprecated Will be removed in a future cleanup pass.
  */
-// deno-lint-ignore no-unused-vars
 async function preCompleteAndRegisterDependenciesAsync(
   state: Record<string | symbol, unknown>,
   fieldParserPairs: ReadonlyArray<
@@ -3608,29 +3622,38 @@ async function preCompleteAndRegisterDependenciesAsync(
   for (const [field, fieldParser] of fieldParserPairs) {
     const fieldState = state[field];
 
-    let completed: unknown;
-
+    // Cases 1-3: only register actual DependencySourceState.
     if (
       Array.isArray(fieldState) &&
       fieldState.length === 1 &&
       isPendingDependencySourceState(fieldState[0])
     ) {
-      completed = await fieldParser.complete(fieldState, exec);
+      const completed = await fieldParser.complete(fieldState, exec);
+      if (isDependencySourceState(completed)) {
+        registerCompletedDependency(completed, registry);
+      }
     } else if (
       fieldState === undefined &&
       isPendingDependencySourceState(fieldParser.initialState)
     ) {
-      completed = await fieldParser.complete(
+      const completed = await fieldParser.complete(
         [fieldParser.initialState],
         exec,
       );
+      if (isDependencySourceState(completed)) {
+        registerCompletedDependency(completed, registry);
+      }
     } else if (
       fieldState === undefined &&
       isWrappedDependencySource(fieldParser)
     ) {
       const pendingState = fieldParser[wrappedDependencySourceMarker];
-      completed = await fieldParser.complete([pendingState], exec);
-    } else if (
+      const completed = await fieldParser.complete([pendingState], exec);
+      if (isDependencySourceState(completed)) {
+        registerCompletedDependency(completed, registry);
+      }
+    } // Case 4: force-wrap for bindEnv/bindConfig.
+    else if (
       fieldState != null &&
       !Array.isArray(fieldState) &&
       !isDependencySourceState(fieldState) &&
@@ -3642,13 +3665,13 @@ async function preCompleteAndRegisterDependenciesAsync(
         field,
         fieldParser,
       );
-      completed = await fieldParser.complete(annotatedFieldState, exec);
-    } else {
-      continue;
+      const completed = await fieldParser.complete(
+        annotatedFieldState,
+        exec,
+      );
+      const depState = wrapAsDependencySourceState(completed, fieldParser);
+      if (depState) registerCompletedDependency(depState, registry);
     }
-
-    const depState = wrapAsDependencySourceState(completed, fieldParser);
-    if (depState) registerCompletedDependency(depState, registry);
   }
 }
 
@@ -4425,81 +4448,26 @@ export function object<
           collectExplicitSourceValues(nodes, runtime);
           fillMissingSourceDefaults(nodes, runtime);
 
-          // Phase 1b: Pre-complete external resolution source parsers
-          // (bindConfig/bindEnv).  These wrappers absorb inner parse
-          // failures and resolve from config/env during complete(), so
-          // extractSourceValue cannot read the value from their state.
-          // Pre-complete them and wrap results as DependencySourceState
-          // using the old protocol bridge.
-          const getFieldState = createFieldStateGetter(state);
-          for (const field of parserKeys) {
-            const fieldKey = field as string | symbol;
-            const fieldState =
-              (state as Record<string | symbol, unknown>)[fieldKey];
-            const fieldParser = parsers[field] as Parser<
-              "sync",
-              unknown,
-              unknown
-            >;
-            // Case 4: non-null, non-array state, parser contains a
-            // dependency source (detected via old-protocol markers since
-            // bindConfig/bindEnv don't compose dependencyMetadata yet).
-            if (
-              fieldState != null &&
-              !Array.isArray(fieldState) &&
-              !isDependencySourceState(fieldState) &&
-              (isWrappedDependencySource(fieldParser) ||
-                isPendingDependencySourceState(fieldParser.initialState))
-            ) {
-              const annotatedState = getFieldState(field, fieldParser);
-              const completed = fieldParser.complete(
-                annotatedState,
-                childExec,
-              );
-              const depState = wrapAsDependencySourceState(
-                completed,
-                fieldParser,
-              );
-              if (depState) {
-                registerCompletedDependency(depState, runtime.registry);
-              }
-            }
-          }
-
-          // Also handle metadata-detected sources that weren't collected.
-          for (const node of nodes) {
-            const meta = node.parser.dependencyMetadata;
-            if (meta?.source == null) continue;
-            if (runtime.hasSource(meta.source.sourceId)) continue;
-            if (runtime.isSourceFailed(meta.source.sourceId)) continue;
-            if (node.state == null) continue;
-            if (Array.isArray(node.state)) continue;
-            if (isDependencySourceState(node.state)) continue;
-            const fieldKey = node.path[node.path.length - 1] as keyof T;
-            const fieldParser = parsers[fieldKey] as Parser<
-              "sync",
-              unknown,
-              unknown
-            >;
-            const annotatedState = getFieldState(fieldKey, fieldParser);
-            const completed = fieldParser.complete(annotatedState, childExec);
-            const actualResult = unwrapCompleteResult(completed);
-            if (
-              actualResult.success && actualResult.value !== undefined &&
-              !runtime.hasSource(meta.source.sourceId)
-            ) {
-              runtime.registerSource(
-                meta.source.sourceId,
-                actualResult.value,
-                "cli",
-              );
-            }
-          }
+          // Phase 1b: Pre-complete ALL dependency source parsers via
+          // old-protocol bridge (handles all 4 cases: pending state in
+          // arrays, undefined with pending initialState, wrapped markers,
+          // and non-null state from bindConfig/bindEnv).  This is needed
+          // because not all wrappers compose dependencyMetadata yet.
+          preCompleteAndRegisterDependencies(
+            state as Record<string | symbol, unknown>,
+            parserPairs as readonly (readonly [
+              string | symbol,
+              Parser<Mode, unknown, unknown>,
+            ])[],
+            runtime.registry,
+            childExec,
+          );
 
           // Phase 2: Resolve all DeferredParseState in the state tree
           // using the dependency runtime.  This recursively finds and
           // replays derived parsers at any nesting depth (including
           // inside multiple() arrays and modifier chains).
+          const getFieldState = createFieldStateGetter(state);
           const resolvedFieldStates: Record<string | symbol, unknown> = {};
           for (const field of parserKeys) {
             const fieldKey = field as string | symbol;
@@ -4584,64 +4552,21 @@ export function object<
           collectExplicitSourceValues(nodes, runtime);
           await fillMissingSourceDefaultsAsync(nodes, runtime);
 
-          // Phase 1b: Pre-complete external resolution source parsers.
-          const getFieldState = createFieldStateGetter(state);
-          for (const field of parserKeys) {
-            const fieldKey = field as string | symbol;
-            const fieldState =
-              (state as Record<string | symbol, unknown>)[fieldKey];
-            const fieldParser = parsers[field];
-            if (
-              fieldState != null &&
-              !Array.isArray(fieldState) &&
-              !isDependencySourceState(fieldState) &&
-              (isWrappedDependencySource(fieldParser) ||
-                isPendingDependencySourceState(fieldParser.initialState))
-            ) {
-              const annotatedState = getFieldState(field, fieldParser);
-              const completed = await fieldParser.complete(
-                annotatedState,
-                childExec,
-              );
-              const depState = wrapAsDependencySourceState(
-                completed,
-                fieldParser,
-              );
-              if (depState) {
-                registerCompletedDependency(depState, runtime.registry);
-              }
-            }
-          }
-          for (const node of nodes) {
-            const meta = node.parser.dependencyMetadata;
-            if (meta?.source == null) continue;
-            if (runtime.hasSource(meta.source.sourceId)) continue;
-            if (runtime.isSourceFailed(meta.source.sourceId)) continue;
-            if (node.state == null) continue;
-            if (Array.isArray(node.state)) continue;
-            if (isDependencySourceState(node.state)) continue;
-            const fieldKey = node.path[node.path.length - 1] as keyof T;
-            const fieldParser = parsers[fieldKey];
-            const annotatedState = getFieldState(fieldKey, fieldParser);
-            const completed = await fieldParser.complete(
-              annotatedState,
-              childExec,
-            );
-            const actualResult = unwrapCompleteResult(completed);
-            if (
-              actualResult.success && actualResult.value !== undefined &&
-              !runtime.hasSource(meta.source.sourceId)
-            ) {
-              runtime.registerSource(
-                meta.source.sourceId,
-                actualResult.value,
-                "cli",
-              );
-            }
-          }
+          // Phase 1b: Pre-complete ALL dependency source parsers via
+          // old-protocol bridge (all 4 cases).
+          await preCompleteAndRegisterDependenciesAsync(
+            state as Record<string | symbol, unknown>,
+            parserPairs as readonly (readonly [
+              string | symbol,
+              Parser<Mode, unknown, unknown>,
+            ])[],
+            runtime.registry,
+            childExec,
+          );
 
           // Phase 2: Resolve all DeferredParseState in the state tree.
           // Use Promise.all for concurrent resolution of async derived parsers.
+          const getFieldState = createFieldStateGetter(state);
           const resolvedFieldStates: Record<string | symbol, unknown> = {};
           await Promise.all(
             parserKeys.map(async (field) => {
@@ -5961,8 +5886,8 @@ export function merge(
       if (!isAsync) {
         // Pre-complete dependency source fields from child parsers so that
         // env/config-backed dependency values are visible across merged
-        // Phase 1: Build dependency runtime and collect/fill source values.
-        // Pre-complete bindConfig/bindEnv sources via old-protocol bridge.
+        // Phase 1: Build dependency runtime and pre-complete ALL dependency
+        // source parsers (all 4 cases) via old-protocol bridge.
         const runtime = exec?.dependencyRuntime ??
           createDependencyRuntimeContext(exec?.dependencyRegistry);
         const childExec: ExecutionContext = {
@@ -5970,38 +5895,12 @@ export function merge(
           dependencyRuntime: runtime,
         } as ExecutionContext;
         const childFieldPairs = collectChildFieldParsers(syncParsers);
-        // Pre-complete Case 4 (bindConfig/bindEnv) for child field parsers.
-        if (state && typeof state === "object") {
-          for (const [field, fieldParser] of childFieldPairs) {
-            const fieldState = (state as Record<string | symbol, unknown>)[
-              field as string | symbol
-            ];
-            if (
-              fieldState != null &&
-              !Array.isArray(fieldState) &&
-              !isDependencySourceState(fieldState) &&
-              (isWrappedDependencySource(fieldParser) ||
-                isPendingDependencySourceState(fieldParser.initialState))
-            ) {
-              const annotatedState = getAnnotatedFieldState(
-                state,
-                field as string | symbol,
-                fieldParser,
-              );
-              const completed = fieldParser.complete(
-                annotatedState,
-                childExec,
-              );
-              const depState = wrapAsDependencySourceState(
-                completed,
-                fieldParser,
-              );
-              if (depState) {
-                registerCompletedDependency(depState, runtime.registry);
-              }
-            }
-          }
-        }
+        preCompleteAndRegisterDependencies(
+          state as Record<string | symbol, unknown>,
+          childFieldPairs,
+          runtime.registry,
+          childExec,
+        );
 
         // Phase 2: Resolve deferred parse states across the entire merged
         // state using the dependency runtime.
@@ -6064,7 +5963,8 @@ export function merge(
 
       // For async mode, complete asynchronously
       return (async () => {
-        // Phase 1: Build dependency runtime.
+        // Phase 1: Build dependency runtime and pre-complete ALL dependency
+        // source parsers (all 4 cases) via old-protocol bridge.
         const runtime = exec?.dependencyRuntime ??
           createDependencyRuntimeContext(exec?.dependencyRegistry);
         const childExec: ExecutionContext = {
@@ -6072,37 +5972,12 @@ export function merge(
           dependencyRuntime: runtime,
         } as ExecutionContext;
         const childFieldPairs = collectChildFieldParsers(parsers);
-        if (state && typeof state === "object") {
-          for (const [field, fieldParser] of childFieldPairs) {
-            const fieldState = (state as Record<string | symbol, unknown>)[
-              field as string | symbol
-            ];
-            if (
-              fieldState != null &&
-              !Array.isArray(fieldState) &&
-              !isDependencySourceState(fieldState) &&
-              (isWrappedDependencySource(fieldParser) ||
-                isPendingDependencySourceState(fieldParser.initialState))
-            ) {
-              const annotatedState = getAnnotatedFieldState(
-                state,
-                field as string | symbol,
-                fieldParser,
-              );
-              const completed = await fieldParser.complete(
-                annotatedState,
-                childExec,
-              );
-              const depState = wrapAsDependencySourceState(
-                completed,
-                fieldParser,
-              );
-              if (depState) {
-                registerCompletedDependency(depState, runtime.registry);
-              }
-            }
-          }
-        }
+        await preCompleteAndRegisterDependenciesAsync(
+          state as Record<string | symbol, unknown>,
+          childFieldPairs,
+          runtime.registry,
+          childExec,
+        );
 
         // Phase 2: Resolve deferred parse states across the entire merged
         // state using the dependency runtime.
