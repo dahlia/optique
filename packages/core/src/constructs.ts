@@ -3,6 +3,7 @@ import {
   type DeferredParseState,
   dependencyId,
   DependencyRegistry,
+  type DependencySourceState,
   isDeferredParseState,
   isDependencySourceState,
   isPendingDependencySourceState,
@@ -3525,6 +3526,29 @@ function collectChildFieldParsers(
 }
 
 /**
+ * If the registry already contains a value for the given dependency ID,
+ * creates a synthetic {@link DependencySourceState} from the registry
+ * value.  Returns `undefined` if the dependency is not yet registered.
+ *
+ * Used by {@link preCompleteAndRegisterDependencies} (and async variant)
+ * to skip re-evaluating default thunks when an outer `merge()` Phase 1
+ * has already seeded the value.
+ *
+ * @see https://github.com/dahlia/optique/issues/762
+ * @internal
+ */
+function reuseRegisteredDependency(
+  depId: symbol,
+  registry: DependencyRegistryLike,
+): DependencySourceState<unknown> | undefined {
+  if (!registry.has(depId)) return undefined;
+  return createDependencySourceState(
+    { success: true as const, value: registry.get(depId) },
+    depId,
+  );
+}
+
+/**
  * Pre-completes dependency source fields and registers their values in
  * the given registry.  Unlike `completeDependencySourceDefaults()` (used
  * by suggest), this function handles all four Phase 1 cases — including
@@ -3563,6 +3587,14 @@ function preCompleteAndRegisterDependencies(
       isPendingDependencySourceState(fieldState[0])
     ) {
       // Case 1: state is [PendingDependencySourceState]
+      const cached = reuseRegisteredDependency(
+        fieldState[0][dependencyId],
+        registry,
+      );
+      if (cached !== undefined) {
+        preCompleted.set(field, cached);
+        continue;
+      }
       const completed = fieldParser.complete(fieldState, exec);
       preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
@@ -3573,6 +3605,14 @@ function preCompleteAndRegisterDependencies(
       isPendingDependencySourceState(fieldParser.initialState)
     ) {
       // Case 2: undefined state, parser.initialState is PendingDependencySourceState
+      const cached = reuseRegisteredDependency(
+        fieldParser.initialState[dependencyId],
+        registry,
+      );
+      if (cached !== undefined) {
+        preCompleted.set(field, cached);
+        continue;
+      }
       const completed = fieldParser.complete(
         [fieldParser.initialState],
         exec,
@@ -3587,6 +3627,14 @@ function preCompleteAndRegisterDependencies(
     ) {
       // Case 3: undefined state, parser has wrappedDependencySourceMarker
       const pendingState = fieldParser[wrappedDependencySourceMarker];
+      const cached = reuseRegisteredDependency(
+        pendingState[dependencyId],
+        registry,
+      );
+      if (cached !== undefined) {
+        preCompleted.set(field, cached);
+        continue;
+      }
       const completed = fieldParser.complete([pendingState], exec);
       preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
@@ -3639,6 +3687,14 @@ async function preCompleteAndRegisterDependenciesAsync(
       fieldState.length === 1 &&
       isPendingDependencySourceState(fieldState[0])
     ) {
+      const cached = reuseRegisteredDependency(
+        fieldState[0][dependencyId],
+        registry,
+      );
+      if (cached !== undefined) {
+        preCompleted.set(field, cached);
+        continue;
+      }
       const completed = await fieldParser.complete(fieldState, exec);
       preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
@@ -3648,6 +3704,14 @@ async function preCompleteAndRegisterDependenciesAsync(
       fieldState === undefined &&
       isPendingDependencySourceState(fieldParser.initialState)
     ) {
+      const cached = reuseRegisteredDependency(
+        fieldParser.initialState[dependencyId],
+        registry,
+      );
+      if (cached !== undefined) {
+        preCompleted.set(field, cached);
+        continue;
+      }
       const completed = await fieldParser.complete(
         [fieldParser.initialState],
         exec,
@@ -3661,6 +3725,14 @@ async function preCompleteAndRegisterDependenciesAsync(
       isWrappedDependencySource(fieldParser)
     ) {
       const pendingState = fieldParser[wrappedDependencySourceMarker];
+      const cached = reuseRegisteredDependency(
+        pendingState[dependencyId],
+        registry,
+      );
+      if (cached !== undefined) {
+        preCompleted.set(field, cached);
+        continue;
+      }
       const completed = await fieldParser.complete([pendingState], exec);
       preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
