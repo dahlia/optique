@@ -385,6 +385,19 @@ export interface ExecutionContext {
    * @since 1.0.0
    */
   readonly dependencyRuntime?: DependencyRuntimeContext;
+
+  /**
+   * Cache of pre-completed results from `preCompleteAndRegisterDependencies`,
+   * keyed by parser instance.  Shared across nested `merge()`/`object()`
+   * constructs so that re-entrant Phase 1 calls reuse the full completed
+   * result (including wrapper-chain transformations) instead of re-evaluating
+   * non-idempotent default thunks.
+   *
+   * @see https://github.com/dahlia/optique/issues/762
+   * @internal
+   * @since 1.0.0
+   */
+  readonly preCompletedCache?: WeakMap<object, unknown>;
 }
 
 /**

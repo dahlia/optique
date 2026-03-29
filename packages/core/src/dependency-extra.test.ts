@@ -1947,6 +1947,48 @@ describe("merge() nested source default thunk exactly-once evaluation", () => {
       `Default thunk should be evaluated exactly once, but was called ${thunkCallCount} times`,
     );
   });
+
+  test("cached result preserves correct default value in nested merge", () => {
+    let thunkCallCount = 0;
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["warn", "error"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    // Verify that the cached result produces the correct value, not a
+    // synthetic placeholder.
+    const parser = merge(
+      object({
+        mode: withDefault(option("--mode", modeParser), () => {
+          thunkCallCount++;
+          return "prod" as const;
+        }),
+      }),
+      object({
+        logLevel: option("--log-level", logLevelParser),
+      }),
+    );
+
+    const result = parseSync(parser, ["--log-level", "warn"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "prod");
+      assert.equal(result.value.logLevel, "warn");
+    }
+    assert.equal(
+      thunkCallCount,
+      1,
+      `Default thunk should be evaluated exactly once, but was called ${thunkCallCount} times`,
+    );
+  });
 });
 
 // =============================================================================
