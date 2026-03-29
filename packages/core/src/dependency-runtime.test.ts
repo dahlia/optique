@@ -2,14 +2,18 @@
  * Unit tests for DependencyRuntimeContext and shared runtime helpers.
  *
  * Part of https://github.com/dahlia/optique/issues/752
+ * Extended for https://github.com/dahlia/optique/issues/753
  */
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
+  buildRuntimeNodesFromArray,
+  buildRuntimeNodesFromPairs,
   collectExplicitSourceValues,
   createDependencyFingerprint,
   createDependencyRuntimeContext,
   createReplayKey,
+  extractRawInputFromState,
   fillMissingSourceDefaults,
   fillMissingSourceDefaultsAsync,
   replayDerivedParser,
@@ -18,9 +22,12 @@ import {
 } from "./dependency-runtime.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
 import {
+  createDeferredParseState,
   createDependencySourceState,
+  createPendingDependencySourceState,
   DependencyRegistry,
   isDependencySourceState,
+  parseWithDependency,
 } from "./dependency.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 
@@ -719,5 +726,228 @@ describe("replayDerivedParserAsync", () => {
     if (result.success) {
       assert.equal(result.value, "async-prod");
     }
+  });
+});
+
+// =============================================================================
+// Bridge helpers for construct migration
+// Part of https://github.com/dahlia/optique/issues/753
+// =============================================================================
+
+describe("extractRawInputFromState", () => {
+  // Create a minimal DerivedValueParser mock for DeferredParseState creation.
+  function makeDerivedVpMock() {
+    return {
+      [parseWithDependency]: () => ({
+        success: true as const,
+        value: undefined,
+      }),
+      // deno-lint-ignore no-explicit-any
+    } as any;
+  }
+
+  test("extracts rawInput from DeferredParseState", () => {
+    const deferred = createDeferredParseState(
+      "hello",
+      makeDerivedVpMock(),
+      { success: true, value: "hello" },
+    );
+    assert.equal(extractRawInputFromState(deferred), "hello");
+  });
+
+  test("extracts rawInput from [DeferredParseState] (array-wrapped)", () => {
+    const deferred = createDeferredParseState(
+      "world",
+      makeDerivedVpMock(),
+      { success: true, value: "world" },
+    );
+    assert.equal(extractRawInputFromState([deferred]), "world");
+  });
+
+  test("returns undefined for PendingDependencySourceState", () => {
+    const pending = createPendingDependencySourceState(Symbol("src"));
+    assert.equal(extractRawInputFromState(pending), undefined);
+  });
+
+  test("returns undefined for DependencySourceState", () => {
+    const depState = createDependencySourceState(
+      { success: true, value: "val" },
+      Symbol("src"),
+    );
+    assert.equal(extractRawInputFromState(depState), undefined);
+  });
+
+  test("returns undefined for plain value", () => {
+    assert.equal(extractRawInputFromState("plain"), undefined);
+    assert.equal(extractRawInputFromState(42), undefined);
+    assert.equal(extractRawInputFromState(undefined), undefined);
+    assert.equal(extractRawInputFromState(null), undefined);
+  });
+
+  test("returns undefined for empty array", () => {
+    assert.equal(extractRawInputFromState([]), undefined);
+  });
+
+  test("returns undefined for array with non-deferred element", () => {
+    assert.equal(extractRawInputFromState(["foo"]), undefined);
+  });
+});
+
+describe("buildRuntimeNodesFromPairs", () => {
+  function makeParser(
+    meta?: ParserDependencyMetadata,
+    initialState?: unknown,
+  ) {
+    return {
+      dependencyMetadata: meta,
+      initialState,
+    };
+  }
+
+  test("builds nodes from field-parser pairs with state", () => {
+    const sourceId = Symbol("env");
+    const sourceMeta: ParserDependencyMetadata = {
+      source: {
+        kind: "source",
+        sourceId,
+        extractSourceValue: () => undefined,
+        preservesSourceValue: true,
+      },
+    };
+    const plainParser = makeParser();
+    const sourceParser = makeParser(sourceMeta);
+
+    const pairs: [
+      PropertyKey,
+      { dependencyMetadata?: ParserDependencyMetadata; initialState?: unknown },
+    ][] = [
+      ["name", plainParser],
+      ["env", sourceParser],
+    ];
+
+    const state: Record<string | symbol, unknown> = {
+      name: { success: true, value: "hello" },
+      env: { success: true, value: "prod" },
+    };
+
+    const nodes = buildRuntimeNodesFromPairs(pairs, state);
+    assert.equal(nodes.length, 2);
+    assert.deepStrictEqual(nodes[0].path, ["name"]);
+    assert.equal(nodes[0].matched, true);
+    assert.equal(nodes[0].parser.dependencyMetadata, undefined);
+
+    assert.deepStrictEqual(nodes[1].path, ["env"]);
+    assert.equal(nodes[1].matched, true);
+    assert.equal(nodes[1].parser.dependencyMetadata, sourceMeta);
+  });
+
+  test("marks unmatched fields (undefined state)", () => {
+    const parser = makeParser(undefined, undefined);
+    const pairs: [
+      PropertyKey,
+      { dependencyMetadata?: ParserDependencyMetadata; initialState?: unknown },
+    ][] = [
+      ["name", parser],
+    ];
+    const state: Record<string | symbol, unknown> = {};
+
+    const nodes = buildRuntimeNodesFromPairs(pairs, state);
+    assert.equal(nodes[0].matched, false);
+    assert.equal(nodes[0].state, undefined);
+  });
+
+  test("marks PendingDependencySourceState as unmatched", () => {
+    const pending = createPendingDependencySourceState(Symbol("src"));
+    const parser = makeParser(undefined, pending);
+    const pairs: [
+      PropertyKey,
+      { dependencyMetadata?: ParserDependencyMetadata; initialState?: unknown },
+    ][] = [
+      ["env", parser],
+    ];
+    const state: Record<string | symbol, unknown> = {};
+
+    const nodes = buildRuntimeNodesFromPairs(pairs, state);
+    assert.equal(nodes[0].matched, false);
+  });
+
+  test("prepends parentPath to node paths", () => {
+    const parser = makeParser();
+    const pairs: [
+      PropertyKey,
+      { dependencyMetadata?: ParserDependencyMetadata; initialState?: unknown },
+    ][] = [
+      ["name", parser],
+    ];
+    const state: Record<string | symbol, unknown> = { name: "hi" };
+
+    const nodes = buildRuntimeNodesFromPairs(pairs, state, ["root", 0]);
+    assert.deepStrictEqual(nodes[0].path, ["root", 0, "name"]);
+  });
+
+  test("does not eagerly snapshot defaultDependencyValues", () => {
+    const depId = Symbol("env");
+    const derivedMeta: ParserDependencyMetadata = {
+      derived: {
+        kind: "derived",
+        dependencyIds: [depId],
+        getDefaultDependencyValues: () => ["dev"],
+        replayParse: () => ({ success: true, value: "x" }),
+      },
+    };
+    const parser = makeParser(derivedMeta);
+    const pairs: [
+      PropertyKey,
+      { dependencyMetadata?: ParserDependencyMetadata; initialState?: unknown },
+    ][] = [
+      ["level", parser],
+    ];
+    const state: Record<string | symbol, unknown> = { level: "info" };
+
+    // defaultDependencyValues is deferred to the replay path,
+    // not eagerly evaluated during node building.
+    const nodes = buildRuntimeNodesFromPairs(pairs, state);
+    assert.equal(nodes[0].defaultDependencyValues, undefined);
+  });
+});
+
+describe("buildRuntimeNodesFromArray", () => {
+  function makeParser(
+    meta?: ParserDependencyMetadata,
+    initialState?: unknown,
+  ) {
+    return {
+      dependencyMetadata: meta,
+      initialState,
+    };
+  }
+
+  test("builds nodes from parser array with state array", () => {
+    const p1 = makeParser();
+    const p2 = makeParser();
+    const parsers = [p1, p2];
+    const stateArray = ["hello", 42];
+
+    const nodes = buildRuntimeNodesFromArray(parsers, stateArray);
+    assert.equal(nodes.length, 2);
+    assert.deepStrictEqual(nodes[0].path, [0]);
+    assert.equal(nodes[0].state, "hello");
+    assert.equal(nodes[0].matched, true);
+
+    assert.deepStrictEqual(nodes[1].path, [1]);
+    assert.equal(nodes[1].state, 42);
+    assert.equal(nodes[1].matched, true);
+  });
+
+  test("marks undefined elements as unmatched", () => {
+    const p = makeParser();
+    const nodes = buildRuntimeNodesFromArray([p], [undefined]);
+    assert.equal(nodes[0].matched, false);
+  });
+
+  test("prepends parentPath to node paths", () => {
+    const p = makeParser();
+    const nodes = buildRuntimeNodesFromArray([p], ["x"], ["parent"]);
+    assert.deepStrictEqual(nodes[0].path, ["parent", 0]);
   });
 });

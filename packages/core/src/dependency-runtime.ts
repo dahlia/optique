@@ -10,6 +10,14 @@
  * @since 1.0.0
  * @module
  */
+import {
+  type DeferredParseState,
+  dependencyId as dependencyIdSymbol,
+  isDeferredParseState,
+  isDependencySourceState,
+  isPendingDependencySourceState,
+  parseWithDependency,
+} from "./dependency.ts";
 import { message } from "./message.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import type { ValueParserResult } from "./valueparser.ts";
@@ -761,4 +769,389 @@ export async function replayDerivedParserAsync(
 
   runtime.setReplayResult(key, result);
   return result;
+}
+
+// =============================================================================
+// Bridge helpers for construct migration
+// =============================================================================
+
+/**
+ * Extracts `rawInput` from a parser state that may contain a
+ * {@link DeferredParseState}.  During the transition period, primitives
+ * still produce `DeferredParseState` with `rawInput`.
+ *
+ * Handles direct `DeferredParseState` and array-wrapped
+ * `[DeferredParseState]` (from optional/withDefault wrappers).
+ *
+ * @param state The parser state to inspect.
+ * @returns The raw input string, or `undefined` if the state does not
+ *   contain a `DeferredParseState`.
+ * @internal
+ * @since 1.0.0
+ */
+export function extractRawInputFromState(state: unknown): string | undefined {
+  if (state == null) return undefined;
+  if (typeof state !== "object") return undefined;
+
+  // Direct DeferredParseState
+  if (isDeferredParseState(state)) return state.rawInput;
+
+  // Array-wrapped: [DeferredParseState] from optional/withDefault
+  if (
+    Array.isArray(state) &&
+    state.length === 1 &&
+    isDeferredParseState(state[0])
+  ) {
+    return state[0].rawInput;
+  }
+
+  return undefined;
+}
+
+// =============================================================================
+// Recursive state resolution with the dependency runtime
+// =============================================================================
+
+/**
+ * Checks if a value is a plain object (not a class instance) for the
+ * purpose of recursive state traversal.
+ */
+function isPlainObject(
+  value: unknown,
+): value is Record<string | symbol, unknown> {
+  if (typeof value !== "object" || value === null) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Resolves a single {@link DeferredParseState} using the dependency runtime.
+ *
+ * Returns the replay result if all dependencies are available, or the
+ * preliminary result if dependencies are missing.
+ */
+function resolveSingleDeferred(
+  deferred: DeferredParseState<unknown>,
+  runtime: DependencyRuntimeContext,
+): ValueParserResult<unknown> {
+  // deriveFrom() sets dependencyIds (always an array).
+  // derive() only sets dependencyId (single value).
+  const isMultiDep = deferred.dependencyIds != null &&
+    deferred.dependencyIds.length > 0;
+  const depIds = isMultiDep ? deferred.dependencyIds! : [deferred.dependencyId];
+  const resolution = runtime.resolveDependencies({
+    dependencyIds: depIds,
+    defaultValues: deferred.defaultValues,
+  });
+  if (resolution.kind !== "resolved") return deferred.preliminaryResult;
+
+  // deriveFrom always passes values as an array; derive passes a single value.
+  const depValue = isMultiDep ? resolution.values : resolution.values[0];
+  const result = deferred.parser[parseWithDependency](
+    deferred.rawInput,
+    depValue,
+  );
+  if (result instanceof Promise) return deferred.preliminaryResult;
+  return result;
+}
+
+/**
+ * Recursively collects dependency source values from {@link DependencySourceState}
+ * objects found in the state tree and registers them in the runtime.
+ *
+ * This must run BEFORE deferred resolution so that all source values
+ * are available when replaying derived parsers.
+ */
+export function collectSourcesFromState(
+  state: unknown,
+  runtime: DependencyRuntimeContext,
+  visited: WeakSet<object> = new WeakSet<object>(),
+): void {
+  if (state == null || typeof state !== "object") return;
+  if (visited.has(state)) return;
+  visited.add(state);
+
+  if (isDependencySourceState(state)) {
+    const depId = state[dependencyIdSymbol];
+    const result = state.result;
+    if (depId != null && result.success) {
+      // Always overwrite so that later values win (e.g., multiple()
+      // where the last tag value should be used as the dependency).
+      runtime.registerSource(depId, result.value, "cli");
+    } else if (depId != null) {
+      // Mark the source as explicitly failed so that derived parsers
+      // do not fall back to defaults for this source.
+      runtime.markSourceFailed(depId);
+    }
+    return;
+  }
+
+  // Skip DeferredParseState internals (they contain parser references, not sources)
+  if (isDeferredParseState(state)) return;
+
+  if (Array.isArray(state)) {
+    for (const item of state) {
+      collectSourcesFromState(item, runtime, visited);
+    }
+    return;
+  }
+
+  // Recurse into any object (including class instances with nested
+  // DependencySourceState).  The old collectDependencies() traversed
+  // all non-DeferredParseState objects; isPlainObject would miss
+  // custom parser states that are class instances.
+  if (typeof state === "object") {
+    for (const key of Reflect.ownKeys(state as object)) {
+      collectSourcesFromState(
+        (state as Record<string | symbol, unknown>)[key],
+        runtime,
+        visited,
+      );
+    }
+  }
+}
+
+/**
+ * Recursively resolves all {@link DeferredParseState} objects in a state
+ * tree using the dependency runtime (sync).
+ *
+ * Performs a two-pass traversal:
+ *  1. Collect all {@link DependencySourceState} values into the runtime.
+ *  2. Resolve all {@link DeferredParseState} using the populated runtime.
+ *
+ * This replaces the old `resolveDeferredParseStates` with runtime-based
+ * resolution.  Only traverses plain objects and arrays; class instances
+ * and primitives are returned as-is.
+ *
+ * @param state The state tree to resolve.
+ * @param runtime The dependency runtime context.
+ * @returns The resolved state tree.
+ * @internal
+ * @since 1.0.0
+ */
+export function resolveStateWithRuntime(
+  state: unknown,
+  runtime: DependencyRuntimeContext,
+): unknown {
+  // Pass 1: Collect all DependencySourceState values into the runtime.
+  collectSourcesFromState(state, runtime);
+  // Pass 2: Resolve all DeferredParseState using the populated runtime.
+  return resolveDeferredInState(state, runtime);
+}
+
+/** Pass 2 helper: recursively replace DeferredParseState with resolved values. */
+function resolveDeferredInState(
+  state: unknown,
+  runtime: DependencyRuntimeContext,
+  visited: WeakSet<object> = new WeakSet<object>(),
+): unknown {
+  if (state == null) return state;
+
+  if (typeof state === "object") {
+    if (visited.has(state)) return state;
+    visited.add(state);
+  }
+
+  if (isDeferredParseState(state)) {
+    return resolveSingleDeferred(state, runtime);
+  }
+
+  if (isDependencySourceState(state)) return state;
+
+  if (Array.isArray(state)) {
+    return state.map((item) => resolveDeferredInState(item, runtime, visited));
+  }
+
+  if (isPlainObject(state)) {
+    const resolved = Object.create(
+      Object.getPrototypeOf(state),
+    ) as Record<string | symbol, unknown>;
+    for (const key of Reflect.ownKeys(state)) {
+      resolved[key] = resolveDeferredInState(state[key], runtime, visited);
+    }
+    return resolved;
+  }
+
+  return state;
+}
+
+/**
+ * Async version of {@link resolveStateWithRuntime}.
+ *
+ * @param state The state tree to resolve.
+ * @param runtime The dependency runtime context.
+ * @returns The resolved state tree.
+ * @internal
+ * @since 1.0.0
+ */
+export function resolveStateWithRuntimeAsync(
+  state: unknown,
+  runtime: DependencyRuntimeContext,
+): Promise<unknown> {
+  // Pass 1: Collect all DependencySourceState values into the runtime.
+  collectSourcesFromState(state, runtime);
+  // Pass 2: Resolve all DeferredParseState using the populated runtime.
+  return resolveDeferredInStateAsync(state, runtime);
+}
+
+/** Async pass 2 helper. */
+async function resolveDeferredInStateAsync(
+  state: unknown,
+  runtime: DependencyRuntimeContext,
+  visited: WeakSet<object> = new WeakSet<object>(),
+): Promise<unknown> {
+  if (state == null) return state;
+
+  if (typeof state === "object") {
+    if (visited.has(state)) return state;
+    visited.add(state);
+  }
+
+  if (isDeferredParseState(state)) {
+    const deferred = state;
+    const isMultiDep = deferred.dependencyIds != null &&
+      deferred.dependencyIds.length > 0;
+    const depIds = isMultiDep
+      ? deferred.dependencyIds!
+      : [deferred.dependencyId];
+    const resolution = runtime.resolveDependencies({
+      dependencyIds: depIds,
+      defaultValues: deferred.defaultValues,
+    });
+    if (resolution.kind !== "resolved") return deferred.preliminaryResult;
+
+    const depValue = isMultiDep ? resolution.values : resolution.values[0];
+    return Promise.resolve(
+      deferred.parser[parseWithDependency](deferred.rawInput, depValue),
+    );
+  }
+
+  if (isDependencySourceState(state)) return state;
+
+  if (Array.isArray(state)) {
+    return Promise.all(
+      state.map((item) => resolveDeferredInStateAsync(item, runtime, visited)),
+    );
+  }
+
+  if (isPlainObject(state)) {
+    const resolved = Object.create(
+      Object.getPrototypeOf(state),
+    ) as Record<string | symbol, unknown>;
+    const keys = Reflect.ownKeys(state);
+    await Promise.all(
+      keys.map(async (key) => {
+        resolved[key] = await resolveDeferredInStateAsync(
+          state[key],
+          runtime,
+          visited,
+        );
+      }),
+    );
+    return resolved;
+  }
+
+  return state;
+}
+
+/**
+ * Determines whether a parser state represents an explicit match (the user
+ * provided input) rather than an initial/pending state.
+ */
+function isMatchedState(
+  fieldState: unknown,
+  parser: { readonly initialState?: unknown },
+): boolean {
+  if (fieldState === undefined) return false;
+  // PendingDependencySourceState in an array means the option was not provided
+  if (
+    Array.isArray(fieldState) &&
+    fieldState.length === 1 &&
+    isPendingDependencySourceState(fieldState[0])
+  ) {
+    return false;
+  }
+  // Bare PendingDependencySourceState
+  if (isPendingDependencySourceState(fieldState)) return false;
+  // If state equals the parser's initialState, it was not matched
+  if (fieldState === parser.initialState) return false;
+  return true;
+}
+
+/**
+ * Builds {@link RuntimeNode}s from field→parser pairs and a state record.
+ *
+ * Used by `object()` and `merge()` constructs.
+ *
+ * @param pairs Field→parser pairs.
+ * @param state The state record keyed by field name.
+ * @param parentPath Optional parent path prefix.
+ * @returns An array of runtime nodes.
+ * @internal
+ * @since 1.0.0
+ */
+export function buildRuntimeNodesFromPairs(
+  pairs: ReadonlyArray<
+    readonly [
+      PropertyKey,
+      {
+        readonly dependencyMetadata?: ParserDependencyMetadata;
+        readonly initialState?: unknown;
+      },
+    ]
+  >,
+  state: Record<PropertyKey, unknown>,
+  parentPath?: readonly PropertyKey[],
+): readonly RuntimeNode[] {
+  const prefix = parentPath ?? [];
+  const nodes: RuntimeNode[] = [];
+  for (const [field, parser] of pairs) {
+    const fieldState = Object.hasOwn(state, field)
+      ? state[field as string | symbol]
+      : undefined;
+    nodes.push({
+      path: [...prefix, field],
+      parser,
+      state: fieldState,
+      matched: isMatchedState(fieldState, parser),
+    });
+  }
+  return nodes;
+}
+
+/**
+ * Builds {@link RuntimeNode}s from a parser array and a state array.
+ *
+ * Used by `tuple()` and `concat()` constructs.
+ *
+ * @param parsers The child parsers.
+ * @param stateArray The state array (one element per parser).
+ * @param parentPath Optional parent path prefix.
+ * @returns An array of runtime nodes.
+ * @internal
+ * @since 1.0.0
+ */
+export function buildRuntimeNodesFromArray(
+  parsers: ReadonlyArray<
+    {
+      readonly dependencyMetadata?: ParserDependencyMetadata;
+      readonly initialState?: unknown;
+    }
+  >,
+  stateArray: readonly unknown[],
+  parentPath?: readonly PropertyKey[],
+): readonly RuntimeNode[] {
+  const prefix = parentPath ?? [];
+  const nodes: RuntimeNode[] = [];
+  for (let i = 0; i < parsers.length; i++) {
+    const parser = parsers[i];
+    const elemState = i < stateArray.length ? stateArray[i] : undefined;
+    nodes.push({
+      path: [...prefix, i],
+      parser,
+      state: elemState,
+      matched: isMatchedState(elemState, parser),
+    });
+  }
+  return nodes;
 }
