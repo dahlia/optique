@@ -15,8 +15,6 @@ import {
   collectExplicitSourceValues,
   collectSourcesFromState,
   createDependencyRuntimeContext,
-  fillMissingSourceDefaults,
-  fillMissingSourceDefaultsAsync,
   resolveStateWithRuntime,
   resolveStateWithRuntimeAsync,
 } from "./dependency-runtime.ts";
@@ -3173,17 +3171,17 @@ function* suggestObjectSync<
     context.exec?.path,
   );
   collectExplicitSourceValues(nodes, runtime);
-  fillMissingSourceDefaults(nodes, runtime);
 
   // Collect dependency sources from the state tree (handles nested
   // DependencySourceState inside arrays, e.g., multiple()).
-  // Only harvest sources — do NOT replay deferred parsers, which
-  // would trigger async parseWithDependency calls and drop promises.
   if (context.state && typeof context.state === "object") {
     collectSourcesFromState(context.state, runtime);
   }
 
-  // Pre-complete bindConfig/bindEnv source parsers (old-protocol bridge).
+  // Pre-complete dependency source defaults (old-protocol bridge).
+  // This is the single evaluation point for lazy defaults in the
+  // suggest path — do NOT also call fillMissingSourceDefaults which
+  // would evaluate the same defaults a second time.
   completeDependencySourceDefaults(
     context,
     parserPairs,
@@ -3268,12 +3266,12 @@ async function* suggestObjectAsync<
     context.exec?.path,
   );
   collectExplicitSourceValues(nodes, runtime);
-  await fillMissingSourceDefaultsAsync(nodes, runtime);
 
-  // Collect dependency sources from state tree + pre-complete bindConfig/bindEnv.
+  // Collect dependency sources from state tree.
   if (context.state && typeof context.state === "object") {
     collectSourcesFromState(context.state, runtime);
   }
+  // Pre-complete dependency source defaults (single evaluation point).
   await completeDependencySourceDefaultsAsync(
     context,
     parserPairs,
