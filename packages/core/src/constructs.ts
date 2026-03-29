@@ -4495,7 +4495,7 @@ export function object<
           );
           const phase3Exec: ExecutionContext = {
             ...childExec,
-            preCompletedByParser: preCompleted,
+            preCompletedByParser: undefined,
           } as ExecutionContext;
 
           // Phase 2: Resolve all DeferredParseState in the state tree
@@ -4606,7 +4606,7 @@ export function object<
           );
           const phase3Exec: ExecutionContext = {
             ...childExec,
-            preCompletedByParser: preCompleted,
+            preCompletedByParser: undefined,
           } as ExecutionContext;
 
           // Phase 2: Build the full annotated state, then resolve the
@@ -5224,7 +5224,7 @@ export function tuple<
           );
           const phase3Exec: ExecutionContext = {
             ...childExec,
-            preCompletedByParser: preCompleted,
+            preCompletedByParser: undefined,
           } as ExecutionContext;
 
           // Phase 2: Resolve all DeferredParseState in the state array.
@@ -5318,7 +5318,7 @@ export function tuple<
           );
           const phase3Exec: ExecutionContext = {
             ...childExec,
-            preCompletedByParser: preCompleted,
+            preCompletedByParser: undefined,
           } as ExecutionContext;
 
           // Phase 2: Resolve all DeferredParseState in the state array.
@@ -6920,6 +6920,7 @@ export function concat(
     const childExec: ExecutionContext = {
       ...exec,
       dependencyRuntime: runtime,
+      preCompletedByParser: undefined,
     } as ExecutionContext;
 
     // Phase 2: Resolve deferred parse states across all tuples using runtime.
@@ -7008,6 +7009,7 @@ export function concat(
     const childExec: ExecutionContext = {
       ...exec,
       dependencyRuntime: runtime,
+      preCompletedByParser: undefined,
     } as ExecutionContext;
 
     // Phase 2: Resolve deferred parse states across all tuples using runtime.
