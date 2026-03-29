@@ -1989,6 +1989,25 @@ describe("merge() nested source default thunk exactly-once evaluation", () => {
       `Default thunk should be evaluated exactly once, but was called ${thunkCallCount} times`,
     );
   });
+
+  test("reused parser in tuple evaluates thunk per position", () => {
+    let thunkCallCount = 0;
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const shared = withDefault(option("--mode", modeParser), () => {
+      thunkCallCount++;
+      return "prod" as const;
+    });
+
+    // When the same parser instance is reused in a tuple, each position
+    // should evaluate independently (cache must not conflate positions
+    // within the same preCompleteAndRegisterDependencies call).
+    const parser = tuple([shared, shared], { allowDuplicates: true });
+
+    const result = parseSync(parser, []);
+    assert.ok(result.success);
+    // Each position should have evaluated the thunk independently.
+    assert.equal(thunkCallCount, 2);
+  });
 });
 
 // =============================================================================
