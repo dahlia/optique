@@ -3525,32 +3525,6 @@ function collectChildFieldParsers(
 }
 
 /**
- * Builds an immutable map of Phase 1 pre-completed results keyed by
- * parser instance.  Passed to children via
- * {@link ExecutionContext.preCompletedByParser} so that nested
- * `preCompleteAndRegisterDependencies` calls reuse the parent's results
- * without re-evaluating default thunks.
- *
- * @see https://github.com/dahlia/optique/issues/762
- * @internal
- */
-function buildPreCompletedByParser(
-  preCompleted: ReadonlyMap<string | symbol, unknown>,
-  fieldParserPairs: ReadonlyArray<
-    readonly [string | symbol, Parser<Mode, unknown, unknown>]
-  >,
-): ReadonlyMap<object, unknown> {
-  const map = new Map<object, unknown>();
-  for (const [field, parser] of fieldParserPairs) {
-    const result = preCompleted.get(field);
-    if (result !== undefined) {
-      map.set(parser, result);
-    }
-  }
-  return map;
-}
-
-/**
  * Pre-completes dependency source fields and registers their values in
  * the given registry.  Unlike `completeDependencySourceDefaults()` (used
  * by suggest), this function handles all four Phase 1 cases — including
@@ -3580,10 +3554,10 @@ function preCompleteAndRegisterDependencies(
   // https://github.com/dahlia/optique/issues/762
   const parentResults = exec?.preCompletedByParser;
   for (const [field, fieldParser] of fieldParserPairs) {
-    // If the parent construct's Phase 1 already completed this exact
-    // parser instance, reuse the full result (including wrapper-chain
-    // transformations) to avoid re-evaluating non-idempotent defaults.
-    const cached = parentResults?.get(fieldParser);
+    // If the parent construct's Phase 1 already completed this field,
+    // reuse the full result (including wrapper-chain transformations)
+    // to avoid re-evaluating non-idempotent defaults.
+    const cached = parentResults?.get(field);
     if (cached !== undefined) {
       preCompleted.set(field, cached);
       registerCompletedDependency(cached, registry);
@@ -3672,7 +3646,7 @@ async function preCompleteAndRegisterDependenciesAsync(
   const preCompleted = new Map<string | symbol, unknown>();
   const parentResults = exec?.preCompletedByParser;
   for (const [field, fieldParser] of fieldParserPairs) {
-    const cached = parentResults?.get(fieldParser);
+    const cached = parentResults?.get(field);
     if (cached !== undefined) {
       preCompleted.set(field, cached);
       registerCompletedDependency(cached, registry);
@@ -4521,10 +4495,7 @@ export function object<
           );
           const phase3Exec: ExecutionContext = {
             ...childExec,
-            preCompletedByParser: buildPreCompletedByParser(
-              preCompleted,
-              typedParserPairs,
-            ),
+            preCompletedByParser: preCompleted,
           } as ExecutionContext;
 
           // Phase 2: Resolve all DeferredParseState in the state tree
@@ -4635,10 +4606,7 @@ export function object<
           );
           const phase3Exec: ExecutionContext = {
             ...childExec,
-            preCompletedByParser: buildPreCompletedByParser(
-              preCompleted,
-              asyncParserPairs,
-            ),
+            preCompletedByParser: preCompleted,
           } as ExecutionContext;
 
           // Phase 2: Build the full annotated state, then resolve the
@@ -5256,10 +5224,7 @@ export function tuple<
           );
           const phase3Exec: ExecutionContext = {
             ...childExec,
-            preCompletedByParser: buildPreCompletedByParser(
-              preCompleted,
-              tuplePairs,
-            ),
+            preCompletedByParser: preCompleted,
           } as ExecutionContext;
 
           // Phase 2: Resolve all DeferredParseState in the state array.
@@ -5353,10 +5318,7 @@ export function tuple<
           );
           const phase3Exec: ExecutionContext = {
             ...childExec,
-            preCompletedByParser: buildPreCompletedByParser(
-              preCompleted,
-              tuplePairs,
-            ),
+            preCompletedByParser: preCompleted,
           } as ExecutionContext;
 
           // Phase 2: Resolve all DeferredParseState in the state array.
@@ -6053,10 +6015,7 @@ export function merge(
         // re-evaluating default thunks.
         const phase3Exec: ExecutionContext = {
           ...childExec,
-          preCompletedByParser: buildPreCompletedByParser(
-            mergePreCompleted,
-            childFieldPairs,
-          ),
+          preCompletedByParser: mergePreCompleted,
         } as ExecutionContext;
 
         const object: MergeState = {};
@@ -6138,10 +6097,7 @@ export function merge(
 
         const phase3Exec: ExecutionContext = {
           ...childExec,
-          preCompletedByParser: buildPreCompletedByParser(
-            mergePreCompleted,
-            childFieldPairs,
-          ),
+          preCompletedByParser: mergePreCompleted,
         } as ExecutionContext;
 
         const object: MergeState = {};

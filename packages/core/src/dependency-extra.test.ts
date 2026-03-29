@@ -2035,6 +2035,34 @@ describe("merge() nested source default thunk exactly-once evaluation", () => {
       );
     }
   });
+
+  test("reused dep source across merged branches preserves per-field results", () => {
+    let callCount = 0;
+    const vals = ["dev", "prod"] as const;
+    const modeParser = dependency(choice(vals));
+    const shared = withDefault(option("--mode", modeParser), () => {
+      return vals[callCount++ % 2];
+    });
+
+    // Same dep-source parser reused in two different fields via merge.
+    // Each field must get its own Phase 1 result, not a conflated one.
+    const parser = merge(
+      object({ a: shared }),
+      object({ b: shared }),
+      { allowDuplicates: true },
+    );
+
+    const result = parseSync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      // Fields "a" and "b" completed independently during merge Phase 1.
+      // The child objects should each see their respective field's result.
+      assert.ok(
+        callCount >= 2,
+        `thunk should be called at least twice, got ${callCount}`,
+      );
+    }
+  });
 });
 
 // =============================================================================

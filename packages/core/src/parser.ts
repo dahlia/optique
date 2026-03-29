@@ -388,18 +388,23 @@ export interface ExecutionContext {
 
   /**
    * Immutable map of pre-completed results from the parent construct's
-   * Phase 1, keyed by parser instance.  Each construct builds this map
-   * from its own `preCompleteAndRegisterDependencies` results and passes
-   * it to children in Phase 3.  Children read it in their own Phase 1
-   * to avoid re-evaluating non-idempotent default thunks, but never
-   * write to it — this prevents sibling completions from leaking into
-   * each other.
+   * Phase 1, keyed by field name.  Each construct passes its own
+   * `preCompleteAndRegisterDependencies` results directly to children
+   * in Phase 3.  Children read it in their own Phase 1 to avoid
+   * re-evaluating non-idempotent default thunks, but never write to
+   * it — this prevents sibling completions from leaking into each
+   * other.
+   *
+   * Field-name keying naturally handles parser reuse across different
+   * fields (e.g., `merge(object({a: shared}), object({b: shared}))`)
+   * because each field maps to its own result regardless of whether
+   * the underlying parser instance is the same.
    *
    * @see https://github.com/dahlia/optique/issues/762
    * @internal
    * @since 1.0.0
    */
-  readonly preCompletedByParser?: ReadonlyMap<object, unknown>;
+  readonly preCompletedByParser?: ReadonlyMap<string | symbol, unknown>;
 }
 
 /**
