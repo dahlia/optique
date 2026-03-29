@@ -874,10 +874,14 @@ export function collectSourcesFromState(
   if (isDependencySourceState(state)) {
     const depId = state[dependencyIdSymbol];
     const result = state.result;
-    if (result.success && depId != null) {
+    if (depId != null && result.success) {
       // Always overwrite so that later values win (e.g., multiple()
       // where the last tag value should be used as the dependency).
       runtime.registerSource(depId, result.value, "cli");
+    } else if (depId != null) {
+      // Mark the source as explicitly failed so that derived parsers
+      // do not fall back to defaults for this source.
+      runtime.markSourceFailed(depId);
     }
     return;
   }
