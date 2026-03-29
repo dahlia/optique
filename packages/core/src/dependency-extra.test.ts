@@ -1822,6 +1822,134 @@ describe("Factory edge cases", () => {
 });
 
 // =============================================================================
+// merge() nested source default thunk exactly-once evaluation
+// https://github.com/dahlia/optique/issues/762
+// =============================================================================
+
+describe("merge() nested source default thunk exactly-once evaluation", () => {
+  test("withDefault thunk in merge(object, object) evaluated exactly once (sync)", () => {
+    let thunkCallCount = 0;
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["warn", "error"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = merge(
+      object({
+        mode: withDefault(option("--mode", modeParser), () => {
+          thunkCallCount++;
+          return "prod" as const;
+        }),
+      }),
+      object({
+        logLevel: option("--log-level", logLevelParser),
+      }),
+    );
+
+    const result = parseSync(parser, ["--log-level", "warn"]);
+    assert.ok(result.success);
+    assert.equal(
+      thunkCallCount,
+      1,
+      `Default thunk should be evaluated exactly once, but was called ${thunkCallCount} times`,
+    );
+  });
+
+  test("withDefault thunk in merge(object, object) evaluated exactly once (async)", async () => {
+    let thunkCallCount = 0;
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["warn", "error"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = merge(
+      object({
+        mode: withDefault(option("--mode", modeParser), () => {
+          thunkCallCount++;
+          return "prod" as const;
+        }),
+      }),
+      object({
+        logLevel: option("--log-level", logLevelParser),
+      }),
+    );
+
+    const result = await parseAsync(parser, ["--log-level", "warn"]);
+    assert.ok(result.success);
+    assert.equal(
+      thunkCallCount,
+      1,
+      `Default thunk should be evaluated exactly once, but was called ${thunkCallCount} times`,
+    );
+  });
+
+  test("withDefault thunk in deeply nested merge evaluated exactly once", async () => {
+    let thunkCallCount = 0;
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["warn", "error"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    // merge(merge(object(source), object(other)), object(derived))
+    const inner = merge(
+      object({
+        mode: withDefault(option("--mode", modeParser), () => {
+          thunkCallCount++;
+          return "prod" as const;
+        }),
+      }),
+      object({
+        name: option("--name", string()),
+      }),
+    );
+
+    const parser = merge(
+      inner,
+      object({
+        logLevel: option("--log-level", logLevelParser),
+      }),
+    );
+
+    const result = await parseAsync(parser, [
+      "--name",
+      "app",
+      "--log-level",
+      "warn",
+    ]);
+    assert.ok(result.success);
+    assert.equal(
+      thunkCallCount,
+      1,
+      `Default thunk should be evaluated exactly once, but was called ${thunkCallCount} times`,
+    );
+  });
+});
+
+// =============================================================================
 // Deeply nested merge() with dependencies
 // =============================================================================
 
