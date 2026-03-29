@@ -4482,8 +4482,11 @@ export function object<
           // using the dependency runtime.  This recursively finds and
           // replays derived parsers at any nesting depth (including
           // inside multiple() arrays and modifier chains).
+          // Build the full annotated state, then resolve the ENTIRE object
+          // at once so that source collection sees all fields before any
+          // DeferredParseState is replayed (order-independent resolution).
           const getFieldState = createFieldStateGetter(state);
-          const resolvedFieldStates: Record<string | symbol, unknown> = {};
+          const annotatedState: Record<string | symbol, unknown> = {};
           for (const field of parserKeys) {
             const fieldKey = field as string | symbol;
             const fieldParser = parsers[field] as Parser<
@@ -4491,12 +4494,12 @@ export function object<
               unknown,
               unknown
             >;
-            const fieldState = getFieldState(field, fieldParser);
-            resolvedFieldStates[fieldKey] = resolveStateWithRuntime(
-              fieldState,
-              runtime,
-            );
+            annotatedState[fieldKey] = getFieldState(field, fieldParser);
           }
+          const resolvedFieldStates = resolveStateWithRuntime(
+            annotatedState,
+            runtime,
+          ) as Record<string | symbol, unknown>;
 
           // Phase 3: Complete each field using resolved state.
           // For pre-completed dependency sources, reuse the Phase 1b result
@@ -4593,19 +4596,19 @@ export function object<
             childExec,
           );
 
-          // Phase 2: Resolve all DeferredParseState in the state tree.
-          // Use Promise.all for concurrent resolution of async derived parsers.
+          // Phase 2: Build the full annotated state, then resolve the
+          // ENTIRE object at once for order-independent resolution.
           const getFieldState = createFieldStateGetter(state);
-          const resolvedFieldStates: Record<string | symbol, unknown> = {};
-          await Promise.all(
-            parserKeys.map(async (field) => {
-              const fieldKey = field as string | symbol;
-              const fieldParser = parsers[field];
-              const fieldState = getFieldState(field, fieldParser);
-              resolvedFieldStates[fieldKey] =
-                await resolveStateWithRuntimeAsync(fieldState, runtime);
-            }),
-          );
+          const annotatedState: Record<string | symbol, unknown> = {};
+          for (const field of parserKeys) {
+            const fieldKey = field as string | symbol;
+            const fieldParser = parsers[field];
+            annotatedState[fieldKey] = getFieldState(field, fieldParser);
+          }
+          const resolvedFieldStates = await resolveStateWithRuntimeAsync(
+            annotatedState,
+            runtime,
+          ) as Record<string | symbol, unknown>;
 
           // Phase 3: Complete each field using resolved state.
           // For pre-completed dependency sources, reuse the Phase 1b result.
