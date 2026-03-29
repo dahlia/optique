@@ -23,6 +23,13 @@ To be released.
     via `ExecutionContext.dependencyRuntime`.  User-facing behavior is
     unchanged.  [[#750], [#753], [#761]]
 
+ -  Fixed `withDefault()` default thunks being evaluated more than once in
+    nested `merge()` compositions.  When an outer `merge()` Phase 1 had
+    already seeded a dependency source value, nested `object()`/`merge()`
+    children would re-evaluate the same default thunk during their own
+    Phase 1.  Non-idempotent thunks (e.g., with side effects) could produce
+    inconsistent values.  [[#762]]
+
  -  `Parser.complete()` and `Parser.shouldDeferCompletion()` now accept an
     optional `ExecutionContext` parameter.  All built-in parser
     implementations (`option()`, `argument()`, `optional()`, `withDefault()`,
@@ -1391,6 +1398,7 @@ To be released.
 [#759]: https://github.com/dahlia/optique/pull/759
 [#760]: https://github.com/dahlia/optique/pull/760
 [#761]: https://github.com/dahlia/optique/pull/761
+[#762]: https://github.com/dahlia/optique/issues/762
 
 ### @optique/config
 
