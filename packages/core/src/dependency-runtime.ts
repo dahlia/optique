@@ -892,9 +892,17 @@ export function collectSourcesFromState(
     return;
   }
 
-  if (isPlainObject(state)) {
-    for (const key of Reflect.ownKeys(state)) {
-      collectSourcesFromState(state[key], runtime, visited);
+  // Recurse into any object (including class instances with nested
+  // DependencySourceState).  The old collectDependencies() traversed
+  // all non-DeferredParseState objects; isPlainObject would miss
+  // custom parser states that are class instances.
+  if (typeof state === "object") {
+    for (const key of Reflect.ownKeys(state as object)) {
+      collectSourcesFromState(
+        (state as Record<string | symbol, unknown>)[key],
+        runtime,
+        visited,
+      );
     }
   }
 }
