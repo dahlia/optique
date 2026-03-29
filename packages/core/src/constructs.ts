@@ -6379,7 +6379,6 @@ type ConcatValues<TParsers extends ConcatParsers> = IsTuple<TParsers> extends
  */
 function buildSuggestRegistry(
   preParsedContext: ParserContext<readonly unknown[]>,
-  parsers: readonly Parser<Mode, unknown, unknown>[],
 ): {
   context: ParserContext<readonly unknown[]>;
   stateArray: unknown[] | undefined;
@@ -6390,22 +6389,6 @@ function buildSuggestRegistry(
   );
   if (stateArray && Array.isArray(stateArray)) {
     collectSourcesFromState(stateArray, runtime);
-  }
-  // Seed missing dependency source defaults so that sources satisfied
-  // only by withDefault() are available to later concat() children.
-  if (stateArray && Array.isArray(stateArray)) {
-    const pairs = parsers.map(
-      (p, i) => [String(i), p] as [string, Parser<Mode, unknown, unknown>],
-    );
-    const tupleState: Record<string, unknown> = Object.fromEntries(
-      stateArray.map((s, i) => [String(i), s]),
-    );
-    completeDependencySourceDefaults(
-      { ...preParsedContext, state: tupleState } as ParserContext<unknown>,
-      pairs,
-      runtime.registry,
-      preParsedContext.exec,
-    );
   }
   return {
     context: { ...preParsedContext, dependencyRegistry: runtime.registry },
@@ -7075,7 +7058,7 @@ export function concat(
             parsers,
           );
           const { context: contextWithRegistry, stateArray } =
-            buildSuggestRegistry(preParsedContext, parsers);
+            buildSuggestRegistry(preParsedContext);
 
           const suggestions: Suggestion[] = [];
 
@@ -7112,7 +7095,6 @@ export function concat(
       );
       const { context: contextWithRegistry, stateArray } = buildSuggestRegistry(
         preParsedContext,
-        syncParsers,
       );
 
       return (function* () {

@@ -1113,7 +1113,7 @@ export function buildRuntimeNodesFromPairs(
   >,
   state: Record<PropertyKey, unknown>,
   parentPath?: readonly PropertyKey[],
-): RuntimeNode[] {
+): readonly RuntimeNode[] {
   const prefix = parentPath ?? [];
   const nodes: RuntimeNode[] = [];
   for (const [field, parser] of pairs) {
@@ -1152,7 +1152,7 @@ export function buildRuntimeNodesFromArray(
   >,
   stateArray: readonly unknown[],
   parentPath?: readonly PropertyKey[],
-): RuntimeNode[] {
+): readonly RuntimeNode[] {
   const prefix = parentPath ?? [];
   const nodes: RuntimeNode[] = [];
   for (let i = 0; i < parsers.length; i++) {
