@@ -27,6 +27,7 @@ import {
   createPendingDependencySourceState,
   DependencyRegistry,
   isDependencySourceState,
+  parseWithDependency,
 } from "./dependency.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 
@@ -736,8 +737,13 @@ describe("replayDerivedParserAsync", () => {
 describe("extractRawInputFromState", () => {
   // Create a minimal DerivedValueParser mock for DeferredParseState creation.
   function makeDerivedVpMock() {
-    // deno-lint-ignore no-explicit-any
-    return { [Symbol.for("optique.parseWithDependency")]: () => ({}) } as any;
+    return {
+      [parseWithDependency]: () => ({
+        success: true as const,
+        value: undefined,
+      }),
+      // deno-lint-ignore no-explicit-any
+    } as any;
   }
 
   test("extracts rawInput from DeferredParseState", () => {

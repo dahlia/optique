@@ -1113,8 +1113,7 @@ export function buildRuntimeNodesFromPairs(
   const prefix = parentPath ?? [];
   const nodes: RuntimeNode[] = [];
   for (const [field, parser] of pairs) {
-    const fieldState = Object.hasOwn(state, field) ||
-        (typeof field === "symbol" && field in state)
+    const fieldState = Object.hasOwn(state, field)
       ? state[field as string | symbol]
       : undefined;
     nodes.push({
