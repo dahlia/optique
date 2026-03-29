@@ -3525,6 +3525,32 @@ function collectChildFieldParsers(
 }
 
 /**
+ * Builds an immutable map of Phase 1 pre-completed results keyed by
+ * parser instance.  Passed to children via
+ * {@link ExecutionContext.preCompletedByParser} so that nested
+ * `preCompleteAndRegisterDependencies` calls reuse the parent's results
+ * without re-evaluating default thunks.
+ *
+ * @see https://github.com/dahlia/optique/issues/762
+ * @internal
+ */
+function buildPreCompletedByParser(
+  preCompleted: ReadonlyMap<string | symbol, unknown>,
+  fieldParserPairs: ReadonlyArray<
+    readonly [string | symbol, Parser<Mode, unknown, unknown>]
+  >,
+): ReadonlyMap<object, unknown> {
+  const map = new Map<object, unknown>();
+  for (const [field, parser] of fieldParserPairs) {
+    const result = preCompleted.get(field);
+    if (result !== undefined) {
+      map.set(parser, result);
+    }
+  }
+  return map;
+}
+
+/**
  * Pre-completes dependency source fields and registers their values in
  * the given registry.  Unlike `completeDependencySourceDefaults()` (used
  * by suggest), this function handles all four Phase 1 cases — including
@@ -3548,19 +3574,16 @@ function preCompleteAndRegisterDependencies(
   exec?: ExecutionContext,
 ): Map<string | symbol, unknown> {
   const preCompleted = new Map<string | symbol, unknown>();
-  const cache = exec?.preCompletedCache;
-  // Collect newly computed results to write to cache AFTER the loop.
-  // Writing during iteration would conflate independent positions when
-  // the same parser instance appears in multiple fields (e.g.,
-  // tuple([shared, shared])).  Deferring ensures only nested calls
-  // (child Phase 1 inside merge Phase 3) see the cached results.
+  // Read-only map from parent construct's Phase 1.  Never written to —
+  // each construct builds its own map for children after this function
+  // returns.  This prevents sibling completions from leaking results.
   // https://github.com/dahlia/optique/issues/762
-  const newlyCompleted: (readonly [object, unknown])[] = [];
+  const parentResults = exec?.preCompletedByParser;
   for (const [field, fieldParser] of fieldParserPairs) {
-    // If an outer construct's Phase 1 already completed this exact parser
-    // instance, reuse the full result (including wrapper-chain
+    // If the parent construct's Phase 1 already completed this exact
+    // parser instance, reuse the full result (including wrapper-chain
     // transformations) to avoid re-evaluating non-idempotent defaults.
-    const cached = cache?.get(fieldParser);
+    const cached = parentResults?.get(fieldParser);
     if (cached !== undefined) {
       preCompleted.set(field, cached);
       registerCompletedDependency(cached, registry);
@@ -3583,7 +3606,6 @@ function preCompleteAndRegisterDependencies(
       // Case 1: state is [PendingDependencySourceState]
       const completed = fieldParser.complete(fieldState, exec);
       preCompleted.set(field, completed);
-      newlyCompleted.push([fieldParser, completed]);
       if (isDependencySourceState(completed)) {
         registerCompletedDependency(completed, registry);
       }
@@ -3597,7 +3619,6 @@ function preCompleteAndRegisterDependencies(
         exec,
       );
       preCompleted.set(field, completed);
-      newlyCompleted.push([fieldParser, completed]);
       if (isDependencySourceState(completed)) {
         registerCompletedDependency(completed, registry);
       }
@@ -3609,7 +3630,6 @@ function preCompleteAndRegisterDependencies(
       const pendingState = fieldParser[wrappedDependencySourceMarker];
       const completed = fieldParser.complete([pendingState], exec);
       preCompleted.set(field, completed);
-      newlyCompleted.push([fieldParser, completed]);
       if (isDependencySourceState(completed)) {
         registerCompletedDependency(completed, registry);
       }
@@ -3634,12 +3654,6 @@ function preCompleteAndRegisterDependencies(
       if (depState) registerCompletedDependency(depState, registry);
     }
   }
-  // Populate cache after the loop so nested calls reuse these results.
-  if (cache != null) {
-    for (const [parser, result] of newlyCompleted) {
-      cache.set(parser, result);
-    }
-  }
   return preCompleted;
 }
 
@@ -3656,13 +3670,9 @@ async function preCompleteAndRegisterDependenciesAsync(
   exec?: ExecutionContext,
 ): Promise<Map<string | symbol, unknown>> {
   const preCompleted = new Map<string | symbol, unknown>();
-  const cache = exec?.preCompletedCache;
-  const newlyCompleted: (readonly [object, unknown])[] = [];
+  const parentResults = exec?.preCompletedByParser;
   for (const [field, fieldParser] of fieldParserPairs) {
-    // If an outer construct's Phase 1 already completed this exact parser
-    // instance, reuse the full result.
-    // https://github.com/dahlia/optique/issues/762
-    const cached = cache?.get(fieldParser);
+    const cached = parentResults?.get(fieldParser);
     if (cached !== undefined) {
       preCompleted.set(field, cached);
       registerCompletedDependency(cached, registry);
@@ -3680,7 +3690,6 @@ async function preCompleteAndRegisterDependenciesAsync(
     ) {
       const completed = await fieldParser.complete(fieldState, exec);
       preCompleted.set(field, completed);
-      newlyCompleted.push([fieldParser, completed]);
       if (isDependencySourceState(completed)) {
         registerCompletedDependency(completed, registry);
       }
@@ -3693,7 +3702,6 @@ async function preCompleteAndRegisterDependenciesAsync(
         exec,
       );
       preCompleted.set(field, completed);
-      newlyCompleted.push([fieldParser, completed]);
       if (isDependencySourceState(completed)) {
         registerCompletedDependency(completed, registry);
       }
@@ -3704,7 +3712,6 @@ async function preCompleteAndRegisterDependenciesAsync(
       const pendingState = fieldParser[wrappedDependencySourceMarker];
       const completed = await fieldParser.complete([pendingState], exec);
       preCompleted.set(field, completed);
-      newlyCompleted.push([fieldParser, completed]);
       if (isDependencySourceState(completed)) {
         registerCompletedDependency(completed, registry);
       }
@@ -3728,11 +3735,6 @@ async function preCompleteAndRegisterDependenciesAsync(
       preCompleted.set(field, completed);
       const depState = wrapAsDependencySourceState(completed, fieldParser);
       if (depState) registerCompletedDependency(depState, registry);
-    }
-  }
-  if (cache != null) {
-    for (const [parser, result] of newlyCompleted) {
-      cache.set(parser, result);
     }
   }
   return preCompleted;
@@ -4506,17 +4508,24 @@ export function object<
           const childExec: ExecutionContext = {
             ...exec,
             dependencyRuntime: runtime,
-            preCompletedCache: exec?.preCompletedCache ?? new WeakMap(),
           } as ExecutionContext;
+          const typedParserPairs = parserPairs as readonly (readonly [
+            string | symbol,
+            Parser<Mode, unknown, unknown>,
+          ])[];
           const preCompleted = preCompleteAndRegisterDependencies(
             state as Record<string | symbol, unknown>,
-            parserPairs as readonly (readonly [
-              string | symbol,
-              Parser<Mode, unknown, unknown>,
-            ])[],
+            typedParserPairs,
             runtime.registry,
             childExec,
           );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: buildPreCompletedByParser(
+              preCompleted,
+              typedParserPairs,
+            ),
+          } as ExecutionContext;
 
           // Phase 2: Resolve all DeferredParseState in the state tree
           // using the dependency runtime.  This recursively finds and
@@ -4569,7 +4578,7 @@ export function object<
             } else {
               const fieldState = resolvedFieldStates[fieldKey];
               valueResult = unwrapCompleteResult(
-                fieldParser.complete(fieldState, childExec),
+                fieldParser.complete(fieldState, phase3Exec),
               );
             }
             if (valueResult.success) {
@@ -4613,17 +4622,24 @@ export function object<
           const childExec: ExecutionContext = {
             ...exec,
             dependencyRuntime: runtime,
-            preCompletedCache: exec?.preCompletedCache ?? new WeakMap(),
           } as ExecutionContext;
+          const asyncParserPairs = parserPairs as readonly (readonly [
+            string | symbol,
+            Parser<Mode, unknown, unknown>,
+          ])[];
           const preCompleted = await preCompleteAndRegisterDependenciesAsync(
             state as Record<string | symbol, unknown>,
-            parserPairs as readonly (readonly [
-              string | symbol,
-              Parser<Mode, unknown, unknown>,
-            ])[],
+            asyncParserPairs,
             runtime.registry,
             childExec,
           );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: buildPreCompletedByParser(
+              preCompleted,
+              asyncParserPairs,
+            ),
+          } as ExecutionContext;
 
           // Phase 2: Build the full annotated state, then resolve the
           // ENTIRE object at once for order-independent resolution.
@@ -4659,7 +4675,7 @@ export function object<
             } else {
               const fieldState = resolvedFieldStates[fieldKey];
               valueResult = unwrapCompleteResult(
-                await fieldParser.complete(fieldState, childExec),
+                await fieldParser.complete(fieldState, phase3Exec),
               );
             }
             if (valueResult.success) {
@@ -5222,7 +5238,6 @@ export function tuple<
           const childExec: ExecutionContext = {
             ...exec,
             dependencyRuntime: runtime,
-            preCompletedCache: exec?.preCompletedCache ?? new WeakMap(),
           } as ExecutionContext;
 
           // Phase 1: Pre-complete dependency sources (single evaluation).
@@ -5239,6 +5254,13 @@ export function tuple<
             runtime.registry,
             childExec,
           );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: buildPreCompletedByParser(
+              preCompleted,
+              tuplePairs,
+            ),
+          } as ExecutionContext;
 
           // Phase 2: Resolve all DeferredParseState in the state array.
           const resolvedArray = resolveStateWithRuntime(
@@ -5266,7 +5288,7 @@ export function tuple<
                 elementParser,
               );
               valueResult = unwrapCompleteResult(
-                elementParser.complete(elementState, childExec),
+                elementParser.complete(elementState, phase3Exec),
               );
             }
             if (valueResult.success) {
@@ -5312,7 +5334,6 @@ export function tuple<
           const childExec: ExecutionContext = {
             ...exec,
             dependencyRuntime: runtime,
-            preCompletedCache: exec?.preCompletedCache ?? new WeakMap(),
           } as ExecutionContext;
           const tuplePairs = parsers.map(
             (p, i) =>
@@ -5330,6 +5351,13 @@ export function tuple<
             runtime.registry,
             childExec,
           );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: buildPreCompletedByParser(
+              preCompleted,
+              tuplePairs,
+            ),
+          } as ExecutionContext;
 
           // Phase 2: Resolve all DeferredParseState in the state array.
           const resolvedArray = await resolveStateWithRuntimeAsync(
@@ -5357,7 +5385,7 @@ export function tuple<
                 elementParser,
               );
               valueResult = unwrapCompleteResult(
-                await elementParser.complete(elementState, childExec),
+                await elementParser.complete(elementState, phase3Exec),
               );
             }
             if (valueResult.success) {
@@ -6004,10 +6032,9 @@ export function merge(
         const childExec: ExecutionContext = {
           ...exec,
           dependencyRuntime: runtime,
-          preCompletedCache: exec?.preCompletedCache ?? new WeakMap(),
         } as ExecutionContext;
         const childFieldPairs = collectChildFieldParsers(syncParsers);
-        preCompleteAndRegisterDependencies(
+        const mergePreCompleted = preCompleteAndRegisterDependencies(
           state as Record<string | symbol, unknown>,
           childFieldPairs,
           runtime.registry,
@@ -6021,6 +6048,17 @@ export function merge(
           runtime,
         ) as MergeState;
 
+        // Build an immutable map of Phase 1 results keyed by parser
+        // instance so that children's Phase 1 can reuse them without
+        // re-evaluating default thunks.
+        const phase3Exec: ExecutionContext = {
+          ...childExec,
+          preCompletedByParser: buildPreCompletedByParser(
+            mergePreCompleted,
+            childFieldPairs,
+          ),
+        } as ExecutionContext;
+
         const object: MergeState = {};
         const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
         let hasDeferred = false;
@@ -6030,7 +6068,7 @@ export function merge(
           const result = unwrapCompleteResult(
             parser.complete(
               parserState as Parameters<typeof parser.complete>[0],
-              childExec,
+              phase3Exec,
             ),
           );
           if (!result.success) return result;
@@ -6082,10 +6120,9 @@ export function merge(
         const childExec: ExecutionContext = {
           ...exec,
           dependencyRuntime: runtime,
-          preCompletedCache: exec?.preCompletedCache ?? new WeakMap(),
         } as ExecutionContext;
         const childFieldPairs = collectChildFieldParsers(parsers);
-        await preCompleteAndRegisterDependenciesAsync(
+        const mergePreCompleted = await preCompleteAndRegisterDependenciesAsync(
           state as Record<string | symbol, unknown>,
           childFieldPairs,
           runtime.registry,
@@ -6099,6 +6136,14 @@ export function merge(
           runtime,
         ) as MergeState;
 
+        const phase3Exec: ExecutionContext = {
+          ...childExec,
+          preCompletedByParser: buildPreCompletedByParser(
+            mergePreCompleted,
+            childFieldPairs,
+          ),
+        } as ExecutionContext;
+
         const object: MergeState = {};
         const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
         let hasDeferred = false;
@@ -6108,7 +6153,7 @@ export function merge(
           const result = unwrapCompleteResult(
             await parser.complete(
               parserState as Parameters<typeof parser.complete>[0],
-              childExec,
+              phase3Exec,
             ),
           );
           if (!result.success) return result;
@@ -6919,7 +6964,6 @@ export function concat(
     const childExec: ExecutionContext = {
       ...exec,
       dependencyRuntime: runtime,
-      preCompletedCache: exec?.preCompletedCache ?? new WeakMap(),
     } as ExecutionContext;
 
     // Phase 2: Resolve deferred parse states across all tuples using runtime.
@@ -7008,7 +7052,6 @@ export function concat(
     const childExec: ExecutionContext = {
       ...exec,
       dependencyRuntime: runtime,
-      preCompletedCache: exec?.preCompletedCache ?? new WeakMap(),
     } as ExecutionContext;
 
     // Phase 2: Resolve deferred parse states across all tuples using runtime.

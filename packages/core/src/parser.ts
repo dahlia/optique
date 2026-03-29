@@ -387,17 +387,19 @@ export interface ExecutionContext {
   readonly dependencyRuntime?: DependencyRuntimeContext;
 
   /**
-   * Cache of pre-completed results from `preCompleteAndRegisterDependencies`,
-   * keyed by parser instance.  Shared across nested `merge()`/`object()`
-   * constructs so that re-entrant Phase 1 calls reuse the full completed
-   * result (including wrapper-chain transformations) instead of re-evaluating
-   * non-idempotent default thunks.
+   * Immutable map of pre-completed results from the parent construct's
+   * Phase 1, keyed by parser instance.  Each construct builds this map
+   * from its own `preCompleteAndRegisterDependencies` results and passes
+   * it to children in Phase 3.  Children read it in their own Phase 1
+   * to avoid re-evaluating non-idempotent default thunks, but never
+   * write to it — this prevents sibling completions from leaking into
+   * each other.
    *
    * @see https://github.com/dahlia/optique/issues/762
    * @internal
    * @since 1.0.0
    */
-  readonly preCompletedCache?: WeakMap<object, unknown>;
+  readonly preCompletedByParser?: ReadonlyMap<object, unknown>;
 }
 
 /**

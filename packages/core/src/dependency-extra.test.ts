@@ -2008,6 +2008,33 @@ describe("merge() nested source default thunk exactly-once evaluation", () => {
     // Each position should have evaluated the thunk independently.
     assert.equal(thunkCallCount, 2);
   });
+
+  test("reused object in tuple does not share pre-completed results across positions", () => {
+    let callCount = 0;
+    const vals = ["dev", "prod"] as const;
+    const modeParser = dependency(choice(vals));
+    const shared = object({
+      mode: withDefault(option("--mode", modeParser), () => {
+        // Return a different value for each position to detect leaking.
+        return vals[callCount++ % 2];
+      }),
+    });
+
+    // Sibling completions of reused object parsers must not leak
+    // pre-completed results between positions.
+    const parser = tuple([shared, shared], { allowDuplicates: true });
+
+    const result = parseSync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      // Both positions should have called their own complete() chain
+      // independently, so at least 2 thunk calls occurred.
+      assert.ok(
+        callCount >= 2,
+        `thunk should be called at least twice, got ${callCount}`,
+      );
+    }
+  });
 });
 
 // =============================================================================
