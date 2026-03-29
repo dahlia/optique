@@ -4442,32 +4442,23 @@ export function object<
       return dispatchByMode(
         combinedMode,
         () => {
-          // Phase 1: Build dependency runtime and collect/fill source values
-          // via parser dependency metadata instead of state-type inspection.
-          // Reuse the parent's runtime if present so that nested objects
-          // share dependency state across the entire parse tree.
+          // Phase 1: Build dependency runtime and pre-complete dependency
+          // source parsers.  Reuse the parent's runtime if present so that
+          // nested objects share dependency state across the parse tree.
+          //
+          // Pre-completion is the single evaluation point for lazy defaults:
+          // each source's complete() is called exactly once, its result is
+          // stored for reuse in Phase 3, and the dependency value is
+          // registered in the runtime for derived-parser replay.
+          // resolveStateWithRuntime (Phase 2) then collects matched
+          // DependencySourceState from the raw state tree, which may
+          // overwrite defaults with actual CLI values — that is correct.
           const runtime = exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec: ExecutionContext = {
             ...exec,
             dependencyRuntime: runtime,
           } as ExecutionContext;
-          const nodes = buildRuntimeNodesFromPairs(
-            parserPairs as readonly (readonly [
-              PropertyKey,
-              Parser<Mode, unknown, unknown>,
-            ])[],
-            state as Record<PropertyKey, unknown>,
-            exec?.path,
-          );
-          collectExplicitSourceValues(nodes, runtime);
-          fillMissingSourceDefaults(nodes, runtime);
-
-          // Phase 1b: Pre-complete ALL dependency source parsers via
-          // old-protocol bridge (handles all 4 cases: pending state in
-          // arrays, undefined with pending initialState, wrapped markers,
-          // and non-null state from bindConfig/bindEnv).  This is needed
-          // because not all wrappers compose dependencyMetadata yet.
           const preCompleted = preCompleteAndRegisterDependencies(
             state as Record<string | symbol, unknown>,
             parserPairs as readonly (readonly [
@@ -4566,26 +4557,14 @@ export function object<
           };
         },
         async () => {
-          // Phase 1: Build dependency runtime and collect/fill source values.
+          // Phase 1: Build dependency runtime and pre-complete dependency
+          // source parsers (single evaluation point for lazy defaults).
           const runtime = exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec: ExecutionContext = {
             ...exec,
             dependencyRuntime: runtime,
           } as ExecutionContext;
-          const nodes = buildRuntimeNodesFromPairs(
-            parserPairs as readonly (readonly [
-              PropertyKey,
-              Parser<Mode, unknown, unknown>,
-            ])[],
-            state as Record<PropertyKey, unknown>,
-            exec?.path,
-          );
-          collectExplicitSourceValues(nodes, runtime);
-          await fillMissingSourceDefaultsAsync(nodes, runtime);
-
-          // Phase 1b: Pre-complete ALL dependency source parsers via
-          // old-protocol bridge (all 4 cases).
           const preCompleted = await preCompleteAndRegisterDependenciesAsync(
             state as Record<string | symbol, unknown>,
             parserPairs as readonly (readonly [
@@ -5194,17 +5173,8 @@ export function tuple<
             ...exec,
             dependencyRuntime: runtime,
           } as ExecutionContext;
-          const nodes = buildRuntimeNodesFromPairs(
-            syncParsers.map((p, i) => [i, p] as const),
-            Object.fromEntries(stateArray.map((s, i) => [i, s])),
-            exec?.path,
-          );
-          collectExplicitSourceValues(nodes, runtime);
-          fillMissingSourceDefaults(nodes, runtime);
 
-          // Phase 1b: Pre-complete dependency sources (all 4 cases).
-          // Use string keys for the state record since
-          // Object.fromEntries converts numeric indices to strings.
+          // Phase 1: Pre-complete dependency sources (single evaluation).
           const tuplePairs = syncParsers.map(
             (p, i) =>
               [String(i), p] as [string, Parser<"sync", unknown, unknown>],
@@ -5284,22 +5254,14 @@ export function tuple<
         async () => {
           const stateArray = state as unknown[];
 
-          // Phase 1: Build dependency runtime and collect/fill source values.
+          // Phase 1: Build dependency runtime and pre-complete dependency
+          // source parsers (single evaluation point for lazy defaults).
           const runtime = exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec: ExecutionContext = {
             ...exec,
             dependencyRuntime: runtime,
           } as ExecutionContext;
-          const nodes = buildRuntimeNodesFromPairs(
-            parsers.map((p, i) => [i, p] as const),
-            Object.fromEntries(stateArray.map((s, i) => [i, s])),
-            exec?.path,
-          );
-          collectExplicitSourceValues(nodes, runtime);
-          await fillMissingSourceDefaultsAsync(nodes, runtime);
-
-          // Phase 1b: Pre-complete dependency sources (all 4 cases).
           const tuplePairs = parsers.map(
             (p, i) =>
               [String(i), p] as [
