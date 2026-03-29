@@ -3545,7 +3545,8 @@ function preCompleteAndRegisterDependencies(
   >,
   registry: DependencyRegistryLike,
   exec?: ExecutionContext,
-): void {
+): Map<string | symbol, unknown> {
+  const preCompleted = new Map<string | symbol, unknown>();
   for (const [field, fieldParser] of fieldParserPairs) {
     const fieldState = state[field];
 
@@ -3553,6 +3554,8 @@ function preCompleteAndRegisterDependencies(
     // Only register when complete() returns an actual DependencySourceState
     // (not force-wrapped), because wrappers like map() may intentionally
     // return a plain result that should NOT be registered as a source value.
+    // Store the result so Phase 3 can reuse it without re-evaluating
+    // potentially non-idempotent lazy defaults.
     if (
       Array.isArray(fieldState) &&
       fieldState.length === 1 &&
@@ -3560,6 +3563,7 @@ function preCompleteAndRegisterDependencies(
     ) {
       // Case 1: state is [PendingDependencySourceState]
       const completed = fieldParser.complete(fieldState, exec);
+      preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
         registerCompletedDependency(completed, registry);
       }
@@ -3572,6 +3576,7 @@ function preCompleteAndRegisterDependencies(
         [fieldParser.initialState],
         exec,
       );
+      preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
         registerCompletedDependency(completed, registry);
       }
@@ -3582,6 +3587,7 @@ function preCompleteAndRegisterDependencies(
       // Case 3: undefined state, parser has wrappedDependencySourceMarker
       const pendingState = fieldParser[wrappedDependencySourceMarker];
       const completed = fieldParser.complete([pendingState], exec);
+      preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
         registerCompletedDependency(completed, registry);
       }
@@ -3601,10 +3607,12 @@ function preCompleteAndRegisterDependencies(
         fieldParser,
       );
       const completed = fieldParser.complete(annotatedFieldState, exec);
+      preCompleted.set(field, completed);
       const depState = wrapAsDependencySourceState(completed, fieldParser);
       if (depState) registerCompletedDependency(depState, registry);
     }
   }
+  return preCompleted;
 }
 
 /**
@@ -3618,17 +3626,20 @@ async function preCompleteAndRegisterDependenciesAsync(
   >,
   registry: DependencyRegistryLike,
   exec?: ExecutionContext,
-): Promise<void> {
+): Promise<Map<string | symbol, unknown>> {
+  const preCompleted = new Map<string | symbol, unknown>();
   for (const [field, fieldParser] of fieldParserPairs) {
     const fieldState = state[field];
 
     // Cases 1-3: only register actual DependencySourceState.
+    // Store result for reuse in Phase 3.
     if (
       Array.isArray(fieldState) &&
       fieldState.length === 1 &&
       isPendingDependencySourceState(fieldState[0])
     ) {
       const completed = await fieldParser.complete(fieldState, exec);
+      preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
         registerCompletedDependency(completed, registry);
       }
@@ -3640,6 +3651,7 @@ async function preCompleteAndRegisterDependenciesAsync(
         [fieldParser.initialState],
         exec,
       );
+      preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
         registerCompletedDependency(completed, registry);
       }
@@ -3649,6 +3661,7 @@ async function preCompleteAndRegisterDependenciesAsync(
     ) {
       const pendingState = fieldParser[wrappedDependencySourceMarker];
       const completed = await fieldParser.complete([pendingState], exec);
+      preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
         registerCompletedDependency(completed, registry);
       }
@@ -3669,10 +3682,12 @@ async function preCompleteAndRegisterDependenciesAsync(
         annotatedFieldState,
         exec,
       );
+      preCompleted.set(field, completed);
       const depState = wrapAsDependencySourceState(completed, fieldParser);
       if (depState) registerCompletedDependency(depState, registry);
     }
   }
+  return preCompleted;
 }
 
 /**
@@ -4453,7 +4468,7 @@ export function object<
           // arrays, undefined with pending initialState, wrapped markers,
           // and non-null state from bindConfig/bindEnv).  This is needed
           // because not all wrappers compose dependencyMetadata yet.
-          preCompleteAndRegisterDependencies(
+          const preCompleted = preCompleteAndRegisterDependencies(
             state as Record<string | symbol, unknown>,
             parserPairs as readonly (readonly [
               string | symbol,
@@ -4484,6 +4499,8 @@ export function object<
           }
 
           // Phase 3: Complete each field using resolved state.
+          // For pre-completed dependency sources, reuse the Phase 1b result
+          // to avoid re-evaluating non-idempotent lazy defaults.
           const result = {} as {
             [K in keyof T]: T[K]["$valueType"][number];
           };
@@ -4496,10 +4513,22 @@ export function object<
               unknown,
               unknown
             >;
-            const fieldState = resolvedFieldStates[fieldKey];
-            const valueResult = unwrapCompleteResult(
-              fieldParser.complete(fieldState, childExec),
-            );
+
+            let valueResult: import("./valueparser.ts").ValueParserResult<
+              unknown
+            >;
+            const preCompletedResult = preCompleted.get(fieldKey);
+            if (preCompletedResult !== undefined) {
+              // Reuse the Phase 1b result to preserve consistency with
+              // the dependency value that derived parsers were validated
+              // against.
+              valueResult = unwrapCompleteResult(preCompletedResult);
+            } else {
+              const fieldState = resolvedFieldStates[fieldKey];
+              valueResult = unwrapCompleteResult(
+                fieldParser.complete(fieldState, childExec),
+              );
+            }
             if (valueResult.success) {
               (result as Record<string | symbol, unknown>)[fieldKey] =
                 valueResult.value;
@@ -4554,7 +4583,7 @@ export function object<
 
           // Phase 1b: Pre-complete ALL dependency source parsers via
           // old-protocol bridge (all 4 cases).
-          await preCompleteAndRegisterDependenciesAsync(
+          const preCompleted = await preCompleteAndRegisterDependenciesAsync(
             state as Record<string | symbol, unknown>,
             parserPairs as readonly (readonly [
               string | symbol,
@@ -4579,6 +4608,7 @@ export function object<
           );
 
           // Phase 3: Complete each field using resolved state.
+          // For pre-completed dependency sources, reuse the Phase 1b result.
           const result = {} as {
             [K in keyof T]: T[K]["$valueType"][number];
           };
@@ -4587,10 +4617,19 @@ export function object<
           for (const field of parserKeys) {
             const fieldKey = field as string | symbol;
             const fieldParser = parsers[field];
-            const fieldState = resolvedFieldStates[fieldKey];
-            const valueResult = unwrapCompleteResult(
-              await fieldParser.complete(fieldState, childExec),
-            );
+
+            let valueResult: import("./valueparser.ts").ValueParserResult<
+              unknown
+            >;
+            const preCompletedResult = preCompleted.get(fieldKey);
+            if (preCompletedResult !== undefined) {
+              valueResult = unwrapCompleteResult(preCompletedResult);
+            } else {
+              const fieldState = resolvedFieldStates[fieldKey];
+              valueResult = unwrapCompleteResult(
+                await fieldParser.complete(fieldState, childExec),
+              );
+            }
             if (valueResult.success) {
               (result as Record<string | symbol, unknown>)[fieldKey] =
                 valueResult.value;
@@ -5160,6 +5199,23 @@ export function tuple<
           collectExplicitSourceValues(nodes, runtime);
           fillMissingSourceDefaults(nodes, runtime);
 
+          // Phase 1b: Pre-complete dependency sources (all 4 cases).
+          // Use string keys for the state record since
+          // Object.fromEntries converts numeric indices to strings.
+          const tuplePairs = syncParsers.map(
+            (p, i) =>
+              [String(i), p] as [string, Parser<"sync", unknown, unknown>],
+          );
+          const tupleState = Object.fromEntries(
+            stateArray.map((s, i) => [String(i), s]),
+          );
+          const preCompleted = preCompleteAndRegisterDependencies(
+            tupleState,
+            tuplePairs,
+            runtime.registry,
+            childExec,
+          );
+
           // Phase 2: Resolve all DeferredParseState in the state array.
           const resolvedArray = resolveStateWithRuntime(
             stateArray,
@@ -5167,18 +5223,28 @@ export function tuple<
           ) as unknown[];
 
           // Phase 3: Complete each element using resolved state.
+          // For pre-completed elements, reuse the Phase 1b result.
           const result: unknown[] = [];
           const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
           let hasDeferred = false;
           for (let i = 0; i < syncParsers.length; i++) {
             const elementParser = syncParsers[i];
-            const elementState = prepareStateForCompletion(
-              resolvedArray[i],
-              elementParser,
-            );
-            const valueResult = unwrapCompleteResult(
-              elementParser.complete(elementState, childExec),
-            );
+
+            let valueResult: import("./valueparser.ts").ValueParserResult<
+              unknown
+            >;
+            const preCompletedResult = preCompleted.get(String(i));
+            if (preCompletedResult !== undefined) {
+              valueResult = unwrapCompleteResult(preCompletedResult);
+            } else {
+              const elementState = prepareStateForCompletion(
+                resolvedArray[i],
+                elementParser,
+              );
+              valueResult = unwrapCompleteResult(
+                elementParser.complete(elementState, childExec),
+              );
+            }
             if (valueResult.success) {
               result[i] = valueResult.value;
               if (valueResult.deferred) {
@@ -5230,6 +5296,24 @@ export function tuple<
           collectExplicitSourceValues(nodes, runtime);
           await fillMissingSourceDefaultsAsync(nodes, runtime);
 
+          // Phase 1b: Pre-complete dependency sources (all 4 cases).
+          const tuplePairs = parsers.map(
+            (p, i) =>
+              [String(i), p] as [
+                string,
+                Parser<Mode, unknown, unknown>,
+              ],
+          );
+          const tupleState = Object.fromEntries(
+            stateArray.map((s, i) => [String(i), s]),
+          );
+          const preCompleted = await preCompleteAndRegisterDependenciesAsync(
+            tupleState,
+            tuplePairs,
+            runtime.registry,
+            childExec,
+          );
+
           // Phase 2: Resolve all DeferredParseState in the state array.
           const resolvedArray = await resolveStateWithRuntimeAsync(
             stateArray,
@@ -5237,18 +5321,28 @@ export function tuple<
           ) as unknown[];
 
           // Phase 3: Complete each element using resolved state.
+          // For pre-completed elements, reuse the Phase 1b result.
           const result: unknown[] = [];
           const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
           let hasDeferred = false;
           for (let i = 0; i < parsers.length; i++) {
             const elementParser = parsers[i];
-            const elementState = prepareStateForCompletion(
-              resolvedArray[i],
-              elementParser,
-            );
-            const valueResult = unwrapCompleteResult(
-              await elementParser.complete(elementState, childExec),
-            );
+
+            let valueResult: import("./valueparser.ts").ValueParserResult<
+              unknown
+            >;
+            const preCompletedResult = preCompleted.get(String(i));
+            if (preCompletedResult !== undefined) {
+              valueResult = unwrapCompleteResult(preCompletedResult);
+            } else {
+              const elementState = prepareStateForCompletion(
+                resolvedArray[i],
+                elementParser,
+              );
+              valueResult = unwrapCompleteResult(
+                await elementParser.complete(elementState, childExec),
+              );
+            }
             if (valueResult.success) {
               result[i] = valueResult.value;
               if (valueResult.deferred) {
