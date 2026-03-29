@@ -2085,6 +2085,29 @@ describe("merge() nested source default thunk exactly-once evaluation", () => {
       assert.equal(result.value.nested.mode, "x");
     }
   });
+
+  test("merge branches with same output key get independent Phase 1 results", () => {
+    const dep1 = dependency(choice(["a", "b", "x", "y"] as const));
+    const dep2 = dependency(choice(["a", "b", "x", "y"] as const));
+
+    // Two branches produce the same key "mode" with different dep sources.
+    // Each branch's Phase 1 must produce its own result independently.
+    const parser = merge(
+      object({
+        mode: withDefault(option("--mode1", dep1), "a" as const),
+      }),
+      object({
+        mode: withDefault(option("--mode2", dep2), "x" as const),
+      }),
+    );
+
+    const result = parseSync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      // merge last-write-wins: second branch's "mode" takes precedence
+      assert.equal(result.value.mode, "x");
+    }
+  });
 });
 
 // =============================================================================

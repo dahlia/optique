@@ -5995,13 +5995,25 @@ export function merge(
           ...exec,
           dependencyRuntime: runtime,
         } as ExecutionContext;
-        const childFieldPairs = collectChildFieldParsers(syncParsers);
-        const mergePreCompleted = preCompleteAndRegisterDependencies(
-          state as Record<string | symbol, unknown>,
-          childFieldPairs,
-          runtime.registry,
-          childExec,
-        );
+        // Pre-complete each child's dependency sources independently so
+        // that branches with overlapping output keys do not collide in
+        // the preCompleted map.
+        // https://github.com/dahlia/optique/issues/762
+        const perChildPreCompleted = syncParsers.map((parser) => {
+          if (fieldParsersKey in parser) {
+            return preCompleteAndRegisterDependencies(
+              state as Record<string | symbol, unknown>,
+              (parser as {
+                [fieldParsersKey]: ReadonlyArray<
+                  readonly [string | symbol, Parser<Mode, unknown, unknown>]
+                >;
+              })[fieldParsersKey],
+              runtime.registry,
+              childExec,
+            );
+          }
+          return new Map<string | symbol, unknown>();
+        });
 
         // Phase 2: Resolve deferred parse states across the entire merged
         // state using the dependency runtime.
@@ -6009,14 +6021,6 @@ export function merge(
           state,
           runtime,
         ) as MergeState;
-
-        // Build an immutable map of Phase 1 results keyed by parser
-        // instance so that children's Phase 1 can reuse them without
-        // re-evaluating default thunks.
-        const phase3Exec: ExecutionContext = {
-          ...childExec,
-          preCompletedByParser: mergePreCompleted,
-        } as ExecutionContext;
 
         const object: MergeState = {};
         const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
@@ -6027,7 +6031,10 @@ export function merge(
           const result = unwrapCompleteResult(
             parser.complete(
               parserState as Parameters<typeof parser.complete>[0],
-              phase3Exec,
+              {
+                ...childExec,
+                preCompletedByParser: perChildPreCompleted[i],
+              } as ExecutionContext,
             ),
           );
           if (!result.success) return result;
@@ -6080,13 +6087,25 @@ export function merge(
           ...exec,
           dependencyRuntime: runtime,
         } as ExecutionContext;
-        const childFieldPairs = collectChildFieldParsers(parsers);
-        const mergePreCompleted = await preCompleteAndRegisterDependenciesAsync(
-          state as Record<string | symbol, unknown>,
-          childFieldPairs,
-          runtime.registry,
-          childExec,
-        );
+        const perChildPreCompleted: Map<string | symbol, unknown>[] = [];
+        for (const parser of parsers) {
+          if (fieldParsersKey in parser) {
+            perChildPreCompleted.push(
+              await preCompleteAndRegisterDependenciesAsync(
+                state as Record<string | symbol, unknown>,
+                (parser as {
+                  [fieldParsersKey]: ReadonlyArray<
+                    readonly [string | symbol, Parser<Mode, unknown, unknown>]
+                  >;
+                })[fieldParsersKey],
+                runtime.registry,
+                childExec,
+              ),
+            );
+          } else {
+            perChildPreCompleted.push(new Map<string | symbol, unknown>());
+          }
+        }
 
         // Phase 2: Resolve deferred parse states across the entire merged
         // state using the dependency runtime.
@@ -6094,11 +6113,6 @@ export function merge(
           state,
           runtime,
         ) as MergeState;
-
-        const phase3Exec: ExecutionContext = {
-          ...childExec,
-          preCompletedByParser: mergePreCompleted,
-        } as ExecutionContext;
 
         const object: MergeState = {};
         const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
@@ -6109,7 +6123,10 @@ export function merge(
           const result = unwrapCompleteResult(
             await parser.complete(
               parserState as Parameters<typeof parser.complete>[0],
-              phase3Exec,
+              {
+                ...childExec,
+                preCompletedByParser: perChildPreCompleted[i],
+              } as ExecutionContext,
             ),
           );
           if (!result.success) return result;
