@@ -885,7 +885,7 @@ describe("buildRuntimeNodesFromPairs", () => {
     assert.deepStrictEqual(nodes[0].path, ["root", 0, "name"]);
   });
 
-  test("snapshots defaultDependencyValues for derived parsers", () => {
+  test("does not eagerly snapshot defaultDependencyValues", () => {
     const depId = Symbol("env");
     const derivedMeta: ParserDependencyMetadata = {
       derived: {
@@ -904,8 +904,10 @@ describe("buildRuntimeNodesFromPairs", () => {
     ];
     const state: Record<string | symbol, unknown> = { level: "info" };
 
+    // defaultDependencyValues is deferred to the replay path,
+    // not eagerly evaluated during node building.
     const nodes = buildRuntimeNodesFromPairs(pairs, state);
-    assert.deepStrictEqual(nodes[0].defaultDependencyValues, ["dev"]);
+    assert.equal(nodes[0].defaultDependencyValues, undefined);
   });
 });
 

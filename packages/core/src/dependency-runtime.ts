@@ -963,7 +963,9 @@ function resolveDeferredInState(
   }
 
   if (isPlainObject(state)) {
-    const resolved: Record<string | symbol, unknown> = {};
+    const resolved = Object.create(
+      Object.getPrototypeOf(state),
+    ) as Record<string | symbol, unknown>;
     for (const key of Reflect.ownKeys(state)) {
       resolved[key] = resolveDeferredInState(state[key], runtime, visited);
     }
@@ -1033,7 +1035,9 @@ async function resolveDeferredInStateAsync(
   }
 
   if (isPlainObject(state)) {
-    const resolved: Record<string | symbol, unknown> = {};
+    const resolved = Object.create(
+      Object.getPrototypeOf(state),
+    ) as Record<string | symbol, unknown>;
     const keys = Reflect.ownKeys(state);
     await Promise.all(
       keys.map(async (key) => {
@@ -1075,21 +1079,6 @@ function isMatchedState(
 }
 
 /**
- * Snapshots `defaultDependencyValues` from derived metadata, or returns
- * `undefined` if not a derived parser or if the thunk fails.
- */
-function snapshotDefaults(
-  meta: ParserDependencyMetadata | undefined,
-): readonly unknown[] | undefined {
-  if (meta?.derived?.getDefaultDependencyValues == null) return undefined;
-  try {
-    return meta.derived.getDefaultDependencyValues();
-  } catch {
-    return undefined;
-  }
-}
-
-/**
  * Builds {@link RuntimeNode}s from field→parser pairs and a state record.
  *
  * Used by `object()` and `merge()` constructs.
@@ -1125,7 +1114,6 @@ export function buildRuntimeNodesFromPairs(
       parser,
       state: fieldState,
       matched: isMatchedState(fieldState, parser),
-      defaultDependencyValues: snapshotDefaults(parser.dependencyMetadata),
     });
   }
   return nodes;
@@ -1163,7 +1151,6 @@ export function buildRuntimeNodesFromArray(
       parser,
       state: elemState,
       matched: isMatchedState(elemState, parser),
-      defaultDependencyValues: snapshotDefaults(parser.dependencyMetadata),
     });
   }
   return nodes;
