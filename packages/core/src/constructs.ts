@@ -3503,6 +3503,27 @@ async function completeDependencySourceDefaultsAsync(
  * mappings from its child `object()` (or nested `merge()`) parsers.
  * @internal
  */
+/**
+ * Returns `true` if a field-parser pair list has no duplicate field names.
+ * Used to decide whether pre-completed results can be safely passed as a
+ * flat field-keyed cache to a child construct.  Inner merges with
+ * duplicate output keys across branches must NOT receive a cache because
+ * the flat map would collapse branch-specific results.
+ *
+ * @see https://github.com/dahlia/optique/issues/762
+ * @internal
+ */
+function fieldPairsHaveUniqueKeys(
+  pairs: ReadonlyArray<readonly [string | symbol, unknown]>,
+): boolean {
+  const seen = new Set<string | symbol>();
+  for (const [field] of pairs) {
+    if (seen.has(field)) return false;
+    seen.add(field);
+  }
+  return true;
+}
+
 function collectChildFieldParsers(
   parsers: readonly Parser<Mode, unknown, unknown>[],
 ): readonly (readonly [string | symbol, Parser<Mode, unknown, unknown>])[] {
@@ -5997,22 +6018,37 @@ export function merge(
         } as ExecutionContext;
         // Pre-complete each child's dependency sources independently so
         // that branches with overlapping output keys do not collide in
-        // the preCompleted map.
+        // the preCompleted map.  Only pass the cache to children whose
+        // field pairs have unique keys (i.e., object() children).  Inner
+        // merge children with duplicate keys must handle their own
+        // pre-completion to avoid cross-branch result leaking.
         // https://github.com/dahlia/optique/issues/762
-        const perChildPreCompleted = syncParsers.map((parser) => {
+        type FieldPairs = ReadonlyArray<
+          readonly [string | symbol, Parser<Mode, unknown, unknown>]
+        >;
+        const perChildCache: (
+          | ReadonlyMap<
+            string | symbol,
+            unknown
+          >
+          | undefined
+        )[] = syncParsers.map((parser) => {
           if (fieldParsersKey in parser) {
-            return preCompleteAndRegisterDependencies(
+            const pairs = (parser as { [fieldParsersKey]: FieldPairs })[
+              fieldParsersKey
+            ];
+            const preCompleted = preCompleteAndRegisterDependencies(
               state as Record<string | symbol, unknown>,
-              (parser as {
-                [fieldParsersKey]: ReadonlyArray<
-                  readonly [string | symbol, Parser<Mode, unknown, unknown>]
-                >;
-              })[fieldParsersKey],
+              pairs,
               runtime.registry,
               childExec,
             );
+            // Only pass cache when field names are unique.  Inner merges
+            // with duplicate output keys would collapse branch-specific
+            // results in the flat map.
+            return fieldPairsHaveUniqueKeys(pairs) ? preCompleted : undefined;
           }
-          return new Map<string | symbol, unknown>();
+          return undefined;
         });
 
         // Phase 2: Resolve deferred parse states across the entire merged
@@ -6028,13 +6064,16 @@ export function merge(
         for (let i = 0; i < syncParsers.length; i++) {
           const parser = syncParsers[i];
           const parserState = extractCompleteState(parser, resolvedState, i);
+          const cache = perChildCache[i];
           const result = unwrapCompleteResult(
             parser.complete(
               parserState as Parameters<typeof parser.complete>[0],
-              {
-                ...childExec,
-                preCompletedByParser: perChildPreCompleted[i],
-              } as ExecutionContext,
+              cache !== undefined
+                ? {
+                  ...childExec,
+                  preCompletedByParser: cache,
+                } as ExecutionContext
+                : childExec,
             ),
           );
           if (!result.success) return result;
@@ -6087,23 +6126,32 @@ export function merge(
           ...exec,
           dependencyRuntime: runtime,
         } as ExecutionContext;
-        const perChildPreCompleted: Map<string | symbol, unknown>[] = [];
+        type AsyncFieldPairs = ReadonlyArray<
+          readonly [string | symbol, Parser<Mode, unknown, unknown>]
+        >;
+        const perChildCache: (
+          | ReadonlyMap<
+            string | symbol,
+            unknown
+          >
+          | undefined
+        )[] = [];
         for (const parser of parsers) {
           if (fieldParsersKey in parser) {
-            perChildPreCompleted.push(
-              await preCompleteAndRegisterDependenciesAsync(
-                state as Record<string | symbol, unknown>,
-                (parser as {
-                  [fieldParsersKey]: ReadonlyArray<
-                    readonly [string | symbol, Parser<Mode, unknown, unknown>]
-                  >;
-                })[fieldParsersKey],
-                runtime.registry,
-                childExec,
-              ),
+            const pairs = (parser as { [fieldParsersKey]: AsyncFieldPairs })[
+              fieldParsersKey
+            ];
+            const preCompleted = await preCompleteAndRegisterDependenciesAsync(
+              state as Record<string | symbol, unknown>,
+              pairs,
+              runtime.registry,
+              childExec,
+            );
+            perChildCache.push(
+              fieldPairsHaveUniqueKeys(pairs) ? preCompleted : undefined,
             );
           } else {
-            perChildPreCompleted.push(new Map<string | symbol, unknown>());
+            perChildCache.push(undefined);
           }
         }
 
@@ -6120,13 +6168,16 @@ export function merge(
         for (let i = 0; i < parsers.length; i++) {
           const parser = parsers[i];
           const parserState = extractCompleteState(parser, resolvedState, i);
+          const asyncCache = perChildCache[i];
           const result = unwrapCompleteResult(
             await parser.complete(
               parserState as Parameters<typeof parser.complete>[0],
-              {
-                ...childExec,
-                preCompletedByParser: perChildPreCompleted[i],
-              } as ExecutionContext,
+              asyncCache !== undefined
+                ? {
+                  ...childExec,
+                  preCompletedByParser: asyncCache,
+                } as ExecutionContext
+                : childExec,
             ),
           );
           if (!result.success) return result;
