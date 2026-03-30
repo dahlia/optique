@@ -3613,9 +3613,11 @@ function* pendingDependencyDefaults(
       ? (context.state as Record<string | symbol, unknown>)[field]
       : undefined;
 
-    const annotatedFieldState = fieldState == null
-      ? getAnnotatedFieldState(context.state, field, fieldParser)
-      : getAnnotatedFieldState(context.state, field, fieldParser);
+    const annotatedFieldState = getAnnotatedFieldState(
+      context.state,
+      field,
+      fieldParser,
+    );
 
     if (
       fieldParser.dependencyMetadata?.source?.getMissingSourceValue != null &&
@@ -3875,9 +3877,11 @@ function preCompleteAndRegisterDependencies(
     }
 
     const fieldState = state[field];
-    const annotatedFieldState = fieldState == null
-      ? getAnnotatedFieldState(state, field, fieldParser)
-      : getAnnotatedFieldState(state, field, fieldParser);
+    const annotatedFieldState = getAnnotatedFieldState(
+      state,
+      field,
+      fieldParser,
+    );
     if (
       fieldParser.dependencyMetadata?.source?.getMissingSourceValue != null &&
       isUnmatchedDependencyState(fieldState, fieldParser)
@@ -3998,9 +4002,11 @@ async function preCompleteAndRegisterDependenciesAsync(
     }
 
     const fieldState = state[field];
-    const annotatedFieldState = fieldState == null
-      ? getAnnotatedFieldState(state, field, fieldParser)
-      : getAnnotatedFieldState(state, field, fieldParser);
+    const annotatedFieldState = getAnnotatedFieldState(
+      state,
+      field,
+      fieldParser,
+    );
     if (
       fieldParser.dependencyMetadata?.source?.getMissingSourceValue != null &&
       isUnmatchedDependencyState(fieldState, fieldParser)
