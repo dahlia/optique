@@ -4594,4 +4594,42 @@ describe("top-level option()/argument() with derived parsers", () => {
     assert.equal(result.value, "debug");
     assert.equal(callCount, 1);
   });
+
+  test("parseAsync top-level deriveAsync() resolves via runtime defaults", async () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.deriveAsync({
+      metavar: "LEVEL",
+      factory: (m) =>
+        asyncChoice(
+          m === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = option("--level", level);
+    const valid = await parseAsync(parser, ["--level", "debug"]);
+    assert.ok(valid.success);
+    assert.equal(valid.value, "debug");
+    const invalid = await parseAsync(parser, ["--level", "silent"]);
+    assert.ok(!invalid.success);
+  });
+
+  test("suggestAsync top-level deriveAsync() with DependencySource", async () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.deriveAsync({
+      metavar: "LEVEL",
+      factory: (m) =>
+        asyncChoice(
+          m === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = option("--level", level);
+    const suggestions = await suggestAsync(parser, ["--level", "d"]);
+    const texts = suggestions.map((s) => "text" in s ? s.text : "");
+    assert.ok(texts.includes("debug"));
+  });
 });
