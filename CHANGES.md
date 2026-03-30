@@ -27,7 +27,7 @@ To be released.
     `suggestAsync()` now create a `DependencyRuntimeContext` and resolve
     deferred dependency states before calling `complete()`, aligning
     top-level parsing with the construct-owned dependency runtime model.
-    User-facing behavior is unchanged.  [[#750], [#754]]
+    User-facing behavior is unchanged.  [[#750], [#754], [#764]]
 
  -  Fixed `withDefault()` default thunks being evaluated more than once in
     nested `merge()` compositions.  When an outer `merge()` Phase 1 had
@@ -1407,6 +1407,7 @@ To be released.
 [#761]: https://github.com/dahlia/optique/pull/761
 [#762]: https://github.com/dahlia/optique/issues/762
 [#763]: https://github.com/dahlia/optique/pull/763
+[#764]: https://github.com/dahlia/optique/pull/764
 
 ### @optique/config
 
