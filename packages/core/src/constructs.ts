@@ -6084,12 +6084,10 @@ export function merge(
           const result = unwrapCompleteResult(
             parser.complete(
               parserState as Parameters<typeof parser.complete>[0],
-              cache !== undefined
-                ? {
-                  ...childExec,
-                  preCompletedByParser: cache,
-                } as ExecutionContext
-                : childExec,
+              {
+                ...childExec,
+                preCompletedByParser: cache,
+              } as ExecutionContext,
             ),
           );
           if (!result.success) return result;
@@ -6188,12 +6186,10 @@ export function merge(
           const result = unwrapCompleteResult(
             await parser.complete(
               parserState as Parameters<typeof parser.complete>[0],
-              asyncCache !== undefined
-                ? {
-                  ...childExec,
-                  preCompletedByParser: asyncCache,
-                } as ExecutionContext
-                : childExec,
+              {
+                ...childExec,
+                preCompletedByParser: asyncCache,
+              } as ExecutionContext,
             ),
           );
           if (!result.success) return result;
