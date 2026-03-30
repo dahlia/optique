@@ -28,7 +28,7 @@ To be released.
     already seeded a dependency source value, nested `object()`/`merge()`
     children would re-evaluate the same default thunk during their own
     Phase 1.  Non-idempotent thunks (e.g., with side effects) could produce
-    inconsistent values.  [[#762]]
+    inconsistent values.  [[#750], [#762], [#763]]
 
  -  `Parser.complete()` and `Parser.shouldDeferCompletion()` now accept an
     optional `ExecutionContext` parameter.  All built-in parser
@@ -1399,6 +1399,7 @@ To be released.
 [#760]: https://github.com/dahlia/optique/pull/760
 [#761]: https://github.com/dahlia/optique/pull/761
 [#762]: https://github.com/dahlia/optique/issues/762
+[#763]: https://github.com/dahlia/optique/pull/763
 
 ### @optique/config
 
