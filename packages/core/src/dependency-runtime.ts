@@ -513,17 +513,49 @@ export function collectExplicitSourceValues(
     if (meta.source.extractSourceValue == null) continue;
 
     const result = meta.source.extractSourceValue(node.state);
-    // undefined = state doesn't contain a source result (unpopulated).
-    // { success: false } = source was provided but failed validation.
-    // { success: true, value } = source value (value may be undefined).
-    if (result == null) continue;
-    if (result.success) {
-      runtime.registerSource(meta.source.sourceId, result.value, "cli");
-    } else {
-      // Mark the source as explicitly failed so that derived parsers
-      // do not fall back to defaults for this source.
-      runtime.markSourceFailed(meta.source.sourceId);
-    }
+    if (result instanceof Promise) continue;
+    registerExplicitSourceValue(meta.source.sourceId, result, runtime);
+  }
+}
+
+function registerExplicitSourceValue(
+  sourceId: symbol,
+  result: ValueParserResult<unknown> | undefined,
+  runtime: DependencyRuntimeContext,
+): void {
+  // undefined = state doesn't contain a source result (unpopulated).
+  // { success: false } = source was provided but failed validation.
+  // { success: true, value } = source value (value may be undefined).
+  if (result == null) return;
+  if (result.success) {
+    runtime.registerSource(sourceId, result.value, "cli");
+  } else {
+    // Mark the source as explicitly failed so that derived parsers
+    // do not fall back to defaults for this source.
+    runtime.markSourceFailed(sourceId);
+  }
+}
+
+/**
+ * Async version of {@link collectExplicitSourceValues}.
+ * Awaits async `extractSourceValue` results.
+ *
+ * @param nodes The runtime nodes to inspect.
+ * @param runtime The dependency runtime context.
+ * @internal
+ * @since 1.0.0
+ */
+export async function collectExplicitSourceValuesAsync(
+  nodes: readonly RuntimeNode[],
+  runtime: DependencyRuntimeContext,
+): Promise<void> {
+  for (const node of nodes) {
+    const meta = node.parser.dependencyMetadata;
+    if (meta?.source == null) continue;
+    if (meta.source.extractSourceValue == null) continue;
+
+    const result = await meta.source.extractSourceValue(node.state);
+    registerExplicitSourceValue(meta.source.sourceId, result, runtime);
   }
 }
 

@@ -838,7 +838,10 @@ export function bindConfig<
         readonly source?: {
           readonly extractSourceValue: (
             state: unknown,
-          ) => Result<unknown> | undefined;
+          ) =>
+            | Result<unknown>
+            | Promise<Result<unknown> | undefined>
+            | undefined;
         };
       };
     }

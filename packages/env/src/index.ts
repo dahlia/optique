@@ -419,7 +419,10 @@ export function bindEnv<
         readonly source?: {
           readonly extractSourceValue: (
             state: unknown,
-          ) => ValueParserResult<unknown> | undefined;
+          ) =>
+            | ValueParserResult<unknown>
+            | Promise<ValueParserResult<unknown> | undefined>
+            | undefined;
         };
       };
     }
@@ -446,7 +449,7 @@ export function bindEnv<
               parser,
               state.cliState,
             );
-            return result instanceof Promise ? undefined : result;
+            return result;
           },
         },
       },

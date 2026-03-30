@@ -10,6 +10,7 @@ import {
   buildRuntimeNodesFromArray,
   buildRuntimeNodesFromPairs,
   collectExplicitSourceValues,
+  collectExplicitSourceValuesAsync,
   createDependencyFingerprint,
   createDependencyRuntimeContext,
   createReplayKey,
@@ -318,6 +319,39 @@ describe("collectExplicitSourceValues", () => {
       state: sourceState,
     }];
     collectExplicitSourceValues(nodes, runtime);
+    assert.ok(runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), "prod");
+  });
+
+  test("awaits async source extractors in async mode", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const sourceState = createDependencySourceState(
+      { success: true, value: "prod" } as ValueParserResult<string>,
+      sourceId,
+    );
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            extractSourceValue: (state: unknown) =>
+              Promise.resolve(
+                bareExtract(state as ValueParserResult<unknown>),
+              ),
+            preservesSourceValue: true,
+          },
+        },
+      },
+      state: sourceState,
+    }];
+
+    collectExplicitSourceValues(nodes, runtime);
+    assert.ok(!runtime.hasSource(sourceId));
+
+    await collectExplicitSourceValuesAsync(nodes, runtime);
     assert.ok(runtime.hasSource(sourceId));
     assert.equal(runtime.getSource(sourceId), "prod");
   });

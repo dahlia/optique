@@ -1692,7 +1692,10 @@ export function multiple<M extends Mode, TValue, TState>(
           preservesSourceValue: false,
           extractSourceValue: (
             state: unknown,
-          ): ValueParserResult<unknown> | undefined => {
+          ):
+            | ValueParserResult<unknown>
+            | Promise<ValueParserResult<unknown> | undefined>
+            | undefined => {
             if (!Array.isArray(state)) {
               return innerSource.extractSourceValue(state);
             }

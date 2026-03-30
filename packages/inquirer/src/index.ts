@@ -1332,7 +1332,10 @@ export function prompt<M extends Mode, TValue, TState>(
         readonly source?: {
           readonly extractSourceValue: (
             state: unknown,
-          ) => ValueParserResult<unknown> | undefined;
+          ) =>
+            | ValueParserResult<unknown>
+            | Promise<ValueParserResult<unknown> | undefined>
+            | undefined;
         };
       };
     }

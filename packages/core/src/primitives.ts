@@ -2,6 +2,7 @@ import {
   type DerivedValueParser,
   getDefaultValuesFunction,
   getDependencyIds,
+  getSnapshottedDefaultDependencyValues,
   isDerivedValueParser,
   suggestWithDependency,
 } from "./dependency.ts";
@@ -116,9 +117,9 @@ function buildTraceEntry<M extends Mode, T>(
     metavar: valueParser.metavar,
   };
   if (isDerivedValueParser(valueParser)) {
-    const defaults = getDefaultValuesFunction(
-      valueParser as DerivedValueParser<M, T, unknown>,
-    )?.();
+    const defaults = getSnapshottedDefaultDependencyValues(
+      parseResult as ValueParserResult<T>,
+    );
     if (defaults != null) {
       return { ...entry, defaultDependencyValues: defaults };
     }

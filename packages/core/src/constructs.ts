@@ -14,6 +14,7 @@ import {
   buildRuntimeNodesFromArray,
   buildRuntimeNodesFromPairs,
   collectExplicitSourceValues,
+  collectExplicitSourceValuesAsync,
   collectSourcesFromState,
   createDependencyRuntimeContext,
   resolveStateWithRuntime,
@@ -3495,7 +3496,7 @@ async function* suggestObjectAsync<
       : {}) as Record<PropertyKey, unknown>,
     context.exec?.path,
   );
-  collectExplicitSourceValues(nodes, runtime);
+  await collectExplicitSourceValuesAsync(nodes, runtime);
 
   // Collect dependency sources from state tree.
   if (context.state && typeof context.state === "object") {
@@ -5047,7 +5048,7 @@ export function object<
             const fieldParser = parsers[field];
             annotatedState[fieldKey] = getFieldState(field, fieldParser);
           }
-          collectExplicitSourceValues(
+          await collectExplicitSourceValuesAsync(
             buildRuntimeNodesFromPairs(
               asyncParserPairs,
               annotatedState,
@@ -5295,7 +5296,7 @@ async function* suggestTupleAsync(
     context.dependencyRegistry?.clone(),
   );
   if (stateArray && Array.isArray(stateArray)) {
-    collectExplicitSourceValues(
+    await collectExplicitSourceValuesAsync(
       buildRuntimeNodesFromArray(parsers, stateArray, context.exec?.path),
       runtime,
     );
@@ -5825,7 +5826,7 @@ export function tuple<
             runtime.registry,
             childExec,
           );
-          collectExplicitSourceValues(
+          await collectExplicitSourceValuesAsync(
             buildRuntimeNodesFromArray(parsers, stateArray, exec?.path),
             runtime,
           );
@@ -6653,7 +6654,7 @@ export function merge(
           ...exec,
           dependencyRuntime: runtime,
         } as ExecutionContext;
-        collectExplicitSourceValues(
+        await collectExplicitSourceValuesAsync(
           buildRuntimeNodesFromPairs(
             mergedFieldParsers,
             state as Record<PropertyKey, unknown>,
@@ -6804,7 +6805,7 @@ export function merge(
           );
           const childFieldPairs = collectChildFieldParsers(parsers);
           if (context.state && typeof context.state === "object") {
-            collectExplicitSourceValues(
+            await collectExplicitSourceValuesAsync(
               buildRuntimeNodesFromPairs(
                 childFieldPairs,
                 context.state as Record<PropertyKey, unknown>,
@@ -9023,7 +9024,7 @@ export function conditional(
     const runtime = createDependencyRuntimeContext(
       exec?.dependencyRegistry?.clone(),
     );
-    collectExplicitSourceValues(
+    await collectExplicitSourceValuesAsync(
       buildRuntimeNodesFromPairs(
         [
           ["_discriminator", discriminator],
@@ -9249,7 +9250,7 @@ export function conditional(
       const runtime = createDependencyRuntimeContext(
         context.dependencyRegistry?.clone(),
       );
-      collectExplicitSourceValues(
+      await collectExplicitSourceValuesAsync(
         buildRuntimeNodesFromPairs(
           defaultBranch == null
             ? [["\u005fdiscriminator", discriminator]] as const
@@ -9318,7 +9319,7 @@ export function conditional(
         _discriminator: state.discriminatorState,
         _branch: state.branchState,
       };
-      collectExplicitSourceValues(
+      await collectExplicitSourceValuesAsync(
         buildRuntimeNodesFromPairs(
           [
             ["_discriminator", discriminator],

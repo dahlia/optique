@@ -25,6 +25,7 @@ import { dispatchByMode } from "./mode-dispatch.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
 import {
   collectExplicitSourceValues,
+  collectExplicitSourceValuesAsync,
   createDependencyRuntimeContext,
   type DependencyRuntimeContext,
 } from "./dependency-runtime.ts";
@@ -975,6 +976,31 @@ function withSuggestRuntime<TState>(
   };
 }
 
+async function withSuggestRuntimeAsync<TState>(
+  parser: Parser<Mode, unknown, TState>,
+  context: ParserContext<TState>,
+): Promise<ParserContext<TState>> {
+  const runtime = createDependencyRuntimeContext();
+  if (parser.dependencyMetadata?.source != null) {
+    await collectExplicitSourceValuesAsync([{
+      path: context.exec?.path ?? [],
+      parser,
+      state: context.state,
+    }], runtime);
+  }
+  return {
+    ...context,
+    dependencyRegistry: runtime.registry,
+    exec: context.exec
+      ? {
+        ...context.exec,
+        dependencyRuntime: runtime,
+        dependencyRegistry: runtime.registry,
+      }
+      : undefined,
+  };
+}
+
 /**
  * Generates command-line suggestions based on current parsing state.
  * This function processes the input arguments up to the last argument,
@@ -1021,7 +1047,7 @@ export async function suggestAsync<T>(
     if (!result.success) {
       // If parsing fails, we might still be able to provide suggestions
       // based on the current state. Try to get suggestions from the parser.
-      const ctx = withSuggestRuntime(parser, context);
+      const ctx = await withSuggestRuntimeAsync(parser, context);
       const suggestions: Suggestion[] = [];
       for await (const suggestion of parser.suggest(ctx, prefix)) {
         suggestions.push(suggestion);
@@ -1034,7 +1060,7 @@ export async function suggestAsync<T>(
   }
 
   // Get suggestions from the parser with the prefix
-  const ctx = withSuggestRuntime(parser, context);
+  const ctx = await withSuggestRuntimeAsync(parser, context);
   const suggestions: Suggestion[] = [];
   for await (const suggestion of parser.suggest(ctx, prefix)) {
     suggestions.push(suggestion);

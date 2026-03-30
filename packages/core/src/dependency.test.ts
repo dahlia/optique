@@ -4524,6 +4524,77 @@ describe("top-level option()/argument() with derived parsers", () => {
     assert.ok(!invalid.success);
   });
 
+  test("partial dependency defaults are snapshotted once during parse", () => {
+    let defaultCallCount = 0;
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const format = dependency(choice(["json", "yaml"] as const));
+    const config = deriveFromSync({
+      metavar: "CONFIG",
+      dependencies: [mode, format] as const,
+      factory: (m, f) =>
+        choice(
+          m === "prod" && f === "yaml"
+            ? (["prod.yaml"] as const)
+            : (["dev.json"] as const),
+        ),
+      defaultValues: () => {
+        defaultCallCount++;
+        return [
+          "dev" as const,
+          defaultCallCount === 1 ? "json" as const : "yaml" as const,
+        ] as const;
+      },
+    });
+    const parser = object({
+      mode: option("--mode", mode),
+      config: option("--config", config),
+    });
+
+    const result = parseSync(parser, ["--mode", "dev", "--config", "dev.json"]);
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "dev");
+    assert.equal(result.value.config, "dev.json");
+    assert.equal(defaultCallCount, 1);
+  });
+
+  test("partial dependency defaults are snapshotted once during async parse", async () => {
+    let defaultCallCount = 0;
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const format = dependency(choice(["json", "yaml"] as const));
+    const config = deriveFromSync({
+      metavar: "CONFIG",
+      dependencies: [mode, format] as const,
+      factory: (m, f) =>
+        choice(
+          m === "prod" && f === "yaml"
+            ? (["prod.yaml"] as const)
+            : (["dev.json"] as const),
+        ),
+      defaultValues: () => {
+        defaultCallCount++;
+        return [
+          "dev" as const,
+          defaultCallCount === 1 ? "json" as const : "yaml" as const,
+        ] as const;
+      },
+    });
+    const parser = object({
+      mode: option("--mode", mode),
+      config: option("--config", config),
+    });
+
+    const result = await parseAsync(parser, [
+      "--mode",
+      "dev",
+      "--config",
+      "dev.json",
+    ]);
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "dev");
+    assert.equal(result.value.config, "dev.json");
+    assert.equal(defaultCallCount, 1);
+  });
+
   test("suggestSync top-level option with DependencySource", () => {
     const src = dependency(choice(["dev", "prod"] as const));
     const parser = option("--mode", src);

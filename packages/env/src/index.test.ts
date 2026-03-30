@@ -9,7 +9,7 @@ import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Parser } from "@optique/core/parser";
-import { parse, suggestSync } from "@optique/core/parser";
+import { parse, suggestAsync, suggestSync } from "@optique/core/parser";
 import { optional } from "@optique/core/modifiers";
 import { fail, flag, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
@@ -21,6 +21,23 @@ import {
 } from "./index.ts";
 
 const sourcePath = fileURLToPath(new URL("./index.ts", import.meta.url));
+
+function asyncChoice<const T extends readonly string[]>(
+  choices: T,
+): ValueParser<"async", T[number]> {
+  const parser = choice(choices);
+  return {
+    ...parser,
+    $mode: "async",
+    parse(input: string) {
+      return Promise.resolve(parser.parse(input));
+    },
+    async *suggest(prefix: string) {
+      if (parser.suggest == null) return;
+      yield* parser.suggest(prefix);
+    },
+  };
+}
 
 function getJsDocFor(sourceText: string, functionName: string): string {
   const declaration = `export function ${functionName}`;
@@ -1685,6 +1702,80 @@ describe("bindEnv() with dependency sources", () => {
     assert.ok(result.success);
     assert.equal(result.value.mode, undefined);
     assert.equal(result.value.level, "debug");
+  });
+
+  it("propagates async env value as dependency to derived parser (parse)", async () => {
+    const asyncMode = dependency(asyncChoice(["dev", "prod"] as const));
+    const asyncLevel = asyncMode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value: "dev" | "prod") =>
+        choice(
+          value === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = object({
+      mode: bindEnv(option("--mode", asyncMode), {
+        context: envContext,
+        key: "MODE",
+        parser: asyncChoice(["dev", "prod"] as const),
+      }),
+      level: option("--level", asyncLevel),
+    });
+
+    const result = await parse(parser, ["--level", "silent"], {
+      annotations,
+    });
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "prod");
+    assert.equal(result.value.level, "silent");
+  });
+
+  it("propagates async env value as dependency to derived parser (suggest)", async () => {
+    const asyncMode = dependency(asyncChoice(["dev", "prod"] as const));
+    const asyncLevel = asyncMode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value: "dev" | "prod") =>
+        choice(
+          value === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = object({
+      mode: bindEnv(option("--mode", asyncMode), {
+        context: envContext,
+        key: "MODE",
+        parser: asyncChoice(["dev", "prod"] as const),
+      }),
+      level: option("--level", asyncLevel),
+    });
+
+    const suggestions = await suggestAsync(parser, ["--level", "s"], {
+      annotations,
+    });
+    const texts = suggestions
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+    assert.ok(texts.includes("silent"));
+    assert.ok(texts.includes("strict"));
+    assert.ok(!texts.includes("debug"));
+    assert.ok(!texts.includes("verbose"));
   });
 });
 

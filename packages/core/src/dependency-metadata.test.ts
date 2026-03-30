@@ -11,6 +11,7 @@ import type { NonEmptyString } from "./nonempty.ts";
 import {
   composeDependencyMetadata,
   extractDependencyMetadata,
+  type ParserDependencyMetadata,
 } from "./dependency-metadata.ts";
 import { createDependencySourceState } from "./dependency.ts";
 
@@ -38,6 +39,16 @@ function createDerivedLogLevel(env: ReturnType<typeof createEnvSource>) {
       }),
     defaultValue: (): Env => "dev",
   });
+}
+
+async function resolveExtractResult(
+  result:
+    | ReturnType<
+      NonNullable<ParserDependencyMetadata["source"]>["extractSourceValue"]
+    >
+    | undefined,
+) {
+  return await result;
 }
 
 function createDerivedFromMulti(
@@ -73,7 +84,7 @@ describe("extractDependencyMetadata", () => {
     assert.equal(metadata.derived, undefined);
   });
 
-  test("extractSourceValue returns result from DependencySourceState", () => {
+  test("extractSourceValue returns result from DependencySourceState", async () => {
     const env = createEnvSource();
     const metadata = extractDependencyMetadata(env);
     assert.ok(metadata?.source?.extractSourceValue !== undefined);
@@ -81,13 +92,15 @@ describe("extractDependencyMetadata", () => {
       { success: true, value: "prod" },
       metadata.source.sourceId,
     );
-    const result = metadata.source.extractSourceValue(sourceState);
+    const result = await resolveExtractResult(
+      metadata.source.extractSourceValue(sourceState),
+    );
     assert.ok(result !== undefined);
     assert.ok(result.success);
     if (result.success) assert.equal(result.value, "prod");
   });
 
-  test("extractSourceValue returns failed result for failed parse", () => {
+  test("extractSourceValue returns failed result for failed parse", async () => {
     const env = createEnvSource();
     const metadata = extractDependencyMetadata(env);
     assert.ok(metadata?.source?.extractSourceValue !== undefined);
@@ -95,24 +108,31 @@ describe("extractDependencyMetadata", () => {
       { success: false, error: undefined! },
       metadata.source.sourceId,
     );
-    const result = metadata.source.extractSourceValue(sourceState);
+    const result = await resolveExtractResult(
+      metadata.source.extractSourceValue(sourceState),
+    );
     assert.ok(result !== undefined);
     assert.ok(!result.success);
   });
 
-  test("extractSourceValue preserves successful undefined value", () => {
-    const env = createEnvSource();
-    const metadata = extractDependencyMetadata(env);
-    assert.ok(metadata?.source?.extractSourceValue !== undefined);
-    const sourceState = createDependencySourceState(
-      { success: true, value: undefined },
-      metadata.source.sourceId,
-    );
-    const result = metadata.source.extractSourceValue(sourceState);
-    assert.ok(result !== undefined);
-    assert.ok(result.success);
-    if (result.success) assert.equal(result.value, undefined);
-  });
+  test(
+    "extractSourceValue preserves successful undefined value",
+    async () => {
+      const env = createEnvSource();
+      const metadata = extractDependencyMetadata(env);
+      assert.ok(metadata?.source?.extractSourceValue !== undefined);
+      const sourceState = createDependencySourceState(
+        { success: true, value: undefined },
+        metadata.source.sourceId,
+      );
+      const result = await resolveExtractResult(
+        metadata.source.extractSourceValue(sourceState),
+      );
+      assert.ok(result !== undefined);
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, undefined);
+    },
+  );
 
   test("extractSourceValue returns undefined for non-source state", () => {
     const env = createEnvSource();
@@ -299,7 +319,7 @@ describe("composeDependencyMetadata", () => {
     assert.ok(afterOptional.source?.getMissingSourceValue !== undefined);
   });
 
-  test("optional extractSourceValue unwraps [state]", () => {
+  test("optional extractSourceValue unwraps [state]", async () => {
     const env = createEnvSource();
     const inner = extractDependencyMetadata(env);
     assert.ok(inner !== undefined);
@@ -310,14 +330,16 @@ describe("composeDependencyMetadata", () => {
       composed.source.sourceId,
     );
     // optional wraps state in [state]
-    const result = composed.source.extractSourceValue([sourceState]);
+    const result = await resolveExtractResult(
+      composed.source.extractSourceValue([sourceState]),
+    );
     assert.ok(result !== undefined && result.success);
     if (result.success) assert.equal(result.value, "prod");
     // undefined inner state (not provided)
     assert.equal(composed.source.extractSourceValue(undefined), undefined);
   });
 
-  test("withDefault extractSourceValue unwraps [state]", () => {
+  test("withDefault extractSourceValue unwraps [state]", async () => {
     const env = createEnvSource();
     const inner = extractDependencyMetadata(env);
     assert.ok(inner !== undefined);
@@ -329,12 +351,14 @@ describe("composeDependencyMetadata", () => {
       { success: true, value: "prod" },
       composed.source.sourceId,
     );
-    const result = composed.source.extractSourceValue([sourceState]);
+    const result = await resolveExtractResult(
+      composed.source.extractSourceValue([sourceState]),
+    );
     assert.ok(result !== undefined && result.success);
     if (result.success) assert.equal(result.value, "prod");
   });
 
-  test("map extractSourceValue extracts pre-transform value", () => {
+  test("map extractSourceValue extracts pre-transform value", async () => {
     const env = createEnvSource();
     const inner = extractDependencyMetadata(env);
     assert.ok(inner !== undefined);
@@ -345,7 +369,9 @@ describe("composeDependencyMetadata", () => {
       composed.source.sourceId,
     );
     // map does not wrap state — inner state is passed through
-    const result = composed.source.extractSourceValue(sourceState);
+    const result = await resolveExtractResult(
+      composed.source.extractSourceValue(sourceState),
+    );
     assert.ok(result !== undefined && result.success);
     if (result.success) assert.equal(result.value, "prod");
   });

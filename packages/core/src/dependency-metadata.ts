@@ -55,7 +55,10 @@ export interface DependencySourceCapability {
    */
   readonly extractSourceValue: (
     state: unknown,
-  ) => ValueParserResult<unknown> | undefined;
+  ) =>
+    | ValueParserResult<unknown>
+    | Promise<ValueParserResult<unknown> | undefined>
+    | undefined;
 
   /**
    * When present, provides a missing-source value (e.g., from a
@@ -259,7 +262,11 @@ function extractFromBareState(
   return undefined;
 }
 
-type ExtractFn = (state: unknown) => ValueParserResult<unknown> | undefined;
+type ExtractResult =
+  | ValueParserResult<unknown>
+  | Promise<ValueParserResult<unknown> | undefined>
+  | undefined;
+type ExtractFn = (state: unknown) => ExtractResult;
 
 /**
  * Wraps an inner `extractSourceValue` to unwrap `[innerState]` first.
@@ -267,7 +274,7 @@ type ExtractFn = (state: unknown) => ValueParserResult<unknown> | undefined;
  * single-element array.
  */
 function unwrapArrayThenExtract(innerExtract: ExtractFn): ExtractFn {
-  return (state: unknown): ValueParserResult<unknown> | undefined => {
+  return (state: unknown): ExtractResult => {
     if (Array.isArray(state) && state.length === 1) {
       return innerExtract(state[0]);
     }
