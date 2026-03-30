@@ -22,7 +22,7 @@ To be released.
     raw user input from a shared `InputTrace` instead of relying on the old
     dependency-state wrapper protocol.  The runtime is shared across nested
     constructs via `ExecutionContext.dependencyRuntime`.  User-facing
-    behavior is unchanged.  [[#750], [#753], [#755], [#761]]
+    behavior is unchanged.  [[#750], [#753], [#755], [#761], [#765]]
 
  -  Top-level `parseSync()` and `parseAsync()` now create a
     `DependencyRuntimeContext` together with an `InputTrace`, so top-level
@@ -30,18 +30,18 @@ To be released.
     dependency replay model.  Top-level `suggestSync()` and `suggestAsync()`
     likewise build a dependency runtime from the current parser state so
     dependency-aware suggestions use the same registry model as
-    construct-owned parsers.  [[#750], [#754], [#755]]
+    construct-owned parsers.  [[#750], [#754], [#755], [#764], [#765]]
 
  -  Removed the last built-in uses of the old dependency-state bridge in
     `option()`, `argument()`, `optional()`, `withDefault()`, and `multiple()`.
     These parsers now keep plain parser-local state and rely on metadata,
     the shared runtime, and the input trace for dependency behavior.
-    [[#750], [#755]]
+    [[#750], [#755], [#765]]
 
  -  Defaults applied after `map()` no longer act as dependency-source
     fallbacks.  They affect only the mapped output value unless the
     underlying dependency source was provided explicitly.
-    [[#750], [#755]]
+    [[#750], [#755], [#765]]
 
  -  Fixed redundant replay of derived-parser factories when all dependency
     values came from defaults.  Previously, `resolveSingleDeferred()` always
@@ -49,7 +49,7 @@ To be released.
     identical to those already used for the preliminary result during
     `parse()`.  Non-idempotent factories (e.g., those building parsers from
     mutable state) could see a second evaluation that rejected input the
-    first evaluation accepted.  [[#750], [#754]]
+    first evaluation accepted.  [[#750], [#754], [#764]]
 
  -  Fixed `withDefault()` default thunks being evaluated more than once in
     nested `merge()` compositions.  When an outer `merge()` Phase 1 had
@@ -1430,6 +1430,8 @@ To be released.
 [#761]: https://github.com/dahlia/optique/pull/761
 [#762]: https://github.com/dahlia/optique/issues/762
 [#763]: https://github.com/dahlia/optique/pull/763
+[#764]: https://github.com/dahlia/optique/pull/764
+[#765]: https://github.com/dahlia/optique/pull/765
 
 ### @optique/config
 
