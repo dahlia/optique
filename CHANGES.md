@@ -23,11 +23,12 @@ To be released.
     via `ExecutionContext.dependencyRuntime`.  User-facing behavior is
     unchanged.  [[#750], [#753], [#761]]
 
- -  Top-level `parseSync()`, `parseAsync()`, `suggestSync()`, and
-    `suggestAsync()` now create a `DependencyRuntimeContext` and resolve
-    deferred dependency states before calling `complete()`, aligning
-    top-level parsing with the construct-owned dependency runtime model.
-    [[#750], [#754]]
+ -  Top-level `parseSync()` and `parseAsync()` now create a
+    `DependencyRuntimeContext` and resolve deferred dependency states before
+    calling `complete()`.  Top-level `suggestSync()` and `suggestAsync()` now
+    build a dependency runtime from the current parser state so that
+    dependency-aware suggestions use the same registry model as
+    construct-owned parsers.  [[#750], [#754]]
 
  -  Fixed redundant replay of derived-parser factories when all dependency
     values came from defaults.  Previously, `resolveSingleDeferred()` always
