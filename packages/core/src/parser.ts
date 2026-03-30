@@ -23,7 +23,14 @@ import {
 } from "./annotations.ts";
 import { dispatchByMode } from "./mode-dispatch.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
-import type { DependencyRuntimeContext } from "./dependency-runtime.ts";
+import {
+  collectSourcesFromState,
+  createDependencyRuntimeContext,
+  type DependencyRuntimeContext,
+  resolveStateWithRuntime,
+  resolveStateWithRuntimeAsync,
+} from "./dependency-runtime.ts";
+import { isDeferredParseState } from "./dependency.ts";
 
 export type { ParseOptions };
 
@@ -701,8 +708,24 @@ export function parseSync<T>(
       };
     }
   } while (context.buffer.length > 0);
-  const completeExec: ExecutionContext = { ...exec, phase: "complete" };
-  const endResult = parser.complete(context.state, completeExec);
+  // Create dependency runtime for top-level resolution, mirroring the
+  // construct-owned model.  Only resolve the immediate state when it is
+  // a DeferredParseState (i.e., the top-level parser is a primitive like
+  // option() or argument() with a derived value parser).  Construct
+  // parsers (object, tuple, merge, concat) handle their own multi-phase
+  // dependency pipeline in complete(), so their state must not be
+  // pre-resolved here.
+  const runtime = createDependencyRuntimeContext();
+  const resolvedState = isDeferredParseState(context.state)
+    ? resolveStateWithRuntime(context.state, runtime)
+    : context.state;
+  const completeExec: ExecutionContext = {
+    ...exec,
+    phase: "complete",
+    dependencyRuntime: runtime,
+    dependencyRegistry: runtime.registry,
+  };
+  const endResult = parser.complete(resolvedState, completeExec);
   return endResult.success
     ? {
       success: true,
@@ -783,8 +806,20 @@ export async function parseAsync<T>(
       };
     }
   } while (context.buffer.length > 0);
-  const completeExec: ExecutionContext = { ...exec, phase: "complete" };
-  const endResult = await parser.complete(context.state, completeExec);
+  // Create dependency runtime for top-level resolution, mirroring the
+  // construct-owned model.  Only resolve the immediate state when it is
+  // a DeferredParseState (primitive with a derived value parser).
+  const runtime = createDependencyRuntimeContext();
+  const resolvedState = isDeferredParseState(context.state)
+    ? await resolveStateWithRuntimeAsync(context.state, runtime)
+    : context.state;
+  const completeExec: ExecutionContext = {
+    ...exec,
+    phase: "complete",
+    dependencyRuntime: runtime,
+    dependencyRegistry: runtime.registry,
+  };
+  const endResult = await parser.complete(resolvedState, completeExec);
   return endResult.success
     ? {
       success: true,
@@ -890,7 +925,9 @@ export function suggestSync<T>(
     if (!result.success) {
       // If parsing fails, we might still be able to provide suggestions
       // based on the current state. Try to get suggestions from the parser.
-      return Array.from(parser.suggest(context, prefix));
+      return Array.from(
+        parser.suggest(withSuggestRuntime(context), prefix),
+      );
     }
     const previousBuffer = context.buffer;
     context = result.next;
@@ -898,7 +935,30 @@ export function suggestSync<T>(
   }
 
   // Get suggestions from the parser with the prefix
-  return Array.from(parser.suggest(context, prefix));
+  return Array.from(
+    parser.suggest(withSuggestRuntime(context), prefix),
+  );
+}
+
+/**
+ * Creates a dependency runtime from the current parser state and returns
+ * a context with the populated registry.  Used by top-level suggest
+ * functions to mirror the construct-owned model where suggest() receives
+ * a context with a dependency registry.
+ * @internal
+ */
+function withSuggestRuntime<TState>(
+  context: ParserContext<TState>,
+): ParserContext<TState> {
+  const runtime = createDependencyRuntimeContext();
+  collectSourcesFromState(context.state, runtime);
+  return {
+    ...context,
+    dependencyRegistry: runtime.registry,
+    exec: context.exec
+      ? { ...context.exec, dependencyRegistry: runtime.registry }
+      : undefined,
+  };
 }
 
 /**
@@ -942,8 +1002,9 @@ export async function suggestAsync<T>(
     if (!result.success) {
       // If parsing fails, we might still be able to provide suggestions
       // based on the current state. Try to get suggestions from the parser.
+      const ctx = withSuggestRuntime(context);
       const suggestions: Suggestion[] = [];
-      for await (const suggestion of parser.suggest(context, prefix)) {
+      for await (const suggestion of parser.suggest(ctx, prefix)) {
         suggestions.push(suggestion);
       }
       return suggestions;
@@ -954,8 +1015,9 @@ export async function suggestAsync<T>(
   }
 
   // Get suggestions from the parser with the prefix
+  const ctx = withSuggestRuntime(context);
   const suggestions: Suggestion[] = [];
-  for await (const suggestion of parser.suggest(context, prefix)) {
+  for await (const suggestion of parser.suggest(ctx, prefix)) {
     suggestions.push(suggestion);
   }
   return suggestions;

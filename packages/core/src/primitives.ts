@@ -1092,11 +1092,10 @@ export function option<M extends Mode, T>(
             : message`Missing option ${eOptionNames(optionNames)}.`,
         };
       }
-      // Handle DeferredParseState: use the preliminary result that was
-      // already computed with default dependency values during parse().
-      // At the construct level (object(), tuple(), etc.), deferred states
-      // are resolved before complete() is called, so this branch is only
-      // reached at the top level where no registry is available.
+      // Handle DeferredParseState: residual fallback for compatibility.
+      // Both top-level and construct-level parsing now resolve deferred
+      // states before calling complete(), so this branch should not be
+      // reached during normal operation.
       if (isDeferredParseState<T>(state)) {
         const preliminaryResult = state.preliminaryResult;
         if (preliminaryResult.success) return preliminaryResult;
@@ -1791,11 +1790,10 @@ export function argument<M extends Mode, T>(
             }, but too few arguments.`,
         };
       }
-      // Handle DeferredParseState: use the preliminary result that was
-      // already computed with default dependency values during parse().
-      // At the construct level (object(), tuple(), etc.), deferred states
-      // are resolved before complete() is called, so this branch is only
-      // reached at the top level where no registry is available.
+      // Handle DeferredParseState: residual fallback for compatibility.
+      // Both top-level and construct-level parsing now resolve deferred
+      // states before calling complete(), so this branch should not be
+      // reached during normal operation.
       if (isDeferredParseState<T>(state)) {
         const preliminaryResult = state.preliminaryResult;
         if (preliminaryResult.success) return preliminaryResult;
