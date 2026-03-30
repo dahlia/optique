@@ -23,6 +23,12 @@ To be released.
     via `ExecutionContext.dependencyRuntime`.  User-facing behavior is
     unchanged.  [[#750], [#753], [#761]]
 
+ -  Top-level `parseSync()`, `parseAsync()`, `suggestSync()`, and
+    `suggestAsync()` now create a `DependencyRuntimeContext` and resolve
+    deferred dependency states before calling `complete()`, aligning
+    top-level parsing with the construct-owned dependency runtime model.
+    User-facing behavior is unchanged.  [[#750], [#754]]
+
  -  Fixed `withDefault()` default thunks being evaluated more than once in
     nested `merge()` compositions.  When an outer `merge()` Phase 1 had
     already seeded a dependency source value, nested `object()`/`merge()`
@@ -1392,6 +1398,7 @@ To be released.
 [#751]: https://github.com/dahlia/optique/issues/751
 [#752]: https://github.com/dahlia/optique/issues/752
 [#753]: https://github.com/dahlia/optique/issues/753
+[#754]: https://github.com/dahlia/optique/issues/754
 [#756]: https://github.com/dahlia/optique/pull/756
 [#757]: https://github.com/dahlia/optique/pull/757
 [#758]: https://github.com/dahlia/optique/pull/758
