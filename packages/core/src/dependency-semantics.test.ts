@@ -19,7 +19,7 @@ import {
   suggestSync,
 } from "./parser.ts";
 import { choice } from "./valueparser.ts";
-import { concat, merge, object, tuple } from "./constructs.ts";
+import { concat, merge, object, or, tuple } from "./constructs.ts";
 import { argument, option } from "./primitives.ts";
 import { map, multiple, optional, withDefault } from "./modifiers.ts";
 import { message } from "./message.ts";
@@ -497,6 +497,8 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     const texts = literalTexts(suggestions);
     assert.ok(texts.includes("info"), `Expected "info" in ${texts}`);
     assert.ok(texts.includes("warn"), `Expected "warn" in ${texts}`);
+    assert.ok(!texts.includes("debug"), `Unexpected "debug" in ${texts}`);
+    assert.ok(!texts.includes("trace"), `Unexpected "trace" in ${texts}`);
   });
 
   test("B.4b concat() — async suggest uses explicit source from multiple()", async () => {
@@ -515,6 +517,23 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     const texts = literalTexts(suggestions);
     assert.ok(texts.includes("info"), `Expected "info" in ${texts}`);
     assert.ok(texts.includes("warn"), `Expected "warn" in ${texts}`);
+    assert.ok(!texts.includes("debug"), `Unexpected "debug" in ${texts}`);
+    assert.ok(!texts.includes("trace"), `Unexpected "trace" in ${texts}`);
+  });
+
+  test("B.4c object(tuple()) — preserves seeded sources in child contexts", () => {
+    const env = createEnvSource();
+    const log = createDerivedLogLevel(env);
+    const parser = object({
+      env: option("--env", env),
+      nested: tuple([option("--log", log)]),
+    });
+    const suggestions = suggestSync(parser, ["--env", "prod", "--log", ""]);
+    const texts = literalTexts(suggestions);
+    assert.ok(texts.includes("info"), `Expected "info" in ${texts}`);
+    assert.ok(texts.includes("warn"), `Expected "warn" in ${texts}`);
+    assert.ok(!texts.includes("debug"), `Unexpected "debug" in ${texts}`);
+    assert.ok(!texts.includes("trace"), `Unexpected "trace" in ${texts}`);
   });
 
   test("B.5 merge() — suggests with cross-child source", () => {
@@ -701,6 +720,22 @@ describe("C. Wrapper combinations: source wrappers", () => {
     assert.ok(result.success);
     assert.equal(result.value.env, "prod");
     assert.equal(result.value.log, "info");
+  });
+
+  test("C.4b optional(or(withDefault(source), withDefault(source))) — omitted exclusive source uses derived defaults", () => {
+    const env = createEnvSource();
+    const log = createDerivedLogLevel(env);
+    const parser = object({
+      env: optional(or(
+        withDefault(option("--env", env), "prod" as Env),
+        withDefault(option("--mode", env), "prod" as Env),
+      )),
+      log: option("--log", log),
+    });
+    const result = parseSync(parser, ["--log", "trace"]);
+    assert.ok(result.success);
+    assert.equal(result.value.env, undefined);
+    assert.equal(result.value.log, "trace");
   });
 
   test("C.5 map(source, f) — breaks source-value preservation", () => {

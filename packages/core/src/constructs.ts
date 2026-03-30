@@ -113,15 +113,18 @@ function withChildContext<TState>(
   usage?: Usage,
 ): ParserContext<TState> {
   const exec = withChildExecPath(context.exec, segment);
+  const dependencyRegistry = context.dependencyRegistry ??
+    exec?.dependencyRegistry;
   return {
     ...context,
     state,
     ...(usage != null ? { usage } : {}),
     ...(exec != null
       ? {
-        exec,
-        dependencyRegistry: exec.dependencyRegistry ??
-          context.dependencyRegistry,
+        exec: dependencyRegistry === exec.dependencyRegistry
+          ? exec
+          : { ...exec, dependencyRegistry },
+        dependencyRegistry,
       }
       : {}),
   };
@@ -896,8 +899,9 @@ function composeExclusiveDependencyMetadata(
   return {
     source: {
       ...sharedSource,
+      getMissingSourceValue: undefined,
       preservesSourceValue: sourceBranches.every((parser) =>
-        parser.dependencyMetadata?.source?.preservesSourceValue === true
+        parser.dependencyMetadata?.source?.preservesSourceValue !== false
       ),
       extractSourceValue(state) {
         if (

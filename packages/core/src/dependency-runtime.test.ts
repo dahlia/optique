@@ -330,6 +330,14 @@ describe("collectExplicitSourceValues", () => {
       { success: true, value: "prod" } as ValueParserResult<string>,
       sourceId,
     );
+    let resolveExtract!: (
+      value: ValueParserResult<unknown> | undefined,
+    ) => void;
+    const extractPromise = new Promise<ValueParserResult<unknown> | undefined>(
+      (resolve) => {
+        resolveExtract = resolve;
+      },
+    );
     const nodes: RuntimeNode[] = [{
       path: ["env"],
       parser: {
@@ -337,10 +345,7 @@ describe("collectExplicitSourceValues", () => {
           source: {
             kind: "source",
             sourceId,
-            extractSourceValue: (state: unknown) =>
-              Promise.resolve(
-                bareExtract(state as ValueParserResult<unknown>),
-              ),
+            extractSourceValue: (_state: unknown) => extractPromise,
             preservesSourceValue: true,
           },
         },
@@ -351,7 +356,10 @@ describe("collectExplicitSourceValues", () => {
     collectExplicitSourceValues(nodes, runtime);
     assert.ok(!runtime.hasSource(sourceId));
 
-    await collectExplicitSourceValuesAsync(nodes, runtime);
+    const pending = collectExplicitSourceValuesAsync(nodes, runtime);
+    assert.ok(!runtime.hasSource(sourceId));
+    resolveExtract(bareExtract(sourceState));
+    await pending;
     assert.ok(runtime.hasSource(sourceId));
     assert.equal(runtime.getSource(sourceId), "prod");
   });

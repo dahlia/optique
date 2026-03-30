@@ -34,7 +34,8 @@ export interface TraceEntry {
   /**
    * Snapshotted default dependency values captured during parse.
    *
-   * Present for multi-source derived parsers created by `deriveFrom()`.
+   * Present when a derived parser snapshots default dependency values during
+   * parse, including both `derive()` and `deriveFrom()` parsers.
    * This avoids re-evaluating dynamic default thunks during replay.
    *
    * @since 1.0.0
