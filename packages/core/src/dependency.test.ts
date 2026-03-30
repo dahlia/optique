@@ -4539,4 +4539,59 @@ describe("top-level option()/argument() with derived parsers", () => {
     const texts = suggestions.map((s) => "text" in s ? s.text : "");
     assert.ok(texts.includes("dev"));
   });
+
+  test("non-idempotent factory is not double-evaluated at top level", () => {
+    // A factory that returns different choices on each call.  If the
+    // runtime replays the factory when only defaults are available,
+    // the second call could produce a different value parser that
+    // rejects the input even though the first call (during parse)
+    // accepted it.
+    let callCount = 0;
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (m) => {
+        callCount++;
+        return choice(
+          m === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        );
+      },
+      defaultValue: () => "dev" as const,
+    });
+    const parser = option("--level", level);
+    callCount = 0;
+    const result = parseSync(parser, ["--level", "debug"]);
+    assert.ok(result.success);
+    assert.equal(result.value, "debug");
+    // The factory should be called exactly once (during parse), not
+    // a second time during runtime resolution with the same defaults.
+    assert.equal(callCount, 1);
+  });
+
+  test("non-idempotent factory is not double-evaluated at top level (async)", async () => {
+    let callCount = 0;
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (m) => {
+        callCount++;
+        return choice(
+          m === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        );
+      },
+      defaultValue: () => "dev" as const,
+    });
+    const parser = option("--level", level);
+    callCount = 0;
+    const result = await parseAsync(parser, ["--level", "debug"]);
+    assert.ok(result.success);
+    assert.equal(result.value, "debug");
+    assert.equal(callCount, 1);
+  });
 });

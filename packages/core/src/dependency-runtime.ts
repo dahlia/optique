@@ -845,6 +845,13 @@ function resolveSingleDeferred(
   });
   if (resolution.kind !== "resolved") return deferred.preliminaryResult;
 
+  // If every dependency value came from defaults, the replay would use
+  // the same values that produced preliminaryResult during parse().
+  // Skip the replay to avoid double-evaluating non-idempotent factories.
+  if (resolution.usedDefaults.every((d) => d)) {
+    return deferred.preliminaryResult;
+  }
+
   // deriveFrom always passes values as an array; derive passes a single value.
   const depValue = isMultiDep ? resolution.values : resolution.values[0];
   const result = deferred.parser[parseWithDependency](
@@ -1019,6 +1026,11 @@ async function resolveDeferredInStateAsync(
       defaultValues: deferred.defaultValues,
     });
     if (resolution.kind !== "resolved") return deferred.preliminaryResult;
+
+    // If every dependency value came from defaults, skip the replay.
+    if (resolution.usedDefaults.every((d) => d)) {
+      return deferred.preliminaryResult;
+    }
 
     const depValue = isMultiDep ? resolution.values : resolution.values[0];
     return Promise.resolve(
