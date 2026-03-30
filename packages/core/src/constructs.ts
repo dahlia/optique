@@ -7066,6 +7066,14 @@ function buildSuggestRegistry(
     preParsedContext.dependencyRegistry?.clone(),
   );
   if (stateArray && Array.isArray(stateArray)) {
+    collectExplicitSourceValues(
+      buildRuntimeNodesFromArray(
+        parsers,
+        stateArray,
+        preParsedContext.exec?.path,
+      ),
+      runtime,
+    );
     collectSourcesFromState(stateArray, runtime);
     const precompleteExec: ExecutionContext = {
       ...(preParsedContext.exec ?? {
@@ -7107,6 +7115,14 @@ async function buildSuggestRegistryAsync(
     preParsedContext.dependencyRegistry?.clone(),
   );
   if (stateArray && Array.isArray(stateArray)) {
+    await collectExplicitSourceValuesAsync(
+      buildRuntimeNodesFromArray(
+        parsers,
+        stateArray,
+        preParsedContext.exec?.path,
+      ),
+      runtime,
+    );
     collectSourcesFromState(stateArray, runtime);
     const precompleteExec: ExecutionContext = {
       ...(preParsedContext.exec ?? {
