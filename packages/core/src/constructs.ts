@@ -11,6 +11,7 @@ import {
   wrappedDependencySourceMarker,
 } from "./dependency.ts";
 import {
+  buildRuntimeNodesFromArray,
   buildRuntimeNodesFromPairs,
   collectExplicitSourceValues,
   collectSourcesFromState,
@@ -50,6 +51,7 @@ import type {
   ParserResult,
   Suggestion,
 } from "./parser.ts";
+import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
 
 /**
  * Helper type to extract Mode from a Parser.
@@ -75,6 +77,70 @@ type CombineObjectModes<
  * do not match any specific name at the first buffer position.
  */
 const EMPTY_LEADING_NAMES: ReadonlySet<string> = new Set();
+
+function withChildExecPath(
+  exec: ExecutionContext | undefined,
+  segment: PropertyKey,
+): ExecutionContext | undefined {
+  if (exec == null) return undefined;
+  return {
+    ...exec,
+    path: [...(exec.path ?? []), segment],
+  };
+}
+
+function mergeChildExec(
+  parent: ExecutionContext | undefined,
+  child: ExecutionContext | undefined,
+): ExecutionContext | undefined {
+  if (parent == null) return child;
+  if (child == null) return parent;
+  return {
+    ...parent,
+    trace: child.trace ?? parent.trace,
+    dependencyRuntime: child.dependencyRuntime ?? parent.dependencyRuntime,
+    dependencyRegistry: child.dependencyRegistry ?? parent.dependencyRegistry,
+    preCompletedByParser: child.preCompletedByParser ??
+      parent.preCompletedByParser,
+  };
+}
+
+function withChildContext<TState>(
+  context: ParserContext<unknown>,
+  segment: PropertyKey,
+  state: TState,
+  usage?: Usage,
+): ParserContext<TState> {
+  const exec = withChildExecPath(context.exec, segment);
+  return {
+    ...context,
+    state,
+    ...(usage != null ? { usage } : {}),
+    ...(exec != null
+      ? {
+        exec,
+        dependencyRegistry: exec.dependencyRegistry ??
+          context.dependencyRegistry,
+      }
+      : {}),
+  };
+}
+
+function isUnmatchedDependencyState(
+  state: unknown,
+  parser: { readonly initialState?: unknown },
+): boolean {
+  if (state === undefined) return true;
+  if (
+    Array.isArray(state) &&
+    state.length === 1 &&
+    isPendingDependencySourceState(state[0])
+  ) {
+    return true;
+  }
+  if (isPendingDependencySourceState(state)) return true;
+  return state === parser.initialState;
+}
 
 interface LeadingNameSource {
   readonly leadingNames: ReadonlySet<string>;
@@ -196,10 +262,19 @@ function getAnnotatedFieldState(
       field in parentState
     ? (parentState as Record<string | symbol, unknown>)[field]
     : parser.initialState;
-  if (sourceState == null || typeof sourceState !== "object") {
+  const annotations = getAnnotations(parentState);
+  if (sourceState == null) {
+    if (
+      annotations !== undefined &&
+      Reflect.get(parser, inheritParentAnnotationsKey) === true
+    ) {
+      return injectAnnotations({}, annotations);
+    }
     return sourceState;
   }
-  const annotations = getAnnotations(parentState);
+  if (typeof sourceState !== "object") {
+    return sourceState;
+  }
   if (
     annotations === undefined || getAnnotations(sourceState) === annotations
   ) {
@@ -680,11 +755,15 @@ function createExclusiveComplete(
 
     return dispatchByMode(
       mode,
-      () => syncParsers[i].complete(result.next.state, exec),
+      () =>
+        syncParsers[i].complete(
+          result.next.state,
+          withChildExecPath(exec, i),
+        ),
       async () => {
         const completeResult = await parsers[i].complete(
           result.next.state,
-          exec,
+          withChildExecPath(exec, i),
         );
         return completeResult;
       },
@@ -714,21 +793,22 @@ function createExclusiveSuggest(
 
         if (context.state == null) {
           // No parser has been selected yet, get suggestions from all parsers
-          for (const parser of syncParsers) {
-            const parserSuggestions = parser.suggest({
-              ...context,
-              state: parser.initialState,
-            }, prefix);
+          for (let i = 0; i < syncParsers.length; i++) {
+            const parser = syncParsers[i];
+            const parserSuggestions = parser.suggest(
+              withChildContext(context, i, parser.initialState),
+              prefix,
+            );
             suggestions.push(...parserSuggestions);
           }
         } else {
           // A parser has been selected, delegate to that parser
           const [index, parserResult] = context.state;
           if (parserResult.success) {
-            const parserSuggestions = syncParsers[index].suggest({
-              ...context,
-              state: parserResult.next.state,
-            }, prefix);
+            const parserSuggestions = syncParsers[index].suggest(
+              withChildContext(context, index, parserResult.next.state),
+              prefix,
+            );
             suggestions.push(...parserSuggestions);
           }
         }
@@ -740,11 +820,12 @@ function createExclusiveSuggest(
 
         if (context.state == null) {
           // No parser has been selected yet, get suggestions from all parsers
-          for (const parser of parsers) {
-            const parserSuggestions = parser.suggest({
-              ...context,
-              state: parser.initialState,
-            }, prefix);
+          for (let i = 0; i < parsers.length; i++) {
+            const parser = parsers[i];
+            const parserSuggestions = parser.suggest(
+              withChildContext(context, i, parser.initialState),
+              prefix,
+            );
             if (parser.$mode === "async") {
               for await (
                 const s of parserSuggestions as AsyncIterable<Suggestion>
@@ -760,10 +841,10 @@ function createExclusiveSuggest(
           const [index, parserResult] = context.state;
           if (parserResult.success) {
             const parser = parsers[index];
-            const parserSuggestions = parser.suggest({
-              ...context,
-              state: parserResult.next.state,
-            }, prefix);
+            const parserSuggestions = parser.suggest(
+              withChildContext(context, index, parserResult.next.state),
+              prefix,
+            );
             if (parser.$mode === "async") {
               for await (
                 const s of parserSuggestions as AsyncIterable<Suggestion>
@@ -797,6 +878,41 @@ function getNoMatchError(
       ? customNoMatch(noMatchContext)
       : customNoMatch)
     : generateNoMatchError(noMatchContext);
+}
+
+function composeExclusiveDependencyMetadata(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+): ParserDependencyMetadata | undefined {
+  const sourceBranches = parsers.filter((parser) =>
+    parser.dependencyMetadata?.source != null
+  );
+  if (sourceBranches.length < 1) return undefined;
+  const sourceIds = new Set(
+    sourceBranches.map((parser) => parser.dependencyMetadata!.source!.sourceId),
+  );
+  if (sourceIds.size !== 1) return undefined;
+  const sharedSource = sourceBranches[0].dependencyMetadata!.source!;
+  return {
+    source: {
+      ...sharedSource,
+      preservesSourceValue: sourceBranches.every((parser) =>
+        parser.dependencyMetadata?.source?.preservesSourceValue === true
+      ),
+      extractSourceValue(state) {
+        if (
+          !Array.isArray(state) || state.length !== 2 ||
+          typeof state[0] !== "number"
+        ) {
+          return undefined;
+        }
+        const [index, parserResult] = state as [number, ParserResult<unknown>];
+        if (!parserResult?.success) return undefined;
+        const branchSource = parsers[index].dependencyMetadata?.source;
+        if (branchSource?.extractSourceValue == null) return undefined;
+        return branchSource.extractSourceValue(parserResult.next.state);
+      },
+    },
+  };
 }
 
 type OrParserArity =
@@ -2341,22 +2457,24 @@ export function or(
       context.state?.[0] === a ? -1 : context.state?.[0] === b ? 1 : a - b
     );
     for (const [parser, i] of orderedParsers) {
-      const result = parser.parse({
-        ...context,
-        state: context.state == null || context.state[0] !== i ||
+      const result = parser.parse(
+        withChildContext(
+          context,
+          i,
+          context.state == null || context.state[0] !== i ||
             !context.state[1].success
-          ? parser.initialState
-          : context.state[1].next.state,
-      });
+            ? parser.initialState
+            : context.state[1].next.state,
+        ),
+      );
       if (result.success && result.consumed.length > 0) {
         if (context.state?.[0] !== i && context.state?.[1].success) {
           // Different branch succeeded. Check if the new branch can also
           // consume the previously consumed input (shared options case).
           const previouslyConsumed = context.state[1].consumed;
           const checkResult = parser.parse({
-            ...context,
+            ...withChildContext(context, i, parser.initialState),
             buffer: previouslyConsumed,
-            state: parser.initialState,
           });
           // If the new branch can consume exactly the same input,
           // this is a shared option - allow branch switch.
@@ -2376,13 +2494,33 @@ export function or(
           }
           // Branch switch allowed - re-parse current input with state from
           // shared options to ensure dependency values are available.
+          const replayExec = mergeChildExec(
+            context.exec,
+            checkResult.next.exec,
+          );
           const replayedResult = parser.parse({
-            ...context,
+            ...withChildContext(
+              {
+                ...context,
+                ...(replayExec != null
+                  ? {
+                    exec: replayExec,
+                    dependencyRegistry: replayExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              i,
+              checkResult.next.state,
+            ),
             state: checkResult.next.state,
           });
           if (!replayedResult.success) {
             return replayedResult;
           }
+          const mergedExec = mergeChildExec(
+            replayExec,
+            replayedResult.next.exec,
+          );
           return {
             success: true,
             next: {
@@ -2393,10 +2531,17 @@ export function or(
                 ...replayedResult,
                 consumed: [...previouslyConsumed, ...replayedResult.consumed],
               }],
+              ...(mergedExec != null
+                ? {
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
+                : {}),
             },
             consumed: replayedResult.consumed,
           };
         }
+        const mergedExec = mergeChildExec(context.exec, result.next.exec);
         return {
           success: true,
           next: {
@@ -2404,6 +2549,12 @@ export function or(
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: [i, result],
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
           },
           consumed: result.consumed,
         };
@@ -2426,13 +2577,16 @@ export function or(
       context.state?.[0] === a ? -1 : context.state?.[0] === b ? 1 : a - b
     );
     for (const [parser, i] of orderedParsers) {
-      const resultOrPromise = parser.parse({
-        ...context,
-        state: context.state == null || context.state[0] !== i ||
+      const resultOrPromise = parser.parse(
+        withChildContext(
+          context,
+          i,
+          context.state == null || context.state[0] !== i ||
             !context.state[1].success
-          ? parser.initialState
-          : context.state[1].next.state,
-      });
+            ? parser.initialState
+            : context.state[1].next.state,
+        ),
+      );
       const result = await resultOrPromise;
       if (result.success && result.consumed.length > 0) {
         if (context.state?.[0] !== i && context.state?.[1].success) {
@@ -2440,9 +2594,8 @@ export function or(
           // consume the previously consumed input (shared options case).
           const previouslyConsumed = context.state[1].consumed;
           const checkResultOrPromise = parser.parse({
-            ...context,
+            ...withChildContext(context, i, parser.initialState),
             buffer: previouslyConsumed,
-            state: parser.initialState,
           });
           const checkResult = await checkResultOrPromise;
           // If the new branch can consume exactly the same input,
@@ -2463,14 +2616,33 @@ export function or(
           }
           // Branch switch allowed - re-parse current input with state from
           // shared options to ensure dependency values are available.
+          const replayExec = mergeChildExec(
+            context.exec,
+            checkResult.next.exec,
+          );
           const replayedResultOrPromise = parser.parse({
-            ...context,
-            state: checkResult.next.state,
+            ...withChildContext(
+              {
+                ...context,
+                ...(replayExec != null
+                  ? {
+                    exec: replayExec,
+                    dependencyRegistry: replayExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              i,
+              checkResult.next.state,
+            ),
           });
           const replayedResult = await replayedResultOrPromise;
           if (!replayedResult.success) {
             return replayedResult;
           }
+          const mergedExec = mergeChildExec(
+            replayExec,
+            replayedResult.next.exec,
+          );
           return {
             success: true,
             next: {
@@ -2481,10 +2653,17 @@ export function or(
                 ...replayedResult,
                 consumed: [...previouslyConsumed, ...replayedResult.consumed],
               }],
+              ...(mergedExec != null
+                ? {
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
+                : {}),
             },
             consumed: replayedResult.consumed,
           };
         }
+        const mergedExec = mergeChildExec(context.exec, result.next.exec);
         return {
           success: true,
           next: {
@@ -2492,6 +2671,12 @@ export function or(
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: [i, result],
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
           },
           consumed: result.consumed,
         };
@@ -2570,6 +2755,11 @@ export function or(
       };
     },
   };
+  const singleDependencyMetadata = composeExclusiveDependencyMetadata(parsers);
+  if (singleDependencyMetadata != null) {
+    (singleResult as Record<string, unknown>).dependencyMetadata =
+      singleDependencyMetadata;
+  }
 
   // or() does NOT forward normalizeValue because the active branch is
   // unknown at default time — normalizing through the wrong branch would
@@ -2910,13 +3100,16 @@ export function longestMatch(
     // Try all parsers and find the one with longest match
     for (let i = 0; i < syncParsers.length; i++) {
       const parser = syncParsers[i];
-      const result = parser.parse({
-        ...context,
-        state: context.state == null || context.state[0] !== i ||
+      const result = parser.parse(
+        withChildContext(
+          context,
+          i,
+          context.state == null || context.state[0] !== i ||
             !context.state[1].success
-          ? parser.initialState
-          : context.state[1].next.state,
-      });
+            ? parser.initialState
+            : context.state[1].next.state,
+        ),
+      );
 
       if (result.success) {
         const consumed = context.buffer.length - result.next.buffer.length;
@@ -2929,6 +3122,10 @@ export function longestMatch(
     }
 
     if (bestMatch && bestMatch.result.success) {
+      const mergedExec = mergeChildExec(
+        context.exec,
+        bestMatch.result.next.exec,
+      );
       return {
         success: true,
         next: {
@@ -2936,6 +3133,12 @@ export function longestMatch(
           buffer: bestMatch.result.next.buffer,
           optionsTerminated: bestMatch.result.next.optionsTerminated,
           state: [bestMatch.index, bestMatch.result],
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
         },
         consumed: bestMatch.result.consumed,
       };
@@ -2958,13 +3161,16 @@ export function longestMatch(
     // Try all parsers and find the one with longest match
     for (let i = 0; i < parsers.length; i++) {
       const parser = parsers[i];
-      const resultOrPromise = parser.parse({
-        ...context,
-        state: context.state == null || context.state[0] !== i ||
+      const resultOrPromise = parser.parse(
+        withChildContext(
+          context,
+          i,
+          context.state == null || context.state[0] !== i ||
             !context.state[1].success
-          ? parser.initialState
-          : context.state[1].next.state,
-      });
+            ? parser.initialState
+            : context.state[1].next.state,
+        ),
+      );
       const result = await resultOrPromise;
 
       if (result.success) {
@@ -2978,6 +3184,10 @@ export function longestMatch(
     }
 
     if (bestMatch && bestMatch.result.success) {
+      const mergedExec = mergeChildExec(
+        context.exec,
+        bestMatch.result.next.exec,
+      );
       return {
         success: true,
         next: {
@@ -2985,6 +3195,12 @@ export function longestMatch(
           buffer: bestMatch.result.next.buffer,
           optionsTerminated: bestMatch.result.next.optionsTerminated,
           state: [bestMatch.index, bestMatch.result],
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
         },
         consumed: bestMatch.result.consumed,
       };
@@ -3061,6 +3277,11 @@ export function longestMatch(
       };
     },
   };
+  const multiDependencyMetadata = composeExclusiveDependencyMetadata(parsers);
+  if (multiDependencyMetadata != null) {
+    (multiResult as Record<string, unknown>).dependencyMetadata =
+      multiDependencyMetadata;
+  }
 
   // longestMatch() does NOT forward normalizeValue because the winning
   // branch is unknown at default time — normalizing through the wrong
@@ -3193,6 +3414,15 @@ function* suggestObjectSync<
   const contextWithRegistry = {
     ...context,
     dependencyRegistry: runtime.registry,
+    ...(context.exec != null
+      ? {
+        exec: {
+          ...context.exec,
+          dependencyRuntime: runtime,
+          dependencyRegistry: runtime.registry,
+        },
+      }
+      : {}),
   };
 
   // Check if the last token in the buffer is an option that requires a value.
@@ -3213,7 +3443,7 @@ function* suggestObjectSync<
             : parser.initialState;
 
         yield* parser.suggest(
-          { ...contextWithRegistry, state: fieldState },
+          withChildContext(contextWithRegistry, field, fieldState),
           prefix,
         );
         return;
@@ -3229,10 +3459,10 @@ function* suggestObjectSync<
       ? (context.state as Record<string | symbol, unknown>)[field]
       : parser.initialState;
 
-    const fieldSuggestions = parser.suggest({
-      ...contextWithRegistry,
-      state: fieldState,
-    }, prefix);
+    const fieldSuggestions = parser.suggest(
+      withChildContext(contextWithRegistry, field, fieldState),
+      prefix,
+    );
 
     suggestions.push(...fieldSuggestions);
   }
@@ -3283,6 +3513,15 @@ async function* suggestObjectAsync<
   const contextWithRegistry = {
     ...context,
     dependencyRegistry: runtime.registry,
+    ...(context.exec != null
+      ? {
+        exec: {
+          ...context.exec,
+          dependencyRuntime: runtime,
+          dependencyRegistry: runtime.registry,
+        },
+      }
+      : {}),
   };
 
   // Check if the last token in the buffer is an option that requires a value.
@@ -3300,7 +3539,7 @@ async function* suggestObjectAsync<
             : parser.initialState;
 
         const suggestions = parser.suggest(
-          { ...contextWithRegistry, state: fieldState },
+          withChildContext(contextWithRegistry, field, fieldState),
           prefix,
         ) as AsyncIterable<Suggestion>;
         for await (const s of suggestions) {
@@ -3320,7 +3559,7 @@ async function* suggestObjectAsync<
       : parser.initialState;
 
     const fieldSuggestions = parser.suggest(
-      { ...contextWithRegistry, state: fieldState },
+      withChildContext(contextWithRegistry, field, fieldState),
       prefix,
     );
 
@@ -3372,6 +3611,33 @@ function* pendingDependencyDefaults(
         field in context.state
       ? (context.state as Record<string | symbol, unknown>)[field]
       : undefined;
+
+    const annotatedFieldState = fieldState == null
+      ? getAnnotatedFieldState(context.state, field, fieldParser)
+      : getAnnotatedFieldState(context.state, field, fieldParser);
+
+    if (
+      fieldParser.dependencyMetadata?.source?.getMissingSourceValue != null &&
+      isUnmatchedDependencyState(fieldState, fieldParser)
+    ) {
+      yield {
+        parser: fieldParser,
+        state: annotatedFieldState,
+      };
+      continue;
+    }
+
+    if (
+      fieldParser.dependencyMetadata?.source != null &&
+      isUnmatchedDependencyState(fieldState, fieldParser) &&
+      annotatedFieldState !== fieldState
+    ) {
+      yield {
+        parser: fieldParser,
+        state: annotatedFieldState,
+      };
+      continue;
+    }
 
     if (fieldState != null) {
       // If the field has a non-null state but the parser wraps a dependency
@@ -3450,7 +3716,12 @@ function wrapAsDependencySourceState(
   parser: Parser<Mode, unknown, unknown>,
 ): import("./dependency.ts").DependencySourceState | undefined {
   if (isDependencySourceState(completed)) return completed;
-  const hasDep = isWrappedDependencySource(parser) ||
+  const metadataSource = parser.dependencyMetadata?.source;
+  if (metadataSource?.preservesSourceValue === false) {
+    return undefined;
+  }
+  const hasDep = metadataSource != null ||
+    isWrappedDependencySource(parser) ||
     isPendingDependencySourceState(parser.initialState);
   if (
     hasDep &&
@@ -3458,9 +3729,10 @@ function wrapAsDependencySourceState(
     "success" in completed && completed.success &&
     "value" in completed && completed.value !== undefined
   ) {
-    const depId = isWrappedDependencySource(parser)
-      ? parser[wrappedDependencySourceMarker][dependencyId]
-      : (parser.initialState as { [dependencyId]: symbol })[dependencyId];
+    const depId = metadataSource?.sourceId ??
+      (isWrappedDependencySource(parser)
+        ? parser[wrappedDependencySourceMarker][dependencyId]
+        : (parser.initialState as { [dependencyId]: symbol })[dependencyId]);
     return createDependencySourceState(
       completed as { success: true; value: unknown },
       depId,
@@ -3602,6 +3874,37 @@ function preCompleteAndRegisterDependencies(
     }
 
     const fieldState = state[field];
+    const annotatedFieldState = fieldState == null
+      ? getAnnotatedFieldState(state, field, fieldParser)
+      : getAnnotatedFieldState(state, field, fieldParser);
+    if (
+      fieldParser.dependencyMetadata?.source?.getMissingSourceValue != null &&
+      isUnmatchedDependencyState(fieldState, fieldParser)
+    ) {
+      const completed = fieldParser.complete(
+        annotatedFieldState,
+        withChildExecPath(exec, field),
+      );
+      preCompleted.set(field, completed);
+      const depState = wrapAsDependencySourceState(completed, fieldParser);
+      if (depState) registerCompletedDependency(depState, registry);
+      continue;
+    }
+
+    if (
+      fieldParser.dependencyMetadata?.source != null &&
+      isUnmatchedDependencyState(fieldState, fieldParser) &&
+      annotatedFieldState !== fieldState
+    ) {
+      const completed = fieldParser.complete(
+        annotatedFieldState,
+        withChildExecPath(exec, field),
+      );
+      preCompleted.set(field, completed);
+      const depState = wrapAsDependencySourceState(completed, fieldParser);
+      if (depState) registerCompletedDependency(depState, registry);
+      continue;
+    }
 
     // Cases 1-3: pre-complete dependency sources that weren't provided.
     // Only register when complete() returns an actual DependencySourceState
@@ -3615,7 +3918,10 @@ function preCompleteAndRegisterDependencies(
       isPendingDependencySourceState(fieldState[0])
     ) {
       // Case 1: state is [PendingDependencySourceState]
-      const completed = fieldParser.complete(fieldState, exec);
+      const completed = fieldParser.complete(
+        fieldState,
+        withChildExecPath(exec, field),
+      );
       preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
         registerCompletedDependency(completed, registry);
@@ -3691,6 +3997,37 @@ async function preCompleteAndRegisterDependenciesAsync(
     }
 
     const fieldState = state[field];
+    const annotatedFieldState = fieldState == null
+      ? getAnnotatedFieldState(state, field, fieldParser)
+      : getAnnotatedFieldState(state, field, fieldParser);
+    if (
+      fieldParser.dependencyMetadata?.source?.getMissingSourceValue != null &&
+      isUnmatchedDependencyState(fieldState, fieldParser)
+    ) {
+      const completed = await fieldParser.complete(
+        annotatedFieldState,
+        withChildExecPath(exec, field),
+      );
+      preCompleted.set(field, completed);
+      const depState = wrapAsDependencySourceState(completed, fieldParser);
+      if (depState) registerCompletedDependency(depState, registry);
+      continue;
+    }
+
+    if (
+      fieldParser.dependencyMetadata?.source != null &&
+      isUnmatchedDependencyState(fieldState, fieldParser) &&
+      annotatedFieldState !== fieldState
+    ) {
+      const completed = await fieldParser.complete(
+        annotatedFieldState,
+        withChildExecPath(exec, field),
+      );
+      preCompleted.set(field, completed);
+      const depState = wrapAsDependencySourceState(completed, fieldParser);
+      if (depState) registerCompletedDependency(depState, registry);
+      continue;
+    }
 
     // Cases 1-3: only register actual DependencySourceState.
     // Store result for reuse in Phase 3.
@@ -3699,7 +4036,10 @@ async function preCompleteAndRegisterDependenciesAsync(
       fieldState.length === 1 &&
       isPendingDependencySourceState(fieldState[0])
     ) {
-      const completed = await fieldParser.complete(fieldState, exec);
+      const completed = await fieldParser.complete(
+        fieldState,
+        withChildExecPath(exec, field),
+      );
       preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
         registerCompletedDependency(completed, registry);
@@ -3926,7 +4266,7 @@ function resolveDeferred(
   return state;
 }
 
-function resolveDeferredParseStates<
+function _resolveDeferredParseStates<
   T extends Record<string | symbol, unknown> | unknown[],
 >(
   fieldStates: T,
@@ -4020,7 +4360,7 @@ async function resolveDeferredAsync(
  * Async version of resolveDeferredParseStates for async parsers.
  * @internal
  */
-async function resolveDeferredParseStatesAsync<
+async function _resolveDeferredParseStatesAsync<
   T extends Record<string | symbol, unknown> | unknown[],
 >(
   fieldStates: T,
@@ -4229,11 +4569,23 @@ export function object<
           fieldKey in parentState
         ? (parentState as Record<string | symbol, unknown>)[fieldKey]
         : parser.initialState;
-      if (sourceState == null || typeof sourceState !== "object") {
+      const annotations = getAnnotations(parentState);
+      if (sourceState == null) {
+        if (
+          annotations !== undefined &&
+          Reflect.get(parser, inheritParentAnnotationsKey) === true
+        ) {
+          const inheritedState = injectAnnotations({}, annotations);
+          cache?.set(fieldKey, inheritedState);
+          return inheritedState;
+        }
         cache?.set(fieldKey, sourceState);
         return sourceState;
       }
-      const annotations = getAnnotations(parentState);
+      if (typeof sourceState !== "object") {
+        cache?.set(fieldKey, sourceState);
+        return sourceState;
+      }
       if (
         annotations === undefined || getAnnotations(sourceState) === annotations
       ) {
@@ -4326,12 +4678,19 @@ export function object<
       const getFieldState = createFieldStateGetter(currentContext.state);
 
       for (const [field, parser] of parserPairs) {
-        const result = (parser as Parser<"sync", unknown, unknown>).parse({
-          ...currentContext,
-          state: getFieldState(field, parser),
-        });
+        const result = (parser as Parser<"sync", unknown, unknown>).parse(
+          withChildContext(
+            currentContext,
+            field,
+            getFieldState(field, parser),
+          ),
+        );
 
         if (result.success && result.consumed.length > 0) {
+          const mergedExec = mergeChildExec(
+            currentContext.exec,
+            result.next.exec,
+          );
           currentContext = {
             ...currentContext,
             buffer: result.next.buffer,
@@ -4340,6 +4699,12 @@ export function object<
               ...(currentContext.state as Record<string | symbol, unknown>),
               [field as string | symbol]: result.next.state,
             } as { readonly [K in keyof T]: unknown },
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
           };
           allConsumed.push(...result.consumed);
           anySuccess = true;
@@ -4367,7 +4732,7 @@ export function object<
       for (const [field, parser] of parserPairs) {
         const fieldState = getFieldState(field, parser);
         const completeResult = (parser as Parser<"sync", unknown, unknown>)
-          .complete(fieldState, context.exec);
+          .complete(fieldState, withChildExecPath(context.exec, field));
         if (!completeResult.success) {
           allCanComplete = false;
           break;
@@ -4404,13 +4769,20 @@ export function object<
       const getFieldState = createFieldStateGetter(currentContext.state);
 
       for (const [field, parser] of parserPairs) {
-        const resultOrPromise = parser.parse({
-          ...currentContext,
-          state: getFieldState(field, parser),
-        });
+        const resultOrPromise = parser.parse(
+          withChildContext(
+            currentContext,
+            field,
+            getFieldState(field, parser),
+          ),
+        );
         const result = await resultOrPromise;
 
         if (result.success && result.consumed.length > 0) {
+          const mergedExec = mergeChildExec(
+            currentContext.exec,
+            result.next.exec,
+          );
           currentContext = {
             ...currentContext,
             buffer: result.next.buffer,
@@ -4419,6 +4791,12 @@ export function object<
               ...(currentContext.state as Record<string | symbol, unknown>),
               [field as string | symbol]: result.next.state,
             } as { readonly [K in keyof T]: unknown },
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
           };
           allConsumed.push(...result.consumed);
           anySuccess = true;
@@ -4445,7 +4823,10 @@ export function object<
       const getFieldState = createFieldStateGetter(context.state);
       for (const [field, parser] of parserPairs) {
         const fieldState = getFieldState(field, parser);
-        const completeResult = await parser.complete(fieldState, context.exec);
+        const completeResult = await parser.complete(
+          fieldState,
+          withChildExecPath(context.exec, field),
+        );
         if (!completeResult.success) {
           allCanComplete = false;
           break;
@@ -4553,6 +4934,14 @@ export function object<
             >;
             annotatedState[fieldKey] = getFieldState(field, fieldParser);
           }
+          collectExplicitSourceValues(
+            buildRuntimeNodesFromPairs(
+              typedParserPairs,
+              annotatedState,
+              exec?.path,
+            ),
+            runtime,
+          );
           const resolvedFieldStates = resolveStateWithRuntime(
             annotatedState,
             runtime,
@@ -4586,7 +4975,10 @@ export function object<
             } else {
               const fieldState = resolvedFieldStates[fieldKey];
               valueResult = unwrapCompleteResult(
-                fieldParser.complete(fieldState, phase3Exec),
+                fieldParser.complete(
+                  fieldState,
+                  withChildExecPath(phase3Exec, fieldKey),
+                ),
               );
             }
             if (valueResult.success) {
@@ -4655,6 +5047,14 @@ export function object<
             const fieldParser = parsers[field];
             annotatedState[fieldKey] = getFieldState(field, fieldParser);
           }
+          collectExplicitSourceValues(
+            buildRuntimeNodesFromPairs(
+              asyncParserPairs,
+              annotatedState,
+              exec?.path,
+            ),
+            runtime,
+          );
           const resolvedFieldStates = await resolveStateWithRuntimeAsync(
             annotatedState,
             runtime,
@@ -4667,22 +5067,23 @@ export function object<
           };
           const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
           let hasDeferred = false;
-          for (const field of parserKeys) {
-            const fieldKey = field as string | symbol;
-            const fieldParser = parsers[field];
-
-            let valueResult: import("./valueparser.ts").ValueParserResult<
-              unknown
-            >;
-            const preCompletedResult = preCompleted.get(fieldKey);
-            if (preCompletedResult !== undefined) {
-              valueResult = unwrapCompleteResult(preCompletedResult);
-            } else {
-              const fieldState = resolvedFieldStates[fieldKey];
-              valueResult = unwrapCompleteResult(
-                await fieldParser.complete(fieldState, phase3Exec),
-              );
-            }
+          const fieldResults = await Promise.all(
+            parserKeys.map(async (field) => {
+              const fieldKey = field as string | symbol;
+              const fieldParser = parsers[field];
+              const preCompletedResult = preCompleted.get(fieldKey);
+              const valueResult = preCompletedResult !== undefined
+                ? unwrapCompleteResult(preCompletedResult)
+                : unwrapCompleteResult(
+                  await fieldParser.complete(
+                    resolvedFieldStates[fieldKey],
+                    withChildExecPath(phase3Exec, fieldKey),
+                  ),
+                );
+              return { fieldKey, valueResult } as const;
+            }),
+          );
+          for (const { fieldKey, valueResult } of fieldResults) {
             if (valueResult.success) {
               (result as Record<string | symbol, unknown>)[fieldKey] =
                 valueResult.value;
@@ -4851,6 +5252,20 @@ function suggestTupleSync(
 ): Suggestion[] {
   const suggestions: Suggestion[] = [];
   const stateArray = context.state as unknown[] | undefined;
+  const runtime = createDependencyRuntimeContext(
+    context.dependencyRegistry?.clone(),
+  );
+  if (stateArray && Array.isArray(stateArray)) {
+    collectExplicitSourceValues(
+      buildRuntimeNodesFromArray(parsers, stateArray, context.exec?.path),
+      runtime,
+    );
+    collectSourcesFromState(stateArray, runtime);
+  }
+  const contextWithRegistry = {
+    ...context,
+    dependencyRegistry: runtime.registry,
+  };
 
   for (let i = 0; i < parsers.length; i++) {
     const parser = parsers[i];
@@ -4859,7 +5274,7 @@ function suggestTupleSync(
       : parser.initialState;
 
     const parserSuggestions = parser.suggest({
-      ...context,
+      ...contextWithRegistry,
       state: parserState,
     }, prefix);
 
@@ -4876,6 +5291,20 @@ async function* suggestTupleAsync(
 ): AsyncGenerator<Suggestion> {
   const suggestions: Suggestion[] = [];
   const stateArray = context.state as unknown[] | undefined;
+  const runtime = createDependencyRuntimeContext(
+    context.dependencyRegistry?.clone(),
+  );
+  if (stateArray && Array.isArray(stateArray)) {
+    collectExplicitSourceValues(
+      buildRuntimeNodesFromArray(parsers, stateArray, context.exec?.path),
+      runtime,
+    );
+    collectSourcesFromState(stateArray, runtime);
+  }
+  const contextWithRegistry = {
+    ...context,
+    dependencyRegistry: runtime.registry,
+  };
 
   for (let i = 0; i < parsers.length; i++) {
     const parser = parsers[i];
@@ -4884,7 +5313,7 @@ async function* suggestTupleAsync(
       : parser.initialState;
 
     const parserSuggestions = parser.suggest({
-      ...context,
+      ...contextWithRegistry,
       state: parserState,
     }, prefix);
 
@@ -5035,21 +5464,30 @@ export function tuple<
         .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
 
       for (const [parser, index] of remainingParsers) {
-        const result = parser.parse({
-          ...currentContext,
-          state: stateArray[index],
-        });
+        const result = parser.parse(
+          withChildContext(currentContext, index, stateArray[index]),
+        );
 
         if (result.success && result.consumed.length > 0) {
           // Parser succeeded and consumed input - take this match
           const newStateArray = stateArray.map((s: unknown, idx: number) =>
             idx === index ? result.next.state : s
           );
+          const mergedExec = mergeChildExec(
+            currentContext.exec,
+            result.next.exec,
+          );
           currentContext = {
             ...currentContext,
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: newStateArray as TupleState,
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
           };
 
           allConsumed.push(...result.consumed);
@@ -5065,19 +5503,28 @@ export function tuple<
       // or mark failing optional parsers as matched
       if (!foundMatch) {
         for (const [parser, index] of remainingParsers) {
-          const result = parser.parse({
-            ...currentContext,
-            state: stateArray[index],
-          });
+          const result = parser.parse(
+            withChildContext(currentContext, index, stateArray[index]),
+          );
 
           if (result.success && result.consumed.length < 1) {
             // Parser succeeded without consuming input (like optional)
             const newStateArray = stateArray.map((s: unknown, idx: number) =>
               idx === index ? result.next.state : s
             );
+            const mergedExec = mergeChildExec(
+              currentContext.exec,
+              result.next.exec,
+            );
             currentContext = {
               ...currentContext,
               state: newStateArray as TupleState,
+              ...(mergedExec != null
+                ? {
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
+                : {}),
             };
 
             matchedParsers.add(index);
@@ -5133,10 +5580,9 @@ export function tuple<
         .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
 
       for (const [parser, index] of remainingParsers) {
-        const resultOrPromise = parser.parse({
-          ...currentContext,
-          state: stateArray[index],
-        });
+        const resultOrPromise = parser.parse(
+          withChildContext(currentContext, index, stateArray[index]),
+        );
         const result = await resultOrPromise;
 
         if (result.success && result.consumed.length > 0) {
@@ -5144,11 +5590,21 @@ export function tuple<
           const newStateArray = stateArray.map((s: unknown, idx: number) =>
             idx === index ? result.next.state : s
           );
+          const mergedExec = mergeChildExec(
+            currentContext.exec,
+            result.next.exec,
+          );
           currentContext = {
             ...currentContext,
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: newStateArray as TupleState,
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
           };
 
           allConsumed.push(...result.consumed);
@@ -5164,10 +5620,9 @@ export function tuple<
       // or mark failing optional parsers as matched
       if (!foundMatch) {
         for (const [parser, index] of remainingParsers) {
-          const resultOrPromise = parser.parse({
-            ...currentContext,
-            state: stateArray[index],
-          });
+          const resultOrPromise = parser.parse(
+            withChildContext(currentContext, index, stateArray[index]),
+          );
           const result = await resultOrPromise;
 
           if (result.success && result.consumed.length < 1) {
@@ -5175,9 +5630,19 @@ export function tuple<
             const newStateArray = stateArray.map((s: unknown, idx: number) =>
               idx === index ? result.next.state : s
             );
+            const mergedExec = mergeChildExec(
+              currentContext.exec,
+              result.next.exec,
+            );
             currentContext = {
               ...currentContext,
               state: newStateArray as TupleState,
+              ...(mergedExec != null
+                ? {
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
+                : {}),
             };
 
             matchedParsers.add(index);
@@ -5259,6 +5724,10 @@ export function tuple<
             runtime.registry,
             childExec,
           );
+          collectExplicitSourceValues(
+            buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
+            runtime,
+          );
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
@@ -5290,7 +5759,10 @@ export function tuple<
                 elementParser,
               );
               valueResult = unwrapCompleteResult(
-                elementParser.complete(elementState, phase3Exec),
+                elementParser.complete(
+                  elementState,
+                  withChildExecPath(phase3Exec, i),
+                ),
               );
             }
             if (valueResult.success) {
@@ -5353,6 +5825,10 @@ export function tuple<
             runtime.registry,
             childExec,
           );
+          collectExplicitSourceValues(
+            buildRuntimeNodesFromArray(parsers, stateArray, exec?.path),
+            runtime,
+          );
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
@@ -5384,7 +5860,10 @@ export function tuple<
                 elementParser,
               );
               valueResult = unwrapCompleteResult(
-                await elementParser.complete(elementState, phase3Exec),
+                await elementParser.complete(
+                  elementState,
+                  withChildExecPath(phase3Exec, i),
+                ),
               );
             }
             if (valueResult.success) {
@@ -5843,18 +6322,31 @@ export function merge(
       const parser = syncParsers[i];
       const parserState = extractParserState(parser, currentContext, i);
 
-      const result = parser.parse({
-        ...currentContext,
-        state: parserState as Parameters<typeof parser.parse>[0]["state"],
-      });
+      const result = parser.parse(
+        withChildContext(
+          currentContext,
+          i,
+          parserState as Parameters<typeof parser.parse>[0]["state"],
+        ),
+      );
 
       if (result.success) {
+        const mergedExec = mergeChildExec(
+          currentContext.exec,
+          result.next.exec,
+        );
         const newState = mergeResultState(parser, currentContext, result, i);
         const newContext = {
           ...currentContext,
           buffer: result.next.buffer,
           optionsTerminated: result.next.optionsTerminated,
           state: newState,
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
         };
 
         if (result.consumed.length > 0) {
@@ -5907,19 +6399,32 @@ export function merge(
       const parser = parsers[i];
       const parserState = extractParserState(parser, currentContext, i);
 
-      const resultOrPromise = parser.parse({
-        ...currentContext,
-        state: parserState as Parameters<typeof parser.parse>[0]["state"],
-      });
+      const resultOrPromise = parser.parse(
+        withChildContext(
+          currentContext,
+          i,
+          parserState as Parameters<typeof parser.parse>[0]["state"],
+        ),
+      );
       const result = await resultOrPromise;
 
       if (result.success) {
+        const mergedExec = mergeChildExec(
+          currentContext.exec,
+          result.next.exec,
+        );
         const newState = mergeResultState(parser, currentContext, result, i);
         const newContext = {
           ...currentContext,
           buffer: result.next.buffer,
           optionsTerminated: result.next.optionsTerminated,
           state: newState,
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
         };
 
         if (result.consumed.length > 0) {
@@ -6032,6 +6537,14 @@ export function merge(
           ...exec,
           dependencyRuntime: runtime,
         } as ExecutionContext;
+        collectExplicitSourceValues(
+          buildRuntimeNodesFromPairs(
+            mergedFieldParsers,
+            state as Record<PropertyKey, unknown>,
+            exec?.path,
+          ),
+          runtime,
+        );
         // Pre-complete each child's dependency sources independently so
         // that branches with overlapping output keys do not collide in
         // the preCompleted map.  Only pass the cache to children whose
@@ -6048,7 +6561,7 @@ export function merge(
             unknown
           >
           | undefined
-        )[] = syncParsers.map((parser) => {
+        )[] = syncParsers.map((parser, i) => {
           if (fieldParsersKey in parser) {
             const pairs = (parser as { [fieldParsersKey]: FieldPairs })[
               fieldParsersKey
@@ -6057,7 +6570,7 @@ export function merge(
               state as Record<string | symbol, unknown>,
               pairs,
               runtime.registry,
-              childExec,
+              withChildExecPath(childExec, i),
             );
             // Only pass cache when field names are unique.  Inner merges
             // with duplicate output keys would collapse branch-specific
@@ -6085,7 +6598,7 @@ export function merge(
             parser.complete(
               parserState as Parameters<typeof parser.complete>[0],
               {
-                ...childExec,
+                ...withChildExecPath(childExec, i),
                 preCompletedByParser: cache,
               } as ExecutionContext,
             ),
@@ -6140,6 +6653,14 @@ export function merge(
           ...exec,
           dependencyRuntime: runtime,
         } as ExecutionContext;
+        collectExplicitSourceValues(
+          buildRuntimeNodesFromPairs(
+            mergedFieldParsers,
+            state as Record<PropertyKey, unknown>,
+            exec?.path,
+          ),
+          runtime,
+        );
         type AsyncFieldPairs = ReadonlyArray<
           readonly [string | symbol, Parser<Mode, unknown, unknown>]
         >;
@@ -6150,7 +6671,8 @@ export function merge(
           >
           | undefined
         )[] = [];
-        for (const parser of parsers) {
+        for (let i = 0; i < parsers.length; i++) {
+          const parser = parsers[i];
           if (fieldParsersKey in parser) {
             const pairs = (parser as { [fieldParsersKey]: AsyncFieldPairs })[
               fieldParsersKey
@@ -6159,7 +6681,7 @@ export function merge(
               state as Record<string | symbol, unknown>,
               pairs,
               runtime.registry,
-              childExec,
+              withChildExecPath(childExec, i),
             );
             perChildCache.push(
               filterDuplicateKeys(preCompleted, pairs),
@@ -6187,7 +6709,7 @@ export function merge(
             await parser.complete(
               parserState as Parameters<typeof parser.complete>[0],
               {
-                ...childExec,
+                ...withChildExecPath(childExec, i),
                 preCompletedByParser: asyncCache,
               } as ExecutionContext,
             ),
@@ -6282,6 +6804,16 @@ export function merge(
           );
           const childFieldPairs = collectChildFieldParsers(parsers);
           if (context.state && typeof context.state === "object") {
+            collectExplicitSourceValues(
+              buildRuntimeNodesFromPairs(
+                childFieldPairs,
+                context.state as Record<PropertyKey, unknown>,
+                context.exec?.path,
+              ),
+              runtime,
+            );
+          }
+          if (context.state && typeof context.state === "object") {
             collectSourcesFromState(context.state, runtime);
           }
           await completeDependencySourceDefaultsAsync(
@@ -6328,6 +6860,16 @@ export function merge(
         context.dependencyRegistry?.clone(),
       );
       const childFieldPairs = collectChildFieldParsers(syncParsers);
+      if (context.state && typeof context.state === "object") {
+        collectExplicitSourceValues(
+          buildRuntimeNodesFromPairs(
+            childFieldPairs,
+            context.state as Record<PropertyKey, unknown>,
+            context.exec?.path,
+          ),
+          runtime,
+        );
+      }
       if (context.state && typeof context.state === "object") {
         collectSourcesFromState(context.state, runtime);
       }
@@ -6513,6 +7055,7 @@ type ConcatValues<TParsers extends ConcatParsers> = IsTuple<TParsers> extends
  */
 function buildSuggestRegistry(
   preParsedContext: ParserContext<readonly unknown[]>,
+  parsers: readonly Parser<"sync", readonly unknown[], unknown>[],
 ): {
   context: ParserContext<readonly unknown[]>;
   stateArray: unknown[] | undefined;
@@ -6523,6 +7066,67 @@ function buildSuggestRegistry(
   );
   if (stateArray && Array.isArray(stateArray)) {
     collectSourcesFromState(stateArray, runtime);
+    const precompleteExec: ExecutionContext = {
+      ...(preParsedContext.exec ?? {
+        usage: preParsedContext.usage,
+        path: [],
+        trace: undefined,
+      }),
+      phase: "complete",
+      dependencyRuntime: runtime,
+      dependencyRegistry: runtime.registry,
+    };
+    for (let i = 0; i < parsers.length; i++) {
+      try {
+        parsers[i].complete(
+          stateArray[i] as Parameters<typeof parsers[number]["complete"]>[0],
+          withChildExecPath(precompleteExec, i),
+        );
+      } catch {
+        // Best-effort only: suggestion pre-pass exists to populate the
+        // dependency registry, not to surface completion failures.
+      }
+    }
+  }
+  return {
+    context: { ...preParsedContext, dependencyRegistry: runtime.registry },
+    stateArray,
+  };
+}
+
+async function buildSuggestRegistryAsync(
+  preParsedContext: ParserContext<readonly unknown[]>,
+  parsers: readonly Parser<Mode, readonly unknown[], unknown>[],
+): Promise<{
+  context: ParserContext<readonly unknown[]>;
+  stateArray: unknown[] | undefined;
+}> {
+  const stateArray = preParsedContext.state as unknown[] | undefined;
+  const runtime = createDependencyRuntimeContext(
+    preParsedContext.dependencyRegistry?.clone(),
+  );
+  if (stateArray && Array.isArray(stateArray)) {
+    collectSourcesFromState(stateArray, runtime);
+    const precompleteExec: ExecutionContext = {
+      ...(preParsedContext.exec ?? {
+        usage: preParsedContext.usage,
+        path: [],
+        trace: undefined,
+      }),
+      phase: "complete",
+      dependencyRuntime: runtime,
+      dependencyRegistry: runtime.registry,
+    };
+    for (let i = 0; i < parsers.length; i++) {
+      try {
+        await parsers[i].complete(
+          stateArray[i] as Parameters<typeof parsers[number]["complete"]>[0],
+          withChildExecPath(precompleteExec, i),
+        );
+      } catch {
+        // Best-effort only.
+      }
+    }
   }
   return {
     context: { ...preParsedContext, dependencyRegistry: runtime.registry },
@@ -6638,10 +7242,9 @@ function tryParseSuggestList(
     const parserState = index < stateArray.length
       ? stateArray[index]
       : parser.initialState;
-    const resultOrPromise = parser.parse({
-      ...context,
-      state: parserState,
-    });
+    const resultOrPromise = parser.parse(
+      withChildContext(context, index, parserState),
+    );
 
     // If the result is a thenable, chain the rest asynchronously.
     if (
@@ -6654,12 +7257,19 @@ function tryParseSuggestList(
           if (result.success && result.consumed.length > 0) {
             stateArray[index] = result.next.state;
             matchedParsers.add(index);
+            const mergedExec = mergeChildExec(context.exec, result.next.exec);
             return preParseSuggestLoop(
               {
                 ...context,
                 buffer: result.next.buffer,
                 optionsTerminated: result.next.optionsTerminated,
                 state: stateArray,
+                ...(mergedExec != null
+                  ? {
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
+                  : {}),
               },
               stateArray,
               parsers,
@@ -6712,11 +7322,18 @@ function tryParseSuggestList(
     if (result.success && result.consumed.length > 0) {
       stateArray[index] = result.next.state;
       matchedParsers.add(index);
+      const mergedExec = mergeChildExec(context.exec, result.next.exec);
       return {
         ...context,
         buffer: result.next.buffer,
         optionsTerminated: result.next.optionsTerminated,
         state: stateArray,
+        ...(mergedExec != null
+          ? {
+            exec: mergedExec,
+            dependencyRegistry: mergedExec.dependencyRegistry,
+          }
+          : {}),
       };
     }
   }
@@ -6817,21 +7434,30 @@ export function concat(
         .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
 
       for (const [parser, index] of remainingParsers) {
-        const result = parser.parse({
-          ...currentContext,
-          state: stateArray[index],
-        });
+        const result = parser.parse(
+          withChildContext(currentContext, index, stateArray[index]),
+        );
 
         if (result.success && result.consumed.length > 0) {
           // Parser succeeded and consumed input - take this match
           const newStateArray = stateArray.map((s, idx) =>
             idx === index ? result.next.state : s
           );
+          const mergedExec = mergeChildExec(
+            currentContext.exec,
+            result.next.exec,
+          );
           currentContext = {
             ...currentContext,
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: newStateArray as readonly unknown[],
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
           };
 
           allConsumed.push(...result.consumed);
@@ -6847,19 +7473,28 @@ export function concat(
       // or mark failing optional parsers as matched
       if (!foundMatch) {
         for (const [parser, index] of remainingParsers) {
-          const result = parser.parse({
-            ...currentContext,
-            state: stateArray[index],
-          });
+          const result = parser.parse(
+            withChildContext(currentContext, index, stateArray[index]),
+          );
 
           if (result.success && result.consumed.length < 1) {
             // Parser succeeded without consuming input (like optional)
             const newStateArray = stateArray.map((s, idx) =>
               idx === index ? result.next.state : s
             );
+            const mergedExec = mergeChildExec(
+              currentContext.exec,
+              result.next.exec,
+            );
             currentContext = {
               ...currentContext,
               state: newStateArray as readonly unknown[],
+              ...(mergedExec != null
+                ? {
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
+                : {}),
             };
 
             matchedParsers.add(index);
@@ -6913,21 +7548,30 @@ export function concat(
         .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
 
       for (const [parser, index] of remainingParsers) {
-        const result = await parser.parse({
-          ...currentContext,
-          state: stateArray[index],
-        });
+        const result = await parser.parse(
+          withChildContext(currentContext, index, stateArray[index]),
+        );
 
         if (result.success && result.consumed.length > 0) {
           // Parser succeeded and consumed input - take this match
           const newStateArray = stateArray.map((s, idx) =>
             idx === index ? result.next.state : s
           );
+          const mergedExec = mergeChildExec(
+            currentContext.exec,
+            result.next.exec,
+          );
           currentContext = {
             ...currentContext,
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: newStateArray as readonly unknown[],
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
           };
 
           allConsumed.push(...result.consumed);
@@ -6943,19 +7587,28 @@ export function concat(
       // or mark failing optional parsers as matched
       if (!foundMatch) {
         for (const [parser, index] of remainingParsers) {
-          const result = await parser.parse({
-            ...currentContext,
-            state: stateArray[index],
-          });
+          const result = await parser.parse(
+            withChildContext(currentContext, index, stateArray[index]),
+          );
 
           if (result.success && result.consumed.length < 1) {
             // Parser succeeded without consuming input (like optional)
             const newStateArray = stateArray.map((s, idx) =>
               idx === index ? result.next.state : s
             );
+            const mergedExec = mergeChildExec(
+              currentContext.exec,
+              result.next.exec,
+            );
             currentContext = {
               ...currentContext,
               state: newStateArray as readonly unknown[],
+              ...(mergedExec != null
+                ? {
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
+                : {}),
             };
 
             matchedParsers.add(index);
@@ -7020,7 +7673,7 @@ export function concat(
         parser,
       );
       const result = unwrapCompleteResult(
-        parser.complete(parserState, childExec),
+        parser.complete(parserState, withChildExecPath(childExec, i)),
       );
       if (!result.success) return result;
 
@@ -7109,7 +7762,7 @@ export function concat(
         parser,
       );
       const result = unwrapCompleteResult(
-        await parser.complete(parserState, childExec),
+        await parser.complete(parserState, withChildExecPath(childExec, i)),
       );
       if (!result.success) return result;
 
@@ -7194,7 +7847,7 @@ export function concat(
             parsers,
           );
           const { context: contextWithRegistry, stateArray } =
-            buildSuggestRegistry(preParsedContext);
+            await buildSuggestRegistryAsync(preParsedContext, parsers);
 
           const suggestions: Suggestion[] = [];
 
@@ -7231,6 +7884,7 @@ export function concat(
       );
       const { context: contextWithRegistry, stateArray } = buildSuggestRegistry(
         preParsedContext,
+        syncParsers,
       );
 
       return (function* () {
@@ -7786,13 +8440,17 @@ export function conditional(
         ? syncDefaultBranch!
         : syncBranches[state.selectedBranch.key];
 
-      const branchResult = branchParser.parse({
-        ...context,
-        state: state.branchState,
-        usage: branchParser.usage,
-      });
+      const branchResult = branchParser.parse(
+        withChildContext(
+          context,
+          "_branch",
+          state.branchState,
+          branchParser.usage,
+        ),
+      );
 
       if (branchResult.success) {
+        const mergedExec = mergeChildExec(context.exec, branchResult.next.exec);
         return {
           success: true,
           next: {
@@ -7801,6 +8459,12 @@ export function conditional(
               ...state,
               branchState: branchResult.next.state,
             },
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
           },
           consumed: branchResult.consumed,
         };
@@ -7810,8 +8474,11 @@ export function conditional(
 
     // Try to parse discriminator first
     const discriminatorResult = syncDiscriminator.parse({
-      ...context,
-      state: state.discriminatorState,
+      ...withChildContext(
+        context,
+        "_discriminator",
+        state.discriminatorState,
+      ),
     });
 
     if (
@@ -7820,7 +8487,7 @@ export function conditional(
       // Complete discriminator to get the value
       const completionResult = syncDiscriminator.complete(
         discriminatorResult.next.state,
-        context.exec,
+        withChildExecPath(context.exec, "_discriminator"),
       );
 
       if (completionResult.success) {
@@ -7829,15 +8496,34 @@ export function conditional(
 
         if (branchParser) {
           // Try to parse more from the branch
+          const discriminatorExec = mergeChildExec(
+            context.exec,
+            discriminatorResult.next.exec,
+          );
           const branchParseResult = branchParser.parse({
-            ...context,
+            ...withChildContext(
+              {
+                ...context,
+                ...(discriminatorExec != null
+                  ? {
+                    exec: discriminatorExec,
+                    dependencyRegistry: discriminatorExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              "_branch",
+              branchParser.initialState,
+              branchParser.usage,
+            ),
             buffer: discriminatorResult.next.buffer,
             optionsTerminated: discriminatorResult.next.optionsTerminated,
-            state: branchParser.initialState,
-            usage: branchParser.usage,
           });
 
           if (branchParseResult.success) {
+            const mergedExec = mergeChildExec(
+              discriminatorExec,
+              branchParseResult.next.exec,
+            );
             return {
               success: true,
               next: {
@@ -7848,6 +8534,12 @@ export function conditional(
                   selectedBranch: { kind: "branch", key: value },
                   branchState: branchParseResult.next.state,
                 },
+                ...(mergedExec != null
+                  ? {
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
+                  : {}),
               },
               consumed: [
                 ...discriminatorResult.consumed,
@@ -7867,6 +8559,12 @@ export function conditional(
                 selectedBranch: { kind: "branch", key: value },
                 branchState: branchParser.initialState,
               },
+              ...(discriminatorExec != null
+                ? {
+                  exec: discriminatorExec,
+                  dependencyRegistry: discriminatorExec.dependencyRegistry,
+                }
+                : {}),
             },
             consumed: discriminatorResult.consumed,
           };
@@ -7876,13 +8574,20 @@ export function conditional(
 
     // Discriminator didn't match, try default branch
     if (syncDefaultBranch !== undefined) {
-      const defaultResult = syncDefaultBranch.parse({
-        ...context,
-        state: state.branchState ?? syncDefaultBranch.initialState,
-        usage: syncDefaultBranch.usage,
-      });
+      const defaultResult = syncDefaultBranch.parse(
+        withChildContext(
+          context,
+          "_branch",
+          state.branchState ?? syncDefaultBranch.initialState,
+          syncDefaultBranch.usage,
+        ),
+      );
 
       if (defaultResult.success && defaultResult.consumed.length > 0) {
+        const mergedExec = mergeChildExec(
+          context.exec,
+          defaultResult.next.exec,
+        );
         return {
           success: true,
           next: {
@@ -7892,6 +8597,12 @@ export function conditional(
               selectedBranch: { kind: "default" },
               branchState: defaultResult.next.state,
             },
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
           },
           consumed: defaultResult.consumed,
         };
@@ -7918,13 +8629,17 @@ export function conditional(
         ? defaultBranch!
         : branches[state.selectedBranch.key];
 
-      const branchResult = await branchParser.parse({
-        ...context,
-        state: state.branchState,
-        usage: branchParser.usage,
-      });
+      const branchResult = await branchParser.parse(
+        withChildContext(
+          context,
+          "_branch",
+          state.branchState,
+          branchParser.usage,
+        ),
+      );
 
       if (branchResult.success) {
+        const mergedExec = mergeChildExec(context.exec, branchResult.next.exec);
         return {
           success: true,
           next: {
@@ -7933,6 +8648,12 @@ export function conditional(
               ...state,
               branchState: branchResult.next.state,
             },
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
           },
           consumed: branchResult.consumed,
         };
@@ -7942,8 +8663,11 @@ export function conditional(
 
     // Try to parse discriminator first
     const discriminatorResult = await discriminator.parse({
-      ...context,
-      state: state.discriminatorState,
+      ...withChildContext(
+        context,
+        "_discriminator",
+        state.discriminatorState,
+      ),
     });
 
     if (
@@ -7952,7 +8676,7 @@ export function conditional(
       // Complete discriminator to get the value
       const completionResult = await discriminator.complete(
         discriminatorResult.next.state,
-        context.exec,
+        withChildExecPath(context.exec, "_discriminator"),
       );
 
       if (completionResult.success) {
@@ -7961,15 +8685,34 @@ export function conditional(
 
         if (branchParser) {
           // Try to parse more from the branch
+          const discriminatorExec = mergeChildExec(
+            context.exec,
+            discriminatorResult.next.exec,
+          );
           const branchParseResult = await branchParser.parse({
-            ...context,
+            ...withChildContext(
+              {
+                ...context,
+                ...(discriminatorExec != null
+                  ? {
+                    exec: discriminatorExec,
+                    dependencyRegistry: discriminatorExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              "_branch",
+              branchParser.initialState,
+              branchParser.usage,
+            ),
             buffer: discriminatorResult.next.buffer,
             optionsTerminated: discriminatorResult.next.optionsTerminated,
-            state: branchParser.initialState,
-            usage: branchParser.usage,
           });
 
           if (branchParseResult.success) {
+            const mergedExec = mergeChildExec(
+              discriminatorExec,
+              branchParseResult.next.exec,
+            );
             return {
               success: true,
               next: {
@@ -7980,6 +8723,12 @@ export function conditional(
                   selectedBranch: { kind: "branch", key: value },
                   branchState: branchParseResult.next.state,
                 },
+                ...(mergedExec != null
+                  ? {
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
+                  : {}),
               },
               consumed: [
                 ...discriminatorResult.consumed,
@@ -7999,6 +8748,12 @@ export function conditional(
                 selectedBranch: { kind: "branch", key: value },
                 branchState: branchParser.initialState,
               },
+              ...(discriminatorExec != null
+                ? {
+                  exec: discriminatorExec,
+                  dependencyRegistry: discriminatorExec.dependencyRegistry,
+                }
+                : {}),
             },
             consumed: discriminatorResult.consumed,
           };
@@ -8008,13 +8763,20 @@ export function conditional(
 
     // Discriminator didn't match, try default branch
     if (defaultBranch !== undefined) {
-      const defaultResult = await defaultBranch.parse({
-        ...context,
-        state: state.branchState ?? defaultBranch.initialState,
-        usage: defaultBranch.usage,
-      });
+      const defaultResult = await defaultBranch.parse(
+        withChildContext(
+          context,
+          "_branch",
+          state.branchState ?? defaultBranch.initialState,
+          defaultBranch.usage,
+        ),
+      );
 
       if (defaultResult.success && defaultResult.consumed.length > 0) {
+        const mergedExec = mergeChildExec(
+          context.exec,
+          defaultResult.next.exec,
+        );
         return {
           success: true,
           next: {
@@ -8024,6 +8786,12 @@ export function conditional(
               selectedBranch: { kind: "default" },
               branchState: defaultResult.next.state,
             },
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
           },
           consumed: defaultResult.consumed,
         };
@@ -8061,7 +8829,10 @@ export function conditional(
       // If we have default branch, use it
       if (syncDefaultBranch !== undefined) {
         const branchState = state.branchState ?? syncDefaultBranch.initialState;
-        const defaultResult = syncDefaultBranch.complete(branchState, exec);
+        const defaultResult = syncDefaultBranch.complete(
+          branchState,
+          withChildExecPath(exec, "_branch"),
+        );
         if (!defaultResult.success) {
           return defaultResult;
         }
@@ -8098,25 +8869,48 @@ export function conditional(
     const branchParser = state.selectedBranch.kind === "default"
       ? syncDefaultBranch!
       : syncBranches[state.selectedBranch.key];
-
-    // First, complete the discriminator to get DependencySourceState if applicable
-    const discriminatorCompleteResult = syncDiscriminator.complete(
-      state.discriminatorState,
-      exec,
-    );
-    // discriminatorCompleteResult may be { success: true, value: ... } or DependencySourceState
-
-    // To propagate dependency from discriminator to branch:
-    // 1. Wrap discriminator state and branch state together
-    // 2. Resolve deferred parse states with dependency registry populated from discriminator
     const combinedState = {
       _discriminator: state.discriminatorState,
       _branch: state.branchState,
     };
-    const resolvedCombinedState = resolveDeferredParseStates(combinedState);
-    const resolvedBranchState = resolvedCombinedState._branch;
+    const runtime = createDependencyRuntimeContext(
+      exec?.dependencyRegistry?.clone(),
+    );
+    collectExplicitSourceValues(
+      buildRuntimeNodesFromPairs(
+        [
+          ["_discriminator", discriminator],
+          ["_branch", branchParser],
+        ],
+        combinedState,
+        exec?.path,
+      ),
+      runtime,
+    );
+    collectSourcesFromState(combinedState, runtime);
+    const resolvedBranchState = resolveStateWithRuntime(
+      state.branchState,
+      runtime,
+    );
+    const completionExec: ExecutionContext = {
+      ...(exec ?? {
+        usage: branchParser.usage,
+        path: [],
+        trace: undefined,
+      }),
+      phase: "complete",
+      dependencyRuntime: runtime,
+      dependencyRegistry: runtime.registry,
+    };
+    const discriminatorCompleteResult = syncDiscriminator.complete(
+      state.discriminatorState,
+      withChildExecPath(completionExec, "_discriminator"),
+    );
 
-    const branchResult = branchParser.complete(resolvedBranchState, exec);
+    const branchResult = branchParser.complete(
+      resolvedBranchState,
+      withChildExecPath(completionExec, "_branch"),
+    );
 
     if (!branchResult.success) {
       // Add context to error message
@@ -8139,14 +8933,13 @@ export function conditional(
     let discriminatorValue: string | undefined;
     if (state.selectedBranch.kind === "default") {
       discriminatorValue = undefined;
-    } else if (isDependencySourceState(discriminatorCompleteResult)) {
-      discriminatorValue = discriminatorCompleteResult.result.success
-        ? discriminatorCompleteResult.result.value as string
-        : state.selectedBranch.key;
-    } else if (discriminatorCompleteResult.success) {
-      discriminatorValue = discriminatorCompleteResult.value;
     } else {
-      discriminatorValue = state.selectedBranch.key;
+      const completedDiscriminator = unwrapCompleteResult(
+        discriminatorCompleteResult,
+      );
+      discriminatorValue = completedDiscriminator.success
+        ? completedDiscriminator.value as string
+        : state.selectedBranch.key;
     }
 
     return {
@@ -8183,7 +8976,10 @@ export function conditional(
       // If we have default branch, use it
       if (defaultBranch !== undefined) {
         const branchState = state.branchState ?? defaultBranch.initialState;
-        const defaultResult = await defaultBranch.complete(branchState, exec);
+        const defaultResult = await defaultBranch.complete(
+          branchState,
+          withChildExecPath(exec, "_branch"),
+        );
         if (!defaultResult.success) {
           return defaultResult;
         }
@@ -8220,28 +9016,47 @@ export function conditional(
     const branchParser = state.selectedBranch.kind === "default"
       ? defaultBranch!
       : branches[state.selectedBranch.key];
-
-    // First, complete the discriminator to get DependencySourceState if applicable
-    const discriminatorCompleteResult = await discriminator.complete(
-      state.discriminatorState,
-      exec,
-    );
-
-    // To propagate dependency from discriminator to branch:
-    // 1. Wrap discriminator state and branch state together
-    // 2. Resolve deferred parse states with dependency registry populated from discriminator
     const combinedState = {
       _discriminator: state.discriminatorState,
       _branch: state.branchState,
     };
-    const resolvedCombinedState = await resolveDeferredParseStatesAsync(
-      combinedState,
+    const runtime = createDependencyRuntimeContext(
+      exec?.dependencyRegistry?.clone(),
     );
-    const resolvedBranchState = resolvedCombinedState._branch;
+    collectExplicitSourceValues(
+      buildRuntimeNodesFromPairs(
+        [
+          ["_discriminator", discriminator],
+          ["_branch", branchParser],
+        ],
+        combinedState,
+        exec?.path,
+      ),
+      runtime,
+    );
+    collectSourcesFromState(combinedState, runtime);
+    const resolvedBranchState = await resolveStateWithRuntimeAsync(
+      state.branchState,
+      runtime,
+    );
+    const completionExec: ExecutionContext = {
+      ...(exec ?? {
+        usage: branchParser.usage,
+        path: [],
+        trace: undefined,
+      }),
+      phase: "complete",
+      dependencyRuntime: runtime,
+      dependencyRegistry: runtime.registry,
+    };
+    const discriminatorCompleteResult = await discriminator.complete(
+      state.discriminatorState,
+      withChildExecPath(completionExec, "_discriminator"),
+    );
 
     const branchResult = await branchParser.complete(
       resolvedBranchState,
-      exec,
+      withChildExecPath(completionExec, "_branch"),
     );
 
     if (!branchResult.success) {
@@ -8265,14 +9080,13 @@ export function conditional(
     let discriminatorValue: string | undefined;
     if (state.selectedBranch.kind === "default") {
       discriminatorValue = undefined;
-    } else if (isDependencySourceState(discriminatorCompleteResult)) {
-      discriminatorValue = discriminatorCompleteResult.result.success
-        ? discriminatorCompleteResult.result.value as string
-        : state.selectedBranch.key;
-    } else if (discriminatorCompleteResult.success) {
-      discriminatorValue = discriminatorCompleteResult.value;
     } else {
-      discriminatorValue = state.selectedBranch.key;
+      const completedDiscriminator = unwrapCompleteResult(
+        discriminatorCompleteResult,
+      );
+      discriminatorValue = completedDiscriminator.success
+        ? completedDiscriminator.value as string
+        : state.selectedBranch.key;
     }
 
     return {
@@ -8314,19 +9128,63 @@ export function conditional(
 
     // If no branch selected, suggest discriminator and default branch options
     if (state.selectedBranch === undefined) {
+      const runtime = createDependencyRuntimeContext(
+        context.dependencyRegistry?.clone(),
+      );
+      collectExplicitSourceValues(
+        buildRuntimeNodesFromPairs(
+          syncDefaultBranch == null
+            ? [["\u005fdiscriminator", discriminator]] as const
+            : [
+              ["\u005fdiscriminator", discriminator],
+              ["\u005fbranch", syncDefaultBranch],
+            ] as const,
+          {
+            _discriminator: state.discriminatorState,
+            _branch: state.branchState,
+          },
+          context.exec?.path,
+        ),
+        runtime,
+      );
+      collectSourcesFromState(
+        {
+          _discriminator: state.discriminatorState,
+          _branch: state.branchState,
+        },
+        runtime,
+      );
+      const suggestContext = {
+        ...context,
+        dependencyRegistry: runtime.registry,
+        ...(context.exec != null
+          ? {
+            exec: {
+              ...context.exec,
+              dependencyRuntime: runtime,
+              dependencyRegistry: runtime.registry,
+            },
+          }
+          : {}),
+      };
       // Discriminator suggestions
       yield* syncDiscriminator.suggest(
-        { ...context, state: state.discriminatorState },
+        withChildContext(
+          suggestContext,
+          "_discriminator",
+          state.discriminatorState,
+        ),
         prefix,
       );
 
       // Default branch suggestions if available
       if (syncDefaultBranch !== undefined) {
         yield* syncDefaultBranch.suggest(
-          {
-            ...context,
-            state: state.branchState ?? syncDefaultBranch.initialState,
-          },
+          withChildContext(
+            suggestContext,
+            "_branch",
+            state.branchState ?? syncDefaultBranch.initialState,
+          ),
           prefix,
         );
       }
@@ -8335,9 +9193,45 @@ export function conditional(
       const branchParser = state.selectedBranch.kind === "default"
         ? syncDefaultBranch!
         : syncBranches[state.selectedBranch.key];
+      const runtime = createDependencyRuntimeContext(
+        context.dependencyRegistry?.clone(),
+      );
+      const combinedState = {
+        _discriminator: state.discriminatorState,
+        _branch: state.branchState,
+      };
+      collectExplicitSourceValues(
+        buildRuntimeNodesFromPairs(
+          [
+            ["_discriminator", discriminator],
+            ["_branch", branchParser],
+          ],
+          combinedState,
+          context.exec?.path,
+        ),
+        runtime,
+      );
+      collectSourcesFromState(combinedState, runtime);
+      const suggestContext = {
+        ...context,
+        dependencyRegistry: runtime.registry,
+        ...(context.exec != null
+          ? {
+            exec: {
+              ...context.exec,
+              dependencyRuntime: runtime,
+              dependencyRegistry: runtime.registry,
+            },
+          }
+          : {}),
+      };
 
       yield* branchParser.suggest(
-        { ...context, state: state.branchState },
+        withChildContext(
+          suggestContext,
+          "_branch",
+          state.branchState,
+        ),
         prefix,
       );
     }
@@ -8352,19 +9246,63 @@ export function conditional(
 
     // If no branch selected, suggest discriminator and default branch options
     if (state.selectedBranch === undefined) {
+      const runtime = createDependencyRuntimeContext(
+        context.dependencyRegistry?.clone(),
+      );
+      collectExplicitSourceValues(
+        buildRuntimeNodesFromPairs(
+          defaultBranch == null
+            ? [["\u005fdiscriminator", discriminator]] as const
+            : [
+              ["\u005fdiscriminator", discriminator],
+              ["\u005fbranch", defaultBranch],
+            ] as const,
+          {
+            _discriminator: state.discriminatorState,
+            _branch: state.branchState,
+          },
+          context.exec?.path,
+        ),
+        runtime,
+      );
+      collectSourcesFromState(
+        {
+          _discriminator: state.discriminatorState,
+          _branch: state.branchState,
+        },
+        runtime,
+      );
+      const suggestContext = {
+        ...context,
+        dependencyRegistry: runtime.registry,
+        ...(context.exec != null
+          ? {
+            exec: {
+              ...context.exec,
+              dependencyRuntime: runtime,
+              dependencyRegistry: runtime.registry,
+            },
+          }
+          : {}),
+      };
       // Discriminator suggestions
       yield* discriminator.suggest(
-        { ...context, state: state.discriminatorState },
+        withChildContext(
+          suggestContext,
+          "_discriminator",
+          state.discriminatorState,
+        ),
         prefix,
       );
 
       // Default branch suggestions if available
       if (defaultBranch !== undefined) {
         yield* defaultBranch.suggest(
-          {
-            ...context,
-            state: state.branchState ?? defaultBranch.initialState,
-          },
+          withChildContext(
+            suggestContext,
+            "_branch",
+            state.branchState ?? defaultBranch.initialState,
+          ),
           prefix,
         );
       }
@@ -8373,9 +9311,45 @@ export function conditional(
       const branchParser = state.selectedBranch.kind === "default"
         ? defaultBranch!
         : branches[state.selectedBranch.key];
+      const runtime = createDependencyRuntimeContext(
+        context.dependencyRegistry?.clone(),
+      );
+      const combinedState = {
+        _discriminator: state.discriminatorState,
+        _branch: state.branchState,
+      };
+      collectExplicitSourceValues(
+        buildRuntimeNodesFromPairs(
+          [
+            ["_discriminator", discriminator],
+            ["_branch", branchParser],
+          ],
+          combinedState,
+          context.exec?.path,
+        ),
+        runtime,
+      );
+      collectSourcesFromState(combinedState, runtime);
+      const suggestContext = {
+        ...context,
+        dependencyRegistry: runtime.registry,
+        ...(context.exec != null
+          ? {
+            exec: {
+              ...context.exec,
+              dependencyRuntime: runtime,
+              dependencyRegistry: runtime.registry,
+            },
+          }
+          : {}),
+      };
 
       yield* branchParser.suggest(
-        { ...context, state: state.branchState },
+        withChildContext(
+          suggestContext,
+          "_branch",
+          state.branchState,
+        ),
         prefix,
       );
     }

@@ -707,11 +707,10 @@ export function bindConfig<
     return annotations?.[options.context.id] === phase1ConfigAnnotationMarker;
   }
 
-  // Do NOT propagate wrappedDependencySourceMarker to the returned parser.
-  // Unlike withDefault(), bindConfig() cannot resolve dependencies from a
-  // synthetic pending state (it needs config annotations).  Propagating the
-  // marker would cause optional() to delegate into bindConfig with an
-  // unannotated state, surfacing "Missing config" errors instead of undefined.
+  // bindConfig() resolves fallbacks through config annotations at completion
+  // time, not through synthetic dependency-wrapper states.  Keeping the bound
+  // parser isolated from those legacy markers prevents optional()/withDefault()
+  // wrappers from invoking it without the annotation context it requires.
 
   const boundParser: Parser<M, TValue, TState> = {
     $mode: parser.$mode,
@@ -721,6 +720,7 @@ export function bindConfig<
     usage: options.default !== undefined
       ? [{ type: "optional", terms: parser.usage }]
       : parser.usage,
+    [Symbol.for("@optique/core/inheritParentAnnotations")]: true,
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
@@ -828,6 +828,40 @@ export function bindConfig<
   if (typeof parser.normalizeValue === "function") {
     Object.defineProperty(boundParser, "normalizeValue", {
       value: parser.normalizeValue.bind(parser),
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  const dependencyMetadata = (
+    parser as Parser<M, TValue, TState> & {
+      readonly dependencyMetadata?: {
+        readonly source?: {
+          readonly extractSourceValue: (
+            state: unknown,
+          ) => Result<unknown> | undefined;
+        };
+      };
+    }
+  ).dependencyMetadata;
+  if (dependencyMetadata != null) {
+    Object.defineProperty(boundParser, "dependencyMetadata", {
+      value: dependencyMetadata.source == null ? dependencyMetadata : {
+        ...dependencyMetadata,
+        source: {
+          ...dependencyMetadata.source,
+          extractSourceValue: (state: unknown) => {
+            if (!isConfigBindState(state)) {
+              return dependencyMetadata.source?.extractSourceValue(state);
+            }
+            if (state.hasCliValue) {
+              return dependencyMetadata.source?.extractSourceValue(
+                state.cliState,
+              );
+            }
+            return getConfigOrDefault(state, options);
+          },
+        },
+      },
       configurable: true,
       enumerable: false,
     });

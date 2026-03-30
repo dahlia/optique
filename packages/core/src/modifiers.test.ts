@@ -8,7 +8,6 @@ import {
   createDependencySourceState,
   createPendingDependencySourceState,
   dependency,
-  dependencyId,
   isDependencySourceState,
   transformsDependencyValueMarker,
   wrappedDependencySourceMarker,
@@ -593,7 +592,7 @@ describe("optional", () => {
     );
   });
 
-  it("should delegate completion to wrapped dependency default source", () => {
+  it("should return the wrapped default value as a plain result", () => {
     const modeSource = dependency(choice(["dev", "prod"] as const));
     const defaultedSource = withDefault(
       option("--mode", modeSource),
@@ -603,13 +602,9 @@ describe("optional", () => {
 
     const completeResult = optionalParser.complete(undefined);
 
-    assert.ok(isDependencySourceState(completeResult));
-    if (isDependencySourceState(completeResult)) {
-      assert.ok(completeResult.result.success);
-      if (completeResult.result.success) {
-        assert.equal(completeResult.result.value, "dev");
-      }
-      assert.equal(completeResult[dependencyId], modeSource[dependencyId]);
+    assert.ok(completeResult.success);
+    if (completeResult.success) {
+      assert.equal(completeResult.value, "dev");
     }
   });
 });
@@ -4564,7 +4559,7 @@ describe("branch coverage: modifiers edge cases", () => {
     assert.ok(Array.isArray(suggestions));
   });
 
-  it("withDefault: transformed async parser keeps dependency state", async () => {
+  it("withDefault: transformed async parser returns plain fallback result", async () => {
     const depId = Symbol("dep");
     const transformedAsyncParser = {
       $mode: "async" as const,
@@ -4598,9 +4593,9 @@ describe("branch coverage: modifiers edge cases", () => {
     );
 
     const result = await parser.complete(undefined);
-    assert.ok(isDependencySourceState(result));
-    if (isDependencySourceState(result) && result.result.success) {
-      assert.equal(result.result.value, "fallback");
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "fallback");
     }
   });
 
@@ -4638,7 +4633,7 @@ describe("branch coverage: modifiers edge cases", () => {
     }
   });
 
-  it("withDefault: wrapped dependency source uses default dependency value", () => {
+  it("withDefault: wrapped dependency source uses plain fallback value", () => {
     const pending = createPendingDependencySourceState(Symbol("wrapped-dep"));
     const wrappedParser = {
       $mode: "sync" as const,
@@ -4665,13 +4660,13 @@ describe("branch coverage: modifiers edge cases", () => {
     );
 
     const result = parser.complete(undefined);
-    assert.ok(isDependencySourceState(result));
-    if (isDependencySourceState(result) && result.result.success) {
-      assert.equal(result.result.value, "fallback");
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "fallback");
     }
   });
 
-  it("withDefault: pending dependency state in async transform uses default", async () => {
+  it("withDefault: defined async transform state delegates to inner parser", async () => {
     const depId = Symbol("pending-dep");
     const transformedAsyncParser = {
       $mode: "async" as const,
@@ -4703,33 +4698,25 @@ describe("branch coverage: modifiers edge cases", () => {
       transformedAsyncParser as unknown as ReturnType<typeof option>,
       "fallback",
     );
-    const pending = createPendingDependencySourceState(depId);
-
-    const result = await parser.complete([pending] as unknown as [undefined]);
+    const result = await parser.complete([undefined] as unknown as [undefined]);
     assert.ok(isDependencySourceState(result));
     if (isDependencySourceState(result) && result.result.success) {
-      assert.equal(result.result.value, "fallback");
+      assert.equal(result.result.value, "inner");
     }
   });
 
-  it("withDefault: pending dependency in sync parser preserves dependency id", () => {
-    const depId = Symbol("pending-sync");
+  it("withDefault: sync parser returns plain fallback for missing value", () => {
     const baseParser = option("--name", string());
     const parser = withDefault(baseParser, "fallback");
-    const pending = createPendingDependencySourceState(depId);
 
-    const result = parser.complete([pending] as unknown as [undefined]);
-    assert.ok(isDependencySourceState(result));
-    if (isDependencySourceState(result)) {
-      assert.equal(result[dependencyId], depId);
-      assert.ok(result.result.success);
-      if (result.result.success) {
-        assert.equal(result.result.value, "fallback");
-      }
+    const result = parser.complete(undefined);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "fallback");
     }
   });
 
-  it("optional: wrapped async dependency complete delegates inner pending state", async () => {
+  it("optional: wrapped async dependency complete returns undefined when missing", async () => {
     const depId = Symbol("opt-async-dep");
     const pending = createPendingDependencySourceState(depId);
     const asyncWrapped = {
@@ -4761,7 +4748,7 @@ describe("branch coverage: modifiers edge cases", () => {
 
     const parser = optional(asyncWrapped);
     const result = await parser.complete(undefined);
-    assert.ok(isDependencySourceState(result));
+    assert.deepEqual(result, { success: true, value: undefined });
   });
 
   it("optional: async wrapped dependency pending state delegates inner parser", async () => {
@@ -4937,8 +4924,7 @@ describe("branch coverage: modifiers edge cases", () => {
     assert.ok(!result.success);
   });
 
-  it("withDefault: pending dependency path handles callback errors", () => {
-    const depId = Symbol("pending-sync-fail");
+  it("withDefault: plain missing path handles callback errors", () => {
     const baseParser = option("--name", string());
     const parser = withDefault(
       baseParser,
@@ -4946,9 +4932,8 @@ describe("branch coverage: modifiers edge cases", () => {
         throw new Error("pending callback failed");
       },
     );
-    const pending = createPendingDependencySourceState(depId);
 
-    const result = parser.complete([pending] as unknown as [undefined]);
+    const result = parser.complete(undefined);
     assert.ok(!result.success);
   });
 
@@ -5089,8 +5074,7 @@ describe("branch coverage: modifiers edge cases", () => {
     }
   });
 
-  it("withDefault: transformed pending complete catches callback errors", async () => {
-    const depId = Symbol("wd-catch-pending");
+  it("withDefault: transformed missing complete catches callback errors", async () => {
     const transformedAsyncParser = {
       $mode: "async" as const,
       $valueType: undefined,
@@ -5122,8 +5106,7 @@ describe("branch coverage: modifiers edge cases", () => {
         throw new Error("pending default callback exploded");
       },
     );
-    const pending = createPendingDependencySourceState(depId);
-    const result = await parser.complete([pending] as unknown as [undefined]);
+    const result = await parser.complete(undefined);
     assert.ok(!result.success);
     if (!result.success) {
       assert.ok(

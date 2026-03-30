@@ -1729,6 +1729,10 @@ export function getDefaultValuesFunction<M extends Mode, T, S>(
   if (defaultValues in parser) {
     return parser[defaultValues];
   }
+  if (singleDefaultValue in parser) {
+    const single = parser[singleDefaultValue];
+    return single == null ? undefined : () => [single()];
+  }
   return undefined;
 }
 

@@ -1,25 +1,19 @@
 import {
-  createDeferredParseState,
-  createDependencySourceState,
-  createPendingDependencySourceState,
-  type DeferredParseState,
-  dependencyId,
-  type DependencySourceState,
   type DerivedValueParser,
   getDefaultValuesFunction,
   getDependencyIds,
-  isDeferredParseState,
-  isDependencySource,
-  isDependencySourceState,
   isDerivedValueParser,
-  isPendingDependencySourceState,
-  type PendingDependencySourceState,
   suggestWithDependency,
 } from "./dependency.ts";
 import { annotateFreshArray, getAnnotations } from "./annotations.ts";
 import { extractDependencyMetadata } from "./dependency-metadata.ts";
+import {
+  replayDerivedParser,
+  replayDerivedParserAsync,
+} from "./dependency-runtime.ts";
 import type { DocFragment } from "./doc.ts";
 import { dispatchIterableByMode } from "./mode-dispatch.ts";
+import type { TraceEntry } from "./input-trace.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import { validateCommandNames, validateOptionNames } from "./validate.ts";
 
@@ -29,31 +23,61 @@ import { validateCommandNames, validateOptionNames } from "./validate.ts";
  */
 const EMPTY_LEADING_NAMES: ReadonlySet<string> = new Set();
 
-/**
- * State type for options that may use deferred parsing (DerivedValueParser).
- * This extends the normal ValueParserResult to also support DeferredParseState
- * and PendingDependencySourceState.
- * @internal
- */
-export type OptionState<T> =
-  | ValueParserResult<T>
-  | DeferredParseState<T>
-  | PendingDependencySourceState
-  | undefined;
+function withChildExecPath(
+  exec: ExecutionContext | undefined,
+  segment: PropertyKey,
+): ExecutionContext | undefined {
+  if (exec == null) return undefined;
+  return {
+    ...exec,
+    path: [...(exec.path ?? []), segment],
+  };
+}
+
+function mergeChildExec(
+  parent: ExecutionContext | undefined,
+  child: ExecutionContext | undefined,
+): ExecutionContext | undefined {
+  if (parent == null) return child;
+  if (child == null) return parent;
+  return {
+    ...parent,
+    trace: child.trace ?? parent.trace,
+    dependencyRuntime: child.dependencyRuntime ?? parent.dependencyRuntime,
+    dependencyRegistry: child.dependencyRegistry ?? parent.dependencyRegistry,
+    preCompletedByParser: child.preCompletedByParser ??
+      parent.preCompletedByParser,
+  };
+}
+
+function withChildContext<TState>(
+  context: ParserContext<unknown>,
+  segment: PropertyKey,
+  state: TState,
+): ParserContext<TState> {
+  const exec = withChildExecPath(context.exec, segment);
+  return {
+    ...context,
+    state,
+    ...(exec != null
+      ? {
+        exec,
+        dependencyRegistry: exec.dependencyRegistry ??
+          context.dependencyRegistry,
+      }
+      : {}),
+  };
+}
+
+/** @internal */
+export type OptionState<T> = ValueParserResult<T> | undefined;
 
 function hasParsedOptionValue<M extends Mode, T>(
-  state:
-    | ValueParserResult<T | boolean>
-    | DeferredParseState<T>
-    | DependencySourceState<T>
-    | PendingDependencySourceState
-    | undefined,
+  state: ValueParserResult<T | boolean> | undefined,
   valueParser: ValueParser<M, T> | undefined,
 ): boolean {
   if (valueParser != null) {
-    return isDeferredParseState(state) ||
-      isDependencySourceState(state) ||
-      (state != null && "success" in state && state.success);
+    return state != null && state.success;
   }
   return state != null &&
     "success" in state &&
@@ -62,29 +86,138 @@ function hasParsedOptionValue<M extends Mode, T>(
 }
 
 /**
- * Helper function to create the appropriate state for an option value.
- * - If the value parser is a DerivedValueParser, wraps the result in a DeferredParseState
- *   to allow later resolution with actual dependency values.
- * - If the value parser is a DependencySource, wraps the result in a DependencySourceState
- *   so that it can be matched with DeferredParseState during resolution.
+ * Helper function to create the stored state for an option or argument value.
+ *
+ * Primitive parsers now keep only the plain parse result as their local state.
+ * Any dependency-aware replay information is recorded separately in the
+ * execution trace.
  * @internal
  */
 function createOptionParseState<M extends Mode, T>(
+  parseResult: ValueParserResult<T>,
+): ValueParserResult<T> {
+  return parseResult;
+}
+
+function buildTraceEntry<M extends Mode, T>(
+  kind: TraceEntry["kind"],
   rawInput: string,
+  consumed: readonly string[],
   valueParser: ValueParser<M, T>,
   parseResult: ValueParserResult<T>,
-): ValueParserResult<T> | DeferredParseState<T> | DependencySourceState<T> {
+  optionNames?: readonly string[],
+): TraceEntry {
+  const entry: TraceEntry = {
+    kind,
+    rawInput,
+    consumed,
+    preliminaryResult: parseResult,
+    ...(optionNames != null ? { optionNames } : {}),
+    metavar: valueParser.metavar,
+  };
   if (isDerivedValueParser(valueParser)) {
-    return createDeferredParseState(
-      rawInput,
+    const defaults = getDefaultValuesFunction(
       valueParser as DerivedValueParser<M, T, unknown>,
-      parseResult,
-    );
+    )?.();
+    if (defaults != null) {
+      return { ...entry, defaultDependencyValues: defaults };
+    }
   }
-  if (isDependencySource(valueParser)) {
-    return createDependencySourceState(parseResult, valueParser[dependencyId]);
+  return entry;
+}
+
+function recordTrace<TState>(
+  context: ParserContext<TState>,
+  entry: TraceEntry,
+): ParserContext<TState> {
+  if (context.exec?.trace == null) return context;
+  return {
+    ...context,
+    exec: {
+      ...context.exec,
+      trace: context.exec.trace.set(context.exec.path, entry),
+    },
+  };
+}
+
+function resolveDerivedCompletionSync<T>(
+  derivedMetadata: ReturnType<typeof extractDependencyMetadata> | undefined,
+  state: ValueParserResult<T>,
+  exec?: ExecutionContext,
+): ValueParserResult<T> {
+  if (derivedMetadata?.derived == null || exec?.dependencyRuntime == null) {
+    return state;
   }
-  return parseResult;
+  const traceEntry = exec.trace?.get(exec.path);
+  if (traceEntry?.rawInput == null) {
+    return traceEntry?.preliminaryResult as ValueParserResult<T> ?? state;
+  }
+  if (traceEntry.preliminaryResult != null) {
+    const resolution = exec.dependencyRuntime.resolveDependencies({
+      dependencyIds: derivedMetadata.derived.dependencyIds,
+      defaultValues: traceEntry.defaultDependencyValues,
+    });
+    if (
+      resolution.kind === "resolved" &&
+      resolution.usedDefaults.length > 0 &&
+      resolution.usedDefaults.every((used) => used)
+    ) {
+      return traceEntry.preliminaryResult as ValueParserResult<T>;
+    }
+  }
+  const replayed = replayDerivedParser(
+    {
+      path: exec.path,
+      parser: { dependencyMetadata: { derived: derivedMetadata.derived } },
+      state,
+      defaultDependencyValues: traceEntry.defaultDependencyValues,
+    },
+    traceEntry.rawInput,
+    exec.dependencyRuntime,
+  );
+  return replayed as ValueParserResult<T> ??
+    traceEntry.preliminaryResult as ValueParserResult<T> ??
+    state;
+}
+
+async function resolveDerivedCompletionAsync<T>(
+  derivedMetadata: ReturnType<typeof extractDependencyMetadata> | undefined,
+  state: ValueParserResult<T>,
+  exec?: ExecutionContext,
+): Promise<ValueParserResult<T>> {
+  if (derivedMetadata?.derived == null || exec?.dependencyRuntime == null) {
+    return state;
+  }
+  const traceEntry = exec.trace?.get(exec.path);
+  if (traceEntry?.rawInput == null) {
+    return traceEntry?.preliminaryResult as ValueParserResult<T> ?? state;
+  }
+  if (traceEntry.preliminaryResult != null) {
+    const resolution = exec.dependencyRuntime.resolveDependencies({
+      dependencyIds: derivedMetadata.derived.dependencyIds,
+      defaultValues: traceEntry.defaultDependencyValues,
+    });
+    if (
+      resolution.kind === "resolved" &&
+      resolution.usedDefaults.length > 0 &&
+      resolution.usedDefaults.every((used) => used)
+    ) {
+      return traceEntry.preliminaryResult as ValueParserResult<T>;
+    }
+  }
+  const replayed = await replayDerivedParserAsync(
+    {
+      path: exec.path,
+      parser: { dependencyMetadata: { derived: derivedMetadata.derived } },
+      state,
+      defaultDependencyValues: traceEntry.defaultDependencyValues,
+    },
+    traceEntry.rawInput,
+    exec.dependencyRuntime,
+  );
+  return replayed as ValueParserResult<T> ??
+    traceEntry.preliminaryResult as ValueParserResult<T> ??
+    state;
 }
 
 import {
@@ -100,6 +233,7 @@ import type {
   DocState,
   ExecutionContext,
   Mode,
+  ModeValue,
   Parser,
   ParserContext,
   ParserResult,
@@ -769,6 +903,9 @@ export function option<M extends Mode, T>(
   validateOptionNames(optionNames, "Option");
   const mode: M = (valueParser?.$mode ?? "sync") as M;
   const isAsync = mode === "async";
+  const dependencyMetadata = valueParser != null
+    ? extractDependencyMetadata(valueParser)
+    : undefined;
 
   // Use 'as any' to allow both sync and async returns from parse method
   // The actual mode is set correctly at the end via spread with $mode
@@ -796,18 +933,14 @@ export function option<M extends Mode, T>(
     ],
     leadingNames: new Set<string>(optionNames),
     acceptingAnyToken: false,
-    initialState: valueParser == null
-      ? { success: true, value: false }
-      : isDependencySource(valueParser)
-      ? createPendingDependencySourceState(valueParser[dependencyId])
-      : {
-        success: false,
-        error: options.errors?.missing
-          ? (typeof options.errors.missing === "function"
-            ? options.errors.missing(optionNames)
-            : options.errors.missing)
-          : message`Missing option ${eOptionNames(optionNames)}.`,
-      },
+    initialState: valueParser == null ? { success: true, value: false } : {
+      success: false,
+      error: options.errors?.missing
+        ? (typeof options.errors.missing === "function"
+          ? options.errors.missing(optionNames)
+          : options.errors.missing)
+        : message`Missing option ${eOptionNames(optionNames)}.`,
+    },
     parse(
       context: ParserContext<
         ValueParserResult<T | boolean> | undefined
@@ -884,30 +1017,47 @@ export function option<M extends Mode, T>(
         const parseResultOrPromise = valueParser!.parse(rawInput);
         if (isAsync) {
           return (parseResultOrPromise as Promise<ValueParserResult<T>>).then(
-            (parseResult) => ({
-              success: true as const,
-              next: {
-                ...context,
-                state: createOptionParseState(
+            (parseResult) => {
+              const next = recordTrace(
+                context,
+                buildTraceEntry(
+                  "option-value",
                   rawInput,
+                  context.buffer.slice(0, 2),
                   valueParser!,
                   parseResult,
+                  optionNames,
                 ),
-                buffer: context.buffer.slice(2),
-              },
-              consumed: context.buffer.slice(0, 2),
-            }),
+              );
+              return {
+                success: true as const,
+                next: {
+                  ...next,
+                  state: createOptionParseState(parseResult),
+                  buffer: context.buffer.slice(2),
+                },
+                consumed: context.buffer.slice(0, 2),
+              };
+            },
           );
         }
+        const parseResult = parseResultOrPromise as ValueParserResult<T>;
+        const next = recordTrace(
+          context,
+          buildTraceEntry(
+            "option-value",
+            rawInput,
+            context.buffer.slice(0, 2),
+            valueParser!,
+            parseResult,
+            optionNames,
+          ),
+        );
         return {
           success: true,
           next: {
-            ...context,
-            state: createOptionParseState(
-              rawInput,
-              valueParser!,
-              parseResultOrPromise as ValueParserResult<T>,
-            ),
+            ...next,
+            state: createOptionParseState(parseResult),
             buffer: context.buffer.slice(2),
           },
           consumed: context.buffer.slice(0, 2),
@@ -956,30 +1106,47 @@ export function option<M extends Mode, T>(
         const parseResultOrPromise = valueParser.parse(rawInput);
         if (isAsync) {
           return (parseResultOrPromise as Promise<ValueParserResult<T>>).then(
-            (parseResult) => ({
-              success: true as const,
-              next: {
-                ...context,
-                state: createOptionParseState(
+            (parseResult) => {
+              const next = recordTrace(
+                context,
+                buildTraceEntry(
+                  "option-value",
                   rawInput,
+                  context.buffer.slice(0, 1),
                   valueParser,
                   parseResult,
+                  optionNames,
                 ),
-                buffer: context.buffer.slice(1),
-              },
-              consumed: context.buffer.slice(0, 1),
-            }),
+              );
+              return {
+                success: true as const,
+                next: {
+                  ...next,
+                  state: createOptionParseState(parseResult),
+                  buffer: context.buffer.slice(1),
+                },
+                consumed: context.buffer.slice(0, 1),
+              };
+            },
           );
         }
+        const parseResult = parseResultOrPromise as ValueParserResult<T>;
+        const next = recordTrace(
+          context,
+          buildTraceEntry(
+            "option-value",
+            rawInput,
+            context.buffer.slice(0, 1),
+            valueParser,
+            parseResult,
+            optionNames,
+          ),
+        );
         return {
           success: true,
           next: {
-            ...context,
-            state: createOptionParseState(
-              rawInput,
-              valueParser,
-              parseResultOrPromise as ValueParserResult<T>,
-            ),
+            ...next,
+            state: createOptionParseState(parseResult),
             buffer: context.buffer.slice(1),
           },
           consumed: context.buffer.slice(0, 1),
@@ -1063,73 +1230,59 @@ export function option<M extends Mode, T>(
       };
     },
     complete(
-      state:
-        | ValueParserResult<T | boolean>
-        | DeferredParseState<T>
-        | PendingDependencySourceState
-        | undefined,
-      _exec?: ExecutionContext,
-    ) {
+      state: ValueParserResult<T | boolean> | undefined,
+      exec?: ExecutionContext,
+    ): ModeValue<M, ValueParserResult<T | boolean>> {
       if (state == null) {
-        return valueParser == null ? { success: true, value: false } : {
-          success: false,
-          error: options.errors?.missing
-            ? (typeof options.errors.missing === "function"
-              ? options.errors.missing(optionNames)
-              : options.errors.missing)
-            : message`Missing option ${eOptionNames(optionNames)}.`,
-        };
+        const missing = valueParser == null
+          ? { success: true, value: false }
+          : {
+            success: false,
+            error: options.errors?.missing
+              ? (typeof options.errors.missing === "function"
+                ? options.errors.missing(optionNames)
+                : options.errors.missing)
+              : message`Missing option ${eOptionNames(optionNames)}.`,
+          };
+        return missing as ModeValue<M, ValueParserResult<T | boolean>>;
       }
-      // Handle PendingDependencySourceState: this means the option was not provided
-      // but it uses a DependencySource. Return a "missing" error.
-      if (isPendingDependencySourceState(state)) {
-        return {
-          success: false,
-          error: options.errors?.missing
-            ? (typeof options.errors.missing === "function"
-              ? options.errors.missing(optionNames)
-              : options.errors.missing)
-            : message`Missing option ${eOptionNames(optionNames)}.`,
-        };
+      if (
+        isAsync && valueParser != null && dependencyMetadata?.derived != null
+      ) {
+        return resolveDerivedCompletionAsync(
+          dependencyMetadata,
+          state as ValueParserResult<T>,
+          exec,
+        ).then((resolved) =>
+          resolved.success ? resolved : {
+            success: false as const,
+            error: options.errors?.invalidValue
+              ? (typeof options.errors.invalidValue === "function"
+                ? options.errors.invalidValue(resolved.error)
+                : options.errors.invalidValue)
+              : message`${eOptionNames(optionNames)}: ${resolved.error}`,
+          }
+        ) as ReturnType<typeof result.complete>;
       }
-      // Handle DeferredParseState: residual fallback for compatibility.
-      // Both top-level and construct-level parsing now resolve deferred
-      // states before calling complete(), so this branch should not be
-      // reached during normal operation.
-      if (isDeferredParseState<T>(state)) {
-        const preliminaryResult = state.preliminaryResult;
-        if (preliminaryResult.success) return preliminaryResult;
-        return {
-          success: false,
-          error: options.errors?.invalidValue
-            ? (typeof options.errors.invalidValue === "function"
-              ? options.errors.invalidValue(preliminaryResult.error)
-              : options.errors.invalidValue)
-            : message`${eOptionNames(optionNames)}: ${preliminaryResult.error}`,
-        };
+      const resolvedState = valueParser != null &&
+          dependencyMetadata?.derived != null
+        ? resolveDerivedCompletionSync(
+          dependencyMetadata,
+          state as ValueParserResult<T>,
+          exec,
+        ) as ValueParserResult<T | boolean>
+        : state;
+      if (resolvedState.success) {
+        return resolvedState as ModeValue<M, ValueParserResult<T | boolean>>;
       }
-      // Handle DependencySourceState: extract the underlying result.
-      if (isDependencySourceState<T | boolean>(state)) {
-        const result = state.result;
-        if (result.success) return result;
-        return {
-          success: false,
-          error: options.errors?.invalidValue
-            ? (typeof options.errors.invalidValue === "function"
-              ? options.errors.invalidValue(result.error)
-              : options.errors.invalidValue)
-            : message`${eOptionNames(optionNames)}: ${result.error}`,
-        };
-      }
-      if (state.success) return state;
       return {
         success: false,
         error: options.errors?.invalidValue
           ? (typeof options.errors.invalidValue === "function"
-            ? options.errors.invalidValue(state.error)
+            ? options.errors.invalidValue(resolvedState.error)
             : options.errors.invalidValue)
-          : message`${eOptionNames(optionNames)}: ${state.error}`,
-      };
+          : message`${eOptionNames(optionNames)}: ${resolvedState.error}`,
+      } as ModeValue<M, ValueParserResult<T | boolean>>;
     },
     suggest(
       context: ParserContext<
@@ -1229,12 +1382,9 @@ export function option<M extends Mode, T>(
       writable: false,
     });
   }
-  // Populate dependency metadata from the value parser's old-protocol markers.
-  if (valueParser != null) {
-    const depMeta = extractDependencyMetadata(valueParser);
-    if (depMeta != null) {
-      (result as Record<string, unknown>).dependencyMetadata = depMeta;
-    }
+  // Populate dependency metadata from the value parser's markers.
+  if (dependencyMetadata != null) {
+    (result as Record<string, unknown>).dependencyMetadata = dependencyMetadata;
   }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
@@ -1674,6 +1824,7 @@ export function argument<M extends Mode, T>(
   options: ArgumentOptions = {},
 ): Parser<M, T, ValueParserResult<T> | undefined> {
   const isAsync = valueParser.$mode === "async";
+  const dependencyMetadata = extractDependencyMetadata(valueParser);
 
   const optionPattern = /^--?[a-z0-9-]+$/i;
   const term: UsageTerm = {
@@ -1750,37 +1901,56 @@ export function argument<M extends Mode, T>(
       const parseResultOrPromise = valueParser.parse(rawInput);
       if (isAsync) {
         return (parseResultOrPromise as Promise<ValueParserResult<T>>).then(
-          (parseResult) => ({
-            success: true as const,
-            next: {
-              ...context,
-              buffer: context.buffer.slice(i + 1),
-              state: createOptionParseState(rawInput, valueParser, parseResult),
-              optionsTerminated,
-            },
-            consumed: context.buffer.slice(0, i + 1),
-          }),
+          (parseResult) => {
+            const next = recordTrace(
+              context,
+              buildTraceEntry(
+                "argument-value",
+                rawInput,
+                context.buffer.slice(0, i + 1),
+                valueParser,
+                parseResult,
+              ),
+            );
+            return {
+              success: true as const,
+              next: {
+                ...next,
+                buffer: context.buffer.slice(i + 1),
+                state: createOptionParseState(parseResult),
+                optionsTerminated,
+              },
+              consumed: context.buffer.slice(0, i + 1),
+            };
+          },
         );
       }
+      const parseResult = parseResultOrPromise as ValueParserResult<T>;
+      const next = recordTrace(
+        context,
+        buildTraceEntry(
+          "argument-value",
+          rawInput,
+          context.buffer.slice(0, i + 1),
+          valueParser,
+          parseResult,
+        ),
+      );
       return {
         success: true,
         next: {
-          ...context,
+          ...next,
           buffer: context.buffer.slice(i + 1),
-          state: createOptionParseState(
-            rawInput,
-            valueParser,
-            parseResultOrPromise as ValueParserResult<T>,
-          ),
+          state: createOptionParseState(parseResult),
           optionsTerminated,
         },
         consumed: context.buffer.slice(0, i + 1),
       };
     },
     complete(
-      state: ValueParserResult<T> | DeferredParseState<T> | undefined,
-      _exec?: ExecutionContext,
-    ) {
+      state: ValueParserResult<T> | undefined,
+      exec?: ExecutionContext,
+    ): ModeValue<M, ValueParserResult<T>> {
       if (state == null) {
         return {
           success: false,
@@ -1788,48 +1958,38 @@ export function argument<M extends Mode, T>(
             message`Expected a ${
               metavar(valueParser.metavar)
             }, but too few arguments.`,
-        };
+        } as ModeValue<M, ValueParserResult<T>>;
       }
-      // Handle DeferredParseState: residual fallback for compatibility.
-      // Both top-level and construct-level parsing now resolve deferred
-      // states before calling complete(), so this branch should not be
-      // reached during normal operation.
-      if (isDeferredParseState<T>(state)) {
-        const preliminaryResult = state.preliminaryResult;
-        if (preliminaryResult.success) return preliminaryResult;
-        return {
-          success: false,
-          error: options.errors?.invalidValue
-            ? (typeof options.errors.invalidValue === "function"
-              ? options.errors.invalidValue(preliminaryResult.error)
-              : options.errors.invalidValue)
-            : message`${
-              metavar(valueParser.metavar)
-            }: ${preliminaryResult.error}`,
-        };
+      if (isAsync && dependencyMetadata?.derived != null) {
+        return resolveDerivedCompletionAsync(
+          dependencyMetadata,
+          state,
+          exec,
+        ).then((resolved) =>
+          resolved.success ? resolved : {
+            success: false as const,
+            error: options.errors?.invalidValue
+              ? (typeof options.errors.invalidValue === "function"
+                ? options.errors.invalidValue(resolved.error)
+                : options.errors.invalidValue)
+              : message`${metavar(valueParser.metavar)}: ${resolved.error}`,
+          }
+        ) as ReturnType<typeof result.complete>;
       }
-      // Handle DependencySourceState: extract the underlying result.
-      if (isDependencySourceState<T>(state)) {
-        const result = state.result;
-        if (result.success) return result;
-        return {
-          success: false,
-          error: options.errors?.invalidValue
-            ? (typeof options.errors.invalidValue === "function"
-              ? options.errors.invalidValue(result.error)
-              : options.errors.invalidValue)
-            : message`${metavar(valueParser.metavar)}: ${result.error}`,
-        };
+      const resolvedState = dependencyMetadata?.derived != null
+        ? resolveDerivedCompletionSync(dependencyMetadata, state, exec)
+        : state;
+      if (resolvedState.success) {
+        return resolvedState as ModeValue<M, ValueParserResult<T>>;
       }
-      if (state.success) return state;
       return {
         success: false,
         error: options.errors?.invalidValue
           ? (typeof options.errors.invalidValue === "function"
-            ? options.errors.invalidValue(state.error)
+            ? options.errors.invalidValue(resolvedState.error)
             : options.errors.invalidValue)
-          : message`${metavar(valueParser.metavar)}: ${state.error}`,
-      };
+          : message`${metavar(valueParser.metavar)}: ${resolvedState.error}`,
+      } as ModeValue<M, ValueParserResult<T>>;
     },
     suggest(
       context: ParserContext<
@@ -1919,10 +2079,8 @@ export function argument<M extends Mode, T>(
     configurable: true,
     enumerable: false,
   });
-  // Populate dependency metadata from the value parser's old-protocol markers.
-  const depMeta = extractDependencyMetadata(valueParser);
-  if (depMeta != null) {
-    (result as Record<string, unknown>).dependencyMetadata = depMeta;
+  if (dependencyMetadata != null) {
+    (result as Record<string, unknown>).dependencyMetadata = dependencyMetadata;
   }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
@@ -2052,16 +2210,16 @@ function* suggestCommandSync<T, TState>(
     }
   } else if (context.state[0] === "matched") {
     // Command matched but inner parser not started - delegate to inner parser
-    yield* parser.suggest({
-      ...context,
-      state: parser.initialState,
-    }, prefix);
+    yield* parser.suggest(
+      withChildContext(context, name, parser.initialState),
+      prefix,
+    );
   } else if (context.state[0] === "parsing") {
     // Command in parsing state - delegate to inner parser
-    yield* parser.suggest({
-      ...context,
-      state: context.state[1],
-    }, prefix);
+    yield* parser.suggest(
+      withChildContext(context, name, context.state[1]),
+      prefix,
+    );
   }
 }
 
@@ -2088,19 +2246,19 @@ async function* suggestCommandAsync<T, TState>(
     }
   } else if (context.state[0] === "matched") {
     // Command matched but inner parser not started - delegate to inner parser
-    const suggestions = parser.suggest({
-      ...context,
-      state: parser.initialState,
-    }, prefix) as AsyncIterable<Suggestion>;
+    const suggestions = parser.suggest(
+      withChildContext(context, name, parser.initialState),
+      prefix,
+    ) as AsyncIterable<Suggestion>;
     for await (const s of suggestions) {
       yield s;
     }
   } else if (context.state[0] === "parsing") {
     // Command in parsing state - delegate to inner parser
-    const suggestions = parser.suggest({
-      ...context,
-      state: context.state[1],
-    }, prefix) as AsyncIterable<Suggestion>;
+    const suggestions = parser.suggest(
+      withChildContext(context, name, context.state[1]),
+      prefix,
+    ) as AsyncIterable<Suggestion>;
     for await (const s of suggestions) {
       yield s;
     }
@@ -2224,14 +2382,17 @@ export function command<M extends Mode, T, TState>(
           : context.state[1];
 
         const parseResultOrPromise = parser.parse({
-          ...context,
-          state: innerState,
+          ...withChildContext(context, name, innerState),
         });
 
         const wrapState = (
           parseResult: ParserResult<TState>,
         ) => {
           if (parseResult.success) {
+            const mergedExec = mergeChildExec(
+              context.exec,
+              parseResult.next.exec,
+            );
             return {
               success: true as const,
               next: {
@@ -2240,6 +2401,12 @@ export function command<M extends Mode, T, TState>(
                   "parsing",
                   TState,
                 ],
+                ...(mergedExec != null
+                  ? {
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
+                  : {}),
               },
               consumed: parseResult.consumed,
             };
@@ -2281,26 +2448,45 @@ export function command<M extends Mode, T, TState>(
           optionsTerminated: false,
           usage: [],
           state: parser.initialState,
+          ...(exec != null
+            ? {
+              exec: withChildExecPath(exec, name),
+              dependencyRegistry: withChildExecPath(exec, name)
+                ?.dependencyRegistry,
+            }
+            : {}),
         });
         if (isAsync) {
           return (
             parseResultOrPromise as Promise<ParserResult<TState>>
           ).then((parseResult) => {
             if (parseResult.success) {
-              return parser.complete(parseResult.next.state, exec);
+              return parser.complete(
+                parseResult.next.state,
+                withChildExecPath(exec, name),
+              );
             }
-            return parser.complete(parser.initialState, exec);
+            return parser.complete(
+              parser.initialState,
+              withChildExecPath(exec, name),
+            );
           });
         }
         const parseResult = parseResultOrPromise as ParserResult<TState>;
         if (parseResult.success) {
-          return parser.complete(parseResult.next.state, exec);
+          return parser.complete(
+            parseResult.next.state,
+            withChildExecPath(exec, name),
+          );
         }
         // If parse fails, fallback to completing with initial state
-        return parser.complete(parser.initialState, exec);
+        return parser.complete(
+          parser.initialState,
+          withChildExecPath(exec, name),
+        );
       } else if (state[0] === "parsing") {
         // Delegate to inner parser
-        return parser.complete(state[1], exec);
+        return parser.complete(state[1], withChildExecPath(exec, name));
       }
       // Should never reach here
       return {

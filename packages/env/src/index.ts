@@ -279,11 +279,10 @@ export function bindEnv<
 
   const deferPromptUntilConfigResolves = parser.shouldDeferCompletion;
 
-  // Do NOT propagate wrappedDependencySourceMarker to the returned parser.
-  // Unlike withDefault(), bindEnv() cannot resolve dependencies from a
-  // synthetic pending state (it needs env annotations).  Propagating the
-  // marker would cause optional() to delegate into bindEnv with an
-  // unannotated state, surfacing "Missing env" errors instead of undefined.
+  // bindEnv() resolves fallbacks through env annotations at completion time,
+  // not through synthetic dependency-wrapper states.  Keeping the bound
+  // parser isolated from those legacy markers prevents optional()/withDefault()
+  // wrappers from invoking it without the annotation context it requires.
 
   const boundParser: Parser<M, TValue, TState> = {
     $mode: parser.$mode,
@@ -293,6 +292,7 @@ export function bindEnv<
     usage: options.default !== undefined
       ? [{ type: "optional", terms: parser.usage }]
       : parser.usage,
+    [Symbol.for("@optique/core/inheritParentAnnotations")]: true,
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
@@ -409,6 +409,47 @@ export function bindEnv<
   if (typeof parser.normalizeValue === "function") {
     Object.defineProperty(boundParser, "normalizeValue", {
       value: parser.normalizeValue.bind(parser),
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  const dependencyMetadata = (
+    parser as Parser<M, TValue, TState> & {
+      readonly dependencyMetadata?: {
+        readonly source?: {
+          readonly extractSourceValue: (
+            state: unknown,
+          ) => ValueParserResult<unknown> | undefined;
+        };
+      };
+    }
+  ).dependencyMetadata;
+  if (dependencyMetadata != null) {
+    Object.defineProperty(boundParser, "dependencyMetadata", {
+      value: dependencyMetadata.source == null ? dependencyMetadata : {
+        ...dependencyMetadata,
+        source: {
+          ...dependencyMetadata.source,
+          extractSourceValue: (state: unknown) => {
+            if (!isEnvBindState(state)) {
+              return dependencyMetadata.source?.extractSourceValue(state);
+            }
+            if (state.hasCliValue) {
+              return dependencyMetadata.source?.extractSourceValue(
+                state.cliState,
+              );
+            }
+            const result = getEnvOrDefault(
+              state,
+              options,
+              parser.$mode,
+              parser,
+              state.cliState,
+            );
+            return result instanceof Promise ? undefined : result;
+          },
+        },
+      },
       configurable: true,
       enumerable: false,
     });

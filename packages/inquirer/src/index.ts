@@ -1326,6 +1326,38 @@ export function prompt<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
+  const dependencyMetadata = (
+    parser as Parser<M, TValue, TState> & {
+      readonly dependencyMetadata?: {
+        readonly source?: {
+          readonly extractSourceValue: (
+            state: unknown,
+          ) => ValueParserResult<unknown> | undefined;
+        };
+      };
+    }
+  ).dependencyMetadata;
+  if (dependencyMetadata != null) {
+    Object.defineProperty(promptedParser, "dependencyMetadata", {
+      value: dependencyMetadata.source == null ? dependencyMetadata : {
+        ...dependencyMetadata,
+        source: {
+          ...dependencyMetadata.source,
+          extractSourceValue: (state: unknown) => {
+            if (!isPromptBindState(state)) {
+              return dependencyMetadata.source?.extractSourceValue(state);
+            }
+            if (!state.hasCliValue) return undefined;
+            return dependencyMetadata.source?.extractSourceValue(
+              state.cliState,
+            );
+          },
+        },
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
 
   return promptedParser;
 }

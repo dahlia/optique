@@ -247,8 +247,16 @@ export function extractDependencyMetadata<M extends Mode, T>(
 function extractFromBareState(
   state: unknown,
 ): ValueParserResult<unknown> | undefined {
-  if (!isDependencySourceState(state)) return undefined;
-  return state.result;
+  if (isDependencySourceState(state)) return state.result;
+  if (
+    state != null &&
+    typeof state === "object" &&
+    "success" in state &&
+    typeof (state as { success?: unknown }).success === "boolean"
+  ) {
+    return state as ValueParserResult<unknown>;
+  }
+  return undefined;
 }
 
 type ExtractFn = (state: unknown) => ValueParserResult<unknown> | undefined;
@@ -334,7 +342,7 @@ export function composeDependencyMetadata(
       const wrappedExtract = inner.source?.extractSourceValue != null
         ? unwrapArrayThenExtract(inner.source.extractSourceValue)
         : undefined;
-      if (inner.source != null && inner.source.preservesSourceValue) {
+      if (inner.source != null) {
         return {
           ...inner,
           source: {
@@ -342,14 +350,10 @@ export function composeDependencyMetadata(
             ...(wrappedExtract != null && {
               extractSourceValue: wrappedExtract,
             }),
-            getMissingSourceValue: options?.defaultValue,
+            ...(options?.defaultValue != null && {
+              getMissingSourceValue: options.defaultValue,
+            }),
           },
-        };
-      }
-      if (wrappedExtract != null && inner.source != null) {
-        return {
-          ...inner,
-          source: { ...inner.source, extractSourceValue: wrappedExtract },
         };
       }
       return inner;

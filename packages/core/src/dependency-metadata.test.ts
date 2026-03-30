@@ -119,9 +119,9 @@ describe("extractDependencyMetadata", () => {
     const metadata = extractDependencyMetadata(env);
     assert.ok(metadata?.source?.extractSourceValue !== undefined);
     assert.equal(metadata.source.extractSourceValue(undefined), undefined);
-    assert.equal(
+    assert.deepEqual(
       metadata.source.extractSourceValue({ success: true, value: "x" }),
-      undefined,
+      { success: true, value: "x" },
     );
   });
 

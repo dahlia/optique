@@ -32,9 +32,6 @@ import {
   type ValueParserResult,
 } from "@optique/core/valueparser";
 import {
-  createDeferredParseState,
-  createDependencySourceState,
-  createPendingDependencySourceState,
   dependency,
   dependencyId,
   DependencyRegistry,
@@ -2113,53 +2110,31 @@ describe("primitives additional branch coverage", () => {
   });
 
   it("option complete covers deferred success and custom invalid branches", () => {
-    const dep = dependency(string({ metavar: "MODE" }));
     const parser = option("--port", integer(), {
       errors: {
         invalidValue: (error) => message`invalid ${error}`,
       },
     });
 
-    const deferredSuccess = parser.complete(
-      createDeferredParseState(
-        "42",
-        deriveFromSync({
-          metavar: "INT",
-          dependencies: [dep] as const,
-          defaultValues: () => ["10"] as const,
-          factory: () => integer(),
-        }),
-        { success: true, value: 42 },
-      ) as unknown as Parameters<typeof parser.complete>[0],
-    );
+    const deferredSuccess = parser.complete({ success: true, value: 42 });
     assert.ok(deferredSuccess.success);
     if (deferredSuccess.success) {
       assert.equal(deferredSuccess.value, 42);
     }
 
-    const deferredFailure = parser.complete(
-      createDeferredParseState(
-        "x",
-        deriveFromSync({
-          metavar: "INT",
-          dependencies: [dep] as const,
-          defaultValues: () => ["10"] as const,
-          factory: () => integer(),
-        }),
-        { success: false, error: message`bad-int` },
-      ) as unknown as Parameters<typeof parser.complete>[0],
-    );
+    const deferredFailure = parser.complete({
+      success: false,
+      error: message`bad-int`,
+    });
     assert.ok(!deferredFailure.success);
     if (!deferredFailure.success) {
       assert.equal(formatMessage(deferredFailure.error), "invalid bad-int");
     }
 
-    const dependencyFailure = parser.complete(
-      createDependencySourceState(
-        { success: false, error: message`dep-fail` },
-        dep[dependencyId],
-      ) as unknown as Parameters<typeof parser.complete>[0],
-    );
+    const dependencyFailure = parser.complete({
+      success: false,
+      error: message`dep-fail`,
+    });
     assert.ok(!dependencyFailure.success);
     if (!dependencyFailure.success) {
       assert.equal(formatMessage(dependencyFailure.error), "invalid dep-fail");
@@ -2176,36 +2151,25 @@ describe("primitives additional branch coverage", () => {
   });
 
   it("argument complete covers custom invalid branches", () => {
-    const dep = dependency(string({ metavar: "MODE" }));
     const parser = argument(integer(), {
       errors: {
         invalidValue: (error) => message`bad ${error}`,
       },
     });
 
-    const deferredFailure = parser.complete(
-      createDeferredParseState(
-        "oops",
-        deriveFromSync({
-          metavar: "INT",
-          dependencies: [dep] as const,
-          defaultValues: () => ["10"] as const,
-          factory: () => integer(),
-        }),
-        { success: false, error: message`deferred-fail` },
-      ) as unknown as Parameters<typeof parser.complete>[0],
-    );
+    const deferredFailure = parser.complete({
+      success: false,
+      error: message`deferred-fail`,
+    });
     assert.ok(!deferredFailure.success);
     if (!deferredFailure.success) {
       assert.equal(formatMessage(deferredFailure.error), "bad deferred-fail");
     }
 
-    const dependencyFailure = parser.complete(
-      createDependencySourceState(
-        { success: false, error: message`dep-fail` },
-        dep[dependencyId],
-      ) as unknown as Parameters<typeof parser.complete>[0],
-    );
+    const dependencyFailure = parser.complete({
+      success: false,
+      error: message`dep-fail`,
+    });
     assert.ok(!dependencyFailure.success);
     if (!dependencyFailure.success) {
       assert.equal(formatMessage(dependencyFailure.error), "bad dep-fail");
@@ -5828,43 +5792,31 @@ describe("branch coverage: primitives edge cases", () => {
     const missing = withMissingFn.complete(undefined);
     assert.ok(!missing.success);
 
-    const depId = Symbol("dep");
     const withPending = option("--mode", string({ metavar: "MODE" }), {
       errors: { missing: message`mode required` },
     });
-    const pending = createPendingDependencySourceState(depId);
     const completeWithPending = withPending.complete as (
       state: unknown,
     ) => ReturnType<typeof withPending.complete>;
-    const pendingResult = await completeWithPending(pending);
+    const pendingResult = await completeWithPending(undefined);
     assert.ok(!pendingResult.success);
 
-    const dep = dependency(string({ metavar: "MODE" }));
-    const derived = deriveFromSync({
-      metavar: "TARGET",
-      dependencies: [dep] as const,
-      defaultValues: () => ["dev"] as const,
-      factory: (_mode: string) => string({ metavar: "TARGET" }),
-    });
-    const withDeferred = option("--target", derived, {
+    const withDeferred = option("--target", string({ metavar: "TARGET" }), {
       errors: { invalidValue: (err) => message`invalid ${err}` },
     });
-    const deferredState = createDeferredParseState(
-      "bad",
-      derived,
-      { success: false, error: message`bad value` },
-    );
     const completeWithDeferred = withDeferred.complete as (
       state: unknown,
     ) => ReturnType<typeof withDeferred.complete>;
-    const deferredResult = await completeWithDeferred(deferredState);
+    const deferredResult = await completeWithDeferred({
+      success: false,
+      error: message`bad value`,
+    });
     assert.ok(!deferredResult.success);
 
-    const depFailState = createDependencySourceState(
-      { success: false, error: message`source failed` },
-      depId,
-    );
-    const depFail = await completeWithPending(depFailState);
+    const depFail = await completeWithPending({
+      success: false,
+      error: message`source failed`,
+    });
     assert.ok(!depFail.success);
 
     const plainFailure = await withDeferred.complete({
@@ -5888,39 +5840,25 @@ describe("branch coverage: primitives edge cases", () => {
   });
 
   it("argument complete/suggest: covers dependency and async branches", async () => {
-    const dep = dependency(string({ metavar: "MODE" }));
-    const derived = deriveFromSync({
-      metavar: "PATH",
-      dependencies: [dep] as const,
-      defaultValues: () => ["dev"] as const,
-      factory: (_mode: string) => string({ metavar: "PATH" }),
-    });
-    const arg = argument(derived, {
+    const arg = argument(string({ metavar: "PATH" }), {
       errors: { invalidValue: (err) => message`invalid ${err}` },
     });
-    const deferredState = createDeferredParseState(
-      "bad",
-      derived,
-      { success: false, error: message`bad arg` },
-    );
     const completeArg = arg.complete as (
       state: unknown,
     ) => ReturnType<typeof arg.complete>;
-    const deferredResult = await completeArg(deferredState);
+    const deferredResult = await completeArg({
+      success: false,
+      error: message`bad arg`,
+    });
     assert.ok(!deferredResult.success);
 
-    const depSuccessState = createDependencySourceState(
-      { success: true, value: "ok" },
-      dep[dependencyId],
-    );
-    const depSuccess = await completeArg(depSuccessState);
+    const depSuccess = await completeArg({ success: true, value: "ok" });
     assert.ok(depSuccess.success);
 
-    const depFailState = createDependencySourceState(
-      { success: false, error: message`dep fail` },
-      dep[dependencyId],
-    );
-    const depFail = await completeArg(depFailState);
+    const depFail = await completeArg({
+      success: false,
+      error: message`dep fail`,
+    });
     assert.ok(!depFail.success);
 
     const plainFail = await arg.complete({
@@ -6236,16 +6174,7 @@ describe("branch coverage: primitives edge cases", () => {
     const duplicateOption = option("--name", string({ metavar: "TEXT" }));
     const duplicateResult = duplicateOption.parse({
       buffer: ["--name", "alice"] as readonly string[],
-      state: createDeferredParseState(
-        "old",
-        deriveFromSync({
-          metavar: "TEXT",
-          dependencies: [dependency(string({ metavar: "TEXT_DEP" }))] as const,
-          defaultValues: () => ["default"] as const,
-          factory: (_dep: string) => string({ metavar: "TEXT" }),
-        }),
-        { success: true, value: "old" },
-      ) as unknown as Parameters<typeof duplicateOption.parse>[0]["state"],
+      state: { success: true, value: "old" },
       optionsTerminated: false,
       usage: duplicateOption.usage,
     });
@@ -6261,33 +6190,16 @@ describe("branch coverage: primitives edge cases", () => {
     assert.ok(!shortDuplicateResult.success);
 
     const completeOption = option("--mode", string({ metavar: "MODE" }));
-    const modeDep = dependency(string({ metavar: "MODE_DEP" }));
-    const modeDerived = deriveFromSync({
-      metavar: "MODE",
-      dependencies: [modeDep] as const,
-      defaultValues: () => ["dev"] as const,
-      factory: (_dep: string) => string({ metavar: "MODE" }),
-    });
-    const pending = createPendingDependencySourceState(Symbol("missing"));
-    const pendingComplete = completeOption.complete(
-      pending as unknown as Parameters<typeof completeOption.complete>[0],
-    );
+    const pendingComplete = completeOption.complete(undefined);
     assert.ok(!pendingComplete.success);
 
     const deferredOptionFail = completeOption.complete(
-      createDeferredParseState(
-        "bad",
-        modeDerived,
-        { success: false, error: message`bad mode` },
-      ) as unknown as Parameters<typeof completeOption.complete>[0],
+      { success: false, error: message`bad mode` },
     );
     assert.ok(!deferredOptionFail.success);
 
     const depOptionFail = completeOption.complete(
-      createDependencySourceState(
-        { success: false, error: message`source failed` },
-        Symbol("dep"),
-      ) as unknown as Parameters<typeof completeOption.complete>[0],
+      { success: false, error: message`source failed` },
     );
     assert.ok(!depOptionFail.success);
 
@@ -6316,27 +6228,13 @@ describe("branch coverage: primitives edge cases", () => {
     assert.ok(!duplicateBundledFlagResult.success);
 
     const completeArgument = argument(string({ metavar: "NAME" }));
-    const nameDep = dependency(string({ metavar: "NAME_DEP" }));
-    const nameDerived = deriveFromSync({
-      metavar: "NAME",
-      dependencies: [nameDep] as const,
-      defaultValues: () => ["guest"] as const,
-      factory: (_dep: string) => string({ metavar: "NAME" }),
-    });
     const deferredArgFail = completeArgument.complete(
-      createDeferredParseState(
-        "bad",
-        nameDerived,
-        { success: false, error: message`bad argument` },
-      ) as unknown as Parameters<typeof completeArgument.complete>[0],
+      { success: false, error: message`bad argument` },
     );
     assert.ok(!deferredArgFail.success);
 
     const depArgFail = completeArgument.complete(
-      createDependencySourceState(
-        { success: false, error: message`dependency failed` },
-        Symbol("arg-dep"),
-      ) as unknown as Parameters<typeof completeArgument.complete>[0],
+      { success: false, error: message`dependency failed` },
     );
     assert.ok(!depArgFail.success);
 
@@ -6481,11 +6379,7 @@ describe("branch coverage: primitives edge cases", () => {
     const tokenOption = option("--token", string({ metavar: "TOKEN" }), {
       errors: { missing: (names) => message`missing ${text(names.join(","))}` },
     });
-    const missingViaPending = tokenOption.complete(
-      createPendingDependencySourceState(
-        Symbol("token"),
-      ) as unknown as Parameters<typeof tokenOption.complete>[0],
-    );
+    const missingViaPending = tokenOption.complete(undefined);
     assert.ok(!missingViaPending.success);
     if (!missingViaPending.success) {
       assert.equal(formatMessage(missingViaPending.error), "missing --token");
@@ -6525,26 +6419,16 @@ describe("branch coverage: primitives edge cases", () => {
     const argWithCustomInvalid = argument(string({ metavar: "NAME" }), {
       errors: { invalidValue: (error) => message`bad ${error}` },
     });
-    const deferredSuccess = argWithCustomInvalid.complete(
-      createDeferredParseState(
-        "ok",
-        deriveFromSync({
-          metavar: "NAME",
-          dependencies: [dep] as const,
-          defaultValues: () => ["default"] as const,
-          factory: (_mode: string) => string({ metavar: "NAME" }),
-        }),
-        { success: true, value: "ok" },
-      ) as unknown as Parameters<typeof argWithCustomInvalid.complete>[0],
-    );
+    const deferredSuccess = argWithCustomInvalid.complete({
+      success: true,
+      value: "ok",
+    });
     assert.ok(deferredSuccess.success);
 
-    const dependencyFailure = argWithCustomInvalid.complete(
-      createDependencySourceState(
-        { success: false, error: message`dep-fail` },
-        dep[dependencyId],
-      ) as unknown as Parameters<typeof argWithCustomInvalid.complete>[0],
-    );
+    const dependencyFailure = argWithCustomInvalid.complete({
+      success: false,
+      error: message`dep-fail`,
+    });
     assert.ok(!dependencyFailure.success);
     if (!dependencyFailure.success) {
       assert.equal(formatMessage(dependencyFailure.error), "bad dep-fail");
@@ -6559,18 +6443,10 @@ describe("branch coverage: primitives edge cases", () => {
       assert.equal(formatMessage(plainFailure.error), "bad plain-fail");
     }
 
-    const deferredFailure = argWithCustomInvalid.complete(
-      createDeferredParseState(
-        "oops",
-        deriveFromSync({
-          metavar: "NAME",
-          dependencies: [dep] as const,
-          defaultValues: () => ["default"] as const,
-          factory: () => string({ metavar: "NAME" }),
-        }),
-        { success: false, error: message`deferred-fail` },
-      ) as unknown as Parameters<typeof argWithCustomInvalid.complete>[0],
-    );
+    const deferredFailure = argWithCustomInvalid.complete({
+      success: false,
+      error: message`deferred-fail`,
+    });
     assert.ok(!deferredFailure.success);
     if (!deferredFailure.success) {
       assert.equal(formatMessage(deferredFailure.error), "bad deferred-fail");
@@ -6588,18 +6464,10 @@ describe("branch coverage: primitives edge cases", () => {
       assert.equal(formatMessage(missingOption.error), "missing --port");
     }
 
-    const deferredOptionFailure = optionWithCustomErrors.complete(
-      createDeferredParseState(
-        "bad",
-        deriveFromSync({
-          metavar: "INT",
-          dependencies: [dep] as const,
-          defaultValues: () => ["default"] as const,
-          factory: () => integer(),
-        }),
-        { success: false, error: message`not-int` },
-      ) as unknown as Parameters<typeof optionWithCustomErrors.complete>[0],
-    );
+    const deferredOptionFailure = optionWithCustomErrors.complete({
+      success: false,
+      error: message`not-int`,
+    });
     assert.ok(!deferredOptionFailure.success);
     if (!deferredOptionFailure.success) {
       assert.equal(
@@ -6608,12 +6476,10 @@ describe("branch coverage: primitives edge cases", () => {
       );
     }
 
-    const dependencyOptionFailure = optionWithCustomErrors.complete(
-      createDependencySourceState(
-        { success: false, error: message`dep-not-int` },
-        dep[dependencyId],
-      ) as unknown as Parameters<typeof optionWithCustomErrors.complete>[0],
-    );
+    const dependencyOptionFailure = optionWithCustomErrors.complete({
+      success: false,
+      error: message`dep-not-int`,
+    });
     assert.ok(!dependencyOptionFailure.success);
     if (!dependencyOptionFailure.success) {
       assert.equal(
