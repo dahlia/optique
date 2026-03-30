@@ -1822,6 +1822,341 @@ describe("Factory edge cases", () => {
 });
 
 // =============================================================================
+// merge() nested source default thunk exactly-once evaluation
+// https://github.com/dahlia/optique/issues/762
+// =============================================================================
+
+describe("merge() nested source default thunk exactly-once evaluation", () => {
+  test("withDefault thunk in merge(object, object) evaluated exactly once (sync)", () => {
+    let thunkCallCount = 0;
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["warn", "error"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = merge(
+      object({
+        mode: withDefault(option("--mode", modeParser), () => {
+          thunkCallCount++;
+          return "prod" as const;
+        }),
+      }),
+      object({
+        logLevel: option("--log-level", logLevelParser),
+      }),
+    );
+
+    const result = parseSync(parser, ["--log-level", "warn"]);
+    assert.ok(result.success);
+    assert.equal(
+      thunkCallCount,
+      1,
+      `Default thunk should be evaluated exactly once, but was called ${thunkCallCount} times`,
+    );
+  });
+
+  test("withDefault thunk in merge(object, object) evaluated exactly once (async)", async () => {
+    let thunkCallCount = 0;
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["warn", "error"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = merge(
+      object({
+        mode: withDefault(option("--mode", modeParser), () => {
+          thunkCallCount++;
+          return "prod" as const;
+        }),
+      }),
+      object({
+        logLevel: option("--log-level", logLevelParser),
+      }),
+    );
+
+    const result = await parseAsync(parser, ["--log-level", "warn"]);
+    assert.ok(result.success);
+    assert.equal(
+      thunkCallCount,
+      1,
+      `Default thunk should be evaluated exactly once, but was called ${thunkCallCount} times`,
+    );
+  });
+
+  test("withDefault thunk in deeply nested merge evaluated exactly once", async () => {
+    let thunkCallCount = 0;
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["warn", "error"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    // merge(merge(object(source), object(other)), object(derived))
+    const inner = merge(
+      object({
+        mode: withDefault(option("--mode", modeParser), () => {
+          thunkCallCount++;
+          return "prod" as const;
+        }),
+      }),
+      object({
+        name: option("--name", string()),
+      }),
+    );
+
+    const parser = merge(
+      inner,
+      object({
+        logLevel: option("--log-level", logLevelParser),
+      }),
+    );
+
+    const result = await parseAsync(parser, [
+      "--name",
+      "app",
+      "--log-level",
+      "warn",
+    ]);
+    assert.ok(result.success);
+    assert.equal(
+      thunkCallCount,
+      1,
+      `Default thunk should be evaluated exactly once, but was called ${thunkCallCount} times`,
+    );
+  });
+
+  test("cached result preserves correct default value in nested merge", () => {
+    let thunkCallCount = 0;
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["warn", "error"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    // Verify that the cached result produces the correct value, not a
+    // synthetic placeholder.
+    const parser = merge(
+      object({
+        mode: withDefault(option("--mode", modeParser), () => {
+          thunkCallCount++;
+          return "prod" as const;
+        }),
+      }),
+      object({
+        logLevel: option("--log-level", logLevelParser),
+      }),
+    );
+
+    const result = parseSync(parser, ["--log-level", "warn"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "prod");
+      assert.equal(result.value.logLevel, "warn");
+    }
+    assert.equal(
+      thunkCallCount,
+      1,
+      `Default thunk should be evaluated exactly once, but was called ${thunkCallCount} times`,
+    );
+  });
+
+  test("reused parser in tuple evaluates thunk per position", () => {
+    let thunkCallCount = 0;
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const shared = withDefault(option("--mode", modeParser), () => {
+      thunkCallCount++;
+      return "prod" as const;
+    });
+
+    // When the same parser instance is reused in a tuple, each position
+    // should evaluate independently (cache must not conflate positions
+    // within the same preCompleteAndRegisterDependencies call).
+    const parser = tuple([shared, shared], { allowDuplicates: true });
+
+    const result = parseSync(parser, []);
+    assert.ok(result.success);
+    // Each position should have evaluated the thunk independently.
+    assert.equal(thunkCallCount, 2);
+  });
+
+  test("reused object in tuple does not share pre-completed results across positions", () => {
+    let callCount = 0;
+    const vals = ["dev", "prod"] as const;
+    const modeParser = dependency(choice(vals));
+    const shared = object({
+      mode: withDefault(option("--mode", modeParser), () => {
+        // Return a different value for each position to detect leaking.
+        return vals[callCount++ % 2];
+      }),
+    });
+
+    // Sibling completions of reused object parsers must not leak
+    // pre-completed results between positions.
+    const parser = tuple([shared, shared], { allowDuplicates: true });
+
+    const result = parseSync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      // Both positions should have called their own complete() chain
+      // independently, so at least 2 thunk calls occurred.
+      assert.ok(
+        callCount >= 2,
+        `thunk should be called at least twice, got ${callCount}`,
+      );
+    }
+  });
+
+  test("reused dep source across merged branches preserves per-field results", () => {
+    let callCount = 0;
+    const vals = ["dev", "prod"] as const;
+    const modeParser = dependency(choice(vals));
+    const shared = withDefault(option("--mode", modeParser), () => {
+      return vals[callCount++ % 2];
+    });
+
+    // Same dep-source parser reused in two different fields via merge.
+    // Each field must get its own Phase 1 result, not a conflated one.
+    const parser = merge(
+      object({ a: shared }),
+      object({ b: shared }),
+      { allowDuplicates: true },
+    );
+
+    const result = parseSync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      // Fields "a" and "b" completed independently during merge Phase 1.
+      // The two fields should have distinct values from the alternating
+      // thunk, confirming no cross-field cache leaking.
+      assert.notEqual(result.value.a, result.value.b);
+    }
+  });
+
+  test("nested objects with same field name get independent defaults", () => {
+    const outerDep = dependency(choice(["a", "b"] as const));
+    const innerDep = dependency(choice(["x", "y"] as const));
+
+    const parser = merge(
+      object({
+        mode: withDefault(option("--outer-mode", outerDep), "a" as const),
+        nested: object({
+          // Same field name "mode" as the outer — must NOT collide.
+          mode: withDefault(option("--inner-mode", innerDep), "x" as const),
+        }),
+      }),
+    );
+
+    const result = parseSync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "a");
+      assert.equal(result.value.nested.mode, "x");
+    }
+  });
+
+  test("merge branches with same output key get independent Phase 1 results", () => {
+    const dep1 = dependency(choice(["a", "b", "x", "y"] as const));
+    const dep2 = dependency(choice(["a", "b", "x", "y"] as const));
+
+    // Two branches produce the same key "mode" with different dep sources.
+    // Each branch's Phase 1 must produce its own result independently.
+    const parser = merge(
+      object({
+        mode: withDefault(option("--mode1", dep1), "a" as const),
+      }),
+      object({
+        mode: withDefault(option("--mode2", dep2), "x" as const),
+      }),
+    );
+
+    const result = parseSync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      // merge last-write-wins: second branch's "mode" takes precedence
+      assert.equal(result.value.mode, "x");
+    }
+  });
+
+  test("inner merge with mixed unique/duplicate keys caches unique fields", () => {
+    let modeThunkCount = 0;
+    const modeDep = dependency(choice(["dev", "prod"] as const));
+    const dupDep = dependency(choice(["a", "b"] as const));
+    const logLevelParser = modeDep.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["warn", "error"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    // Inner merge: "mode" is unique, "dup" is duplicated across branches.
+    // The cache should preserve "mode" (no re-evaluation) while leaving
+    // "dup" to each branch's own Phase 1.
+    const innerMerge = merge(
+      object({
+        mode: withDefault(option("--mode", modeDep), () => {
+          modeThunkCount++;
+          return "prod" as const;
+        }),
+        dup: withDefault(option("--dup1", dupDep), "a" as const),
+      }),
+      object({
+        dup: withDefault(option("--dup2", dupDep), "b" as const),
+      }),
+    );
+
+    const parser = merge(
+      innerMerge,
+      object({
+        logLevel: option("--log-level", logLevelParser),
+      }),
+    );
+
+    const result = parseSync(parser, ["--log-level", "warn"]);
+    assert.ok(result.success);
+    assert.equal(
+      modeThunkCount,
+      1,
+      `unique "mode" thunk should be evaluated exactly once, got ${modeThunkCount}`,
+    );
+  });
+});
+
+// =============================================================================
 // Deeply nested merge() with dependencies
 // =============================================================================
 
