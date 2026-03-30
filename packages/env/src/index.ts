@@ -428,28 +428,27 @@ export function bindEnv<
     }
   ).dependencyMetadata;
   if (dependencyMetadata != null) {
+    const sourceMetadata = dependencyMetadata.source;
     Object.defineProperty(boundParser, "dependencyMetadata", {
-      value: dependencyMetadata.source == null ? dependencyMetadata : {
+      value: sourceMetadata == null ? dependencyMetadata : {
         ...dependencyMetadata,
         source: {
-          ...dependencyMetadata.source,
+          ...sourceMetadata,
           extractSourceValue: (state: unknown) => {
             if (!isEnvBindState(state)) {
-              return dependencyMetadata.source?.extractSourceValue(state);
+              return sourceMetadata.extractSourceValue(state);
             }
             if (state.hasCliValue) {
-              return dependencyMetadata.source?.extractSourceValue(
+              return sourceMetadata.extractSourceValue(
                 state.cliState,
               );
             }
-            const result = getEnvOrDefault(
+            return getEnvSourceValue(
               state,
               options,
-              parser.$mode,
-              parser,
               state.cliState,
+              sourceMetadata.extractSourceValue,
             );
-            return result;
           },
         },
       },
@@ -520,6 +519,57 @@ function getEnvOrDefault<M extends Mode, TValue>(
     success: false as const,
     error: message`Missing required environment variable: ${envVar(fullKey)}`,
   });
+}
+
+function getEnvSourceValue<M extends Mode, TValue>(
+  state: unknown,
+  options: BindEnvOptions<M, TValue>,
+  innerState: unknown,
+  extractInnerSourceValue: (
+    state: unknown,
+  ) =>
+    | ValueParserResult<unknown>
+    | Promise<ValueParserResult<unknown> | undefined>
+    | undefined,
+):
+  | ValueParserResult<unknown>
+  | Promise<ValueParserResult<unknown> | undefined>
+  | undefined {
+  const annotations = getAnnotations(state);
+  const sourceData =
+    (annotations?.[options.context.id] as EnvSourceData | undefined) ??
+      getActiveEnvSource(options.context.id);
+
+  const fullKey = `${
+    sourceData?.prefix ?? options.context.prefix
+  }${options.key}`;
+  const rawValue = sourceData?.source(fullKey);
+  if (rawValue !== undefined) {
+    if (typeof rawValue !== "string") {
+      const type = rawValue === null
+        ? "null"
+        : Array.isArray(rawValue)
+        ? "array"
+        : typeof rawValue;
+      return {
+        success: false as const,
+        error: message`Environment variable ${
+          envVar(fullKey)
+        } must be a string, but got: ${type}.`,
+      };
+    }
+    const parsed = options.parser.parse(rawValue);
+    return parsed instanceof Promise ? parsed : parsed;
+  }
+
+  if (options.default !== undefined) {
+    return {
+      success: true as const,
+      value: options.default,
+    };
+  }
+
+  return extractInnerSourceValue(innerState);
 }
 
 /**

@@ -4528,4 +4528,39 @@ describe("prompt() with dependency sources", () => {
     assert.equal(result.value.mode, "prod");
     assert.equal(result.value.level, "debug");
   });
+
+  it("preserves inner source extraction when prompt() wraps bindEnv()", async () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const modeParser = prompt(
+      bindEnv(option("--mode", mode), {
+        context: envContext,
+        key: "MODE",
+        parser: choice(["dev", "prod"] as const),
+      }),
+      {
+        type: "select",
+        message: "Select mode:",
+        choices: ["dev", "prod"],
+        prompter: () =>
+          Promise.reject(new Error("Prompt should not be called")),
+      },
+    );
+    const parseResult = await modeParser.parse({
+      buffer: [],
+      state: modeParser.initialState,
+      optionsTerminated: false,
+      usage: modeParser.usage,
+    });
+    assert.ok(parseResult.success);
+    const extracted = await modeParser.dependencyMetadata?.source
+      ?.extractSourceValue(parseResult.next.state);
+    assert.deepEqual(extracted, { success: true, value: "prod" });
+  });
 });

@@ -57,14 +57,17 @@ function withChildContext<TState>(
   state: TState,
 ): ParserContext<TState> {
   const exec = withChildExecPath(context.exec, segment);
+  const dependencyRegistry = context.dependencyRegistry ??
+    exec?.dependencyRegistry;
   return {
     ...context,
     state,
     ...(exec != null
       ? {
-        exec,
-        dependencyRegistry: exec.dependencyRegistry ??
-          context.dependencyRegistry,
+        exec: dependencyRegistry === exec.dependencyRegistry
+          ? exec
+          : { ...exec, dependencyRegistry },
+        dependencyRegistry,
       }
       : {}),
   };
@@ -1699,11 +1702,23 @@ export function multiple<M extends Mode, TValue, TState>(
             if (!Array.isArray(state)) {
               return innerSource.extractSourceValue(state);
             }
-            for (let i = state.length - 1; i >= 0; i--) {
-              const result = innerSource.extractSourceValue(state[i]);
-              if (result != null) return result;
-            }
-            return undefined;
+            const scan = (
+              index: number,
+            ):
+              | ValueParserResult<unknown>
+              | Promise<ValueParserResult<unknown> | undefined>
+              | undefined => {
+              for (let i = index; i >= 0; i--) {
+                const result = innerSource.extractSourceValue(state[i]);
+                if (result == null) continue;
+                if (result instanceof Promise) {
+                  return result.then((resolved) => resolved ?? scan(i - 1));
+                }
+                return result;
+              }
+              return undefined;
+            };
+            return scan(state.length - 1);
           },
         },
       },

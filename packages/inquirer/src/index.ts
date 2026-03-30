@@ -1350,10 +1350,9 @@ export function prompt<M extends Mode, TValue, TState>(
             if (!isPromptBindState(state)) {
               return dependencyMetadata.source?.extractSourceValue(state);
             }
-            if (!state.hasCliValue) return undefined;
-            return dependencyMetadata.source?.extractSourceValue(
-              state.cliState,
-            );
+            return state.cliState === undefined
+              ? undefined
+              : dependencyMetadata.source?.extractSourceValue(state.cliState);
           },
         },
       },

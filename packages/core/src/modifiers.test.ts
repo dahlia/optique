@@ -5398,3 +5398,71 @@ describe("acceptingAnyToken", () => {
     );
   });
 });
+
+describe("multiple() dependency source extraction", () => {
+  it("keeps scanning when the newest async source resolves to undefined", async () => {
+    const sourceId = Symbol("mode");
+    const earlier = Symbol("earlier");
+    const latest = Symbol("latest");
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: () =>
+        Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`No parse.`,
+        }),
+      complete: () =>
+        Promise.resolve({
+          success: false as const,
+          error: message`No completion.`,
+        }),
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue(state: unknown) {
+            if (state === latest) return Promise.resolve(undefined);
+            if (state === earlier) {
+              return Promise.resolve({
+                success: true as const,
+                value: "prod",
+              });
+            }
+            return undefined;
+          },
+        },
+      },
+    } as const satisfies Parser<"async", string, symbol | null> & {
+      readonly dependencyMetadata: {
+        readonly source: {
+          readonly kind: "source";
+          readonly sourceId: typeof sourceId;
+          readonly preservesSourceValue: true;
+          readonly extractSourceValue: (
+            state: unknown,
+          ) =>
+            | ValueParserResult<unknown>
+            | Promise<ValueParserResult<unknown> | undefined>
+            | undefined;
+        };
+      };
+    };
+    const parser = multiple(inner);
+    const result = await parser.dependencyMetadata?.source?.extractSourceValue([
+      earlier,
+      latest,
+    ]);
+    assert.deepEqual(result, { success: true, value: "prod" });
+  });
+});

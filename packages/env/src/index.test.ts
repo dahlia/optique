@@ -1777,6 +1777,81 @@ describe("bindEnv() with dependency sources", () => {
     assert.ok(!texts.includes("debug"));
     assert.ok(!texts.includes("verbose"));
   });
+
+  it("keeps dependency source extraction side-effect free for inner fallbacks", () => {
+    const sourceId = Symbol("mode");
+    const innerState = { kind: "inner-state" } as const;
+    let completeCalls = 0;
+    const innerParser = {
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined as typeof innerState | undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: { ...context, state: innerState },
+          consumed: [],
+        };
+      },
+      complete() {
+        completeCalls += 1;
+        return { success: true as const, value: "prod" as const };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue(state: unknown) {
+            return state === innerState
+              ? { success: true as const, value: "prod" as const }
+              : undefined;
+          },
+        },
+      },
+    } as const satisfies
+      & Parser<"sync", "prod", typeof innerState | undefined>
+      & {
+        readonly dependencyMetadata: {
+          readonly source: {
+            readonly kind: "source";
+            readonly sourceId: typeof sourceId;
+            readonly preservesSourceValue: true;
+            readonly extractSourceValue: (
+              state: unknown,
+            ) => ValueParserResult<unknown> | undefined;
+          };
+        };
+      };
+    const parser = bindEnv(innerParser, {
+      context: createEnvContext({ source: () => undefined }),
+      key: "MODE",
+      parser: string(),
+    });
+    const parseResult = parser.parse({
+      buffer: [],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success);
+    const extracted = parser.dependencyMetadata?.source?.extractSourceValue(
+      parseResult.next.state,
+    );
+    assert.deepEqual(extracted, { success: true, value: "prod" });
+    assert.equal(completeCalls, 0);
+  });
 });
 
 // https://github.com/dahlia/optique/issues/681
