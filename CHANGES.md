@@ -23,6 +23,21 @@ To be released.
     via `ExecutionContext.dependencyRuntime`.  User-facing behavior is
     unchanged.  [[#750], [#753], [#761]]
 
+ -  Top-level `parseSync()` and `parseAsync()` now create a
+    `DependencyRuntimeContext` and resolve deferred dependency states before
+    calling `complete()`.  Top-level `suggestSync()` and `suggestAsync()` now
+    build a dependency runtime from the current parser state so that
+    dependency-aware suggestions use the same registry model as
+    construct-owned parsers.  [[#750], [#754]]
+
+ -  Fixed redundant replay of derived-parser factories when all dependency
+    values came from defaults.  Previously, `resolveSingleDeferred()` always
+    re-invoked the user-supplied factory even when the resolved values were
+    identical to those already used for the preliminary result during
+    `parse()`.  Non-idempotent factories (e.g., those building parsers from
+    mutable state) could see a second evaluation that rejected input the
+    first evaluation accepted.  [[#750], [#754]]
+
  -  Fixed `withDefault()` default thunks being evaluated more than once in
     nested `merge()` compositions.  When an outer `merge()` Phase 1 had
     already seeded a dependency source value, nested `object()`/`merge()`
@@ -1392,6 +1407,7 @@ To be released.
 [#751]: https://github.com/dahlia/optique/issues/751
 [#752]: https://github.com/dahlia/optique/issues/752
 [#753]: https://github.com/dahlia/optique/issues/753
+[#754]: https://github.com/dahlia/optique/issues/754
 [#756]: https://github.com/dahlia/optique/pull/756
 [#757]: https://github.com/dahlia/optique/pull/757
 [#758]: https://github.com/dahlia/optique/pull/758
