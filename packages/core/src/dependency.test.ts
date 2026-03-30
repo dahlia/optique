@@ -4448,4 +4448,95 @@ describe("top-level option()/argument() with derived parsers", () => {
     const texts = suggestions.map((s) => "text" in s ? s.text : "");
     assert.ok(texts.includes("debug"));
   });
+
+  test("parseSync top-level DependencySource option succeeds", () => {
+    const src = dependency(choice(["dev", "prod"] as const));
+    const parser = option("--mode", src);
+    const result = parseSync(parser, ["--mode", "dev"]);
+    assert.ok(result.success);
+    assert.equal(result.value, "dev");
+  });
+
+  test("parseAsync top-level DependencySource option succeeds", async () => {
+    const src = dependency(choice(["dev", "prod"] as const));
+    const parser = option("--mode", src);
+    const result = await parseAsync(parser, ["--mode", "prod"]);
+    assert.ok(result.success);
+    assert.equal(result.value, "prod");
+  });
+
+  test("parseSync top-level withDefault(DependencySource) option succeeds", () => {
+    const src = dependency(choice(["dev", "prod"] as const));
+    const parser = withDefault(option("--mode", src), "dev" as const);
+    const provided = parseSync(parser, ["--mode", "prod"]);
+    assert.ok(provided.success);
+    assert.equal(provided.value, "prod");
+    const missing = parseSync(parser, []);
+    assert.ok(missing.success);
+    assert.equal(missing.value, "dev");
+  });
+
+  test("parseSync top-level derive resolves via runtime defaults", () => {
+    // Verify that runtime-based resolution produces the same result
+    // as the old preliminaryResult fallback.  At top level, derived parsers
+    // always use their default dependency value since no sibling source
+    // parser exists.
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (m) =>
+        choice(
+          m === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = option("--level", level);
+    // "debug" is valid for dev choices — should succeed
+    const valid = parseSync(parser, ["--level", "debug"]);
+    assert.ok(valid.success);
+    assert.equal(valid.value, "debug");
+    // "silent" is NOT valid for dev choices — should fail
+    const invalid = parseSync(parser, ["--level", "silent"]);
+    assert.ok(!invalid.success);
+  });
+
+  test("parseAsync top-level derive resolves via runtime defaults", async () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (m) =>
+        choice(
+          m === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = option("--level", level);
+    const valid = await parseAsync(parser, ["--level", "debug"]);
+    assert.ok(valid.success);
+    assert.equal(valid.value, "debug");
+    const invalid = await parseAsync(parser, ["--level", "silent"]);
+    assert.ok(!invalid.success);
+  });
+
+  test("suggestSync top-level option with DependencySource", () => {
+    const src = dependency(choice(["dev", "prod"] as const));
+    const parser = option("--mode", src);
+    const suggestions = suggestSync(parser, ["--mode", "d"]);
+    const texts = suggestions.map((s) => "text" in s ? s.text : "");
+    assert.ok(texts.includes("dev"));
+  });
+
+  test("suggestAsync top-level option with DependencySource", async () => {
+    const src = dependency(choice(["dev", "prod"] as const));
+    const parser = option("--mode", src);
+    const suggestions = await suggestAsync(parser, ["--mode", "d"]);
+    const texts = suggestions.map((s) => "text" in s ? s.text : "");
+    assert.ok(texts.includes("dev"));
+  });
 });
