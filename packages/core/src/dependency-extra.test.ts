@@ -2056,11 +2056,9 @@ describe("merge() nested source default thunk exactly-once evaluation", () => {
     assert.ok(result.success);
     if (result.success) {
       // Fields "a" and "b" completed independently during merge Phase 1.
-      // The child objects should each see their respective field's result.
-      assert.ok(
-        callCount >= 2,
-        `thunk should be called at least twice, got ${callCount}`,
-      );
+      // The two fields should have distinct values from the alternating
+      // thunk, confirming no cross-field cache leaking.
+      assert.notEqual(result.value.a, result.value.b);
     }
   });
 
