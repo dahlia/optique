@@ -2108,6 +2108,54 @@ describe("merge() nested source default thunk exactly-once evaluation", () => {
       assert.equal(result.value.mode, "x");
     }
   });
+
+  test("inner merge with mixed unique/duplicate keys caches unique fields", () => {
+    let modeThunkCount = 0;
+    const modeDep = dependency(choice(["dev", "prod"] as const));
+    const dupDep = dependency(choice(["a", "b"] as const));
+    const logLevelParser = modeDep.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["warn", "error"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    // Inner merge: "mode" is unique, "dup" is duplicated across branches.
+    // The cache should preserve "mode" (no re-evaluation) while leaving
+    // "dup" to each branch's own Phase 1.
+    const innerMerge = merge(
+      object({
+        mode: withDefault(option("--mode", modeDep), () => {
+          modeThunkCount++;
+          return "prod" as const;
+        }),
+        dup: withDefault(option("--dup1", dupDep), "a" as const),
+      }),
+      object({
+        dup: withDefault(option("--dup2", dupDep), "b" as const),
+      }),
+    );
+
+    const parser = merge(
+      innerMerge,
+      object({
+        logLevel: option("--log-level", logLevelParser),
+      }),
+    );
+
+    const result = parseSync(parser, ["--log-level", "warn"]);
+    assert.ok(result.success);
+    assert.equal(
+      modeThunkCount,
+      1,
+      `unique "mode" thunk should be evaluated exactly once, got ${modeThunkCount}`,
+    );
+  });
 });
 
 // =============================================================================

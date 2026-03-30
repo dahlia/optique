@@ -3504,24 +3504,40 @@ async function completeDependencySourceDefaultsAsync(
  * @internal
  */
 /**
- * Returns `true` if a field-parser pair list has no duplicate field names.
- * Used to decide whether pre-completed results can be safely passed as a
- * flat field-keyed cache to a child construct.  Inner merges with
- * duplicate output keys across branches must NOT receive a cache because
- * the flat map would collapse branch-specific results.
+ * Removes entries for duplicate field names from a pre-completed results
+ * map.  When a child construct's field-parser pairs contain the same field
+ * name more than once (e.g., inner merges with overlapping output keys),
+ * the flat map collapses branch-specific results.  This function strips
+ * only the ambiguous entries, preserving cached results for unique fields.
+ *
+ * Returns `undefined` if the filtered map is empty (no cacheable fields).
  *
  * @see https://github.com/dahlia/optique/issues/762
  * @internal
  */
-function fieldPairsHaveUniqueKeys(
+function filterDuplicateKeys(
+  preCompleted: ReadonlyMap<string | symbol, unknown>,
   pairs: ReadonlyArray<readonly [string | symbol, unknown]>,
-): boolean {
-  const seen = new Set<string | symbol>();
+): ReadonlyMap<string | symbol, unknown> | undefined {
+  const counts = new Map<string | symbol, number>();
   for (const [field] of pairs) {
-    if (seen.has(field)) return false;
-    seen.add(field);
+    counts.set(field, (counts.get(field) ?? 0) + 1);
   }
-  return true;
+  let hasDuplicates = false;
+  for (const count of counts.values()) {
+    if (count > 1) {
+      hasDuplicates = true;
+      break;
+    }
+  }
+  if (!hasDuplicates) return preCompleted;
+  const filtered = new Map<string | symbol, unknown>();
+  for (const [field, value] of preCompleted) {
+    if ((counts.get(field) ?? 0) <= 1) {
+      filtered.set(field, value);
+    }
+  }
+  return filtered.size > 0 ? filtered : undefined;
 }
 
 function collectChildFieldParsers(
@@ -6046,7 +6062,7 @@ export function merge(
             // Only pass cache when field names are unique.  Inner merges
             // with duplicate output keys would collapse branch-specific
             // results in the flat map.
-            return fieldPairsHaveUniqueKeys(pairs) ? preCompleted : undefined;
+            return filterDuplicateKeys(preCompleted, pairs);
           }
           return undefined;
         });
@@ -6148,7 +6164,7 @@ export function merge(
               childExec,
             );
             perChildCache.push(
-              fieldPairsHaveUniqueKeys(pairs) ? preCompleted : undefined,
+              filterDuplicateKeys(preCompleted, pairs),
             );
           } else {
             perChildCache.push(undefined);
