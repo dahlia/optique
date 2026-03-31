@@ -5,7 +5,13 @@
  */
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
-import { dependency, deriveFrom } from "./dependency.ts";
+import {
+  createDependencySourceState,
+  dependency,
+  dependencyId,
+  deriveFrom,
+  isDependencySourceState,
+} from "./dependency.ts";
 import { choice } from "./valueparser.ts";
 import type { NonEmptyString } from "./nonempty.ts";
 import {
@@ -13,7 +19,6 @@ import {
   extractDependencyMetadata,
   type ParserDependencyMetadata,
 } from "./dependency-metadata.ts";
-import { createDependencySourceState } from "./dependency.ts";
 
 // =============================================================================
 // Shared test fixtures
@@ -67,6 +72,25 @@ function createDerivedFromMulti(
   });
 }
 
+function createAsyncSourceMetadata(
+  sourceId: symbol,
+): ParserDependencyMetadata {
+  return {
+    source: {
+      kind: "source",
+      sourceId,
+      preservesSourceValue: true,
+      async extractSourceValue(state) {
+        await Promise.resolve();
+        return isDependencySourceState(state) &&
+            state[dependencyId] === sourceId
+          ? state.result
+          : undefined;
+      },
+    },
+  };
+}
+
 // =============================================================================
 // Tests: extractDependencyMetadata
 // =============================================================================
@@ -101,12 +125,12 @@ describe("extractDependencyMetadata", () => {
   });
 
   test("extractSourceValue returns failed result for failed parse", async () => {
-    const env = createEnvSource();
-    const metadata = extractDependencyMetadata(env);
+    const sourceId = Symbol("async-source");
+    const metadata = createAsyncSourceMetadata(sourceId);
     assert.ok(metadata?.source?.extractSourceValue !== undefined);
     const sourceState = createDependencySourceState(
       { success: false, error: undefined! },
-      metadata.source.sourceId,
+      sourceId,
     );
     const result = await resolveExtractResult(
       metadata.source.extractSourceValue(sourceState),
@@ -118,12 +142,12 @@ describe("extractDependencyMetadata", () => {
   test(
     "extractSourceValue preserves successful undefined value",
     async () => {
-      const env = createEnvSource();
-      const metadata = extractDependencyMetadata(env);
+      const sourceId = Symbol("async-source");
+      const metadata = createAsyncSourceMetadata(sourceId);
       assert.ok(metadata?.source?.extractSourceValue !== undefined);
       const sourceState = createDependencySourceState(
         { success: true, value: undefined },
-        metadata.source.sourceId,
+        sourceId,
       );
       const result = await resolveExtractResult(
         metadata.source.extractSourceValue(sourceState),

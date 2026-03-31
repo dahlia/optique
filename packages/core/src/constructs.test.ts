@@ -10850,6 +10850,24 @@ describe("branch coverage: constructs.ts edge cases", () => {
   });
 
   it("tuple(), merge(), and concat() suggest use child exec paths", () => {
+    const tupleFirstChild = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: "first" };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, undefined>;
     const tupleChild = {
       $mode: "sync" as const,
       $valueType: [] as readonly string[],
@@ -10868,14 +10886,14 @@ describe("branch coverage: constructs.ts edge cases", () => {
       suggest: function* (context: ParserContext<undefined>) {
         if (
           JSON.stringify(context.exec?.path) ===
-            JSON.stringify(["root", 0])
+            JSON.stringify(["root", 1])
         ) {
           yield { kind: "literal" as const, text: "tuple" };
         }
       },
       getDocFragments: () => ({ fragments: [] }),
     } as const satisfies Parser<"sync", string, undefined>;
-    const tupleParser = tuple([tupleChild]);
+    const tupleParser = tuple([tupleFirstChild, tupleChild]);
     assert.deepEqual(
       [...tupleParser.suggest({
         buffer: [],
@@ -10892,6 +10910,24 @@ describe("branch coverage: constructs.ts edge cases", () => {
       [{ kind: "literal", text: "tuple" }],
     );
 
+    const mergeFirstChild = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly { readonly first: string }[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: { first: "first" } };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", { readonly first: string }, undefined>;
     const mergeChild = {
       $mode: "sync" as const,
       $valueType: [] as readonly { readonly value: string }[],
@@ -10910,14 +10946,14 @@ describe("branch coverage: constructs.ts edge cases", () => {
       suggest: function* (context: ParserContext<undefined>) {
         if (
           JSON.stringify(context.exec?.path) ===
-            JSON.stringify(["root", 0])
+            JSON.stringify(["root", 1])
         ) {
           yield { kind: "literal" as const, text: "merge" };
         }
       },
       getDocFragments: () => ({ fragments: [] }),
     } as const satisfies Parser<"sync", { readonly value: string }, undefined>;
-    const mergeParser = merge(mergeChild);
+    const mergeParser = merge(mergeFirstChild, mergeChild);
     assert.deepEqual(
       [...mergeParser.suggest({
         buffer: [],
@@ -10934,6 +10970,24 @@ describe("branch coverage: constructs.ts edge cases", () => {
       [{ kind: "literal", text: "merge" }],
     );
 
+    const concatFirstChild = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly [string][],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: ["first"] as const };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", readonly [string], undefined>;
     const concatChild = {
       $mode: "sync" as const,
       $valueType: [] as readonly [string][],
@@ -10952,14 +11006,14 @@ describe("branch coverage: constructs.ts edge cases", () => {
       suggest: function* (context: ParserContext<undefined>) {
         if (
           JSON.stringify(context.exec?.path) ===
-            JSON.stringify(["root", 0])
+            JSON.stringify(["root", 1])
         ) {
           yield { kind: "literal" as const, text: "concat" };
         }
       },
       getDocFragments: () => ({ fragments: [] }),
     } as const satisfies Parser<"sync", readonly [string], undefined>;
-    const concatParser = concat(concatChild);
+    const concatParser = concat(concatFirstChild, concatChild);
     assert.deepEqual(
       [...concatParser.suggest({
         buffer: [],
