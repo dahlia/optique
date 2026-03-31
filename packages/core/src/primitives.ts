@@ -583,7 +583,7 @@ function* suggestOptionSync<T>(
       else if (
         context.state === undefined &&
         context.buffer.length === 0 &&
-        (context.exec?.path == null || context.exec.path.length === 0) &&
+        (context.exec?.path?.length ?? 0) === 0 &&
         !(prefix.startsWith("--") || prefix.startsWith("-") ||
           prefix.startsWith("/"))
       ) {
@@ -757,7 +757,7 @@ async function* suggestOptionAsync<T>(
       else if (
         context.state === undefined &&
         context.buffer.length === 0 &&
-        (context.exec?.path == null || context.exec.path.length === 0) &&
+        (context.exec?.path?.length ?? 0) === 0 &&
         !(prefix.startsWith("--") || prefix.startsWith("-") ||
           prefix.startsWith("/"))
       ) {
