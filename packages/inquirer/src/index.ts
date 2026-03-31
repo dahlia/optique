@@ -983,7 +983,7 @@ export function prompt<M extends Mode, TValue, TState>(
         : context;
       const effectiveInnerState = annotations != null &&
           innerState == null &&
-          typeof parser.shouldDeferCompletion === "function"
+          Reflect.get(parser, inheritParentAnnotationsKey) === true
         ? injectAnnotations(innerState, annotations)
         : innerState;
       // Propagate annotations into the inner context state so that source-

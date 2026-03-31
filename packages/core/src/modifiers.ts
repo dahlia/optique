@@ -200,18 +200,21 @@ function adaptShouldDeferCompletion<TState>(
   innerCheck: (state: TState, exec?: ExecutionContext) => boolean,
 ): (state: [TState] | undefined, exec?: ExecutionContext) => boolean {
   return (state: [TState] | undefined, exec?: ExecutionContext): boolean => {
-    if (state != null && typeof state === "object") {
+    if (Array.isArray(state)) {
       return innerCheck(
-        normalizeOptionalLikeInnerState(state, undefined as TState),
+        normalizeOptionalLikeInnerState(state, state[0]),
         exec,
       );
+    }
+    if (state != null && typeof state === "object") {
+      return innerCheck(state, exec);
     }
     return false;
   };
 }
 
 function normalizeOptionalLikeInnerState<TState>(
-  state: [TState] | undefined,
+  state: [TState] | TState | undefined,
   initialState: TState,
 ): TState {
   if (Array.isArray(state)) {
@@ -222,7 +225,7 @@ function normalizeOptionalLikeInnerState<TState>(
       : state[0];
   }
   if (state != null && typeof state === "object") {
-    return state as unknown as TState;
+    return state;
   }
   return initialState;
 }

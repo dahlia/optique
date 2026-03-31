@@ -3332,6 +3332,69 @@ describe("prompt()", () => {
       }
     });
 
+    it(
+      "does not rebox omitted cliState without the inheritance marker",
+      async () => {
+        const annotations = { [Symbol("annotation")]: true };
+        const seenStates: unknown[] = [];
+        const inner: Parser<"async", string, undefined> = {
+          $mode: "async",
+          $valueType: [] as readonly string[],
+          $stateType: [] as readonly undefined[],
+          priority: 5,
+          usage: [],
+          leadingNames: new Set(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context) {
+            seenStates.push(context.state);
+            return Promise.resolve({
+              success: true as const,
+              next: {
+                ...context,
+                state: undefined,
+              },
+              consumed: [],
+            });
+          },
+          complete() {
+            return Promise.resolve({
+              success: true as const,
+              value: "ok",
+            });
+          },
+          shouldDeferCompletion: () => true,
+          async *suggest() {},
+          getDocFragments(): DocFragments {
+            return { fragments: [] };
+          },
+        };
+
+        const parser = prompt(inner, {
+          type: "input",
+          message: "Enter value",
+        });
+        const first = await parser.parse({
+          buffer: [],
+          state: injectAnnotations(parser.initialState, annotations),
+          optionsTerminated: false,
+          usage: parser.usage,
+        });
+        assert.ok(first.success);
+        if (!first.success) return;
+
+        const second = await parser.parse({
+          buffer: [],
+          state: first.next.state,
+          optionsTerminated: false,
+          usage: parser.usage,
+        });
+        assert.ok(second.success);
+        assert.equal(seenStates.length, 2);
+        assert.equal(seenStates[1], undefined);
+      },
+    );
+
     it("executes built-in prompt branches via prompt-function override", async () => {
       const calls: Array<{ name: string; config: Record<string, unknown> }> =
         [];
