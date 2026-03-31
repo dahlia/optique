@@ -129,6 +129,76 @@ describe("optional", () => {
     }
   });
 
+  it("should preserve delegated object state for missing-source completion", () => {
+    const annotation = Symbol.for("@test/optional-complete-state");
+    const sourceId = Symbol("mode");
+    const receivedStates: unknown[] = [];
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`No match.`,
+        };
+      },
+      complete(state: unknown) {
+        receivedStates.push(state);
+        return {
+          success: true as const,
+          value: getAnnotations(state)?.[annotation] === "ok"
+            ? "annotated"
+            : "missing",
+        };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue: () => undefined,
+          getMissingSourceValue: () => ({
+            success: true as const,
+            value: "fallback",
+          }),
+        },
+      },
+    } as const satisfies Parser<"sync", string, undefined> & {
+      readonly dependencyMetadata: {
+        readonly source: {
+          readonly kind: "source";
+          readonly sourceId: typeof sourceId;
+          readonly preservesSourceValue: true;
+          readonly extractSourceValue: (
+            state: unknown,
+          ) => ValueParserResult<unknown> | undefined;
+          readonly getMissingSourceValue: () => ValueParserResult<string>;
+        };
+      };
+    };
+    const parser = optional(inner);
+    const deferredState = injectAnnotations(undefined, {
+      [annotation]: "ok",
+    });
+    const result = (
+      parser.complete as (
+        state: unknown,
+      ) => ValueParserResult<string | undefined>
+    )(deferredState);
+
+    assert.deepEqual(receivedStates, [deferredState]);
+    assert.deepEqual(result, { success: true, value: "annotated" });
+  });
+
   it("should propagate successful parse results correctly", () => {
     const baseParser = option("-n", "--name", string());
     const optionalParser = optional(baseParser);
@@ -2826,6 +2896,110 @@ describe("multiple", () => {
     assert.ok(
       suggestions.some((s) => s.kind === "literal" && s.text === "beta"),
     );
+  });
+
+  it("should continue suggestions from the in-progress sync item", () => {
+    const baseParser: Parser<"sync", string, { readonly step: number }> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { step: 0 },
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`Expected a value.`,
+        };
+      },
+      complete(state) {
+        return { success: true as const, value: `step-${state.step}` };
+      },
+      suggest(context) {
+        if (
+          context.state.step === 1 &&
+          JSON.stringify(context.exec?.path) === JSON.stringify(["root", 0])
+        ) {
+          return [{ kind: "literal" as const, text: "second" }];
+        }
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const suggestions = [...parser.suggest({
+      buffer: [],
+      state: [{ step: 1 }],
+      optionsTerminated: false,
+      usage: parser.usage,
+      exec: {
+        usage: parser.usage,
+        phase: "suggest",
+        path: ["root"],
+        trace: undefined,
+      },
+    }, "")];
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "second" }]);
+  });
+
+  it("should continue suggestions from the in-progress async item", async () => {
+    const baseParser: Parser<"async", string, { readonly step: number }> = {
+      $mode: "async",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { step: 0 },
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`Expected a value.`,
+        });
+      },
+      complete(state) {
+        return Promise.resolve({
+          success: true as const,
+          value: `step-${state.step}`,
+        });
+      },
+      async *suggest(context) {
+        if (
+          context.state.step === 1 &&
+          JSON.stringify(context.exec?.path) === JSON.stringify(["root", 0])
+        ) {
+          yield { kind: "literal" as const, text: "second" };
+        }
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const suggestions = await collectSuggestions(parser.suggest({
+      buffer: [],
+      state: [{ step: 1 }],
+      optionsTerminated: false,
+      usage: parser.usage,
+      exec: {
+        usage: parser.usage,
+        phase: "suggest",
+        path: ["root"],
+        trace: undefined,
+      },
+    }, ""));
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "second" }]);
   });
 
   it("should not fallback to unwrapped primitive state after async suggest succeeds", async () => {

@@ -80,7 +80,7 @@ function isTerminalMultipleItemState(state: unknown): boolean {
     ? unwrapInjectedAnnotationWrapper(state)
     : state;
   return unwrapped != null && typeof unwrapped === "object" &&
-    "success" in unwrapped &&
+    Object.hasOwn(unwrapped, "success") &&
     typeof (unwrapped as { success?: unknown }).success === "boolean";
 }
 
@@ -288,12 +288,15 @@ export function optional<M extends Mode, TValue, TState>(
         // dependency metadata (e.g. optional(withDefault(source))), delegate
         // to it so the user-visible value matches the dependency runtime.
         if (parser.dependencyMetadata?.source?.getMissingSourceValue != null) {
+          const delegatedState = state != null && typeof state === "object"
+            ? state as TState
+            : undefined as TState;
           return dispatchByMode(
             parser.$mode,
-            () => syncParser.complete(undefined as TState, exec),
+            () => syncParser.complete(delegatedState, exec),
             () =>
               parser.complete(
-                undefined as TState,
+                delegatedState,
                 exec,
               ) as Promise<ValueParserResult<TValue | undefined>>,
           );
@@ -1449,10 +1452,18 @@ export function multiple<M extends Mode, TValue, TState>(
       // Extract already-selected values from completed states to exclude them
       // from suggestions (fixes https://github.com/dahlia/optique/issues/73)
       const selectedValues = new Set<string>();
-      const suggestInitialState = inheritAnnotations(
-        context.state,
-        parser.initialState,
-      );
+      const currentItemState = context.state.at(-1);
+      const canExtendCurrent = currentItemState != null &&
+        !isTerminalMultipleItemState(currentItemState);
+      const itemIndex = canExtendCurrent
+        ? context.state.length - 1
+        : context.state.length;
+      const suggestInitialState = canExtendCurrent
+        ? currentItemState
+        : inheritAnnotations(
+          context.state,
+          parser.initialState,
+        );
       const suggestFallbackState = unwrapInjectedWrapper(
         suggestInitialState,
       ) as TState;
@@ -1512,7 +1523,7 @@ export function multiple<M extends Mode, TValue, TState>(
               syncParser.suggest(
                 withChildContext(
                   context,
-                  context.state.length,
+                  itemIndex,
                   suggestInitialState as TState,
                 ),
                 prefix,
@@ -1527,7 +1538,7 @@ export function multiple<M extends Mode, TValue, TState>(
               syncParser.suggest(
                 withChildContext(
                   context,
-                  context.state.length,
+                  itemIndex,
                   suggestFallbackState,
                 ),
                 prefix,
@@ -1554,7 +1565,7 @@ export function multiple<M extends Mode, TValue, TState>(
               parser.suggest(
                 withChildContext(
                   context,
-                  context.state.length,
+                  itemIndex,
                   suggestInitialState,
                 ),
                 prefix,
@@ -1569,7 +1580,7 @@ export function multiple<M extends Mode, TValue, TState>(
               parser.suggest(
                 withChildContext(
                   context,
-                  context.state.length,
+                  itemIndex,
                   suggestFallbackState,
                 ),
                 prefix,
