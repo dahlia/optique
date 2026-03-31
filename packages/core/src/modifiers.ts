@@ -193,19 +193,31 @@ function adaptShouldDeferCompletion<TState>(
   innerCheck: (state: TState, exec?: ExecutionContext) => boolean,
 ): (state: [TState] | undefined, exec?: ExecutionContext) => boolean {
   return (state: [TState] | undefined, exec?: ExecutionContext): boolean => {
-    if (Array.isArray(state)) {
-      const inner = getAnnotations(state) != null &&
-          state[0] != null &&
-          typeof state[0] === "object"
-        ? inheritAnnotations(state, state[0]) as TState
-        : state[0];
-      return innerCheck(inner, exec);
-    }
     if (state != null && typeof state === "object") {
-      return innerCheck(state as unknown as TState, exec);
+      return innerCheck(
+        normalizeOptionalLikeInnerState(state, undefined as TState),
+        exec,
+      );
     }
     return false;
   };
+}
+
+function normalizeOptionalLikeInnerState<TState>(
+  state: [TState] | undefined,
+  initialState: TState,
+): TState {
+  if (Array.isArray(state)) {
+    return getAnnotations(state) != null &&
+        state[0] != null &&
+        typeof state[0] === "object"
+      ? inheritAnnotations(state, state[0]) as TState
+      : state[0];
+  }
+  if (state != null && typeof state === "object") {
+    return state as unknown as TState;
+  }
+  return initialState;
 }
 
 /**
@@ -283,7 +295,10 @@ export function optional<M extends Mode, TValue, TState>(
       if (optionalParser.dependencyMetadata?.source != null) {
         return [{ path, parser: optionalParser, state }];
       }
-      const innerState = Array.isArray(state) ? state[0] : parser.initialState;
+      const innerState = normalizeOptionalLikeInnerState(
+        state,
+        parser.initialState,
+      );
       return parser.getSuggestRuntimeNodes?.(innerState, path) ??
         (parser.dependencyMetadata?.source != null
           ? [{ path, parser, state: innerState }]
@@ -356,11 +371,10 @@ export function optional<M extends Mode, TValue, TState>(
       // them during phase-two resolution.  Only propagate when the inner
       // element is an object; primitive states cannot carry annotations
       // without changing their shape, which would break inner parsers.
-      const innerElement = getAnnotations(state) != null &&
-          state[0] != null &&
-          typeof state[0] === "object"
-        ? inheritAnnotations(state, state[0])
-        : state[0];
+      const innerElement = normalizeOptionalLikeInnerState(
+        state,
+        parser.initialState,
+      );
       return dispatchByMode(
         parser.$mode,
         () => syncParser.complete(innerElement as TState, exec),
@@ -623,7 +637,10 @@ export function withDefault<
       if (withDefaultParser.dependencyMetadata?.source != null) {
         return [{ path, parser: withDefaultParser, state }];
       }
-      const innerState = Array.isArray(state) ? state[0] : parser.initialState;
+      const innerState = normalizeOptionalLikeInnerState(
+        state,
+        parser.initialState,
+      );
       return parser.getSuggestRuntimeNodes?.(innerState, path) ??
         (parser.dependencyMetadata?.source != null
           ? [{ path, parser, state: innerState }]
@@ -701,11 +718,10 @@ export function withDefault<
       // them during phase-two resolution.  Only propagate when the inner
       // element is an object; primitive states cannot carry annotations
       // without changing their shape, which would break inner parsers.
-      const innerElement = getAnnotations(state) != null &&
-          state[0] != null &&
-          typeof state[0] === "object"
-        ? inheritAnnotations(state, state[0])
-        : state[0];
+      const innerElement = normalizeOptionalLikeInnerState(
+        state,
+        parser.initialState,
+      );
       return dispatchByMode(
         parser.$mode,
         () => syncParser.complete(innerElement as TState, exec),

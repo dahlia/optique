@@ -5375,6 +5375,7 @@ describe("branch coverage: modifiers edge cases", () => {
   });
 
   it("multiple: async suggest derives selected values with child exec paths", async () => {
+    const seenPaths: readonly string[] = [];
     const inner = {
       $mode: "async" as const,
       $valueType: [] as readonly string[],
@@ -5394,15 +5395,16 @@ describe("branch coverage: modifiers edge cases", () => {
         _state: string,
         exec?: { readonly path: readonly PropertyKey[] },
       ) {
-        const index = exec?.path.at(-1);
+        const path = exec?.path?.map(String).join("/") ?? "root";
+        (seenPaths as string[]).push(path);
         return Promise.resolve({
           success: true as const,
-          value: `item-${String(index ?? "root")}`,
+          value: `item-${path}`,
         });
       },
       async *suggest() {
-        yield { kind: "literal" as const, text: "item-0" };
-        yield { kind: "literal" as const, text: "item-1" };
+        yield { kind: "literal" as const, text: "item-root/0" };
+        yield { kind: "literal" as const, text: "item-root/1" };
       },
       getDocFragments() {
         return { fragments: [] };
@@ -5420,7 +5422,7 @@ describe("branch coverage: modifiers edge cases", () => {
           exec: {
             usage: parser.usage,
             phase: "suggest",
-            path: [],
+            path: ["root"],
           },
         },
         "",
@@ -5428,6 +5430,79 @@ describe("branch coverage: modifiers edge cases", () => {
     );
 
     assert.deepEqual(suggestions, []);
+    assert.deepEqual(seenPaths, ["root/0", "root/1"]);
+  });
+
+  it("optional: getSuggestRuntimeNodes preserves outer annotations", () => {
+    const annotations = { [Symbol("annotation")]: true };
+    let seenState: unknown;
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly unknown[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: { kind: "initial" as const },
+      getSuggestRuntimeNodes(state: unknown) {
+        seenState = state;
+        return [];
+      },
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No parse.`,
+      }),
+      complete: () => ({ success: true as const, value: "ok" }),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, unknown>;
+    const parser = optional(inner);
+    const state = injectAnnotations([{ kind: "value" as const }], annotations);
+
+    parser.getSuggestRuntimeNodes?.(state as [unknown], ["root"]);
+
+    assert.ok(seenState != null && typeof seenState === "object");
+    assert.deepEqual(getAnnotations(seenState), annotations);
+    assert.equal((seenState as { readonly kind: "value" }).kind, "value");
+  });
+
+  it("withDefault: getSuggestRuntimeNodes preserves object wrapper state", () => {
+    const annotations = { [Symbol("annotation")]: true };
+    const wrappedState = injectAnnotations(undefined, annotations);
+    let seenState: unknown;
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly unknown[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "initial",
+      getSuggestRuntimeNodes(state: unknown) {
+        seenState = state;
+        return [];
+      },
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No parse.`,
+      }),
+      complete: () => ({ success: true as const, value: "ok" }),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, unknown>;
+    const parser = withDefault(inner, "fallback");
+
+    parser.getSuggestRuntimeNodes?.(
+      wrappedState as unknown as [unknown] | undefined,
+      ["root"],
+    );
+
+    assert.equal(seenState, wrappedState);
+    assert.deepEqual(getAnnotations(seenState), annotations);
   });
 
   it("withDefault: transformed complete(undefined) catches callback errors", async () => {
