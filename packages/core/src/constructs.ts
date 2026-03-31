@@ -8929,10 +8929,12 @@ export function conditional(
       dependencyRuntime: runtime,
       dependencyRegistry: runtime.registry,
     };
-    const discriminatorCompleteResult = syncDiscriminator.complete(
-      state.discriminatorState,
-      withChildExecPath(completionExec, "_discriminator"),
-    );
+    const discriminatorCompleteResult = state.selectedBranch.kind === "default"
+      ? undefined
+      : syncDiscriminator.complete(
+        state.discriminatorState,
+        withChildExecPath(completionExec, "_discriminator"),
+      );
 
     const branchResult = branchParser.complete(
       resolvedBranchState,
@@ -9076,10 +9078,12 @@ export function conditional(
       dependencyRuntime: runtime,
       dependencyRegistry: runtime.registry,
     };
-    const discriminatorCompleteResult = await discriminator.complete(
-      state.discriminatorState,
-      withChildExecPath(completionExec, "_discriminator"),
-    );
+    const discriminatorCompleteResult = state.selectedBranch.kind === "default"
+      ? undefined
+      : await discriminator.complete(
+        state.discriminatorState,
+        withChildExecPath(completionExec, "_discriminator"),
+      );
 
     const branchResult = await branchParser.complete(
       resolvedBranchState,

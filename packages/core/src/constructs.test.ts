@@ -33,6 +33,7 @@ import {
 } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
+  type ExecutionContext,
   getDocPage,
   type InferValue,
   parseAsync,
@@ -10566,6 +10567,81 @@ describe("branch coverage: constructs.ts edge cases", () => {
     }
   });
 
+  it("conditional() complete skips discriminator completion for selected default branch", () => {
+    const dep = Symbol("cond-disc-default-sync");
+    let discriminatorCompleteCalls = 0;
+    const discriminator = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "seed",
+      parse(context: ParserContext<string>) {
+        return {
+          success: true as const,
+          next: { ...context, state: "seed" },
+          consumed: [],
+        };
+      },
+      complete(_state: string, exec?: ExecutionContext) {
+        discriminatorCompleteCalls++;
+        exec?.dependencyRuntime?.registerSource(
+          dep,
+          "fast",
+          "derived-precomplete",
+        );
+        return createDependencySourceState(
+          { success: true as const, value: "fast" },
+          dep,
+        );
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"sync", string, string>;
+    const defaultBranch = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete(_state: undefined, exec?: ExecutionContext) {
+        return {
+          success: true as const,
+          value: exec?.dependencyRuntime?.hasSource(dep) ? "fast" : "default",
+        };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as Parser<"sync", string, undefined>;
+    const parser = conditional(
+      discriminator,
+      { fast: constant("F") },
+      defaultBranch,
+    );
+
+    const completed = parser.complete({
+      ...parser.initialState,
+      discriminatorState: "seed",
+      discriminatorValue: undefined,
+      selectedBranch: { kind: "default" },
+      branchState: undefined,
+    });
+    assert.deepEqual(completed, {
+      success: true,
+      value: [undefined, "default"],
+    });
+    assert.equal(discriminatorCompleteCalls, 0);
+  });
+
   it("conditional() async complete uses default branch when none selected", async () => {
     const asyncDiscriminator = option("--mode", asyncStringValue());
     const parser = conditional(
@@ -10660,6 +10736,87 @@ describe("branch coverage: constructs.ts edge cases", () => {
     if (completed.success) {
       assert.deepEqual(completed.value, ["fast", "S"]);
     }
+  });
+
+  it("conditional() async complete skips discriminator completion for selected default branch", async () => {
+    const dep = Symbol("cond-disc-default-async");
+    let discriminatorCompleteCalls = 0;
+    const discriminator = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "seed",
+      parse(context: ParserContext<string>) {
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, state: "seed" },
+          consumed: [],
+        });
+      },
+      complete(_state: string, exec?: ExecutionContext) {
+        discriminatorCompleteCalls++;
+        exec?.dependencyRuntime?.registerSource(
+          dep,
+          "fast",
+          "derived-precomplete",
+        );
+        return Promise.resolve(
+          createDependencySourceState(
+            { success: true as const, value: "fast" },
+            dep,
+          ),
+        );
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"async", string, string>;
+    const defaultBranch = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete(_state: undefined, exec?: ExecutionContext) {
+        return Promise.resolve({
+          success: true as const,
+          value: exec?.dependencyRuntime?.hasSource(dep) ? "fast" : "default",
+        });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as Parser<"async", string, undefined>;
+    const parser = conditional(
+      discriminator,
+      { fast: constant("F") },
+      defaultBranch,
+    );
+
+    const completed = await parser.complete({
+      ...parser.initialState,
+      discriminatorState: "seed",
+      discriminatorValue: undefined,
+      selectedBranch: { kind: "default" },
+      branchState: undefined,
+    });
+    assert.deepEqual(completed, {
+      success: true,
+      value: [undefined, "default"],
+    });
+    assert.equal(discriminatorCompleteCalls, 0);
   });
 
   it("object() suggest returns empty when hidden is true in sync and async", async () => {
