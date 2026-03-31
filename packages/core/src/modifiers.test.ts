@@ -601,11 +601,7 @@ describe("optional", () => {
     const optionalParser = optional(defaultedSource);
 
     const completeResult = optionalParser.complete(undefined);
-
-    assert.ok(completeResult.success);
-    if (completeResult.success) {
-      assert.equal(completeResult.value, "dev");
-    }
+    assert.deepEqual(completeResult, { success: true, value: "dev" });
   });
 });
 
@@ -4593,10 +4589,7 @@ describe("branch coverage: modifiers edge cases", () => {
     );
 
     const result = await parser.complete(undefined);
-    assert.ok(result.success);
-    if (result.success) {
-      assert.equal(result.value, "fallback");
-    }
+    assert.deepEqual(result, { success: true, value: "fallback" });
   });
 
   it("withDefault: transformed async parser without dependency returns default", async () => {
@@ -4627,10 +4620,7 @@ describe("branch coverage: modifiers edge cases", () => {
     );
 
     const result = await parser.complete(undefined);
-    assert.ok(result.success);
-    if (result.success) {
-      assert.equal(result.value, "fallback");
-    }
+    assert.deepEqual(result, { success: true, value: "fallback" });
   });
 
   it("withDefault: wrapped dependency source uses plain fallback value", () => {
@@ -4660,10 +4650,7 @@ describe("branch coverage: modifiers edge cases", () => {
     );
 
     const result = parser.complete(undefined);
-    assert.ok(result.success);
-    if (result.success) {
-      assert.equal(result.value, "fallback");
-    }
+    assert.deepEqual(result, { success: true, value: "fallback" });
   });
 
   it("withDefault: defined async transform state delegates to inner parser", async () => {
@@ -5404,6 +5391,7 @@ describe("multiple() dependency source extraction", () => {
     const sourceId = Symbol("mode");
     const earlier = Symbol("earlier");
     const latest = Symbol("latest");
+    const visited: unknown[] = [];
     const inner = {
       $mode: "async" as const,
       $valueType: [] as const,
@@ -5432,6 +5420,7 @@ describe("multiple() dependency source extraction", () => {
           sourceId,
           preservesSourceValue: true,
           extractSourceValue(state: unknown) {
+            visited.push(state);
             if (state === latest) return Promise.resolve(undefined);
             if (state === earlier) {
               return Promise.resolve({
@@ -5464,5 +5453,6 @@ describe("multiple() dependency source extraction", () => {
       latest,
     ]);
     assert.deepEqual(result, { success: true, value: "prod" });
+    assert.deepEqual(visited, [latest, earlier]);
   });
 });
