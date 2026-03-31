@@ -421,6 +421,19 @@ describe("composeDependencyMetadata", () => {
     assert.ok(composed.transform.transformsSourceValue);
   });
 
+  test("withDefault after map does not add missing-source fallback", () => {
+    const env = createEnvSource();
+    const inner = extractDependencyMetadata(env);
+    assert.ok(inner !== undefined);
+    const mapped = composeDependencyMetadata(inner, "map");
+    const composed = composeDependencyMetadata(mapped, "withDefault", {
+      defaultValue: () => ({ success: true as const, value: "dev" as Env }),
+    });
+    assert.ok(composed?.source !== undefined);
+    assert.ok(!composed.source.preservesSourceValue);
+    assert.equal(composed.source.getMissingSourceValue, undefined);
+  });
+
   test("map preserves derived capability", () => {
     const env = createEnvSource();
     const logLevel = createDerivedLogLevel(env);

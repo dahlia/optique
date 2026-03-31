@@ -349,6 +349,7 @@ export function composeDependencyMetadata(
       const wrappedExtract = inner.source?.extractSourceValue != null
         ? unwrapArrayThenExtract(inner.source.extractSourceValue)
         : undefined;
+      const preservesSourceValue = inner.source?.preservesSourceValue !== false;
       if (inner.source != null) {
         return {
           ...inner,
@@ -357,7 +358,7 @@ export function composeDependencyMetadata(
             ...(wrappedExtract != null && {
               extractSourceValue: wrappedExtract,
             }),
-            ...(options?.defaultValue != null && {
+            ...(preservesSourceValue && options?.defaultValue != null && {
               getMissingSourceValue: options.defaultValue,
             }),
           },

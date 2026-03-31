@@ -3539,6 +3539,96 @@ describe("multiple", () => {
     }
   });
 
+  it("should append a sync item when a new slot reuses undefined state", () => {
+    const itemParser = {
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: context.state,
+          },
+          consumed: [context.buffer[0]!],
+        };
+      },
+      complete() {
+        return { success: true as const, value: "item" };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, undefined>;
+    const parser = multiple(itemParser);
+
+    const parsed = parser.parse({
+      buffer: ["value"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+    if (parsed.success) {
+      assert.deepEqual(parsed.next.state, [undefined]);
+      assert.deepEqual(parser.complete(parsed.next.state), {
+        success: true,
+        value: ["item"],
+      });
+    }
+  });
+
+  it("should append an async item when a new slot reuses undefined state", async () => {
+    const itemParser = {
+      $mode: "async" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: context.state,
+          },
+          consumed: [context.buffer[0]!],
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "item" });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"async", string, undefined>;
+    const parser = multiple(itemParser);
+
+    const parsed = await parser.parse({
+      buffer: ["value"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+    if (parsed.success) {
+      assert.deepEqual(parsed.next.state, [undefined]);
+      assert.deepEqual(await parser.complete(parsed.next.state), {
+        success: true,
+        value: ["item"],
+      });
+    }
+  });
+
   describe("getDocFragments", () => {
     it("should delegate to wrapped parser", () => {
       const baseParser = option("-l", "--locale", string());

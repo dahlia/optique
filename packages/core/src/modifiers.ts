@@ -1219,9 +1219,12 @@ export function multiple<M extends Mode, TValue, TState>(
       : currentItemStateWithAnnotations;
     const mergedExec = mergeChildExec(context.exec, result.next.exec);
     if (
-      added &&
       result.next.state === currentItemStateWithAnnotations &&
-      result.consumed.length > 0
+      result.consumed.length > 0 &&
+      (
+        !added ||
+        result.next.optionsTerminated !== context.optionsTerminated
+      )
     ) {
       return {
         success: true,
@@ -1303,9 +1306,12 @@ export function multiple<M extends Mode, TValue, TState>(
       : currentItemStateWithAnnotations;
     const mergedExec = mergeChildExec(context.exec, result.next.exec);
     if (
-      added &&
       result.next.state === currentItemStateWithAnnotations &&
-      result.consumed.length > 0
+      result.consumed.length > 0 &&
+      (
+        !added ||
+        result.next.optionsTerminated !== context.optionsTerminated
+      )
     ) {
       return {
         success: true,
