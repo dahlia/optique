@@ -47,6 +47,31 @@ function assertErrorIncludes(error: Message, text: string): void {
   assert.ok(formatted.includes(text));
 }
 
+function createPromiseLike<T>(value: T): Promise<T> {
+  const promise = Promise.resolve(value);
+  return {
+    then<TResult1 = T, TResult2 = never>(
+      onFulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+      onRejected?:
+        | ((reason: unknown) => TResult2 | PromiseLike<TResult2>)
+        | null,
+    ): Promise<TResult1 | TResult2> {
+      return promise.then(onFulfilled, onRejected);
+    },
+    catch<TResult = never>(
+      onRejected?:
+        | ((reason: unknown) => TResult | PromiseLike<TResult>)
+        | null,
+    ): Promise<T | TResult> {
+      return promise.catch(onRejected);
+    },
+    finally(onFinally?: (() => void) | null): Promise<T> {
+      return promise.finally(onFinally ?? undefined);
+    },
+    [Symbol.toStringTag]: "Promise",
+  };
+}
+
 function asyncChoice<T extends string>(
   choices: readonly T[],
 ): ValueParser<"async", T> {
@@ -5875,12 +5900,26 @@ describe("acceptingAnyToken", () => {
 });
 
 describe("multiple() dependency source extraction", () => {
-  it("keeps scanning when the newest async source resolves to undefined", async () => {
+  it("keeps scanning when the newest async source is thenable", async () => {
     const sourceId = Symbol("mode");
     const earlier = Symbol("earlier");
     const latest = Symbol("latest");
     const visited: unknown[] = [];
-    const inner = {
+    const inner: Parser<"async", string, symbol | null> & {
+      readonly dependencyMetadata: {
+        readonly source: {
+          readonly kind: "source";
+          readonly sourceId: typeof sourceId;
+          readonly preservesSourceValue: true;
+          readonly extractSourceValue: (
+            state: unknown,
+          ) =>
+            | ValueParserResult<unknown>
+            | Promise<ValueParserResult<unknown> | undefined>
+            | undefined;
+        };
+      };
+    } = {
       $mode: "async" as const,
       $valueType: [] as const,
       $stateType: [] as const,
@@ -5909,9 +5948,11 @@ describe("multiple() dependency source extraction", () => {
           preservesSourceValue: true,
           extractSourceValue(state: unknown) {
             visited.push(state);
-            if (state === latest) return Promise.resolve(undefined);
+            if (state === latest) {
+              return createPromiseLike(undefined);
+            }
             if (state === earlier) {
-              return Promise.resolve({
+              return createPromiseLike({
                 success: true as const,
                 value: "prod",
               });
@@ -5920,20 +5961,6 @@ describe("multiple() dependency source extraction", () => {
           },
         },
       },
-    } as const satisfies Parser<"async", string, symbol | null> & {
-      readonly dependencyMetadata: {
-        readonly source: {
-          readonly kind: "source";
-          readonly sourceId: typeof sourceId;
-          readonly preservesSourceValue: true;
-          readonly extractSourceValue: (
-            state: unknown,
-          ) =>
-            | ValueParserResult<unknown>
-            | Promise<ValueParserResult<unknown> | undefined>
-            | undefined;
-        };
-      };
     };
     const parser = multiple(inner);
     const result = await parser.dependencyMetadata?.source?.extractSourceValue([

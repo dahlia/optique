@@ -85,6 +85,13 @@ function isTerminalMultipleItemState(state: unknown): boolean {
     typeof (unwrapped as { success?: unknown }).success === "boolean";
 }
 
+function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
+  return value != null &&
+    (typeof value === "object" || typeof value === "function") &&
+    "then" in value &&
+    typeof (value as Record<string, unknown>).then === "function";
+}
+
 /**
  * Internal helper for optional-style parsing logic shared by optional()
  * and withDefault(). Handles the common pattern of:
@@ -1847,8 +1854,14 @@ export function multiple<M extends Mode, TValue, TState>(
               for (let i = index; i >= 0; i--) {
                 const result = innerSource.extractSourceValue(state[i]);
                 if (result == null) continue;
-                if (result instanceof Promise) {
-                  return result.then((resolved) => resolved ?? scan(i - 1));
+                if (
+                  isPromiseLike<ValueParserResult<unknown> | undefined>(
+                    result,
+                  )
+                ) {
+                  return Promise.resolve(result).then(
+                    (resolved) => resolved ?? scan(i - 1),
+                  );
                 }
                 return result;
               }
