@@ -21,6 +21,7 @@ import {
   createPendingDependencySourceState,
   dependency,
   dependencyId,
+  DependencyRegistry,
   isPendingDependencySourceState,
   wrappedDependencySourceMarker,
 } from "@optique/core/dependency";
@@ -10850,6 +10851,8 @@ describe("branch coverage: constructs.ts edge cases", () => {
   });
 
   it("tuple(), merge(), and concat() suggest use child exec paths", () => {
+    const staleRegistry = new DependencyRegistry();
+    const freshRegistry = new DependencyRegistry();
     const tupleFirstChild = {
       $mode: "sync" as const,
       $valueType: [] as readonly string[],
@@ -10885,6 +10888,9 @@ describe("branch coverage: constructs.ts edge cases", () => {
       },
       suggest: function* (context: ParserContext<undefined>) {
         if (
+          context.dependencyRegistry != null &&
+          context.dependencyRegistry !== staleRegistry &&
+          context.dependencyRegistry === context.exec?.dependencyRegistry &&
           JSON.stringify(context.exec?.path) ===
             JSON.stringify(["root", 1])
         ) {
@@ -10900,11 +10906,13 @@ describe("branch coverage: constructs.ts edge cases", () => {
         state: tupleParser.initialState,
         optionsTerminated: false,
         usage: tupleParser.usage,
+        dependencyRegistry: freshRegistry,
         exec: {
           usage: tupleParser.usage,
           phase: "suggest",
           path: ["root"],
           trace: undefined,
+          dependencyRegistry: staleRegistry,
         },
       }, "")],
       [{ kind: "literal", text: "tuple" }],
@@ -10945,6 +10953,9 @@ describe("branch coverage: constructs.ts edge cases", () => {
       },
       suggest: function* (context: ParserContext<undefined>) {
         if (
+          context.dependencyRegistry != null &&
+          context.dependencyRegistry !== staleRegistry &&
+          context.dependencyRegistry === context.exec?.dependencyRegistry &&
           JSON.stringify(context.exec?.path) ===
             JSON.stringify(["root", 1])
         ) {
@@ -10960,11 +10971,13 @@ describe("branch coverage: constructs.ts edge cases", () => {
         state: mergeParser.initialState,
         optionsTerminated: false,
         usage: mergeParser.usage,
+        dependencyRegistry: freshRegistry,
         exec: {
           usage: mergeParser.usage,
           phase: "suggest",
           path: ["root"],
           trace: undefined,
+          dependencyRegistry: staleRegistry,
         },
       }, "")],
       [{ kind: "literal", text: "merge" }],
@@ -11005,6 +11018,9 @@ describe("branch coverage: constructs.ts edge cases", () => {
       },
       suggest: function* (context: ParserContext<undefined>) {
         if (
+          context.dependencyRegistry != null &&
+          context.dependencyRegistry !== staleRegistry &&
+          context.dependencyRegistry === context.exec?.dependencyRegistry &&
           JSON.stringify(context.exec?.path) ===
             JSON.stringify(["root", 1])
         ) {
@@ -11020,11 +11036,13 @@ describe("branch coverage: constructs.ts edge cases", () => {
         state: concatParser.initialState,
         optionsTerminated: false,
         usage: concatParser.usage,
+        dependencyRegistry: freshRegistry,
         exec: {
           usage: concatParser.usage,
           phase: "suggest",
           path: ["root"],
           trace: undefined,
+          dependencyRegistry: staleRegistry,
         },
       }, "")],
       [{ kind: "literal", text: "concat" }],

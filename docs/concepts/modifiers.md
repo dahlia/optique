@@ -242,7 +242,7 @@ Dynamic defaults are useful when:
 When `withDefault()` wraps a dependency source, the default also participates
 in dependency resolution. Derived parsers see the same fallback value that the
 user-facing parser returns, even through larger compositions such as
-`object()`, `merge()`, or `multiple()`. One exception is `map()`: once a
+`object()` or `merge()`. One exception is `map()`: once a
 source value has been transformed, a later `withDefault()` only supplies a
 fallback for the mapped output. It does not invent a dependency-source value
 for downstream derived parsers.

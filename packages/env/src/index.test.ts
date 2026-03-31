@@ -10,7 +10,7 @@ import { message } from "@optique/core/message";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Parser } from "@optique/core/parser";
 import { parse, suggestAsync, suggestSync } from "@optique/core/parser";
-import { optional } from "@optique/core/modifiers";
+import { map, optional } from "@optique/core/modifiers";
 import { fail, flag, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import {
@@ -1851,6 +1851,37 @@ describe("bindEnv() with dependency sources", () => {
     );
     assert.deepEqual(extracted, { success: true, value: "prod" });
     assert.equal(completeCalls, 0);
+  });
+
+  it("does not invent mapped dependency source values from env fallbacks", () => {
+    const source = dependency(choice(["dev", "prod"] as const));
+    const parser = bindEnv(
+      map(
+        option("--mode", source),
+        (value) => value === "dev" ? "development" : "production",
+      ),
+      {
+        context: createEnvContext({
+          prefix: "APP_",
+          source: (key) => ({ APP_MODE: "production" })[key],
+        }),
+        key: "MODE",
+        parser: choice(["development", "production"] as const),
+      },
+    );
+    const parseResult = parser.parse({
+      buffer: [],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success);
+    assert.equal(
+      parser.dependencyMetadata?.source?.extractSourceValue(
+        parseResult.next.state,
+      ),
+      undefined,
+    );
   });
 });
 
