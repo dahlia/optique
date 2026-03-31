@@ -2250,6 +2250,26 @@ describe("argument() error customization", () => {
 });
 
 describe("command", () => {
+  function createRegistry(
+    entries: readonly (readonly [symbol, unknown])[] = [],
+  ): import("./registry-types.ts").DependencyRegistryLike {
+    const map = new Map<symbol, unknown>(entries);
+    return {
+      set<T>(id: symbol, value: T): void {
+        map.set(id, value);
+      },
+      get<T>(id: symbol): T | undefined {
+        return map.get(id) as T | undefined;
+      },
+      has(id: symbol): boolean {
+        return map.has(id);
+      },
+      clone() {
+        return createRegistry([...map.entries()]);
+      },
+    };
+  }
+
   it("should create a parser that matches a subcommand and applies inner parser", () => {
     const showParser = command(
       "show",
@@ -2949,6 +2969,104 @@ describe("command", () => {
       assert.strictEqual(resultWithOptions.value.cwd, "./");
       assert.strictEqual(resultWithOptions.value.key, "foo");
     }
+  });
+
+  it("should preserve the fresher dependency registry during command parse", () => {
+    const dependencyId = Symbol("command-parse-dependency");
+    const staleRegistry = createRegistry();
+    const freshRegistry = createRegistry([[dependencyId, "fresh"]]);
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return context.dependencyRegistry?.has(dependencyId)
+          ? { success: true as const, next: context, consumed: [] }
+          : {
+            success: false as const,
+            consumed: 0,
+            error: message`missing dependency`,
+          };
+      },
+      complete() {
+        return { success: true as const, value: "ok" };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, undefined>;
+    const parser = command("deploy", inner);
+
+    const result = parser.parse({
+      buffer: [],
+      state: ["matched", "deploy"],
+      optionsTerminated: false,
+      usage: parser.usage,
+      exec: {
+        usage: parser.usage,
+        phase: "parse",
+        path: ["root"],
+        trace: undefined,
+        dependencyRegistry: staleRegistry,
+      },
+      dependencyRegistry: freshRegistry,
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.strictEqual(result.next.dependencyRegistry, freshRegistry);
+      assert.strictEqual(result.next.exec?.dependencyRegistry, freshRegistry);
+    }
+  });
+
+  it("should preserve the fresher dependency registry during command suggest", () => {
+    const dependencyId = Symbol("command-suggest-dependency");
+    const staleRegistry = createRegistry();
+    const freshRegistry = createRegistry([[dependencyId, "fresh"]]);
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: "ok" };
+      },
+      suggest: function* (context: ParserContext<undefined>) {
+        if (context.dependencyRegistry?.has(dependencyId)) {
+          yield { kind: "literal" as const, text: "fresh" };
+        }
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, undefined>;
+    const parser = command("deploy", inner);
+
+    const suggestions = [...parser.suggest({
+      buffer: [],
+      state: ["matched", "deploy"],
+      optionsTerminated: false,
+      usage: parser.usage,
+      exec: {
+        usage: parser.usage,
+        phase: "suggest",
+        path: ["root"],
+        trace: undefined,
+        dependencyRegistry: staleRegistry,
+      },
+      dependencyRegistry: freshRegistry,
+    }, "")];
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "fresh" }]);
   });
 });
 

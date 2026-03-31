@@ -59,14 +59,17 @@ function withChildContext<TState>(
   state: TState,
 ): ParserContext<TState> {
   const exec = withChildExecPath(context.exec, segment);
+  const dependencyRegistry = context.dependencyRegistry ??
+    exec?.dependencyRegistry;
   return {
     ...context,
     state,
     ...(exec != null
       ? {
-        exec,
-        dependencyRegistry: exec.dependencyRegistry ??
-          context.dependencyRegistry,
+        exec: dependencyRegistry === exec.dependencyRegistry
+          ? exec
+          : { ...exec, dependencyRegistry },
+        dependencyRegistry,
       }
       : {}),
   };
