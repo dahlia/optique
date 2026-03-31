@@ -578,8 +578,14 @@ function* suggestOptionSync<T>(
         if ((optionNames as readonly string[]).includes(lastToken)) {
           shouldSuggestValues = true;
         }
-      } // Scenario 2: Empty buffer but state is undefined
-      else if (context.state === undefined && context.buffer.length === 0) {
+      } // Scenario 2: Empty buffer, state is undefined, and the prefix is
+      // not itself starting an option token.
+      else if (
+        context.state === undefined &&
+        context.buffer.length === 0 &&
+        !(prefix.startsWith("--") || prefix.startsWith("-") ||
+          prefix.startsWith("/"))
+      ) {
         shouldSuggestValues = true;
       }
 
@@ -745,8 +751,14 @@ async function* suggestOptionAsync<T>(
         if ((optionNames as readonly string[]).includes(lastToken)) {
           shouldSuggestValues = true;
         }
-      } // Scenario 2: Empty buffer but state is undefined
-      else if (context.state === undefined && context.buffer.length === 0) {
+      } // Scenario 2: Empty buffer, state is undefined, and the prefix is
+      // not itself starting an option token.
+      else if (
+        context.state === undefined &&
+        context.buffer.length === 0 &&
+        !(prefix.startsWith("--") || prefix.startsWith("-") ||
+          prefix.startsWith("/"))
+      ) {
         shouldSuggestValues = true;
       }
 
@@ -939,14 +951,9 @@ export function option<M extends Mode, T>(
     ],
     leadingNames: new Set<string>(optionNames),
     acceptingAnyToken: false,
-    initialState: valueParser == null ? { success: true, value: false } : {
-      success: false,
-      error: options.errors?.missing
-        ? (typeof options.errors.missing === "function"
-          ? options.errors.missing(optionNames)
-          : options.errors.missing)
-        : message`Missing option ${eOptionNames(optionNames)}.`,
-    },
+    initialState: valueParser == null
+      ? { success: true, value: false }
+      : undefined,
     parse(
       context: ParserContext<
         ValueParserResult<T | boolean> | undefined

@@ -663,11 +663,11 @@ describe("option", () => {
       assert.deepEqual(suggestions, [{ kind: "literal", text: "-v" }]);
     });
 
-    it("should suggest value candidates on empty buffer with undefined state", () => {
+    it("should suggest value candidates on empty buffer from initialState", () => {
       const parser = option("--env", choice(["dev", "prod"]));
       const suggestions = Array.from(parser.suggest({
         buffer: [],
-        state: undefined,
+        state: parser.initialState,
         usage: parser.usage,
         optionsTerminated: false,
       }, "p"));
@@ -1247,6 +1247,21 @@ describe("option() error customization", () => {
     if (!result.success) {
       const errorMessage = formatMessage(result.error);
       assert.ok(errorMessage.includes("Invalid port number:"));
+    }
+  });
+
+  it("should keep missing and invalidValue completion paths distinct", () => {
+    const parser = option("--port", integer(), {
+      errors: {
+        missing: message`Port is required.`,
+        invalidValue: () => message`Port is invalid.`,
+      },
+    });
+
+    const result = parser.complete(parser.initialState);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(formatMessage(result.error), "Port is required.");
     }
   });
 
