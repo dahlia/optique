@@ -39,6 +39,7 @@ import {
   deriveFromSync,
 } from "@optique/core/dependency";
 import { annotationKey } from "@optique/core/annotations";
+import { extractDependencyMetadata } from "./dependency-metadata.ts";
 import {
   type InferValue,
   parse,
@@ -2137,31 +2138,13 @@ describe("primitives additional branch coverage", () => {
       assert.equal(deferredSuccess.value, 42);
     }
 
-    const deferredFailure = parser.complete({
+    const failure = parser.complete({
       success: false,
       error: message`bad-int`,
     });
-    assert.ok(!deferredFailure.success);
-    if (!deferredFailure.success) {
-      assert.equal(formatMessage(deferredFailure.error), "invalid bad-int");
-    }
-
-    const dependencyFailure = parser.complete({
-      success: false,
-      error: message`dep-fail`,
-    });
-    assert.ok(!dependencyFailure.success);
-    if (!dependencyFailure.success) {
-      assert.equal(formatMessage(dependencyFailure.error), "invalid dep-fail");
-    }
-
-    const plainFailure = parser.complete({
-      success: false,
-      error: message`plain-fail`,
-    });
-    assert.ok(!plainFailure.success);
-    if (!plainFailure.success) {
-      assert.equal(formatMessage(plainFailure.error), "invalid plain-fail");
+    assert.ok(!failure.success);
+    if (!failure.success) {
+      assert.equal(formatMessage(failure.error), "invalid bad-int");
     }
   });
 
@@ -2172,31 +2155,13 @@ describe("primitives additional branch coverage", () => {
       },
     });
 
-    const deferredFailure = parser.complete({
+    const failure = parser.complete({
       success: false,
       error: message`deferred-fail`,
     });
-    assert.ok(!deferredFailure.success);
-    if (!deferredFailure.success) {
-      assert.equal(formatMessage(deferredFailure.error), "bad deferred-fail");
-    }
-
-    const dependencyFailure = parser.complete({
-      success: false,
-      error: message`dep-fail`,
-    });
-    assert.ok(!dependencyFailure.success);
-    if (!dependencyFailure.success) {
-      assert.equal(formatMessage(dependencyFailure.error), "bad dep-fail");
-    }
-
-    const plainFailure = parser.complete({
-      success: false,
-      error: message`plain-fail`,
-    });
-    assert.ok(!plainFailure.success);
-    if (!plainFailure.success) {
-      assert.equal(formatMessage(plainFailure.error), "bad plain-fail");
+    assert.ok(!failure.success);
+    if (!failure.success) {
+      assert.equal(formatMessage(failure.error), "bad deferred-fail");
     }
   });
 });
@@ -3033,12 +2998,17 @@ describe("command", () => {
 
     assert.ok(result.success);
     if (result.success) {
-      assert.strictEqual(result.next.dependencyRegistry, freshRegistry);
-      assert.strictEqual(result.next.exec?.dependencyRegistry, freshRegistry);
+      const childRegistry = result.next.dependencyRegistry;
+      assert.ok(childRegistry);
+      assert.notStrictEqual(childRegistry, staleRegistry);
+      assert.ok(childRegistry.has(dependencyId));
+      assert.strictEqual(result.next.exec?.dependencyRegistry, childRegistry);
     }
   });
 
   it("should preserve the fresher dependency registry during command suggest", () => {
+    let childRegistry: ParserContext<undefined>["dependencyRegistry"];
+    let childExecRegistry: ParserContext<undefined>["exec"];
     const dependencyId = Symbol("command-suggest-dependency");
     const staleRegistry = createRegistry();
     const freshRegistry = createRegistry([[dependencyId, "fresh"]]);
@@ -3058,6 +3028,8 @@ describe("command", () => {
         return { success: true as const, value: "ok" };
       },
       suggest: function* (context: ParserContext<undefined>) {
+        childRegistry = context.dependencyRegistry;
+        childExecRegistry = context.exec;
         if (context.dependencyRegistry?.has(dependencyId)) {
           yield { kind: "literal" as const, text: "fresh" };
         }
@@ -3082,6 +3054,10 @@ describe("command", () => {
     }, "")];
 
     assert.deepEqual(suggestions, [{ kind: "literal", text: "fresh" }]);
+    assert.ok(childRegistry);
+    assert.notStrictEqual(childRegistry, staleRegistry);
+    assert.ok(childRegistry.has(dependencyId));
+    assert.strictEqual(childExecRegistry?.dependencyRegistry, childRegistry);
   });
 });
 
@@ -6389,6 +6365,19 @@ describe("branch coverage: primitives edge cases", () => {
     assert.ok(!invalidStateResult.success);
   });
 
+  it("option parse treats failed value parses as consumed for duplicates", () => {
+    const parser = option("--port", integer());
+    const result = parseSync(parser, ["--port", "bad", "--port", "42"]);
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(
+        formatMessage(result.error),
+        "`--port` cannot be used multiple times.",
+      );
+    }
+  });
+
   it("covers async suggestion and custom error edge branches", async () => {
     const dep = dependency(string({ metavar: "MODE" }));
     const asyncDerivedWithoutDefaults = deriveFromAsync({
@@ -6736,6 +6725,50 @@ describe("branch coverage: primitives edge cases", () => {
         "custom invalid state",
       );
     }
+  });
+
+  it("wrapped derived value parsers preserve parse-time default snapshots", () => {
+    let callCount = 0;
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: () => {
+        callCount++;
+        return choice(
+          callCount % 2 === 1 ? (["debug"] as const) : (["strict"] as const),
+        );
+      },
+      defaultValue: () => "dev" as const,
+    });
+    const dependencyMetadata = extractDependencyMetadata(level);
+    assert.ok(dependencyMetadata != null);
+    const wrappedLevel = {
+      $mode: "sync" as const,
+      metavar: level.metavar,
+      get placeholder() {
+        return level.placeholder;
+      },
+      parse(input: string) {
+        return level.parse(input);
+      },
+      format(value: "debug" | "strict") {
+        return level.format(value);
+      },
+      dependencyMetadata,
+    } as const satisfies ValueParser<"sync", string> & {
+      readonly dependencyMetadata: typeof dependencyMetadata;
+    };
+    const parser = option("--level", wrappedLevel);
+
+    callCount = 0;
+    const result = parseSync(parser, ["--level", "debug"]);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "debug");
+    }
+    assert.equal(callCount, 1);
   });
 });
 

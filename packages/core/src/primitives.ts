@@ -83,7 +83,10 @@ function hasParsedOptionValue<M extends Mode, T>(
   valueParser: ValueParser<M, T> | undefined,
 ): boolean {
   if (valueParser != null) {
-    return state != null && state.success;
+    return state != null &&
+      typeof state === "object" &&
+      "success" in state &&
+      typeof state.success === "boolean";
   }
   return state != null &&
     "success" in state &&
