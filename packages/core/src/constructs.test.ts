@@ -9166,6 +9166,65 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.ok(!completed.success);
   });
 
+  it("object() async complete short-circuits before deferred later fields", async () => {
+    let laterFieldCompleted = false;
+    const first = {
+      $mode: "async" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 1,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse: (context: ParserContext<unknown>) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve({
+          success: false as const,
+          error: message`first field failed`,
+        }),
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"async", string, undefined>;
+    const later = {
+      $mode: "async" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse: (context: ParserContext<unknown>) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () => {
+        laterFieldCompleted = true;
+        return Promise.resolve({
+          success: true as const,
+          value: "later",
+        });
+      },
+      shouldDeferCompletion: () => true,
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"async", string, undefined>;
+
+    const p = object({ first, later });
+    const completed = await p.complete(p.initialState);
+
+    assert.ok(!completed.success);
+    assert.equal(laterFieldCompleted, false);
+  });
+
   // ----- suggestTupleSync: stateArray not an array (line 3366) -----
   it("suggestTupleSync uses initialState when stateArray is not an array", () => {
     const p = tuple([option("--x", string()), flag("--y")]);

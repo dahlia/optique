@@ -4902,23 +4902,10 @@ export function object<
           };
           const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
           let hasDeferred = false;
-          const fieldResults = await Promise.all(
-            parserKeys.map(async (field) => {
-              const fieldKey = field as string | symbol;
-              const fieldParser = parsers[field];
-              const preCompletedResult = preCompleted.get(fieldKey);
-              const valueResult = preCompletedResult !== undefined
-                ? unwrapCompleteResult(preCompletedResult)
-                : unwrapCompleteResult(
-                  await fieldParser.complete(
-                    resolvedFieldStates[fieldKey],
-                    withChildExecPath(phase3Exec, fieldKey),
-                  ),
-                );
-              return { fieldKey, valueResult } as const;
-            }),
-          );
-          for (const { fieldKey, valueResult } of fieldResults) {
+          const applyValueResult = (
+            fieldKey: string | symbol,
+            valueResult: ValueParserResult<unknown>,
+          ) => {
             if (valueResult.success) {
               (result as Record<string | symbol, unknown>)[fieldKey] =
                 valueResult.value;
@@ -4937,6 +4924,62 @@ export function object<
             } else {
               return { success: false as const, error: valueResult.error };
             }
+            return undefined;
+          };
+          const concurrentFields: (keyof T)[] = [];
+          const deferredFields: (keyof T)[] = [];
+          for (const field of parserKeys) {
+            const fieldKey = field as string | symbol;
+            const fieldParser = parsers[field];
+            const preCompletedResult = preCompleted.get(fieldKey);
+            if (preCompletedResult !== undefined) {
+              const failure = applyValueResult(
+                fieldKey,
+                unwrapCompleteResult(preCompletedResult),
+              );
+              if (failure != null) return failure;
+              continue;
+            }
+            if (
+              typeof fieldParser.shouldDeferCompletion === "function" &&
+              fieldParser.shouldDeferCompletion(
+                  resolvedFieldStates[fieldKey],
+                  withChildExecPath(phase3Exec, fieldKey),
+                ) === true
+            ) {
+              deferredFields.push(field);
+            } else {
+              concurrentFields.push(field);
+            }
+          }
+          const concurrentResults = await Promise.all(
+            concurrentFields.map(async (field) => {
+              const fieldKey = field as string | symbol;
+              const fieldParser = parsers[field];
+              const valueResult = unwrapCompleteResult(
+                await fieldParser.complete(
+                  resolvedFieldStates[fieldKey],
+                  withChildExecPath(phase3Exec, fieldKey),
+                ),
+              );
+              return { fieldKey, valueResult } as const;
+            }),
+          );
+          for (const { fieldKey, valueResult } of concurrentResults) {
+            const failure = applyValueResult(fieldKey, valueResult);
+            if (failure != null) return failure;
+          }
+          for (const field of deferredFields) {
+            const fieldKey = field as string | symbol;
+            const fieldParser = parsers[field];
+            const valueResult = unwrapCompleteResult(
+              await fieldParser.complete(
+                resolvedFieldStates[fieldKey],
+                withChildExecPath(phase3Exec, fieldKey),
+              ),
+            );
+            const failure = applyValueResult(fieldKey, valueResult);
+            if (failure != null) return failure;
           }
 
           const isDeferred = deferredKeys.size > 0 || hasDeferred;
