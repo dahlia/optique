@@ -47,7 +47,7 @@ function assertErrorIncludes(error: Message, text: string): void {
   assert.ok(formatted.includes(text));
 }
 
-function createPromiseLike<T>(value: T): Promise<T> {
+function createPromiseLike<T>(value: T): PromiseLike<T> {
   const promise = Promise.resolve(value);
   return {
     then<TResult1 = T, TResult2 = never>(
@@ -55,20 +55,9 @@ function createPromiseLike<T>(value: T): Promise<T> {
       onRejected?:
         | ((reason: unknown) => TResult2 | PromiseLike<TResult2>)
         | null,
-    ): Promise<TResult1 | TResult2> {
+    ): PromiseLike<TResult1 | TResult2> {
       return promise.then(onFulfilled, onRejected);
     },
-    catch<TResult = never>(
-      onRejected?:
-        | ((reason: unknown) => TResult | PromiseLike<TResult>)
-        | null,
-    ): Promise<T | TResult> {
-      return promise.catch(onRejected);
-    },
-    finally(onFinally?: (() => void) | null): Promise<T> {
-      return promise.finally(onFinally ?? undefined);
-    },
-    [Symbol.toStringTag]: "Promise",
   };
 }
 
@@ -3821,20 +3810,29 @@ describe("multiple", () => {
     } as const satisfies Parser<"sync", string, undefined>;
     const parser = multiple(itemParser);
 
-    const parsed = parser.parse({
-      buffer: ["value"],
+    const first = parser.parse({
+      buffer: ["first"],
       state: parser.initialState,
       optionsTerminated: false,
       usage: parser.usage,
     });
-    assert.ok(parsed.success);
-    if (parsed.success) {
-      assert.deepEqual(parsed.next.state, [undefined]);
-      assert.deepEqual(parser.complete(parsed.next.state), {
-        success: true,
-        value: ["item"],
-      });
-    }
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const second = parser.parse({
+      buffer: ["second"],
+      state: first.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(second.success);
+    if (!second.success) return;
+
+    assert.deepEqual(second.next.state, [undefined, undefined]);
+    assert.deepEqual(parser.complete(second.next.state), {
+      success: true,
+      value: ["item", "item"],
+    });
   });
 
   it("should append an async item when a new slot reuses undefined state", async () => {
@@ -3866,20 +3864,29 @@ describe("multiple", () => {
     } as const satisfies Parser<"async", string, undefined>;
     const parser = multiple(itemParser);
 
-    const parsed = await parser.parse({
-      buffer: ["value"],
+    const first = await parser.parse({
+      buffer: ["first"],
       state: parser.initialState,
       optionsTerminated: false,
       usage: parser.usage,
     });
-    assert.ok(parsed.success);
-    if (parsed.success) {
-      assert.deepEqual(parsed.next.state, [undefined]);
-      assert.deepEqual(await parser.complete(parsed.next.state), {
-        success: true,
-        value: ["item"],
-      });
-    }
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const second = await parser.parse({
+      buffer: ["second"],
+      state: first.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(second.success);
+    if (!second.success) return;
+
+    assert.deepEqual(second.next.state, [undefined, undefined]);
+    assert.deepEqual(await parser.complete(second.next.state), {
+      success: true,
+      value: ["item", "item"],
+    });
   });
 
   describe("getDocFragments", () => {
@@ -5400,7 +5407,7 @@ describe("branch coverage: modifiers edge cases", () => {
   });
 
   it("multiple: async suggest derives selected values with child exec paths", async () => {
-    const seenPaths: readonly string[] = [];
+    const seenPaths: string[] = [];
     const inner = {
       $mode: "async" as const,
       $valueType: [] as readonly string[],
@@ -5421,7 +5428,7 @@ describe("branch coverage: modifiers edge cases", () => {
         exec?: { readonly path: readonly PropertyKey[] },
       ) {
         const path = exec?.path?.map(String).join("/") ?? "root";
-        (seenPaths as string[]).push(path);
+        seenPaths.push(path);
         return Promise.resolve({
           success: true as const,
           value: `item-${path}`,
@@ -5905,21 +5912,7 @@ describe("multiple() dependency source extraction", () => {
     const earlier = Symbol("earlier");
     const latest = Symbol("latest");
     const visited: unknown[] = [];
-    const inner: Parser<"async", string, symbol | null> & {
-      readonly dependencyMetadata: {
-        readonly source: {
-          readonly kind: "source";
-          readonly sourceId: typeof sourceId;
-          readonly preservesSourceValue: true;
-          readonly extractSourceValue: (
-            state: unknown,
-          ) =>
-            | ValueParserResult<unknown>
-            | Promise<ValueParserResult<unknown> | undefined>
-            | undefined;
-        };
-      };
-    } = {
+    const inner: Parser<"async", string, symbol | null> = {
       $mode: "async" as const,
       $valueType: [] as const,
       $stateType: [] as const,
@@ -5941,7 +5934,9 @@ describe("multiple() dependency source extraction", () => {
         }),
       suggest: async function* () {},
       getDocFragments: () => ({ fragments: [] }),
-      dependencyMetadata: {
+    };
+    Object.defineProperty(inner, "dependencyMetadata", {
+      value: {
         source: {
           kind: "source" as const,
           sourceId,
@@ -5961,7 +5956,9 @@ describe("multiple() dependency source extraction", () => {
           },
         },
       },
-    };
+      configurable: true,
+      enumerable: false,
+    });
     const parser = multiple(inner);
     const result = await parser.dependencyMetadata?.source?.extractSourceValue([
       earlier,
