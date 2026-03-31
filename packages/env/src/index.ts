@@ -568,7 +568,7 @@ function getEnvSourceValue<M extends Mode, TValue>(
       };
     }
     const parsed = options.parser.parse(rawValue);
-    return parsed instanceof Promise ? parsed : parsed;
+    return parsed;
   }
 
   if (options.default !== undefined) {
