@@ -514,7 +514,7 @@ export function collectExplicitSourceValues(
     if (meta.source.extractSourceValue == null) continue;
 
     const result = meta.source.extractSourceValue(node.state);
-    if (result instanceof Promise) {
+    if (isPromiseLike(result)) {
       throw new TypeError(
         `collectExplicitSourceValues() received an async extractSourceValue() result for ${
           String(meta.source.sourceId)
@@ -541,6 +541,13 @@ function registerExplicitSourceValue(
     // do not fall back to defaults for this source.
     runtime.markSourceFailed(sourceId);
   }
+}
+
+function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
+  return value != null &&
+    (typeof value === "object" || typeof value === "function") &&
+    "then" in value &&
+    typeof (value as Record<PropertyKey, unknown>).then === "function";
 }
 
 /**
@@ -620,7 +627,7 @@ export function fillMissingSourceDefaults(
       continue;
     }
     // Only handle sync results here; async handled by async variant
-    if (result instanceof Promise) continue;
+    if (isPromiseLike(result)) continue;
     if (result.success) {
       runtime.registerSource(
         meta.source.sourceId,
@@ -748,7 +755,7 @@ export function replayDerivedParser(
 
   const result = meta.derived.replayParse(rawInput, resolution.values);
   // Handle sync result only
-  if (result instanceof Promise) return undefined;
+  if (isPromiseLike(result)) return undefined;
 
   runtime.setReplayResult(key, result);
   return result;
@@ -897,7 +904,7 @@ function resolveSingleDeferred(
     deferred.rawInput,
     depValue,
   );
-  if (result instanceof Promise) return deferred.preliminaryResult;
+  if (isPromiseLike(result)) return deferred.preliminaryResult;
   return result;
 }
 

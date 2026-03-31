@@ -367,6 +367,45 @@ describe("collectExplicitSourceValues", () => {
     assert.equal(runtime.getSource(sourceId), "prod");
   });
 
+  test("treats thenable source extractors as async in sync mode", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const sourceState = createDependencySourceState(
+      { success: true, value: "prod" } as ValueParserResult<string>,
+      sourceId,
+    );
+    const thenable = {
+      then(
+        resolve: (value: ValueParserResult<unknown> | undefined) => void,
+      ) {
+        resolve(bareExtract(sourceState));
+      },
+    };
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            extractSourceValue: (_state: unknown) => thenable as never,
+            preservesSourceValue: true,
+          },
+        },
+      },
+      state: sourceState,
+    }];
+
+    assert.throws(
+      () => collectExplicitSourceValues(nodes, runtime),
+      /collectExplicitSourceValues\(\).*extractSourceValue.*Symbol\(env\)/,
+    );
+
+    await collectExplicitSourceValuesAsync(nodes, runtime);
+    assert.ok(runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), "prod");
+  });
+
   test("registers source from optional-wrapped state", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
