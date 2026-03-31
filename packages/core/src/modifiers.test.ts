@@ -4787,10 +4787,7 @@ describe("branch coverage: modifiers edge cases", () => {
     const parser = withDefault(baseParser, "fallback");
 
     const result = parser.complete(undefined);
-    assert.ok(result.success);
-    if (result.success) {
-      assert.equal(result.value, "fallback");
-    }
+    assert.deepEqual(result, { success: true, value: "fallback" });
   });
 
   it("optional: wrapped async dependency complete returns undefined when missing", async () => {
