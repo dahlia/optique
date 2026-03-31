@@ -6743,20 +6743,18 @@ describe("branch coverage: primitives edge cases", () => {
     });
     const dependencyMetadata = extractDependencyMetadata(level);
     assert.ok(dependencyMetadata != null);
-    const wrappedLevel = {
-      $mode: "sync" as const,
-      metavar: level.metavar,
-      get placeholder() {
-        return level.placeholder;
+    const wrappedLevel = Object.defineProperties(
+      {},
+      {
+        ...Object.getOwnPropertyDescriptors(level),
+        dependencyMetadata: {
+          value: dependencyMetadata,
+          configurable: true,
+          enumerable: true,
+          writable: true,
+        },
       },
-      parse(input: string) {
-        return level.parse(input);
-      },
-      format(value: "debug" | "strict") {
-        return level.format(value);
-      },
-      dependencyMetadata,
-    } as const satisfies ValueParser<"sync", string> & {
+    ) as typeof level & {
       readonly dependencyMetadata: typeof dependencyMetadata;
     };
     const parser = option("--level", wrappedLevel);

@@ -5239,6 +5239,9 @@ describe("branch coverage: modifiers edge cases", () => {
 
     const result = parser.complete(undefined);
     assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "pending callback failed");
+    }
   });
 
   it("multiple: async parse updates existing slot without appending", async () => {

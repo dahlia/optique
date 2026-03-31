@@ -907,6 +907,12 @@ function resolveSingleDeferred(
  *
  * This must run BEFORE deferred resolution so that all source values
  * are available when replaying derived parsers.
+ *
+ * @param state The state tree to traverse.
+ * @param runtime The dependency runtime context to populate.
+ * @param visited Cycle guard for recursive traversal.
+ * @param excludedFields Optional property keys to skip at the current level.
+ *                       This exclusion set is not propagated recursively.
  */
 export function collectSourcesFromState(
   state: unknown,
