@@ -9222,7 +9222,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const completed = await p.complete(p.initialState);
 
     assert.ok(!completed.success);
-    assert.equal(laterFieldCompleted, false);
+    assert.ok(!laterFieldCompleted);
   });
 
   // ----- suggestTupleSync: stateArray not an array (line 3366) -----

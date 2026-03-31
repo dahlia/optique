@@ -633,7 +633,7 @@ describe("bindConfig", () => {
       key(config) {
         keyCalls += 1;
         if (keyCalls > 1) {
-          throw new Error("config key re-ran.");
+          throw new TypeError("Config key callback re-ran.");
         }
         return config.mode;
       },
@@ -670,7 +670,7 @@ describe("bindConfig", () => {
       key(config) {
         keyCalls += 1;
         if (keyCalls > 1) {
-          throw new Error("config key re-ran.");
+          throw new TypeError("Config key callback re-ran.");
         }
         return config.mode;
       },
