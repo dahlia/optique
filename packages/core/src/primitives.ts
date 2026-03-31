@@ -2326,6 +2326,22 @@ export function command<M extends Mode, T, TState>(
     leadingNames: new Set([name]),
     acceptingAnyToken: false,
     initialState: undefined,
+    getSuggestRuntimeNodes(
+      state: CommandState<TState>,
+      path: readonly PropertyKey[],
+    ) {
+      if (state === undefined) {
+        return [];
+      }
+      const childState = state[0] === "matched"
+        ? parser.initialState
+        : state[1];
+      const childPath = [...path, name];
+      return parser.getSuggestRuntimeNodes?.(childState, childPath) ??
+        (parser.dependencyMetadata?.source != null
+          ? [{ path: childPath, parser, state: childState }]
+          : []);
+    },
     parse(context: ParserContext<CommandState<TState>>) {
       // Handle different states
       if (context.state === undefined) {

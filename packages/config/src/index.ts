@@ -728,6 +728,18 @@ export function bindConfig<
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
+    getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
+      if (boundParser.dependencyMetadata?.source != null) {
+        return [{ path, parser: boundParser, state }];
+      }
+      const innerState = isConfigBindState(state)
+        ? (state.hasCliValue ? state.cliState as TState : parser.initialState)
+        : state;
+      return parser.getSuggestRuntimeNodes?.(innerState, path) ??
+        (parser.dependencyMetadata?.source != null
+          ? [{ path, parser, state: innerState }]
+          : []);
+    },
 
     parse: (context) => {
       // Extract annotations from context to preserve them

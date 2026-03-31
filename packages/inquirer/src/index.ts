@@ -949,6 +949,18 @@ export function prompt<M extends Mode, TValue, TState>(
       : [{ type: "optional", terms: parser.usage }],
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
+    getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
+      if (promptedParser.dependencyMetadata?.source != null) {
+        return [{ path, parser: promptedParser, state }];
+      }
+      const innerState = isPromptBindState(state)
+        ? (state.hasCliValue ? state.cliState as TState : parser.initialState)
+        : state;
+      return parser.getSuggestRuntimeNodes?.(innerState, path) ??
+        (parser.dependencyMetadata?.source != null
+          ? [{ path, parser, state: innerState }]
+          : []);
+    },
     // Use the sentinel as initialState so complete() can detect the
     // completability-check call and deduplicate prompt execution.
     get initialState(): TState {

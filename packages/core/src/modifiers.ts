@@ -1,4 +1,5 @@
 import { composeDependencyMetadata } from "./dependency-metadata.ts";
+import type { RuntimeNode } from "./dependency-runtime.ts";
 import { formatMessage, type Message, message, text } from "./message.ts";
 import {
   annotateFreshArray,
@@ -275,6 +276,19 @@ export function optional<M extends Mode, TValue, TState>(
         ),
       }
       : {}),
+    getSuggestRuntimeNodes(
+      state: [TState] | undefined,
+      path: readonly PropertyKey[],
+    ) {
+      if (optionalParser.dependencyMetadata?.source != null) {
+        return [{ path, parser: optionalParser, state }];
+      }
+      const innerState = Array.isArray(state) ? state[0] : parser.initialState;
+      return parser.getSuggestRuntimeNodes?.(innerState, path) ??
+        (parser.dependencyMetadata?.source != null
+          ? [{ path, parser, state: innerState }]
+          : []);
+    },
     parse(context: ParserContext<[TState] | undefined>) {
       return dispatchByMode(
         parser.$mode,
@@ -602,6 +616,19 @@ export function withDefault<
         ),
       }
       : {}),
+    getSuggestRuntimeNodes(
+      state: [TState] | undefined,
+      path: readonly PropertyKey[],
+    ) {
+      if (withDefaultParser.dependencyMetadata?.source != null) {
+        return [{ path, parser: withDefaultParser, state }];
+      }
+      const innerState = Array.isArray(state) ? state[0] : parser.initialState;
+      return parser.getSuggestRuntimeNodes?.(innerState, path) ??
+        (parser.dependencyMetadata?.source != null
+          ? [{ path, parser, state: innerState }]
+          : []);
+    },
     parse(context: ParserContext<[TState] | undefined>) {
       return dispatchByMode(
         parser.$mode,
@@ -951,6 +978,15 @@ export function map<M extends Mode, T, U, TState>(
     ...parser,
     $valueType: [] as readonly U[],
     complete,
+    getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
+      if (mappedParser.dependencyMetadata?.source != null) {
+        return [{ path, parser: mappedParser, state }];
+      }
+      return parser.getSuggestRuntimeNodes?.(state, path) ??
+        (parser.dependencyMetadata?.source != null
+          ? [{ path, parser, state }]
+          : []);
+    },
     getDocFragments(state: DocState<TState>, _defaultValue?: U) {
       // Since we can't reverse the transformation, we delegate to the original
       // parser with undefined default value. This is acceptable since
@@ -1112,7 +1148,11 @@ export function multiple<M extends Mode, TValue, TState>(
     exec?: ExecutionContext,
   ): ReturnType<typeof syncParser.complete> => {
     try {
-      return syncParser.complete(state, exec);
+      const result = syncParser.complete(state, exec);
+      if (!result.success && isInjectedAnnotationWrapper(state)) {
+        return syncParser.complete(unwrapInjectedWrapper(state), exec);
+      }
+      return result;
     } catch (error) {
       if (!isInjectedAnnotationWrapper(state)) {
         throw error;
@@ -1151,7 +1191,11 @@ export function multiple<M extends Mode, TValue, TState>(
     exec?: ExecutionContext,
   ): Promise<Awaited<ReturnType<typeof parser.complete>>> => {
     try {
-      return await parser.complete(state, exec);
+      const result = await parser.complete(state, exec);
+      if (!result.success && isInjectedAnnotationWrapper(state)) {
+        return await parser.complete(unwrapInjectedWrapper(state), exec);
+      }
+      return result;
     } catch (error) {
       if (!isInjectedAnnotationWrapper(state)) {
         throw error;
@@ -1185,6 +1229,14 @@ export function multiple<M extends Mode, TValue, TState>(
       });
     }
   };
+  const getInnerSuggestRuntimeNodes = (
+    state: TState,
+    path: readonly PropertyKey[],
+  ) =>
+    parser.getSuggestRuntimeNodes?.(state, path) ??
+      (parser.dependencyMetadata?.source != null
+        ? [{ path, parser, state }]
+        : []);
 
   // Sync parse implementation
   const parseSync = (
@@ -1371,6 +1423,19 @@ export function multiple<M extends Mode, TValue, TState>(
     // catch-all status when at least one match is required.
     acceptingAnyToken: min > 0 && (parser.acceptingAnyToken ?? false),
     initialState: [] as readonly TState[],
+    getSuggestRuntimeNodes(state: MultipleState, path: readonly PropertyKey[]) {
+      const nodes: RuntimeNode[] =
+        resultParser.dependencyMetadata?.source != null
+          ? [{ path, parser: resultParser, state }]
+          : [];
+      for (let i = 0; i < state.length; i++) {
+        nodes.push(...getInnerSuggestRuntimeNodes(state[i] as TState, [
+          ...path,
+          i,
+        ]));
+      }
+      return nodes;
+    },
     parse(context: ParserContext<MultipleState>) {
       return dispatchByMode(
         parser.$mode,
@@ -1455,7 +1520,6 @@ export function multiple<M extends Mode, TValue, TState>(
     suggest(context: ParserContext<MultipleState>, prefix: string) {
       // Extract already-selected values from completed states to exclude them
       // from suggestions (fixes https://github.com/dahlia/optique/issues/73)
-      const selectedValues = new Set<string>();
       const currentItemState = context.state.at(-1);
       const canExtendCurrent = currentItemState != null &&
         !isTerminalMultipleItemState(currentItemState);
@@ -1473,17 +1537,48 @@ export function multiple<M extends Mode, TValue, TState>(
       ) as TState;
       const hasSuggestFallbackState = suggestFallbackState !==
         suggestInitialState;
-      for (const s of context.state) {
-        const completed = completeSyncWithUnwrappedFallback(s as TState);
-        if (completed.success) {
-          // Convert value to string for comparison with suggestion text
-          const valueStr = String(unwrapInjectedWrapper(completed.value));
-          selectedValues.add(valueStr);
+      const collectSelectedValuesSync = () => {
+        const selectedValues = new Set<string>();
+        for (let i = 0; i < context.state.length; i++) {
+          const childContext = withChildContext(
+            context,
+            i,
+            context.state[i] as TState,
+          );
+          const completed = completeSyncWithUnwrappedFallback(
+            childContext.state,
+            childContext.exec,
+          );
+          if (completed.success) {
+            selectedValues.add(String(unwrapInjectedWrapper(completed.value)));
+          }
         }
-      }
+        return selectedValues;
+      };
+      const collectSelectedValuesAsync = async () => {
+        const selectedValues = new Set<string>();
+        const results = await Promise.all(
+          context.state.map(async (state, i) => {
+            const childContext = withChildContext(context, i, state as TState);
+            return await completeAsyncWithUnwrappedFallback(
+              childContext.state,
+              childContext.exec,
+            );
+          }),
+        );
+        for (const completed of results) {
+          if (completed.success) {
+            selectedValues.add(String(unwrapInjectedWrapper(completed.value)));
+          }
+        }
+        return selectedValues;
+      };
 
       // Helper to filter suggestions
-      const shouldInclude = (suggestion: Suggestion) => {
+      const shouldInclude = (
+        selectedValues: ReadonlySet<string>,
+        suggestion: Suggestion,
+      ) => {
         if (suggestion.kind === "literal") {
           return !selectedValues.has(suggestion.text);
         }
@@ -1511,11 +1606,12 @@ export function multiple<M extends Mode, TValue, TState>(
       return dispatchIterableByMode(
         parser.$mode,
         function* () {
+          const selectedValues = collectSelectedValuesSync();
           const emitted = new Set<string>();
           const yieldUnique = function* (suggestions: Iterable<Suggestion>) {
             for (const s of suggestions) {
               const key = suggestionKey(s);
-              if (shouldInclude(s) && !emitted.has(key)) {
+              if (shouldInclude(selectedValues, s) && !emitted.has(key)) {
                 emitted.add(key);
                 yield s;
               }
@@ -1551,13 +1647,14 @@ export function multiple<M extends Mode, TValue, TState>(
           }
         },
         async function* () {
+          const selectedValues = await collectSelectedValuesAsync();
           const emitted = new Set<string>();
           const yieldUnique = async function* (
             suggestions: AsyncIterable<Suggestion>,
           ) {
             for await (const s of suggestions) {
               const key = suggestionKey(s);
-              if (shouldInclude(s) && !emitted.has(key)) {
+              if (shouldInclude(selectedValues, s) && !emitted.has(key)) {
                 emitted.add(key);
                 yield s;
               }
@@ -1843,6 +1940,12 @@ export function nonEmpty<M extends Mode, T, TState>(
     ...(typeof parser.shouldDeferCompletion === "function"
       ? { shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser) }
       : {}),
+    getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
+      return parser.getSuggestRuntimeNodes?.(state, path) ??
+        (parser.dependencyMetadata?.source != null
+          ? [{ path, parser, state }]
+          : []);
+    },
     parse(context: ParserContext<TState>) {
       return dispatchByMode(
         parser.$mode,

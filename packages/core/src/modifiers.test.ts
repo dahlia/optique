@@ -2680,7 +2680,7 @@ describe("multiple", () => {
     }
   });
 
-  it("should keep complete failure on annotated wrapper state", () => {
+  it("should retry complete on annotated wrapper state failures", () => {
     const baseParser: Parser<"sync", string, string> = {
       $mode: "sync",
       $valueType: [] as const,
@@ -2726,13 +2726,13 @@ describe("multiple", () => {
     const result = parse(parser, ["alpha"], {
       annotations: { [Symbol.for("@test/fallback-complete-failure")]: true },
     });
-    assert.ok(!result.success);
-    if (!result.success) {
-      assert.ok(formatMessage(result.error).includes("Expected string state."));
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ALPHA"]);
     }
   });
 
-  it("should keep async complete failure on annotated wrapper state", async () => {
+  it("should retry async complete on annotated wrapper state failures", async () => {
     const baseParser: Parser<"async", string, string> = {
       $mode: "async",
       $valueType: [] as const,
@@ -2781,9 +2781,9 @@ describe("multiple", () => {
         [Symbol.for("@test/fallback-complete-failure-async")]: true,
       },
     });
-    assert.ok(!result.success);
-    if (!result.success) {
-      assert.ok(formatMessage(result.error).includes("Expected string state."));
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ALPHA"]);
     }
   });
 
@@ -5332,6 +5332,99 @@ describe("branch coverage: modifiers edge cases", () => {
 
     const result = await parser.complete(["ok", "bad"]);
     assert.ok(!result.success);
+  });
+
+  it("multiple: complete retries unwrapped injected states after failure", () => {
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No parse.`,
+      }),
+      complete(state: unknown) {
+        if (typeof state !== "string") {
+          return { success: false as const, error: message`wrapped state` };
+        }
+        return { success: true as const, value: state };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, string>;
+    const parser = multiple(inner);
+    const wrappedState = injectAnnotations("alpha", {
+      [Symbol("annotation")]: true,
+    });
+
+    const result = parser.complete([wrappedState]);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["alpha"]);
+    }
+  });
+
+  it("multiple: async suggest derives selected values with child exec paths", async () => {
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse: () =>
+        Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`No parse.`,
+        }),
+      complete(
+        _state: string,
+        exec?: { readonly path: readonly PropertyKey[] },
+      ) {
+        const index = exec?.path.at(-1);
+        return Promise.resolve({
+          success: true as const,
+          value: `item-${String(index ?? "root")}`,
+        });
+      },
+      async *suggest() {
+        yield { kind: "literal" as const, text: "item-0" };
+        yield { kind: "literal" as const, text: "item-1" };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    } as const satisfies Parser<"async", string, string>;
+    const parser = multiple(inner);
+
+    const suggestions = await collectSuggestions(
+      parser.suggest(
+        {
+          buffer: [],
+          state: ["first", "second"],
+          optionsTerminated: false,
+          usage: parser.usage,
+          exec: {
+            usage: parser.usage,
+            phase: "suggest",
+            path: [],
+          },
+        },
+        "",
+      ) as AsyncIterable<Suggestion>,
+    );
+
+    assert.deepEqual(suggestions, []);
   });
 
   it("withDefault: transformed complete(undefined) catches callback errors", async () => {

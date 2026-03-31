@@ -304,6 +304,18 @@ export function bindEnv<
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
+    getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
+      if (boundParser.dependencyMetadata?.source != null) {
+        return [{ path, parser: boundParser, state }];
+      }
+      const innerState = isEnvBindState(state)
+        ? (state.hasCliValue ? state.cliState as TState : parser.initialState)
+        : state;
+      return parser.getSuggestRuntimeNodes?.(innerState, path) ??
+        (parser.dependencyMetadata?.source != null
+          ? [{ path, parser, state: innerState }]
+          : []);
+    },
 
     parse: (context) => {
       const annotations = getAnnotations(context.state);

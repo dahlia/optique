@@ -8050,6 +8050,12 @@ export function group<M extends Mode, TValue, TState>(
         shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser),
       }
       : {}),
+    getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
+      return parser.getSuggestRuntimeNodes?.(state, path) ??
+        (parser.dependencyMetadata?.source != null
+          ? [{ path, parser, state }]
+          : []);
+    },
     parse: (context) => parser.parse(context),
     complete: (state, exec?) => parser.complete(state, exec),
     suggest: (context, prefix) => {

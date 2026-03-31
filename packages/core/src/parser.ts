@@ -28,6 +28,7 @@ import {
   collectExplicitSourceValuesAsync,
   createDependencyRuntimeContext,
   type DependencyRuntimeContext,
+  type RuntimeNode,
 } from "./dependency-runtime.ts";
 import { createInputTrace, type InputTrace } from "./input-trace.ts";
 
@@ -323,6 +324,25 @@ export interface Parser<
    * @since 1.0.0
    */
   readonly dependencyMetadata?: ParserDependencyMetadata;
+
+  /**
+   * Internal hook for top-level suggest-time dependency seeding.
+   *
+   * Wrapper parsers can expose the active parser/state pairs that should be
+   * scanned when `suggestSync()` or `suggestAsync()` builds a fresh dependency
+   * runtime.  When omitted, only this parser's own dependency source metadata
+   * is considered.
+   *
+   * @param state The current parser state.
+   * @param path The path to this parser within the parse tree.
+   * @returns Runtime nodes to seed into the suggestion-time dependency runtime.
+   * @internal
+   * @since 1.0.0
+   */
+  getSuggestRuntimeNodes?(
+    state: TState,
+    path: readonly PropertyKey[],
+  ): readonly RuntimeNode[];
 }
 
 /**
@@ -996,12 +1016,13 @@ function withSuggestRuntime<TState>(
   context: ParserContext<TState>,
 ): ParserContext<TState> {
   const runtime = createDependencyRuntimeContext();
-  if (parser.dependencyMetadata?.source != null) {
-    collectExplicitSourceValues([{
-      path: context.exec?.path ?? [],
-      parser,
-      state: context.state,
-    }], runtime);
+  const nodes = getSuggestRuntimeNodes(
+    parser,
+    context.state,
+    context.exec?.path ?? [],
+  );
+  if (nodes.length > 0) {
+    collectExplicitSourceValues(nodes, runtime);
   }
   return {
     ...context,
@@ -1021,12 +1042,13 @@ async function withSuggestRuntimeAsync<TState>(
   context: ParserContext<TState>,
 ): Promise<ParserContext<TState>> {
   const runtime = createDependencyRuntimeContext();
-  if (parser.dependencyMetadata?.source != null) {
-    await collectExplicitSourceValuesAsync([{
-      path: context.exec?.path ?? [],
-      parser,
-      state: context.state,
-    }], runtime);
+  const nodes = getSuggestRuntimeNodes(
+    parser,
+    context.state,
+    context.exec?.path ?? [],
+  );
+  if (nodes.length > 0) {
+    await collectExplicitSourceValuesAsync(nodes, runtime);
   }
   return {
     ...context,
@@ -1039,6 +1061,20 @@ async function withSuggestRuntimeAsync<TState>(
       }
       : undefined,
   };
+}
+
+function getSuggestRuntimeNodes<TState>(
+  parser: Parser<Mode, unknown, TState>,
+  state: TState,
+  path: readonly PropertyKey[],
+): readonly RuntimeNode[] {
+  if (typeof parser.getSuggestRuntimeNodes === "function") {
+    return parser.getSuggestRuntimeNodes(state, path);
+  }
+  if (parser.dependencyMetadata?.source == null) {
+    return [];
+  }
+  return [{ path, parser, state }];
 }
 
 /**
