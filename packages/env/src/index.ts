@@ -456,6 +456,14 @@ export function bindEnv<
           ...sourceMetadata,
           extractSourceValue: (state: unknown) => {
             if (!isEnvBindState(state)) {
+              if (sourceMetadata.preservesSourceValue) {
+                return getEnvSourceValue(
+                  state,
+                  options,
+                  state,
+                  sourceMetadata.extractSourceValue,
+                );
+              }
               return sourceMetadata.extractSourceValue(state);
             }
             if (state.hasCliValue) {

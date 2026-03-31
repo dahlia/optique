@@ -1703,6 +1703,27 @@ describe("bindEnv() with dependency sources", () => {
     assert.equal(result.value.level, "silent");
   });
 
+  it("exposes env fallback as a source from raw annotated state", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const parser = bindEnv(option("--mode", mode), {
+      context: envContext,
+      key: "MODE",
+      parser: choice(["dev", "prod"] as const),
+    });
+    const state = injectAnnotations(
+      parser.initialState,
+      envContext.getAnnotations() as Record<symbol, unknown>,
+    );
+
+    assert.deepEqual(
+      parser.dependencyMetadata?.source?.extractSourceValue(state),
+      { success: true, value: "prod" },
+    );
+  });
+
   it("propagates env value as dependency to derived parser (suggest)", () => {
     const { parser, annotations } = createParser(
       (key) => ({ APP_MODE: "prod" })[key],

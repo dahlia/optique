@@ -858,6 +858,9 @@ export function bindConfig<
           ...sourceMetadata,
           extractSourceValue: (state: unknown) => {
             if (!isConfigBindState(state)) {
+              if (sourceMetadata.preservesSourceValue) {
+                return getConfigOrDefault(state, options);
+              }
               return sourceMetadata.extractSourceValue(state);
             }
             if (state.hasCliValue) {

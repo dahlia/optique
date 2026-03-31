@@ -2088,6 +2088,22 @@ describe("bindConfig() with dependency sources", () => {
     assert.equal(result.value.level, "silent");
   });
 
+  test("exposes config fallback as a source from raw annotated state", () => {
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(option("--mode", mode), {
+      context,
+      key: "mode",
+    });
+    const state = injectAnnotations(parser.initialState, {
+      [context.id]: { data: { mode: "prod" as const } },
+    });
+
+    assert.deepEqual(
+      parser.dependencyMetadata?.source?.extractSourceValue(state),
+      { success: true, value: "prod" },
+    );
+  });
+
   test("propagates config value as dependency to derived parser (suggest)", () => {
     const { parser, annotations } = createParser({ mode: "prod" });
     const suggestions = suggestSync(parser, ["--level", "s"], { annotations });
