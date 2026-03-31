@@ -287,7 +287,11 @@ export function optional<M extends Mode, TValue, TState>(
         // When the inner parser preserves an omitted-source default via
         // dependency metadata (e.g. optional(withDefault(source))), delegate
         // to it so the user-visible value matches the dependency runtime.
-        if (parser.dependencyMetadata?.source?.getMissingSourceValue != null) {
+        const sourceMetadata = parser.dependencyMetadata?.source;
+        if (
+          sourceMetadata?.preservesSourceValue !== false &&
+          sourceMetadata?.getMissingSourceValue != null
+        ) {
           const delegatedState = state != null && typeof state === "object"
             ? state as TState
             : undefined as TState;

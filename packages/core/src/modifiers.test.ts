@@ -195,8 +195,62 @@ describe("optional", () => {
       ) => ValueParserResult<string | undefined>
     )(deferredState);
 
-    assert.deepEqual(receivedStates, [deferredState]);
+    assert.equal(receivedStates.length, 1);
+    assert.strictEqual(receivedStates[0], deferredState);
     assert.deepEqual(result, { success: true, value: "annotated" });
+  });
+
+  it("should not delegate omitted completion to non-preserving multiple sources", () => {
+    const sourceId = Symbol("multiple-source");
+    const source = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No match.`,
+      }),
+      complete: () => ({
+        success: true as const,
+        value: "fallback",
+      }),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue: () => undefined,
+          getMissingSourceValue: () => ({
+            success: true as const,
+            value: "fallback",
+          }),
+        },
+      },
+    } as const satisfies Parser<"sync", string, undefined> & {
+      readonly dependencyMetadata: {
+        readonly source: {
+          readonly kind: "source";
+          readonly sourceId: typeof sourceId;
+          readonly preservesSourceValue: true;
+          readonly extractSourceValue: (
+            state: unknown,
+          ) => ValueParserResult<unknown> | undefined;
+          readonly getMissingSourceValue: () => ValueParserResult<string>;
+        };
+      };
+    };
+    const parser = optional(multiple(source, { min: 1 }));
+
+    const result = parser.complete(undefined);
+    assert.deepEqual(result, { success: true, value: undefined });
   });
 
   it("should propagate successful parse results correctly", () => {
@@ -4951,7 +5005,9 @@ describe("branch coverage: modifiers edge cases", () => {
     );
     const result = await parser.complete([undefined] as unknown as [undefined]);
     assert.ok(isDependencySourceState(result));
-    if (isDependencySourceState(result) && result.result.success) {
+    if (!isDependencySourceState(result)) return;
+    assert.ok(result.result.success);
+    if (result.result.success) {
       assert.equal(result.result.value, "inner");
     }
   });
