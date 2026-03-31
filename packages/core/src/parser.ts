@@ -423,6 +423,18 @@ export interface ExecutionContext {
    * @since 1.0.0
    */
   readonly preCompletedByParser?: ReadonlyMap<string | symbol, unknown>;
+
+  /**
+   * Field names that should be ignored when a construct seeds dependency
+   * sources from child state during completion.
+   *
+   * Used by outer `merge()` completions to suppress ambiguous duplicate
+   * keys while still allowing the child parser to finish its own value
+   * completion.
+   *
+   * @internal
+   */
+  readonly excludedSourceFields?: ReadonlySet<string | symbol>;
 }
 
 /**

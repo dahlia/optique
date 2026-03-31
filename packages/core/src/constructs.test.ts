@@ -10849,6 +10849,324 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.deepEqual(asyncSuggestions, []);
   });
 
+  it("tuple(), merge(), and concat() suggest use child exec paths", () => {
+    const tupleChild = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: "tuple" };
+      },
+      suggest: function* (context: ParserContext<undefined>) {
+        if (
+          JSON.stringify(context.exec?.path) ===
+            JSON.stringify(["root", 0])
+        ) {
+          yield { kind: "literal" as const, text: "tuple" };
+        }
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, undefined>;
+    const tupleParser = tuple([tupleChild]);
+    assert.deepEqual(
+      [...tupleParser.suggest({
+        buffer: [],
+        state: tupleParser.initialState,
+        optionsTerminated: false,
+        usage: tupleParser.usage,
+        exec: {
+          usage: tupleParser.usage,
+          phase: "suggest",
+          path: ["root"],
+          trace: undefined,
+        },
+      }, "")],
+      [{ kind: "literal", text: "tuple" }],
+    );
+
+    const mergeChild = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly { readonly value: string }[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: { value: "merge" } };
+      },
+      suggest: function* (context: ParserContext<undefined>) {
+        if (
+          JSON.stringify(context.exec?.path) ===
+            JSON.stringify(["root", 0])
+        ) {
+          yield { kind: "literal" as const, text: "merge" };
+        }
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", { readonly value: string }, undefined>;
+    const mergeParser = merge(mergeChild);
+    assert.deepEqual(
+      [...mergeParser.suggest({
+        buffer: [],
+        state: mergeParser.initialState,
+        optionsTerminated: false,
+        usage: mergeParser.usage,
+        exec: {
+          usage: mergeParser.usage,
+          phase: "suggest",
+          path: ["root"],
+          trace: undefined,
+        },
+      }, "")],
+      [{ kind: "literal", text: "merge" }],
+    );
+
+    const concatChild = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly [string][],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: ["concat"] as const };
+      },
+      suggest: function* (context: ParserContext<undefined>) {
+        if (
+          JSON.stringify(context.exec?.path) ===
+            JSON.stringify(["root", 0])
+        ) {
+          yield { kind: "literal" as const, text: "concat" };
+        }
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", readonly [string], undefined>;
+    const concatParser = concat(concatChild);
+    assert.deepEqual(
+      [...concatParser.suggest({
+        buffer: [],
+        state: concatParser.initialState,
+        optionsTerminated: false,
+        usage: concatParser.usage,
+        exec: {
+          usage: concatParser.usage,
+          phase: "suggest",
+          path: ["root"],
+          trace: undefined,
+        },
+      }, "")],
+      [{ kind: "literal", text: "concat" }],
+    );
+  });
+
+  it("concat() suggest does not pre-complete sync children", () => {
+    let completeCalls = 0;
+    const child = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly [string][],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        completeCalls++;
+        return { success: true as const, value: ["side-effect"] as const };
+      },
+      suggest: function* () {
+        yield { kind: "literal" as const, text: "safe" };
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", readonly [string], undefined>;
+    const parser = concat(child);
+
+    const suggestions = [...parser.suggest({
+      buffer: [],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    }, "")];
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "safe" }]);
+    assert.equal(completeCalls, 0);
+  });
+
+  it("concat() suggest does not pre-complete async children", async () => {
+    let completeCalls = 0;
+    const child = {
+      $mode: "async" as const,
+      $valueType: [] as readonly [string][],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        completeCalls++;
+        return Promise.resolve({
+          success: true as const,
+          value: ["side-effect"] as const,
+        });
+      },
+      suggest: async function* () {
+        yield { kind: "literal" as const, text: "safe" };
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"async", readonly [string], undefined>;
+    const parser = concat(child);
+
+    const suggestions: Suggestion[] = [];
+    for await (
+      const suggestion of parser.suggest({
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "")
+    ) {
+      suggestions.push(suggestion);
+    }
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "safe" }]);
+    assert.equal(completeCalls, 0);
+  });
+
+  it("merge() complete ignores ambiguous duplicate source keys", () => {
+    const sourceId = Symbol("merge-duplicate-source");
+    const sharedSource = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly (string | undefined)[],
+      $stateType: [] as readonly unknown[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<unknown>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete(state: unknown) {
+        return {
+          success: true as const,
+          value: typeof state === "object" && state !== null &&
+              "kind" in state && state.kind === "first"
+            ? "prod"
+            : undefined,
+        };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue(state: unknown) {
+            if (
+              typeof state === "object" && state !== null && "value" in state
+            ) {
+              return {
+                success: true as const,
+                value: (state as { readonly value: string }).value,
+              };
+            }
+            return undefined;
+          },
+        },
+      },
+    } as const satisfies Parser<"sync", string | undefined, unknown>;
+    const derivedField = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete(_state: undefined, exec?: ExecutionContext) {
+        return {
+          success: true as const,
+          value: exec?.dependencyRuntime?.hasSource(sourceId)
+            ? "from-source"
+            : "no-source",
+        };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, undefined>;
+    const unrelatedShared = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly unknown[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<unknown>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: "other" };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, unknown>;
+    const parser = merge(
+      object({
+        shared: sharedSource,
+        derived: derivedField,
+      }),
+      object({
+        shared: unrelatedShared,
+      }),
+    );
+
+    const completed = parser.complete({
+      shared: { value: "leaked" },
+      derived: undefined,
+    });
+    assert.deepEqual(completed, {
+      success: true,
+      value: {
+        shared: "other",
+        derived: "no-source",
+      },
+    });
+  });
+
   it("tuple() custom inspect covers unlabeled multi-parser format", () => {
     const parser = tuple([option("--first", string()), flag("--second")]);
     const inspect = (parser as unknown as Record<symbol, () => string>)[

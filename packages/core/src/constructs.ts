@@ -1,13 +1,9 @@
 import {
   createDependencySourceState,
-  type DeferredParseState,
   dependencyId,
-  DependencyRegistry,
-  isDeferredParseState,
   isDependencySourceState,
   isPendingDependencySourceState,
   isWrappedDependencySource,
-  parseWithDependency,
   wrappedDependencySourceMarker,
 } from "./dependency.ts";
 import {
@@ -17,6 +13,8 @@ import {
   collectExplicitSourceValuesAsync,
   collectSourcesFromState,
   createDependencyRuntimeContext,
+  fillMissingSourceDefaults,
+  fillMissingSourceDefaultsAsync,
   resolveStateWithRuntime,
   resolveStateWithRuntimeAsync,
 } from "./dependency-runtime.ts";
@@ -3840,6 +3838,38 @@ function collectChildFieldParsers(
   return pairs;
 }
 
+function filterDuplicateFieldParsers<T>(
+  pairs: ReadonlyArray<readonly [string | symbol, T]>,
+): ReadonlyArray<readonly [string | symbol, T]> {
+  const counts = new Map<string | symbol, number>();
+  for (const [field] of pairs) {
+    counts.set(field, (counts.get(field) ?? 0) + 1);
+  }
+  return pairs.filter(([field]) => (counts.get(field) ?? 0) <= 1);
+}
+
+function collectDuplicateFieldNames(
+  pairs: ReadonlyArray<readonly [string | symbol, unknown]>,
+): ReadonlySet<string | symbol> {
+  const counts = new Map<string | symbol, number>();
+  for (const [field] of pairs) {
+    counts.set(field, (counts.get(field) ?? 0) + 1);
+  }
+  return new Set(
+    [...counts.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([field]) => field),
+  );
+}
+
+function filterExcludedFieldParsers<T>(
+  pairs: ReadonlyArray<readonly [string | symbol, T]>,
+  excludedFields?: ReadonlySet<string | symbol>,
+): ReadonlyArray<readonly [string | symbol, T]> {
+  if (excludedFields == null || excludedFields.size < 1) return pairs;
+  return pairs.filter(([field]) => !excludedFields.has(field));
+}
+
 /**
  * Pre-completes dependency source fields and registers their values in
  * the given registry.  Unlike `completeDependencySourceDefaults()` (used
@@ -3942,7 +3972,7 @@ function preCompleteAndRegisterDependencies(
       // Case 2: undefined state, parser.initialState is PendingDependencySourceState
       const completed = fieldParser.complete(
         [fieldParser.initialState],
-        exec,
+        withChildExecPath(exec, field),
       );
       preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
@@ -3954,7 +3984,10 @@ function preCompleteAndRegisterDependencies(
     ) {
       // Case 3: undefined state, parser has wrappedDependencySourceMarker
       const pendingState = fieldParser[wrappedDependencySourceMarker];
-      const completed = fieldParser.complete([pendingState], exec);
+      const completed = fieldParser.complete(
+        [pendingState],
+        withChildExecPath(exec, field),
+      );
       preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
         registerCompletedDependency(completed, registry);
@@ -3974,7 +4007,10 @@ function preCompleteAndRegisterDependencies(
         field,
         fieldParser,
       );
-      const completed = fieldParser.complete(annotatedFieldState, exec);
+      const completed = fieldParser.complete(
+        annotatedFieldState,
+        withChildExecPath(exec, field),
+      );
       preCompleted.set(field, completed);
       const depState = wrapAsDependencySourceState(completed, fieldParser);
       if (depState) registerCompletedDependency(depState, registry);
@@ -4061,7 +4097,7 @@ async function preCompleteAndRegisterDependenciesAsync(
     ) {
       const completed = await fieldParser.complete(
         [fieldParser.initialState],
-        exec,
+        withChildExecPath(exec, field),
       );
       preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
@@ -4072,7 +4108,10 @@ async function preCompleteAndRegisterDependenciesAsync(
       isWrappedDependencySource(fieldParser)
     ) {
       const pendingState = fieldParser[wrappedDependencySourceMarker];
-      const completed = await fieldParser.complete([pendingState], exec);
+      const completed = await fieldParser.complete(
+        [pendingState],
+        withChildExecPath(exec, field),
+      );
       preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
         registerCompletedDependency(completed, registry);
@@ -4092,7 +4131,7 @@ async function preCompleteAndRegisterDependenciesAsync(
       );
       const completed = await fieldParser.complete(
         annotatedFieldState,
-        exec,
+        withChildExecPath(exec, field),
       );
       preCompleted.set(field, completed);
       const depState = wrapAsDependencySourceState(completed, fieldParser);
@@ -4100,290 +4139,6 @@ async function preCompleteAndRegisterDependenciesAsync(
     }
   }
   return preCompleted;
-}
-
-/**
- * Recursively collects dependency values from DependencySourceState objects
- * found anywhere in the state tree.
- * @internal
- */
-function collectDependencies(
-  state: unknown,
-  registry: DependencyRegistryLike,
-  visited: WeakSet<object> = new WeakSet<object>(),
-): void {
-  if (state === null || state === undefined) return;
-
-  if (typeof state === "object") {
-    if (visited.has(state)) return;
-    visited.add(state);
-  }
-
-  // Check if this is a DependencySourceState
-  if (isDependencySourceState(state)) {
-    const depId = state[dependencyId];
-    const result = state.result;
-    if (result.success) {
-      registry.set(depId, result.value);
-    }
-    return;
-  }
-
-  // Recursively search in arrays
-  if (Array.isArray(state)) {
-    for (const item of state) {
-      collectDependencies(item, registry, visited);
-    }
-    return;
-  }
-
-  // Recursively search in objects (but skip DeferredParseState internals)
-  if (typeof state === "object" && !isDeferredParseState(state)) {
-    for (const key of Reflect.ownKeys(state)) {
-      collectDependencies(
-        (state as Record<string | symbol, unknown>)[key],
-        registry,
-        visited,
-      );
-    }
-  }
-}
-
-/**
- * Checks if a value is a plain object (created with `{}` or `Object.create(null)`).
- * Class instances like `Temporal.PlainDate`, `URL`, `Date`, etc. return false.
- * This is used to determine whether to recursively traverse an object when
- * resolving deferred parse states - we only want to traverse plain objects
- * that are part of the parser state structure, not user values.
- */
-function isPlainObject(
-  value: unknown,
-): value is Record<string | symbol, unknown> {
-  if (typeof value !== "object" || value === null) return false;
-  const proto = Object.getPrototypeOf(value);
-  return proto === Object.prototype || proto === null;
-}
-
-/**
- * Collects dependency values for a DeferredParseState from the registry.
- * Returns the collected values array, or null if any required dependency
- * is missing (and no default is available).
- */
-function collectDependencyValues(
-  deferredState: DeferredParseState<unknown>,
-  registry: DependencyRegistry,
-): unknown[] | unknown | null {
-  const depIds = deferredState.dependencyIds;
-
-  // Multi-dependency case (from deriveFrom)
-  if (depIds && depIds.length > 0) {
-    const defaults = deferredState.defaultValues;
-    const dependencyValues: unknown[] = [];
-
-    for (let i = 0; i < depIds.length; i++) {
-      const depId = depIds[i];
-      if (registry.has(depId)) {
-        dependencyValues.push(registry.get(depId));
-      } else if (defaults && i < defaults.length) {
-        dependencyValues.push(defaults[i]);
-      } else {
-        return null; // Missing dependency with no default
-      }
-    }
-    return dependencyValues;
-  }
-
-  // Single dependency case (from derive)
-  const depId = deferredState.dependencyId;
-  if (registry.has(depId)) {
-    return registry.get(depId);
-  }
-  // Fall back to default value if available
-  const defaults = deferredState.defaultValues;
-  if (defaults && defaults.length > 0) {
-    return defaults[0];
-  }
-  return null; // Dependency not found, no default
-}
-
-/**
- * Recursively resolves DeferredParseState objects found anywhere in the state tree.
- * Returns the resolved state (sync version).
- *
- * Only traverses:
- * - DeferredParseState (to resolve it)
- * - DependencySourceState (skipped, kept as-is)
- * - Arrays (to find nested deferred states)
- * - Plain objects (to find nested deferred states in parser state structures)
- *
- * Does NOT traverse class instances (e.g., Temporal.PlainDate, URL) since these
- * are user values that should be preserved as-is.
- */
-function resolveDeferred(
-  state: unknown,
-  registry: DependencyRegistry,
-  visited: WeakSet<object> = new WeakSet<object>(),
-): unknown {
-  if (state === null || state === undefined) return state;
-
-  if (typeof state === "object") {
-    if (visited.has(state)) return state;
-    visited.add(state);
-  }
-
-  // Check if this is a DeferredParseState - resolve it
-  if (isDeferredParseState(state)) {
-    const deferredState = state as DeferredParseState<unknown>;
-    const dependencyValue = collectDependencyValues(deferredState, registry);
-
-    if (dependencyValue === null) {
-      return deferredState.preliminaryResult;
-    }
-
-    const reParseResult = deferredState.parser[parseWithDependency](
-      deferredState.rawInput,
-      dependencyValue,
-    );
-
-    // Handle sync vs async result
-    if (reParseResult instanceof Promise) {
-      // For async, use preliminary result (will be handled by async version)
-      return deferredState.preliminaryResult;
-    }
-    return reParseResult;
-  }
-
-  // Skip DependencySourceState - it's a marker, not something to resolve
-  if (isDependencySourceState(state)) {
-    return state;
-  }
-
-  // Recursively resolve in arrays
-  if (Array.isArray(state)) {
-    return state.map((item) => resolveDeferred(item, registry, visited));
-  }
-
-  // Only traverse plain objects (parser state structures)
-  // Skip class instances (user values like Temporal.PlainDate, URL, etc.)
-  if (isPlainObject(state)) {
-    const resolved: Record<string | symbol, unknown> = {};
-    for (const key of Reflect.ownKeys(state)) {
-      resolved[key] = resolveDeferred(state[key], registry, visited);
-    }
-    return resolved;
-  }
-
-  // Everything else (primitives, class instances) - return as-is
-  return state;
-}
-
-function _resolveDeferredParseStates<
-  T extends Record<string | symbol, unknown> | unknown[],
->(
-  fieldStates: T,
-  initialRegistry?: DependencyRegistry,
-): T {
-  // First pass: Build dependency registry from all DependencySourceState fields
-  // (recursively searching through nested structures)
-  const registry = initialRegistry ?? new DependencyRegistry();
-  collectDependencies(fieldStates, registry);
-
-  // Second pass: Resolve all DeferredParseState fields recursively
-  return resolveDeferred(fieldStates, registry) as T;
-}
-
-/**
- * Recursively resolves DeferredParseState objects found anywhere in the state tree.
- * Returns the resolved state (async version).
- *
- * Only traverses:
- * - DeferredParseState (to resolve it)
- * - DependencySourceState (skipped, kept as-is)
- * - Arrays (to find nested deferred states)
- * - Plain objects (to find nested deferred states in parser state structures)
- *
- * Does NOT traverse class instances (e.g., Temporal.PlainDate, URL) since these
- * are user values that should be preserved as-is.
- */
-async function resolveDeferredAsync(
-  state: unknown,
-  registry: DependencyRegistry,
-  visited: WeakSet<object> = new WeakSet<object>(),
-): Promise<unknown> {
-  if (state === null || state === undefined) return state;
-
-  if (typeof state === "object") {
-    if (visited.has(state)) return state;
-    visited.add(state);
-  }
-
-  // Check if this is a DeferredParseState - resolve it
-  if (isDeferredParseState(state)) {
-    const deferredState = state as DeferredParseState<unknown>;
-    const dependencyValue = collectDependencyValues(deferredState, registry);
-
-    if (dependencyValue === null) {
-      return deferredState.preliminaryResult;
-    }
-
-    const reParseResult = deferredState.parser[parseWithDependency](
-      deferredState.rawInput,
-      dependencyValue,
-    );
-
-    // Handle both sync and async results
-    return Promise.resolve(reParseResult);
-  }
-
-  // Skip DependencySourceState - it's a marker, not something to resolve
-  if (isDependencySourceState(state)) {
-    return state;
-  }
-
-  // Recursively resolve in arrays
-  if (Array.isArray(state)) {
-    return Promise.all(
-      state.map((item) => resolveDeferredAsync(item, registry, visited)),
-    );
-  }
-
-  // Only traverse plain objects (parser state structures)
-  // Skip class instances (user values like Temporal.PlainDate, URL, etc.)
-  if (isPlainObject(state)) {
-    const resolved: Record<string | symbol, unknown> = {};
-    const keys = Reflect.ownKeys(state);
-    await Promise.all(
-      keys.map(async (key) => {
-        resolved[key] = await resolveDeferredAsync(
-          state[key],
-          registry,
-          visited,
-        );
-      }),
-    );
-    return resolved;
-  }
-
-  return state;
-}
-
-/**
- * Async version of resolveDeferredParseStates for async parsers.
- * @internal
- */
-async function _resolveDeferredParseStatesAsync<
-  T extends Record<string | symbol, unknown> | unknown[],
->(
-  fieldStates: T,
-  initialRegistry?: DependencyRegistry,
-): Promise<T> {
-  // First pass: Build dependency registry from all DependencySourceState fields
-  // (recursively searching through nested structures)
-  const registry = initialRegistry ?? new DependencyRegistry();
-  collectDependencies(fieldStates, registry);
-
-  // Second pass: Resolve all DeferredParseState fields recursively
-  return await resolveDeferredAsync(fieldStates, registry) as T;
 }
 
 /**
@@ -4912,10 +4667,13 @@ export function object<
             ...exec,
             dependencyRuntime: runtime,
           } as ExecutionContext;
-          const typedParserPairs = parserPairs as readonly (readonly [
-            string | symbol,
-            Parser<Mode, unknown, unknown>,
-          ])[];
+          const typedParserPairs = filterExcludedFieldParsers(
+            parserPairs as readonly (readonly [
+              string | symbol,
+              Parser<Mode, unknown, unknown>,
+            ])[],
+            exec?.excludedSourceFields,
+          );
           const preCompleted = preCompleteAndRegisterDependencies(
             state as Record<string | symbol, unknown>,
             typedParserPairs,
@@ -5034,10 +4792,13 @@ export function object<
             ...exec,
             dependencyRuntime: runtime,
           } as ExecutionContext;
-          const asyncParserPairs = parserPairs as readonly (readonly [
-            string | symbol,
-            Parser<Mode, unknown, unknown>,
-          ])[];
+          const asyncParserPairs = filterExcludedFieldParsers(
+            parserPairs as readonly (readonly [
+              string | symbol,
+              Parser<Mode, unknown, unknown>,
+            ])[],
+            exec?.excludedSourceFields,
+          );
           const preCompleted = await preCompleteAndRegisterDependenciesAsync(
             state as Record<string | symbol, unknown>,
             asyncParserPairs,
@@ -5284,10 +5045,10 @@ function suggestTupleSync(
       ? stateArray[i]
       : parser.initialState;
 
-    const parserSuggestions = parser.suggest({
-      ...contextWithRegistry,
-      state: parserState,
-    }, prefix);
+    const parserSuggestions = parser.suggest(
+      withChildContext(contextWithRegistry, i, parserState),
+      prefix,
+    );
 
     suggestions.push(...parserSuggestions);
   }
@@ -5323,10 +5084,10 @@ async function* suggestTupleAsync(
       ? stateArray[i]
       : parser.initialState;
 
-    const parserSuggestions = parser.suggest({
-      ...contextWithRegistry,
-      state: parserState,
-    }, prefix);
+    const parserSuggestions = parser.suggest(
+      withChildContext(contextWithRegistry, i, parserState),
+      prefix,
+    );
 
     if (parser.$mode === "async") {
       for await (const s of parserSuggestions as AsyncIterable<Suggestion>) {
@@ -5687,6 +5448,13 @@ export function tuple<
     $mode: combinedMode,
     $valueType: [],
     $stateType: [],
+    [fieldParsersKey]: parsers.map(
+      (parser, index) =>
+        [String(index), parser] as [
+          string,
+          Parser<Mode, unknown, unknown>,
+        ],
+    ),
     usage: parsers
       .toSorted((a, b) => b.priority - a.priority)
       .flatMap((p) => p.usage),
@@ -6548,9 +6316,15 @@ export function merge(
           ...exec,
           dependencyRuntime: runtime,
         } as ExecutionContext;
+        const duplicateFieldNames = collectDuplicateFieldNames(
+          mergedFieldParsers,
+        );
+        const unambiguousFieldParsers = filterDuplicateFieldParsers(
+          mergedFieldParsers,
+        );
         collectExplicitSourceValues(
           buildRuntimeNodesFromPairs(
-            mergedFieldParsers,
+            unambiguousFieldParsers,
             state as Record<PropertyKey, unknown>,
             exec?.path,
           ),
@@ -6566,29 +6340,37 @@ export function merge(
         type FieldPairs = ReadonlyArray<
           readonly [string | symbol, Parser<Mode, unknown, unknown>]
         >;
-        const perChildCache: (
-          | ReadonlyMap<
-            string | symbol,
-            unknown
-          >
-          | undefined
-        )[] = syncParsers.map((parser, i) => {
+        const perChildPhase1 = syncParsers.map((parser, i) => {
           if (fieldParsersKey in parser) {
             const pairs = (parser as { [fieldParsersKey]: FieldPairs })[
               fieldParsersKey
             ];
+            const excludedSourceFields = new Set(
+              pairs
+                .map(([field]) => field)
+                .filter((field) => duplicateFieldNames.has(field)),
+            );
+            const phase1Pairs = filterExcludedFieldParsers(
+              pairs,
+              excludedSourceFields,
+            );
             const preCompleted = preCompleteAndRegisterDependencies(
               state as Record<string | symbol, unknown>,
-              pairs,
+              phase1Pairs,
               runtime.registry,
               withChildExecPath(childExec, i),
             );
             // Only pass cache when field names are unique.  Inner merges
             // with duplicate output keys would collapse branch-specific
             // results in the flat map.
-            return filterDuplicateKeys(preCompleted, pairs);
+            return {
+              cache: filterDuplicateKeys(preCompleted, phase1Pairs),
+              excludedSourceFields: excludedSourceFields.size > 0
+                ? excludedSourceFields
+                : undefined,
+            };
           }
-          return undefined;
+          return { cache: undefined, excludedSourceFields: undefined };
         });
 
         // Phase 2: Resolve deferred parse states across the entire merged
@@ -6604,13 +6386,14 @@ export function merge(
         for (let i = 0; i < syncParsers.length; i++) {
           const parser = syncParsers[i];
           const parserState = extractCompleteState(parser, resolvedState, i);
-          const cache = perChildCache[i];
+          const { cache, excludedSourceFields } = perChildPhase1[i];
           const result = unwrapCompleteResult(
             parser.complete(
               parserState as Parameters<typeof parser.complete>[0],
               {
                 ...withChildExecPath(childExec, i),
                 preCompletedByParser: cache,
+                excludedSourceFields,
               } as ExecutionContext,
             ),
           );
@@ -6664,9 +6447,15 @@ export function merge(
           ...exec,
           dependencyRuntime: runtime,
         } as ExecutionContext;
+        const duplicateFieldNames = collectDuplicateFieldNames(
+          mergedFieldParsers,
+        );
+        const unambiguousFieldParsers = filterDuplicateFieldParsers(
+          mergedFieldParsers,
+        );
         await collectExplicitSourceValuesAsync(
           buildRuntimeNodesFromPairs(
-            mergedFieldParsers,
+            unambiguousFieldParsers,
             state as Record<PropertyKey, unknown>,
             exec?.path,
           ),
@@ -6675,30 +6464,42 @@ export function merge(
         type AsyncFieldPairs = ReadonlyArray<
           readonly [string | symbol, Parser<Mode, unknown, unknown>]
         >;
-        const perChildCache: (
-          | ReadonlyMap<
-            string | symbol,
-            unknown
-          >
-          | undefined
-        )[] = [];
+        const perChildPhase1: {
+          readonly cache?: ReadonlyMap<string | symbol, unknown>;
+          readonly excludedSourceFields?: ReadonlySet<string | symbol>;
+        }[] = [];
         for (let i = 0; i < parsers.length; i++) {
           const parser = parsers[i];
           if (fieldParsersKey in parser) {
             const pairs = (parser as { [fieldParsersKey]: AsyncFieldPairs })[
               fieldParsersKey
             ];
+            const excludedSourceFields = new Set(
+              pairs
+                .map(([field]) => field)
+                .filter((field) => duplicateFieldNames.has(field)),
+            );
+            const phase1Pairs = filterExcludedFieldParsers(
+              pairs,
+              excludedSourceFields,
+            );
             const preCompleted = await preCompleteAndRegisterDependenciesAsync(
               state as Record<string | symbol, unknown>,
-              pairs,
+              phase1Pairs,
               runtime.registry,
               withChildExecPath(childExec, i),
             );
-            perChildCache.push(
-              filterDuplicateKeys(preCompleted, pairs),
-            );
+            perChildPhase1.push({
+              cache: filterDuplicateKeys(preCompleted, phase1Pairs),
+              excludedSourceFields: excludedSourceFields.size > 0
+                ? excludedSourceFields
+                : undefined,
+            });
           } else {
-            perChildCache.push(undefined);
+            perChildPhase1.push({
+              cache: undefined,
+              excludedSourceFields: undefined,
+            });
           }
         }
 
@@ -6715,13 +6516,14 @@ export function merge(
         for (let i = 0; i < parsers.length; i++) {
           const parser = parsers[i];
           const parserState = extractCompleteState(parser, resolvedState, i);
-          const asyncCache = perChildCache[i];
+          const { cache: asyncCache, excludedSourceFields } = perChildPhase1[i];
           const result = unwrapCompleteResult(
             await parser.complete(
               parserState as Parameters<typeof parser.complete>[0],
               {
                 ...withChildExecPath(childExec, i),
                 preCompletedByParser: asyncCache,
+                excludedSourceFields,
               } as ExecutionContext,
             ),
           );
@@ -6813,7 +6615,9 @@ export function merge(
           const runtime = createDependencyRuntimeContext(
             context.dependencyRegistry?.clone(),
           );
-          const childFieldPairs = collectChildFieldParsers(parsers);
+          const childFieldPairs = filterDuplicateFieldParsers(
+            collectChildFieldParsers(parsers),
+          );
           if (context.state && typeof context.state === "object") {
             await collectExplicitSourceValuesAsync(
               buildRuntimeNodesFromPairs(
@@ -6844,12 +6648,14 @@ export function merge(
             const parser = parsers[i];
             const parserState = extractState(parser, i);
 
-            const parserSuggestions = parser.suggest({
-              ...contextWithRegistry,
-              state: parserState as Parameters<
-                typeof parser.suggest
-              >[0]["state"],
-            }, prefix);
+            const parserSuggestions = parser.suggest(
+              withChildContext(
+                contextWithRegistry,
+                i,
+                parserState as Parameters<typeof parser.suggest>[0]["state"],
+              ),
+              prefix,
+            );
 
             if (parser.$mode === "async") {
               for await (
@@ -6870,7 +6676,9 @@ export function merge(
       const runtime = createDependencyRuntimeContext(
         context.dependencyRegistry?.clone(),
       );
-      const childFieldPairs = collectChildFieldParsers(syncParsers);
+      const childFieldPairs = filterDuplicateFieldParsers(
+        collectChildFieldParsers(syncParsers),
+      );
       if (context.state && typeof context.state === "object") {
         collectExplicitSourceValues(
           buildRuntimeNodesFromPairs(
@@ -6902,10 +6710,14 @@ export function merge(
           const parser = syncParsers[i];
           const parserState = extractState(parser, i);
 
-          const parserSuggestions = parser.suggest({
-            ...contextWithRegistry,
-            state: parserState as Parameters<typeof parser.suggest>[0]["state"],
-          }, prefix);
+          const parserSuggestions = parser.suggest(
+            withChildContext(
+              contextWithRegistry,
+              i,
+              parserState as Parameters<typeof parser.suggest>[0]["state"],
+            ),
+            prefix,
+          );
 
           suggestions.push(...parserSuggestions);
         }
@@ -7076,35 +6888,25 @@ function buildSuggestRegistry(
     preParsedContext.dependencyRegistry?.clone(),
   );
   if (stateArray && Array.isArray(stateArray)) {
+    const nodes = buildRuntimeNodesFromArray(
+      parsers,
+      stateArray,
+      preParsedContext.exec?.path,
+    );
     collectExplicitSourceValues(
-      buildRuntimeNodesFromArray(
-        parsers,
-        stateArray,
-        preParsedContext.exec?.path,
-      ),
+      nodes,
       runtime,
     );
     collectSourcesFromState(stateArray, runtime);
-    const precompleteExec: ExecutionContext = {
-      ...(preParsedContext.exec ?? {
-        usage: preParsedContext.usage,
-        path: [],
-        trace: undefined,
-      }),
-      phase: "complete",
-      dependencyRuntime: runtime,
-      dependencyRegistry: runtime.registry,
-    };
+    fillMissingSourceDefaults(nodes, runtime);
+    const prefix = preParsedContext.exec?.path ?? [];
     for (let i = 0; i < parsers.length; i++) {
-      try {
-        parsers[i].complete(
-          stateArray[i] as Parameters<typeof parsers[number]["complete"]>[0],
-          withChildExecPath(precompleteExec, i),
-        );
-      } catch {
-        // Best-effort only: suggestion pre-pass exists to populate the
-        // dependency registry, not to surface completion failures.
-      }
+      seedSuggestRuntimeFromFieldParsers(
+        parsers[i],
+        stateArray[i],
+        runtime,
+        [...prefix, i],
+      );
     }
   }
   return {
@@ -7125,40 +6927,93 @@ async function buildSuggestRegistryAsync(
     preParsedContext.dependencyRegistry?.clone(),
   );
   if (stateArray && Array.isArray(stateArray)) {
+    const nodes = buildRuntimeNodesFromArray(
+      parsers,
+      stateArray,
+      preParsedContext.exec?.path,
+    );
     await collectExplicitSourceValuesAsync(
-      buildRuntimeNodesFromArray(
-        parsers,
-        stateArray,
-        preParsedContext.exec?.path,
-      ),
+      nodes,
       runtime,
     );
     collectSourcesFromState(stateArray, runtime);
-    const precompleteExec: ExecutionContext = {
-      ...(preParsedContext.exec ?? {
-        usage: preParsedContext.usage,
-        path: [],
-        trace: undefined,
-      }),
-      phase: "complete",
-      dependencyRuntime: runtime,
-      dependencyRegistry: runtime.registry,
-    };
+    await fillMissingSourceDefaultsAsync(nodes, runtime);
+    const prefix = preParsedContext.exec?.path ?? [];
     for (let i = 0; i < parsers.length; i++) {
-      try {
-        await parsers[i].complete(
-          stateArray[i] as Parameters<typeof parsers[number]["complete"]>[0],
-          withChildExecPath(precompleteExec, i),
-        );
-      } catch {
-        // Best-effort only.
-      }
+      await seedSuggestRuntimeFromFieldParsersAsync(
+        parsers[i],
+        stateArray[i],
+        runtime,
+        [...prefix, i],
+      );
     }
   }
   return {
     context: { ...preParsedContext, dependencyRegistry: runtime.registry },
     stateArray,
   };
+}
+
+function seedSuggestRuntimeFromFieldParsers(
+  parser: Parser<Mode, unknown, unknown>,
+  state: unknown,
+  runtime: ReturnType<typeof createDependencyRuntimeContext>,
+  parentPath: readonly PropertyKey[],
+): void {
+  if (!(fieldParsersKey in parser)) return;
+  const pairs = filterDuplicateFieldParsers(
+    (parser as {
+      [fieldParsersKey]: ReadonlyArray<
+        readonly [string | symbol, Parser<Mode, unknown, unknown>]
+      >;
+    })[fieldParsersKey],
+  );
+  const stateRecord = state != null && typeof state === "object"
+    ? state as Record<PropertyKey, unknown>
+    : {};
+  const nodes = buildRuntimeNodesFromPairs(pairs, stateRecord, parentPath);
+  collectExplicitSourceValues(nodes, runtime);
+  collectSourcesFromState(state, runtime);
+  fillMissingSourceDefaults(nodes, runtime);
+  for (const [field, childParser] of pairs) {
+    seedSuggestRuntimeFromFieldParsers(
+      childParser,
+      Object.hasOwn(stateRecord, field) ? stateRecord[field] : undefined,
+      runtime,
+      [...parentPath, field],
+    );
+  }
+}
+
+async function seedSuggestRuntimeFromFieldParsersAsync(
+  parser: Parser<Mode, unknown, unknown>,
+  state: unknown,
+  runtime: ReturnType<typeof createDependencyRuntimeContext>,
+  parentPath: readonly PropertyKey[],
+): Promise<void> {
+  if (!(fieldParsersKey in parser)) return;
+  const pairs = filterDuplicateFieldParsers(
+    (parser as {
+      [fieldParsersKey]: ReadonlyArray<
+        readonly [string | symbol, Parser<Mode, unknown, unknown>]
+      >;
+    })[fieldParsersKey],
+  );
+  const stateRecord = state != null && typeof state === "object"
+    ? state as Record<PropertyKey, unknown>
+    : {};
+  const nodes = buildRuntimeNodesFromPairs(pairs, stateRecord, parentPath);
+  await collectExplicitSourceValuesAsync(nodes, runtime);
+  collectSourcesFromState(state, runtime);
+  await fillMissingSourceDefaultsAsync(nodes, runtime);
+  for (const [field, childParser] of pairs) {
+    await seedSuggestRuntimeFromFieldParsersAsync(
+      childParser,
+      Object.hasOwn(stateRecord, field) ? stateRecord[field] : undefined,
+      runtime,
+      [...parentPath, field],
+    );
+  }
 }
 
 /**
@@ -7884,10 +7739,10 @@ export function concat(
               ? stateArray[i]
               : parser.initialState;
 
-            const parserSuggestions = parser.suggest({
-              ...contextWithRegistry,
-              state: parserState,
-            }, prefix);
+            const parserSuggestions = parser.suggest(
+              withChildContext(contextWithRegistry, i, parserState),
+              prefix,
+            );
 
             if (parser.$mode === "async") {
               for await (
@@ -7923,10 +7778,10 @@ export function concat(
             ? stateArray[i]
             : parser.initialState;
 
-          const parserSuggestions = parser.suggest({
-            ...contextWithRegistry,
-            state: parserState,
-          }, prefix);
+          const parserSuggestions = parser.suggest(
+            withChildContext(contextWithRegistry, i, parserState),
+            prefix,
+          );
 
           suggestions.push(...parserSuggestions);
         }
