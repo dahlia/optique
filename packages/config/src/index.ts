@@ -832,20 +832,7 @@ export function bindConfig<
       enumerable: false,
     });
   }
-  const dependencyMetadata = (
-    parser as Parser<M, TValue, TState> & {
-      readonly dependencyMetadata?: {
-        readonly source?: {
-          readonly extractSourceValue: (
-            state: unknown,
-          ) =>
-            | Result<unknown>
-            | Promise<Result<unknown> | undefined>
-            | undefined;
-        };
-      };
-    }
-  ).dependencyMetadata;
+  const dependencyMetadata = parser.dependencyMetadata;
   if (dependencyMetadata != null) {
     Object.defineProperty(boundParser, "dependencyMetadata", {
       value: dependencyMetadata.source == null ? dependencyMetadata : {
