@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { injectAnnotations } from "@optique/core/annotations";
-import { group, merge, object } from "@optique/core/constructs";
+import { concat, group, merge, object, tuple } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
@@ -669,6 +669,85 @@ describe("bindEnv()", () => {
     assert.equal(result.host, "env.example.com");
     assert.equal(result.verbose, true);
     assert.equal(result.timeout, 30);
+  });
+
+  it("tuple() does not re-evaluate env fallback parsers", () => {
+    const source = dependency(string());
+    let parseCalls = 0;
+    const flakyEnvParser: ValueParser<"sync", string> = {
+      $mode: "sync",
+      metavar: "MODE",
+      placeholder: "",
+      parse(input: string) {
+        parseCalls += 1;
+        return parseCalls === 1
+          ? { success: true, value: input }
+          : { success: false, error: message`env parser re-ran` };
+      },
+      format(value: string) {
+        return value;
+      },
+    };
+    const context = createEnvContext({
+      source: (key) => key === "MODE" ? "prod" : undefined,
+    });
+    const parser = tuple([
+      bindEnv(option("--mode", source), {
+        context,
+        key: "MODE",
+        parser: flakyEnvParser,
+      }),
+    ]);
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const result = parse(parser, [], { annotations });
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["prod"]);
+    assert.equal(parseCalls, 1);
+  });
+
+  it("concat() does not re-evaluate env fallback parsers", () => {
+    const source = dependency(string());
+    let parseCalls = 0;
+    const flakyEnvParser: ValueParser<"sync", string> = {
+      $mode: "sync",
+      metavar: "MODE",
+      placeholder: "",
+      parse(input: string) {
+        parseCalls += 1;
+        return parseCalls === 1
+          ? { success: true, value: input }
+          : { success: false, error: message`env parser re-ran` };
+      },
+      format(value: string) {
+        return value;
+      },
+    };
+    const context = createEnvContext({
+      source: (key) => key === "MODE" ? "prod" : undefined,
+    });
+    const parser = concat(
+      tuple([
+        bindEnv(option("--mode", source), {
+          context,
+          key: "MODE",
+          parser: flakyEnvParser,
+        }),
+      ]),
+      tuple([]),
+    );
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const result = parse(parser, [], { annotations });
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["prod"]);
+    assert.equal(parseCalls, 1);
   });
 
   it("uses env values when prefix is omitted", () => {

@@ -15,6 +15,9 @@ import type {
   Result,
 } from "@optique/core/parser";
 import {
+  unmatchedNonCliDependencySourceStateMarker,
+} from "@optique/core/parser";
+import {
   ensureNonEmptyString,
   isValueParser,
   type NonEmptyString,
@@ -293,6 +296,7 @@ export function bindEnv<
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
+    [unmatchedNonCliDependencySourceStateMarker]: true,
     usage: options.default !== undefined
       ? [{ type: "optional", terms: parser.usage }]
       : parser.usage,

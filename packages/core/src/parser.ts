@@ -190,6 +190,16 @@ export interface Parser<
   readonly initialState: TState;
 
   /**
+   * Internal marker for wrappers whose `{ hasCliValue: false }` states should
+   * be treated as unmatched dependency-source states during completion-time
+   * Phase 1.
+   *
+   * @internal
+   * @since 1.0.0
+   */
+  readonly [unmatchedNonCliDependencySourceStateMarker]?: true;
+
+  /**
    * Parses the input context and returns a result indicating
    * whether the parsing was successful or not.
    * @param context The context of the parser, which includes the input buffer
@@ -436,6 +446,24 @@ export interface ExecutionContext {
    */
   readonly excludedSourceFields?: ReadonlySet<string | symbol>;
 }
+
+/**
+ * Internal marker for wrappers whose `{ hasCliValue: false }` states should
+ * be treated as unmatched dependency-source states during completion-time
+ * Phase 1.
+ *
+ * Wrappers like `bindEnv()` and `bindConfig()` opt in because their missing
+ * CLI states still carry enough fallback context to pre-complete exactly
+ * once. Wrappers like `prompt()` intentionally do not opt in because
+ * prompted values are not yet registered as dependency sources.
+ *
+ * @internal
+ * @since 1.0.0
+ */
+export const unmatchedNonCliDependencySourceStateMarker: unique symbol = Symbol
+  .for(
+    "@optique/core/parser/unmatchedNonCliDependencySourceStateMarker",
+  );
 
 /**
  * The context of the parser, which includes the input buffer and the state.

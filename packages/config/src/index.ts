@@ -22,6 +22,9 @@ import type {
   ParserResult,
   Result,
 } from "@optique/core/parser";
+import {
+  unmatchedNonCliDependencySourceStateMarker,
+} from "@optique/core/parser";
 import { annotationKey, getAnnotations } from "@optique/core/annotations";
 import { message } from "@optique/core/message";
 import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
@@ -717,6 +720,7 @@ export function bindConfig<
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
+    [unmatchedNonCliDependencySourceStateMarker]: true,
     usage: options.default !== undefined
       ? [{ type: "optional", terms: parser.usage }]
       : parser.usage,

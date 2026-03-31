@@ -19,6 +19,7 @@ import {
   parseWithDependency,
 } from "./dependency.ts";
 import { message } from "./message.ts";
+import { unmatchedNonCliDependencySourceStateMarker } from "./parser.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
@@ -1112,7 +1113,10 @@ async function resolveDeferredInStateAsync(
  */
 function isMatchedState(
   fieldState: unknown,
-  parser: { readonly initialState?: unknown },
+  parser: {
+    readonly initialState?: unknown;
+    readonly [unmatchedNonCliDependencySourceStateMarker]?: true;
+  },
 ): boolean {
   if (fieldState === undefined) return false;
   // PendingDependencySourceState in an array means the option was not provided
@@ -1125,6 +1129,15 @@ function isMatchedState(
   }
   // Bare PendingDependencySourceState
   if (isPendingDependencySourceState(fieldState)) return false;
+  if (
+    parser[unmatchedNonCliDependencySourceStateMarker] === true &&
+    fieldState != null &&
+    typeof fieldState === "object" &&
+    Object.hasOwn(fieldState, "hasCliValue") &&
+    (fieldState as { readonly hasCliValue?: unknown }).hasCliValue === false
+  ) {
+    return false;
+  }
   // If state equals the parser's initialState, it was not matched
   if (fieldState === parser.initialState) return false;
   return true;

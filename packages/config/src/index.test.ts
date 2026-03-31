@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 import { getDocPage, parse, suggestSync } from "@optique/core/parser";
 import type { Parser } from "@optique/core/parser";
-import { merge, object } from "@optique/core/constructs";
+import { concat, merge, object, tuple } from "@optique/core/constructs";
+import { injectAnnotations } from "@optique/core/annotations";
 import { dependency } from "@optique/core/dependency";
 import { optional } from "@optique/core/modifiers";
 import { fail, flag, option } from "@optique/core/primitives";
@@ -616,6 +617,80 @@ describe("bindConfig", () => {
     assert.ok(result.success);
     assert.equal(result.value.host, "cli.com"); // from CLI
     assert.equal(result.value.port, 3000); // from default (not config)
+  });
+
+  test("tuple() complete() does not re-evaluate config fallback readers", () => {
+    const source = dependency(string());
+    let keyCalls = 0;
+    const context = createConfigContext({
+      schema: z.object({ mode: z.string() }),
+    });
+    const annotations: Annotations = {
+      [context.id]: { data: { mode: "prod" } },
+    };
+    const leaf = bindConfig(option("--mode", source), {
+      context,
+      key(config) {
+        keyCalls += 1;
+        if (keyCalls > 1) {
+          throw new Error("config key re-ran.");
+        }
+        return config.mode;
+      },
+    });
+    const leafParse = leaf.parse({
+      buffer: [],
+      state: injectAnnotations(undefined, annotations),
+      optionsTerminated: false,
+      usage: leaf.usage,
+    });
+    assert.ok(leafParse.success);
+    const parser = tuple([leaf]);
+    const result = parser.complete(
+      [leafParse.next.state],
+      { usage: parser.usage, phase: "complete", path: [], trace: undefined },
+    );
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["prod"]);
+    assert.equal(keyCalls, 1);
+  });
+
+  test("concat() complete() does not re-evaluate config fallback readers", () => {
+    const source = dependency(string());
+    let keyCalls = 0;
+    const context = createConfigContext({
+      schema: z.object({ mode: z.string() }),
+    });
+    const annotations: Annotations = {
+      [context.id]: { data: { mode: "prod" } },
+    };
+    const leaf = bindConfig(option("--mode", source), {
+      context,
+      key(config) {
+        keyCalls += 1;
+        if (keyCalls > 1) {
+          throw new Error("config key re-ran.");
+        }
+        return config.mode;
+      },
+    });
+    const leafParse = leaf.parse({
+      buffer: [],
+      state: injectAnnotations(undefined, annotations),
+      optionsTerminated: false,
+      usage: leaf.usage,
+    });
+    assert.ok(leafParse.success);
+    const parser = concat(tuple([leaf]), tuple([]));
+    const result = parser.complete(
+      [[leafParse.next.state], []],
+      { usage: parser.usage, phase: "complete", path: [], trace: undefined },
+    );
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["prod"]);
+    assert.equal(keyCalls, 1);
   });
 
   // Regression test for https://github.com/dahlia/optique/issues/94

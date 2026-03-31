@@ -50,6 +50,7 @@ import type {
   ParserResult,
   Suggestion,
 } from "./parser.ts";
+import { unmatchedNonCliDependencySourceStateMarker } from "./parser.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
 
 /**
@@ -76,6 +77,19 @@ type CombineObjectModes<
  * do not match any specific name at the first buffer position.
  */
 const EMPTY_LEADING_NAMES: ReadonlySet<string> = new Set();
+
+function isNonCliBoundSourceState(
+  state: unknown,
+  parser: {
+    readonly [unmatchedNonCliDependencySourceStateMarker]?: true;
+  },
+): state is { readonly hasCliValue: false } {
+  return parser[unmatchedNonCliDependencySourceStateMarker] === true &&
+    state != null &&
+    typeof state === "object" &&
+    Object.hasOwn(state, "hasCliValue") &&
+    (state as { readonly hasCliValue?: unknown }).hasCliValue === false;
+}
 
 function withChildExecPath(
   exec: ExecutionContext | undefined,
@@ -132,7 +146,10 @@ function withChildContext<TState>(
 
 function isUnmatchedDependencyState(
   state: unknown,
-  parser: { readonly initialState?: unknown },
+  parser: {
+    readonly initialState?: unknown;
+    readonly [unmatchedNonCliDependencySourceStateMarker]?: true;
+  },
 ): boolean {
   if (state === undefined) return true;
   if (
@@ -143,7 +160,24 @@ function isUnmatchedDependencyState(
     return true;
   }
   if (isPendingDependencySourceState(state)) return true;
+  if (isNonCliBoundSourceState(state, parser)) return true;
   return state === parser.initialState;
+}
+
+function filterPreCompletedRuntimeNodes<
+  T extends { readonly path: readonly PropertyKey[] },
+>(
+  nodes: readonly T[],
+  preCompletedKeys: ReadonlySet<string | symbol>,
+): readonly T[] {
+  if (preCompletedKeys.size < 1) return nodes;
+  return nodes.filter((node) => {
+    const segment = node.path.at(-1);
+    if (typeof segment === "number") {
+      return !preCompletedKeys.has(String(segment));
+    }
+    return segment == null || !preCompletedKeys.has(segment);
+  });
 }
 
 interface LeadingNameSource {
@@ -3655,7 +3689,8 @@ function* pendingDependencyDefaults(
     if (
       fieldParser.dependencyMetadata?.source != null &&
       isUnmatchedDependencyState(fieldState, fieldParser) &&
-      annotatedFieldState !== fieldState
+      (annotatedFieldState !== fieldState ||
+        isNonCliBoundSourceState(fieldState, fieldParser))
     ) {
       yield {
         parser: fieldParser,
@@ -3953,7 +3988,8 @@ function preCompleteAndRegisterDependencies(
     if (
       fieldParser.dependencyMetadata?.source != null &&
       isUnmatchedDependencyState(fieldState, fieldParser) &&
-      annotatedFieldState !== fieldState
+      (annotatedFieldState !== fieldState ||
+        isNonCliBoundSourceState(fieldState, fieldParser))
     ) {
       const completed = fieldParser.complete(
         annotatedFieldState,
@@ -4084,7 +4120,8 @@ async function preCompleteAndRegisterDependenciesAsync(
     if (
       fieldParser.dependencyMetadata?.source != null &&
       isUnmatchedDependencyState(fieldState, fieldParser) &&
-      annotatedFieldState !== fieldState
+      (annotatedFieldState !== fieldState ||
+        isNonCliBoundSourceState(fieldState, fieldParser))
     ) {
       const completed = await fieldParser.complete(
         annotatedFieldState,
@@ -4724,10 +4761,13 @@ export function object<
             annotatedState[fieldKey] = getFieldState(field, fieldParser);
           }
           collectExplicitSourceValues(
-            buildRuntimeNodesFromPairs(
-              typedParserPairs,
-              annotatedState,
-              exec?.path,
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromPairs(
+                typedParserPairs,
+                annotatedState,
+                exec?.path,
+              ),
+              new Set(preCompleted.keys()),
             ),
             runtime,
           );
@@ -4840,10 +4880,13 @@ export function object<
             annotatedState[fieldKey] = getFieldState(field, fieldParser);
           }
           await collectExplicitSourceValuesAsync(
-            buildRuntimeNodesFromPairs(
-              asyncParserPairs,
-              annotatedState,
-              exec?.path,
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromPairs(
+                asyncParserPairs,
+                annotatedState,
+                exec?.path,
+              ),
+              new Set(preCompleted.keys()),
             ),
             runtime,
           );
@@ -5524,7 +5567,10 @@ export function tuple<
             childExec,
           );
           collectExplicitSourceValues(
-            buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
+              new Set(preCompleted.keys()),
+            ),
             runtime,
           );
           const phase3Exec: ExecutionContext = {
@@ -5625,7 +5671,10 @@ export function tuple<
             childExec,
           );
           await collectExplicitSourceValuesAsync(
-            buildRuntimeNodesFromArray(parsers, stateArray, exec?.path),
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromArray(parsers, stateArray, exec?.path),
+              new Set(preCompleted.keys()),
+            ),
             runtime,
           );
           const phase3Exec: ExecutionContext = {
@@ -6342,14 +6391,6 @@ export function merge(
         const unambiguousFieldParsers = filterDuplicateFieldParsers(
           mergedFieldParsers,
         );
-        collectExplicitSourceValues(
-          buildRuntimeNodesFromPairs(
-            unambiguousFieldParsers,
-            state as Record<PropertyKey, unknown>,
-            exec?.path,
-          ),
-          runtime,
-        );
         // Pre-complete each child's dependency sources independently so
         // that branches with overlapping output keys do not collide in
         // the preCompleted map.  Only pass the cache to children whose
@@ -6392,6 +6433,14 @@ export function merge(
           }
           return { cache: undefined, excludedSourceFields: undefined };
         });
+        collectExplicitSourceValues(
+          buildRuntimeNodesFromPairs(
+            unambiguousFieldParsers,
+            state as Record<PropertyKey, unknown>,
+            exec?.path,
+          ),
+          runtime,
+        );
 
         // Phase 2: Resolve deferred parse states across the entire merged
         // state using the dependency runtime.
@@ -6473,14 +6522,6 @@ export function merge(
         const unambiguousFieldParsers = filterDuplicateFieldParsers(
           mergedFieldParsers,
         );
-        await collectExplicitSourceValuesAsync(
-          buildRuntimeNodesFromPairs(
-            unambiguousFieldParsers,
-            state as Record<PropertyKey, unknown>,
-            exec?.path,
-          ),
-          runtime,
-        );
         type AsyncFieldPairs = ReadonlyArray<
           readonly [string | symbol, Parser<Mode, unknown, unknown>]
         >;
@@ -6522,6 +6563,14 @@ export function merge(
             });
           }
         }
+        await collectExplicitSourceValuesAsync(
+          buildRuntimeNodesFromPairs(
+            unambiguousFieldParsers,
+            state as Record<PropertyKey, unknown>,
+            exec?.path,
+          ),
+          runtime,
+        );
 
         // Phase 2: Resolve deferred parse states across the entire merged
         // state using the dependency runtime.
