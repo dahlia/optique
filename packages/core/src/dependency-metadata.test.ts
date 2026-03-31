@@ -158,16 +158,19 @@ describe("extractDependencyMetadata", () => {
     },
   );
 
-  test("extractSourceValue returns undefined for non-source state", () => {
-    const env = createEnvSource();
-    const metadata = extractDependencyMetadata(env);
-    assert.ok(metadata?.source?.extractSourceValue !== undefined);
-    assert.equal(metadata.source.extractSourceValue(undefined), undefined);
-    assert.deepEqual(
-      metadata.source.extractSourceValue({ success: true, value: "x" }),
-      { success: true, value: "x" },
-    );
-  });
+  test(
+    "extractSourceValue returns undefined for undefined input and passes through plain results",
+    () => {
+      const env = createEnvSource();
+      const metadata = extractDependencyMetadata(env);
+      assert.ok(metadata?.source?.extractSourceValue !== undefined);
+      assert.equal(metadata.source.extractSourceValue(undefined), undefined);
+      assert.deepEqual(
+        metadata.source.extractSourceValue({ success: true, value: "x" }),
+        { success: true, value: "x" },
+      );
+    },
+  );
 
   test("extracts derived capability from DerivedValueParser (derive)", () => {
     const env = createEnvSource();
