@@ -1934,33 +1934,39 @@ describe("bindEnv() with dependency sources", () => {
 
   it("does not invent mapped dependency source values from env fallbacks", () => {
     const source = dependency(choice(["dev", "prod"] as const));
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "production" })[key],
+    });
     const parser = bindEnv(
       map(
         option("--mode", source),
         (value) => value === "dev" ? "development" : "production",
       ),
       {
-        context: createEnvContext({
-          prefix: "APP_",
-          source: (key) => ({ APP_MODE: "production" })[key],
-        }),
+        context: envContext,
         key: "MODE",
         parser: choice(["development", "production"] as const),
       },
     );
-    const parseResult = parser.parse({
-      buffer: [],
-      state: parser.initialState,
-      optionsTerminated: false,
-      usage: parser.usage,
-    });
-    assert.ok(parseResult.success);
-    assert.equal(
-      parser.dependencyMetadata?.source?.extractSourceValue(
-        parseResult.next.state,
-      ),
-      undefined,
-    );
+    envContext.getAnnotations();
+    try {
+      const parseResult = parser.parse({
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(parseResult.success);
+      assert.equal(
+        parser.dependencyMetadata?.source?.extractSourceValue(
+          parseResult.next.state,
+        ),
+        undefined,
+      );
+    } finally {
+      envContext[Symbol.dispose]?.();
+    }
   });
 });
 

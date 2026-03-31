@@ -850,17 +850,23 @@ export function bindConfig<
   }
   const dependencyMetadata = parser.dependencyMetadata;
   if (dependencyMetadata != null) {
+    const sourceMetadata = dependencyMetadata.source;
     Object.defineProperty(boundParser, "dependencyMetadata", {
-      value: dependencyMetadata.source == null ? dependencyMetadata : {
+      value: sourceMetadata == null ? dependencyMetadata : {
         ...dependencyMetadata,
         source: {
-          ...dependencyMetadata.source,
+          ...sourceMetadata,
           extractSourceValue: (state: unknown) => {
             if (!isConfigBindState(state)) {
-              return dependencyMetadata.source?.extractSourceValue(state);
+              return sourceMetadata.extractSourceValue(state);
             }
             if (state.hasCliValue) {
-              return dependencyMetadata.source?.extractSourceValue(
+              return sourceMetadata.extractSourceValue(
+                state.cliState,
+              );
+            }
+            if (!sourceMetadata.preservesSourceValue) {
+              return sourceMetadata.extractSourceValue(
                 state.cliState,
               );
             }

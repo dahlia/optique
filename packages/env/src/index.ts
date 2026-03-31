@@ -463,6 +463,9 @@ export function bindEnv<
                 state.cliState,
               );
             }
+            if (!sourceMetadata.preservesSourceValue) {
+              return sourceMetadata.extractSourceValue(state.cliState);
+            }
             return getEnvSourceValue(
               state,
               options,

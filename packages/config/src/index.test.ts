@@ -6,7 +6,7 @@ import type { Parser } from "@optique/core/parser";
 import { concat, merge, object, tuple } from "@optique/core/constructs";
 import { injectAnnotations } from "@optique/core/annotations";
 import { dependency } from "@optique/core/dependency";
-import { optional } from "@optique/core/modifiers";
+import { map, optional } from "@optique/core/modifiers";
 import { fail, flag, option } from "@optique/core/primitives";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { choice, integer, string } from "@optique/core/valueparser";
@@ -2133,6 +2133,38 @@ describe("bindConfig() with dependency sources", () => {
     assert.ok(result.success);
     assert.equal(result.value.mode, undefined);
     assert.equal(result.value.level, "debug");
+  });
+
+  test("does not invent mapped dependency source values from config fallbacks", () => {
+    const context = createConfigContext({ schema });
+    const annotations: Annotations = {
+      [context.id]: { data: { mode: "prod" as const } },
+    };
+    const parser = bindConfig(
+      map(
+        option("--mode", mode),
+        (value) => value === "dev" ? "development" : "production",
+      ),
+      {
+        context,
+        key: "mode",
+      },
+    );
+
+    const parseResult = parser.parse({
+      buffer: [],
+      state: injectAnnotations(parser.initialState, annotations),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(parseResult.success);
+    assert.equal(
+      parser.dependencyMetadata?.source?.extractSourceValue(
+        parseResult.next.state,
+      ),
+      undefined,
+    );
   });
 });
 
