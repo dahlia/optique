@@ -970,6 +970,11 @@ export function prompt<M extends Mode, TValue, TState>(
       const baseInnerContext = innerState !== context.state
         ? { ...context, state: innerState }
         : context;
+      const effectiveInnerState = annotations != null &&
+          innerState == null &&
+          typeof parser.shouldDeferCompletion === "function"
+        ? injectAnnotations(innerState, annotations)
+        : innerState;
       // Propagate annotations into the inner context state so that source-
       // binding wrappers (bindEnv, bindConfig) can carry them through into
       // their output state.  This is necessary when parse() is called with
@@ -1017,7 +1022,7 @@ export function prompt<M extends Mode, TValue, TState>(
 
       const result = withAnnotatedInnerState(
         context.state,
-        innerState,
+        effectiveInnerState,
         (annotatedInnerState) => {
           const innerContext = annotatedInnerState !== context.state
             ? { ...context, state: annotatedInnerState }

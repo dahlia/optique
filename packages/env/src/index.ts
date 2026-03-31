@@ -1,4 +1,8 @@
-import { annotationKey, getAnnotations } from "@optique/core/annotations";
+import {
+  annotationKey,
+  getAnnotations,
+  injectAnnotations,
+} from "@optique/core/annotations";
 import type { Annotations, SourceContext } from "@optique/core/context";
 import { envVar, type Message, message, valueSet } from "@optique/core/message";
 import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
@@ -511,7 +515,12 @@ function getEnvOrDefault<M extends Mode, TValue>(
   // environment variable" when the env var is unset, even if the config
   // layer has a value.
   if (innerParser != null) {
-    const completeState = innerState ?? innerParser.initialState;
+    const completeState = innerState ??
+      (annotations != null &&
+          innerParser.initialState == null &&
+          typeof innerParser.shouldDeferCompletion === "function"
+        ? injectAnnotations(innerParser.initialState, annotations)
+        : innerParser.initialState);
     return wrapForMode(mode, innerParser.complete(completeState, exec));
   }
 

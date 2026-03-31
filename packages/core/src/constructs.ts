@@ -3386,8 +3386,12 @@ function* suggestObjectSync<
   const runtime = createDependencyRuntimeContext(
     context.dependencyRegistry?.clone(),
   );
+  const sourceParserPairs = filterExcludedFieldParsers(
+    parserPairs,
+    context.exec?.excludedSourceFields,
+  );
   const nodes = buildRuntimeNodesFromPairs(
-    parserPairs as readonly (readonly [
+    sourceParserPairs as readonly (readonly [
       PropertyKey,
       Parser<Mode, unknown, unknown>,
     ])[],
@@ -3401,7 +3405,12 @@ function* suggestObjectSync<
   // Collect dependency sources from the state tree (handles nested
   // DependencySourceState inside arrays, e.g., multiple()).
   if (context.state && typeof context.state === "object") {
-    collectSourcesFromState(context.state, runtime);
+    collectSourcesFromState(
+      context.state,
+      runtime,
+      new WeakSet<object>(),
+      context.exec?.excludedSourceFields,
+    );
   }
 
   // Pre-complete dependency source defaults (old-protocol bridge).
@@ -3410,7 +3419,7 @@ function* suggestObjectSync<
   // would evaluate the same defaults a second time.
   completeDependencySourceDefaults(
     context,
-    parserPairs,
+    sourceParserPairs,
     runtime.registry,
     context.exec,
   );
@@ -3490,8 +3499,12 @@ async function* suggestObjectAsync<
   const runtime = createDependencyRuntimeContext(
     context.dependencyRegistry?.clone(),
   );
+  const sourceParserPairs = filterExcludedFieldParsers(
+    parserPairs,
+    context.exec?.excludedSourceFields,
+  );
   const nodes = buildRuntimeNodesFromPairs(
-    parserPairs as readonly (readonly [
+    sourceParserPairs as readonly (readonly [
       PropertyKey,
       Parser<Mode, unknown, unknown>,
     ])[],
@@ -3504,12 +3517,17 @@ async function* suggestObjectAsync<
 
   // Collect dependency sources from state tree.
   if (context.state && typeof context.state === "object") {
-    collectSourcesFromState(context.state, runtime);
+    collectSourcesFromState(
+      context.state,
+      runtime,
+      new WeakSet<object>(),
+      context.exec?.excludedSourceFields,
+    );
   }
   // Pre-complete dependency source defaults (single evaluation point).
   await completeDependencySourceDefaultsAsync(
     context,
-    parserPairs,
+    sourceParserPairs,
     runtime.registry,
     context.exec,
   );
@@ -6617,9 +6635,27 @@ export function merge(
           const runtime = createDependencyRuntimeContext(
             context.dependencyRegistry?.clone(),
           );
+          const mergedPairs = collectChildFieldParsers(parsers);
+          const duplicateFieldNames = collectDuplicateFieldNames(mergedPairs);
           const childFieldPairs = filterDuplicateFieldParsers(
-            collectChildFieldParsers(parsers),
+            mergedPairs,
           );
+          const perChildExcludedSourceFields = parsers.map((parser) => {
+            if (!(fieldParsersKey in parser)) return undefined;
+            const pairs = (parser as {
+              [fieldParsersKey]: ReadonlyArray<
+                readonly [string | symbol, Parser<Mode, unknown, unknown>]
+              >;
+            })[fieldParsersKey];
+            const excludedSourceFields = new Set(
+              pairs
+                .map(([field]) => field)
+                .filter((field) => duplicateFieldNames.has(field)),
+            );
+            return excludedSourceFields.size > 0
+              ? excludedSourceFields
+              : undefined;
+          });
           if (context.state && typeof context.state === "object") {
             await collectExplicitSourceValuesAsync(
               buildRuntimeNodesFromPairs(
@@ -6631,7 +6667,12 @@ export function merge(
             );
           }
           if (context.state && typeof context.state === "object") {
-            collectSourcesFromState(context.state, runtime);
+            collectSourcesFromState(
+              context.state,
+              runtime,
+              new WeakSet<object>(),
+              duplicateFieldNames,
+            );
           }
           await completeDependencySourceDefaultsAsync(
             context,
@@ -6649,13 +6690,22 @@ export function merge(
           for (let i = 0; i < parsers.length; i++) {
             const parser = parsers[i];
             const parserState = extractState(parser, i);
+            const childContext = withChildContext(
+              contextWithRegistry,
+              i,
+              parserState as Parameters<typeof parser.suggest>[0]["state"],
+            );
+            const excludedSourceFields = perChildExcludedSourceFields[i];
+            const contextForChild = excludedSourceFields == null ||
+                childContext.exec == null
+              ? childContext
+              : {
+                ...childContext,
+                exec: { ...childContext.exec, excludedSourceFields },
+              };
 
             const parserSuggestions = parser.suggest(
-              withChildContext(
-                contextWithRegistry,
-                i,
-                parserState as Parameters<typeof parser.suggest>[0]["state"],
-              ),
+              contextForChild,
               prefix,
             );
 
@@ -6678,9 +6728,25 @@ export function merge(
       const runtime = createDependencyRuntimeContext(
         context.dependencyRegistry?.clone(),
       );
+      const mergedPairs = collectChildFieldParsers(syncParsers);
+      const duplicateFieldNames = collectDuplicateFieldNames(mergedPairs);
       const childFieldPairs = filterDuplicateFieldParsers(
-        collectChildFieldParsers(syncParsers),
+        mergedPairs,
       );
+      const perChildExcludedSourceFields = syncParsers.map((parser) => {
+        if (!(fieldParsersKey in parser)) return undefined;
+        const pairs = (parser as {
+          [fieldParsersKey]: ReadonlyArray<
+            readonly [string | symbol, Parser<Mode, unknown, unknown>]
+          >;
+        })[fieldParsersKey];
+        const excludedSourceFields = new Set(
+          pairs
+            .map(([field]) => field)
+            .filter((field) => duplicateFieldNames.has(field)),
+        );
+        return excludedSourceFields.size > 0 ? excludedSourceFields : undefined;
+      });
       if (context.state && typeof context.state === "object") {
         collectExplicitSourceValues(
           buildRuntimeNodesFromPairs(
@@ -6692,7 +6758,12 @@ export function merge(
         );
       }
       if (context.state && typeof context.state === "object") {
-        collectSourcesFromState(context.state, runtime);
+        collectSourcesFromState(
+          context.state,
+          runtime,
+          new WeakSet<object>(),
+          duplicateFieldNames,
+        );
       }
       completeDependencySourceDefaults(
         context,
@@ -6711,13 +6782,22 @@ export function merge(
         for (let i = 0; i < syncParsers.length; i++) {
           const parser = syncParsers[i];
           const parserState = extractState(parser, i);
+          const childContext = withChildContext(
+            contextWithRegistry,
+            i,
+            parserState as Parameters<typeof parser.suggest>[0]["state"],
+          );
+          const excludedSourceFields = perChildExcludedSourceFields[i];
+          const contextForChild = excludedSourceFields == null ||
+              childContext.exec == null
+            ? childContext
+            : {
+              ...childContext,
+              exec: { ...childContext.exec, excludedSourceFields },
+            };
 
           const parserSuggestions = parser.suggest(
-            withChildContext(
-              contextWithRegistry,
-              i,
-              parserState as Parameters<typeof parser.suggest>[0]["state"],
-            ),
+            contextForChild,
             prefix,
           );
 
@@ -6963,19 +7043,26 @@ function seedSuggestRuntimeFromFieldParsers(
   parentPath: readonly PropertyKey[],
 ): void {
   if (!(fieldParsersKey in parser)) return;
+  const rawPairs = (parser as {
+    [fieldParsersKey]: ReadonlyArray<
+      readonly [string | symbol, Parser<Mode, unknown, unknown>]
+    >;
+  })[fieldParsersKey];
+  const duplicateFieldNames = collectDuplicateFieldNames(rawPairs);
   const pairs = filterDuplicateFieldParsers(
-    (parser as {
-      [fieldParsersKey]: ReadonlyArray<
-        readonly [string | symbol, Parser<Mode, unknown, unknown>]
-      >;
-    })[fieldParsersKey],
+    rawPairs,
   );
   const stateRecord = state != null && typeof state === "object"
     ? state as Record<PropertyKey, unknown>
     : {};
   const nodes = buildRuntimeNodesFromPairs(pairs, stateRecord, parentPath);
   collectExplicitSourceValues(nodes, runtime);
-  collectSourcesFromState(state, runtime);
+  collectSourcesFromState(
+    state,
+    runtime,
+    new WeakSet<object>(),
+    duplicateFieldNames,
+  );
   fillMissingSourceDefaults(nodes, runtime);
   for (const [field, childParser] of pairs) {
     seedSuggestRuntimeFromFieldParsers(
@@ -6994,19 +7081,26 @@ async function seedSuggestRuntimeFromFieldParsersAsync(
   parentPath: readonly PropertyKey[],
 ): Promise<void> {
   if (!(fieldParsersKey in parser)) return;
+  const rawPairs = (parser as {
+    [fieldParsersKey]: ReadonlyArray<
+      readonly [string | symbol, Parser<Mode, unknown, unknown>]
+    >;
+  })[fieldParsersKey];
+  const duplicateFieldNames = collectDuplicateFieldNames(rawPairs);
   const pairs = filterDuplicateFieldParsers(
-    (parser as {
-      [fieldParsersKey]: ReadonlyArray<
-        readonly [string | symbol, Parser<Mode, unknown, unknown>]
-      >;
-    })[fieldParsersKey],
+    rawPairs,
   );
   const stateRecord = state != null && typeof state === "object"
     ? state as Record<PropertyKey, unknown>
     : {};
   const nodes = buildRuntimeNodesFromPairs(pairs, stateRecord, parentPath);
   await collectExplicitSourceValuesAsync(nodes, runtime);
-  collectSourcesFromState(state, runtime);
+  collectSourcesFromState(
+    state,
+    runtime,
+    new WeakSet<object>(),
+    duplicateFieldNames,
+  );
   await fillMissingSourceDefaultsAsync(nodes, runtime);
   for (const [field, childParser] of pairs) {
     await seedSuggestRuntimeFromFieldParsersAsync(

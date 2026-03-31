@@ -905,6 +905,7 @@ export function collectSourcesFromState(
   state: unknown,
   runtime: DependencyRuntimeContext,
   visited: WeakSet<object> = new WeakSet<object>(),
+  excludedFields?: ReadonlySet<PropertyKey>,
 ): void {
   if (state == null || typeof state !== "object") return;
   if (visited.has(state)) return;
@@ -941,6 +942,7 @@ export function collectSourcesFromState(
   // custom parser states that are class instances.
   if (typeof state === "object") {
     for (const key of Reflect.ownKeys(state as object)) {
+      if (excludedFields?.has(key)) continue;
       collectSourcesFromState(
         (state as Record<string | symbol, unknown>)[key],
         runtime,

@@ -11031,8 +11031,27 @@ describe("branch coverage: constructs.ts edge cases", () => {
     );
   });
 
-  it("concat() suggest does not pre-complete sync children", () => {
+  it("concat() suggest seeds sync dependency defaults without pre-complete", () => {
     let completeCalls = 0;
+    const sourceId = Symbol("concat-sync-suggest-source");
+    const firstChild = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly [string][],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: ["first"] as const };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", readonly [string], undefined>;
     const child = {
       $mode: "sync" as const,
       $valueType: [] as readonly [string][],
@@ -11049,25 +11068,76 @@ describe("branch coverage: constructs.ts edge cases", () => {
         completeCalls++;
         return { success: true as const, value: ["side-effect"] as const };
       },
-      suggest: function* () {
-        yield { kind: "literal" as const, text: "safe" };
+      suggest: function* (context: ParserContext<undefined>) {
+        if (
+          JSON.stringify(context.exec?.path) ===
+            JSON.stringify(["root", 1]) &&
+          context.dependencyRegistry?.has(sourceId)
+        ) {
+          yield { kind: "literal" as const, text: "safe" };
+        }
       },
       getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          extractSourceValue() {
+            return undefined;
+          },
+          getMissingSourceValue() {
+            return { success: true as const, value: "prod" };
+          },
+          preservesSourceValue: true,
+        },
+      },
     } as const satisfies Parser<"sync", readonly [string], undefined>;
-    const parser = concat(child);
+    const parser = concat(firstChild, child);
 
     const suggestions = [...parser.suggest({
       buffer: [],
       state: parser.initialState,
       optionsTerminated: false,
       usage: parser.usage,
+      exec: {
+        usage: parser.usage,
+        phase: "suggest",
+        path: ["root"],
+        trace: undefined,
+      },
     }, "")];
     assert.deepEqual(suggestions, [{ kind: "literal", text: "safe" }]);
     assert.equal(completeCalls, 0);
   });
 
-  it("concat() suggest does not pre-complete async children", async () => {
+  it("concat() suggest seeds async dependency defaults without pre-complete", async () => {
     let completeCalls = 0;
+    const sourceId = Symbol("concat-async-suggest-source");
+    const firstChild = {
+      $mode: "async" as const,
+      $valueType: [] as readonly [string][],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: ["first"] as const,
+        });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"async", readonly [string], undefined>;
     const child = {
       $mode: "async" as const,
       $valueType: [] as readonly [string][],
@@ -11091,12 +11161,34 @@ describe("branch coverage: constructs.ts edge cases", () => {
           value: ["side-effect"] as const,
         });
       },
-      suggest: async function* () {
-        yield { kind: "literal" as const, text: "safe" };
+      suggest: async function* (context: ParserContext<undefined>) {
+        if (
+          JSON.stringify(context.exec?.path) ===
+            JSON.stringify(["root", 1]) &&
+          context.dependencyRegistry?.has(sourceId)
+        ) {
+          yield { kind: "literal" as const, text: "safe" };
+        }
       },
       getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          extractSourceValue() {
+            return undefined;
+          },
+          getMissingSourceValue() {
+            return Promise.resolve({
+              success: true as const,
+              value: "prod",
+            });
+          },
+          preservesSourceValue: true,
+        },
+      },
     } as const satisfies Parser<"async", readonly [string], undefined>;
-    const parser = concat(child);
+    const parser = concat(firstChild, child);
 
     const suggestions: Suggestion[] = [];
     for await (
@@ -11105,6 +11197,12 @@ describe("branch coverage: constructs.ts edge cases", () => {
         state: parser.initialState,
         optionsTerminated: false,
         usage: parser.usage,
+        exec: {
+          usage: parser.usage,
+          phase: "suggest",
+          path: ["root"],
+          trace: undefined,
+        },
       }, "")
     ) {
       suggestions.push(suggestion);
@@ -11219,6 +11317,249 @@ describe("branch coverage: constructs.ts edge cases", () => {
         derived: "no-source",
       },
     });
+  });
+
+  it("merge() suggest ignores ambiguous duplicate source keys", async () => {
+    const sourceId = Symbol("merge-duplicate-source-suggest");
+    const syncSharedSource = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly (string | undefined)[],
+      $stateType: [] as readonly unknown[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<unknown>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete(state: unknown) {
+        return {
+          success: true as const,
+          value: typeof state === "object" && state !== null &&
+              "kind" in state && state.kind === "first"
+            ? "prod"
+            : undefined,
+        };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue(state: unknown) {
+            if (
+              typeof state === "object" && state !== null && "value" in state
+            ) {
+              return {
+                success: true as const,
+                value: (state as { readonly value: string }).value,
+              };
+            }
+            return undefined;
+          },
+        },
+      },
+    } as const satisfies Parser<"sync", string | undefined, unknown>;
+    const syncDerivedField = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: "complete" };
+      },
+      suggest: function* (context: ParserContext<undefined>) {
+        yield {
+          kind: "literal" as const,
+          text: context.dependencyRegistry?.has(sourceId)
+            ? "from-source"
+            : "no-source",
+        };
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, undefined>;
+    const syncUnrelatedShared = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly unknown[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<unknown>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: "other" };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, unknown>;
+    const syncParser = merge(
+      object({
+        shared: syncSharedSource,
+        derived: syncDerivedField,
+      }),
+      object({
+        shared: syncUnrelatedShared,
+      }),
+    );
+
+    assert.deepEqual(
+      [...syncParser.suggest({
+        buffer: [],
+        state: { shared: { value: "leaked" }, derived: undefined },
+        optionsTerminated: false,
+        usage: syncParser.usage,
+        exec: {
+          usage: syncParser.usage,
+          phase: "suggest",
+          path: [],
+          trace: undefined,
+        },
+      }, "")],
+      [{ kind: "literal", text: "no-source" }],
+    );
+
+    const asyncSharedSource = {
+      $mode: "async" as const,
+      $valueType: [] as readonly (string | undefined)[],
+      $stateType: [] as readonly unknown[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<unknown>) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete(state: unknown) {
+        return Promise.resolve({
+          success: true as const,
+          value: typeof state === "object" && state !== null &&
+              "kind" in state && state.kind === "first"
+            ? "prod"
+            : undefined,
+        });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue(state: unknown) {
+            if (
+              typeof state === "object" && state !== null && "value" in state
+            ) {
+              return Promise.resolve({
+                success: true as const,
+                value: (state as { readonly value: string }).value,
+              });
+            }
+            return Promise.resolve(undefined);
+          },
+        },
+      },
+    } as const satisfies Parser<"async", string | undefined, unknown>;
+    const asyncDerivedField = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "complete" });
+      },
+      suggest: async function* (context: ParserContext<undefined>) {
+        yield {
+          kind: "literal" as const,
+          text: context.dependencyRegistry?.has(sourceId)
+            ? "from-source"
+            : "no-source",
+        };
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"async", string, undefined>;
+    const asyncUnrelatedShared = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly unknown[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<unknown>) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "other" });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"async", string, unknown>;
+    const asyncParser = merge(
+      object({
+        shared: asyncSharedSource,
+        derived: asyncDerivedField,
+      }),
+      object({
+        shared: asyncUnrelatedShared,
+      }),
+    );
+
+    const asyncSuggestions: Suggestion[] = [];
+    for await (
+      const suggestion of asyncParser.suggest({
+        buffer: [],
+        state: { shared: { value: "leaked" }, derived: undefined },
+        optionsTerminated: false,
+        usage: asyncParser.usage,
+        exec: {
+          usage: asyncParser.usage,
+          phase: "suggest",
+          path: [],
+          trace: undefined,
+        },
+      }, "")
+    ) {
+      asyncSuggestions.push(suggestion);
+    }
+    assert.deepEqual(asyncSuggestions, [{
+      kind: "literal",
+      text: "no-source",
+    }]);
   });
 
   it("tuple() custom inspect covers unlabeled multi-parser format", () => {
