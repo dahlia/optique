@@ -1078,6 +1078,65 @@ describe("prompt()", () => {
       assert.ok(promptCalled, "Prompt should have been called");
       assert.equal(result.value, "prompted-value");
     });
+
+    it("preserves zero-consumption cliState in getSuggestRuntimeNodes", async () => {
+      const inner: Parser<"async", string, string> = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "initial",
+        parse(parseContext) {
+          return Promise.resolve({
+            success: true as const,
+            next: { ...parseContext, state: "cli-state" },
+            consumed: [],
+          });
+        },
+        complete() {
+          return Promise.resolve({
+            success: true as const,
+            value: "cli-state",
+          });
+        },
+        async *suggest() {},
+        getSuggestRuntimeNodes(state, path) {
+          return [{ path, parser: inner, state }];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      const wrapped = prompt(inner, {
+        type: "input",
+        message: "input?",
+      });
+
+      const parsed = await wrapped.parse({
+        buffer: [],
+        state: wrapped.initialState,
+        optionsTerminated: false,
+        usage: wrapped.usage,
+      });
+      assert.ok(parsed.success);
+      if (!parsed.success) return;
+
+      const nodes = wrapped.getSuggestRuntimeNodes?.(
+        parsed.next.state as Parameters<
+          NonNullable<typeof wrapped.getSuggestRuntimeNodes>
+        >[0],
+        ["prompt"],
+      );
+      assert.ok(nodes != null);
+      if (nodes == null) return;
+      assert.equal(nodes.length, 1);
+      assert.deepEqual(nodes[0]?.path, ["prompt"]);
+      assert.equal(nodes[0]?.parser, inner);
+      assert.equal(nodes[0]?.state, "cli-state");
+    });
   });
 
   describe("composition with non-CLI sources", () => {

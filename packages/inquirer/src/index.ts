@@ -954,12 +954,11 @@ export function prompt<M extends Mode, TValue, TState>(
         return [{ path, parser: promptedParser, state }];
       }
       const innerState = isPromptBindState(state)
-        ? (state.hasCliValue ? state.cliState as TState : parser.initialState)
+        ? (state.cliState === undefined
+          ? parser.initialState
+          : state.cliState as TState)
         : state;
-      return parser.getSuggestRuntimeNodes?.(innerState, path) ??
-        (parser.dependencyMetadata?.source != null
-          ? [{ path, parser, state: innerState }]
-          : []);
+      return parser.getSuggestRuntimeNodes?.(innerState, path) ?? [];
     },
     // Use the sentinel as initialState so complete() can detect the
     // completability-check call and deduplicate prompt execution.
@@ -1290,9 +1289,9 @@ export function prompt<M extends Mode, TValue, TState>(
 
     suggest: (context, prefix) => {
       const innerState = isPromptBindState(context.state)
-        ? (context.state.hasCliValue
-          ? (context.state.cliState as TState)
-          : parser.initialState)
+        ? (context.state.cliState === undefined
+          ? parser.initialState
+          : context.state.cliState as TState)
         : context.state;
       const innerContext = innerState !== context.state
         ? { ...context, state: innerState }

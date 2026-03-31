@@ -733,12 +733,11 @@ export function bindConfig<
         return [{ path, parser: boundParser, state }];
       }
       const innerState = isConfigBindState(state)
-        ? (state.hasCliValue ? state.cliState as TState : parser.initialState)
+        ? (state.cliState === undefined
+          ? parser.initialState
+          : state.cliState as TState)
         : state;
-      return parser.getSuggestRuntimeNodes?.(innerState, path) ??
-        (parser.dependencyMetadata?.source != null
-          ? [{ path, parser, state: innerState }]
-          : []);
+      return parser.getSuggestRuntimeNodes?.(innerState, path) ?? [];
     },
 
     parse: (context) => {
