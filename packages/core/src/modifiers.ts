@@ -48,6 +48,8 @@ function mergeChildExec(
     dependencyRegistry: child.dependencyRegistry ?? parent.dependencyRegistry,
     preCompletedByParser: child.preCompletedByParser ??
       parent.preCompletedByParser,
+    excludedSourceFields: child.excludedSourceFields ??
+      parent.excludedSourceFields,
   };
 }
 
