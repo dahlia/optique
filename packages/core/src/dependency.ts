@@ -57,7 +57,6 @@ export const defaultValues: unique symbol = Symbol.for(
  * this symbol is only read by the dependency-metadata bridge so that
  * single-source defaults are accessible without double evaluation.
  * @internal
- * @since 1.0.0
  */
 export const singleDefaultValue: unique symbol = Symbol.for(
   "@optique/core/dependency/singleDefaultValue",
@@ -68,7 +67,6 @@ export const singleDefaultValue: unique symbol = Symbol.for(
  * a parse result produced by a derived parser's default path.
  *
  * @internal
- * @since 1.0.0
  */
 export const defaultDependencyValueSnapshot: unique symbol = Symbol.for(
   "@optique/core/dependency/defaultDependencyValueSnapshot",
@@ -496,7 +494,6 @@ export interface DerivedValueParser<
    * Read by the dependency-metadata bridge; not consumed by
    * `createDeferredParseState()`.
    * @internal
-   * @since 1.0.0
    */
   readonly [singleDefaultValue]?: () => S;
 
@@ -828,7 +825,6 @@ function normalizeWithDerivedParser<T>(
  * @param values The dependency values used for the default-path parse.
  * @returns A cloned parse result with an internal snapshot attached.
  * @internal
- * @since 1.0.0
  */
 export function snapshotDefaultDependencyValues<T>(
   result: ValueParserResult<T>,
@@ -852,7 +848,6 @@ export function snapshotDefaultDependencyValues<T>(
  * @param result The parse result to inspect.
  * @returns The snapshotted dependency values, if present.
  * @internal
- * @since 1.0.0
  */
 export function getSnapshottedDefaultDependencyValues<T>(
   result: ValueParserResult<T>,
