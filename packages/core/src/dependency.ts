@@ -826,7 +826,7 @@ function normalizeWithDerivedParser<T>(
  *
  * @param result The parse result to annotate.
  * @param values The dependency values used for the default-path parse.
- * @returns The same parse result with an internal snapshot attached.
+ * @returns A cloned parse result with an internal snapshot attached.
  * @internal
  * @since 1.0.0
  */
@@ -834,12 +834,16 @@ export function snapshotDefaultDependencyValues<T>(
   result: ValueParserResult<T>,
   values: readonly unknown[],
 ): ValueParserResult<T> {
-  Object.defineProperty(result, defaultDependencyValueSnapshot, {
+  const annotated = Object.create(
+    Object.getPrototypeOf(result),
+    Object.getOwnPropertyDescriptors(result),
+  ) as ValueParserResult<T>;
+  Object.defineProperty(annotated, defaultDependencyValueSnapshot, {
     value: [...values],
     configurable: true,
     enumerable: false,
   });
-  return result;
+  return annotated;
 }
 
 /**

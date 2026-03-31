@@ -12,10 +12,12 @@ import {
   deriveFromAsync,
   deriveFromSync,
   formatDependencyError,
+  getSnapshottedDefaultDependencyValues,
   isDeferredParseState,
   isDependencySource,
   isDerivedValueParser,
   parseWithDependency,
+  snapshotDefaultDependencyValues,
   suggestWithDependency,
 } from "./dependency.ts";
 import { message } from "./message.ts";
@@ -556,6 +558,23 @@ describe("DeferredParseState", () => {
     if (deferred.preliminaryResult.success) {
       assert.equal(deferred.preliminaryResult.value, "test-input");
     }
+  });
+});
+
+describe("snapshotDefaultDependencyValues", () => {
+  test("clones the result before attaching the snapshot", () => {
+    const result = Object.freeze({
+      success: true as const,
+      value: "prod",
+    });
+
+    const snapshotted = snapshotDefaultDependencyValues(result, ["dev"]);
+
+    assert.notEqual(snapshotted, result);
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(snapshotted), [
+      "dev",
+    ]);
+    assert.equal(getSnapshottedDefaultDependencyValues(result), undefined);
   });
 });
 

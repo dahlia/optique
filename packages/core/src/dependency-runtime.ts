@@ -513,7 +513,13 @@ export function collectExplicitSourceValues(
     if (meta.source.extractSourceValue == null) continue;
 
     const result = meta.source.extractSourceValue(node.state);
-    if (result instanceof Promise) continue;
+    if (result instanceof Promise) {
+      throw new TypeError(
+        `collectExplicitSourceValues() received an async extractSourceValue() result for ${
+          String(meta.source.sourceId)
+        }. Use collectExplicitSourceValuesAsync() instead.`,
+      );
+    }
     registerExplicitSourceValue(meta.source.sourceId, result, runtime);
   }
 }

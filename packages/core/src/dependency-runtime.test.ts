@@ -11,6 +11,7 @@ import {
   buildRuntimeNodesFromPairs,
   collectExplicitSourceValues,
   collectExplicitSourceValuesAsync,
+  collectSourcesFromState,
   createDependencyFingerprint,
   createDependencyRuntimeContext,
   createReplayKey,
@@ -353,8 +354,10 @@ describe("collectExplicitSourceValues", () => {
       state: sourceState,
     }];
 
-    collectExplicitSourceValues(nodes, runtime);
-    assert.ok(!runtime.hasSource(sourceId));
+    assert.throws(
+      () => collectExplicitSourceValues(nodes, runtime),
+      /collectExplicitSourceValues\(\).*extractSourceValue.*Symbol\(env\)/,
+    );
 
     const pending = collectExplicitSourceValuesAsync(nodes, runtime);
     assert.ok(!runtime.hasSource(sourceId));
@@ -458,6 +461,36 @@ describe("collectExplicitSourceValues — failed sources", () => {
     });
     // Failed source blocks default fallback — resolution stays unresolved.
     assert.notEqual(resolution.kind, "resolved");
+  });
+});
+
+describe("collectSourcesFromState", () => {
+  test("only applies excluded fields at the current object depth", () => {
+    const runtime = createDependencyRuntimeContext();
+    const topSourceId = Symbol("top");
+    const nestedSourceId = Symbol("nested");
+    const state = {
+      shared: createDependencySourceState(
+        { success: true as const, value: "top" },
+        topSourceId,
+      ),
+      nested: {
+        shared: createDependencySourceState(
+          { success: true as const, value: "nested" },
+          nestedSourceId,
+        ),
+      },
+    };
+
+    collectSourcesFromState(
+      state,
+      runtime,
+      new WeakSet<object>(),
+      new Set<PropertyKey>(["shared"]),
+    );
+
+    assert.ok(!runtime.hasSource(topSourceId));
+    assert.equal(runtime.getSource(nestedSourceId), "nested");
   });
 });
 
