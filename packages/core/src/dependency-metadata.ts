@@ -254,7 +254,7 @@ function extractFromBareState(
   if (
     state != null &&
     typeof state === "object" &&
-    "success" in state &&
+    Object.hasOwn(state, "success") &&
     typeof (state as { success?: unknown }).success === "boolean"
   ) {
     return state as ValueParserResult<unknown>;

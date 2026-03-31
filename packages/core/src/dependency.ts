@@ -1796,10 +1796,10 @@ export function getDependencyIds<M extends Mode, T, S>(
 export function getDefaultValuesFunction<M extends Mode, T, S>(
   parser: DerivedValueParser<M, T, S>,
 ): (() => readonly unknown[]) | undefined {
-  if (defaultValues in parser) {
+  if (Object.hasOwn(parser, defaultValues)) {
     return parser[defaultValues];
   }
-  if (singleDefaultValue in parser) {
+  if (Object.hasOwn(parser, singleDefaultValue)) {
     const single = parser[singleDefaultValue];
     return single == null ? undefined : () => [single()];
   }
@@ -1830,7 +1830,7 @@ export function createDeferredParseState<T, S>(
     : undefined;
 
   // Get the default values if available
-  const defaultValuesFn = defaultValues in parser
+  const defaultValuesFn = Object.hasOwn(parser, defaultValues)
     ? (parser as unknown as { [defaultValues]: () => readonly unknown[] })[
       defaultValues
     ]
