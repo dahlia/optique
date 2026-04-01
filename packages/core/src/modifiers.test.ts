@@ -3894,6 +3894,168 @@ describe("multiple", () => {
     });
   });
 
+  it("should not reopen a sync slot after a consumed extension failure", () => {
+    type ItemState =
+      | { readonly first: string }
+      | ValueParserResult<string>
+      | undefined;
+    const itemParser = {
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<ItemState>) {
+        if (context.state == null) {
+          return {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: { first: context.buffer[0]! },
+            },
+            consumed: [context.buffer[0]!],
+          };
+        }
+        if (!("success" in context.state) && context.buffer[0] === "ok") {
+          return {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: {
+                success: true as const,
+                value: `${context.state.first}:ok`,
+              },
+            },
+            consumed: [context.buffer[0]!],
+          };
+        }
+        return {
+          success: false as const,
+          consumed: 1,
+          error: message`Expected closing token.`,
+        };
+      },
+      complete(state: ItemState) {
+        if (state != null && typeof state === "object" && "success" in state) {
+          return state;
+        }
+        return {
+          success: false as const,
+          error: message`Expected closing token.`,
+        };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, ItemState>;
+    const parser = multiple(itemParser);
+
+    const first = parser.parse({
+      buffer: ["start"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const second = parser.parse({
+      buffer: ["bad"],
+      state: first.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(!second.success);
+    if (second.success) return;
+    assert.equal(second.consumed, 1);
+    assert.deepEqual(second.error, message`Expected closing token.`);
+  });
+
+  it("should not reopen an async slot after a consumed extension failure", async () => {
+    type ItemState =
+      | { readonly first: string }
+      | ValueParserResult<string>
+      | undefined;
+    const itemParser = {
+      $mode: "async" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<ItemState>) {
+        if (context.state == null) {
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: { first: context.buffer[0]! },
+            },
+            consumed: [context.buffer[0]!],
+          });
+        }
+        if (!("success" in context.state) && context.buffer[0] === "ok") {
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: {
+                success: true as const,
+                value: `${context.state.first}:ok`,
+              },
+            },
+            consumed: [context.buffer[0]!],
+          });
+        }
+        return Promise.resolve({
+          success: false as const,
+          consumed: 1,
+          error: message`Expected closing token.`,
+        });
+      },
+      complete(state: ItemState) {
+        if (state != null && typeof state === "object" && "success" in state) {
+          return Promise.resolve(state);
+        }
+        return Promise.resolve({
+          success: false as const,
+          error: message`Expected closing token.`,
+        });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"async", string, ItemState>;
+    const parser = multiple(itemParser);
+
+    const first = await parser.parse({
+      buffer: ["start"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const second = await parser.parse({
+      buffer: ["bad"],
+      state: first.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(!second.success);
+    if (second.success) return;
+    assert.equal(second.consumed, 1);
+    assert.deepEqual(second.error, message`Expected closing token.`);
+  });
+
   describe("getDocFragments", () => {
     it("should delegate to wrapped parser", () => {
       const baseParser = option("-l", "--locale", string());

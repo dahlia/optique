@@ -77,12 +77,20 @@ function withChildContext<TState>(
 }
 
 function isTerminalMultipleItemState(state: unknown): boolean {
-  const unwrapped = isInjectedAnnotationWrapper(state)
-    ? unwrapInjectedAnnotationWrapper(state)
-    : state;
-  return unwrapped != null && typeof unwrapped === "object" &&
-    Object.hasOwn(unwrapped, "success") &&
-    typeof (unwrapped as { success?: unknown }).success === "boolean";
+  let unwrapped = state;
+  while (true) {
+    if (isInjectedAnnotationWrapper(unwrapped)) {
+      unwrapped = unwrapInjectedAnnotationWrapper(unwrapped);
+      continue;
+    }
+    if (Array.isArray(unwrapped) && unwrapped.length === 1) {
+      unwrapped = unwrapped[0];
+      continue;
+    }
+    return unwrapped != null && typeof unwrapped === "object" &&
+      Object.hasOwn(unwrapped, "success") &&
+      typeof (unwrapped as { success?: unknown }).success === "boolean";
+  }
 }
 
 function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
@@ -1290,7 +1298,7 @@ export function multiple<M extends Mode, TValue, TState>(
       ),
     );
     if (!result.success) {
-      if (!added) {
+      if (!added && result.consumed === 0) {
         const nextInitialState = inheritAnnotations(
           context.state,
           syncParser.initialState,
@@ -1377,7 +1385,7 @@ export function multiple<M extends Mode, TValue, TState>(
       ),
     );
     if (!result.success) {
-      if (!added) {
+      if (!added && result.consumed === 0) {
         const nextInitialState = inheritAnnotations(
           context.state,
           parser.initialState,
