@@ -100,11 +100,13 @@ function toAsyncParser<TValue, TState>(
   return {
     ...parser,
     $mode: "async",
-    parse(context: ParserContext<TState>) {
-      return Promise.resolve(parser.parse(context));
+    // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
+    async parse(context: ParserContext<TState>) {
+      return parser.parse(context);
     },
-    complete(state: TState, exec?: ExecutionContext) {
-      return Promise.resolve(parser.complete(state, exec));
+    // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
+    async complete(state: TState, exec?: ExecutionContext) {
+      return parser.complete(state, exec);
     },
     async *suggest(context: ParserContext<TState>, prefix: string) {
       for (const suggestion of parser.suggest(context, prefix)) {
@@ -112,6 +114,18 @@ function toAsyncParser<TValue, TState>(
       }
     },
   };
+}
+
+function describeDuplicateSourceState(
+  context: ParserContext<unknown>,
+  sourceId: symbol,
+): "from-source" | "missing-source" | "failed-source" {
+  if (context.exec?.dependencyRuntime?.isSourceFailed(sourceId)) {
+    return "failed-source";
+  }
+  return context.dependencyRegistry?.has(sourceId)
+    ? "from-source"
+    : "missing-source";
 }
 
 describe("or", () => {
@@ -11805,9 +11819,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       suggest: function* (context: ParserContext<undefined>) {
         yield {
           kind: "literal" as const,
-          text: context.dependencyRegistry?.has(sourceId)
-            ? "from-source"
-            : "no-source",
+          text: describeDuplicateSourceState(context, sourceId),
         };
       },
       getDocFragments: () => ({ fragments: [] }),
@@ -11853,7 +11865,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
           trace: undefined,
         },
       }, "")],
-      [{ kind: "literal", text: "no-source" }],
+      [{ kind: "literal", text: "missing-source" }],
     );
 
     const asyncSharedSource = {
@@ -11924,9 +11936,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       suggest: async function* (context: ParserContext<undefined>) {
         yield {
           kind: "literal" as const,
-          text: context.dependencyRegistry?.has(sourceId)
-            ? "from-source"
-            : "no-source",
+          text: describeDuplicateSourceState(context, sourceId),
         };
       },
       getDocFragments: () => ({ fragments: [] }),
@@ -11982,7 +11992,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     }
     assert.deepEqual(asyncSuggestions, [{
       kind: "literal",
-      text: "no-source",
+      text: "missing-source",
     }]);
   });
 
