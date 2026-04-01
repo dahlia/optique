@@ -490,7 +490,7 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = concat(
-      multiple(option("--env", env)),
+      tuple([multiple(option("--env", env))]),
       tuple([option("--log", log)]),
     );
     const suggestions = suggestSync(parser, ["--env", "prod", "--log", ""]);
@@ -505,7 +505,7 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     const env = createEnvSource();
     const log = createAsyncDerivedLogLevel(env);
     const parser = concat(
-      multiple(option("--env", env)),
+      tuple([multiple(option("--env", env))]),
       tuple([option("--log", log)]),
     );
     const suggestions = await suggestAsync(parser, [

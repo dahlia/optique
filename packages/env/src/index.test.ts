@@ -10,7 +10,7 @@ import { message } from "@optique/core/message";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Parser } from "@optique/core/parser";
 import { parse, suggestAsync, suggestSync } from "@optique/core/parser";
-import { map, optional } from "@optique/core/modifiers";
+import { map, multiple, optional } from "@optique/core/modifiers";
 import { fail, flag, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import {
@@ -1097,6 +1097,54 @@ describe("bindEnv()", () => {
     assert.deepEqual(nodes[0]?.path, ["name"]);
     assert.equal(nodes[0]?.parser, inner);
     assert.equal(nodes[0]?.state, "cli-state");
+  });
+
+  it("bindEnv getSuggestRuntimeNodes preserves inner nodes for source parsers", () => {
+    const context = createEnvContext({ source: () => undefined });
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const inner = multiple(option("--mode", mode));
+    const modeListParser: ValueParser<"sync", readonly ("dev" | "prod")[]> = {
+      $mode: "sync",
+      metavar: "MODE",
+      placeholder: ["dev"],
+      parse(input) {
+        if (input === "dev" || input === "prod") {
+          return { success: true as const, value: [input] as const };
+        }
+        return { success: false as const, error: message`Invalid mode.` };
+      },
+      format(value) {
+        return value.join(",");
+      },
+    };
+    const parser = bindEnv(inner, {
+      context,
+      key: "MODE",
+      parser: modeListParser,
+    });
+
+    const parsed = parser.parse({
+      buffer: ["--mode", "prod"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const nodes = parser.getSuggestRuntimeNodes?.(parsed.next.state, ["mode"]);
+    assert.ok(nodes != null);
+    if (nodes == null) return;
+
+    assert.equal(nodes[0]?.parser, parser);
+    assert.deepEqual(nodes[0]?.path, ["mode"]);
+    assert.equal(nodes[0]?.state, parsed.next.state);
+    assert.ok(nodes.some((node) => node.parser === inner));
+    assert.ok(
+      nodes.some((node) =>
+        JSON.stringify(node.path) === JSON.stringify(["mode", 0])
+      ),
+    );
   });
 
   it("returns a Promise from complete() in async mode for env path", async () => {
