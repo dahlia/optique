@@ -1549,6 +1549,14 @@ export function multiple<M extends Mode, TValue, TState>(
       const currentItemState = context.state.at(-1);
       const canExtendCurrent = currentItemState != null &&
         !isTerminalMultipleItemState(currentItemState);
+      const canOpenNew = context.state.length < max;
+      if (!canExtendCurrent && !canOpenNew) {
+        return dispatchIterableByMode(
+          parser.$mode,
+          function* () {},
+          async function* () {},
+        );
+      }
       const itemIndex = canExtendCurrent
         ? context.state.length - 1
         : context.state.length;

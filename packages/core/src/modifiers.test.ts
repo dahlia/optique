@@ -4867,6 +4867,26 @@ describe("branch coverage: modifiers edge cases", () => {
     assert.ok(suggestions.some((s) => s.kind === "file"));
   });
 
+  it("multiple: suggest does not open a new slot after reaching max", () => {
+    const parser = multiple(argument(choice(["one", "two"] as const)), {
+      max: 1,
+    });
+    const parsed = parser.parse({
+      buffer: ["one"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const suggestions = [
+      ...parser.suggest(parsed.next, "") as Iterable<Suggestion>,
+    ];
+
+    assert.deepEqual(suggestions, []);
+  });
+
   // Line 155/442: async optional/withDefault suggestAsync — state is undefined
   // (not an array), so the else branch uses syncParser.initialState.
   it("optional: async suggest with undefined state uses initialState", async () => {
