@@ -2214,7 +2214,7 @@ describe("map", () => {
             createPromiseLike({
               success: true as const,
               value: "debug",
-            }) as never,
+            }),
         },
       },
       configurable: true,
@@ -5181,6 +5181,11 @@ describe("branch coverage: modifiers edge cases", () => {
 
   // Line 1012: multiple() suggest — shouldInclude returns true for non-literal
   // suggestion kind (e.g., "file" or "directory" kinds pass through always).
+  function coerceRuntimeSuggestState<TState>(state: unknown): TState {
+    // @ts-expect-error: intentionally exercise runtime-only state shapes.
+    return state;
+  }
+
   it("multiple: suggest passes through non-literal suggestions", () => {
     const fileValueParser: ValueParser<"sync", string> = {
       $mode: "sync",
@@ -5338,14 +5343,13 @@ describe("branch coverage: modifiers edge cases", () => {
     >;
     const parser = optional(inner);
 
-    const suggestions = [...parser.suggest({
+    const suggestContext: Parameters<typeof parser.suggest>[0] = {
       buffer: [],
-      state: {
-        value: "live",
-      } as unknown as Parameters<typeof parser.suggest>[0]["state"],
+      state: coerceRuntimeSuggestState({ value: "live" }),
       optionsTerminated: false,
       usage: parser.usage,
-    }, "")];
+    };
+    const suggestions = [...parser.suggest(suggestContext, "")];
 
     assert.deepEqual(suggestions, [{ kind: "literal", text: "live" }]);
   });
@@ -5380,14 +5384,13 @@ describe("branch coverage: modifiers edge cases", () => {
     >;
     const parser = withDefault(inner, "initial" as const);
 
-    const suggestions = [...parser.suggest({
+    const suggestContext: Parameters<typeof parser.suggest>[0] = {
       buffer: [],
-      state: {
-        value: "live",
-      } as unknown as Parameters<typeof parser.suggest>[0]["state"],
+      state: coerceRuntimeSuggestState({ value: "live" }),
       optionsTerminated: false,
       usage: parser.usage,
-    }, "")];
+    };
+    const suggestions = [...parser.suggest(suggestContext, "")];
 
     assert.deepEqual(suggestions, [{ kind: "literal", text: "live" }]);
   });

@@ -55,6 +55,7 @@ function stableSymbolKey(sym: symbol): string {
 /**
  * The origin of a dependency source value.
  *
+ * @throws Propagates errors thrown or rejected by `extractSourceValue()`.
  * @internal
  * @since 1.0.0
  */

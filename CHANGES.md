@@ -21,7 +21,8 @@ To be released.
     filling, and derived-parser replay.  Dependency-aware replay now reads
     raw user input from a shared `InputTrace` instead of relying on the old
     dependency-state wrapper protocol.  The runtime is shared across nested
-    constructs via `ExecutionContext.dependencyRuntime`.  User-facing
+    constructs via `ExecutionContext.dependencyRuntime`.  Aside from the
+    `withDefault()` after `map()` fallback change noted below, user-facing
     behavior is unchanged.  [[#750], [#753], [#755], [#761], [#765]]
 
  -  Top-level `parseSync()` and `parseAsync()` now create a

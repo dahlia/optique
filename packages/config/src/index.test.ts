@@ -640,7 +640,7 @@ describe("bindConfig", () => {
     });
     const leafParse = leaf.parse({
       buffer: [],
-      state: injectAnnotations(undefined, annotations),
+      state: injectAnnotations(leaf.initialState, annotations),
       optionsTerminated: false,
       usage: leaf.usage,
     });
@@ -677,7 +677,7 @@ describe("bindConfig", () => {
     });
     const leafParse = leaf.parse({
       buffer: [],
-      state: injectAnnotations(undefined, annotations),
+      state: injectAnnotations(leaf.initialState, annotations),
       optionsTerminated: false,
       usage: leaf.usage,
     });
