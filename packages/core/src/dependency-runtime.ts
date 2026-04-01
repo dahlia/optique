@@ -294,6 +294,15 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
   }
 }
 
+/**
+ * Registry wrapper that hides values for sources that have failed.
+ *
+ * The wrapper lets clones share an underlying registry while maintaining
+ * an isolated failed-source view, so later lookups do not reuse stale
+ * values after extraction errors.
+ *
+ * @internal
+ */
 class FailedAwareRegistry implements DependencyRegistryLike {
   readonly #inner: DependencyRegistryLike;
   readonly #failedSources: Set<symbol>;

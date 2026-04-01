@@ -304,7 +304,6 @@ export function bindEnv<
     usage: options.default !== undefined
       ? [{ type: "optional", terms: parser.usage }]
       : parser.usage,
-    [Symbol.for("@optique/core/inheritParentAnnotations")]: true,
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
@@ -417,6 +416,10 @@ export function bindEnv<
       return parser.getDocFragments(state, defaultValue);
     },
   };
+  Object.defineProperty(boundParser, inheritParentAnnotationsKey, {
+    value: true,
+    configurable: true,
+  });
   // Lazily forward placeholder from inner parser to avoid eagerly
   // evaluating derived value parser factories at construction time.
   if ("placeholder" in parser) {

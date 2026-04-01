@@ -196,7 +196,6 @@ export interface Parser<
    * Phase 1.
    *
    * @internal
-   * @since 1.0.0
    */
   readonly [unmatchedNonCliDependencySourceStateMarker]?: true;
 
@@ -321,7 +320,6 @@ export interface Parser<
    * capabilities.  Used by the dependency runtime to resolve dependencies
    * without relying on state-shape protocols.
    * @internal
-   * @since 1.0.0
    */
   readonly dependencyMetadata?: ParserDependencyMetadata;
 
@@ -337,7 +335,6 @@ export interface Parser<
    * @param path The path to this parser within the parse tree.
    * @returns Runtime nodes to seed into the suggestion-time dependency runtime.
    * @internal
-   * @since 1.0.0
    */
   getSuggestRuntimeNodes?(
     state: TState,
@@ -415,7 +412,6 @@ export interface ExecutionContext {
    * dependency values.
    *
    * @internal
-   * @since 1.0.0
    */
   readonly trace?: InputTrace;
 
@@ -430,7 +426,6 @@ export interface ExecutionContext {
    * The dependency runtime context for dependency resolution.
    * Coexists with `dependencyRegistry` during the transition period.
    * @internal
-   * @since 1.0.0
    */
   readonly dependencyRuntime?: DependencyRuntimeContext;
 
@@ -450,7 +445,6 @@ export interface ExecutionContext {
    *
    * @see https://github.com/dahlia/optique/issues/762
    * @internal
-   * @since 1.0.0
    */
   readonly preCompletedByParser?: ReadonlyMap<string | symbol, unknown>;
 
@@ -478,7 +472,6 @@ export interface ExecutionContext {
  * prompted values are not yet registered as dependency sources.
  *
  * @internal
- * @since 1.0.0
  */
 export const unmatchedNonCliDependencySourceStateMarker: unique symbol = Symbol
   .for(
