@@ -873,15 +873,16 @@ export function bindConfig<
                 state.cliState,
               );
             }
+            const fallbackState = state.cliState ?? state;
             if (!sourceMetadata.preservesSourceValue) {
               return sourceMetadata.extractSourceValue(
-                state.cliState,
+                fallbackState,
               );
             }
             return getConfigSourceValue(
               state,
               options,
-              state.cliState,
+              fallbackState,
               sourceMetadata.extractSourceValue,
             );
           },
@@ -985,7 +986,8 @@ function getConfigSourceValue<T, TValue, TConfigMeta>(
   const configData = annotationValue?.data ?? getActiveConfig<T>(contextId);
 
   if (configData !== undefined && configData !== null) {
-    return getConfigOrDefault(state, options);
+    const resolved = getConfigOrDefault(state, options);
+    if (resolved.success) return resolved;
   }
   if (options.default !== undefined) {
     return { success: true as const, value: options.default };

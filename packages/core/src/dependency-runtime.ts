@@ -243,6 +243,9 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
   readonly #failedSources = new Set<symbol>();
 
   constructor(registry: DependencyRegistryLike) {
+    if (registry instanceof FailedAwareRegistry) {
+      registry.copyFailedSources(this.#failedSources);
+    }
     this.registry = new FailedAwareRegistry(registry, this.#failedSources);
   }
 
@@ -305,11 +308,19 @@ class FailedAwareRegistry implements DependencyRegistryLike {
   }
 
   get<T>(id: symbol): T | undefined {
+    if (this.#failedSources.has(id)) return undefined;
     return this.#inner.get(id);
   }
 
   has(id: symbol): boolean {
+    if (this.#failedSources.has(id)) return false;
     return this.#inner.has(id);
+  }
+
+  copyFailedSources(target: Set<symbol>): void {
+    for (const sourceId of this.#failedSources) {
+      target.add(sourceId);
+    }
   }
 
   clone(): DependencyRegistryLike {
@@ -531,6 +542,9 @@ export function createReplayKey(
  *
  * @param nodes The runtime nodes to inspect.
  * @param runtime The dependency runtime context.
+ * @throws {TypeError} If `extractSourceValue()` returns a promise-like result.
+ *         Use {@link collectExplicitSourceValuesAsync} when async source
+ *         extraction is expected.
  * @internal
  * @since 1.0.0
  */
@@ -582,7 +596,8 @@ function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
 
 /**
  * Async version of {@link collectExplicitSourceValues}.
- * Awaits async `extractSourceValue` results.
+ * Awaits async `extractSourceValue` results instead of rejecting
+ * promise-like values as the synchronous variant does.
  *
  * @param nodes The runtime nodes to inspect.
  * @param runtime The dependency runtime context.

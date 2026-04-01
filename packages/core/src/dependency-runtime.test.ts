@@ -153,6 +153,25 @@ describe("DependencyRuntimeContext", () => {
     assert.ok(runtime.hasSource(id));
     assert.equal(runtime.getSource(id), "prod");
   });
+
+  test("preserves failed sources when wrapping a cloned registry", () => {
+    const sourceId = Symbol("env");
+    const runtime = createDependencyRuntimeContext();
+    runtime.registerSource(sourceId, "prod", "cli");
+    runtime.markSourceFailed(sourceId);
+
+    const cloned = createDependencyRuntimeContext(runtime.registry.clone());
+    assert.ok(!cloned.hasSource(sourceId));
+    assert.equal(cloned.getSource(sourceId), undefined);
+    assert.ok(cloned.isSourceFailed(sourceId));
+    assert.notEqual(
+      cloned.resolveDependencies({
+        dependencyIds: [sourceId],
+        defaultValues: ["dev"],
+      }).kind,
+      "resolved",
+    );
+  });
 });
 
 // =============================================================================
@@ -544,8 +563,8 @@ describe("collectExplicitSourceValues — failed sources", () => {
 
     collectExplicitSourceValues(nodes, runtime);
 
-    assert.ok(runtime.hasSource(sourceId));
-    assert.equal(runtime.getSource(sourceId), "prod");
+    assert.ok(!runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), undefined);
     assert.ok(runtime.isSourceFailed(sourceId));
     assert.notEqual(
       runtime.resolveDependencies({

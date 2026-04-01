@@ -2154,6 +2154,84 @@ describe("bindConfig() with dependency sources", () => {
     );
   });
 
+  test("preserves nested bindConfig() source extraction from raw bind state", () => {
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(
+      map(
+        bindConfig(option("--mode", mode), {
+          context,
+          key: "mode",
+        }),
+        (value) => value.toUpperCase(),
+      ),
+      {
+        context,
+        key: "mode",
+      },
+    );
+    const state = injectAnnotations(parser.initialState, {
+      [context.id]: { data: { mode: "prod" as const } },
+    });
+
+    assert.deepEqual(
+      parser.dependencyMetadata?.source?.extractSourceValue(state),
+      { success: true, value: "prod" },
+    );
+  });
+
+  test("preserves nested bindEnv() source extraction from raw bind state", () => {
+    const context = createConfigContext({ schema });
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source(key) {
+        return ({ APP_MODE: "prod" } as const)[key as "APP_MODE"];
+      },
+    });
+    const envAnnotations = envContext.getAnnotations();
+    if (envAnnotations instanceof Promise) {
+      throw new TypeError("Expected synchronous env annotations.");
+    }
+    const parser = bindConfig(
+      map(
+        bindEnv(option("--mode", mode), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+        (value) => value.toUpperCase(),
+      ),
+      {
+        context,
+        key: "mode",
+      },
+    );
+    const state = injectAnnotations(parser.initialState, envAnnotations);
+
+    assert.deepEqual(
+      parser.dependencyMetadata?.source?.extractSourceValue(state),
+      { success: true, value: "prod" },
+    );
+  });
+
+  test("treats a missing config key as an absent source", () => {
+    const optionalSchema = z.object({
+      mode: z.enum(["dev", "prod"]).optional(),
+    });
+    const context = createConfigContext({ schema: optionalSchema });
+    const parser = bindConfig(option("--mode", mode), {
+      context,
+      key: "mode",
+    });
+    const state = injectAnnotations(parser.initialState, {
+      [context.id]: { data: {} },
+    });
+
+    assert.equal(
+      parser.dependencyMetadata?.source?.extractSourceValue(state),
+      undefined,
+    );
+  });
+
   test("propagates config value as dependency to derived parser (suggest)", () => {
     const { parser, annotations } = createParser({ mode: "prod" });
     const suggestions = suggestSync(parser, ["--level", "s"], { annotations });
