@@ -6935,13 +6935,21 @@ export function merge(
               parserState as Parameters<typeof parser.suggest>[0]["state"],
             );
             const excludedSourceFields = perChildExcludedSourceFields[i];
-            const contextForChild = excludedSourceFields == null ||
-                childContext.exec == null
+            const contextForChild = excludedSourceFields == null
               ? childContext
-              : {
-                ...childContext,
-                exec: { ...childContext.exec, excludedSourceFields },
-              };
+              : (() => {
+                const childRuntime = createDependencyRuntimeContext(
+                  runtime.registry.clone(),
+                );
+                return {
+                  ...childContext,
+                  dependencyRegistry: childRuntime.registry,
+                  exec: childContext.exec == null ? childContext.exec : {
+                    ...childContext.exec,
+                    dependencyRegistry: childRuntime.registry,
+                  },
+                };
+              })();
 
             const parserSuggestions = parser.suggest(
               contextForChild,
@@ -7027,13 +7035,21 @@ export function merge(
             parserState as Parameters<typeof parser.suggest>[0]["state"],
           );
           const excludedSourceFields = perChildExcludedSourceFields[i];
-          const contextForChild = excludedSourceFields == null ||
-              childContext.exec == null
+          const contextForChild = excludedSourceFields == null
             ? childContext
-            : {
-              ...childContext,
-              exec: { ...childContext.exec, excludedSourceFields },
-            };
+            : (() => {
+              const childRuntime = createDependencyRuntimeContext(
+                runtime.registry.clone(),
+              );
+              return {
+                ...childContext,
+                dependencyRegistry: childRuntime.registry,
+                exec: childContext.exec == null ? childContext.exec : {
+                  ...childContext.exec,
+                  dependencyRegistry: childRuntime.registry,
+                },
+              };
+            })();
 
           const parserSuggestions = parser.suggest(
             contextForChild,
