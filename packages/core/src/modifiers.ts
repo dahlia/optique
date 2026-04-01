@@ -1103,7 +1103,7 @@ export function map<M extends Mode, T, U, TState>(
             depValues: readonly unknown[],
           ) => {
             const result = innerReplay(rawInput, depValues);
-            return result instanceof Promise
+            return isPromiseLike(result)
               ? result.then(applyMappedReplay)
               : applyMappedReplay(result);
           },

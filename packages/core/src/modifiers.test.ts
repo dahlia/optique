@@ -2201,6 +2201,32 @@ describe("map", () => {
       assert.equal(result.value, "ecila"); // "ALICE" -> "alice" -> "ecila"
     }
   });
+
+  it("should map thenable replay results for derived metadata", async () => {
+    const sourceId = Symbol("mode");
+    const baseParser = option("--level", string());
+    Object.defineProperty(baseParser, "dependencyMetadata", {
+      value: {
+        derived: {
+          kind: "derived" as const,
+          dependencyIds: [sourceId],
+          replayParse: () =>
+            createPromiseLike({
+              success: true as const,
+              value: "debug",
+            }) as never,
+        },
+      },
+      configurable: true,
+    });
+
+    const mappedParser = map(baseParser, (value) => value.toUpperCase());
+    const replayParse = mappedParser.dependencyMetadata?.derived?.replayParse;
+    assert.ok(replayParse);
+
+    const result = await Promise.resolve(replayParse("ignored", ["prod"]));
+    assert.deepEqual(result, { success: true, value: "DEBUG" });
+  });
 });
 
 describe("multiple", () => {
