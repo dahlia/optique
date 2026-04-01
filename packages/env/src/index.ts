@@ -470,13 +470,14 @@ export function bindEnv<
                 state.cliState,
               );
             }
+            const innerState = state.cliState ?? state;
             if (!sourceMetadata.preservesSourceValue) {
-              return sourceMetadata.extractSourceValue(state.cliState);
+              return sourceMetadata.extractSourceValue(innerState);
             }
             return getEnvSourceValue(
               state,
               options,
-              state.cliState,
+              innerState,
               sourceMetadata.extractSourceValue,
             );
           },

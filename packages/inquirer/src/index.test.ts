@@ -1137,6 +1137,81 @@ describe("prompt()", () => {
       assert.equal(nodes[0]?.parser, inner);
       assert.equal(nodes[0]?.state, "cli-state");
     });
+
+    it("preserves delegated suggest nodes for source wrappers", async () => {
+      const sourceId = Symbol("prompt-multiple-source");
+      const item = {
+        $mode: "async" as const,
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "",
+        parse(parseContext: ParserContext<string>) {
+          return Promise.resolve({
+            success: true as const,
+            next: { ...parseContext, state: parseContext.state },
+            consumed: [],
+          });
+        },
+        complete(state: string) {
+          return Promise.resolve({
+            success: true as const,
+            value: state || "mode",
+          });
+        },
+        async *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+        dependencyMetadata: {
+          source: {
+            kind: "source" as const,
+            sourceId,
+            preservesSourceValue: true,
+            extractSourceValue(state: unknown) {
+              return typeof state === "string"
+                ? { success: true as const, value: state }
+                : undefined;
+            },
+          },
+        },
+      } as const satisfies Parser<"async", string, string>;
+      const inner = multiple(item);
+      const wrapped = prompt(inner, {
+        type: "checkbox",
+        message: "input?",
+        choices: [],
+      });
+
+      const parsed = await wrapped.parse({
+        buffer: [],
+        state: wrapped.initialState,
+        optionsTerminated: false,
+        usage: wrapped.usage,
+      });
+      assert.ok(parsed.success);
+      if (!parsed.success) return;
+
+      const nodes = wrapped.getSuggestRuntimeNodes?.(
+        parsed.next.state as Parameters<
+          NonNullable<typeof wrapped.getSuggestRuntimeNodes>
+        >[0],
+        ["prompt"],
+      );
+      assert.ok(nodes != null);
+      if (nodes == null) return;
+
+      assert.equal(nodes.length, 3);
+      assert.equal(nodes[0]?.parser, wrapped);
+      assert.deepEqual(nodes[0]?.path, ["prompt"]);
+      assert.equal(nodes[1]?.parser, inner);
+      assert.deepEqual(nodes[1]?.path, ["prompt"]);
+      assert.equal(nodes[2]?.parser, item);
+      assert.deepEqual(nodes[2]?.path, ["prompt", 0]);
+    });
   });
 
   describe("composition with non-CLI sources", () => {

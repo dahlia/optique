@@ -102,6 +102,23 @@ function asyncChoice<T extends string>(
   };
 }
 
+function syncThrowingParser<
+  M extends "sync" | "async",
+  T extends string,
+>(mode: M): ValueParser<M, T> {
+  return {
+    $mode: mode,
+    metavar: "THROWING" as NonEmptyString,
+    placeholder: "" as T,
+    parse(): never {
+      throw new TypeError("Parser exploded.");
+    },
+    format(value: T): string {
+      return value;
+    },
+  };
+}
+
 /**
  * Creates an async integer parser that validates against a range.
  */
@@ -1012,6 +1029,32 @@ describe("derive() with async factory", () => {
     assert.ok(!result.success);
   });
 
+  test("async factory parse rejects synchronous parser throws", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = modeParser.derive({
+      metavar: "LOG_LEVEL",
+      mode: "async",
+      factory: () => syncThrowingParser("async"),
+      defaultValue: () => "dev" as const,
+    });
+
+    await assert.rejects(
+      async () => await derived.parse("debug"),
+      {
+        name: "TypeError",
+        message: "Parser exploded.",
+      },
+    );
+    await assert.rejects(
+      async () => await derived[parseWithDependency]("debug", "prod"),
+      {
+        name: "TypeError",
+        message: "Parser exploded.",
+      },
+    );
+  });
+
   test("format() should not throw when factory throws on default value", () => {
     const modeParser = dependency(choice(["safe", "broken"] as const));
 
@@ -1087,6 +1130,31 @@ describe("deriveSync()", () => {
 
     // Even with sync factory, async source makes it async
     assert.equal(derived.$mode, "async");
+  });
+
+  test("async source parse rejects synchronous parser throws", async () => {
+    const modeParser = dependency(asyncChoice(["dev", "prod"] as const));
+
+    const derived = modeParser.deriveSync({
+      metavar: "LOG_LEVEL",
+      factory: () => syncThrowingParser("sync"),
+      defaultValue: () => "dev" as const,
+    });
+
+    await assert.rejects(
+      async () => await derived.parse("debug"),
+      {
+        name: "TypeError",
+        message: "Parser exploded.",
+      },
+    );
+    await assert.rejects(
+      async () => await derived[parseWithDependency]("debug", "prod"),
+      {
+        name: "TypeError",
+        message: "Parser exploded.",
+      },
+    );
   });
 
   test("deriveSync parse works correctly", () => {
@@ -1348,6 +1416,38 @@ describe("deriveFrom() with async factory", () => {
     assert.equal(derived.format("x"), "x");
   });
 
+  test("deriveFrom async factory parse rejects synchronous parser throws", async () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = deriveFrom({
+      metavar: "CONFIG",
+      mode: "async",
+      dependencies: [dirParser, modeParser] as const,
+      factory: () => syncThrowingParser("async"),
+      defaultValues: () => ["/config", "dev"] as const,
+    });
+
+    await assert.rejects(
+      async () => await derived.parse("debug"),
+      {
+        name: "TypeError",
+        message: "Parser exploded.",
+      },
+    );
+    await assert.rejects(
+      async () =>
+        await derived[parseWithDependency](
+          "debug",
+          ["/config", "prod"] as const,
+        ),
+      {
+        name: "TypeError",
+        message: "Parser exploded.",
+      },
+    );
+  });
+
   test("suggest() should not throw when factory throws on default values", async () => {
     const dirParser = dependency(string({ metavar: "DIR" }));
     const modeParser = dependency(choice(["safe", "broken"] as const));
@@ -1403,6 +1503,37 @@ describe("deriveFromSync()", () => {
 
     // Async source makes it async even with sync factory
     assert.equal(derived.$mode, "async");
+  });
+
+  test("mixed sync/async sources reject synchronous parser throws", async () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(asyncChoice(["dev", "prod"] as const));
+
+    const derived = deriveFromSync({
+      metavar: "CONFIG",
+      dependencies: [dirParser, modeParser] as const,
+      factory: () => syncThrowingParser("sync"),
+      defaultValues: () => ["/config", "dev"] as const,
+    });
+
+    await assert.rejects(
+      async () => await derived.parse("debug"),
+      {
+        name: "TypeError",
+        message: "Parser exploded.",
+      },
+    );
+    await assert.rejects(
+      async () =>
+        await derived[parseWithDependency](
+          "debug",
+          ["/config", "prod"] as const,
+        ),
+      {
+        name: "TypeError",
+        message: "Parser exploded.",
+      },
+    );
   });
 
   test("format() should not throw when factory throws on default values", () => {

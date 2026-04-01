@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
-import { injectAnnotations } from "@optique/core/annotations";
+import { getAnnotations, injectAnnotations } from "@optique/core/annotations";
 import { concat, group, merge, object, tuple } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import { runWith } from "@optique/core/facade";
@@ -29,8 +29,8 @@ function asyncChoice<const T extends readonly string[]>(
   return {
     ...parser,
     $mode: "async",
-    parse(input: string) {
-      return Promise.resolve(parser.parse(input));
+    async parse(input: string) {
+      return await parser.parse(input);
     },
     async *suggest(prefix: string) {
       if (parser.suggest == null) return;
@@ -2004,6 +2004,80 @@ describe("bindEnv() with dependency sources", () => {
     );
     assert.deepEqual(extracted, { success: true, value: "prod" });
     assert.equal(completeCalls, 0);
+  });
+
+  it("preserves outer annotations when no-CLI fallback delegates source extraction", () => {
+    const sourceId = Symbol("mode");
+    const marker = Symbol("outer-annotation");
+    const innerParser = {
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: { ...context, state: undefined },
+          consumed: [],
+        };
+      },
+      complete() {
+        return { success: true as const, value: "prod" as const };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue(state: unknown) {
+            return getAnnotations(state)?.[marker] === true
+              ? { success: true as const, value: "prod" as const }
+              : undefined;
+          },
+        },
+      },
+    } as const satisfies
+      & Parser<"sync", "prod", undefined>
+      & {
+        readonly dependencyMetadata: {
+          readonly source: {
+            readonly kind: "source";
+            readonly sourceId: typeof sourceId;
+            readonly preservesSourceValue: true;
+            readonly extractSourceValue: (
+              state: unknown,
+            ) => ValueParserResult<unknown> | undefined;
+          };
+        };
+      };
+    const parser = bindEnv(innerParser, {
+      context: createEnvContext({ source: () => undefined }),
+      key: "MODE",
+      parser: string(),
+    });
+    const parseResult = parser.parse({
+      buffer: [],
+      state: injectAnnotations(parser.initialState, { [marker]: true }),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success);
+    if (!parseResult.success) return;
+
+    const extracted = parser.dependencyMetadata?.source?.extractSourceValue(
+      parseResult.next.state,
+    );
+    assert.deepEqual(extracted, { success: true, value: "prod" });
   });
 
   it("does not invent mapped dependency source values from env fallbacks", () => {
