@@ -243,7 +243,7 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
   readonly #failedSources = new Set<symbol>();
 
   constructor(registry: DependencyRegistryLike) {
-    this.registry = registry;
+    this.registry = new FailedAwareRegistry(registry, this.#failedSources);
   }
 
   registerSource(
@@ -290,6 +290,36 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
   }
 }
 
+class FailedAwareRegistry implements DependencyRegistryLike {
+  readonly #inner: DependencyRegistryLike;
+  readonly #failedSources: Set<symbol>;
+
+  constructor(inner: DependencyRegistryLike, failedSources: Set<symbol>) {
+    this.#inner = inner;
+    this.#failedSources = failedSources;
+  }
+
+  set<T>(id: symbol, value: T): void {
+    this.#failedSources.delete(id);
+    this.#inner.set(id, value);
+  }
+
+  get<T>(id: symbol): T | undefined {
+    return this.#inner.get(id);
+  }
+
+  has(id: symbol): boolean {
+    return this.#inner.has(id);
+  }
+
+  clone(): DependencyRegistryLike {
+    return new FailedAwareRegistry(
+      this.#inner.clone(),
+      new Set(this.#failedSources),
+    );
+  }
+}
+
 function resolveRequest(
   ctx: DependencyRuntimeContext,
   request: DependencyRequest,
@@ -301,15 +331,15 @@ function resolveRequest(
 
   for (let i = 0; i < request.dependencyIds.length; i++) {
     const id = request.dependencyIds[i];
-    if (ctx.hasSource(id)) {
-      values.push(ctx.getSource(id));
-      usedDefaults.push(false);
-      resolvedCount++;
-    } else if (ctx.isSourceFailed(id)) {
+    if (ctx.isSourceFailed(id)) {
       // Source was explicitly provided but failed validation.
       // Do not fall back to defaults — treat as unresolvable.
       values.push(undefined);
       usedDefaults.push(false);
+    } else if (ctx.hasSource(id)) {
+      values.push(ctx.getSource(id));
+      usedDefaults.push(false);
+      resolvedCount++;
     } else if (
       request.defaultValues != null && i < request.defaultValues.length
     ) {

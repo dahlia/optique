@@ -28,6 +28,7 @@ import {
 import { annotationKey, getAnnotations } from "@optique/core/annotations";
 import { message } from "@optique/core/message";
 import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
+import type { ValueParserResult } from "@optique/core/valueparser";
 
 const phase2UndefinedParsedValueKey = Symbol(
   "@optique/config/phase2UndefinedParsedValue",
@@ -858,7 +859,12 @@ export function bindConfig<
           extractSourceValue: (state: unknown) => {
             if (!isConfigBindState(state)) {
               if (sourceMetadata.preservesSourceValue) {
-                return getConfigOrDefault(state, options);
+                return getConfigSourceValue(
+                  state,
+                  options,
+                  state,
+                  sourceMetadata.extractSourceValue,
+                );
               }
               return sourceMetadata.extractSourceValue(state);
             }
@@ -872,7 +878,12 @@ export function bindConfig<
                 state.cliState,
               );
             }
-            return getConfigOrDefault(state, options);
+            return getConfigSourceValue(
+              state,
+              options,
+              state.cliState,
+              sourceMetadata.extractSourceValue,
+            );
           },
         },
       },
@@ -950,4 +961,34 @@ function getConfigOrDefault<T, TValue, TConfigMeta>(
     success: false,
     error: message`Missing required configuration value.`,
   };
+}
+
+function getConfigSourceValue<T, TValue, TConfigMeta>(
+  state: unknown,
+  options: BindConfigOptions<T, TValue, TConfigMeta>,
+  innerState: unknown,
+  extractInnerSourceValue: (
+    state: unknown,
+  ) =>
+    | ValueParserResult<unknown>
+    | Promise<ValueParserResult<unknown> | undefined>
+    | undefined,
+):
+  | ValueParserResult<unknown>
+  | Promise<ValueParserResult<unknown> | undefined>
+  | undefined {
+  const annotations = getAnnotations(state);
+  const contextId = options.context.id;
+  const annotationValue = annotations?.[contextId] as
+    | { readonly data: T; readonly meta?: TConfigMeta | undefined }
+    | undefined;
+  const configData = annotationValue?.data ?? getActiveConfig<T>(contextId);
+
+  if (configData !== undefined && configData !== null) {
+    return getConfigOrDefault(state, options);
+  }
+  if (options.default !== undefined) {
+    return { success: true as const, value: options.default };
+  }
+  return extractInnerSourceValue(innerState);
 }

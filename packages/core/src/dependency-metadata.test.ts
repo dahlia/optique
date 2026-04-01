@@ -175,6 +175,20 @@ describe("extractDependencyMetadata", () => {
     },
   );
 
+  test("extractSourceValue rejects malformed bare results", () => {
+    const env = createEnvSource();
+    const metadata = extractDependencyMetadata(env);
+    assert.ok(metadata?.source?.extractSourceValue !== undefined);
+    assert.equal(
+      metadata.source.extractSourceValue({ success: true }),
+      undefined,
+    );
+    assert.equal(
+      metadata.source.extractSourceValue({ success: false }),
+      undefined,
+    );
+  });
+
   test("extracts derived capability from DerivedValueParser (derive)", () => {
     const env = createEnvSource();
     const logLevel = createDerivedLogLevel(env);

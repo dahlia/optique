@@ -501,6 +501,60 @@ describe("collectExplicitSourceValues — failed sources", () => {
     // Failed source blocks default fallback — resolution stays unresolved.
     assert.notEqual(resolution.kind, "resolved");
   });
+
+  test("later failed extraction shadows an earlier registered value", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env", "first"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: bareExtract,
+              preservesSourceValue: true,
+            },
+          },
+        },
+        state: createDependencySourceState(
+          { success: true, value: "prod" } as ValueParserResult<string>,
+          sourceId,
+        ),
+      },
+      {
+        path: ["env", "second"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: bareExtract,
+              preservesSourceValue: true,
+            },
+          },
+        },
+        state: createDependencySourceState(
+          { success: false, error: undefined! } as ValueParserResult<string>,
+          sourceId,
+        ),
+      },
+    ];
+
+    collectExplicitSourceValues(nodes, runtime);
+
+    assert.ok(runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), "prod");
+    assert.ok(runtime.isSourceFailed(sourceId));
+    assert.notEqual(
+      runtime.resolveDependencies({
+        dependencyIds: [sourceId],
+        defaultValues: ["dev"],
+      }).kind,
+      "resolved",
+    );
+  });
 });
 
 describe("collectSourcesFromState", () => {
