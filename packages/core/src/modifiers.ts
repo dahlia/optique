@@ -253,9 +253,10 @@ export function optional<M extends Mode, TValue, TState>(
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): Generator<Suggestion> {
-    const innerState = Array.isArray(context.state)
-      ? context.state[0]
-      : syncParser.initialState;
+    const innerState = normalizeOptionalLikeInnerState(
+      context.state,
+      syncParser.initialState,
+    );
     yield* syncParser.suggest({ ...context, state: innerState }, prefix);
   }
 
@@ -264,9 +265,10 @@ export function optional<M extends Mode, TValue, TState>(
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): AsyncGenerator<Suggestion> {
-    const innerState = Array.isArray(context.state)
-      ? context.state[0]
-      : syncParser.initialState;
+    const innerState = normalizeOptionalLikeInnerState(
+      context.state,
+      syncParser.initialState,
+    );
     const suggestions = parser.suggest(
       { ...context, state: innerState },
       prefix,
@@ -596,9 +598,10 @@ export function withDefault<
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): Generator<Suggestion> {
-    const innerState = Array.isArray(context.state)
-      ? context.state[0]
-      : syncParser.initialState;
+    const innerState = normalizeOptionalLikeInnerState(
+      context.state,
+      syncParser.initialState,
+    );
     yield* syncParser.suggest({ ...context, state: innerState }, prefix);
   }
 
@@ -607,9 +610,10 @@ export function withDefault<
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): AsyncGenerator<Suggestion> {
-    const innerState = Array.isArray(context.state)
-      ? context.state[0]
-      : syncParser.initialState;
+    const innerState = normalizeOptionalLikeInnerState(
+      context.state,
+      syncParser.initialState,
+    );
     const suggestions = parser.suggest(
       { ...context, state: innerState },
       prefix,

@@ -11152,7 +11152,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         if (
           JSON.stringify(context.exec?.path) ===
             JSON.stringify(["root", 1]) &&
-          context.dependencyRegistry?.has(sourceId)
+          context.dependencyRegistry?.get(sourceId) === "prod"
         ) {
           yield { kind: "literal" as const, text: "safe" };
         }
@@ -11245,7 +11245,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         if (
           JSON.stringify(context.exec?.path) ===
             JSON.stringify(["root", 1]) &&
-          context.dependencyRegistry?.has(sourceId)
+          context.dependencyRegistry?.get(sourceId) === "prod"
         ) {
           yield { kind: "literal" as const, text: "safe" };
         }

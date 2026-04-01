@@ -28,7 +28,12 @@ import {
   withDefault,
   WithDefaultError,
 } from "@optique/core/modifiers";
-import { parse, type Parser, type Suggestion } from "@optique/core/parser";
+import {
+  parse,
+  type Parser,
+  type ParserContext,
+  type Suggestion,
+} from "@optique/core/parser";
 import { argument, constant, flag, option } from "@optique/core/primitives";
 import {
   choice,
@@ -4923,6 +4928,90 @@ describe("branch coverage: modifiers edge cases", () => {
       asyncWd.suggest(ctx, "--") as AsyncIterable<Suggestion>,
     );
     assert.ok(Array.isArray(suggestions));
+  });
+
+  it("optional: suggest uses direct object state when present", () => {
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly ("initial" | "live")[],
+      $stateType: [] as readonly { readonly value: "initial" | "live" }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "initial" as const },
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No parse.`,
+      }),
+      complete: (state: { readonly value: "initial" | "live" }) => ({
+        success: true as const,
+        value: state.value,
+      }),
+      *suggest(context: ParserContext<{ readonly value: "initial" | "live" }>) {
+        yield { kind: "literal" as const, text: context.state.value };
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<
+      "sync",
+      "initial" | "live",
+      { readonly value: "initial" | "live" }
+    >;
+    const parser = optional(inner);
+
+    const suggestions = [...parser.suggest({
+      buffer: [],
+      state: {
+        value: "live",
+      } as unknown as Parameters<typeof parser.suggest>[0]["state"],
+      optionsTerminated: false,
+      usage: parser.usage,
+    }, "")];
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "live" }]);
+  });
+
+  it("withDefault: suggest uses direct object state when present", () => {
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly ("initial" | "live")[],
+      $stateType: [] as readonly { readonly value: "initial" | "live" }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "initial" as const },
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No parse.`,
+      }),
+      complete: (state: { readonly value: "initial" | "live" }) => ({
+        success: true as const,
+        value: state.value,
+      }),
+      *suggest(context: ParserContext<{ readonly value: "initial" | "live" }>) {
+        yield { kind: "literal" as const, text: context.state.value };
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<
+      "sync",
+      "initial" | "live",
+      { readonly value: "initial" | "live" }
+    >;
+    const parser = withDefault(inner, "initial" as const);
+
+    const suggestions = [...parser.suggest({
+      buffer: [],
+      state: {
+        value: "live",
+      } as unknown as Parameters<typeof parser.suggest>[0]["state"],
+      optionsTerminated: false,
+      usage: parser.usage,
+    }, "")];
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "live" }]);
   });
 
   it("withDefault: transformed async parser returns plain fallback result", async () => {
