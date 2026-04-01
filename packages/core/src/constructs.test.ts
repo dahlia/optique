@@ -11291,7 +11291,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.equal(completeCalls, 0);
   });
 
-  it("merge() complete ignores ambiguous duplicate source keys", () => {
+  it("merge() complete preserves child-local duplicate sources", () => {
     const sourceId = Symbol("merge-duplicate-source");
     const sharedSource = {
       $mode: "sync" as const,
@@ -11383,6 +11383,114 @@ describe("branch coverage: constructs.ts edge cases", () => {
       }),
       object({
         shared: unrelatedShared,
+      }),
+    );
+
+    const completed = parser.complete({
+      shared: { value: "leaked" },
+      derived: undefined,
+    });
+    assert.deepEqual(completed, {
+      success: true,
+      value: {
+        shared: "other",
+        derived: "from-source",
+      },
+    });
+  });
+
+  it("merge() complete ignores ambiguous duplicate sources across children", () => {
+    const sourceId = Symbol("merge-duplicate-source-cross-child");
+    const sharedSource = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly (string | undefined)[],
+      $stateType: [] as readonly unknown[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<unknown>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete(state: unknown) {
+        return {
+          success: true as const,
+          value: typeof state === "object" && state !== null &&
+              "kind" in state && state.kind === "first"
+            ? "prod"
+            : undefined,
+        };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue(state: unknown) {
+            if (
+              typeof state === "object" && state !== null && "value" in state
+            ) {
+              return {
+                success: true as const,
+                value: (state as { readonly value: string }).value,
+              };
+            }
+            return undefined;
+          },
+        },
+      },
+    } as const satisfies Parser<"sync", string | undefined, unknown>;
+    const derivedField = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete(_state: undefined, exec?: ExecutionContext) {
+        return {
+          success: true as const,
+          value: exec?.dependencyRuntime?.hasSource(sourceId)
+            ? "from-source"
+            : "no-source",
+        };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, undefined>;
+    const unrelatedShared = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly unknown[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<unknown>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: "other" };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, unknown>;
+    const parser = merge(
+      object({
+        shared: sharedSource,
+      }),
+      object({
+        shared: unrelatedShared,
+        derived: derivedField,
       }),
     );
 

@@ -6551,14 +6551,31 @@ export function merge(
           const parser = syncParsers[i];
           const parserState = extractCompleteState(parser, resolvedState, i);
           const { cache, excludedSourceFields } = perChildPhase1[i];
+          const childCompleteExec = withChildExecPath(childExec, i);
+          // Keep duplicate-key exclusion at the merge level.  A child that
+          // owns duplicate output keys still needs to seed its own local
+          // dependency sources during completion, but those sources must not
+          // leak into sibling completions through the shared merge runtime.
+          const completeExec = excludedSourceFields == null
+            ? {
+              ...childCompleteExec,
+              preCompletedByParser: cache,
+            }
+            : (() => {
+              const childRuntime = createDependencyRuntimeContext(
+                runtime.registry.clone(),
+              );
+              return {
+                ...childCompleteExec,
+                dependencyRuntime: childRuntime,
+                dependencyRegistry: childRuntime.registry,
+                preCompletedByParser: cache,
+              };
+            })();
           const result = unwrapCompleteResult(
             parser.complete(
               parserState as Parameters<typeof parser.complete>[0],
-              {
-                ...withChildExecPath(childExec, i),
-                preCompletedByParser: cache,
-                excludedSourceFields,
-              } as ExecutionContext,
+              completeExec as ExecutionContext,
             ),
           );
           if (!result.success) return result;
@@ -6681,14 +6698,27 @@ export function merge(
           const parser = parsers[i];
           const parserState = extractCompleteState(parser, resolvedState, i);
           const { cache: asyncCache, excludedSourceFields } = perChildPhase1[i];
+          const childCompleteExec = withChildExecPath(childExec, i);
+          const completeExec = excludedSourceFields == null
+            ? {
+              ...childCompleteExec,
+              preCompletedByParser: asyncCache,
+            }
+            : (() => {
+              const childRuntime = createDependencyRuntimeContext(
+                runtime.registry.clone(),
+              );
+              return {
+                ...childCompleteExec,
+                dependencyRuntime: childRuntime,
+                dependencyRegistry: childRuntime.registry,
+                preCompletedByParser: asyncCache,
+              };
+            })();
           const result = unwrapCompleteResult(
             await parser.complete(
               parserState as Parameters<typeof parser.complete>[0],
-              {
-                ...withChildExecPath(childExec, i),
-                preCompletedByParser: asyncCache,
-                excludedSourceFields,
-              } as ExecutionContext,
+              completeExec as ExecutionContext,
             ),
           );
           if (!result.success) return result;
