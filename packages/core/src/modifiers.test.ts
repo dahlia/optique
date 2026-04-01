@@ -3523,7 +3523,7 @@ describe("multiple", () => {
     if (!resultTooMany.success) {
       assertErrorIncludes(
         resultTooMany.error,
-        "Expected at most 2 values, but got 3",
+        "Unexpected option or argument",
       );
     }
 
@@ -3553,7 +3553,7 @@ describe("multiple", () => {
     if (!resultTooMany.success) {
       assertErrorIncludes(
         resultTooMany.error,
-        "Expected at most 3 values, but got 4",
+        "Unexpected option or argument",
       );
     }
 
@@ -3806,7 +3806,7 @@ describe("multiple", () => {
     if (!result3.success) {
       assertErrorIncludes(
         result3.error,
-        "Expected at most 3 values, but got 4",
+        "Unexpected option or argument",
       );
     }
   });
@@ -3902,7 +3902,7 @@ describe("multiple", () => {
     if (!tooManyResult.success) {
       assertErrorIncludes(
         tooManyResult.error,
-        "Expected at most 5 values, but got 6",
+        "Unexpected option or argument",
       );
     }
   });
@@ -5344,6 +5344,60 @@ describe("branch coverage: modifiers edge cases", () => {
     ];
 
     assert.deepEqual(suggestions, []);
+  });
+
+  it("multiple: sync parse stops consuming after reaching max", () => {
+    const parser = multiple(argument(string()), { max: 1 });
+    const first = parser.parse({
+      buffer: ["a"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const second = parser.parse({
+      buffer: ["b"],
+      state: first.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(second.success);
+    if (!second.success) return;
+
+    assert.deepEqual(second.consumed, []);
+    assert.equal(second.next.buffer[0], "b");
+    assert.deepEqual(second.next.state, first.next.state);
+  });
+
+  it("multiple: async parse stops consuming after reaching max", async () => {
+    const parser = multiple(argument(asyncChoice(["a", "b"] as const)), {
+      max: 1,
+    });
+    const first = await parser.parse({
+      buffer: ["a"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const second = await parser.parse({
+      buffer: ["b"],
+      state: first.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(second.success);
+    if (!second.success) return;
+
+    assert.deepEqual(second.consumed, []);
+    assert.equal(second.next.buffer[0], "b");
+    assert.deepEqual(second.next.state, first.next.state);
   });
 
   it("multiple: zero-consumption fresh object state does not add a slot", () => {

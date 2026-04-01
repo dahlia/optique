@@ -59,6 +59,12 @@ To be released.
     Phase 1.  Non-idempotent thunks (e.g., with side effects) could produce
     inconsistent values.  [[#750], [#762], [#763]]
 
+ -  Fixed `multiple()` continuing to open fresh item slots after reaching its
+    `max` bound.  Once the bound is reached, `multiple()` now stops consuming
+    additional input so later parsers in shared-buffer compositions can see
+    the remaining tokens instead of having them absorbed into an overfull
+    `multiple()` state.  [[#755], [#765]]
+
  -  `Parser.complete()` and `Parser.shouldDeferCompletion()` now accept an
     optional `ExecutionContext` parameter.  All built-in parser
     implementations (`option()`, `argument()`, `optional()`, `withDefault()`,

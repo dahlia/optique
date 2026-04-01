@@ -1306,6 +1306,14 @@ export function multiple<M extends Mode, TValue, TState>(
     const currentItemState = context.state.at(-1);
     const canExtendCurrent = currentItemState != null &&
       !isTerminalMultipleItemState(currentItemState);
+    const canOpenFreshItem = context.state.length < max;
+    if (!canExtendCurrent && !canOpenFreshItem) {
+      return {
+        success: true,
+        next: context,
+        consumed: [],
+      };
+    }
     let added = !canExtendCurrent;
     let itemIndex = canExtendCurrent
       ? context.state.length - 1
@@ -1321,7 +1329,7 @@ export function multiple<M extends Mode, TValue, TState>(
       ),
     );
     if (!result.success) {
-      if (!added && result.consumed === 0) {
+      if (!added && canOpenFreshItem && result.consumed === 0) {
         const nextInitialState = inheritAnnotations(
           context.state,
           syncParser.initialState,
@@ -1417,6 +1425,14 @@ export function multiple<M extends Mode, TValue, TState>(
     const currentItemState = context.state.at(-1);
     const canExtendCurrent = currentItemState != null &&
       !isTerminalMultipleItemState(currentItemState);
+    const canOpenFreshItem = context.state.length < max;
+    if (!canExtendCurrent && !canOpenFreshItem) {
+      return {
+        success: true,
+        next: context,
+        consumed: [],
+      };
+    }
     let added = !canExtendCurrent;
     let itemIndex = canExtendCurrent
       ? context.state.length - 1
@@ -1432,7 +1448,7 @@ export function multiple<M extends Mode, TValue, TState>(
       ),
     );
     if (!result.success) {
-      if (!added && result.consumed === 0) {
+      if (!added && canOpenFreshItem && result.consumed === 0) {
         const nextInitialState = inheritAnnotations(
           context.state,
           parser.initialState,
