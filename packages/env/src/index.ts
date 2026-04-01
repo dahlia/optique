@@ -398,7 +398,7 @@ export function bindEnv<
         options,
         parser.$mode,
         parser,
-        isEnvBindState(state) ? state.cliState : undefined,
+        isEnvBindState(state) ? state.cliState : state,
         exec,
       );
     },

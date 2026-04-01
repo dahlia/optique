@@ -13,6 +13,7 @@ import { parse, suggestAsync, suggestSync } from "@optique/core/parser";
 import { map, multiple, optional } from "@optique/core/modifiers";
 import { fail, flag, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
+import { bindConfig, createConfigContext } from "../../config/src/index.ts";
 import {
   bindEnv,
   bool,
@@ -915,6 +916,84 @@ describe("bindEnv()", () => {
     assert.equal(result.value, "from-config");
   });
 
+  it("preserves raw inner state when env fallback delegates complete()", () => {
+    const configContext = createConfigContext<
+      { readonly mode?: "dev" | "prod" }
+    >({
+      schema: {
+        "~standard": {
+          version: 1,
+          vendor: "optique-test",
+          validate(input: unknown) {
+            return {
+              value: input as { readonly mode?: "dev" | "prod" },
+            };
+          },
+        },
+      },
+    });
+    const annotations = configContext.getAnnotations(
+      {},
+      {
+        load: () => ({
+          config: { mode: "prod" as const },
+          meta: undefined,
+        }),
+      },
+    );
+    assert.ok(!(annotations instanceof Promise));
+    if (annotations instanceof Promise) return;
+
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const inner = object({
+      mode: bindConfig(option("--mode", mode), {
+        context: configContext,
+        key: "mode",
+      }),
+    });
+    const parser = bindEnv(inner, {
+      context: createEnvContext({
+        prefix: "APP_",
+        source: () => undefined,
+      }),
+      key: "CONFIG",
+      parser: {
+        $mode: "sync",
+        metavar: "CONFIG",
+        placeholder: { mode: "dev" as const },
+        parse(input) {
+          if (input === "prod") {
+            return {
+              success: true as const,
+              value: { mode: "prod" as const },
+            };
+          }
+          if (input === "dev") {
+            return {
+              success: true as const,
+              value: { mode: "dev" as const },
+            };
+          }
+          return {
+            success: false as const,
+            error: message`Invalid config.`,
+          };
+        },
+        format(value) {
+          return value.mode;
+        },
+      },
+    });
+
+    const result = parser.complete(
+      injectAnnotations(parser.initialState, annotations),
+    );
+    assert.deepEqual(result, {
+      success: true,
+      value: { mode: "prod" },
+    });
+  });
+
   it("prefers env value over inner parser complete()", () => {
     const mockConfigParser = {
       $mode: "sync" as const,
@@ -988,11 +1067,7 @@ describe("bindEnv()", () => {
     // complete() with a state that has no CLI value should fall through
     // to getEnvOrDefault, which takes the default path.  In async mode
     // the return value must be a Promise.
-    const completeResult = parser.complete(
-      { hasCliValue: false } as unknown as Parameters<
-        typeof parser.complete
-      >[0],
-    );
+    const completeResult = parser.complete(parser.initialState);
     assert.ok(
       completeResult instanceof Promise,
       "Expected complete() to return a Promise in async mode",
@@ -1003,41 +1078,63 @@ describe("bindEnv()", () => {
   });
 
   it("returns a Promise from complete() in async mode for error path", async () => {
-    const asyncInt: ValueParser<"async", number> = {
+    const asyncFailureParser: Parser<"async", number, undefined> = {
       $mode: "async",
-      metavar: "INT",
-      placeholder: 0,
-      parse(input: string): Promise<ValueParserResult<number>> {
-        const n = parseInt(input, 10);
-        if (isNaN(n)) {
-          return Promise.resolve({
-            success: false,
-            error: message`Invalid integer: ${input}`,
-          });
-        }
-        return Promise.resolve({ success: true, value: n });
+      $valueType: [] as readonly number[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
       },
-      format(v: number): string {
-        return v.toString();
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`Missing port.`,
+        });
       },
+      suggest() {
+        return (async function* () {})();
+      },
+      getDocFragments: () => ({ fragments: [] }),
     };
 
     const context = createEnvContext({
       source: () => undefined,
       prefix: "APP_",
     });
-    const parser = bindEnv(option("--port", asyncInt), {
+    const parser = bindEnv(asyncFailureParser, {
       context,
       key: "PORT",
-      parser: asyncInt,
+      parser: {
+        $mode: "async",
+        metavar: "INT",
+        placeholder: 0,
+        parse(input: string): Promise<ValueParserResult<number>> {
+          const n = parseInt(input, 10);
+          if (isNaN(n)) {
+            return Promise.resolve({
+              success: false,
+              error: message`Invalid integer: ${input}`,
+            });
+          }
+          return Promise.resolve({ success: true, value: n });
+        },
+        format(v: number): string {
+          return v.toString();
+        },
+      },
       // No default — should take the error path.
     });
 
-    const completeResult = parser.complete(
-      { hasCliValue: false } as unknown as Parameters<
-        typeof parser.complete
-      >[0],
-    );
+    const completeResult = parser.complete(parser.initialState);
     assert.ok(
       completeResult instanceof Promise,
       "Expected complete() to return a Promise in async mode",

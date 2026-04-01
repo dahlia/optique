@@ -737,11 +737,12 @@ export function bindConfig<
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
-      if (boundParser.dependencyMetadata?.source != null) {
-        return [{ path, parser: boundParser, state }];
-      }
       const innerState = getSuggestInnerState(state);
-      return parser.getSuggestRuntimeNodes?.(innerState, path) ?? [];
+      const innerNodes = parser.getSuggestRuntimeNodes?.(innerState, path) ??
+        [];
+      return boundParser.dependencyMetadata?.source != null
+        ? [{ path, parser: boundParser, state }, ...innerNodes]
+        : innerNodes;
     },
 
     parse: (context) => {

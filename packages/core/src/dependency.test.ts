@@ -1070,20 +1070,18 @@ describe("derive() with async factory", () => {
       defaultValue: () => "dev" as const,
     });
 
-    await assert.rejects(
-      async () => await derived.parse("debug"),
-      {
-        name: "TypeError",
-        message: "Parser exploded.",
-      },
-    );
-    await assert.rejects(
-      async () => await derived[parseWithDependency]("debug", "prod"),
-      {
-        name: "TypeError",
-        message: "Parser exploded.",
-      },
-    );
+    const parsePromise = derived.parse("debug");
+    assert.ok(parsePromise instanceof Promise);
+    await assert.rejects(parsePromise, {
+      name: "TypeError",
+      message: "Parser exploded.",
+    });
+    const replayPromise = derived[parseWithDependency]("debug", "prod");
+    assert.ok(replayPromise instanceof Promise);
+    await assert.rejects(replayPromise, {
+      name: "TypeError",
+      message: "Parser exploded.",
+    });
   });
 
   test("format() should not throw when factory throws on default value", () => {
@@ -1125,6 +1123,39 @@ describe("derive() with async factory", () => {
     }
     assert.equal(suggestions.length, 0);
   });
+
+  test(
+    "option suggest does not double-evaluate single-source defaults",
+    async () => {
+      let defaultCalls = 0;
+      const modeParser = dependency(choice(["dev", "prod"] as const));
+      const derived = modeParser.derive({
+        metavar: "VALUE",
+        mode: "async",
+        factory: (value: "dev" | "prod") =>
+          asyncChoice(
+            value === "dev"
+              ? ["debug", "verbose"] as const
+              : ["silent", "strict"] as const,
+          ),
+        defaultValue: () => {
+          defaultCalls++;
+          return "dev" as const;
+        },
+      });
+      const parser = object({ level: option("--level", derived) });
+
+      const suggestions = await suggestAsync(parser, ["--level", ""]);
+
+      assert.equal(defaultCalls, 1);
+      assert.deepEqual(
+        suggestions.map((suggestion) =>
+          "text" in suggestion ? suggestion.text : ""
+        ),
+        ["debug", "verbose"],
+      );
+    },
+  );
 });
 
 describe("deriveSync()", () => {
@@ -1172,20 +1203,18 @@ describe("deriveSync()", () => {
       defaultValue: () => "dev" as const,
     });
 
-    await assert.rejects(
-      async () => await derived.parse("debug"),
-      {
-        name: "TypeError",
-        message: "Parser exploded.",
-      },
-    );
-    await assert.rejects(
-      async () => await derived[parseWithDependency]("debug", "prod"),
-      {
-        name: "TypeError",
-        message: "Parser exploded.",
-      },
-    );
+    const parsePromise = derived.parse("debug");
+    assert.ok(parsePromise instanceof Promise);
+    await assert.rejects(parsePromise, {
+      name: "TypeError",
+      message: "Parser exploded.",
+    });
+    const replayPromise = derived[parseWithDependency]("debug", "prod");
+    assert.ok(replayPromise instanceof Promise);
+    await assert.rejects(replayPromise, {
+      name: "TypeError",
+      message: "Parser exploded.",
+    });
   });
 
   test("deriveSync parse works correctly", () => {
@@ -1459,24 +1488,21 @@ describe("deriveFrom() with async factory", () => {
       defaultValues: () => ["/config", "dev"] as const,
     });
 
-    await assert.rejects(
-      async () => await derived.parse("debug"),
-      {
-        name: "TypeError",
-        message: "Parser exploded.",
-      },
+    const parsePromise = derived.parse("debug");
+    assert.ok(parsePromise instanceof Promise);
+    await assert.rejects(parsePromise, {
+      name: "TypeError",
+      message: "Parser exploded.",
+    });
+    const replayPromise = derived[parseWithDependency](
+      "debug",
+      ["/config", "prod"] as const,
     );
-    await assert.rejects(
-      async () =>
-        await derived[parseWithDependency](
-          "debug",
-          ["/config", "prod"] as const,
-        ),
-      {
-        name: "TypeError",
-        message: "Parser exploded.",
-      },
-    );
+    assert.ok(replayPromise instanceof Promise);
+    await assert.rejects(replayPromise, {
+      name: "TypeError",
+      message: "Parser exploded.",
+    });
   });
 
   test("suggest() should not throw when factory throws on default values", async () => {
@@ -1547,24 +1573,21 @@ describe("deriveFromSync()", () => {
       defaultValues: () => ["/config", "dev"] as const,
     });
 
-    await assert.rejects(
-      async () => await derived.parse("debug"),
-      {
-        name: "TypeError",
-        message: "Parser exploded.",
-      },
+    const parsePromise = derived.parse("debug");
+    assert.ok(parsePromise instanceof Promise);
+    await assert.rejects(parsePromise, {
+      name: "TypeError",
+      message: "Parser exploded.",
+    });
+    const replayPromise = derived[parseWithDependency](
+      "debug",
+      ["/config", "prod"] as const,
     );
-    await assert.rejects(
-      async () =>
-        await derived[parseWithDependency](
-          "debug",
-          ["/config", "prod"] as const,
-        ),
-      {
-        name: "TypeError",
-        message: "Parser exploded.",
-      },
-    );
+    assert.ok(replayPromise instanceof Promise);
+    await assert.rejects(replayPromise, {
+      name: "TypeError",
+      message: "Parser exploded.",
+    });
   });
 
   test("format() should not throw when factory throws on default values", () => {

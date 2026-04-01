@@ -6,7 +6,7 @@ import type { Parser } from "@optique/core/parser";
 import { concat, merge, object, tuple } from "@optique/core/constructs";
 import { injectAnnotations } from "@optique/core/annotations";
 import { dependency } from "@optique/core/dependency";
-import { map, optional } from "@optique/core/modifiers";
+import { map, multiple, optional } from "@optique/core/modifiers";
 import { fail, flag, option } from "@optique/core/primitives";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { choice, integer, string } from "@optique/core/valueparser";
@@ -2048,6 +2048,43 @@ describe("createConfigContext error paths", () => {
     assert.deepEqual(nodes[0]?.path, ["host"]);
     assert.equal(nodes[0]?.parser, inner);
     assert.equal(nodes[0]?.state, "cli-state");
+  });
+
+  test("bindConfig getSuggestRuntimeNodes preserves inner nodes for source parsers", () => {
+    const context = createConfigContext({
+      schema: z.object({
+        mode: z.array(z.enum(["dev", "prod"])).optional(),
+      }),
+    });
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const inner = multiple(option("--mode", mode));
+    const parser = bindConfig(inner, {
+      context,
+      key: "mode",
+    });
+
+    const parsed = parser.parse({
+      buffer: ["--mode", "prod"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const nodes = parser.getSuggestRuntimeNodes?.(parsed.next.state, ["mode"]);
+    assert.ok(nodes != null);
+    if (nodes == null) return;
+
+    assert.equal(nodes[0]?.parser, parser);
+    assert.deepEqual(nodes[0]?.path, ["mode"]);
+    assert.equal(nodes[0]?.state, parsed.next.state);
+    assert.ok(nodes.some((node) => node.parser === inner));
+    assert.ok(
+      nodes.some((node) =>
+        JSON.stringify(node.path) === JSON.stringify(["mode", 0])
+      ),
+    );
   });
 
   test("bindConfig suggest unwraps zero-consumption cliState", () => {

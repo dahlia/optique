@@ -1804,9 +1804,12 @@ export function getDependencyIds<M extends Mode, T, S>(
 }
 
 /**
- * Gets the default values function from a derived parser, if present.
- * This function is available on parsers created with `deriveFrom` that
- * specify default values for their dependencies.
+ * Gets the default values function from a multi-source derived parser, if
+ * present.
+ *
+ * Single-source `derive()` defaults must stay lazy during suggestion-time
+ * replay so missing dependencies do not eagerly evaluate side-effectful
+ * `defaultValue()` thunks.
  *
  * @param parser The derived value parser to get the default values function from.
  * @returns The default values function, or undefined if not available.
@@ -1818,10 +1821,6 @@ export function getDefaultValuesFunction<M extends Mode, T, S>(
 ): (() => readonly unknown[]) | undefined {
   if (Object.hasOwn(parser, defaultValues)) {
     return parser[defaultValues];
-  }
-  if (Object.hasOwn(parser, singleDefaultValue)) {
-    const single = parser[singleDefaultValue];
-    return single == null ? undefined : () => [single()];
   }
   return undefined;
 }
