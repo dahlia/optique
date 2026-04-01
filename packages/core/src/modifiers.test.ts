@@ -28,6 +28,7 @@ import {
   withDefault,
   WithDefaultError,
 } from "@optique/core/modifiers";
+import { createDependencyRuntimeContext } from "./dependency-runtime.ts";
 import {
   parse,
   parseAsync,
@@ -5177,6 +5178,115 @@ describe("branch coverage: modifiers edge cases", () => {
       const result = await failComplete.complete(r.next.state);
       assert.ok(!result.success);
     }
+  });
+
+  it("multiple: async complete preserves later source registration order", async () => {
+    const sourceId = Symbol("mode");
+    const child: Parser<"async", string, string> = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [] as const,
+        });
+      },
+      async complete(state, exec) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, state === "slow" ? 20 : 0)
+        );
+        exec?.dependencyRuntime?.registerSource(sourceId, state, "cli");
+        return { success: true as const, value: `item-${state}` };
+      },
+      async *suggest() {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser = multiple(child);
+    const runtime = createDependencyRuntimeContext();
+
+    const result = await parser.complete(
+      ["slow", "fast"],
+      {
+        usage: parser.usage,
+        phase: "complete",
+        path: ["root"],
+        dependencyRuntime: runtime,
+        dependencyRegistry: runtime.registry,
+      },
+    );
+
+    assert.ok(result.success);
+    assert.equal(runtime.getSource(sourceId), "fast");
+  });
+
+  it("multiple: async suggest preserves later source registration order", async () => {
+    const sourceId = Symbol("mode");
+    const child: Parser<"async", string, string> = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [] as const,
+        });
+      },
+      async complete(state, exec) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, state === "slow" ? 20 : 0)
+        );
+        exec?.dependencyRuntime?.registerSource(sourceId, state, "cli");
+        return { success: true as const, value: `item-${state}` };
+      },
+      async *suggest(context) {
+        yield {
+          kind: "literal" as const,
+          text: `latest-${
+            String(
+              context.exec?.dependencyRuntime?.getSource(sourceId),
+            )
+          }`,
+        };
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser = multiple(child);
+    const runtime = createDependencyRuntimeContext();
+
+    const suggestions: Suggestion[] = [];
+    for await (
+      const suggestion of parser.suggest({
+        buffer: [],
+        state: ["slow", "fast"],
+        optionsTerminated: false,
+        usage: parser.usage,
+        dependencyRegistry: runtime.registry,
+        exec: {
+          usage: parser.usage,
+          phase: "suggest",
+          path: ["root"],
+          dependencyRuntime: runtime,
+          dependencyRegistry: runtime.registry,
+        },
+      }, "")
+    ) {
+      suggestions.push(suggestion);
+    }
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "latest-fast" }]);
   });
 
   // Line 1012: multiple() suggest — shouldInclude returns true for non-literal

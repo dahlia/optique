@@ -1589,20 +1589,14 @@ export function multiple<M extends Mode, TValue, TState>(
           return validateMultipleResult(result, deferredIndices, hasDeferred);
         },
         async () => {
-          // Async complete - use Promise.all for parallel execution
-          const results = await Promise.all(
-            state.map((s, i) =>
-              completeAsyncWithUnwrappedFallback(
-                s,
-                withChildExecPath(exec, i),
-              )
-            ),
-          );
           const values: TValue[] = [];
           const deferredIndices = new Map<PropertyKey, DeferredMap | null>();
           let hasDeferred = false;
-          for (let i = 0; i < results.length; i++) {
-            const valueResult = results[i];
+          for (let i = 0; i < state.length; i++) {
+            const valueResult = await completeAsyncWithUnwrappedFallback(
+              state[i] as TState,
+              withChildExecPath(exec, i),
+            );
             if (valueResult.success) {
               const unwrappedValue = unwrapInjectedWrapper(valueResult.value);
               values.push(unwrappedValue);
@@ -1674,16 +1668,16 @@ export function multiple<M extends Mode, TValue, TState>(
       };
       const collectSelectedValuesAsync = async () => {
         const selectedValues = new Set<string>();
-        const results = await Promise.all(
-          context.state.map(async (state, i) => {
-            const childContext = withChildContext(context, i, state as TState);
-            return await completeAsyncWithUnwrappedFallback(
-              childContext.state,
-              childContext.exec,
-            );
-          }),
-        );
-        for (const completed of results) {
+        for (let i = 0; i < context.state.length; i++) {
+          const childContext = withChildContext(
+            context,
+            i,
+            context.state[i] as TState,
+          );
+          const completed = await completeAsyncWithUnwrappedFallback(
+            childContext.state,
+            childContext.exec,
+          );
           if (completed.success) {
             selectedValues.add(String(unwrapInjectedWrapper(completed.value)));
           }
