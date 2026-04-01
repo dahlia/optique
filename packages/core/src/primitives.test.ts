@@ -1262,7 +1262,16 @@ describe("option() error customization", () => {
     const result = parser.complete(parser.initialState);
     assert.strictEqual(result.success, false);
     if (!result.success) {
-      assert.strictEqual(formatMessage(result.error), "Port is required.");
+      assert.deepEqual(result.error, message`Port is required.`);
+    }
+
+    const invalidResult = parser.complete({
+      success: false,
+      error: message`bad`,
+    });
+    assert.strictEqual(invalidResult.success, false);
+    if (!invalidResult.success) {
+      assert.deepEqual(invalidResult.error, message`Port is invalid.`);
     }
   });
 
