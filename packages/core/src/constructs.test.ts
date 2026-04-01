@@ -11337,7 +11337,22 @@ describe("branch coverage: constructs.ts edge cases", () => {
       acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<unknown>) {
-        return { success: true as const, next: context, consumed: [] };
+        if (context.buffer[0] !== "first") {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected first source token.`,
+          };
+        }
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: { kind: "first" as const, value: "prod" as const },
+          },
+          consumed: ["first"],
+        };
       },
       complete(state: unknown) {
         return {
@@ -11357,7 +11372,9 @@ describe("branch coverage: constructs.ts edge cases", () => {
           preservesSourceValue: true,
           extractSourceValue(state: unknown) {
             if (
-              typeof state === "object" && state !== null && "value" in state
+              typeof state === "object" && state !== null &&
+              "kind" in state && state.kind === "first" &&
+              "value" in state
             ) {
               return {
                 success: true as const,
@@ -11402,7 +11419,14 @@ describe("branch coverage: constructs.ts edge cases", () => {
       acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<unknown>) {
-        return { success: true as const, next: context, consumed: [] };
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            state: { kind: "second" as const, value: "other" as const },
+          },
+          consumed: [],
+        };
       },
       complete() {
         return { success: true as const, value: "other" };
@@ -11420,10 +11444,16 @@ describe("branch coverage: constructs.ts edge cases", () => {
       }),
     );
 
-    const completed = parser.complete({
-      shared: { value: "leaked" },
-      derived: undefined,
+    const parsed = parser.parse({
+      buffer: ["first"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
     });
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const completed = parser.complete(parsed.next.state);
     assert.deepEqual(completed, {
       success: true,
       value: {
@@ -11445,7 +11475,22 @@ describe("branch coverage: constructs.ts edge cases", () => {
       acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<unknown>) {
-        return { success: true as const, next: context, consumed: [] };
+        if (context.buffer[0] !== "first") {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected first source token.`,
+          };
+        }
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: { kind: "first" as const, value: "prod" as const },
+          },
+          consumed: ["first"],
+        };
       },
       complete(state: unknown) {
         return {
@@ -11465,7 +11510,9 @@ describe("branch coverage: constructs.ts edge cases", () => {
           preservesSourceValue: true,
           extractSourceValue(state: unknown) {
             if (
-              typeof state === "object" && state !== null && "value" in state
+              typeof state === "object" && state !== null &&
+              "kind" in state && state.kind === "first" &&
+              "value" in state
             ) {
               return {
                 success: true as const,
@@ -11510,7 +11557,14 @@ describe("branch coverage: constructs.ts edge cases", () => {
       acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<unknown>) {
-        return { success: true as const, next: context, consumed: [] };
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            state: { kind: "second" as const, value: "other" as const },
+          },
+          consumed: [],
+        };
       },
       complete() {
         return { success: true as const, value: "other" };
@@ -11528,10 +11582,16 @@ describe("branch coverage: constructs.ts edge cases", () => {
       }),
     );
 
-    const completed = parser.complete({
-      shared: { value: "leaked" },
-      derived: undefined,
+    const parsed = parser.parse({
+      buffer: ["first"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
     });
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const completed = parser.complete(parsed.next.state);
     assert.deepEqual(completed, {
       success: true,
       value: {
@@ -11553,7 +11613,22 @@ describe("branch coverage: constructs.ts edge cases", () => {
       acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<unknown>) {
-        return { success: true as const, next: context, consumed: [] };
+        if (context.buffer[0] !== "first") {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected first source token.`,
+          };
+        }
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: { kind: "first" as const, value: "prod" as const },
+          },
+          consumed: ["first"],
+        };
       },
       complete(state: unknown) {
         return {
@@ -11573,7 +11648,9 @@ describe("branch coverage: constructs.ts edge cases", () => {
           preservesSourceValue: true,
           extractSourceValue(state: unknown) {
             if (
-              typeof state === "object" && state !== null && "value" in state
+              typeof state === "object" && state !== null &&
+              "kind" in state && state.kind === "first" &&
+              "value" in state
             ) {
               return {
                 success: true as const,
@@ -11618,7 +11695,14 @@ describe("branch coverage: constructs.ts edge cases", () => {
       acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<unknown>) {
-        return { success: true as const, next: context, consumed: [] };
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            state: { kind: "second" as const, value: "other" as const },
+          },
+          consumed: [],
+        };
       },
       complete() {
         return { success: true as const, value: "other" };
@@ -11636,10 +11720,16 @@ describe("branch coverage: constructs.ts edge cases", () => {
       }),
     );
 
-    const completed = await parser.complete({
-      shared: { value: "leaked" },
-      derived: undefined,
+    const parsed = await parser.parse({
+      buffer: ["first"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
     });
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const completed = await parser.complete(parsed.next.state);
     assert.deepEqual(completed, {
       success: true,
       value: {
@@ -11661,7 +11751,22 @@ describe("branch coverage: constructs.ts edge cases", () => {
       acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<unknown>) {
-        return { success: true as const, next: context, consumed: [] };
+        if (context.buffer[0] !== "first") {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected first source token.`,
+          };
+        }
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: { kind: "first" as const, value: "prod" as const },
+          },
+          consumed: ["first"],
+        };
       },
       complete(state: unknown) {
         return {
@@ -11681,7 +11786,9 @@ describe("branch coverage: constructs.ts edge cases", () => {
           preservesSourceValue: true,
           extractSourceValue(state: unknown) {
             if (
-              typeof state === "object" && state !== null && "value" in state
+              typeof state === "object" && state !== null &&
+              "kind" in state && state.kind === "first" &&
+              "value" in state
             ) {
               return {
                 success: true as const,
@@ -11726,7 +11833,14 @@ describe("branch coverage: constructs.ts edge cases", () => {
       acceptingAnyToken: false,
       initialState: undefined,
       parse(context: ParserContext<unknown>) {
-        return { success: true as const, next: context, consumed: [] };
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            state: { kind: "second" as const, value: "other" as const },
+          },
+          consumed: [],
+        };
       },
       complete() {
         return { success: true as const, value: "other" };
@@ -11744,10 +11858,16 @@ describe("branch coverage: constructs.ts edge cases", () => {
       }),
     );
 
-    const completed = await parser.complete({
-      shared: { value: "leaked" },
-      derived: undefined,
+    const parsed = await parser.parse({
+      buffer: ["first"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
     });
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const completed = await parser.complete(parsed.next.state);
     assert.deepEqual(completed, {
       success: true,
       value: {

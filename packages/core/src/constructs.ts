@@ -6166,6 +6166,23 @@ export function merge(
     );
   }
 
+  // Collect field parser pairs from all children so that nested merge()
+  // can pre-complete dependency source fields at the outer level.
+  const mergedFieldParsers = collectChildFieldParsers(parsers);
+  const duplicateOutputFieldNames = collectDuplicateFieldNames(
+    mergedFieldParsers,
+  );
+  const parserStateKey = (index: number) => `__parser_${index}`;
+  const localObjectStateKey = (index: number) => `__merge_local_${index}`;
+  const shouldPreserveLocalChildState = (
+    parser: Parser<Mode, Record<string | symbol, unknown>, unknown>,
+  ): boolean =>
+    parser.initialState != null &&
+    typeof parser.initialState === "object" &&
+    Object.keys(parser.initialState).some((field) =>
+      duplicateOutputFieldNames.has(field)
+    );
+
   const initialState: Record<string | symbol, unknown> = {};
   for (let i = 0; i < parsers.length; i++) {
     const parser = parsers[i];
@@ -6174,7 +6191,7 @@ export function merge(
       // include a __parser_N sentinel so that an outer merge's
       // extractParserState will forward these keys when extracting state
       // for this (inner) merge.
-      initialState[`__parser_${i}`] = undefined;
+      initialState[parserStateKey(i)] = undefined;
     } else if (
       parser.initialState && typeof parser.initialState === "object"
     ) {
@@ -6195,7 +6212,7 @@ export function merge(
     if (parser.initialState === undefined) {
       // For parsers with undefined initialState (like or()),
       // check if they have accumulated state during parsing
-      const key = `__parser_${index}`;
+      const key = parserStateKey(index);
       if (
         context.state && typeof context.state === "object" &&
         key in context.state
@@ -6206,6 +6223,14 @@ export function merge(
     } else if (
       parser.initialState && typeof parser.initialState === "object"
     ) {
+      const localStateKey = localObjectStateKey(index);
+      if (
+        shouldPreserveLocalChildState(parser) &&
+        context.state && typeof context.state === "object" &&
+        localStateKey in context.state
+      ) {
+        return context.state[localStateKey];
+      }
       // For object parsers, extract matching fields from context state
       if (context.state && typeof context.state === "object") {
         const extractedState: MergeState = {};
@@ -6225,13 +6250,14 @@ export function merge(
   const mergeResultState = (
     parser: Parser<Mode, MergeState, MergeState>,
     context: ParserContext<MergeState>,
+    parserState: unknown,
     result: ParserResult<unknown>,
     index: number,
   ): MergeState => {
     if (parser.initialState === undefined) {
       // For parsers with undefined initialState (like withDefault()),
       // store their state separately to avoid conflicts with object merging.
-      const key = `__parser_${index}`;
+      const key = parserStateKey(index);
       if (result.success) {
         if (
           result.consumed.length > 0 || result.next.state !== undefined
@@ -6245,10 +6271,25 @@ export function merge(
       // Parser succeeded with zero consumption and undefined state
       return { ...context.state };
     }
-    // For regular object parsers, use the original merging approach
-    return result.success
-      ? { ...context.state, ...result.next.state as MergeState }
-      : { ...context.state };
+    if (!result.success) return { ...context.state };
+
+    const mergedState = {
+      ...context.state,
+      ...result.next.state as MergeState,
+    };
+    if (!shouldPreserveLocalChildState(parser)) {
+      return mergedState;
+    }
+    if (
+      result.consumed.length === 0 &&
+      result.next.state === parserState
+    ) {
+      return mergedState;
+    }
+    return {
+      ...mergedState,
+      [localObjectStateKey(index)]: result.next.state,
+    };
   };
 
   // Sync parse implementation
@@ -6278,7 +6319,13 @@ export function merge(
           currentContext.exec,
           result.next.exec,
         );
-        const newState = mergeResultState(parser, currentContext, result, i);
+        const newState = mergeResultState(
+          parser,
+          currentContext,
+          parserState,
+          result,
+          i,
+        );
         const newContext = {
           ...currentContext,
           buffer: result.next.buffer,
@@ -6356,7 +6403,13 @@ export function merge(
           currentContext.exec,
           result.next.exec,
         );
-        const newState = mergeResultState(parser, currentContext, result, i);
+        const newState = mergeResultState(
+          parser,
+          currentContext,
+          parserState,
+          result,
+          i,
+        );
         const newContext = {
           ...currentContext,
           buffer: result.next.buffer,
@@ -6406,10 +6459,6 @@ export function merge(
     };
   };
 
-  // Collect field parser pairs from all children so that nested merge()
-  // can pre-complete dependency source fields at the outer level.
-  const mergedFieldParsers = collectChildFieldParsers(parsers);
-
   const mergeParser = {
     $mode: combinedMode,
     $valueType: [],
@@ -6437,7 +6486,7 @@ export function merge(
         index: number,
       ): unknown => {
         if (parser.initialState === undefined) {
-          const key = `__parser_${index}`;
+          const key = parserStateKey(index);
           if (
             resolvedState && typeof resolvedState === "object" &&
             key in resolvedState
@@ -6448,6 +6497,14 @@ export function merge(
         } else if (
           parser.initialState && typeof parser.initialState === "object"
         ) {
+          const key = localObjectStateKey(index);
+          if (
+            shouldPreserveLocalChildState(parser) &&
+            resolvedState && typeof resolvedState === "object" &&
+            key in resolvedState
+          ) {
+            return resolvedState[key];
+          }
           if (resolvedState && typeof resolvedState === "object") {
             const extractedState: MergeState = {};
             for (const field in parser.initialState) {
@@ -6778,7 +6835,7 @@ export function merge(
         i: number,
       ): unknown => {
         if (p.initialState === undefined) {
-          const key = `__parser_${i}`;
+          const key = parserStateKey(i);
           if (
             context.state && typeof context.state === "object" &&
             key in context.state
@@ -6789,6 +6846,14 @@ export function merge(
         } else if (
           p.initialState && typeof p.initialState === "object"
         ) {
+          const key = localObjectStateKey(i);
+          if (
+            shouldPreserveLocalChildState(p) &&
+            context.state && typeof context.state === "object" &&
+            key in context.state
+          ) {
+            return context.state[key];
+          }
           if (context.state && typeof context.state === "object") {
             const extractedState: MergeState = {};
             for (const field in p.initialState) {

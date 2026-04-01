@@ -716,6 +716,13 @@ export function bindConfig<
   // parser isolated from those legacy markers prevents optional()/withDefault()
   // wrappers from invoking it without the annotation context it requires.
 
+  const getSuggestInnerState = (state: TState): TState =>
+    isConfigBindState(state)
+      ? (state.cliState === undefined
+        ? parser.initialState
+        : state.cliState as TState)
+      : state;
+
   const boundParser: Parser<M, TValue, TState> = {
     $mode: parser.$mode,
     $valueType: parser.$valueType,
@@ -733,11 +740,7 @@ export function bindConfig<
       if (boundParser.dependencyMetadata?.source != null) {
         return [{ path, parser: boundParser, state }];
       }
-      const innerState = isConfigBindState(state)
-        ? (state.cliState === undefined
-          ? parser.initialState
-          : state.cliState as TState)
-        : state;
+      const innerState = getSuggestInnerState(state);
       return parser.getSuggestRuntimeNodes?.(innerState, path) ?? [];
     },
 
@@ -820,7 +823,13 @@ export function bindConfig<
       return wrapForMode(parser.$mode, getConfigOrDefault(state, options));
     },
 
-    suggest: parser.suggest,
+    suggest: (context, prefix) => {
+      const innerState = getSuggestInnerState(context.state);
+      const innerContext = innerState !== context.state
+        ? { ...context, state: innerState }
+        : context;
+      return parser.suggest(innerContext, prefix);
+    },
     shouldDeferCompletion: shouldDeferPromptUntilConfigResolves,
     getDocFragments(state, upperDefaultValue?) {
       const defaultValue = upperDefaultValue ?? options.default;

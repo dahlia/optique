@@ -93,12 +93,27 @@ function isTerminalMultipleItemState(state: unknown): boolean {
   }
 }
 
-function isUnstartedMultipleItemState(state: unknown): boolean {
-  let unwrapped = state;
-  while (isInjectedAnnotationWrapper(unwrapped)) {
-    unwrapped = unwrapInjectedAnnotationWrapper(unwrapped);
+function isUnstartedMultipleItemState(
+  state: unknown,
+  originalState?: unknown,
+): boolean {
+  let unwrappedState = state;
+  while (isInjectedAnnotationWrapper(unwrappedState)) {
+    unwrappedState = unwrapInjectedAnnotationWrapper(unwrappedState);
   }
-  return unwrapped == null;
+  if (unwrappedState == null) return true;
+
+  if (originalState === undefined) return false;
+
+  let unwrappedOriginalState = originalState;
+  while (isInjectedAnnotationWrapper(unwrappedOriginalState)) {
+    unwrappedOriginalState = unwrapInjectedAnnotationWrapper(
+      unwrappedOriginalState,
+    );
+  }
+  return unwrappedState === unwrappedOriginalState &&
+    unwrappedOriginalState != null &&
+    typeof unwrappedOriginalState === "object";
 }
 
 function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
@@ -1325,9 +1340,11 @@ export function multiple<M extends Mode, TValue, TState>(
     if (
       added &&
       result.consumed.length === 0 &&
-      result.next.state === currentItemStateWithAnnotations &&
       result.next.optionsTerminated === context.optionsTerminated &&
-      isUnstartedMultipleItemState(currentItemStateWithAnnotations)
+      isUnstartedMultipleItemState(
+        result.next.state,
+        currentItemStateWithAnnotations,
+      )
     ) {
       return {
         success: true,
@@ -1434,9 +1451,11 @@ export function multiple<M extends Mode, TValue, TState>(
     if (
       added &&
       result.consumed.length === 0 &&
-      result.next.state === currentItemStateWithAnnotations &&
       result.next.optionsTerminated === context.optionsTerminated &&
-      isUnstartedMultipleItemState(currentItemStateWithAnnotations)
+      isUnstartedMultipleItemState(
+        result.next.state,
+        currentItemStateWithAnnotations,
+      )
     ) {
       return {
         success: true,

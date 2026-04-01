@@ -2050,6 +2050,50 @@ describe("createConfigContext error paths", () => {
     assert.equal(nodes[0]?.state, "cli-state");
   });
 
+  test("bindConfig suggest unwraps zero-consumption cliState", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    const inner: Parser<"sync", string, string> = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "initial",
+      parse(parseContext) {
+        return {
+          success: true as const,
+          next: { ...parseContext, state: "cli-state" },
+          consumed: [],
+        };
+      },
+      complete: () => ({ success: true as const, value: "cli-state" }),
+      *suggest(context) {
+        yield { kind: "literal" as const, text: context.state };
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser: Parser<"sync", string, string> = bindConfig(inner, {
+      context,
+      key: "host",
+      default: "fallback",
+    });
+
+    const parsed = parser.parse({
+      buffer: [],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const suggestions = [...parser.suggest(parsed.next, "")];
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "cli-state" }]);
+  });
+
   test("throws when sync mode parser.parse returns Promise", () => {
     const schema = z.object({ host: z.string() });
     const context = createConfigContext({ schema });

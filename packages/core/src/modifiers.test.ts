@@ -5231,6 +5231,45 @@ describe("branch coverage: modifiers edge cases", () => {
     assert.deepEqual(suggestions, []);
   });
 
+  it("multiple: zero-consumption fresh object state does not add a slot", () => {
+    const inner: Parser<
+      "sync",
+      "idle",
+      { readonly kind: "idle" }
+    > = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly "idle"[],
+      $stateType: [] as readonly { readonly kind: "idle" }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { kind: "idle" as const },
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete: (state) => ({ success: true as const, value: state.kind }),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser = multiple(inner);
+
+    const result = parser.parse({
+      buffer: [],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(result.success);
+    if (!result.success) return;
+    assert.deepEqual(result.next.state, []);
+  });
+
   // Line 155/442: async optional/withDefault suggestAsync — state is undefined
   // (not an array), so the else branch uses syncParser.initialState.
   it("optional: async suggest with undefined state uses initialState", async () => {
