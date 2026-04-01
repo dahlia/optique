@@ -17,6 +17,7 @@ import {
   fillMissingSourceDefaultsAsync,
   resolveStateWithRuntime,
   resolveStateWithRuntimeAsync,
+  type RuntimeNode,
 } from "./dependency-runtime.ts";
 import {
   getAnnotations,
@@ -899,6 +900,45 @@ function createExclusiveSuggest(
       },
     );
   };
+}
+
+function getParserSuggestRuntimeNodes<TState>(
+  parser: Parser<Mode, unknown, TState>,
+  state: TState,
+  path: readonly PropertyKey[],
+): readonly RuntimeNode[] {
+  return parser.getSuggestRuntimeNodes?.(state, path) ??
+    (parser.dependencyMetadata?.source != null
+      ? [{ path, parser, state }]
+      : []);
+}
+
+function getExclusiveSuggestRuntimeNodes(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+  state: ExclusiveState,
+  path: readonly PropertyKey[],
+): readonly RuntimeNode[] {
+  if (
+    !Array.isArray(state) ||
+    state.length !== 2 ||
+    typeof state[0] !== "number"
+  ) {
+    return [];
+  }
+  const [index, parserResult] = state;
+  if (
+    !parserResult?.success ||
+    index < 0 ||
+    index >= parsers.length
+  ) {
+    return [];
+  }
+  const parser = parsers[index];
+  return getParserSuggestRuntimeNodes(
+    parser,
+    parserResult.next.state,
+    [...path, index],
+  );
 }
 
 /**
@@ -2748,6 +2788,12 @@ export function or(
         () => parseAsync(context),
       );
     },
+    getSuggestRuntimeNodes(
+      state: undefined | [number, ParserResult<unknown>],
+      path: readonly PropertyKey[],
+    ) {
+      return getExclusiveSuggestRuntimeNodes(parsers, state, path);
+    },
     suggest: createExclusiveSuggest(parsers, combinedMode),
     getDocFragments(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
@@ -3269,6 +3315,12 @@ export function longestMatch(
         () => parseSync(context),
         () => parseAsync(context),
       );
+    },
+    getSuggestRuntimeNodes(
+      state: undefined | [number, ParserResult<unknown>],
+      path: readonly PropertyKey[],
+    ) {
+      return getExclusiveSuggestRuntimeNodes(parsers, state, path);
     },
     suggest: createExclusiveSuggest(parsers, combinedMode),
     getDocFragments(
