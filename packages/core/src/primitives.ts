@@ -13,7 +13,7 @@ import {
   replayDerivedParserAsync,
 } from "./dependency-runtime.ts";
 import type { DocFragment } from "./doc.ts";
-import { dispatchIterableByMode } from "./mode-dispatch.ts";
+import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
 import type { TraceEntry } from "./input-trace.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import { validateCommandNames, validateOptionNames } from "./validate.ts";
@@ -1251,56 +1251,59 @@ export function option<M extends Mode, T>(
       state: ValueParserResult<T | boolean> | undefined,
       exec?: ExecutionContext,
     ): ModeValue<M, ValueParserResult<T | boolean>> {
-      if (state == null) {
-        const missing = valueParser == null
-          ? { success: true, value: false }
-          : {
-            success: false,
-            error: options.errors?.missing
-              ? (typeof options.errors.missing === "function"
-                ? options.errors.missing(optionNames)
-                : options.errors.missing)
-              : message`Missing option ${eOptionNames(optionNames)}.`,
-          };
-        return missing as ModeValue<M, ValueParserResult<T | boolean>>;
-      }
-      if (
-        isAsync && valueParser != null && dependencyMetadata?.derived != null
-      ) {
-        return resolveDerivedCompletionAsync(
-          dependencyMetadata,
-          state as ValueParserResult<T>,
-          exec,
-        ).then((resolved) =>
-          resolved.success ? resolved : {
-            success: false as const,
-            error: options.errors?.invalidValue
-              ? (typeof options.errors.invalidValue === "function"
-                ? options.errors.invalidValue(resolved.error)
-                : options.errors.invalidValue)
-              : message`${eOptionNames(optionNames)}: ${resolved.error}`,
-          }
-        ) as ReturnType<typeof result.complete>;
-      }
-      const resolvedState = valueParser != null &&
-          dependencyMetadata?.derived != null
-        ? resolveDerivedCompletionSync(
-          dependencyMetadata,
-          state as ValueParserResult<T>,
-          exec,
-        ) as ValueParserResult<T | boolean>
-        : state;
-      if (resolvedState.success) {
-        return resolvedState as ModeValue<M, ValueParserResult<T | boolean>>;
-      }
-      return {
-        success: false,
-        error: options.errors?.invalidValue
+      const formatInvalidValueError = (error: Message) =>
+        options.errors?.invalidValue
           ? (typeof options.errors.invalidValue === "function"
-            ? options.errors.invalidValue(resolvedState.error)
+            ? options.errors.invalidValue(error)
             : options.errors.invalidValue)
-          : message`${eOptionNames(optionNames)}: ${resolvedState.error}`,
-      } as ModeValue<M, ValueParserResult<T | boolean>>;
+          : message`${eOptionNames(optionNames)}: ${error}`;
+      const missing = valueParser == null
+        ? { success: true as const, value: false }
+        : {
+          success: false as const,
+          error: options.errors?.missing
+            ? (typeof options.errors.missing === "function"
+              ? options.errors.missing(optionNames)
+              : options.errors.missing)
+            : message`Missing option ${eOptionNames(optionNames)}.`,
+        };
+      const completeSync = (): ValueParserResult<T | boolean> => {
+        if (state == null) return missing;
+        const resolvedState = valueParser != null &&
+            dependencyMetadata?.derived != null
+          ? resolveDerivedCompletionSync(
+            dependencyMetadata,
+            state as ValueParserResult<T>,
+            exec,
+          ) as ValueParserResult<T | boolean>
+          : state;
+        return resolvedState.success ? resolvedState : {
+          success: false,
+          error: formatInvalidValueError(resolvedState.error),
+        };
+      };
+      const completeAsync = async (): Promise<
+        ValueParserResult<T | boolean>
+      > => {
+        if (state == null) return missing;
+        if (valueParser == null || dependencyMetadata?.derived == null) {
+          return completeSync();
+        }
+        const resolved = await resolveDerivedCompletionAsync(
+          dependencyMetadata,
+          state as ValueParserResult<T>,
+          exec,
+        );
+        return resolved.success ? resolved : {
+          success: false,
+          error: formatInvalidValueError(resolved.error),
+        };
+      };
+      return dispatchByMode(
+        mode,
+        completeSync,
+        completeAsync,
+      );
     },
     suggest(
       context: ParserContext<
@@ -1402,7 +1405,11 @@ export function option<M extends Mode, T>(
   }
   // Populate dependency metadata from the value parser's markers.
   if (dependencyMetadata != null) {
-    (result as Record<string, unknown>).dependencyMetadata = dependencyMetadata;
+    Object.defineProperty(result, "dependencyMetadata", {
+      value: dependencyMetadata,
+      configurable: true,
+      enumerable: false,
+    });
   }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
@@ -1969,45 +1976,47 @@ export function argument<M extends Mode, T>(
       state: ValueParserResult<T> | undefined,
       exec?: ExecutionContext,
     ): ModeValue<M, ValueParserResult<T>> {
-      if (state == null) {
-        return {
+      const formatInvalidValueError = (error: Message) =>
+        options.errors?.invalidValue
+          ? (typeof options.errors.invalidValue === "function"
+            ? options.errors.invalidValue(error)
+            : options.errors.invalidValue)
+          : message`${metavar(valueParser.metavar)}: ${error}`;
+      const missing = {
+        success: false as const,
+        error: options.errors?.endOfInput ??
+          message`Expected a ${
+            metavar(valueParser.metavar)
+          }, but too few arguments.`,
+      };
+      const completeSync = (): ValueParserResult<T> => {
+        if (state == null) return missing;
+        const resolvedState = dependencyMetadata?.derived != null
+          ? resolveDerivedCompletionSync(dependencyMetadata, state, exec)
+          : state;
+        return resolvedState.success ? resolvedState : {
           success: false,
-          error: options.errors?.endOfInput ??
-            message`Expected a ${
-              metavar(valueParser.metavar)
-            }, but too few arguments.`,
-        } as ModeValue<M, ValueParserResult<T>>;
-      }
-      if (isAsync && dependencyMetadata?.derived != null) {
-        return resolveDerivedCompletionAsync(
+          error: formatInvalidValueError(resolvedState.error),
+        };
+      };
+      const completeAsync = async (): Promise<ValueParserResult<T>> => {
+        if (state == null) return missing;
+        if (dependencyMetadata?.derived == null) return completeSync();
+        const resolved = await resolveDerivedCompletionAsync(
           dependencyMetadata,
           state,
           exec,
-        ).then((resolved) =>
-          resolved.success ? resolved : {
-            success: false as const,
-            error: options.errors?.invalidValue
-              ? (typeof options.errors.invalidValue === "function"
-                ? options.errors.invalidValue(resolved.error)
-                : options.errors.invalidValue)
-              : message`${metavar(valueParser.metavar)}: ${resolved.error}`,
-          }
-        ) as ReturnType<typeof result.complete>;
-      }
-      const resolvedState = dependencyMetadata?.derived != null
-        ? resolveDerivedCompletionSync(dependencyMetadata, state, exec)
-        : state;
-      if (resolvedState.success) {
-        return resolvedState as ModeValue<M, ValueParserResult<T>>;
-      }
-      return {
-        success: false,
-        error: options.errors?.invalidValue
-          ? (typeof options.errors.invalidValue === "function"
-            ? options.errors.invalidValue(resolvedState.error)
-            : options.errors.invalidValue)
-          : message`${metavar(valueParser.metavar)}: ${resolvedState.error}`,
-      } as ModeValue<M, ValueParserResult<T>>;
+        );
+        return resolved.success ? resolved : {
+          success: false,
+          error: formatInvalidValueError(resolved.error),
+        };
+      };
+      return dispatchByMode(
+        valueParser.$mode,
+        completeSync,
+        completeAsync,
+      );
     },
     suggest(
       context: ParserContext<
@@ -2098,7 +2107,11 @@ export function argument<M extends Mode, T>(
     enumerable: false,
   });
   if (dependencyMetadata != null) {
-    (result as Record<string, unknown>).dependencyMetadata = dependencyMetadata;
+    Object.defineProperty(result, "dependencyMetadata", {
+      value: dependencyMetadata,
+      configurable: true,
+      enumerable: false,
+    });
   }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
