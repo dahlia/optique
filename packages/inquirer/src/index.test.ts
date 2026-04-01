@@ -4756,8 +4756,12 @@ describe("prompt() with dependency sources", () => {
       usage: modeParser.usage,
     });
     assert.ok(parseResult.success);
-    const extracted = await modeParser.dependencyMetadata?.source
-      ?.extractSourceValue(parseResult.next.state);
+    assert.ok(
+      modeParser.dependencyMetadata?.source != null,
+      "Expected source metadata.",
+    );
+    const extracted = await modeParser.dependencyMetadata.source
+      .extractSourceValue(parseResult.next.state);
     assert.deepEqual(extracted, { success: true, value: "prod" });
   });
 
@@ -4787,8 +4791,12 @@ describe("prompt() with dependency sources", () => {
         },
       );
 
-      const extracted = await modeParser.dependencyMetadata?.source
-        ?.extractSourceValue(
+      assert.ok(
+        modeParser.dependencyMetadata?.source != null,
+        "Expected source metadata.",
+      );
+      const extracted = await modeParser.dependencyMetadata.source
+        .extractSourceValue(
           injectAnnotations(modeParser.initialState, annotations),
         );
       assert.deepEqual(extracted, { success: true, value: "prod" });
@@ -4836,8 +4844,12 @@ describe("prompt() with dependency sources", () => {
         },
       );
 
-      const extracted = await modeParser.dependencyMetadata?.source
-        ?.extractSourceValue(
+      assert.ok(
+        modeParser.dependencyMetadata?.source != null,
+        "Expected source metadata.",
+      );
+      const extracted = await modeParser.dependencyMetadata.source
+        .extractSourceValue(
           injectAnnotations(modeParser.initialState, annotations),
         );
       assert.deepEqual(extracted, { success: true, value: "prod" });
