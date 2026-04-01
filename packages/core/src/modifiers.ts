@@ -93,6 +93,14 @@ function isTerminalMultipleItemState(state: unknown): boolean {
   }
 }
 
+function isUnstartedMultipleItemState(state: unknown): boolean {
+  let unwrapped = state;
+  while (isInjectedAnnotationWrapper(unwrapped)) {
+    unwrapped = unwrapInjectedAnnotationWrapper(unwrapped);
+  }
+  return unwrapped == null;
+}
+
 function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
   return value != null &&
     (typeof value === "object" || typeof value === "function") &&
@@ -333,27 +341,6 @@ export function optional<M extends Mode, TValue, TState>(
     },
     complete(state: [TState] | undefined, exec?: ExecutionContext) {
       if (!Array.isArray(state)) {
-        // When the inner parser preserves an omitted-source default via
-        // dependency metadata (e.g. optional(withDefault(source))), delegate
-        // to it so the user-visible value matches the dependency runtime.
-        const sourceMetadata = parser.dependencyMetadata?.source;
-        if (
-          sourceMetadata?.preservesSourceValue !== false &&
-          sourceMetadata?.getMissingSourceValue != null
-        ) {
-          const delegatedState = state != null && typeof state === "object"
-            ? state as TState
-            : undefined as TState;
-          return dispatchByMode(
-            parser.$mode,
-            () => syncParser.complete(delegatedState, exec),
-            () =>
-              parser.complete(
-                delegatedState,
-                exec,
-              ) as Promise<ValueParserResult<TValue | undefined>>,
-          );
-        }
         if (
           typeof parser.shouldDeferCompletion === "function" &&
           state != null &&
@@ -383,6 +370,27 @@ export function optional<M extends Mode, TValue, TState>(
             );
           };
           return innerComplete();
+        }
+        // When the inner parser preserves an omitted-source default via
+        // dependency metadata (e.g. optional(withDefault(source))), delegate
+        // to it so the user-visible value matches the dependency runtime.
+        const sourceMetadata = parser.dependencyMetadata?.source;
+        if (
+          sourceMetadata?.preservesSourceValue !== false &&
+          sourceMetadata?.getMissingSourceValue != null
+        ) {
+          const delegatedState = state != null && typeof state === "object"
+            ? state as TState
+            : undefined as TState;
+          return dispatchByMode(
+            parser.$mode,
+            () => syncParser.complete(delegatedState, exec),
+            () =>
+              parser.complete(
+                delegatedState,
+                exec,
+              ) as Promise<ValueParserResult<TValue | undefined>>,
+          );
         }
         return { success: true, value: undefined };
       }
@@ -1313,10 +1321,32 @@ export function multiple<M extends Mode, TValue, TState>(
         return result;
       }
     }
+    const mergedExec = mergeChildExec(context.exec, result.next.exec);
+    if (
+      added &&
+      result.consumed.length === 0 &&
+      result.next.state === currentItemStateWithAnnotations &&
+      result.next.optionsTerminated === context.optionsTerminated &&
+      isUnstartedMultipleItemState(currentItemStateWithAnnotations)
+    ) {
+      return {
+        success: true,
+        next: {
+          ...result.next,
+          state: context.state,
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        },
+        consumed: result.consumed,
+      };
+    }
     const itemAnnotationSource = added
       ? context.state
       : currentItemStateWithAnnotations;
-    const mergedExec = mergeChildExec(context.exec, result.next.exec);
     if (
       result.next.state === currentItemStateWithAnnotations &&
       result.consumed.length > 0 &&
@@ -1400,10 +1430,32 @@ export function multiple<M extends Mode, TValue, TState>(
         return result;
       }
     }
+    const mergedExec = mergeChildExec(context.exec, result.next.exec);
+    if (
+      added &&
+      result.consumed.length === 0 &&
+      result.next.state === currentItemStateWithAnnotations &&
+      result.next.optionsTerminated === context.optionsTerminated &&
+      isUnstartedMultipleItemState(currentItemStateWithAnnotations)
+    ) {
+      return {
+        success: true,
+        next: {
+          ...result.next,
+          state: context.state,
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        },
+        consumed: result.consumed,
+      };
+    }
     const itemAnnotationSource = added
       ? context.state
       : currentItemStateWithAnnotations;
-    const mergedExec = mergeChildExec(context.exec, result.next.exec);
     if (
       result.next.state === currentItemStateWithAnnotations &&
       result.consumed.length > 0 &&

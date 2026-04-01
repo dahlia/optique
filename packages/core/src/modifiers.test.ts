@@ -30,6 +30,7 @@ import {
 } from "@optique/core/modifiers";
 import {
   parse,
+  parseAsync,
   type Parser,
   type ParserContext,
   type Suggestion,
@@ -745,6 +746,129 @@ describe("optional", () => {
 
     const completeResult = optionalParser.complete(undefined);
     assert.deepEqual(completeResult, { success: true, value: "dev" });
+  });
+
+  it("should collapse deferred missing-source failures to undefined", () => {
+    const sourceId = Symbol("optional-deferred-missing-source");
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly ({ readonly pending: true } | undefined)[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<{ readonly pending: true } | undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return {
+          success: false as const,
+          error: message`Missing config value.`,
+        };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      shouldDeferCompletion() {
+        return true;
+      },
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          getMissingSourceValue() {
+            return { success: true as const, value: "fallback" };
+          },
+          extractSourceValue() {
+            return undefined;
+          },
+        },
+      },
+    } as const satisfies Parser<
+      "sync",
+      string,
+      { readonly pending: true } | undefined
+    >;
+    const parser = optional(withDefault(inner, "fallback"));
+
+    assert.deepEqual(
+      (
+        parser.complete as (
+          state: unknown,
+        ) => ValueParserResult<string | undefined>
+      )({ pending: true }),
+      {
+        success: true,
+        value: undefined,
+      },
+    );
+  });
+
+  it("should collapse async deferred missing-source failures to undefined", async () => {
+    const sourceId = Symbol("optional-deferred-missing-source-async");
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly ({ readonly pending: true } | undefined)[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<{ readonly pending: true } | undefined>) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`Missing config value.`,
+        });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      shouldDeferCompletion() {
+        return true;
+      },
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          getMissingSourceValue() {
+            return Promise.resolve({
+              success: true as const,
+              value: "fallback",
+            });
+          },
+          extractSourceValue() {
+            return Promise.resolve(undefined);
+          },
+        },
+      },
+    } as const satisfies Parser<
+      "async",
+      string,
+      { readonly pending: true } | undefined
+    >;
+    const parser = optional(withDefault(inner, "fallback"));
+
+    assert.deepEqual(
+      await (
+        parser.complete as (
+          state: unknown,
+        ) => Promise<ValueParserResult<string | undefined>>
+      )({ pending: true }),
+      {
+        success: true,
+        value: undefined,
+      },
+    );
   });
 });
 
@@ -3892,6 +4016,33 @@ describe("multiple", () => {
       success: true,
       value: ["item", "item"],
     });
+  });
+
+  it("should not append an empty optional slot on empty input", () => {
+    const parser = multiple(optional(option("--name", string())));
+
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (!result.success) return;
+    assert.deepEqual(result.value, []);
+  });
+
+  it("should not append an empty withDefault slot on empty input", () => {
+    const parser = multiple(withDefault(option("--name", string()), "guest"));
+
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (!result.success) return;
+    assert.deepEqual(result.value, []);
+  });
+
+  it("should not append an empty async optional slot on empty input", async () => {
+    const parser = multiple(optional(option("--mode", asyncChoice(["dev"]))));
+
+    const result = await parseAsync(parser, []);
+    assert.ok(result.success);
+    if (!result.success) return;
+    assert.deepEqual(result.value, []);
   });
 
   it("should not reopen a sync slot after a consumed extension failure", () => {
