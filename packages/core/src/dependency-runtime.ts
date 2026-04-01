@@ -55,7 +55,6 @@ function stableSymbolKey(sym: symbol): string {
 /**
  * The origin of a dependency source value.
  *
- * @throws Propagates errors thrown or rejected by `extractSourceValue()`.
  * @internal
  * @since 1.0.0
  */
@@ -245,7 +244,8 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
 
   constructor(registry: DependencyRegistryLike) {
     if (registry instanceof FailedAwareRegistry) {
-      registry.copyFailedSources(this.#failedSources);
+      this.registry = registry.rebindFailedSources(this.#failedSources);
+      return;
     }
     this.registry = new FailedAwareRegistry(registry, this.#failedSources);
   }
@@ -324,11 +324,17 @@ class FailedAwareRegistry implements DependencyRegistryLike {
     }
   }
 
+  rebindFailedSources(target: Set<symbol>): FailedAwareRegistry {
+    this.copyFailedSources(target);
+    return new FailedAwareRegistry(this.#inner, target);
+  }
+
   clone(): DependencyRegistryLike {
-    return new FailedAwareRegistry(
-      this.#inner.clone(),
-      new Set(this.#failedSources),
-    );
+    const failedSources = new Set(this.#failedSources);
+    const innerClone = this.#inner.clone();
+    return innerClone instanceof FailedAwareRegistry
+      ? innerClone.rebindFailedSources(failedSources)
+      : new FailedAwareRegistry(innerClone, failedSources);
   }
 }
 
@@ -602,6 +608,7 @@ function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
  *
  * @param nodes The runtime nodes to inspect.
  * @param runtime The dependency runtime context.
+ * @throws Propagates errors thrown or rejected by `extractSourceValue()`.
  * @internal
  * @since 1.0.0
  */

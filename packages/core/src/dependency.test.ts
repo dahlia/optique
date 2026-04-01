@@ -576,6 +576,37 @@ describe("DeferredParseState", () => {
       assert.equal(deferred.preliminaryResult.value, "test-input");
     }
   });
+
+  test("createDeferredParseState reuses snapshotted default values", () => {
+    const env = dependency(choice(["dev", "prod"] as const));
+    const region = dependency(choice(["us", "eu"] as const));
+    let defaultCalls = 0;
+    const derived = deriveFrom({
+      metavar: "URL",
+      mode: "sync",
+      dependencies: [env, region] as const,
+      factory: (currentEnv, currentRegion) =>
+        choice([`https://${currentEnv}.${currentRegion}.example.com`] as const),
+      defaultValues: () => {
+        defaultCalls++;
+        return defaultCalls === 1
+          ? ["dev", "us"] as const
+          : ["prod", "eu"] as const;
+      },
+    });
+
+    const preliminaryResult = derived.parse("https://dev.us.example.com");
+    assert.equal(defaultCalls, 1);
+
+    const deferred = createDeferredParseState(
+      "https://dev.us.example.com",
+      derived,
+      preliminaryResult,
+    );
+
+    assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
+    assert.equal(defaultCalls, 1);
+  });
 });
 
 describe("snapshotDefaultDependencyValues", () => {

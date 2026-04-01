@@ -37,6 +37,10 @@ interface EnvSourceData {
   readonly source: EnvSource;
 }
 
+const inheritParentAnnotationsKey = Symbol.for(
+  "@optique/core/inheritParentAnnotations",
+);
+
 /**
  * Context for environment-variable-based fallback values.
  *
@@ -545,7 +549,7 @@ function getEnvOrDefault<M extends Mode, TValue>(
     const completeState = innerState ??
       (annotations != null &&
           innerParser.initialState == null &&
-          typeof innerParser.shouldDeferCompletion === "function"
+          Reflect.get(innerParser, inheritParentAnnotationsKey) === true
         ? injectAnnotations(innerParser.initialState, annotations)
         : innerParser.initialState);
     return wrapForMode(mode, innerParser.complete(completeState, exec));

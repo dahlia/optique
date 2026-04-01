@@ -1032,10 +1032,10 @@ export function option<M extends Mode, T>(
           };
         }
         const rawInput = context.buffer[1];
-        const parseResultOrPromise = valueParser!.parse(rawInput);
         if (isAsync) {
-          return (parseResultOrPromise as Promise<ValueParserResult<T>>).then(
-            (parseResult) => {
+          return Promise.resolve()
+            .then(() => valueParser!.parse(rawInput))
+            .then((parseResult) => {
               const next = recordTrace(
                 context,
                 buildTraceEntry(
@@ -1056,10 +1056,11 @@ export function option<M extends Mode, T>(
                 },
                 consumed: context.buffer.slice(0, 2),
               };
-            },
-          );
+            });
         }
-        const parseResult = parseResultOrPromise as ValueParserResult<T>;
+        const parseResult = valueParser!.parse(rawInput) as ValueParserResult<
+          T
+        >;
         const next = recordTrace(
           context,
           buildTraceEntry(
@@ -1121,10 +1122,10 @@ export function option<M extends Mode, T>(
               } is a Boolean flag, but got a value: ${rawInput}.`,
           };
         }
-        const parseResultOrPromise = valueParser.parse(rawInput);
         if (isAsync) {
-          return (parseResultOrPromise as Promise<ValueParserResult<T>>).then(
-            (parseResult) => {
+          return Promise.resolve()
+            .then(() => valueParser.parse(rawInput))
+            .then((parseResult) => {
               const next = recordTrace(
                 context,
                 buildTraceEntry(
@@ -1145,10 +1146,9 @@ export function option<M extends Mode, T>(
                 },
                 consumed: context.buffer.slice(0, 1),
               };
-            },
-          );
+            });
         }
-        const parseResult = parseResultOrPromise as ValueParserResult<T>;
+        const parseResult = valueParser.parse(rawInput) as ValueParserResult<T>;
         const next = recordTrace(
           context,
           buildTraceEntry(
@@ -1923,10 +1923,10 @@ export function argument<M extends Mode, T>(
       }
 
       const rawInput = context.buffer[i];
-      const parseResultOrPromise = valueParser.parse(rawInput);
       if (isAsync) {
-        return (parseResultOrPromise as Promise<ValueParserResult<T>>).then(
-          (parseResult) => {
+        return Promise.resolve()
+          .then(() => valueParser.parse(rawInput))
+          .then((parseResult) => {
             const next = recordTrace(
               context,
               buildTraceEntry(
@@ -1947,10 +1947,9 @@ export function argument<M extends Mode, T>(
               },
               consumed: context.buffer.slice(0, i + 1),
             };
-          },
-        );
+          });
       }
-      const parseResult = parseResultOrPromise as ValueParserResult<T>;
+      const parseResult = valueParser.parse(rawInput) as ValueParserResult<T>;
       const next = recordTrace(
         context,
         buildTraceEntry(
@@ -2428,10 +2427,6 @@ export function command<M extends Mode, T, TState>(
           ? parser.initialState
           : context.state[1];
 
-        const parseResultOrPromise = parser.parse({
-          ...withChildContext(context, name, innerState),
-        });
-
         const wrapState = (
           parseResult: ParserResult<TState>,
         ) => {
@@ -2462,12 +2457,17 @@ export function command<M extends Mode, T, TState>(
         };
 
         if (isAsync) {
-          return (
-            parseResultOrPromise as Promise<
-              ParserResult<TState>
-            >
-          ).then(wrapState);
+          return Promise.resolve()
+            .then(() =>
+              parser.parse({
+                ...withChildContext(context, name, innerState),
+              })
+            )
+            .then(wrapState);
         }
+        const parseResultOrPromise = parser.parse({
+          ...withChildContext(context, name, innerState),
+        });
         return wrapState(
           parseResultOrPromise as ParserResult<TState>,
         );
@@ -2490,50 +2490,67 @@ export function command<M extends Mode, T, TState>(
         // Command matched but inner parser never started.
         // First give the inner parser a chance to run with empty buffer,
         // then complete with the resulting state.
+        const childExec = withChildExecPath(exec, name);
+        if (isAsync) {
+          return Promise.resolve()
+            .then(() =>
+              parser.parse({
+                buffer: [],
+                optionsTerminated: false,
+                usage: [],
+                state: parser.initialState,
+                ...(childExec != null
+                  ? {
+                    exec: childExec,
+                    dependencyRegistry: childExec.dependencyRegistry,
+                  }
+                  : {}),
+              })
+            )
+            .then((parseResult) =>
+              Promise.resolve().then(() =>
+                parser.complete(
+                  parseResult.success
+                    ? parseResult.next.state
+                    : parser.initialState,
+                  childExec,
+                )
+              )
+            );
+        }
         const parseResultOrPromise = parser.parse({
           buffer: [],
           optionsTerminated: false,
           usage: [],
           state: parser.initialState,
-          ...(exec != null
+          ...(childExec != null
             ? {
-              exec: withChildExecPath(exec, name),
-              dependencyRegistry: withChildExecPath(exec, name)
-                ?.dependencyRegistry,
+              exec: childExec,
+              dependencyRegistry: childExec.dependencyRegistry,
             }
             : {}),
         });
-        if (isAsync) {
-          return (
-            parseResultOrPromise as Promise<ParserResult<TState>>
-          ).then((parseResult) => {
-            if (parseResult.success) {
-              return parser.complete(
-                parseResult.next.state,
-                withChildExecPath(exec, name),
-              );
-            }
-            return parser.complete(
-              parser.initialState,
-              withChildExecPath(exec, name),
-            );
-          });
-        }
         const parseResult = parseResultOrPromise as ParserResult<TState>;
         if (parseResult.success) {
           return parser.complete(
             parseResult.next.state,
-            withChildExecPath(exec, name),
+            childExec,
           );
         }
         // If parse fails, fallback to completing with initial state
         return parser.complete(
           parser.initialState,
-          withChildExecPath(exec, name),
+          childExec,
         );
       } else if (state[0] === "parsing") {
         // Delegate to inner parser
-        return parser.complete(state[1], withChildExecPath(exec, name));
+        const childExec = withChildExecPath(exec, name);
+        if (isAsync) {
+          return Promise.resolve().then(() =>
+            parser.complete(state[1], childExec)
+          );
+        }
+        return parser.complete(state[1], childExec);
       }
       // Should never reach here
       return {

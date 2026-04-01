@@ -2047,6 +2047,154 @@ describe("primitives additional branch coverage", () => {
     }
   });
 
+  it("option parse rejects instead of throwing when async value parsing throws synchronously", async () => {
+    const throwingParser: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "VALUE",
+      placeholder: "",
+      parse() {
+        throw new TypeError("Synchronous option parse failure.");
+      },
+      format(value) {
+        return value;
+      },
+    };
+    const parser = option("--name", throwingParser);
+    let result: ReturnType<typeof parser.parse> | undefined;
+    assert.doesNotThrow(() => {
+      result = parser.parse({
+        buffer: ["--name", "alice"],
+        state: undefined,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+    });
+    assert.ok(result instanceof Promise);
+    await assert.rejects(result, {
+      name: "TypeError",
+      message: "Synchronous option parse failure.",
+    });
+  });
+
+  it("argument parse rejects instead of throwing when async value parsing throws synchronously", async () => {
+    const throwingParser: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "VALUE",
+      placeholder: "",
+      parse() {
+        throw new TypeError("Synchronous argument parse failure.");
+      },
+      format(value) {
+        return value;
+      },
+    };
+    const parser = argument(throwingParser);
+    let result: ReturnType<typeof parser.parse> | undefined;
+    assert.doesNotThrow(() => {
+      result = parser.parse({
+        buffer: ["alice"],
+        state: undefined,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+    });
+    assert.ok(result instanceof Promise);
+    await assert.rejects(result, {
+      name: "TypeError",
+      message: "Synchronous argument parse failure.",
+    });
+  });
+
+  it("command parse rejects instead of throwing when async child parsing throws synchronously", async () => {
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse() {
+        throw new TypeError("Synchronous command parse failure.");
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "ok" });
+      },
+      suggest: async function* () {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    } as const satisfies Parser<"async", string, undefined>;
+    const parser = command("deploy", inner);
+    let result: ReturnType<typeof parser.parse> | undefined;
+    assert.doesNotThrow(() => {
+      result = parser.parse({
+        buffer: [],
+        state: ["matched", "deploy"],
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+    });
+    assert.ok(result instanceof Promise);
+    await assert.rejects(result, {
+      name: "TypeError",
+      message: "Synchronous command parse failure.",
+    });
+  });
+
+  it("command complete rejects instead of throwing when async child completion throws synchronously", async () => {
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "initial",
+      parse() {
+        return Promise.resolve({
+          success: true as const,
+          next: {
+            buffer: [] as readonly string[],
+            state: "parsed",
+            optionsTerminated: false,
+            usage: [] as const,
+          },
+          consumed: [] as const,
+        });
+      },
+      complete() {
+        throw new TypeError("Synchronous command complete failure.");
+      },
+      suggest: async function* () {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    } as const satisfies Parser<"async", string, string>;
+    const parser = command("deploy", inner);
+    let matchedResult: ReturnType<typeof parser.complete> | undefined;
+    assert.doesNotThrow(() => {
+      matchedResult = parser.complete(["matched", "deploy"]);
+    });
+    assert.ok(matchedResult instanceof Promise);
+    await assert.rejects(matchedResult, {
+      name: "TypeError",
+      message: "Synchronous command complete failure.",
+    });
+
+    let parsingResult: ReturnType<typeof parser.complete> | undefined;
+    assert.doesNotThrow(() => {
+      parsingResult = parser.complete(["parsing", "parsed"]);
+    });
+    assert.ok(parsingResult instanceof Promise);
+    await assert.rejects(parsingResult, {
+      name: "TypeError",
+      message: "Synchronous command complete failure.",
+    });
+  });
+
   it("option duplicate error function handles direct and joined forms", () => {
     const parser = option("--count", integer(), {
       errors: {

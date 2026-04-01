@@ -53,8 +53,9 @@ export const defaultValues: unique symbol = Symbol.for(
 /**
  * A unique symbol used to store the single default value thunk on derived
  * parsers created by {@link DependencySource.derive}.  Unlike
- * {@link defaultValues} (which `createDeferredParseState` reads eagerly),
- * this symbol is only read by the dependency-metadata bridge so that
+ * {@link defaultValues} (which `createDeferredParseState` only falls back to
+ * when no parse-time snapshot is available), this symbol is only read by the
+ * dependency-metadata bridge so that
  * single-source defaults are accessible without double evaluation.
  * @internal
  */
@@ -1855,7 +1856,9 @@ export function createDeferredParseState<T, S>(
     ]
     : undefined;
 
-  const defaultVals = defaultValuesFn ? defaultValuesFn() : undefined;
+  const defaultVals = getSnapshottedDefaultDependencyValues(
+    preliminaryResult,
+  ) ?? (defaultValuesFn ? defaultValuesFn() : undefined);
 
   return {
     [deferredParseMarker]: true,

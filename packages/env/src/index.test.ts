@@ -2080,6 +2080,64 @@ describe("bindEnv() with dependency sources", () => {
     assert.deepEqual(extracted, { success: true, value: "prod" });
   });
 
+  it("only injects annotations into fallback state for inheriting parsers", () => {
+    const envContext = createEnvContext({ source: () => undefined });
+    const annotations = envContext.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+
+    let completedState: unknown;
+    const innerParser = {
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`No CLI value.`,
+        };
+      },
+      complete(state: unknown) {
+        completedState = state;
+        return { success: true as const, value: "fallback" as const };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+      shouldDeferCompletion() {
+        return true;
+      },
+    } as const satisfies Parser<"sync", "fallback", undefined>;
+    const parser = bindEnv(innerParser, {
+      context: envContext,
+      key: "MODE",
+      parser: string(),
+    });
+    const parseResult = parser.parse({
+      buffer: [],
+      state: injectAnnotations(parser.initialState, annotations),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success);
+    if (!parseResult.success) return;
+
+    const completed = parser.complete(parseResult.next.state);
+
+    assert.deepEqual(completed, { success: true, value: "fallback" });
+    assert.equal(completedState, undefined);
+  });
+
   it("does not invent mapped dependency source values from env fallbacks", () => {
     const source = dependency(choice(["dev", "prod"] as const));
     const envContext = createEnvContext({
