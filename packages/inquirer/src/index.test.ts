@@ -4685,4 +4685,87 @@ describe("prompt() with dependency sources", () => {
       ?.extractSourceValue(parseResult.next.state);
     assert.deepEqual(extracted, { success: true, value: "prod" });
   });
+
+  it(
+    "preserves inner source extraction when prompt() wraps bindEnv() at initial state",
+    async () => {
+      const envContext = createEnvContext({
+        prefix: "APP_",
+        source: (key) => ({ APP_MODE: "prod" })[key],
+      });
+      const annotations = envContext.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const modeParser = prompt(
+        bindEnv(option("--mode", mode), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+        {
+          type: "select",
+          message: "Select mode:",
+          choices: ["dev", "prod"],
+          prompter: () =>
+            Promise.reject(new Error("Prompt should not be called")),
+        },
+      );
+
+      const extracted = await modeParser.dependencyMetadata?.source
+        ?.extractSourceValue(
+          injectAnnotations(modeParser.initialState, annotations),
+        );
+      assert.deepEqual(extracted, { success: true, value: "prod" });
+    },
+  );
+
+  it(
+    "preserves inner source extraction when prompt() wraps bindConfig() at initial state",
+    async () => {
+      const configContext = createConfigContext<
+        { readonly mode?: "dev" | "prod" }
+      >({
+        schema: {
+          "~standard": {
+            version: 1,
+            vendor: "optique-test",
+            validate(input: unknown) {
+              return {
+                value: input as { readonly mode?: "dev" | "prod" },
+              };
+            },
+          },
+        },
+      });
+      const annotations = await configContext.getAnnotations(
+        {},
+        {
+          load: () => ({
+            config: { mode: "prod" as const },
+            meta: undefined,
+          }),
+        },
+      );
+      const modeParser = prompt(
+        bindConfig(option("--mode", mode), {
+          context: configContext,
+          key: "mode",
+        }),
+        {
+          type: "select",
+          message: "Select mode:",
+          choices: ["dev", "prod"],
+          prompter: () =>
+            Promise.reject(new Error("Prompt should not be called")),
+        },
+      );
+
+      const extracted = await modeParser.dependencyMetadata?.source
+        ?.extractSourceValue(
+          injectAnnotations(modeParser.initialState, annotations),
+        );
+      assert.deepEqual(extracted, { success: true, value: "prod" });
+    },
+  );
 });
