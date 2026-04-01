@@ -5897,7 +5897,7 @@ describe("branch coverage: modifiers edge cases", () => {
   });
 
   it("multiple: async suggest derives selected values with child exec paths", async () => {
-    const seenPaths: string[] = [];
+    const seenPaths: PropertyKey[][] = [];
     const inner = {
       $mode: "async" as const,
       $valueType: [] as readonly string[],
@@ -5917,11 +5917,12 @@ describe("branch coverage: modifiers edge cases", () => {
         _state: string,
         exec?: { readonly path: readonly PropertyKey[] },
       ) {
-        const path = exec?.path?.map(String).join("/") ?? "root";
+        const path = [...(exec?.path ?? ["root"])];
         seenPaths.push(path);
+        const pathText = path.map(String).join("/");
         return Promise.resolve({
           success: true as const,
-          value: `item-${path}`,
+          value: `item-${pathText}`,
         });
       },
       async *suggest() {
@@ -5952,7 +5953,7 @@ describe("branch coverage: modifiers edge cases", () => {
     );
 
     assert.deepEqual(suggestions, []);
-    assert.deepEqual(seenPaths, ["root/0", "root/1"]);
+    assert.deepEqual(seenPaths, [["root", 0], ["root", 1]]);
   });
 
   it("optional: getSuggestRuntimeNodes preserves outer annotations", () => {

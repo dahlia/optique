@@ -11148,9 +11148,9 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("concat() suggest seeds sync dependency defaults without pre-complete", () => {
     let completeCalls = 0;
     const sourceId = Symbol("concat-sync-suggest-source");
-    const firstChild = {
+    const firstField = {
       $mode: "sync" as const,
-      $valueType: [] as readonly [string][],
+      $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
       usage: [],
@@ -11161,14 +11161,14 @@ describe("branch coverage: constructs.ts edge cases", () => {
         return { success: true as const, next: context, consumed: [] };
       },
       complete() {
-        return { success: true as const, value: ["first"] as const };
+        return { success: true as const, value: "first" };
       },
       suggest: function* () {},
       getDocFragments: () => ({ fragments: [] }),
-    } as const satisfies Parser<"sync", readonly [string], undefined>;
-    const child = {
+    } as const satisfies Parser<"sync", string, undefined>;
+    const sourceField = {
       $mode: "sync" as const,
-      $valueType: [] as readonly [string][],
+      $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
       usage: [],
@@ -11180,12 +11180,12 @@ describe("branch coverage: constructs.ts edge cases", () => {
       },
       complete() {
         completeCalls++;
-        return { success: true as const, value: ["side-effect"] as const };
+        return { success: true as const, value: "side-effect" };
       },
       suggest: function* (context: ParserContext<undefined>) {
         if (
           JSON.stringify(context.exec?.path) ===
-            JSON.stringify(["root", 1]) &&
+            JSON.stringify(["root", 1, 0]) &&
           context.dependencyRegistry?.get(sourceId) === "prod"
         ) {
           yield { kind: "literal" as const, text: "safe" };
@@ -11205,7 +11205,9 @@ describe("branch coverage: constructs.ts edge cases", () => {
           preservesSourceValue: true,
         },
       },
-    } as const satisfies Parser<"sync", readonly [string], undefined>;
+    } as const satisfies Parser<"sync", string, undefined>;
+    const firstChild = tuple([firstField] as const);
+    const child = tuple([sourceField] as const);
     const parser = concat(firstChild, child);
 
     const suggestions = [...parser.suggest({
@@ -11227,9 +11229,9 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("concat() suggest seeds async dependency defaults without pre-complete", async () => {
     let completeCalls = 0;
     const sourceId = Symbol("concat-async-suggest-source");
-    const firstChild = {
+    const firstField = {
       $mode: "async" as const,
-      $valueType: [] as readonly [string][],
+      $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
       usage: [],
@@ -11246,15 +11248,15 @@ describe("branch coverage: constructs.ts edge cases", () => {
       complete() {
         return Promise.resolve({
           success: true as const,
-          value: ["first"] as const,
+          value: "first",
         });
       },
       suggest: async function* () {},
       getDocFragments: () => ({ fragments: [] }),
-    } as const satisfies Parser<"async", readonly [string], undefined>;
-    const child = {
+    } as const satisfies Parser<"async", string, undefined>;
+    const childField = {
       $mode: "async" as const,
-      $valueType: [] as readonly [string][],
+      $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
       usage: [],
@@ -11272,13 +11274,13 @@ describe("branch coverage: constructs.ts edge cases", () => {
         completeCalls++;
         return Promise.resolve({
           success: true as const,
-          value: ["side-effect"] as const,
+          value: "side-effect",
         });
       },
       suggest: async function* (context: ParserContext<undefined>) {
         if (
           JSON.stringify(context.exec?.path) ===
-            JSON.stringify(["root", 1]) &&
+            JSON.stringify(["root", 1, 0]) &&
           context.dependencyRegistry?.get(sourceId) === "prod"
         ) {
           yield { kind: "literal" as const, text: "safe" };
@@ -11301,7 +11303,9 @@ describe("branch coverage: constructs.ts edge cases", () => {
           preservesSourceValue: true,
         },
       },
-    } as const satisfies Parser<"async", readonly [string], undefined>;
+    } as const satisfies Parser<"async", string, undefined>;
+    const firstChild = tuple([firstField] as const);
+    const child = tuple([childField] as const);
     const parser = concat(firstChild, child);
 
     const suggestions: Suggestion[] = [];

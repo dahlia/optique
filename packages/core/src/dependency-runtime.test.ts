@@ -579,17 +579,16 @@ describe("collectExplicitSourceValues — failed sources", () => {
 describe("collectSourcesFromState", () => {
   test("only applies excluded fields at the current object depth", () => {
     const runtime = createDependencyRuntimeContext();
-    const topSourceId = Symbol("top");
-    const nestedSourceId = Symbol("nested");
+    const sourceId = Symbol("shared");
     const state = {
       shared: createDependencySourceState(
         { success: true as const, value: "top" },
-        topSourceId,
+        sourceId,
       ),
       nested: {
         shared: createDependencySourceState(
           { success: true as const, value: "nested" },
-          nestedSourceId,
+          sourceId,
         ),
       },
     };
@@ -601,8 +600,9 @@ describe("collectSourcesFromState", () => {
       new Set<PropertyKey>(["shared"]),
     );
 
-    assert.ok(!runtime.hasSource(topSourceId));
-    assert.equal(runtime.getSource(nestedSourceId), "nested");
+    assert.ok(runtime.hasSource(sourceId));
+    assert.ok(!runtime.isSourceFailed(sourceId));
+    assert.equal(runtime.getSource(sourceId), "nested");
   });
 });
 
