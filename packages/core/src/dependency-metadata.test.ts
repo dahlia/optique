@@ -19,6 +19,7 @@ import {
   extractDependencyMetadata,
   type ParserDependencyMetadata,
 } from "./dependency-metadata.ts";
+import { message } from "./message.ts";
 
 // =============================================================================
 // Shared test fixtures
@@ -128,8 +129,9 @@ describe("extractDependencyMetadata", () => {
     const sourceId = Symbol("async-source");
     const metadata = createAsyncSourceMetadata(sourceId);
     assert.ok(metadata?.source?.extractSourceValue !== undefined);
+    const parseError = message`invalid env`;
     const sourceState = createDependencySourceState(
-      { success: false, error: undefined! },
+      { success: false, error: parseError },
       sourceId,
     );
     const result = await resolveExtractResult(
@@ -137,6 +139,7 @@ describe("extractDependencyMetadata", () => {
     );
     assert.ok(result !== undefined);
     assert.ok(!result.success);
+    if (!result.success) assert.equal(result.error, parseError);
   });
 
   test(

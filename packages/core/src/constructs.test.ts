@@ -9222,6 +9222,9 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const completed = await p.complete(p.initialState);
 
     assert.ok(!completed.success);
+    if (!completed.success) {
+      assert.equal(formatMessage(completed.error), "first field failed");
+    }
     assert.ok(!laterFieldCompleted);
   });
 
