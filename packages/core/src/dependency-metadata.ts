@@ -44,14 +44,18 @@ export interface DependencySourceCapability {
   /**
    * Extracts the dependency source parse result from the parser's state.
    *
-   * Each wrapper composes this method to handle its state shape:
+   * The `state` argument is the current parser state for the source-owning
+   * parser.  Each wrapper composes this method to handle its own state shape:
    * - plain source: reads from `DependencySourceState`
    * - `optional()` / `withDefault()`: unwraps `[innerState]` first
    * - `map()`: reads the pre-transform value from inner state
    *
    * Returns the `ValueParserResult` (which may be successful with any
-   * value including `undefined`, or failed), or `undefined` if the state
+   * value including `undefined`, or failed), a promise that resolves to the
+   * same shape when extraction needs async work, or `undefined` if the state
    * does not contain a source result at all (unpopulated / wrong shape).
+   * Callers and wrapper authors must handle both direct and promise-wrapped
+   * results when composing `extractSourceValue`.
    */
   readonly extractSourceValue: (
     state: unknown,

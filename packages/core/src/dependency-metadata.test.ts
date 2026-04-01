@@ -383,6 +383,28 @@ describe("composeDependencyMetadata", () => {
     assert.equal(composed.source.extractSourceValue(undefined), undefined);
   });
 
+  test("optional extractSourceValue unwraps [state] for async sources", async () => {
+    const sourceId = Symbol("async-source");
+    const composed = composeDependencyMetadata(
+      createAsyncSourceMetadata(sourceId),
+      "optional",
+    );
+    assert.ok(composed?.source?.extractSourceValue !== undefined);
+    const sourceState = createDependencySourceState(
+      { success: true, value: "prod" },
+      sourceId,
+    );
+    const result = await resolveExtractResult(
+      composed.source.extractSourceValue([sourceState]),
+    );
+    assert.ok(result !== undefined && result.success);
+    if (result.success) assert.equal(result.value, "prod");
+    assert.equal(
+      await resolveExtractResult(composed.source.extractSourceValue(undefined)),
+      undefined,
+    );
+  });
+
   test("withDefault extractSourceValue unwraps [state]", async () => {
     const env = createEnvSource();
     const inner = extractDependencyMetadata(env);

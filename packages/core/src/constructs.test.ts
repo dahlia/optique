@@ -11975,11 +11975,19 @@ describe("branch coverage: constructs.ts edge cases", () => {
         shared: syncUnrelatedShared,
       }),
     );
+    const syncParsed = syncParser.parse({
+      buffer: [],
+      state: syncParser.initialState,
+      optionsTerminated: false,
+      usage: syncParser.usage,
+    });
+    assert.ok(syncParsed.success);
+    if (!syncParsed.success) return;
 
     assert.deepEqual(
       [...syncParser.suggest({
         buffer: [],
-        state: { shared: { value: "leaked" }, derived: undefined },
+        state: syncParsed.next.state,
         optionsTerminated: false,
         usage: syncParser.usage,
         exec: {
@@ -12096,12 +12104,20 @@ describe("branch coverage: constructs.ts edge cases", () => {
         shared: asyncUnrelatedShared,
       }),
     );
+    const asyncParsed = await asyncParser.parse({
+      buffer: [],
+      state: asyncParser.initialState,
+      optionsTerminated: false,
+      usage: asyncParser.usage,
+    });
+    assert.ok(asyncParsed.success);
+    if (!asyncParsed.success) return;
 
     const asyncSuggestions: Suggestion[] = [];
     for await (
       const suggestion of asyncParser.suggest({
         buffer: [],
-        state: { shared: { value: "leaked" }, derived: undefined },
+        state: asyncParsed.next.state,
         optionsTerminated: false,
         usage: asyncParser.usage,
         exec: {
