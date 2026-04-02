@@ -2706,6 +2706,20 @@ describe("bindEnv() with dependency sources across tuple()/concat() boundaries",
     );
   });
 
+  it("tuple() suggest does not override invalid CLI source with env", () => {
+    const { parser, annotations } = createTupleParser();
+    const texts = suggestSync(
+      parser,
+      ["--mode", "invalid", "--level", "s"],
+      { annotations },
+    )
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+
+    assert.ok(!texts.includes("silent"));
+    assert.ok(!texts.includes("strict"));
+  });
+
   it("concat() parse uses env-backed dependency source", () => {
     const { parser, annotations } = createConcatParser();
     const result = parse(parser, ["--level", "silent"], { annotations });
@@ -2740,5 +2754,19 @@ describe("bindEnv() with dependency sources across tuple()/concat() boundaries",
       !texts.includes("verbose"),
       `Did not expect "verbose" in suggestions, got: ${JSON.stringify(texts)}`,
     );
+  });
+
+  it("concat() suggest does not override invalid CLI source with env", () => {
+    const { parser, annotations } = createConcatParser();
+    const texts = suggestSync(
+      parser,
+      ["--mode", "invalid", "--level", "s"],
+      { annotations },
+    )
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+
+    assert.ok(!texts.includes("silent"));
+    assert.ok(!texts.includes("strict"));
   });
 });

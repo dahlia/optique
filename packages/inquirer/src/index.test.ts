@@ -5016,6 +5016,21 @@ describe("prompt() with dependency sources", () => {
             assert.ok(result.success);
             assert.deepEqual(result.value, ["prod", "silent"]);
             assert.equal(promptCalls, 0);
+
+            const suggestionTexts = (
+              await suggestAsync(
+                parser,
+                ["--level", "s"],
+                { annotations },
+              )
+            )
+              .filter((suggestion) => suggestion.kind === "literal")
+              .map((suggestion) => suggestion.text);
+            assert.ok(suggestionTexts.includes("silent"));
+            assert.ok(suggestionTexts.includes("strict"));
+            assert.ok(!suggestionTexts.includes("debug"));
+            assert.ok(!suggestionTexts.includes("verbose"));
+            assert.equal(promptCalls, 0);
           },
         );
       }
