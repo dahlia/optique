@@ -11149,6 +11149,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   });
 
   it("concat() suggest seeds sync dependency defaults without pre-complete", () => {
+    let firstCompleteCalls = 0;
     let completeCalls = 0;
     const sourceId = Symbol("concat-sync-suggest-source");
     const firstField = {
@@ -11164,6 +11165,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         return { success: true as const, next: context, consumed: [] };
       },
       complete() {
+        firstCompleteCalls++;
         return { success: true as const, value: "first" };
       },
       suggest: function* () {},
@@ -11226,10 +11228,12 @@ describe("branch coverage: constructs.ts edge cases", () => {
       },
     }, "")];
     assert.deepEqual(suggestions, [{ kind: "literal", text: "safe" }]);
+    assert.equal(firstCompleteCalls, 0);
     assert.equal(completeCalls, 0);
   });
 
   it("concat() suggest seeds async dependency defaults without pre-complete", async () => {
+    let firstCompleteCalls = 0;
     let completeCalls = 0;
     const sourceId = Symbol("concat-async-suggest-source");
     const firstField = {
@@ -11249,6 +11253,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         });
       },
       complete() {
+        firstCompleteCalls++;
         return Promise.resolve({
           success: true as const,
           value: "first",
@@ -11329,6 +11334,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       suggestions.push(suggestion);
     }
     assert.deepEqual(suggestions, [{ kind: "literal", text: "safe" }]);
+    assert.equal(firstCompleteCalls, 0);
     assert.equal(completeCalls, 0);
   });
 
@@ -12162,6 +12168,161 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.deepEqual(asyncSuggestions, [{
       kind: "literal",
       text: "from-source",
+    }]);
+
+    const syncFailedSource = {
+      ...syncSharedSource,
+      parse(context: ParserContext<unknown>) {
+        if (context.buffer[0] !== "broken") {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected broken source token.`,
+          };
+        }
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: { kind: "broken" as const },
+          },
+          consumed: ["broken"],
+        };
+      },
+      dependencyMetadata: {
+        source: {
+          ...syncSharedSource.dependencyMetadata.source,
+          extractSourceValue(state: unknown) {
+            if (
+              typeof state === "object" && state !== null &&
+              "kind" in state && state.kind === "broken"
+            ) {
+              return {
+                success: false as const,
+                error: message`Broken source.`,
+              };
+            }
+            return syncSharedSource.dependencyMetadata.source
+              .extractSourceValue(
+                state,
+              );
+          },
+        },
+      },
+    } as const satisfies Parser<"sync", string | undefined, unknown>;
+    const syncFailedParser = merge(
+      object({
+        shared: syncFailedSource,
+        derived: syncDerivedField,
+      }),
+      object({
+        shared: syncUnrelatedShared,
+      }),
+    );
+    const syncFailedParsed = syncFailedParser.parse({
+      buffer: ["broken"],
+      state: syncFailedParser.initialState,
+      optionsTerminated: false,
+      usage: syncFailedParser.usage,
+    });
+    assert.ok(syncFailedParsed.success);
+    if (!syncFailedParsed.success) return;
+    assert.deepEqual(
+      [...syncFailedParser.suggest({
+        buffer: [],
+        state: syncFailedParsed.next.state,
+        optionsTerminated: false,
+        usage: syncFailedParser.usage,
+        exec: {
+          usage: syncFailedParser.usage,
+          phase: "suggest",
+          path: [],
+          trace: undefined,
+        },
+      }, "")],
+      [{ kind: "literal", text: "failed-source" }],
+    );
+
+    const asyncFailedSource = {
+      ...asyncSharedSource,
+      parse(context: ParserContext<unknown>) {
+        if (context.buffer[0] !== "broken") {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`Expected broken source token.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: { kind: "broken" as const },
+          },
+          consumed: ["broken"],
+        });
+      },
+      dependencyMetadata: {
+        source: {
+          ...asyncSharedSource.dependencyMetadata.source,
+          extractSourceValue(state: unknown) {
+            if (
+              typeof state === "object" && state !== null &&
+              "kind" in state && state.kind === "broken"
+            ) {
+              return Promise.resolve({
+                success: false as const,
+                error: message`Broken source.`,
+              });
+            }
+            return asyncSharedSource.dependencyMetadata.source
+              .extractSourceValue(
+                state,
+              );
+          },
+        },
+      },
+    } as const satisfies Parser<"async", string | undefined, unknown>;
+    const asyncFailedParser = merge(
+      object({
+        shared: asyncFailedSource,
+        derived: asyncDerivedField,
+      }),
+      object({
+        shared: asyncUnrelatedShared,
+      }),
+    );
+    const asyncFailedParsed = await asyncFailedParser.parse({
+      buffer: ["broken"],
+      state: asyncFailedParser.initialState,
+      optionsTerminated: false,
+      usage: asyncFailedParser.usage,
+    });
+    assert.ok(asyncFailedParsed.success);
+    if (!asyncFailedParsed.success) return;
+
+    const asyncFailedSuggestions: Suggestion[] = [];
+    for await (
+      const suggestion of asyncFailedParser.suggest({
+        buffer: [],
+        state: asyncFailedParsed.next.state,
+        optionsTerminated: false,
+        usage: asyncFailedParser.usage,
+        exec: {
+          usage: asyncFailedParser.usage,
+          phase: "suggest",
+          path: [],
+          trace: undefined,
+        },
+      }, "")
+    ) {
+      asyncFailedSuggestions.push(suggestion);
+    }
+    assert.deepEqual(asyncFailedSuggestions, [{
+      kind: "literal",
+      text: "failed-source",
     }]);
   });
 

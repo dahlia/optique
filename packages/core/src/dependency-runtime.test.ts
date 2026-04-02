@@ -378,6 +378,9 @@ describe("collectExplicitSourceValues", () => {
       message:
         /collectExplicitSourceValues\(\).*extractSourceValue.*Symbol\(env\)/,
     });
+    assert.ok(!runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), undefined);
+    assert.ok(!runtime.isSourceFailed(sourceId));
 
     const pending = collectExplicitSourceValuesAsync(nodes, runtime);
     assert.ok(!runtime.hasSource(sourceId));
@@ -422,6 +425,9 @@ describe("collectExplicitSourceValues", () => {
       message:
         /collectExplicitSourceValues\(\).*extractSourceValue.*Symbol\(env\)/,
     });
+    assert.ok(!runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), undefined);
+    assert.ok(!runtime.isSourceFailed(sourceId));
 
     await collectExplicitSourceValuesAsync(nodes, runtime);
     assert.ok(runtime.hasSource(sourceId));
