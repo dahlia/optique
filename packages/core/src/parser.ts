@@ -1060,6 +1060,10 @@ async function withSuggestRuntimeAsync<TState>(
  * Returns suggest-time runtime nodes for a parser, falling back to the
  * parser's own source metadata when it does not expose a custom hook.
  *
+ * @param parser The parser whose suggest-time runtime nodes should be resolved.
+ * @param state The current parser state.
+ * @param path The path to this parser within the parse tree.
+ * @returns The runtime nodes used to seed suggest-time dependency resolution.
  * @internal
  */
 export function getParserSuggestRuntimeNodes<TState>(

@@ -37,8 +37,6 @@ export interface TraceEntry {
    * Present when a derived parser snapshots default dependency values during
    * parse, including both `derive()` and `deriveFrom()` parsers.
    * This avoids re-evaluating dynamic default thunks during replay.
-   *
-   * @since 1.0.0
    */
   readonly defaultDependencyValues?: readonly unknown[];
 
