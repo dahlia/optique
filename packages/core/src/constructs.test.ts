@@ -3214,23 +3214,20 @@ describe("object() - duplicate option detection", () => {
     );
   });
 
-  it("should expose annotations to custom child parse state", () => {
+  it("should expose annotations to plain custom child parse state", () => {
     const marker = Symbol.for("@test/object-custom-parse-annotations");
 
-    class ChildState {
-      value = "ok";
-    }
-
+    const initialState = { value: "ok" };
     let seenState: unknown;
-    const childParser: Parser<"sync", string, ChildState> = {
+    const childParser: Parser<"sync", string, typeof initialState> = {
       $mode: "sync",
       $valueType: [] as readonly string[],
-      $stateType: [] as readonly ChildState[],
+      $stateType: [] as readonly (typeof initialState)[],
       priority: 1,
       usage: [],
       leadingNames: new Set(),
       acceptingAnyToken: false,
-      initialState: new ChildState(),
+      initialState,
       parse(context) {
         seenState = context.state;
         return getAnnotations(context.state)?.[marker] === true &&
@@ -3268,12 +3265,240 @@ describe("object() - duplicate option detection", () => {
     if (result.success) {
       assert.equal(result.value.value, "ok");
     }
-    assert.ok(seenState instanceof ChildState);
+    assert.ok(seenState != null && typeof seenState === "object");
+    assert.equal((seenState as { value: string }).value, "ok");
     assert.ok(seenState !== childParser.initialState);
     assert.equal(getAnnotations(seenState)?.[marker], true);
     assert.ok(
       !Reflect.ownKeys(childParser.initialState).includes(annotationKey),
     );
+  });
+
+  it("should preserve non-plain child parse state instances under annotations", () => {
+    const marker = Symbol.for("@test/object-non-plain-parse-state");
+
+    class PrivateState {
+      #value = "ok";
+
+      getValue(): string {
+        return this.#value;
+      }
+    }
+
+    let seenState: unknown;
+    const childParser: Parser<"sync", string, PrivateState> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly PrivateState[],
+      priority: 1,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: new PrivateState(),
+      parse(context) {
+        seenState = context.state;
+        return context.state.getValue() === "ok" && context.buffer.length > 0
+          ? {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+            },
+            consumed: [context.buffer[0]],
+          }
+          : { success: false as const, consumed: 0, error: message`missing` };
+      },
+      complete(state) {
+        return {
+          success: true as const,
+          value: state.getValue(),
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = object({ value: childParser });
+    const result = parseSync(parser, ["value"], {
+      annotations: { [marker]: true } satisfies Annotations,
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.value, "ok");
+    }
+    assert.equal(seenState, childParser.initialState);
+    assert.equal(getAnnotations(seenState), undefined);
+    assert.ok(
+      !Reflect.ownKeys(childParser.initialState).includes(annotationKey),
+    );
+  });
+
+  it("should not invoke accessors when scanning for annotation views", () => {
+    let getterCalls = 0;
+    const completedValue = Object.defineProperty({}, "danger", {
+      get() {
+        getterCalls++;
+        return "boom";
+      },
+      enumerable: true,
+      configurable: true,
+    });
+
+    const childParser: Parser<
+      "sync",
+      typeof completedValue,
+      { seen: boolean }
+    > = {
+      $mode: "sync",
+      $valueType: [] as readonly (typeof completedValue)[],
+      $stateType: [] as readonly { seen: boolean }[],
+      priority: 1,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { seen: false },
+      parse(context) {
+        return context.buffer.length > 0
+          ? {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: { seen: true },
+            },
+            consumed: [context.buffer[0]],
+          }
+          : { success: false as const, consumed: 0, error: message`missing` };
+      },
+      complete(state) {
+        assert.ok(state.seen);
+        return {
+          success: true as const,
+          value: completedValue,
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = object({ value: childParser });
+    const result = parseSync(parser, ["value"]);
+
+    assert.ok(result.success);
+    assert.equal(getterCalls, 0);
+    if (result.success) {
+      assert.equal(result.value.value, completedValue);
+    }
+  });
+
+  it("should unwrap stacked annotation views from nested completion results", () => {
+    const firstMarker = Symbol.for("@test/object-stacked-annotations/first");
+    const secondMarker = Symbol.for("@test/object-stacked-annotations/second");
+    const rawState = { value: "ok" };
+
+    const childParser: Parser<
+      "sync",
+      { readonly inner: unknown },
+      typeof rawState
+    > = {
+      $mode: "sync",
+      $valueType: [] as readonly { readonly inner: unknown }[],
+      $stateType: [] as readonly (typeof rawState)[],
+      priority: 1,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: rawState,
+      parse(context) {
+        return context.buffer.length > 0
+          ? {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+            },
+            consumed: [context.buffer[0]],
+          }
+          : { success: false as const, consumed: 0, error: message`missing` };
+      },
+      complete(state) {
+        return {
+          success: true as const,
+          value: { inner: state },
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const firstParser = tuple([childParser]);
+    const firstParsed = firstParser.parse({
+      buffer: ["first"],
+      state: injectAnnotations(
+        firstParser.initialState,
+        { [firstMarker]: true } satisfies Annotations,
+      ),
+      optionsTerminated: false,
+      usage: firstParser.usage,
+    });
+
+    assert.ok(firstParsed.success);
+    if (!firstParsed.success) {
+      return;
+    }
+    const firstView = firstParsed.next.state[0];
+    assert.ok(firstView != null && typeof firstView === "object");
+    assert.equal(getAnnotations(firstView)?.[firstMarker], true);
+
+    const stackedChildParser: Parser<
+      "sync",
+      { readonly inner: unknown },
+      object
+    > = {
+      ...childParser,
+      $stateType: [] as readonly object[],
+      initialState: firstView as object,
+    };
+    const secondParser = tuple([stackedChildParser]);
+    const secondParsed = secondParser.parse({
+      buffer: ["second"],
+      state: injectAnnotations(
+        secondParser.initialState,
+        { [secondMarker]: true } satisfies Annotations,
+      ),
+      optionsTerminated: false,
+      usage: secondParser.usage,
+    });
+
+    assert.ok(secondParsed.success);
+    if (!secondParsed.success) {
+      return;
+    }
+    const secondCompleted = secondParser.complete(secondParsed.next.state);
+
+    assert.ok(secondCompleted.success);
+    if (secondCompleted.success) {
+      assert.equal(secondCompleted.value[0].inner, rawState);
+      assert.equal(getAnnotations(secondCompleted.value[0].inner), undefined);
+      assert.ok(
+        !Reflect.ownKeys(secondCompleted.value[0].inner as object).includes(
+          annotationKey,
+        ),
+      );
+    }
   });
 
   it("should not mutate parent field state when inheriting annotations", () => {

@@ -308,12 +308,16 @@ function containsAnnotationView(
   if (proto !== Object.prototype && proto !== null) {
     return false;
   }
-  return Reflect.ownKeys(source).some((key) =>
-    containsAnnotationView(
-      (source as Record<PropertyKey, unknown>)[key],
-      seen,
-    )
-  );
+  const descriptors = Object.getOwnPropertyDescriptors(source) as Record<
+    PropertyKey,
+    PropertyDescriptor
+  >;
+  return Reflect.ownKeys(descriptors).some((key) => {
+    const descriptor = descriptors[key];
+    return descriptor != null && "value" in descriptor
+      ? containsAnnotationView(descriptor.value, seen)
+      : false;
+  });
 }
 
 function unwrapNestedAnnotationViews<T>(
@@ -440,7 +444,8 @@ function withAnnotationView<T extends object>(
   state: T,
   annotations: Annotations,
 ): T {
-  const view = new Proxy(state, {
+  const target = unwrapAnnotationView(state) as T;
+  const view = new Proxy(target, {
     get(target, key) {
       if (key === annotationKey) {
         return annotations;
@@ -452,7 +457,7 @@ function withAnnotationView<T extends object>(
       return key === annotationKey || Reflect.has(target, key);
     },
   });
-  annotationViewTargets.set(view, state);
+  annotationViewTargets.set(view, target);
   return view;
 }
 
@@ -498,7 +503,7 @@ function getObjectParseChildState(
   ) {
     return childState;
   }
-  return injectAnnotations(childState, annotations);
+  return inheritAnnotations(parentState, childState);
 }
 
 function getAnnotatedChildState(
