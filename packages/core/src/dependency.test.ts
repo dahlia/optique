@@ -954,6 +954,26 @@ describe("snapshotDefaultDependencyValues", () => {
       "us",
     ]);
   });
+
+  test("outer derived parsers overwrite inner default snapshots", () => {
+    const mode = dependency(choice(["inner", "outer"] as const));
+    const outer = mode.derive({
+      metavar: "VALUE",
+      mode: "sync",
+      defaultValue: () => "outer" as const,
+      factory: (_value) =>
+        mode.derive({
+          metavar: "INNER",
+          mode: "sync",
+          defaultValue: () => "inner" as const,
+          factory: () => choice(["ok"] as const),
+        }),
+    });
+
+    const result = outer.parse("ok");
+    assert.ok(result.success);
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(result), ["outer"]);
+  });
 });
 
 describe("DependencyRegistry", () => {
@@ -4205,6 +4225,13 @@ describe("coverage-guided dependency parser tests", () => {
       name: "TypeError",
       message: /promise-like result/i,
     });
+    assert.throws(
+      () => multiDerived[parseWithDependency]("ok", ["sync", "dev"] as const),
+      {
+        name: "TypeError",
+        message: /promise-like result/i,
+      },
+    );
 
     const singleDerived = modeParser.derive({
       metavar: "VALUE",
@@ -4230,6 +4257,10 @@ describe("coverage-guided dependency parser tests", () => {
     });
 
     assert.throws(() => singleDerived.parse("ok"), {
+      name: "TypeError",
+      message: /promise-like result/i,
+    });
+    assert.throws(() => singleDerived[parseWithDependency]("ok", "sync"), {
       name: "TypeError",
       message: /promise-like result/i,
     });

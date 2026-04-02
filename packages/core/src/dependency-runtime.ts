@@ -558,6 +558,7 @@ export function createReplayKey(
  *
  * @param nodes The runtime nodes to inspect.
  * @param runtime The dependency runtime context.
+ * @throws Propagates synchronous errors thrown by `extractSourceValue()`.
  * @throws {TypeError} If `extractSourceValue()` returns a promise-like result.
  *         Use {@link collectExplicitSourceValuesAsync} when async source
  *         extraction is expected.

@@ -747,6 +747,8 @@ function injectAnnotationsIntoState<TState>(
  *          successful or not.  If successful, it contains the parsed value of
  *          type `T`.  If not, it contains an error message describing the
  *          failure.
+ * @throws {TypeError} When a synchronous dependency source extractor returns a
+ *         thenable during completion-time dependency seeding.
  * @since 0.9.0 Renamed from the original `parse` function which now delegates
  *              to this for sync parsers.
  * @since 0.10.0 Added optional `options` parameter for annotations support.
@@ -917,6 +919,8 @@ export async function parseAsync<T>(
  * @param options Optional {@link ParseOptions} for customizing parsing behavior.
  * @returns A {@link Result} object (for sync) or Promise thereof (for async)
  *          indicating whether the parsing was successful or not.
+ * @throws {TypeError} When a synchronous dependency source extractor returns a
+ *         thenable during completion-time dependency seeding.
  * @since 0.10.0 Added optional `options` parameter for annotations support.
  */
 export function parse<M extends Mode, T>(

@@ -25,7 +25,11 @@ import type {
 import {
   unmatchedNonCliDependencySourceStateMarker,
 } from "@optique/core/parser";
-import { annotationKey, getAnnotations } from "@optique/core/annotations";
+import {
+  annotationKey,
+  getAnnotations,
+  inheritAnnotations,
+} from "@optique/core/annotations";
 import { message } from "@optique/core/message";
 import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
 import type { ValueParserResult } from "@optique/core/valueparser";
@@ -723,7 +727,7 @@ export function bindConfig<
   const getSuggestInnerState = (state: TState): TState =>
     isConfigBindState(state)
       ? (state.cliState === undefined
-        ? parser.initialState
+        ? inheritAnnotations(state, parser.initialState)
         : state.cliState as TState)
       : state;
 

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getDocPage, parse, suggestSync } from "@optique/core/parser";
 import type { Parser } from "@optique/core/parser";
 import { concat, merge, object, tuple } from "@optique/core/constructs";
-import { injectAnnotations } from "@optique/core/annotations";
+import { getAnnotations, injectAnnotations } from "@optique/core/annotations";
 import { dependency } from "@optique/core/dependency";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { fail, flag, option } from "@optique/core/primitives";
@@ -2054,6 +2054,71 @@ describe("createConfigContext error paths", () => {
     assert.equal(nodes[0]?.state, "cli-state");
   });
 
+  test(
+    "bindConfig getSuggestRuntimeNodes preserves annotations on no-cli fallback",
+    () => {
+      const context = createConfigContext({
+        schema: z.object({
+          host: z.string().optional(),
+        }),
+      });
+      let seenHost: string | undefined;
+      const inner: Parser<"sync", string, undefined> = {
+        $mode: "sync" as const,
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(parseContext) {
+          return {
+            success: true as const,
+            next: { ...parseContext, state: undefined },
+            consumed: [],
+          };
+        },
+        complete: () => ({ success: true as const, value: "ok" }),
+        suggest: () => [],
+        getSuggestRuntimeNodes(state, path) {
+          seenHost = (
+            getAnnotations(state) as
+              | {
+                readonly [key: symbol]: { readonly data?: { host?: string } };
+              }
+              | undefined
+          )?.[context.id]?.data?.host;
+          return [{ path, parser: inner, state }];
+        },
+        getDocFragments: () => ({ fragments: [] }),
+      };
+      const parser = bindConfig(inner, {
+        context,
+        key: "host",
+      });
+
+      const parsed = parser.parse({
+        buffer: [],
+        state: injectAnnotations(parser.initialState, {
+          [context.id]: { data: { host: "prod" } },
+        }),
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(parsed.success);
+      if (!parsed.success) return;
+
+      const nodes = parser.getSuggestRuntimeNodes?.(parsed.next.state, [
+        "host",
+      ]);
+      assert.ok(nodes != null);
+      if (nodes == null) return;
+      assert.equal(nodes.length, 1);
+      assert.equal(seenHost, "prod");
+    },
+  );
+
   test("bindConfig getSuggestRuntimeNodes preserves inner nodes for source parsers", () => {
     const context = createConfigContext({
       schema: z.object({
@@ -2493,12 +2558,10 @@ describe("bindConfig() with dependency sources", () => {
     });
 
     assert.ok(parseResult.success);
-    assert.equal(
-      parser.dependencyMetadata?.source?.extractSourceValue(
-        parseResult.next.state,
-      ),
-      undefined,
-    );
+    const source = parser.dependencyMetadata?.source;
+    assert.ok(source != null, "Expected dependency source metadata.");
+    if (source == null) return;
+    assert.equal(source.extractSourceValue(parseResult.next.state), undefined);
   });
 });
 
