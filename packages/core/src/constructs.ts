@@ -278,11 +278,27 @@ const fieldParsersKey: unique symbol = Symbol("fieldParsers");
  * to consume results from parsers that still return `DependencySourceState`.
  * @internal
  */
+function unwrapAnnotationView<T>(value: T): T {
+  if (value == null || typeof value !== "object") {
+    return value;
+  }
+  return (annotationViewTargets.get(value as object) as T | undefined) ?? value;
+}
+
 function unwrapCompleteResult(
   result: unknown,
 ): import("./valueparser.ts").ValueParserResult<unknown> {
-  if (isDependencySourceState(result)) return result.result;
-  return result as import("./valueparser.ts").ValueParserResult<unknown>;
+  const unwrappedResult = isDependencySourceState(result)
+    ? result.result
+    : result as import("./valueparser.ts").ValueParserResult<unknown>;
+  if (!unwrappedResult.success) {
+    return unwrappedResult;
+  }
+  const value = unwrapAnnotationView(unwrappedResult.value);
+  return value === unwrappedResult.value ? unwrappedResult : {
+    ...unwrappedResult,
+    value,
+  };
 }
 
 /**
@@ -331,11 +347,13 @@ function getAnnotatedFieldState(
   return getAnnotatedChildState(parentState, sourceState, parser);
 }
 
+const annotationViewTargets = new WeakMap<object, object>();
+
 function withAnnotationView<T extends object>(
   state: T,
   annotations: Annotations,
 ): T {
-  return new Proxy(state, {
+  const view = new Proxy(state, {
     get(target, key) {
       if (key === annotationKey) {
         return annotations;
@@ -347,6 +365,8 @@ function withAnnotationView<T extends object>(
       return key === annotationKey || Reflect.has(target, key);
     },
   });
+  annotationViewTargets.set(view, state);
+  return view;
 }
 
 function getAnnotatedChildState(
@@ -376,9 +396,8 @@ function getAnnotatedChildState(
     if (getAnnotations(injectedState) === annotations) {
       return injectedState;
     }
-    return withAnnotationView(childState, annotations);
   }
-  return childState;
+  return withAnnotationView(childState, annotations);
 }
 
 function buildSuggestRuntimeNodesFromPairs(
@@ -9642,9 +9661,11 @@ export function conditional(
       // If we have default branch, use it
       if (syncDefaultBranch !== undefined) {
         const branchState = state.branchState ?? syncDefaultBranch.initialState;
-        const defaultResult = syncDefaultBranch.complete(
-          branchState,
-          withChildExecPath(exec, "_branch"),
+        const defaultResult = unwrapCompleteResult(
+          syncDefaultBranch.complete(
+            branchState,
+            withChildExecPath(exec, "_branch"),
+          ),
         );
         if (!defaultResult.success) {
           return defaultResult;
@@ -9722,9 +9743,11 @@ export function conditional(
         withChildExecPath(completionExec, "_discriminator"),
       );
 
-    const branchResult = branchParser.complete(
-      resolvedBranchState,
-      withChildExecPath(completionExec, "_branch"),
+    const branchResult = unwrapCompleteResult(
+      branchParser.complete(
+        resolvedBranchState,
+        withChildExecPath(completionExec, "_branch"),
+      ),
     );
 
     if (!branchResult.success) {
@@ -9791,9 +9814,11 @@ export function conditional(
       // If we have default branch, use it
       if (defaultBranch !== undefined) {
         const branchState = state.branchState ?? defaultBranch.initialState;
-        const defaultResult = await defaultBranch.complete(
-          branchState,
-          withChildExecPath(exec, "_branch"),
+        const defaultResult = unwrapCompleteResult(
+          await defaultBranch.complete(
+            branchState,
+            withChildExecPath(exec, "_branch"),
+          ),
         );
         if (!defaultResult.success) {
           return defaultResult;
@@ -9871,9 +9896,11 @@ export function conditional(
         withChildExecPath(completionExec, "_discriminator"),
       );
 
-    const branchResult = await branchParser.complete(
-      resolvedBranchState,
-      withChildExecPath(completionExec, "_branch"),
+    const branchResult = unwrapCompleteResult(
+      await branchParser.complete(
+        resolvedBranchState,
+        withChildExecPath(completionExec, "_branch"),
+      ),
     );
 
     if (!branchResult.success) {

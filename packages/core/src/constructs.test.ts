@@ -10500,6 +10500,75 @@ describe("branch coverage: constructs.ts edge cases", () => {
     }
   });
 
+  it("shared-buffer constructs preserve annotations for custom child parsers", () => {
+    const marker = Symbol.for("@test/shared-buffer-custom-annotations");
+    const createCustomParser = (): Parser<
+      "sync",
+      string,
+      { value: string }
+    > => ({
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { value: string }[],
+      priority: 1,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "ok" },
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete(state) {
+        return getAnnotations(state)?.[marker] === true
+          ? { success: true as const, value: state.value }
+          : { success: false as const, error: message`missing` };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    });
+    const parsers: ReadonlyArray<
+      readonly [
+        string,
+        Parser<"sync", unknown, unknown>,
+        (value: unknown) => unknown,
+      ]
+    > = [
+      [
+        "object",
+        object({ child: createCustomParser() }),
+        (value) => (value as { readonly child: string }).child,
+      ],
+      [
+        "tuple",
+        tuple([createCustomParser()]),
+        (value) => (value as readonly [string])[0],
+      ],
+      [
+        "concat",
+        concat(tuple([createCustomParser()])),
+        (value) => (value as readonly [string])[0],
+      ],
+    ];
+
+    for (const [name, parser, getValue] of parsers) {
+      const result = parseSync(parser, [], {
+        annotations: { [marker]: true } satisfies Annotations,
+      });
+      assert.ok(result.success, `${name} should preserve annotations.`);
+      if (result.success) {
+        assert.equal(getValue(result.value), "ok");
+      }
+    }
+  });
+
   it("shared-buffer constructs skip annotation injection for missing plain dependency sources", () => {
     const modeSource = dependency(choice(["dev", "prod"] as const));
     const annotations = { source: "annotation" };
