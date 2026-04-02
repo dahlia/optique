@@ -926,6 +926,7 @@ export function option<M extends Mode, T>(
   validateOptionNames(optionNames, "Option");
   const mode: M = (valueParser?.$mode ?? "sync") as M;
   const isAsync = mode === "async";
+  const syncValueParser = valueParser as ValueParser<"sync", T> | undefined;
   const dependencyMetadata = valueParser != null
     ? extractDependencyMetadata(valueParser)
     : undefined;
@@ -1032,55 +1033,55 @@ export function option<M extends Mode, T>(
           };
         }
         const rawInput = context.buffer[1];
-        if (isAsync) {
-          return Promise.resolve()
-            .then(() => valueParser!.parse(rawInput))
-            .then((parseResult) => {
-              const next = recordTrace(
-                context,
-                buildTraceEntry(
-                  "option-value",
-                  rawInput,
-                  context.buffer.slice(0, 2),
-                  valueParser!,
-                  parseResult,
-                  optionNames,
-                ),
-              );
-              return {
-                success: true as const,
-                next: {
-                  ...next,
-                  state: createOptionParseState(parseResult),
-                  buffer: context.buffer.slice(2),
-                },
-                consumed: context.buffer.slice(0, 2),
-              };
-            });
-        }
-        const parseResult = valueParser!.parse(rawInput) as ValueParserResult<
-          T
-        >;
-        const next = recordTrace(
-          context,
-          buildTraceEntry(
-            "option-value",
-            rawInput,
-            context.buffer.slice(0, 2),
-            valueParser!,
-            parseResult,
-            optionNames,
-          ),
-        );
-        return {
-          success: true,
-          next: {
-            ...next,
-            state: createOptionParseState(parseResult),
-            buffer: context.buffer.slice(2),
+        return dispatchByMode(
+          mode,
+          () => {
+            const parseResult = syncValueParser!.parse(rawInput);
+            const next = recordTrace(
+              context,
+              buildTraceEntry(
+                "option-value",
+                rawInput,
+                context.buffer.slice(0, 2),
+                syncValueParser!,
+                parseResult,
+                optionNames,
+              ),
+            );
+            return {
+              success: true as const,
+              next: {
+                ...next,
+                state: createOptionParseState(parseResult),
+                buffer: context.buffer.slice(2),
+              },
+              consumed: context.buffer.slice(0, 2),
+            };
           },
-          consumed: context.buffer.slice(0, 2),
-        };
+          async () => {
+            const parseResult = await valueParser!.parse(rawInput);
+            const next = recordTrace(
+              context,
+              buildTraceEntry(
+                "option-value",
+                rawInput,
+                context.buffer.slice(0, 2),
+                valueParser!,
+                parseResult,
+                optionNames,
+              ),
+            );
+            return {
+              success: true as const,
+              next: {
+                ...next,
+                state: createOptionParseState(parseResult),
+                buffer: context.buffer.slice(2),
+              },
+              consumed: context.buffer.slice(0, 2),
+            };
+          },
+        );
       }
 
       // When the input is not split by spaces, but joined by = or :
@@ -1122,53 +1123,55 @@ export function option<M extends Mode, T>(
               } is a Boolean flag, but got a value: ${rawInput}.`,
           };
         }
-        if (isAsync) {
-          return Promise.resolve()
-            .then(() => valueParser.parse(rawInput))
-            .then((parseResult) => {
-              const next = recordTrace(
-                context,
-                buildTraceEntry(
-                  "option-value",
-                  rawInput,
-                  context.buffer.slice(0, 1),
-                  valueParser,
-                  parseResult,
-                  optionNames,
-                ),
-              );
-              return {
-                success: true as const,
-                next: {
-                  ...next,
-                  state: createOptionParseState(parseResult),
-                  buffer: context.buffer.slice(1),
-                },
-                consumed: context.buffer.slice(0, 1),
-              };
-            });
-        }
-        const parseResult = valueParser.parse(rawInput) as ValueParserResult<T>;
-        const next = recordTrace(
-          context,
-          buildTraceEntry(
-            "option-value",
-            rawInput,
-            context.buffer.slice(0, 1),
-            valueParser,
-            parseResult,
-            optionNames,
-          ),
-        );
-        return {
-          success: true,
-          next: {
-            ...next,
-            state: createOptionParseState(parseResult),
-            buffer: context.buffer.slice(1),
+        return dispatchByMode(
+          mode,
+          () => {
+            const parseResult = syncValueParser!.parse(rawInput);
+            const next = recordTrace(
+              context,
+              buildTraceEntry(
+                "option-value",
+                rawInput,
+                context.buffer.slice(0, 1),
+                syncValueParser!,
+                parseResult,
+                optionNames,
+              ),
+            );
+            return {
+              success: true as const,
+              next: {
+                ...next,
+                state: createOptionParseState(parseResult),
+                buffer: context.buffer.slice(1),
+              },
+              consumed: context.buffer.slice(0, 1),
+            };
           },
-          consumed: context.buffer.slice(0, 1),
-        };
+          async () => {
+            const parseResult = await valueParser.parse(rawInput);
+            const next = recordTrace(
+              context,
+              buildTraceEntry(
+                "option-value",
+                rawInput,
+                context.buffer.slice(0, 1),
+                valueParser,
+                parseResult,
+                optionNames,
+              ),
+            );
+            return {
+              success: true as const,
+              next: {
+                ...next,
+                state: createOptionParseState(parseResult),
+                buffer: context.buffer.slice(1),
+              },
+              consumed: context.buffer.slice(0, 1),
+            };
+          },
+        );
       }
 
       if (valueParser == null) {
@@ -1849,6 +1852,7 @@ export function argument<M extends Mode, T>(
   options: ArgumentOptions = {},
 ): Parser<M, T, ValueParserResult<T> | undefined> {
   const isAsync = valueParser.$mode === "async";
+  const syncValueParser = valueParser as ValueParser<"sync", T>;
   const dependencyMetadata = extractDependencyMetadata(valueParser);
 
   const optionPattern = /^--?[a-z0-9-]+$/i;
@@ -1923,53 +1927,55 @@ export function argument<M extends Mode, T>(
       }
 
       const rawInput = context.buffer[i];
-      if (isAsync) {
-        return Promise.resolve()
-          .then(() => valueParser.parse(rawInput))
-          .then((parseResult) => {
-            const next = recordTrace(
-              context,
-              buildTraceEntry(
-                "argument-value",
-                rawInput,
-                context.buffer.slice(0, i + 1),
-                valueParser,
-                parseResult,
-              ),
-            );
-            return {
-              success: true as const,
-              next: {
-                ...next,
-                buffer: context.buffer.slice(i + 1),
-                state: createOptionParseState(parseResult),
-                optionsTerminated,
-              },
-              consumed: context.buffer.slice(0, i + 1),
-            };
-          });
-      }
-      const parseResult = valueParser.parse(rawInput) as ValueParserResult<T>;
-      const next = recordTrace(
-        context,
-        buildTraceEntry(
-          "argument-value",
-          rawInput,
-          context.buffer.slice(0, i + 1),
-          valueParser,
-          parseResult,
-        ),
-      );
-      return {
-        success: true,
-        next: {
-          ...next,
-          buffer: context.buffer.slice(i + 1),
-          state: createOptionParseState(parseResult),
-          optionsTerminated,
+      return dispatchByMode(
+        valueParser.$mode,
+        () => {
+          const parseResult = syncValueParser.parse(rawInput);
+          const next = recordTrace(
+            context,
+            buildTraceEntry(
+              "argument-value",
+              rawInput,
+              context.buffer.slice(0, i + 1),
+              syncValueParser,
+              parseResult,
+            ),
+          );
+          return {
+            success: true as const,
+            next: {
+              ...next,
+              buffer: context.buffer.slice(i + 1),
+              state: createOptionParseState(parseResult),
+              optionsTerminated,
+            },
+            consumed: context.buffer.slice(0, i + 1),
+          };
         },
-        consumed: context.buffer.slice(0, i + 1),
-      };
+        async () => {
+          const parseResult = await valueParser.parse(rawInput);
+          const next = recordTrace(
+            context,
+            buildTraceEntry(
+              "argument-value",
+              rawInput,
+              context.buffer.slice(0, i + 1),
+              valueParser,
+              parseResult,
+            ),
+          );
+          return {
+            success: true as const,
+            next: {
+              ...next,
+              buffer: context.buffer.slice(i + 1),
+              state: createOptionParseState(parseResult),
+              optionsTerminated,
+            },
+            consumed: context.buffer.slice(0, i + 1),
+          };
+        },
+      );
     },
     complete(
       state: ValueParserResult<T> | undefined,
@@ -2318,6 +2324,8 @@ export function command<M extends Mode, T, TState>(
 ): Parser<M, T, CommandState<TState>> {
   validateCommandNames([name], "Command");
   const isAsync = parser.$mode === "async";
+  const syncInnerParser = parser as Parser<"sync", T, TState>;
+  const asyncInnerParser = parser as Parser<"async", T, TState>;
 
   // Use type assertion to allow both sync and async returns from parse method
   const result = {
@@ -2456,20 +2464,20 @@ export function command<M extends Mode, T, TState>(
           return parseResult;
         };
 
-        if (isAsync) {
-          return Promise.resolve()
-            .then(() =>
-              parser.parse({
-                ...withChildContext(context, name, innerState),
-              })
-            )
-            .then(wrapState);
-        }
-        const parseResultOrPromise = parser.parse({
-          ...withChildContext(context, name, innerState),
-        });
-        return wrapState(
-          parseResultOrPromise as ParserResult<TState>,
+        return dispatchByMode(
+          parser.$mode,
+          () =>
+            wrapState(
+              syncInnerParser.parse(
+                withChildContext(context, name, innerState),
+              ),
+            ),
+          async () =>
+            wrapState(
+              await parser.parse(
+                withChildContext(context, name, innerState),
+              ),
+            ),
         );
       }
       // Should never reach here
@@ -2491,34 +2499,7 @@ export function command<M extends Mode, T, TState>(
         // First give the inner parser a chance to run with empty buffer,
         // then complete with the resulting state.
         const childExec = withChildExecPath(exec, name);
-        if (isAsync) {
-          return Promise.resolve()
-            .then(() =>
-              parser.parse({
-                buffer: [],
-                optionsTerminated: false,
-                usage: [],
-                state: parser.initialState,
-                ...(childExec != null
-                  ? {
-                    exec: childExec,
-                    dependencyRegistry: childExec.dependencyRegistry,
-                  }
-                  : {}),
-              })
-            )
-            .then((parseResult) =>
-              Promise.resolve().then(() =>
-                parser.complete(
-                  parseResult.success
-                    ? parseResult.next.state
-                    : parser.initialState,
-                  childExec,
-                )
-              )
-            );
-        }
-        const parseResultOrPromise = parser.parse({
+        const childContext = {
           buffer: [],
           optionsTerminated: false,
           usage: [],
@@ -2529,28 +2510,36 @@ export function command<M extends Mode, T, TState>(
               dependencyRegistry: childExec.dependencyRegistry,
             }
             : {}),
-        });
-        const parseResult = parseResultOrPromise as ParserResult<TState>;
-        if (parseResult.success) {
-          return parser.complete(
-            parseResult.next.state,
-            childExec,
-          );
-        }
-        // If parse fails, fallback to completing with initial state
-        return parser.complete(
-          parser.initialState,
-          childExec,
+        };
+        return dispatchByMode(
+          parser.$mode,
+          () => {
+            const parseResult = syncInnerParser.parse(childContext);
+            return syncInnerParser.complete(
+              parseResult.success
+                ? parseResult.next.state
+                : syncInnerParser.initialState,
+              childExec,
+            );
+          },
+          async () => {
+            const parseResult = await asyncInnerParser.parse(childContext);
+            return asyncInnerParser.complete(
+              parseResult.success
+                ? parseResult.next.state
+                : parser.initialState,
+              childExec,
+            );
+          },
         );
       } else if (state[0] === "parsing") {
         // Delegate to inner parser
         const childExec = withChildExecPath(exec, name);
-        if (isAsync) {
-          return Promise.resolve().then(() =>
-            parser.complete(state[1], childExec)
-          );
-        }
-        return parser.complete(state[1], childExec);
+        return dispatchByMode(
+          parser.$mode,
+          () => syncInnerParser.complete(state[1], childExec),
+          async () => await asyncInnerParser.complete(state[1], childExec),
+        );
       }
       // Should never reach here
       return {
