@@ -285,6 +285,37 @@ function unwrapAnnotationView<T>(value: T): T {
   return (annotationViewTargets.get(value as object) as T | undefined) ?? value;
 }
 
+function containsAnnotationView(
+  value: unknown,
+  seen = new WeakSet<object>(),
+): boolean {
+  if (value == null || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as object;
+  if (annotationViewTargets.has(candidate)) {
+    return true;
+  }
+  const source = unwrapAnnotationView(candidate);
+  if (seen.has(source)) {
+    return false;
+  }
+  seen.add(source);
+  if (Array.isArray(source)) {
+    return source.some((item) => containsAnnotationView(item, seen));
+  }
+  const proto = Object.getPrototypeOf(source);
+  if (proto !== Object.prototype && proto !== null) {
+    return false;
+  }
+  return Reflect.ownKeys(source).some((key) =>
+    containsAnnotationView(
+      (source as Record<PropertyKey, unknown>)[key],
+      seen,
+    )
+  );
+}
+
 function unwrapNestedAnnotationViews<T>(
   value: T,
   seen = new WeakMap<object, unknown>(),
@@ -318,6 +349,8 @@ function unwrapNestedAnnotationViews<T>(
     PropertyDescriptor
   >;
   let changed = false;
+  const clone = Object.create(proto);
+  seen.set(source, clone);
   for (const key of Reflect.ownKeys(descriptors)) {
     const descriptor = descriptors[key];
     if (descriptor != null && "value" in descriptor) {
@@ -332,8 +365,6 @@ function unwrapNestedAnnotationViews<T>(
     seen.set(source, source);
     return source as T;
   }
-  const clone = Object.create(proto);
-  seen.set(source, clone);
   Object.defineProperties(clone, descriptors);
   return clone as T;
 }
@@ -344,7 +375,10 @@ function unwrapCompleteResult(
   const unwrappedResult = isDependencySourceState(result)
     ? result.result
     : result as import("./valueparser.ts").ValueParserResult<unknown>;
-  if (!unwrappedResult.success) {
+  if (
+    !unwrappedResult.success ||
+    !containsAnnotationView(unwrappedResult.value)
+  ) {
     return unwrappedResult;
   }
   const value = unwrapNestedAnnotationViews(unwrappedResult.value);
@@ -448,6 +482,23 @@ function getParseChildState(
   return getAnnotations(injectedState) === annotations
     ? injectedState
     : childState;
+}
+
+function getObjectParseChildState(
+  parentState: unknown,
+  childState: unknown,
+  _parser: Parser<Mode, unknown, unknown>,
+): unknown {
+  const annotations = getAnnotations(parentState);
+  if (
+    annotations === undefined ||
+    childState == null ||
+    typeof childState !== "object" ||
+    getAnnotations(childState) === annotations
+  ) {
+    return childState;
+  }
+  return injectAnnotations(childState, annotations);
 }
 
 function getAnnotatedChildState(
@@ -4737,7 +4788,7 @@ export function object<
       madeProgress = false;
       const getFieldState = createFieldStateGetter(
         currentContext.state,
-        getParseChildState,
+        getObjectParseChildState,
       );
 
       for (const [field, parser] of parserPairs) {
@@ -4836,7 +4887,7 @@ export function object<
       madeProgress = false;
       const getFieldState = createFieldStateGetter(
         currentContext.state,
-        getParseChildState,
+        getObjectParseChildState,
       );
 
       for (const [field, parser] of parserPairs) {

@@ -3214,6 +3214,68 @@ describe("object() - duplicate option detection", () => {
     );
   });
 
+  it("should expose annotations to custom child parse state", () => {
+    const marker = Symbol.for("@test/object-custom-parse-annotations");
+
+    class ChildState {
+      value = "ok";
+    }
+
+    let seenState: unknown;
+    const childParser: Parser<"sync", string, ChildState> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly ChildState[],
+      priority: 1,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: new ChildState(),
+      parse(context) {
+        seenState = context.state;
+        return getAnnotations(context.state)?.[marker] === true &&
+            context.buffer.length > 0
+          ? {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+            },
+            consumed: [context.buffer[0]],
+          }
+          : { success: false as const, consumed: 0, error: message`missing` };
+      },
+      complete(state) {
+        return {
+          success: true as const,
+          value: state.value,
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = object({ value: childParser });
+    const result = parseSync(parser, ["value"], {
+      annotations: { [marker]: true } satisfies Annotations,
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.value, "ok");
+    }
+    assert.ok(seenState instanceof ChildState);
+    assert.ok(seenState !== childParser.initialState);
+    assert.equal(getAnnotations(seenState)?.[marker], true);
+    assert.ok(
+      !Reflect.ownKeys(childParser.initialState).includes(annotationKey),
+    );
+  });
+
   it("should not mutate parent field state when inheriting annotations", () => {
     const marker = Symbol.for("@test/object-parent-state");
 
@@ -10569,9 +10631,9 @@ describe("branch coverage: constructs.ts edge cases", () => {
     }
   });
 
-  it("shared-buffer constructs preserve parse state identity for custom children", () => {
+  it("tuple() and concat() preserve parse state identity for custom children", () => {
     const marker = Symbol.for("@test/shared-buffer-custom-state-identity");
-    const parsers = ["object", "tuple", "concat"] as const;
+    const parsers = ["tuple", "concat"] as const;
 
     for (const name of parsers) {
       const initialState = { value: name };
@@ -10624,9 +10686,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         },
       };
 
-      const parser: Parser<"sync", unknown, unknown> = name === "object"
-        ? object({ child: childParser })
-        : name === "tuple"
+      const parser: Parser<"sync", unknown, unknown> = name === "tuple"
         ? tuple([childParser])
         : concat(tuple([childParser]));
       const result = parseSync(parser, [name], {
@@ -10640,13 +10700,9 @@ describe("branch coverage: constructs.ts edge cases", () => {
         `${name} parse should preserve the original child state identity.`,
       );
       if (!result.success) continue;
-      const inner = name === "object"
-        ? (result.value as {
-          readonly child: { readonly inner: { readonly value: string } };
-        }).child.inner
-        : (result.value as readonly [
-          { readonly inner: { readonly value: string } },
-        ])[0].inner;
+      const inner = (result.value as readonly [
+        { readonly inner: { readonly value: string } },
+      ])[0].inner;
       assert.equal(
         inner,
         initialState,
