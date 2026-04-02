@@ -1009,7 +1009,7 @@ function withSuggestRuntime<TState>(
   context: ParserContext<TState>,
 ): ParserContext<TState> {
   const runtime = createDependencyRuntimeContext();
-  const nodes = getSuggestRuntimeNodes(
+  const nodes = getParserSuggestRuntimeNodes(
     parser,
     context.state,
     context.exec?.path ?? [],
@@ -1035,7 +1035,7 @@ async function withSuggestRuntimeAsync<TState>(
   context: ParserContext<TState>,
 ): Promise<ParserContext<TState>> {
   const runtime = createDependencyRuntimeContext();
-  const nodes = getSuggestRuntimeNodes(
+  const nodes = getParserSuggestRuntimeNodes(
     parser,
     context.state,
     context.exec?.path ?? [],
@@ -1056,7 +1056,13 @@ async function withSuggestRuntimeAsync<TState>(
   };
 }
 
-function getSuggestRuntimeNodes<TState>(
+/**
+ * Returns suggest-time runtime nodes for a parser, falling back to the
+ * parser's own source metadata when it does not expose a custom hook.
+ *
+ * @internal
+ */
+export function getParserSuggestRuntimeNodes<TState>(
   parser: Parser<Mode, unknown, TState>,
   state: TState,
   path: readonly PropertyKey[],

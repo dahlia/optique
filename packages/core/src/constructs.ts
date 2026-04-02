@@ -51,7 +51,10 @@ import type {
   ParserResult,
   Suggestion,
 } from "./parser.ts";
-import { unmatchedNonCliDependencySourceStateMarker } from "./parser.ts";
+import {
+  getParserSuggestRuntimeNodes,
+  unmatchedNonCliDependencySourceStateMarker,
+} from "./parser.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
 
 /**
@@ -900,17 +903,6 @@ function createExclusiveSuggest(
       },
     );
   };
-}
-
-function getParserSuggestRuntimeNodes<TState>(
-  parser: Parser<Mode, unknown, TState>,
-  state: TState,
-  path: readonly PropertyKey[],
-): readonly RuntimeNode[] {
-  return parser.getSuggestRuntimeNodes?.(state, path) ??
-    (parser.dependencyMetadata?.source != null
-      ? [{ path, parser, state }]
-      : []);
 }
 
 function getExclusiveSuggestRuntimeNodes(
