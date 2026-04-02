@@ -141,7 +141,7 @@ function withChildContext<TState>(
     exec?.dependencyRegistry;
   const childState = parser == null
     ? state
-    : getAnnotatedChildState(context.state, state, parser) as TState;
+    : getParseChildState(context.state, state, parser) as TState;
   return {
     ...context,
     state: childState,
@@ -285,6 +285,59 @@ function unwrapAnnotationView<T>(value: T): T {
   return (annotationViewTargets.get(value as object) as T | undefined) ?? value;
 }
 
+function unwrapNestedAnnotationViews<T>(
+  value: T,
+  seen = new WeakMap<object, unknown>(),
+): T {
+  if (value == null || typeof value !== "object") {
+    return value;
+  }
+  const source = unwrapAnnotationView(value as object);
+  if (seen.has(source)) {
+    return seen.get(source) as T;
+  }
+  if (Array.isArray(source)) {
+    let changed = false;
+    const clone = [...source];
+    seen.set(source, clone);
+    for (let i = 0; i < source.length; i++) {
+      const nextValue = unwrapNestedAnnotationViews(source[i], seen);
+      if (nextValue !== source[i]) {
+        clone[i] = nextValue;
+        changed = true;
+      }
+    }
+    return (changed ? clone : source) as T;
+  }
+  const proto = Object.getPrototypeOf(source);
+  if (proto !== Object.prototype && proto !== null) {
+    return source as T;
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(source) as Record<
+    PropertyKey,
+    PropertyDescriptor
+  >;
+  let changed = false;
+  for (const key of Reflect.ownKeys(descriptors)) {
+    const descriptor = descriptors[key];
+    if (descriptor != null && "value" in descriptor) {
+      const nextValue = unwrapNestedAnnotationViews(descriptor.value, seen);
+      if (nextValue !== descriptor.value) {
+        descriptors[key] = { ...descriptor, value: nextValue };
+        changed = true;
+      }
+    }
+  }
+  if (!changed) {
+    seen.set(source, source);
+    return source as T;
+  }
+  const clone = Object.create(proto);
+  seen.set(source, clone);
+  Object.defineProperties(clone, descriptors);
+  return clone as T;
+}
+
 function unwrapCompleteResult(
   result: unknown,
 ): import("./valueparser.ts").ValueParserResult<unknown> {
@@ -294,7 +347,7 @@ function unwrapCompleteResult(
   if (!unwrappedResult.success) {
     return unwrappedResult;
   }
-  const value = unwrapAnnotationView(unwrappedResult.value);
+  const value = unwrapNestedAnnotationViews(unwrappedResult.value);
   return value === unwrappedResult.value ? unwrappedResult : {
     ...unwrappedResult,
     value,
@@ -367,6 +420,34 @@ function withAnnotationView<T extends object>(
   });
   annotationViewTargets.set(view, state);
   return view;
+}
+
+function getParseChildState(
+  parentState: unknown,
+  childState: unknown,
+  parser: Parser<Mode, unknown, unknown>,
+): unknown {
+  const annotations = getAnnotations(parentState);
+  const shouldInheritAnnotations =
+    Reflect.get(parser, inheritParentAnnotationsKey) === true;
+  if (childState == null) {
+    if (annotations !== undefined && shouldInheritAnnotations) {
+      return injectAnnotations({}, annotations);
+    }
+    return childState;
+  }
+  if (
+    annotations === undefined ||
+    typeof childState !== "object" ||
+    getAnnotations(childState) === annotations ||
+    !shouldInheritAnnotations
+  ) {
+    return childState;
+  }
+  const injectedState = injectAnnotations(childState, annotations);
+  return getAnnotations(injectedState) === annotations
+    ? injectedState
+    : childState;
 }
 
 function getAnnotatedChildState(
@@ -4545,7 +4626,10 @@ export function object<
     object,
     Map<string | symbol, unknown>
   >();
-  const createFieldStateGetter = (parentState: unknown) => {
+  const createFieldStateGetter = (
+    parentState: unknown,
+    annotateChildState = getAnnotatedChildState,
+  ) => {
     return (
       field: keyof T,
       parser: Parser<Mode, unknown, unknown>,
@@ -4567,7 +4651,7 @@ export function object<
           fieldKey in parentState
         ? (parentState as Record<string | symbol, unknown>)[fieldKey]
         : parser.initialState;
-      const inheritedState = getAnnotatedChildState(
+      const inheritedState = annotateChildState(
         parentState,
         sourceState,
         parser,
@@ -4651,7 +4735,10 @@ export function object<
     let madeProgress = true;
     while (madeProgress && currentContext.buffer.length > 0) {
       madeProgress = false;
-      const getFieldState = createFieldStateGetter(currentContext.state);
+      const getFieldState = createFieldStateGetter(
+        currentContext.state,
+        getParseChildState,
+      );
 
       for (const [field, parser] of parserPairs) {
         const result = (parser as Parser<"sync", unknown, unknown>).parse(
@@ -4673,7 +4760,11 @@ export function object<
             optionsTerminated: result.next.optionsTerminated,
             state: {
               ...(currentContext.state as Record<string | symbol, unknown>),
-              [field as string | symbol]: result.next.state,
+              [field as string | symbol]: getAnnotatedChildState(
+                currentContext.state,
+                result.next.state,
+                parser,
+              ),
             } as { readonly [K in keyof T]: unknown },
             ...(mergedExec != null
               ? {
@@ -4743,7 +4834,10 @@ export function object<
     let madeProgress = true;
     while (madeProgress && currentContext.buffer.length > 0) {
       madeProgress = false;
-      const getFieldState = createFieldStateGetter(currentContext.state);
+      const getFieldState = createFieldStateGetter(
+        currentContext.state,
+        getParseChildState,
+      );
 
       for (const [field, parser] of parserPairs) {
         const resultOrPromise = parser.parse(
@@ -4766,7 +4860,11 @@ export function object<
             optionsTerminated: result.next.optionsTerminated,
             state: {
               ...(currentContext.state as Record<string | symbol, unknown>),
-              [field as string | symbol]: result.next.state,
+              [field as string | symbol]: getAnnotatedChildState(
+                currentContext.state,
+                result.next.state,
+                parser,
+              ),
             } as { readonly [K in keyof T]: unknown },
             ...(mergedExec != null
               ? {
@@ -5461,7 +5559,13 @@ function advanceTupleSuggestContextSync(
         const newStateArray = annotateFreshArray(
           currentContext.state,
           stateArray.map((state, idx) =>
-            idx === index ? result.next.state : state
+            idx === index
+              ? getAnnotatedChildState(
+                currentContext.state,
+                result.next.state,
+                parser,
+              )
+              : state
           ),
         );
         const mergedExec = mergeChildExec(
@@ -5503,7 +5607,13 @@ function advanceTupleSuggestContextSync(
           const newStateArray = annotateFreshArray(
             currentContext.state,
             stateArray.map((state, idx) =>
-              idx === index ? result.next.state : state
+              idx === index
+                ? getAnnotatedChildState(
+                  currentContext.state,
+                  result.next.state,
+                  parser,
+                )
+                : state
             ),
           );
           const mergedExec = mergeChildExec(
@@ -5575,7 +5685,13 @@ async function advanceTupleSuggestContextAsync(
         const newStateArray = annotateFreshArray(
           currentContext.state,
           stateArray.map((state, idx) =>
-            idx === index ? result.next.state : state
+            idx === index
+              ? getAnnotatedChildState(
+                currentContext.state,
+                result.next.state,
+                parser,
+              )
+              : state
           ),
         );
         const mergedExec = mergeChildExec(
@@ -5617,7 +5733,13 @@ async function advanceTupleSuggestContextAsync(
           const newStateArray = annotateFreshArray(
             currentContext.state,
             stateArray.map((state, idx) =>
-              idx === index ? result.next.state : state
+              idx === index
+                ? getAnnotatedChildState(
+                  currentContext.state,
+                  result.next.state,
+                  parser,
+                )
+                : state
             ),
           );
           const mergedExec = mergeChildExec(
@@ -5837,7 +5959,13 @@ export function tuple<
           const newStateArray = annotateFreshArray(
             currentContext.state,
             stateArray.map((s: unknown, idx: number) =>
-              idx === index ? result.next.state : s
+              idx === index
+                ? getAnnotatedChildState(
+                  currentContext.state,
+                  result.next.state,
+                  parser,
+                )
+                : s
             ),
           );
           const mergedExec = mergeChildExec(
@@ -5879,7 +6007,13 @@ export function tuple<
             const newStateArray = annotateFreshArray(
               currentContext.state,
               stateArray.map((s: unknown, idx: number) =>
-                idx === index ? result.next.state : s
+                idx === index
+                  ? getAnnotatedChildState(
+                    currentContext.state,
+                    result.next.state,
+                    parser,
+                  )
+                  : s
               ),
             );
             const mergedExec = mergeChildExec(
@@ -5960,7 +6094,13 @@ export function tuple<
           const newStateArray = annotateFreshArray(
             currentContext.state,
             stateArray.map((s: unknown, idx: number) =>
-              idx === index ? result.next.state : s
+              idx === index
+                ? getAnnotatedChildState(
+                  currentContext.state,
+                  result.next.state,
+                  parser,
+                )
+                : s
             ),
           );
           const mergedExec = mergeChildExec(
@@ -6003,7 +6143,13 @@ export function tuple<
             const newStateArray = annotateFreshArray(
               currentContext.state,
               stateArray.map((s: unknown, idx: number) =>
-                idx === index ? result.next.state : s
+                idx === index
+                  ? getAnnotatedChildState(
+                    currentContext.state,
+                    result.next.state,
+                    parser,
+                  )
+                  : s
               ),
             );
             const mergedExec = mergeChildExec(
@@ -8027,7 +8173,11 @@ function tryParseSuggestList(
       return (resultOrPromise as Promise<ParserResult<readonly unknown[]>>)
         .then((result) => {
           if (result.success && result.consumed.length > 0) {
-            stateArray[index] = result.next.state;
+            stateArray[index] = getAnnotatedChildState(
+              context.state,
+              result.next.state,
+              parser,
+            );
             matchedParsers.add(index);
             const mergedExec = mergeChildExec(context.exec, result.next.exec);
             return preParseSuggestLoop(
@@ -8092,7 +8242,11 @@ function tryParseSuggestList(
 
     const result = resultOrPromise as ParserResult<readonly unknown[]>;
     if (result.success && result.consumed.length > 0) {
-      stateArray[index] = result.next.state;
+      stateArray[index] = getAnnotatedChildState(
+        context.state,
+        result.next.state,
+        parser,
+      );
       matchedParsers.add(index);
       const mergedExec = mergeChildExec(context.exec, result.next.exec);
       return {
@@ -8214,7 +8368,15 @@ export function concat(
           // Parser succeeded and consumed input - take this match
           const newStateArray = annotateFreshArray(
             currentContext.state,
-            stateArray.map((s, idx) => idx === index ? result.next.state : s),
+            stateArray.map((s, idx) =>
+              idx === index
+                ? getAnnotatedChildState(
+                  currentContext.state,
+                  result.next.state,
+                  parser,
+                )
+                : s
+            ),
           );
           const mergedExec = mergeChildExec(
             currentContext.exec,
@@ -8254,7 +8416,15 @@ export function concat(
             // Parser succeeded without consuming input (like optional)
             const newStateArray = annotateFreshArray(
               currentContext.state,
-              stateArray.map((s, idx) => idx === index ? result.next.state : s),
+              stateArray.map((s, idx) =>
+                idx === index
+                  ? getAnnotatedChildState(
+                    currentContext.state,
+                    result.next.state,
+                    parser,
+                  )
+                  : s
+              ),
             );
             const mergedExec = mergeChildExec(
               currentContext.exec,
@@ -8330,7 +8500,15 @@ export function concat(
           // Parser succeeded and consumed input - take this match
           const newStateArray = annotateFreshArray(
             currentContext.state,
-            stateArray.map((s, idx) => idx === index ? result.next.state : s),
+            stateArray.map((s, idx) =>
+              idx === index
+                ? getAnnotatedChildState(
+                  currentContext.state,
+                  result.next.state,
+                  parser,
+                )
+                : s
+            ),
           );
           const mergedExec = mergeChildExec(
             currentContext.exec,
@@ -8370,7 +8548,15 @@ export function concat(
             // Parser succeeded without consuming input (like optional)
             const newStateArray = annotateFreshArray(
               currentContext.state,
-              stateArray.map((s, idx) => idx === index ? result.next.state : s),
+              stateArray.map((s, idx) =>
+                idx === index
+                  ? getAnnotatedChildState(
+                    currentContext.state,
+                    result.next.state,
+                    parser,
+                  )
+                  : s
+              ),
             );
             const mergedExec = mergeChildExec(
               currentContext.exec,

@@ -10569,6 +10569,94 @@ describe("branch coverage: constructs.ts edge cases", () => {
     }
   });
 
+  it("shared-buffer constructs preserve parse state identity for custom children", () => {
+    const marker = Symbol.for("@test/shared-buffer-custom-state-identity");
+    const parsers = ["object", "tuple", "concat"] as const;
+
+    for (const name of parsers) {
+      const initialState = { value: name };
+      let seenState: unknown;
+      const childParser: Parser<
+        "sync",
+        { readonly inner: { readonly value: string } },
+        { readonly value: string }
+      > = {
+        $mode: "sync",
+        $valueType: [] as readonly {
+          readonly inner: { readonly value: string };
+        }[],
+        $stateType: [] as readonly { readonly value: string }[],
+        priority: 1,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState,
+        parse(context) {
+          seenState = context.state;
+          return context.buffer.length > 0
+            ? {
+              success: true as const,
+              next: {
+                ...context,
+                buffer: context.buffer.slice(1),
+              },
+              consumed: [context.buffer[0]],
+            }
+            : {
+              success: true as const,
+              next: context,
+              consumed: [],
+            };
+        },
+        complete(state) {
+          return getAnnotations(state)?.[marker] === true
+            ? {
+              success: true as const,
+              value: { inner: state },
+            }
+            : { success: false as const, error: message`missing` };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+
+      const parser: Parser<"sync", unknown, unknown> = name === "object"
+        ? object({ child: childParser })
+        : name === "tuple"
+        ? tuple([childParser])
+        : concat(tuple([childParser]));
+      const result = parseSync(parser, [name], {
+        annotations: { [marker]: true } satisfies Annotations,
+      });
+
+      assert.ok(result.success, `${name} should parse successfully.`);
+      assert.equal(
+        seenState,
+        initialState,
+        `${name} parse should preserve the original child state identity.`,
+      );
+      if (!result.success) continue;
+      const inner = name === "object"
+        ? (result.value as {
+          readonly child: { readonly inner: { readonly value: string } };
+        }).child.inner
+        : (result.value as readonly [
+          { readonly inner: { readonly value: string } },
+        ])[0].inner;
+      assert.equal(
+        inner,
+        initialState,
+        `${name} should unwrap nested child state from the completed value.`,
+      );
+      assert.equal(getAnnotations(inner), undefined);
+      assert.ok(!Reflect.ownKeys(inner).includes(annotationKey));
+    }
+  });
+
   it("shared-buffer constructs skip annotation injection for missing plain dependency sources", () => {
     const modeSource = dependency(choice(["dev", "prod"] as const));
     const annotations = { source: "annotation" };
