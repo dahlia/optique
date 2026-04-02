@@ -2,6 +2,7 @@ import {
   annotationKey,
   getAnnotations,
   injectAnnotations,
+  isInjectedAnnotationWrapper,
 } from "@optique/core/annotations";
 import type { Annotations, SourceContext } from "@optique/core/context";
 import { envVar, type Message, message, valueSet } from "@optique/core/message";
@@ -397,7 +398,11 @@ export function bindEnv<
         options,
         parser.$mode,
         parser,
-        isEnvBindState(state) ? state.cliState : state,
+        isEnvBindState(state)
+          ? state.cliState
+          : isInjectedAnnotationWrapper(state)
+          ? undefined
+          : state,
         exec,
       );
     },

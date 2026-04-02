@@ -57,6 +57,7 @@ function withChildContext<TState>(
   context: ParserContext<unknown>,
   segment: PropertyKey,
   state: TState,
+  usage?: Usage,
 ): ParserContext<TState> {
   const exec = withChildExecPath(context.exec, segment);
   const dependencyRegistry = context.dependencyRegistry ??
@@ -64,6 +65,7 @@ function withChildContext<TState>(
   return {
     ...context,
     state,
+    ...(usage != null ? { usage } : {}),
     ...(exec != null
       ? {
         exec: dependencyRegistry === exec.dependencyRegistry
@@ -140,11 +142,13 @@ function recordTrace<TState>(
   entry: TraceEntry,
 ): ParserContext<TState> {
   if (context.exec?.trace == null) return context;
+  const trace = context.exec.trace.set(context.exec.path, entry);
   return {
     ...context,
+    trace,
     exec: {
       ...context.exec,
-      trace: context.exec.trace.set(context.exec.path, entry),
+      trace,
     },
   };
 }
@@ -2247,13 +2251,13 @@ function* suggestCommandSync<T, TState>(
   } else if (context.state[0] === "matched") {
     // Command matched but inner parser not started - delegate to inner parser
     yield* parser.suggest(
-      withChildContext(context, name, parser.initialState),
+      withChildContext(context, name, parser.initialState, parser.usage),
       prefix,
     );
   } else if (context.state[0] === "parsing") {
     // Command in parsing state - delegate to inner parser
     yield* parser.suggest(
-      withChildContext(context, name, context.state[1]),
+      withChildContext(context, name, context.state[1], parser.usage),
       prefix,
     );
   }
@@ -2283,7 +2287,7 @@ async function* suggestCommandAsync<T, TState>(
   } else if (context.state[0] === "matched") {
     // Command matched but inner parser not started - delegate to inner parser
     const suggestions = parser.suggest(
-      withChildContext(context, name, parser.initialState),
+      withChildContext(context, name, parser.initialState, parser.usage),
       prefix,
     ) as AsyncIterable<Suggestion>;
     for await (const s of suggestions) {
@@ -2292,7 +2296,7 @@ async function* suggestCommandAsync<T, TState>(
   } else if (context.state[0] === "parsing") {
     // Command in parsing state - delegate to inner parser
     const suggestions = parser.suggest(
-      withChildContext(context, name, context.state[1]),
+      withChildContext(context, name, context.state[1], parser.usage),
       prefix,
     ) as AsyncIterable<Suggestion>;
     for await (const s of suggestions) {
@@ -2469,13 +2473,13 @@ export function command<M extends Mode, T, TState>(
           () =>
             wrapState(
               syncInnerParser.parse(
-                withChildContext(context, name, innerState),
+                withChildContext(context, name, innerState, parser.usage),
               ),
             ),
           async () =>
             wrapState(
               await parser.parse(
-                withChildContext(context, name, innerState),
+                withChildContext(context, name, innerState, parser.usage),
               ),
             ),
         );
@@ -2502,11 +2506,12 @@ export function command<M extends Mode, T, TState>(
         const childContext = {
           buffer: [],
           optionsTerminated: false,
-          usage: [],
+          usage: parser.usage,
           state: parser.initialState,
           ...(childExec != null
             ? {
               exec: childExec,
+              trace: childExec.trace,
               dependencyRegistry: childExec.dependencyRegistry,
             }
             : {}),

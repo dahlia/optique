@@ -1401,6 +1401,7 @@ export function multiple<M extends Mode, TValue, TState>(
           state: context.state,
           ...(mergedExec != null
             ? {
+              trace: mergedExec.trace,
               exec: mergedExec,
               dependencyRegistry: mergedExec.dependencyRegistry,
             }
@@ -1427,6 +1428,7 @@ export function multiple<M extends Mode, TValue, TState>(
           state: context.state,
           ...(mergedExec != null
             ? {
+              trace: mergedExec.trace,
               exec: mergedExec,
               dependencyRegistry: mergedExec.dependencyRegistry,
             }
@@ -1449,6 +1451,7 @@ export function multiple<M extends Mode, TValue, TState>(
         ]),
         ...(mergedExec != null
           ? {
+            trace: mergedExec.trace,
             exec: mergedExec,
             dependencyRegistry: mergedExec.dependencyRegistry,
           }
@@ -1520,6 +1523,7 @@ export function multiple<M extends Mode, TValue, TState>(
           state: context.state,
           ...(mergedExec != null
             ? {
+              trace: mergedExec.trace,
               exec: mergedExec,
               dependencyRegistry: mergedExec.dependencyRegistry,
             }
@@ -1546,6 +1550,7 @@ export function multiple<M extends Mode, TValue, TState>(
           state: context.state,
           ...(mergedExec != null
             ? {
+              trace: mergedExec.trace,
               exec: mergedExec,
               dependencyRegistry: mergedExec.dependencyRegistry,
             }
@@ -1568,6 +1573,7 @@ export function multiple<M extends Mode, TValue, TState>(
         ]),
         ...(mergedExec != null
           ? {
+            trace: mergedExec.trace,
             exec: mergedExec,
             dependencyRegistry: mergedExec.dependencyRegistry,
           }

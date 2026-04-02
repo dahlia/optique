@@ -499,6 +499,16 @@ export interface ParserContext<TState> {
   readonly exec?: ExecutionContext;
 
   /**
+   * Immutable trace of raw primitive inputs recorded during parsing.
+   *
+   * Preserved as a flat compatibility field so wrapper parsers can forward
+   * trace data even when they rebuild the parser context without {@link exec}.
+   *
+   * @since 1.0.0
+   */
+  readonly trace?: InputTrace;
+
+  /**
    * The array of input strings that the parser is currently processing.
    */
   readonly buffer: readonly string[];
@@ -554,6 +564,7 @@ export function createParserContext<TState>(
 ): ParserContext<TState> {
   return {
     exec,
+    trace: exec.trace,
     buffer: frame.buffer,
     state: frame.state,
     optionsTerminated: frame.optionsTerminated,
@@ -779,7 +790,7 @@ export function parseSync<T>(
     phase: "complete",
     dependencyRuntime: runtime,
     dependencyRegistry: runtime.registry,
-    trace: context.exec?.trace ?? exec.trace,
+    trace: context.exec?.trace ?? context.trace ?? exec.trace,
   };
   const endResult = parser.complete(context.state, completeExec);
   return endResult.success
@@ -869,7 +880,7 @@ export async function parseAsync<T>(
     phase: "complete",
     dependencyRuntime: runtime,
     dependencyRegistry: runtime.registry,
-    trace: context.exec?.trace ?? exec.trace,
+    trace: context.exec?.trace ?? context.trace ?? exec.trace,
   };
   const endResult = await parser.complete(context.state, completeExec);
   return endResult.success

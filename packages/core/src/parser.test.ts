@@ -29,6 +29,7 @@ import {
   flag,
   option,
 } from "@optique/core/primitives";
+import { dependency, deriveFromSync } from "@optique/core/dependency";
 import { getAnnotations, type ParseOptions } from "@optique/core/annotations";
 import type { Usage } from "@optique/core/usage";
 import { choice, integer, string } from "@optique/core/valueparser";
@@ -101,6 +102,52 @@ describe("parse", () => {
       assert.equal(result.value.verbose, true);
       assert.equal(result.value.port, 8080);
     }
+  });
+
+  it("should preserve flat trace when wrappers drop exec", () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = deriveFromSync({
+      metavar: "LEVEL",
+      dependencies: [mode] as const,
+      defaultValues: () => ["dev"] as const,
+      factory: (currentMode) =>
+        choice(
+          currentMode === "dev" ? ["debug"] as const : ["strict"] as const,
+        ),
+    });
+    const inner = object({
+      mode: option("--mode", mode),
+      level: option("--level", level),
+    });
+    const wrapper: Parser<
+      "sync",
+      { readonly mode: "dev" | "prod"; readonly level: string },
+      typeof inner.initialState
+    > = {
+      ...inner,
+      parse(context) {
+        const result = inner.parse(context);
+        if (!result.success) return result;
+        return {
+          success: true as const,
+          next: {
+            ...result.next,
+            exec: undefined,
+            trace: result.next.trace,
+          },
+          consumed: result.consumed,
+        };
+      },
+    };
+
+    const result = parse(wrapper, ["--mode", "prod", "--level", "strict"]);
+    assert.deepEqual(result, {
+      success: true,
+      value: {
+        mode: "prod",
+        level: "strict",
+      },
+    });
   });
 
   it("should handle options terminator", () => {

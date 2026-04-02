@@ -4568,6 +4568,7 @@ export function object<
             } as { readonly [K in keyof T]: unknown },
             ...(mergedExec != null
               ? {
+                trace: mergedExec.trace,
                 exec: mergedExec,
                 dependencyRegistry: mergedExec.dependencyRegistry,
               }
@@ -4660,6 +4661,7 @@ export function object<
             } as { readonly [K in keyof T]: unknown },
             ...(mergedExec != null
               ? {
+                trace: mergedExec.trace,
                 exec: mergedExec,
                 dependencyRegistry: mergedExec.dependencyRegistry,
               }

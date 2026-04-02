@@ -2326,6 +2326,26 @@ describe("bindEnv() with dependency sources", () => {
     assert.equal(completedState, undefined);
   });
 
+  it("treats injected annotation wrappers as omitted CLI state during complete()", () => {
+    const envContext = createEnvContext({ source: () => undefined });
+    const annotations = envContext.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+
+    const inner = option("--mode", string());
+    const parser = bindEnv(inner, {
+      context: envContext,
+      key: "MODE",
+      parser: string(),
+    });
+    const completed = parser.complete(
+      injectAnnotations(parser.initialState, annotations),
+    );
+
+    assert.deepEqual(completed, inner.complete(undefined));
+  });
+
   it("does not invent mapped dependency source values from env fallbacks", () => {
     const source = dependency(choice(["dev", "prod"] as const));
     const envContext = createEnvContext({

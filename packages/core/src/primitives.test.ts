@@ -3051,6 +3051,21 @@ describe("command", () => {
     }
   });
 
+  it("should suggest nested child commands after the parent matches", () => {
+    const parser = command(
+      "root",
+      command("child", object({ foo: flag("--foo") })),
+    );
+
+    const result = parse(parser, ["root", "chil"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Expected command `child`");
+      assertErrorIncludes(result.error, "Did you mean");
+      assertErrorIncludes(result.error, "`child`");
+    }
+  });
+
   it("should not suggest nested sub-commands in or() sibling context", () => {
     // or(command("file", or(add, remove)), command("other", ...))
     // When "add" is given, "add" should not be suggested (it's a child of "file").
