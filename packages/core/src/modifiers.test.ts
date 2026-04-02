@@ -749,6 +749,110 @@ describe("optional", () => {
     assert.deepEqual(completeResult, { success: true, value: "dev" });
   });
 
+  it("delegates omitted source completion from the inner initial state", () => {
+    const sourceId = Symbol("optional-initial-source");
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly ("fallback" | "live")[],
+      $stateType: [] as readonly { readonly value: "fallback" | "live" }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "fallback" as const },
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No parse.`,
+      }),
+      complete(state: { readonly value: "fallback" | "live" }) {
+        return {
+          success: true as const,
+          value: state.value,
+        };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          getMissingSourceValue() {
+            return { success: true as const, value: "fallback" };
+          },
+          extractSourceValue() {
+            return undefined;
+          },
+        },
+      },
+    } as const satisfies Parser<
+      "sync",
+      "fallback" | "live",
+      { readonly value: "fallback" | "live" }
+    >;
+    const parser = optional(inner);
+
+    assert.deepEqual(parser.complete(undefined), {
+      success: true,
+      value: "fallback",
+    });
+  });
+
+  it("delegates omitted async source completion from the inner initial state", async () => {
+    const sourceId = Symbol("optional-initial-source-async");
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly ("fallback" | "live")[],
+      $stateType: [] as readonly { readonly value: "fallback" | "live" }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "fallback" as const },
+      parse: () =>
+        Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`No parse.`,
+        }),
+      complete(state: { readonly value: "fallback" | "live" }) {
+        return Promise.resolve({
+          success: true as const,
+          value: state.value,
+        });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          getMissingSourceValue() {
+            return Promise.resolve({
+              success: true as const,
+              value: "fallback",
+            });
+          },
+          extractSourceValue() {
+            return Promise.resolve(undefined);
+          },
+        },
+      },
+    } as const satisfies Parser<
+      "async",
+      "fallback" | "live",
+      { readonly value: "fallback" | "live" }
+    >;
+    const parser = optional(inner);
+
+    assert.deepEqual(await parser.complete(undefined), {
+      success: true,
+      value: "fallback",
+    });
+  });
+
   it("should collapse deferred missing-source failures to undefined", () => {
     const sourceId = Symbol("optional-deferred-missing-source");
     const inner = {

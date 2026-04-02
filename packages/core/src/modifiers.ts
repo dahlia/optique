@@ -394,9 +394,10 @@ export function optional<M extends Mode, TValue, TState>(
           sourceMetadata?.preservesSourceValue !== false &&
           sourceMetadata?.getMissingSourceValue != null
         ) {
-          const delegatedState = state != null && typeof state === "object"
-            ? state as TState
-            : undefined as TState;
+          const delegatedState = normalizeOptionalLikeInnerState(
+            state,
+            parser.initialState,
+          );
           return dispatchByMode(
             parser.$mode,
             () => syncParser.complete(delegatedState, exec),
