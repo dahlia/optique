@@ -1703,7 +1703,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `tuple()` and `concat()`.  These shared-buffer compositions now skip the
     prompt when env/config fallback resolves the dependency source, and
     dependency-aware `suggest*()` calls now offer the correct derived values.
-    [[#750], [#768]]
+    [[#750], [#768], [#769]]
 
  -  Fixed `prompt()` leaving `ExitPromptError` uncaught when a user cancels an
     Inquirer prompt with <kbd>^C</kbd>.  Prompt cancellation is now converted
