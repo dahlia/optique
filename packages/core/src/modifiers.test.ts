@@ -68,6 +68,20 @@ function createPromiseLike<T>(value: T): PromiseLike<T> {
   };
 }
 
+async function waitForStartedCount(
+  started: readonly unknown[],
+  count: number,
+  messageText: string,
+): Promise<void> {
+  const timeoutAt = Date.now() + 1_000;
+  while (started.length < count) {
+    if (Date.now() >= timeoutAt) {
+      throw new TypeError(messageText);
+    }
+    await Promise.resolve();
+  }
+}
+
 function asyncChoice<T extends string>(
   choices: readonly T[],
 ): ValueParser<"async", T> {
@@ -5641,9 +5655,11 @@ describe("branch coverage: modifiers edge cases", () => {
 
     assert.deepEqual(started, ["slow"]);
     gates.get("slow")?.resolve();
-    while (started.length < 2) {
-      await Promise.resolve();
-    }
+    await waitForStartedCount(
+      started,
+      2,
+      "multiple() async completion did not start the second item.",
+    );
     assert.deepEqual(started, ["slow", "fast"]);
     gates.get("fast")?.resolve();
 
@@ -5728,9 +5744,11 @@ describe("branch coverage: modifiers edge cases", () => {
 
     assert.deepEqual(started, ["slow"]);
     gates.get("slow")?.resolve();
-    while (started.length < 2) {
-      await Promise.resolve();
-    }
+    await waitForStartedCount(
+      started,
+      2,
+      "multiple() async suggest did not start the second item.",
+    );
     assert.deepEqual(started, ["slow", "fast"]);
     gates.get("fast")?.resolve();
 

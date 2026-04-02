@@ -2156,7 +2156,7 @@ describe("createConfigContext error paths", () => {
 
     assert.ok(descriptor != null);
     if (descriptor == null) return;
-    assert.equal(descriptor.enumerable, false);
+    assert.ok(!descriptor.enumerable);
     assert.notEqual(Reflect.get(map(parser, (value) => value), marker), true);
   });
 
@@ -2379,11 +2379,11 @@ describe("bindConfig() with dependency sources", () => {
     const state = injectAnnotations(parser.initialState, {
       [context.id]: { data: {} },
     });
+    const source = parser.dependencyMetadata?.source;
 
-    assert.equal(
-      parser.dependencyMetadata?.source?.extractSourceValue(state),
-      undefined,
-    );
+    assert.ok(source != null, "Expected dependency source metadata.");
+    if (source == null) return;
+    assert.equal(source.extractSourceValue(state), undefined);
   });
 
   test("propagates config value as dependency to derived parser (suggest)", () => {
@@ -2442,11 +2442,11 @@ describe("bindConfig() with dependency sources", () => {
         key: "mode",
       },
     );
+    const source = parser.dependencyMetadata?.source;
 
-    assert.equal(
-      parser.dependencyMetadata?.source?.getMissingSourceValue,
-      undefined,
-    );
+    assert.ok(source != null, "Expected dependency source metadata.");
+    if (source == null) return;
+    assert.equal(source.getMissingSourceValue, undefined);
   });
 
   test("uses the outer config default for missing source values", () => {
@@ -2459,11 +2459,14 @@ describe("bindConfig() with dependency sources", () => {
         default: "dev" as const,
       },
     );
+    const source = parser.dependencyMetadata?.source;
 
-    assert.deepEqual(
-      parser.dependencyMetadata?.source?.getMissingSourceValue?.(),
-      { success: true, value: "dev" },
-    );
+    assert.ok(source != null, "Expected dependency source metadata.");
+    if (source == null) return;
+    assert.deepEqual(source.getMissingSourceValue?.(), {
+      success: true,
+      value: "dev",
+    });
   });
 
   test("does not invent mapped dependency source values from config fallbacks", () => {
