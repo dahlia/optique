@@ -10520,6 +10520,54 @@ describe("branch coverage: constructs.ts edge cases", () => {
     }
   });
 
+  it("shared-buffer suggest preserves missing optional-like child states", () => {
+    const annotations = { source: "annotation" };
+    const parsers: ReadonlyArray<
+      readonly [string, Parser<"sync", unknown, unknown>]
+    > = [
+      [
+        "tuple optional",
+        tuple([optional(argument(choice(["alice", "bob"] as const)))]),
+      ],
+      [
+        "tuple withDefault",
+        tuple([
+          withDefault(
+            argument(choice(["alice", "bob"] as const)),
+            "alice",
+          ),
+        ]),
+      ],
+      [
+        "concat optional",
+        concat(tuple([optional(argument(choice(["alice", "bob"] as const)))])),
+      ],
+      [
+        "concat withDefault",
+        concat(tuple([
+          withDefault(
+            argument(choice(["alice", "bob"] as const)),
+            "alice",
+          ),
+        ])),
+      ],
+    ];
+
+    for (const [name, parser] of parsers) {
+      const suggestionTexts = suggestSync(parser, [""], {
+        annotations,
+      })
+        .filter((suggestion) => suggestion.kind === "literal")
+        .map((suggestion) => suggestion.text)
+        .sort();
+      assert.deepEqual(
+        suggestionTexts,
+        ["alice", "bob"],
+        `${name} should preserve positional suggestions.`,
+      );
+    }
+  });
+
   it("conditional() suggest handles undefined and selected branch states", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
