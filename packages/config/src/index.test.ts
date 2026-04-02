@@ -6,7 +6,7 @@ import type { Parser } from "@optique/core/parser";
 import { concat, merge, object, tuple } from "@optique/core/constructs";
 import { injectAnnotations } from "@optique/core/annotations";
 import { dependency } from "@optique/core/dependency";
-import { map, multiple, optional } from "@optique/core/modifiers";
+import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { fail, flag, option } from "@optique/core/primitives";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { choice, integer, string } from "@optique/core/valueparser";
@@ -2358,6 +2358,39 @@ describe("bindConfig() with dependency sources", () => {
     assert.ok(result.success);
     assert.equal(result.value.mode, undefined);
     assert.equal(result.value.level, "debug");
+  });
+
+  test("does not preserve inner missing-source defaults without outer fallback", () => {
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(
+      withDefault(optional(option("--mode", mode)), "prod" as const),
+      {
+        context,
+        key: "mode",
+      },
+    );
+
+    assert.equal(
+      parser.dependencyMetadata?.source?.getMissingSourceValue,
+      undefined,
+    );
+  });
+
+  test("uses the outer config default for missing source values", () => {
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(
+      withDefault(optional(option("--mode", mode)), "prod" as const),
+      {
+        context,
+        key: "mode",
+        default: "dev" as const,
+      },
+    );
+
+    assert.deepEqual(
+      parser.dependencyMetadata?.source?.getMissingSourceValue?.(),
+      { success: true, value: "dev" },
+    );
   });
 
   test("does not invent mapped dependency source values from config fallbacks", () => {

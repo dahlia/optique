@@ -866,6 +866,11 @@ export function bindConfig<
         ...dependencyMetadata,
         source: {
           ...sourceMetadata,
+          getMissingSourceValue:
+            sourceMetadata.preservesSourceValue !== false &&
+              options.default !== undefined
+              ? () => ({ success: true as const, value: options.default })
+              : undefined,
           extractSourceValue: (state: unknown) => {
             if (!isConfigBindState(state)) {
               if (sourceMetadata.preservesSourceValue) {
