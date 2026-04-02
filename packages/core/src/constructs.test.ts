@@ -3501,6 +3501,77 @@ describe("object() - duplicate option detection", () => {
     }
   });
 
+  it("should not reuse parse-time child cache during completion", () => {
+    const marker = Symbol.for("@test/object-cache-annotations");
+    const initialState = { value: "ok" };
+    let parseState: unknown;
+    let completeState: unknown;
+
+    const childParser: Parser<
+      "sync",
+      typeof initialState,
+      typeof initialState
+    > = {
+      $mode: "sync",
+      $valueType: [] as readonly (typeof initialState)[],
+      $stateType: [] as readonly (typeof initialState)[],
+      priority: 1,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState,
+      parse(context) {
+        parseState = context.state;
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`missing`,
+        };
+      },
+      complete(state) {
+        completeState = state;
+        return getAnnotations(state)?.[marker] === true
+          ? { success: true as const, value: state }
+          : { success: false as const, error: message`missing` };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = object({ value: childParser });
+    const parentState = injectAnnotations(
+      { value: initialState },
+      { [marker]: true } satisfies Annotations,
+    );
+    const parseResult = parser.parse({
+      buffer: ["value"],
+      state: parentState as never,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(!parseResult.success);
+    assert.ok(parseState != null && typeof parseState === "object");
+    assert.ok(parseState !== initialState);
+    assert.ok(Reflect.ownKeys(parseState).includes(annotationKey));
+
+    const completeResult = parser.complete(parentState as never);
+
+    assert.ok(completeResult.success);
+    assert.ok(completeState != null && typeof completeState === "object");
+    assert.equal(getAnnotations(completeState)?.[marker], true);
+    if (completeResult.success) {
+      assert.equal(completeResult.value.value, initialState);
+      assert.ok(
+        !Reflect.ownKeys(completeResult.value.value).includes(annotationKey),
+      );
+    }
+  });
+
   it("should not mutate parent field state when inheriting annotations", () => {
     const marker = Symbol.for("@test/object-parent-state");
 

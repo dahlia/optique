@@ -4680,7 +4680,7 @@ export function object<
   };
   const inheritedFieldStateCache = new WeakMap<
     object,
-    Map<string | symbol, unknown>
+    WeakMap<typeof getAnnotatedChildState, Map<string | symbol, unknown>>
   >();
   const createFieldStateGetter = (
     parentState: unknown,
@@ -4692,12 +4692,23 @@ export function object<
     ): unknown => {
       const fieldKey = field as string | symbol;
       const cache = parentState != null && typeof parentState === "object"
-        ? (inheritedFieldStateCache.get(parentState) ??
-          (() => {
-            const stateCache = new Map<string | symbol, unknown>();
-            inheritedFieldStateCache.set(parentState, stateCache);
-            return stateCache;
-          })())
+        ? (() => {
+          const annotatorCaches = inheritedFieldStateCache.get(parentState) ??
+            (() => {
+              const nextCaches = new WeakMap<
+                typeof getAnnotatedChildState,
+                Map<string | symbol, unknown>
+              >();
+              inheritedFieldStateCache.set(parentState, nextCaches);
+              return nextCaches;
+            })();
+          return annotatorCaches.get(annotateChildState) ??
+            (() => {
+              const stateCache = new Map<string | symbol, unknown>();
+              annotatorCaches.set(annotateChildState, stateCache);
+              return stateCache;
+            })();
+        })()
         : undefined;
       if (cache?.has(fieldKey)) {
         return cache.get(fieldKey);
