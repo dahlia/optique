@@ -684,6 +684,94 @@ describe("DeferredParseState", () => {
       assert.equal(defaultCalls, 1);
     },
   );
+
+  test(
+    "createDeferredParseState keeps single-source snapshots across later mode-mismatch parses",
+    () => {
+      let defaultCalls = 0;
+      const mode = dependency(choice(["dev", "prod"] as const));
+      const derived = mode.derive<"ok", "sync">({
+        metavar: "VALUE",
+        mode: "sync",
+        factory: () =>
+          asyncChoice(["ok"] as const) as unknown as ValueParser<
+            "sync",
+            "ok"
+          >,
+        defaultValue: () => {
+          defaultCalls++;
+          return defaultCalls === 1 ? "dev" : "prod";
+        },
+      });
+
+      const firstResult = derived.parse("ok");
+      assert.ok(!firstResult.success);
+      assert.deepEqual(
+        getSnapshottedDefaultDependencyValues(firstResult),
+        ["dev"],
+      );
+
+      const secondResult = derived.parse("ok");
+      assert.ok(!secondResult.success);
+      assert.deepEqual(
+        getSnapshottedDefaultDependencyValues(secondResult),
+        ["prod"],
+      );
+
+      const deferred = createDeferredParseState("ok", derived, firstResult);
+
+      assert.deepEqual(deferred.defaultValues, ["dev"]);
+      assert.equal(defaultCalls, 2);
+    },
+  );
+
+  test(
+    "createDeferredParseState keeps multi-source snapshots across later mode-mismatch parses",
+    () => {
+      let defaultCalls = 0;
+      const env = dependency(choice(["dev", "prod"] as const));
+      const region = dependency(choice(["us", "eu"] as const));
+      const derived = deriveFrom<
+        readonly [typeof env, typeof region],
+        "ok",
+        "sync"
+      >({
+        metavar: "VALUE",
+        mode: "sync",
+        dependencies: [env, region] as const,
+        factory: () =>
+          asyncChoice(["ok"] as const) as unknown as ValueParser<
+            "sync",
+            "ok"
+          >,
+        defaultValues: () => {
+          defaultCalls++;
+          return defaultCalls === 1
+            ? ["dev", "us"] as const
+            : ["prod", "eu"] as const;
+        },
+      });
+
+      const firstResult = derived.parse("ok");
+      assert.ok(!firstResult.success);
+      assert.deepEqual(
+        getSnapshottedDefaultDependencyValues(firstResult),
+        ["dev", "us"],
+      );
+
+      const secondResult = derived.parse("ok");
+      assert.ok(!secondResult.success);
+      assert.deepEqual(
+        getSnapshottedDefaultDependencyValues(secondResult),
+        ["prod", "eu"],
+      );
+
+      const deferred = createDeferredParseState("ok", derived, firstResult);
+
+      assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
+      assert.equal(defaultCalls, 2);
+    },
+  );
 });
 
 describe("snapshotDefaultDependencyValues", () => {
@@ -4861,14 +4949,14 @@ describe("top-level option()/argument() with derived parsers", () => {
       dependencies: [mode, format] as const,
       factory: (m, f) =>
         choice(
-          m === "prod" && f === "yaml"
-            ? (["prod.yaml"] as const)
-            : (["dev.json"] as const),
+          m === "prod"
+            ? (f === "yaml" ? ["prod.yaml"] as const : ["prod.json"] as const)
+            : (f === "yaml" ? ["dev.yaml"] as const : ["dev.json"] as const),
         ),
       defaultValues: () => {
         defaultCallCount++;
         return [
-          "dev" as const,
+          "prod" as const,
           defaultCallCount === 1 ? "json" as const : "yaml" as const,
         ] as const;
       },
@@ -4894,14 +4982,14 @@ describe("top-level option()/argument() with derived parsers", () => {
       dependencies: [mode, format] as const,
       factory: (m, f) =>
         choice(
-          m === "prod" && f === "yaml"
-            ? (["prod.yaml"] as const)
-            : (["dev.json"] as const),
+          m === "prod"
+            ? (f === "yaml" ? ["prod.yaml"] as const : ["prod.json"] as const)
+            : (f === "yaml" ? ["dev.yaml"] as const : ["dev.json"] as const),
         ),
       defaultValues: () => {
         defaultCallCount++;
         return [
-          "dev" as const,
+          "prod" as const,
           defaultCallCount === 1 ? "json" as const : "yaml" as const,
         ] as const;
       },

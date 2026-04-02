@@ -928,11 +928,14 @@ function createSyncDerivedFromParser<
           : snapshotDefaultDependencyValues(failure, sourceValues);
       }
       if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
-        return {
+        const failure: ValueParserResult<T> = {
           success: false,
           error:
             message`Factory returned an async parser where a sync parser is required.`,
         };
+        return sourceValues == null
+          ? failure
+          : snapshotDefaultDependencyValues(failure, sourceValues);
       }
       return snapshotDefaultDependencyValues(
         derivedParser.parse(input),
@@ -954,11 +957,12 @@ function createSyncDerivedFromParser<
         return { success: false, error: message`Factory error: ${msg}` };
       }
       if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
-        return {
+        const failure: ValueParserResult<T> = {
           success: false,
           error:
             message`Factory returned an async parser where a sync parser is required.`,
         };
+        return failure;
       }
       return derivedParser.parse(input);
     },
@@ -1392,11 +1396,14 @@ function createSyncDerivedParser<S, T>(
           : failure;
       }
       if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
-        return {
+        const failure: ValueParserResult<T> = {
           success: false,
           error:
             message`Factory returned an async parser where a sync parser is required.`,
         };
+        return hasSourceValue
+          ? snapshotDefaultDependencyValues(failure, [sourceValue])
+          : failure;
       }
       return snapshotDefaultDependencyValues(
         derivedParser.parse(input),
