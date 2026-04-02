@@ -2515,20 +2515,26 @@ export function command<M extends Mode, T, TState>(
           parser.$mode,
           () => {
             const parseResult = syncInnerParser.parse(childContext);
+            const nextExec = parseResult.success
+              ? mergeChildExec(childExec, parseResult.next.exec)
+              : childExec;
             return syncInnerParser.complete(
               parseResult.success
                 ? parseResult.next.state
                 : syncInnerParser.initialState,
-              childExec,
+              nextExec,
             );
           },
           async () => {
             const parseResult = await asyncInnerParser.parse(childContext);
+            const nextExec = parseResult.success
+              ? mergeChildExec(childExec, parseResult.next.exec)
+              : childExec;
             return asyncInnerParser.complete(
               parseResult.success
                 ? parseResult.next.state
                 : parser.initialState,
-              childExec,
+              nextExec,
             );
           },
         );

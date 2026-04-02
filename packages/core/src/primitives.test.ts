@@ -3216,6 +3216,126 @@ describe("command", () => {
     assert.ok(childRegistry.has(dependencyId));
     assert.strictEqual(childExecRegistry?.dependencyRegistry, childRegistry);
   });
+
+  it("should forward synthetic sync parse exec into command complete", () => {
+    const dependencyId = Symbol("command-complete-dependency");
+    const staleRegistry = createRegistry();
+    const freshRegistry = createRegistry([[dependencyId, "fresh"]]);
+    let completeExec: ParserContext<undefined>["exec"];
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            exec: context.exec == null
+              ? undefined
+              : { ...context.exec, dependencyRegistry: freshRegistry },
+            dependencyRegistry: freshRegistry,
+          },
+          consumed: [],
+        };
+      },
+      complete(_state: undefined, exec?: ParserContext<undefined>["exec"]) {
+        completeExec = exec;
+        return exec?.dependencyRegistry?.has(dependencyId)
+          ? { success: true as const, value: "ok" }
+          : {
+            success: false as const,
+            error: message`Missing forwarded exec.`,
+          };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, undefined>;
+    const parser = command("deploy", inner);
+
+    const result = parser.complete(
+      ["matched", "deploy"],
+      {
+        usage: parser.usage,
+        phase: "complete",
+        path: ["root"],
+        trace: undefined,
+        dependencyRegistry: staleRegistry,
+      },
+    );
+
+    assert.ok(result.success);
+    assert.strictEqual(completeExec?.dependencyRegistry, freshRegistry);
+  });
+
+  it("should forward synthetic async parse exec into command complete", async () => {
+    const dependencyId = Symbol("command-complete-async-dependency");
+    const staleRegistry = createRegistry();
+    const freshRegistry = createRegistry([[dependencyId, "fresh"]]);
+    let completeExec: ParserContext<undefined>["exec"];
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return Promise.resolve({
+          success: true as const,
+          next: {
+            ...context,
+            exec: context.exec == null
+              ? undefined
+              : { ...context.exec, dependencyRegistry: freshRegistry },
+            dependencyRegistry: freshRegistry,
+          },
+          consumed: [],
+        });
+      },
+      complete(_state: undefined, exec?: ParserContext<undefined>["exec"]) {
+        completeExec = exec;
+        return Promise.resolve(
+          exec?.dependencyRegistry?.has(dependencyId)
+            ? { success: true as const, value: "ok" }
+            : {
+              success: false as const,
+              error: message`Missing forwarded exec.`,
+            },
+        );
+      },
+      suggest() {
+        return {
+          async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+            yield* [];
+          },
+        };
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"async", string, undefined>;
+    const parser = command("deploy", inner);
+
+    const result = await parser.complete(
+      ["matched", "deploy"],
+      {
+        usage: parser.usage,
+        phase: "complete",
+        path: ["root"],
+        trace: undefined,
+        dependencyRegistry: staleRegistry,
+      },
+    );
+
+    assert.ok(result.success);
+    assert.strictEqual(completeExec?.dependencyRegistry, freshRegistry);
+  });
 });
 
 describe("command() error customization", () => {
