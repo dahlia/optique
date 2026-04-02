@@ -2282,17 +2282,17 @@ describe("primitives additional branch coverage", () => {
     }
   });
 
-  it("option complete covers deferred success and custom invalid branches", () => {
+  it("option complete handles plain success and custom invalid branches", () => {
     const parser = option("--port", integer(), {
       errors: {
         invalidValue: (error) => message`invalid ${error}`,
       },
     });
 
-    const deferredSuccess = parser.complete({ success: true, value: 42 });
-    assert.ok(deferredSuccess.success);
-    if (deferredSuccess.success) {
-      assert.equal(deferredSuccess.value, 42);
+    const plainSuccess = parser.complete({ success: true, value: 42 });
+    assert.ok(plainSuccess.success);
+    if (plainSuccess.success) {
+      assert.equal(plainSuccess.value, 42);
     }
 
     const failure = parser.complete({
@@ -2305,7 +2305,7 @@ describe("primitives additional branch coverage", () => {
     }
   });
 
-  it("argument complete covers custom invalid branches", () => {
+  it("argument complete formats plain failures with custom invalid branches", () => {
     const parser = argument(integer(), {
       errors: {
         invalidValue: (error) => message`bad ${error}`,
@@ -2314,11 +2314,11 @@ describe("primitives additional branch coverage", () => {
 
     const failure = parser.complete({
       success: false,
-      error: message`deferred-fail`,
+      error: message`plain-fail`,
     });
     assert.ok(!failure.success);
     if (!failure.success) {
-      assert.equal(formatMessage(failure.error), "bad deferred-fail");
+      assert.equal(formatMessage(failure.error), "bad plain-fail");
     }
   });
 });
@@ -6833,37 +6833,27 @@ describe("branch coverage: primitives edge cases", () => {
     const argWithCustomInvalid = argument(string({ metavar: "NAME" }), {
       errors: { invalidValue: (error) => message`bad ${error}` },
     });
-    const deferredSuccess = argWithCustomInvalid.complete({
+    const plainSuccess = argWithCustomInvalid.complete({
       success: true,
       value: "ok",
     });
-    assert.ok(deferredSuccess.success);
+    assert.ok(plainSuccess.success);
 
-    const dependencyFailure = argWithCustomInvalid.complete({
-      success: false,
-      error: message`dep-fail`,
-    });
-    assert.ok(!dependencyFailure.success);
-    if (!dependencyFailure.success) {
-      assert.equal(formatMessage(dependencyFailure.error), "bad dep-fail");
-    }
-
-    const plainFailure = argWithCustomInvalid.complete({
-      success: false,
-      error: message`plain-fail`,
-    });
-    assert.ok(!plainFailure.success);
-    if (!plainFailure.success) {
-      assert.equal(formatMessage(plainFailure.error), "bad plain-fail");
-    }
-
-    const deferredFailure = argWithCustomInvalid.complete({
-      success: false,
-      error: message`deferred-fail`,
-    });
-    assert.ok(!deferredFailure.success);
-    if (!deferredFailure.success) {
-      assert.equal(formatMessage(deferredFailure.error), "bad deferred-fail");
+    for (
+      const [error, expected] of [
+        [message`dep-fail`, "bad dep-fail"],
+        [message`plain-fail`, "bad plain-fail"],
+        [message`deferred-fail`, "bad deferred-fail"],
+      ] as const
+    ) {
+      const failure = argWithCustomInvalid.complete({
+        success: false,
+        error,
+      });
+      assert.ok(!failure.success);
+      if (!failure.success) {
+        assert.equal(formatMessage(failure.error), expected);
+      }
     }
 
     const optionWithCustomErrors = option("--port", integer(), {
@@ -6878,40 +6868,24 @@ describe("branch coverage: primitives edge cases", () => {
       assert.equal(formatMessage(missingOption.error), "missing --port");
     }
 
-    const deferredOptionFailure = optionWithCustomErrors.complete({
-      success: false,
-      error: message`not-int`,
-    });
-    assert.ok(!deferredOptionFailure.success);
-    if (!deferredOptionFailure.success) {
-      assert.equal(
-        formatMessage(deferredOptionFailure.error),
-        "invalid not-int",
-      );
-    }
-
-    const dependencyOptionFailure = optionWithCustomErrors.complete({
-      success: false,
-      error: message`dep-not-int`,
-    });
-    assert.ok(!dependencyOptionFailure.success);
-    if (!dependencyOptionFailure.success) {
-      assert.equal(
-        formatMessage(dependencyOptionFailure.error),
-        "invalid dep-not-int",
-      );
-    }
-
-    const plainOptionFailure = optionWithCustomErrors.complete({
-      success: false,
-      error: message`plain-not-int`,
-    });
-    assert.ok(!plainOptionFailure.success);
-    if (!plainOptionFailure.success) {
-      assert.equal(
-        formatMessage(plainOptionFailure.error),
-        "invalid plain-not-int",
-      );
+    for (
+      const [error, expected] of [
+        [message`not-int`, "invalid not-int"],
+        [message`dep-not-int`, "invalid dep-not-int"],
+        [message`plain-not-int`, "invalid plain-not-int"],
+      ] as const
+    ) {
+      const invalidOptionFailure = optionWithCustomErrors.complete({
+        success: false,
+        error,
+      });
+      assert.ok(!invalidOptionFailure.success);
+      if (!invalidOptionFailure.success) {
+        assert.equal(
+          formatMessage(invalidOptionFailure.error),
+          expected,
+        );
+      }
     }
 
     const staticDuplicateOption = option("--count", integer(), {

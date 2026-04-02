@@ -3168,6 +3168,7 @@ describe("multiple", () => {
   });
 
   it("should retry complete on annotated wrapper state failures", () => {
+    const seenStates: string[] = [];
     const baseParser: Parser<"sync", string, string> = {
       $mode: "sync",
       $valueType: [] as const,
@@ -3193,6 +3194,7 @@ describe("multiple", () => {
         };
       },
       complete(state) {
+        seenStates.push(typeof state === "string" ? state : "wrapped");
         if (typeof state !== "string") {
           return {
             success: false as const,
@@ -3217,9 +3219,11 @@ describe("multiple", () => {
     if (result.success) {
       assert.deepEqual(result.value, ["ALPHA"]);
     }
+    assert.deepEqual(seenStates, ["wrapped", "alpha"]);
   });
 
   it("should retry async complete on annotated wrapper state failures", async () => {
+    const seenStates: string[] = [];
     const baseParser: Parser<"async", string, string> = {
       $mode: "async",
       $valueType: [] as const,
@@ -3245,6 +3249,7 @@ describe("multiple", () => {
         });
       },
       complete(state) {
+        seenStates.push(typeof state === "string" ? state : "wrapped");
         if (typeof state !== "string") {
           return Promise.resolve({
             success: false as const,
@@ -3272,6 +3277,7 @@ describe("multiple", () => {
     if (result.success) {
       assert.deepEqual(result.value, ["ALPHA"]);
     }
+    assert.deepEqual(seenStates, ["wrapped", "alpha"]);
   });
 
   it("should fallback to unwrapped primitive state in suggest()", () => {
@@ -6497,6 +6503,7 @@ describe("branch coverage: modifiers edge cases", () => {
   });
 
   it("multiple: complete retries unwrapped injected states after failure", () => {
+    const seenStates: string[] = [];
     const inner = {
       $mode: "sync" as const,
       $valueType: [] as readonly string[],
@@ -6512,6 +6519,7 @@ describe("branch coverage: modifiers edge cases", () => {
         error: message`No parse.`,
       }),
       complete(state: unknown) {
+        seenStates.push(typeof state === "string" ? state : "wrapped");
         if (typeof state !== "string") {
           return { success: false as const, error: message`wrapped state` };
         }
@@ -6531,6 +6539,7 @@ describe("branch coverage: modifiers edge cases", () => {
     if (result.success) {
       assert.deepEqual(result.value, ["alpha"]);
     }
+    assert.deepEqual(seenStates, ["wrapped", "alpha"]);
   });
 
   it("multiple: async suggest derives selected values with child exec paths", async () => {
