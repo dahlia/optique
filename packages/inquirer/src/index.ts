@@ -949,6 +949,19 @@ export function prompt<M extends Mode, TValue, TState>(
       : [{ type: "optional", terms: parser.usage }],
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
+    getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
+      const innerState = isPromptBindState(state)
+        ? (state.cliState === undefined
+          ? parser.initialState
+          : state.cliState as TState)
+        : state;
+      const innerNodes = parser.getSuggestRuntimeNodes?.(innerState, path) ??
+        [];
+      if (promptedParser.dependencyMetadata?.source != null) {
+        return [{ path, parser: promptedParser, state }, ...innerNodes];
+      }
+      return innerNodes;
+    },
     // Use the sentinel as initialState so complete() can detect the
     // completability-check call and deduplicate prompt execution.
     get initialState(): TState {
@@ -970,6 +983,11 @@ export function prompt<M extends Mode, TValue, TState>(
       const baseInnerContext = innerState !== context.state
         ? { ...context, state: innerState }
         : context;
+      const effectiveInnerState = annotations != null &&
+          innerState == null &&
+          Reflect.get(parser, inheritParentAnnotationsKey) === true
+        ? injectAnnotations(innerState, annotations)
+        : innerState;
       // Propagate annotations into the inner context state so that source-
       // binding wrappers (bindEnv, bindConfig) can carry them through into
       // their output state.  This is necessary when parse() is called with
@@ -1017,7 +1035,7 @@ export function prompt<M extends Mode, TValue, TState>(
 
       const result = withAnnotatedInnerState(
         context.state,
-        innerState,
+        effectiveInnerState,
         (annotatedInnerState) => {
           const innerContext = annotatedInnerState !== context.state
             ? { ...context, state: annotatedInnerState }
@@ -1273,9 +1291,9 @@ export function prompt<M extends Mode, TValue, TState>(
 
     suggest: (context, prefix) => {
       const innerState = isPromptBindState(context.state)
-        ? (context.state.hasCliValue
-          ? (context.state.cliState as TState)
-          : parser.initialState)
+        ? (context.state.cliState === undefined
+          ? parser.initialState
+          : context.state.cliState as TState)
         : context.state;
       const innerContext = innerState !== context.state
         ? { ...context, state: innerState }
@@ -1322,6 +1340,40 @@ export function prompt<M extends Mode, TValue, TState>(
   if (typeof parser.normalizeValue === "function") {
     Object.defineProperty(promptedParser, "normalizeValue", {
       value: parser.normalizeValue.bind(parser),
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  const dependencyMetadata = (
+    parser as Parser<M, TValue, TState> & {
+      readonly dependencyMetadata?: {
+        readonly source?: {
+          readonly extractSourceValue: (
+            state: unknown,
+          ) =>
+            | ValueParserResult<unknown>
+            | Promise<ValueParserResult<unknown> | undefined>
+            | undefined;
+        };
+      };
+    }
+  ).dependencyMetadata;
+  if (dependencyMetadata != null) {
+    Object.defineProperty(promptedParser, "dependencyMetadata", {
+      value: dependencyMetadata.source == null ? dependencyMetadata : {
+        ...dependencyMetadata,
+        source: {
+          ...dependencyMetadata.source,
+          extractSourceValue: (state: unknown) => {
+            if (!isPromptBindState(state)) {
+              return dependencyMetadata.source?.extractSourceValue(state);
+            }
+            return dependencyMetadata.source?.extractSourceValue(
+              state.cliState ?? state,
+            );
+          },
+        },
+      },
       configurable: true,
       enumerable: false,
     });

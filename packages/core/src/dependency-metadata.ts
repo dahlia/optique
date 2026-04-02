@@ -44,18 +44,25 @@ export interface DependencySourceCapability {
   /**
    * Extracts the dependency source parse result from the parser's state.
    *
-   * Each wrapper composes this method to handle its state shape:
+   * The `state` argument is the current parser state for the source-owning
+   * parser.  Each wrapper composes this method to handle its own state shape:
    * - plain source: reads from `DependencySourceState`
    * - `optional()` / `withDefault()`: unwraps `[innerState]` first
    * - `map()`: reads the pre-transform value from inner state
    *
    * Returns the `ValueParserResult` (which may be successful with any
-   * value including `undefined`, or failed), or `undefined` if the state
+   * value including `undefined`, or failed), a promise that resolves to the
+   * same shape when extraction needs async work, or `undefined` if the state
    * does not contain a source result at all (unpopulated / wrong shape).
+   * Callers and wrapper authors must handle both direct and promise-wrapped
+   * results when composing `extractSourceValue`.
    */
   readonly extractSourceValue: (
     state: unknown,
-  ) => ValueParserResult<unknown> | undefined;
+  ) =>
+    | ValueParserResult<unknown>
+    | Promise<ValueParserResult<unknown> | undefined>
+    | undefined;
 
   /**
    * When present, provides a missing-source value (e.g., from a
@@ -241,17 +248,39 @@ export function extractDependencyMetadata<M extends Mode, T>(
 // =============================================================================
 
 /**
- * Extracts the source parse result from a bare `DependencySourceState`.
- * Used as the base `extractSourceValue` for plain dependency sources.
+ * Extracts the source parse result from a plain source state.
+ *
+ * Accepts either a `DependencySourceState` or a bare
+ * `ValueParserResult`-shaped object, and returns `undefined` for
+ * unrelated states. Used as the base `extractSourceValue` for plain
+ * dependency sources.
  */
 function extractFromBareState(
   state: unknown,
 ): ValueParserResult<unknown> | undefined {
-  if (!isDependencySourceState(state)) return undefined;
-  return state.result;
+  if (isDependencySourceState(state)) return state.result;
+  if (
+    state != null &&
+    typeof state === "object" &&
+    Object.hasOwn(state, "success") &&
+    typeof (state as { success?: unknown }).success === "boolean" &&
+    (
+      ((state as { success: boolean }).success &&
+        Object.hasOwn(state, "value")) ||
+      (!(state as { success: boolean }).success &&
+        Object.hasOwn(state, "error"))
+    )
+  ) {
+    return state as ValueParserResult<unknown>;
+  }
+  return undefined;
 }
 
-type ExtractFn = (state: unknown) => ValueParserResult<unknown> | undefined;
+type ExtractResult =
+  | ValueParserResult<unknown>
+  | Promise<ValueParserResult<unknown> | undefined>
+  | undefined;
+type ExtractFn = (state: unknown) => ExtractResult;
 
 /**
  * Wraps an inner `extractSourceValue` to unwrap `[innerState]` first.
@@ -259,7 +288,7 @@ type ExtractFn = (state: unknown) => ValueParserResult<unknown> | undefined;
  * single-element array.
  */
 function unwrapArrayThenExtract(innerExtract: ExtractFn): ExtractFn {
-  return (state: unknown): ValueParserResult<unknown> | undefined => {
+  return (state: unknown): ExtractResult => {
     if (Array.isArray(state) && state.length === 1) {
       return innerExtract(state[0]);
     }
@@ -334,7 +363,8 @@ export function composeDependencyMetadata(
       const wrappedExtract = inner.source?.extractSourceValue != null
         ? unwrapArrayThenExtract(inner.source.extractSourceValue)
         : undefined;
-      if (inner.source != null && inner.source.preservesSourceValue) {
+      const preservesSourceValue = inner.source?.preservesSourceValue !== false;
+      if (inner.source != null) {
         return {
           ...inner,
           source: {
@@ -342,14 +372,10 @@ export function composeDependencyMetadata(
             ...(wrappedExtract != null && {
               extractSourceValue: wrappedExtract,
             }),
-            getMissingSourceValue: options?.defaultValue,
+            ...(preservesSourceValue && options?.defaultValue != null && {
+              getMissingSourceValue: options.defaultValue,
+            }),
           },
-        };
-      }
-      if (wrappedExtract != null && inner.source != null) {
-        return {
-          ...inner,
-          source: { ...inner.source, extractSourceValue: wrappedExtract },
         };
       }
       return inner;

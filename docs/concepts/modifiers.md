@@ -35,6 +35,11 @@ even when the wrapped parser fails to match. If the wrapped parser succeeds,
 `optional()` returns its value. If it fails, `optional()` returns `undefined`
 without consuming any input or reporting an error.
 
+When `optional()` wraps a dependency source, Optique still tracks that source
+through the shared dependency runtime. A missing optional source therefore
+remains visible to derived parsers as “not provided” rather than becoming a
+special wrapper-specific state.
+
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
@@ -233,6 +238,16 @@ Dynamic defaults are useful when:
  -  The default value depends on runtime conditions
  -  You want to compute expensive defaults only when needed
  -  The default value might change between invocations
+
+When `withDefault()` wraps a dependency source, the default also participates
+in dependency resolution. Derived parsers see the same fallback value that the
+user-facing parser returns, even through larger compositions such as
+`object()` or `merge()`. One exception is `map()`: once a
+source value has been transformed anywhere in the wrapper chain,
+`withDefault()` only supplies a fallback for the mapped output. This applies
+both to `withDefault(map(source), ...)` and to `map(withDefault(source), ...)`.
+In either form, the default does not invent a dependency-source value for
+downstream derived parsers.
 
 ### Default normalization
 

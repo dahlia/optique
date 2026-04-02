@@ -24,13 +24,13 @@ import {
 import { dispatchByMode } from "./mode-dispatch.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
 import {
-  collectSourcesFromState,
+  collectExplicitSourceValues,
+  collectExplicitSourceValuesAsync,
   createDependencyRuntimeContext,
   type DependencyRuntimeContext,
-  resolveStateWithRuntime,
-  resolveStateWithRuntimeAsync,
+  type RuntimeNode,
 } from "./dependency-runtime.ts";
-import { isDeferredParseState } from "./dependency.ts";
+import { createInputTrace, type InputTrace } from "./input-trace.ts";
 
 export type { ParseOptions };
 
@@ -191,6 +191,15 @@ export interface Parser<
   readonly initialState: TState;
 
   /**
+   * Internal marker for wrappers whose `{ hasCliValue: false }` states should
+   * be treated as unmatched dependency-source states during completion-time
+   * Phase 1.
+   *
+   * @internal
+   */
+  readonly [unmatchedNonCliDependencySourceStateMarker]?: true;
+
+  /**
    * Parses the input context and returns a result indicating
    * whether the parsing was successful or not.
    * @param context The context of the parser, which includes the input buffer
@@ -311,9 +320,26 @@ export interface Parser<
    * capabilities.  Used by the dependency runtime to resolve dependencies
    * without relying on state-shape protocols.
    * @internal
-   * @since 1.0.0
    */
   readonly dependencyMetadata?: ParserDependencyMetadata;
+
+  /**
+   * Internal hook for top-level suggest-time dependency seeding.
+   *
+   * Wrapper parsers can expose the active parser/state pairs that should be
+   * scanned when `suggestSync()` or `suggestAsync()` builds a fresh dependency
+   * runtime.  When omitted, only this parser's own dependency source metadata
+   * is considered.
+   *
+   * @param state The current parser state.
+   * @param path The path to this parser within the parse tree.
+   * @returns Runtime nodes to seed into the suggestion-time dependency runtime.
+   * @internal
+   */
+  getSuggestRuntimeNodes?(
+    state: TState,
+    path: readonly PropertyKey[],
+  ): readonly RuntimeNode[];
 }
 
 /**
@@ -379,6 +405,17 @@ export interface ExecutionContext {
   readonly path: readonly PropertyKey[];
 
   /**
+   * Immutable trace of raw primitive inputs recorded during parsing.
+   *
+   * Primitives append trace entries keyed by {@link path}, allowing later
+   * completion phases to replay derived parsers with the resolved
+   * dependency values.
+   *
+   * @internal
+   */
+  readonly trace?: InputTrace;
+
+  /**
    * A registry containing resolved dependency values from DependencySource
    * parsers.
    * @since 0.10.0
@@ -389,7 +426,6 @@ export interface ExecutionContext {
    * The dependency runtime context for dependency resolution.
    * Coexists with `dependencyRegistry` during the transition period.
    * @internal
-   * @since 1.0.0
    */
   readonly dependencyRuntime?: DependencyRuntimeContext;
 
@@ -409,10 +445,38 @@ export interface ExecutionContext {
    *
    * @see https://github.com/dahlia/optique/issues/762
    * @internal
-   * @since 1.0.0
    */
   readonly preCompletedByParser?: ReadonlyMap<string | symbol, unknown>;
+
+  /**
+   * Field names that should be ignored when a construct seeds dependency
+   * sources from child state during completion.
+   *
+   * Used by outer `merge()` completions to suppress ambiguous duplicate
+   * keys while still allowing the child parser to finish its own value
+   * completion.
+   *
+   * @internal
+   */
+  readonly excludedSourceFields?: ReadonlySet<string | symbol>;
 }
+
+/**
+ * Internal marker for wrappers whose `{ hasCliValue: false }` states should
+ * be treated as unmatched dependency-source states during completion-time
+ * Phase 1.
+ *
+ * Wrappers like `bindEnv()` and `bindConfig()` opt in because their missing
+ * CLI states still carry enough fallback context to pre-complete exactly
+ * once. Wrappers like `prompt()` intentionally do not opt in because
+ * prompted values are not yet registered as dependency sources.
+ *
+ * @internal
+ */
+export const unmatchedNonCliDependencySourceStateMarker: unique symbol = Symbol
+  .for(
+    "@optique/core/parser/unmatchedNonCliDependencySourceStateMarker",
+  );
 
 /**
  * The context of the parser, which includes the input buffer and the state.
@@ -433,6 +497,16 @@ export interface ParserContext<TState> {
    * @since 1.0.0
    */
   readonly exec?: ExecutionContext;
+
+  /**
+   * Immutable trace of raw primitive inputs recorded during parsing.
+   *
+   * Preserved as a flat compatibility field so wrapper parsers can forward
+   * trace data even when they rebuild the parser context without {@link exec}.
+   *
+   * @since 1.0.0
+   */
+  readonly trace?: InputTrace;
 
   /**
    * The array of input strings that the parser is currently processing.
@@ -490,6 +564,7 @@ export function createParserContext<TState>(
 ): ParserContext<TState> {
   return {
     exec,
+    trace: exec.trace,
     buffer: frame.buffer,
     state: frame.state,
     optionsTerminated: frame.optionsTerminated,
@@ -672,6 +747,8 @@ function injectAnnotationsIntoState<TState>(
  *          successful or not.  If successful, it contains the parsed value of
  *          type `T`.  If not, it contains an error message describing the
  *          failure.
+ * @throws {TypeError} When a synchronous dependency source extractor returns a
+ *         thenable during completion-time dependency seeding.
  * @since 0.9.0 Renamed from the original `parse` function which now delegates
  *              to this for sync parsers.
  * @since 0.10.0 Added optional `options` parameter for annotations support.
@@ -689,6 +766,7 @@ export function parseSync<T>(
     usage: parser.usage,
     phase: "parse",
     path: [],
+    trace: createInputTrace(),
   };
   let context: ParserContext<unknown> = createParserContext(
     { buffer: args, state: initialState, optionsTerminated: false },
@@ -708,24 +786,15 @@ export function parseSync<T>(
       };
     }
   } while (context.buffer.length > 0);
-  // Create dependency runtime for top-level resolution, mirroring the
-  // construct-owned model.  Only resolve the immediate state when it is
-  // a DeferredParseState (i.e., the top-level parser is a primitive like
-  // option() or argument() with a derived value parser).  Construct
-  // parsers (object, tuple, merge, concat) handle their own multi-phase
-  // dependency pipeline in complete(), so their state must not be
-  // pre-resolved here.
   const runtime = createDependencyRuntimeContext();
-  const resolvedState = isDeferredParseState(context.state)
-    ? resolveStateWithRuntime(context.state, runtime)
-    : context.state;
   const completeExec: ExecutionContext = {
     ...exec,
     phase: "complete",
     dependencyRuntime: runtime,
     dependencyRegistry: runtime.registry,
+    trace: context.exec?.trace ?? context.trace ?? exec.trace,
   };
-  const endResult = parser.complete(resolvedState, completeExec);
+  const endResult = parser.complete(context.state, completeExec);
   return endResult.success
     ? {
       success: true,
@@ -787,6 +856,7 @@ export async function parseAsync<T>(
     usage: parser.usage,
     phase: "parse",
     path: [],
+    trace: createInputTrace(),
   };
   let context: ParserContext<unknown> = createParserContext(
     { buffer: args, state: initialState, optionsTerminated: false },
@@ -806,20 +876,15 @@ export async function parseAsync<T>(
       };
     }
   } while (context.buffer.length > 0);
-  // Create dependency runtime for top-level resolution, mirroring the
-  // construct-owned model.  Only resolve the immediate state when it is
-  // a DeferredParseState (primitive with a derived value parser).
   const runtime = createDependencyRuntimeContext();
-  const resolvedState = isDeferredParseState(context.state)
-    ? await resolveStateWithRuntimeAsync(context.state, runtime)
-    : context.state;
   const completeExec: ExecutionContext = {
     ...exec,
     phase: "complete",
     dependencyRuntime: runtime,
     dependencyRegistry: runtime.registry,
+    trace: context.exec?.trace ?? context.trace ?? exec.trace,
   };
-  const endResult = await parser.complete(resolvedState, completeExec);
+  const endResult = await parser.complete(context.state, completeExec);
   return endResult.success
     ? {
       success: true,
@@ -854,6 +919,8 @@ export async function parseAsync<T>(
  * @param options Optional {@link ParseOptions} for customizing parsing behavior.
  * @returns A {@link Result} object (for sync) or Promise thereof (for async)
  *          indicating whether the parsing was successful or not.
+ * @throws {TypeError} When a synchronous dependency source extractor returns a
+ *         thenable during completion-time dependency seeding.
  * @since 0.10.0 Added optional `options` parameter for annotations support.
  */
 export function parse<M extends Mode, T>(
@@ -900,6 +967,8 @@ export function parse<M extends Mode, T>(
  * const suggestions2 = suggestSync(parser, ["-v", "--format="]);
  * // Returns: [{ text: "--format=json" }, { text: "--format=yaml" }]
  * ```
+ * @throws {TypeError} When a synchronous dependency source extractor returns a
+ *         thenable during suggestion seeding.
  * @since 0.6.0
  * @since 0.9.0 Renamed from the original `suggest` function.
  * @since 0.10.0 Added optional `options` parameter for annotations support.
@@ -916,7 +985,12 @@ export function suggestSync<T>(
 
   let context: ParserContext<unknown> = createParserContext(
     { buffer: allButLast, state: initialState, optionsTerminated: false },
-    { usage: parser.usage, phase: "suggest", path: [] },
+    {
+      usage: parser.usage,
+      phase: "suggest",
+      path: [],
+      trace: createInputTrace(),
+    },
   );
 
   // Parse up to the prefix
@@ -926,7 +1000,7 @@ export function suggestSync<T>(
       // If parsing fails, we might still be able to provide suggestions
       // based on the current state. Try to get suggestions from the parser.
       return Array.from(
-        parser.suggest(withSuggestRuntime(context), prefix),
+        parser.suggest(withSuggestRuntime(parser, context), prefix),
       );
     }
     const previousBuffer = context.buffer;
@@ -936,7 +1010,7 @@ export function suggestSync<T>(
 
   // Get suggestions from the parser with the prefix
   return Array.from(
-    parser.suggest(withSuggestRuntime(context), prefix),
+    parser.suggest(withSuggestRuntime(parser, context), prefix),
   );
 }
 
@@ -948,17 +1022,79 @@ export function suggestSync<T>(
  * @internal
  */
 function withSuggestRuntime<TState>(
+  parser: Parser<Mode, unknown, TState>,
   context: ParserContext<TState>,
 ): ParserContext<TState> {
   const runtime = createDependencyRuntimeContext();
-  collectSourcesFromState(context.state, runtime);
+  const nodes = getParserSuggestRuntimeNodes(
+    parser,
+    context.state,
+    context.exec?.path ?? [],
+  );
+  if (nodes.length > 0) {
+    collectExplicitSourceValues(nodes, runtime);
+  }
   return {
     ...context,
     dependencyRegistry: runtime.registry,
     exec: context.exec
-      ? { ...context.exec, dependencyRegistry: runtime.registry }
+      ? {
+        ...context.exec,
+        dependencyRuntime: runtime,
+        dependencyRegistry: runtime.registry,
+      }
       : undefined,
   };
+}
+
+async function withSuggestRuntimeAsync<TState>(
+  parser: Parser<Mode, unknown, TState>,
+  context: ParserContext<TState>,
+): Promise<ParserContext<TState>> {
+  const runtime = createDependencyRuntimeContext();
+  const nodes = getParserSuggestRuntimeNodes(
+    parser,
+    context.state,
+    context.exec?.path ?? [],
+  );
+  if (nodes.length > 0) {
+    await collectExplicitSourceValuesAsync(nodes, runtime);
+  }
+  return {
+    ...context,
+    dependencyRegistry: runtime.registry,
+    exec: context.exec
+      ? {
+        ...context.exec,
+        dependencyRuntime: runtime,
+        dependencyRegistry: runtime.registry,
+      }
+      : undefined,
+  };
+}
+
+/**
+ * Returns suggest-time runtime nodes for a parser, falling back to the
+ * parser's own source metadata when it does not expose a custom hook.
+ *
+ * @param parser The parser whose suggest-time runtime nodes should be resolved.
+ * @param state The current parser state.
+ * @param path The path to this parser within the parse tree.
+ * @returns The runtime nodes used to seed suggest-time dependency resolution.
+ * @internal
+ */
+export function getParserSuggestRuntimeNodes<TState>(
+  parser: Parser<Mode, unknown, TState>,
+  state: TState,
+  path: readonly PropertyKey[],
+): readonly RuntimeNode[] {
+  if (typeof parser.getSuggestRuntimeNodes === "function") {
+    return parser.getSuggestRuntimeNodes(state, path);
+  }
+  if (parser.dependencyMetadata?.source == null) {
+    return [];
+  }
+  return [{ path, parser, state }];
 }
 
 /**
@@ -993,7 +1129,12 @@ export async function suggestAsync<T>(
 
   let context: ParserContext<unknown> = createParserContext(
     { buffer: allButLast, state: initialState, optionsTerminated: false },
-    { usage: parser.usage, phase: "suggest", path: [] },
+    {
+      usage: parser.usage,
+      phase: "suggest",
+      path: [],
+      trace: createInputTrace(),
+    },
   );
 
   // Parse up to the prefix
@@ -1002,7 +1143,7 @@ export async function suggestAsync<T>(
     if (!result.success) {
       // If parsing fails, we might still be able to provide suggestions
       // based on the current state. Try to get suggestions from the parser.
-      const ctx = withSuggestRuntime(context);
+      const ctx = await withSuggestRuntimeAsync(parser, context);
       const suggestions: Suggestion[] = [];
       for await (const suggestion of parser.suggest(ctx, prefix)) {
         suggestions.push(suggestion);
@@ -1015,7 +1156,7 @@ export async function suggestAsync<T>(
   }
 
   // Get suggestions from the parser with the prefix
-  const ctx = withSuggestRuntime(context);
+  const ctx = await withSuggestRuntimeAsync(parser, context);
   const suggestions: Suggestion[] = [];
   for await (const suggestion of parser.suggest(ctx, prefix)) {
     suggestions.push(suggestion);
@@ -1043,6 +1184,8 @@ export async function suggestAsync<T>(
  * @param options Optional {@link ParseOptions} for customizing parsing behavior.
  * @returns An array of {@link Suggestion} objects (for sync) or Promise thereof
  *          (for async) containing completion candidates.
+ * @throws {TypeError} When a synchronous dependency source extractor returns a
+ *         thenable during suggestion seeding.
  * @since 0.6.0
  * @since 0.10.0 Added optional `options` parameter for annotations support.
  */

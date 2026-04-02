@@ -12,10 +12,12 @@ import {
   deriveFromAsync,
   deriveFromSync,
   formatDependencyError,
+  getSnapshottedDefaultDependencyValues,
   isDeferredParseState,
   isDependencySource,
   isDerivedValueParser,
   parseWithDependency,
+  snapshotDefaultDependencyValues,
   suggestWithDependency,
 } from "./dependency.ts";
 import { message } from "./message.ts";
@@ -96,6 +98,23 @@ function asyncChoice<T extends string>(
           yield { kind: "literal", text: c };
         }
       }
+    },
+  };
+}
+
+function syncThrowingParser<
+  M extends "sync" | "async",
+  T extends string,
+>(mode: M): ValueParser<M, T> {
+  return {
+    $mode: mode,
+    metavar: "THROWING" as NonEmptyString,
+    placeholder: "" as T,
+    parse(): never {
+      throw new TypeError("Parser exploded.");
+    },
+    format(value: T): string {
+      return value;
     },
   };
 }
@@ -557,6 +576,404 @@ describe("DeferredParseState", () => {
       assert.equal(deferred.preliminaryResult.value, "test-input");
     }
   });
+
+  test("createDeferredParseState reuses snapshotted default values", () => {
+    const env = dependency(choice(["dev", "prod"] as const));
+    const region = dependency(choice(["us", "eu"] as const));
+    let defaultCalls = 0;
+    const derived = deriveFrom({
+      metavar: "URL",
+      mode: "sync",
+      dependencies: [env, region] as const,
+      factory: (currentEnv, currentRegion) =>
+        choice([`https://${currentEnv}.${currentRegion}.example.com`] as const),
+      defaultValues: () => {
+        defaultCalls++;
+        return defaultCalls === 1
+          ? ["dev", "us"] as const
+          : ["prod", "eu"] as const;
+      },
+    });
+
+    const preliminaryResult = derived.parse("https://dev.us.example.com");
+    assert.equal(defaultCalls, 1);
+
+    const deferred = createDeferredParseState(
+      "https://dev.us.example.com",
+      derived,
+      preliminaryResult,
+    );
+
+    assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
+    assert.equal(defaultCalls, 1);
+  });
+
+  test(
+    "createDeferredParseState reuses snapshotted single-source defaults on factory failure",
+    () => {
+      const mode = dependency(choice(["dev", "prod"] as const));
+      let defaultCalls = 0;
+      const derived = mode.derive({
+        metavar: "LEVEL",
+        mode: "sync",
+        factory: () => {
+          throw new Error("Factory exploded.");
+        },
+        defaultValue: () => {
+          defaultCalls++;
+          return defaultCalls === 1 ? "dev" : "prod";
+        },
+      });
+
+      const preliminaryResult = derived.parse("warn");
+      assert.ok(!preliminaryResult.success);
+      assert.equal(defaultCalls, 1);
+      assert.deepEqual(
+        getSnapshottedDefaultDependencyValues(preliminaryResult),
+        ["dev"],
+      );
+
+      const deferred = createDeferredParseState(
+        "warn",
+        derived,
+        preliminaryResult,
+      );
+
+      assert.deepEqual(deferred.defaultValues, ["dev"]);
+      assert.equal(defaultCalls, 1);
+    },
+  );
+
+  test(
+    "createDeferredParseState reuses snapshotted multi-source defaults on async factory failure",
+    async () => {
+      const env = dependency(choice(["dev", "prod"] as const));
+      const region = dependency(choice(["us", "eu"] as const));
+      let defaultCalls = 0;
+      const derived = deriveFromAsync({
+        metavar: "URL",
+        dependencies: [env, region] as const,
+        factory: () => {
+          throw new Error("Factory exploded.");
+        },
+        defaultValues: () => {
+          defaultCalls++;
+          return defaultCalls === 1
+            ? ["dev", "us"] as const
+            : ["prod", "eu"] as const;
+        },
+      });
+
+      const preliminaryResult = await derived.parse(
+        "https://dev.us.example.com",
+      );
+      assert.ok(!preliminaryResult.success);
+      assert.equal(defaultCalls, 1);
+      assert.deepEqual(
+        getSnapshottedDefaultDependencyValues(preliminaryResult),
+        ["dev", "us"],
+      );
+
+      const deferred = createDeferredParseState(
+        "https://dev.us.example.com",
+        derived,
+        preliminaryResult,
+      );
+
+      assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
+      assert.equal(defaultCalls, 1);
+    },
+  );
+
+  test(
+    "createDeferredParseState keeps single-source snapshots across later mode-mismatch parses",
+    () => {
+      let defaultCalls = 0;
+      const mode = dependency(choice(["dev", "prod"] as const));
+      const derived = mode.derive<"ok", "sync">({
+        metavar: "VALUE",
+        mode: "sync",
+        // @ts-expect-error: intentional sync/async mode mismatch coverage.
+        factory: () => {
+          return asyncChoice(["ok"] as const);
+        },
+        defaultValue: () => {
+          defaultCalls++;
+          return defaultCalls === 1 ? "dev" : "prod";
+        },
+      });
+
+      const firstResult = derived.parse("ok");
+      assert.ok(!firstResult.success);
+      assert.deepEqual(
+        getSnapshottedDefaultDependencyValues(firstResult),
+        ["dev"],
+      );
+
+      const secondResult = derived.parse("ok");
+      assert.ok(!secondResult.success);
+      assert.deepEqual(
+        getSnapshottedDefaultDependencyValues(secondResult),
+        ["prod"],
+      );
+
+      const deferred = createDeferredParseState("ok", derived, firstResult);
+
+      assert.deepEqual(deferred.defaultValues, ["dev"]);
+      assert.equal(defaultCalls, 2);
+    },
+  );
+
+  test(
+    "createDeferredParseState keeps multi-source snapshots across later mode-mismatch parses",
+    () => {
+      let defaultCalls = 0;
+      const env = dependency(choice(["dev", "prod"] as const));
+      const region = dependency(choice(["us", "eu"] as const));
+      const derived = deriveFrom<
+        readonly [typeof env, typeof region],
+        "ok",
+        "sync"
+      >({
+        metavar: "VALUE",
+        mode: "sync",
+        dependencies: [env, region] as const,
+        // @ts-expect-error: intentional sync/async mode mismatch coverage.
+        factory: () => {
+          return asyncChoice(["ok"] as const);
+        },
+        defaultValues: () => {
+          defaultCalls++;
+          return defaultCalls === 1
+            ? ["dev", "us"] as const
+            : ["prod", "eu"] as const;
+        },
+      });
+
+      const firstResult = derived.parse("ok");
+      assert.ok(!firstResult.success);
+      assert.deepEqual(
+        getSnapshottedDefaultDependencyValues(firstResult),
+        ["dev", "us"],
+      );
+
+      const secondResult = derived.parse("ok");
+      assert.ok(!secondResult.success);
+      assert.deepEqual(
+        getSnapshottedDefaultDependencyValues(secondResult),
+        ["prod", "eu"],
+      );
+
+      const deferred = createDeferredParseState("ok", derived, firstResult);
+
+      assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
+      assert.equal(defaultCalls, 2);
+    },
+  );
+
+  test(
+    "createDeferredParseState clones snapshotted default values",
+    () => {
+      const env = dependency(choice(["dev", "prod"] as const));
+      const region = dependency(choice(["us", "eu"] as const));
+      const parser = deriveFromSync({
+        metavar: "URL",
+        dependencies: [env, region] as const,
+        factory: (currentEnv, currentRegion) =>
+          choice(
+            [`https://${currentEnv}.${currentRegion}.example.com`] as const,
+          ),
+        defaultValues: () => ["dev", "us"] as const,
+      });
+      const preliminaryResult = snapshotDefaultDependencyValues(
+        {
+          success: false as const,
+          error: message`pending callback failed`,
+        },
+        ["dev", "us"] as const,
+      );
+      const deferred = createDeferredParseState(
+        "https://dev.us.example.com",
+        parser,
+        preliminaryResult,
+      );
+      const snapshot = getSnapshottedDefaultDependencyValues(preliminaryResult);
+
+      assert.ok(snapshot != null);
+      if (snapshot == null) return;
+      (snapshot as ["dev" | "prod", "us" | "eu"])[0] = "prod";
+      (snapshot as ["dev" | "prod", "us" | "eu"])[1] = "eu";
+
+      assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
+    },
+  );
+
+  test(
+    "createDeferredParseState clones fallback default values",
+    () => {
+      const env = dependency(choice(["dev", "prod"] as const));
+      const region = dependency(choice(["us", "eu"] as const));
+      const defaults: ["dev" | "prod", "us" | "eu"] = ["dev", "us"];
+      const parser = deriveFromSync({
+        metavar: "URL",
+        dependencies: [env, region] as const,
+        factory: (currentEnv, currentRegion) =>
+          choice(
+            [`https://${currentEnv}.${currentRegion}.example.com`] as const,
+          ),
+        defaultValues: () => defaults,
+      });
+      const deferred = createDeferredParseState(
+        "https://dev.us.example.com",
+        parser,
+        {
+          success: false,
+          error: message`pending callback failed`,
+        },
+      );
+
+      defaults[0] = "prod";
+      defaults[1] = "eu";
+
+      assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
+    },
+  );
+});
+
+describe("snapshotDefaultDependencyValues", () => {
+  test("clones the result before attaching the snapshot", () => {
+    const result = Object.freeze({
+      success: true as const,
+      value: "prod",
+    });
+    const defaults = ["dev"];
+
+    const snapshotted = snapshotDefaultDependencyValues(result, defaults);
+    defaults[0] = "prod";
+
+    assert.notEqual(snapshotted, result);
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(snapshotted), [
+      "dev",
+    ]);
+    assert.equal(getSnapshottedDefaultDependencyValues(result), undefined);
+  });
+
+  test("deriveFromAsync snapshots defaults before awaiting parse", async () => {
+    const env = dependency(choice(["dev", "prod"] as const));
+    const region = dependency(choice(["us", "eu"] as const));
+    const defaults: ["dev" | "prod", "us" | "eu"] = ["dev", "us"];
+    let releaseParse!: () => void;
+    const parseGate = new Promise<void>((resolve) => {
+      releaseParse = resolve;
+    });
+
+    const derived = deriveFromAsync({
+      metavar: "URL",
+      dependencies: [env, region] as const,
+      factory: (currentEnv, currentRegion) => ({
+        $mode: "async" as const,
+        metavar: "URL",
+        placeholder: "",
+        async parse(input: string): Promise<ValueParserResult<string>> {
+          await parseGate;
+          return input === `https://${currentEnv}.${currentRegion}.example.com`
+            ? { success: true as const, value: input }
+            : {
+              success: false as const,
+              error: message`Unexpected URL.`,
+            };
+        },
+        format(value: string): string {
+          return value;
+        },
+      }),
+      defaultValues: () => defaults,
+    });
+
+    const pending = derived.parse("https://dev.us.example.com");
+    defaults[0] = "prod";
+    defaults[1] = "eu";
+    releaseParse();
+
+    const result = await pending;
+    assert.ok(result.success);
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(result), [
+      "dev",
+      "us",
+    ]);
+  });
+
+  test("deriveFromSync snapshots defaults before parse mutates the tuple", () => {
+    const env = dependency(choice(["dev", "prod"] as const));
+    const region = dependency(choice(["us", "eu"] as const));
+    const defaults: ["dev" | "prod", "us" | "eu"] = ["dev", "us"];
+
+    const derived = deriveFromSync({
+      metavar: "URL",
+      dependencies: [env, region] as const,
+      factory: (currentEnv, currentRegion) => ({
+        $mode: "sync" as const,
+        metavar: "URL",
+        placeholder: "",
+        parse(input: string): ValueParserResult<string> {
+          defaults[0] = "prod";
+          defaults[1] = "eu";
+          return input === `https://${currentEnv}.${currentRegion}.example.com`
+            ? { success: true as const, value: input }
+            : {
+              success: false as const,
+              error: message`Unexpected URL.`,
+            };
+        },
+        format(value: string): string {
+          return value;
+        },
+      }),
+      defaultValues: () => defaults,
+    });
+
+    const result = derived.parse("https://dev.us.example.com");
+    assert.ok(result.success);
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(result), [
+      "dev",
+      "us",
+    ]);
+  });
+
+  test("preserves the first snapshot on re-annotation", () => {
+    const result = Object.freeze({
+      success: true as const,
+      value: "ok",
+    });
+
+    const first = snapshotDefaultDependencyValues(result, ["dev", "us"]);
+    const second = snapshotDefaultDependencyValues(first, ["prod", "eu"]);
+
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(second), [
+      "dev",
+      "us",
+    ]);
+  });
+
+  test("outer derived parsers overwrite inner default snapshots", () => {
+    const mode = dependency(choice(["inner", "outer"] as const));
+    const outer = mode.derive({
+      metavar: "VALUE",
+      mode: "sync",
+      defaultValue: () => "outer" as const,
+      factory: (_value) =>
+        mode.derive({
+          metavar: "INNER",
+          mode: "sync",
+          defaultValue: () => "inner" as const,
+          factory: () => choice(["ok"] as const),
+        }),
+    });
+
+    const result = outer.parse("ok");
+    assert.ok(result.success);
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(result), ["outer"]);
+  });
 });
 
 describe("DependencyRegistry", () => {
@@ -993,6 +1410,30 @@ describe("derive() with async factory", () => {
     assert.ok(!result.success);
   });
 
+  test("async factory parse rejects synchronous parser throws", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = modeParser.derive({
+      metavar: "LOG_LEVEL",
+      mode: "async",
+      factory: () => syncThrowingParser("async"),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parsePromise = derived.parse("debug");
+    assert.ok(parsePromise instanceof Promise);
+    await assert.rejects(parsePromise, {
+      name: "TypeError",
+      message: "Parser exploded.",
+    });
+    const replayPromise = derived[parseWithDependency]("debug", "prod");
+    assert.ok(replayPromise instanceof Promise);
+    await assert.rejects(replayPromise, {
+      name: "TypeError",
+      message: "Parser exploded.",
+    });
+  });
+
   test("format() should not throw when factory throws on default value", () => {
     const modeParser = dependency(choice(["safe", "broken"] as const));
 
@@ -1032,6 +1473,39 @@ describe("derive() with async factory", () => {
     }
     assert.equal(suggestions.length, 0);
   });
+
+  test(
+    "option suggest does not double-evaluate single-source defaults",
+    async () => {
+      let defaultCalls = 0;
+      const modeParser = dependency(choice(["dev", "prod"] as const));
+      const derived = modeParser.derive({
+        metavar: "VALUE",
+        mode: "async",
+        factory: (value: "dev" | "prod") =>
+          asyncChoice(
+            value === "dev"
+              ? ["debug", "verbose"] as const
+              : ["silent", "strict"] as const,
+          ),
+        defaultValue: () => {
+          defaultCalls++;
+          return "dev" as const;
+        },
+      });
+      const parser = object({ level: option("--level", derived) });
+
+      const suggestions = await suggestAsync(parser, ["--level", ""]);
+
+      assert.equal(defaultCalls, 1);
+      assert.deepEqual(
+        suggestions.map((suggestion) =>
+          "text" in suggestion ? suggestion.text : ""
+        ),
+        ["debug", "verbose"],
+      );
+    },
+  );
 });
 
 describe("deriveSync()", () => {
@@ -1068,6 +1542,29 @@ describe("deriveSync()", () => {
 
     // Even with sync factory, async source makes it async
     assert.equal(derived.$mode, "async");
+  });
+
+  test("async source parse rejects synchronous parser throws", async () => {
+    const modeParser = dependency(asyncChoice(["dev", "prod"] as const));
+
+    const derived = modeParser.deriveSync({
+      metavar: "LOG_LEVEL",
+      factory: () => syncThrowingParser("sync"),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parsePromise = derived.parse("debug");
+    assert.ok(parsePromise instanceof Promise);
+    await assert.rejects(parsePromise, {
+      name: "TypeError",
+      message: "Parser exploded.",
+    });
+    const replayPromise = derived[parseWithDependency]("debug", "prod");
+    assert.ok(replayPromise instanceof Promise);
+    await assert.rejects(replayPromise, {
+      name: "TypeError",
+      message: "Parser exploded.",
+    });
   });
 
   test("deriveSync parse works correctly", () => {
@@ -1329,6 +1826,35 @@ describe("deriveFrom() with async factory", () => {
     assert.equal(derived.format("x"), "x");
   });
 
+  test("deriveFrom async factory parse rejects synchronous parser throws", async () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = deriveFrom({
+      metavar: "CONFIG",
+      mode: "async",
+      dependencies: [dirParser, modeParser] as const,
+      factory: () => syncThrowingParser("async"),
+      defaultValues: () => ["/config", "dev"] as const,
+    });
+
+    const parsePromise = derived.parse("debug");
+    assert.ok(parsePromise instanceof Promise);
+    await assert.rejects(parsePromise, {
+      name: "TypeError",
+      message: "Parser exploded.",
+    });
+    const replayPromise = derived[parseWithDependency](
+      "debug",
+      ["/config", "prod"] as const,
+    );
+    assert.ok(replayPromise instanceof Promise);
+    await assert.rejects(replayPromise, {
+      name: "TypeError",
+      message: "Parser exploded.",
+    });
+  });
+
   test("suggest() should not throw when factory throws on default values", async () => {
     const dirParser = dependency(string({ metavar: "DIR" }));
     const modeParser = dependency(choice(["safe", "broken"] as const));
@@ -1384,6 +1910,34 @@ describe("deriveFromSync()", () => {
 
     // Async source makes it async even with sync factory
     assert.equal(derived.$mode, "async");
+  });
+
+  test("mixed sync/async sources reject synchronous parser throws", async () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(asyncChoice(["dev", "prod"] as const));
+
+    const derived = deriveFromSync({
+      metavar: "CONFIG",
+      dependencies: [dirParser, modeParser] as const,
+      factory: () => syncThrowingParser("sync"),
+      defaultValues: () => ["/config", "dev"] as const,
+    });
+
+    const parsePromise = derived.parse("debug");
+    assert.ok(parsePromise instanceof Promise);
+    await assert.rejects(parsePromise, {
+      name: "TypeError",
+      message: "Parser exploded.",
+    });
+    const replayPromise = derived[parseWithDependency](
+      "debug",
+      ["/config", "prod"] as const,
+    );
+    assert.ok(replayPromise instanceof Promise);
+    await assert.rejects(replayPromise, {
+      name: "TypeError",
+      message: "Parser exploded.",
+    });
   });
 
   test("format() should not throw when factory throws on default values", () => {
@@ -3467,16 +4021,14 @@ describe("coverage-guided dependency parser tests", () => {
 
   test("deriveFrom sync parser should reject async parser mode at parse time", async () => {
     // Intentionally declare mode: "sync" but return an async parser from the
-    // factory (via cast) to test runtime mode-mismatch detection.
+    // factory to test runtime mode-mismatch detection.
     const derived = deriveFrom<readonly [], "ok", "sync">({
       metavar: "VALUE",
       mode: "sync",
       dependencies: [] as const,
+      // @ts-expect-error: intentional sync/async mode mismatch coverage.
       factory: () => {
-        return asyncChoice(["ok"] as const) as unknown as ValueParser<
-          "sync",
-          "ok"
-        >;
+        return asyncChoice(["ok"] as const);
       },
       defaultValues: () => [] as const,
     });
@@ -3601,14 +4153,12 @@ describe("coverage-guided dependency parser tests", () => {
       metavar: "VALUE",
       mode: "sync",
       dependencies: [modeParser, envParser] as const,
+      // @ts-expect-error: intentional sync/async mode mismatch coverage.
       factory: (
         _mode: "sync" | "async",
         _env: "dev" | "prod",
       ) => {
-        return asyncChoice(["ok"] as const) as unknown as ValueParser<
-          "sync",
-          "ok"
-        >;
+        return asyncChoice(["ok"] as const);
       },
       defaultValues: () => ["sync", "dev"] as const,
     });
@@ -3626,15 +4176,13 @@ describe("coverage-guided dependency parser tests", () => {
     }
 
     // Intentionally declare mode: "sync" while factory returns async parser
-    // (via cast) to test runtime mode-mismatch detection in single derive.
+    // to test runtime mode-mismatch detection in single derive.
     const singleDerived = modeParser.derive<"ok", "sync">({
       metavar: "VALUE",
       mode: "sync",
+      // @ts-expect-error: intentional sync/async mode mismatch coverage.
       factory: (_mode: "sync" | "async") => {
-        return asyncChoice(["ok"] as const) as unknown as ValueParser<
-          "sync",
-          "ok"
-        >;
+        return asyncChoice(["ok"] as const);
       },
       defaultValue: () => "sync" as const,
     });
@@ -3647,6 +4195,75 @@ describe("coverage-guided dependency parser tests", () => {
         message`Factory returned an async parser where a sync parser is required.`,
       );
     }
+  });
+
+  test("sync derived parsers should reject promise-like parse results", () => {
+    const modeParser = dependency(choice(["sync", "async"] as const));
+    const envParser = dependency(choice(["dev", "prod"] as const));
+    const multiDerived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [modeParser, envParser] as const,
+      factory: () => ({
+        $mode: "sync" as const,
+        metavar: "VALUE",
+        placeholder: "ok" as const,
+        parse(_input: string): ValueParserResult<"ok"> {
+          // @ts-expect-error: intentional sync Promise regression coverage.
+          return Promise.resolve({
+            success: true as const,
+            value: "ok" as const,
+          });
+        },
+        format(value: "ok"): string {
+          return value;
+        },
+      }),
+      defaultValues: () => ["sync", "dev"] as const,
+    });
+
+    assert.throws(() => multiDerived.parse("ok"), {
+      name: "TypeError",
+      message: /promise-like result/i,
+    });
+    assert.throws(
+      () => multiDerived[parseWithDependency]("ok", ["sync", "dev"] as const),
+      {
+        name: "TypeError",
+        message: /promise-like result/i,
+      },
+    );
+
+    const singleDerived = modeParser.derive({
+      metavar: "VALUE",
+      mode: "sync",
+      factory: () => {
+        return {
+          $mode: "sync" as const,
+          metavar: "VALUE",
+          placeholder: "ok" as const,
+          parse(_input: string): ValueParserResult<"ok"> {
+            // @ts-expect-error: intentional sync Promise regression coverage.
+            return Promise.resolve({
+              success: true as const,
+              value: "ok" as const,
+            });
+          },
+          format(value: "ok"): string {
+            return value;
+          },
+        };
+      },
+      defaultValue: () => "sync" as const,
+    });
+
+    assert.throws(() => singleDerived.parse("ok"), {
+      name: "TypeError",
+      message: /promise-like result/i,
+    });
+    assert.throws(() => singleDerived[parseWithDependency]("ok", "sync"), {
+      name: "TypeError",
+      message: /promise-like result/i,
+    });
   });
 
   test("suggestWithDependency should return empty when both factories fail", async () => {
@@ -4522,6 +5139,77 @@ describe("top-level option()/argument() with derived parsers", () => {
     assert.equal(valid.value, "debug");
     const invalid = await parseAsync(parser, ["--level", "silent"]);
     assert.ok(!invalid.success);
+  });
+
+  test("partial dependency defaults are snapshotted once during parse", () => {
+    let defaultCallCount = 0;
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const format = dependency(choice(["json", "yaml"] as const));
+    const config = deriveFromSync({
+      metavar: "CONFIG",
+      dependencies: [mode, format] as const,
+      factory: (m, f) =>
+        choice(
+          m === "prod"
+            ? (f === "yaml" ? ["prod.yaml"] as const : ["prod.json"] as const)
+            : (f === "yaml" ? ["dev.yaml"] as const : ["dev.json"] as const),
+        ),
+      defaultValues: () => {
+        defaultCallCount++;
+        return [
+          "prod" as const,
+          defaultCallCount === 1 ? "json" as const : "yaml" as const,
+        ] as const;
+      },
+    });
+    const parser = object({
+      mode: option("--mode", mode),
+      config: option("--config", config),
+    });
+
+    const result = parseSync(parser, ["--mode", "dev", "--config", "dev.json"]);
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "dev");
+    assert.equal(result.value.config, "dev.json");
+    assert.equal(defaultCallCount, 1);
+  });
+
+  test("partial dependency defaults are snapshotted once during async parse", async () => {
+    let defaultCallCount = 0;
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const format = dependency(choice(["json", "yaml"] as const));
+    const config = deriveFromSync({
+      metavar: "CONFIG",
+      dependencies: [mode, format] as const,
+      factory: (m, f) =>
+        choice(
+          m === "prod"
+            ? (f === "yaml" ? ["prod.yaml"] as const : ["prod.json"] as const)
+            : (f === "yaml" ? ["dev.yaml"] as const : ["dev.json"] as const),
+        ),
+      defaultValues: () => {
+        defaultCallCount++;
+        return [
+          "prod" as const,
+          defaultCallCount === 1 ? "json" as const : "yaml" as const,
+        ] as const;
+      },
+    });
+    const parser = object({
+      mode: option("--mode", mode),
+      config: option("--config", config),
+    });
+
+    const result = await parseAsync(parser, [
+      "--mode",
+      "dev",
+      "--config",
+      "dev.json",
+    ]);
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "dev");
+    assert.equal(result.value.config, "dev.json");
+    assert.equal(defaultCallCount, 1);
   });
 
   test("suggestSync top-level option with DependencySource", () => {

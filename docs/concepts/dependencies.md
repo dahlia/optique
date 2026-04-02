@@ -18,9 +18,10 @@ relationships.
 
 The dependency system works by deferring the final validation of dependent
 options until all options have been parsed. During parsing, dependent options
-store their raw input along with a preliminary result. After all options are
-collected, the system resolves dependencies and re-validates dependent options
-using the actual dependency values.
+record their raw input and preliminary result in a shared input trace. After
+parsing, Optique builds a shared dependency runtime, resolves dependency
+source values, and replays dependent parsers with the actual dependency
+values.
 
 
 Creating a dependency source
@@ -186,9 +187,10 @@ const result2 = parseSync(parser, ["--mode", "prod", "--log-level", "warn"]);
 // result2.value = { mode: "prod", logLevel: "warn" }
 ~~~~
 
-The dependency resolution happens automatically in `object().complete()`,
-so you don't need any special handling beyond using the dependency source
-and derived parser together.
+This replay happens automatically during normal `parse*()` and `suggest*()`
+flows, whether the parsers appear at the top level or inside combinators like
+`object()`, `tuple()`, `merge()`, and `concat()`. You do not need any special
+handling beyond using the dependency source and derived parser together.
 
 Dependencies also work across parser combinators like `merge()` and `concat()`.
 For example, you can have the dependency source in one `object()` and the

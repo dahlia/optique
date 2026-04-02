@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 import { getDocPage, parse, suggestSync } from "@optique/core/parser";
 import type { Parser } from "@optique/core/parser";
-import { merge, object } from "@optique/core/constructs";
+import { concat, merge, object, tuple } from "@optique/core/constructs";
+import { getAnnotations, injectAnnotations } from "@optique/core/annotations";
 import { dependency } from "@optique/core/dependency";
-import { optional } from "@optique/core/modifiers";
+import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { fail, flag, option } from "@optique/core/primitives";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { choice, integer, string } from "@optique/core/valueparser";
@@ -13,6 +14,10 @@ import { message } from "@optique/core/message";
 import { bindEnv, createEnvContext } from "@optique/env";
 
 import type { Annotations } from "@optique/core/annotations";
+import {
+  collectExplicitSourceValues,
+  createDependencyRuntimeContext,
+} from "../../core/src/dependency-runtime.ts";
 import {
   bindConfig,
   createConfigContext,
@@ -616,6 +621,80 @@ describe("bindConfig", () => {
     assert.ok(result.success);
     assert.equal(result.value.host, "cli.com"); // from CLI
     assert.equal(result.value.port, 3000); // from default (not config)
+  });
+
+  test("tuple() complete() does not re-evaluate config fallback readers", () => {
+    const source = dependency(string());
+    let keyCalls = 0;
+    const context = createConfigContext({
+      schema: z.object({ mode: z.string() }),
+    });
+    const annotations: Annotations = {
+      [context.id]: { data: { mode: "prod" } },
+    };
+    const leaf = bindConfig(option("--mode", source), {
+      context,
+      key(config) {
+        keyCalls += 1;
+        if (keyCalls > 1) {
+          throw new TypeError("Config key callback re-ran.");
+        }
+        return config.mode;
+      },
+    });
+    const leafParse = leaf.parse({
+      buffer: [],
+      state: injectAnnotations(leaf.initialState, annotations),
+      optionsTerminated: false,
+      usage: leaf.usage,
+    });
+    assert.ok(leafParse.success);
+    const parser = tuple([leaf]);
+    const result = parser.complete(
+      [leafParse.next.state],
+      { usage: parser.usage, phase: "complete", path: [], trace: undefined },
+    );
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["prod"]);
+    assert.equal(keyCalls, 1);
+  });
+
+  test("concat() complete() does not re-evaluate config fallback readers", () => {
+    const source = dependency(string());
+    let keyCalls = 0;
+    const context = createConfigContext({
+      schema: z.object({ mode: z.string() }),
+    });
+    const annotations: Annotations = {
+      [context.id]: { data: { mode: "prod" } },
+    };
+    const leaf = bindConfig(option("--mode", source), {
+      context,
+      key(config) {
+        keyCalls += 1;
+        if (keyCalls > 1) {
+          throw new TypeError("Config key callback re-ran.");
+        }
+        return config.mode;
+      },
+    });
+    const leafParse = leaf.parse({
+      buffer: [],
+      state: injectAnnotations(leaf.initialState, annotations),
+      optionsTerminated: false,
+      usage: leaf.usage,
+    });
+    assert.ok(leafParse.success);
+    const parser = concat(tuple([leaf]), tuple([]));
+    const result = parser.complete(
+      [[leafParse.next.state], []],
+      { usage: parser.usage, phase: "complete", path: [], trace: undefined },
+    );
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["prod"]);
+    assert.equal(keyCalls, 1);
   });
 
   // Regression test for https://github.com/dahlia/optique/issues/94
@@ -1925,6 +2004,271 @@ describe("createConfigContext error paths", () => {
     assert.deepEqual(second.consumed, ["--host", "alice"]);
   });
 
+  test("bindConfig getSuggestRuntimeNodes preserves zero-consumption cliState", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    const inner: Parser<"sync", string, string> = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "initial",
+      parse(parseContext) {
+        return {
+          success: true as const,
+          next: { ...parseContext, state: "cli-state" },
+          consumed: [],
+        };
+      },
+      complete: () => ({ success: true as const, value: "cli-state" }),
+      suggest: () => [],
+      getSuggestRuntimeNodes(state, path) {
+        return [{ path, parser: inner, state }];
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser: Parser<"sync", string, string> = bindConfig(inner, {
+      context,
+      key: "host",
+      default: "fallback",
+    });
+
+    const parsed = parser.parse({
+      buffer: [],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const nodes = parser.getSuggestRuntimeNodes?.(parsed.next.state, ["host"]);
+    assert.ok(nodes != null);
+    if (nodes == null) return;
+    assert.equal(nodes.length, 1);
+    assert.deepEqual(nodes[0]?.path, ["host"]);
+    assert.equal(nodes[0]?.parser, inner);
+    assert.equal(nodes[0]?.state, "cli-state");
+  });
+
+  test(
+    "bindConfig getSuggestRuntimeNodes preserves annotations on no-cli fallback",
+    () => {
+      const context = createConfigContext({
+        schema: z.object({
+          host: z.string().optional(),
+        }),
+      });
+      let seenHost: string | undefined;
+      const inner: Parser<"sync", string, undefined> = {
+        $mode: "sync" as const,
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(parseContext) {
+          return {
+            success: true as const,
+            next: { ...parseContext, state: undefined },
+            consumed: [],
+          };
+        },
+        complete: () => ({ success: true as const, value: "ok" }),
+        suggest: () => [],
+        getSuggestRuntimeNodes(state, path) {
+          seenHost = (
+            getAnnotations(state) as
+              | {
+                readonly [key: symbol]: { readonly data?: { host?: string } };
+              }
+              | undefined
+          )?.[context.id]?.data?.host;
+          return [{ path, parser: inner, state }];
+        },
+        getDocFragments: () => ({ fragments: [] }),
+      };
+      const parser = bindConfig(inner, {
+        context,
+        key: "host",
+      });
+
+      const parsed = parser.parse({
+        buffer: [],
+        state: injectAnnotations(parser.initialState, {
+          [context.id]: { data: { host: "prod" } },
+        }),
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(parsed.success);
+      if (!parsed.success) return;
+
+      const nodes = parser.getSuggestRuntimeNodes?.(parsed.next.state, [
+        "host",
+      ]);
+      assert.ok(nodes != null);
+      if (nodes == null) return;
+      assert.equal(nodes.length, 1);
+      assert.equal(seenHost, "prod");
+    },
+  );
+
+  test("bindConfig getSuggestRuntimeNodes preserves inner nodes for source parsers", () => {
+    const context = createConfigContext({
+      schema: z.object({
+        mode: z.array(z.enum(["dev", "prod"])).optional(),
+      }),
+    });
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const inner = multiple(option("--mode", mode));
+    const parser = bindConfig(inner, {
+      context,
+      key: "mode",
+    });
+
+    const parsed = parser.parse({
+      buffer: ["--mode", "prod"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const nodes = parser.getSuggestRuntimeNodes?.(parsed.next.state, ["mode"]);
+    assert.ok(nodes != null);
+    if (nodes == null) return;
+
+    assert.equal(nodes.at(-1)?.parser, parser);
+    assert.deepEqual(nodes.at(-1)?.path, ["mode"]);
+    assert.equal(nodes.at(-1)?.state, parsed.next.state);
+    assert.ok(nodes.some((node) => node.parser === inner));
+    assert.ok(
+      nodes.some((node) =>
+        JSON.stringify(node.path) === JSON.stringify(["mode", 0])
+      ),
+    );
+  });
+
+  test("bindConfig getSuggestRuntimeNodes keeps outer source precedence", () => {
+    const context = createConfigContext({
+      schema: z.object({
+        mode: z.enum(["dev", "prod"]).optional(),
+      }),
+    });
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source(key) {
+        return ({ APP_MODE: "invalid" } as const)[key as "APP_MODE"];
+      },
+    });
+    const envAnnotations = envContext.getAnnotations();
+    if (envAnnotations instanceof Promise) {
+      throw new TypeError("Expected synchronous env annotations.");
+    }
+    const parser = bindConfig(
+      bindEnv(option("--mode", mode), {
+        context: envContext,
+        key: "MODE",
+        parser: choice(["dev", "prod"] as const),
+      }),
+      {
+        context,
+        key: "mode",
+      },
+    );
+    const state = injectAnnotations(
+      injectAnnotations(parser.initialState, envAnnotations),
+      {
+        [context.id]: { data: { mode: "prod" as const } },
+      },
+    );
+    const nodes = parser.getSuggestRuntimeNodes?.(state, ["mode"]);
+    assert.ok(nodes != null);
+    if (nodes == null) return;
+
+    const runtime = createDependencyRuntimeContext();
+    collectExplicitSourceValues(nodes, runtime);
+
+    const sourceId = parser.dependencyMetadata?.source?.sourceId;
+    assert.ok(sourceId != null);
+    if (sourceId == null) return;
+    assert.ok(runtime.hasSource(sourceId));
+    assert.ok(!runtime.isSourceFailed(sourceId));
+    assert.equal(runtime.getSource(sourceId), "prod");
+  });
+
+  test("bindConfig keeps annotation inheritance non-enumerable", () => {
+    const context = createConfigContext({
+      schema: z.object({
+        mode: z.enum(["dev", "prod"]).optional(),
+      }),
+    });
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const parser = bindConfig(option("--mode", mode), {
+      context,
+      key: "mode",
+    });
+    const marker = Symbol.for("@optique/core/inheritParentAnnotations");
+    const descriptor = Object.getOwnPropertyDescriptor(parser, marker);
+
+    assert.ok(descriptor != null);
+    if (descriptor == null) return;
+    assert.ok(!descriptor.enumerable);
+    assert.notEqual(Reflect.get(map(parser, (value) => value), marker), true);
+  });
+
+  test("bindConfig suggest unwraps zero-consumption cliState", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    const inner: Parser<"sync", string, string> = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "initial",
+      parse(parseContext) {
+        return {
+          success: true as const,
+          next: { ...parseContext, state: "cli-state" },
+          consumed: [],
+        };
+      },
+      complete: () => ({ success: true as const, value: "cli-state" }),
+      *suggest(context) {
+        yield { kind: "literal" as const, text: context.state };
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser: Parser<"sync", string, string> = bindConfig(inner, {
+      context,
+      key: "host",
+      default: "fallback",
+    });
+
+    const parsed = parser.parse({
+      buffer: [],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const suggestions = [...parser.suggest(parsed.next, "")];
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "cli-state" }]);
+  });
+
   test("throws when sync mode parser.parse returns Promise", () => {
     const schema = z.object({ host: z.string() });
     const context = createConfigContext({ schema });
@@ -2013,6 +2357,100 @@ describe("bindConfig() with dependency sources", () => {
     assert.equal(result.value.level, "silent");
   });
 
+  test("exposes config fallback as a source from raw annotated state", () => {
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(option("--mode", mode), {
+      context,
+      key: "mode",
+    });
+    const state = injectAnnotations(parser.initialState, {
+      [context.id]: { data: { mode: "prod" as const } },
+    });
+
+    assert.deepEqual(
+      parser.dependencyMetadata?.source?.extractSourceValue(state),
+      { success: true, value: "prod" },
+    );
+  });
+
+  test("preserves nested bindConfig() source extraction from raw bind state", () => {
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(
+      map(
+        bindConfig(option("--mode", mode), {
+          context,
+          key: "mode",
+        }),
+        (value) => value.toUpperCase(),
+      ),
+      {
+        context,
+        key: "mode",
+      },
+    );
+    const state = injectAnnotations(parser.initialState, {
+      [context.id]: { data: { mode: "prod" as const } },
+    });
+
+    assert.deepEqual(
+      parser.dependencyMetadata?.source?.extractSourceValue(state),
+      { success: true, value: "prod" },
+    );
+  });
+
+  test("preserves nested bindEnv() source extraction from raw bind state", () => {
+    const context = createConfigContext({ schema });
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source(key) {
+        return ({ APP_MODE: "prod" } as const)[key as "APP_MODE"];
+      },
+    });
+    const envAnnotations = envContext.getAnnotations();
+    if (envAnnotations instanceof Promise) {
+      throw new TypeError("Expected synchronous env annotations.");
+    }
+    const parser = bindConfig(
+      map(
+        bindEnv(option("--mode", mode), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+        (value) => value.toUpperCase(),
+      ),
+      {
+        context,
+        key: "mode",
+      },
+    );
+    const state = injectAnnotations(parser.initialState, envAnnotations);
+
+    assert.deepEqual(
+      parser.dependencyMetadata?.source?.extractSourceValue(state),
+      { success: true, value: "prod" },
+    );
+  });
+
+  test("treats a missing config key as an absent source", () => {
+    const optionalSchema = z.object({
+      mode: z.enum(["dev", "prod"]).optional(),
+    });
+    const context = createConfigContext({ schema: optionalSchema });
+    const parser = bindConfig(option("--mode", mode), {
+      context,
+      key: "mode",
+    });
+    const state = injectAnnotations(parser.initialState, {
+      [context.id]: { data: {} },
+    });
+    const source = parser.dependencyMetadata?.source;
+
+    assert.ok(source != null, "Expected dependency source metadata.");
+    if (source == null) return;
+    assert.equal(source.extractSourceValue(state), undefined);
+  });
+
   test("propagates config value as dependency to derived parser (suggest)", () => {
     const { parser, annotations } = createParser({ mode: "prod" });
     const suggestions = suggestSync(parser, ["--level", "s"], { annotations });
@@ -2058,6 +2496,72 @@ describe("bindConfig() with dependency sources", () => {
     assert.ok(result.success);
     assert.equal(result.value.mode, undefined);
     assert.equal(result.value.level, "debug");
+  });
+
+  test("does not preserve inner missing-source defaults without outer fallback", () => {
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(
+      withDefault(optional(option("--mode", mode)), "prod" as const),
+      {
+        context,
+        key: "mode",
+      },
+    );
+    const source = parser.dependencyMetadata?.source;
+
+    assert.ok(source != null, "Expected dependency source metadata.");
+    if (source == null) return;
+    assert.equal(source.getMissingSourceValue, undefined);
+  });
+
+  test("uses the outer config default for missing source values", () => {
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(
+      withDefault(optional(option("--mode", mode)), "prod" as const),
+      {
+        context,
+        key: "mode",
+        default: "dev" as const,
+      },
+    );
+    const source = parser.dependencyMetadata?.source;
+
+    assert.ok(source != null, "Expected dependency source metadata.");
+    if (source == null) return;
+    assert.deepEqual(source.getMissingSourceValue?.(), {
+      success: true,
+      value: "dev",
+    });
+  });
+
+  test("does not invent mapped dependency source values from config fallbacks", () => {
+    const context = createConfigContext({ schema });
+    const annotations: Annotations = {
+      [context.id]: { data: { mode: "prod" as const } },
+    };
+    const parser = bindConfig(
+      map(
+        option("--mode", mode),
+        (value) => value === "dev" ? "development" : "production",
+      ),
+      {
+        context,
+        key: "mode",
+      },
+    );
+
+    const parseResult = parser.parse({
+      buffer: [],
+      state: injectAnnotations(parser.initialState, annotations),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(parseResult.success);
+    const source = parser.dependencyMetadata?.source;
+    assert.ok(source != null, "Expected dependency source metadata.");
+    if (source == null) return;
+    assert.equal(source.extractSourceValue(parseResult.next.state), undefined);
   });
 });
 

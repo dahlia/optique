@@ -1,17 +1,6 @@
 import { composeDependencyMetadata } from "./dependency-metadata.ts";
 import { formatMessage, type Message, message, text } from "./message.ts";
 import {
-  createDependencySourceState,
-  dependencyId,
-  isDependencySourceState,
-  isPendingDependencySourceState,
-  isWrappedDependencySource,
-  type PendingDependencySourceState,
-  transformsDependencyValue,
-  transformsDependencyValueMarker,
-  wrappedDependencySourceMarker,
-} from "./dependency.ts";
-import {
   annotateFreshArray,
   getAnnotations,
   inheritAnnotations,
@@ -34,6 +23,134 @@ import type {
   Suggestion,
 } from "./parser.ts";
 import type { DeferredMap, ValueParserResult } from "./valueparser.ts";
+
+function withChildExecPath(
+  exec: ExecutionContext | undefined,
+  segment: PropertyKey,
+): ExecutionContext | undefined {
+  if (exec == null) return undefined;
+  return {
+    ...exec,
+    path: [...(exec.path ?? []), segment],
+  };
+}
+
+function mergeChildExec(
+  parent: ExecutionContext | undefined,
+  child: ExecutionContext | undefined,
+): ExecutionContext | undefined {
+  if (parent == null) return child;
+  if (child == null) return parent;
+  return {
+    ...parent,
+    trace: child.trace ?? parent.trace,
+    dependencyRuntime: child.dependencyRuntime ?? parent.dependencyRuntime,
+    dependencyRegistry: child.dependencyRegistry ?? parent.dependencyRegistry,
+    preCompletedByParser: child.preCompletedByParser ??
+      parent.preCompletedByParser,
+    excludedSourceFields: child.excludedSourceFields ??
+      parent.excludedSourceFields,
+  };
+}
+
+function withChildContext<TState>(
+  context: ParserContext<unknown>,
+  segment: PropertyKey,
+  state: TState,
+): ParserContext<TState> {
+  const exec = withChildExecPath(context.exec, segment);
+  const dependencyRegistry = context.dependencyRegistry ??
+    exec?.dependencyRegistry;
+  return {
+    ...context,
+    state,
+    ...(exec != null
+      ? {
+        exec: dependencyRegistry === exec.dependencyRegistry
+          ? exec
+          : { ...exec, dependencyRegistry },
+        dependencyRegistry,
+      }
+      : {}),
+  };
+}
+
+function isTerminalMultipleItemState(state: unknown): boolean {
+  const unwrapped = unwrapMultipleItemState(state).value;
+  return unwrapped != null && typeof unwrapped === "object" &&
+    Object.hasOwn(unwrapped, "success") &&
+    typeof (unwrapped as { success?: unknown }).success === "boolean";
+}
+
+function isUnstartedMultipleItemState(
+  state: unknown,
+  originalState?: unknown,
+): boolean {
+  const unwrappedState = unwrapMultipleItemState(state);
+  if (unwrappedState.value == null) return true;
+
+  if (originalState === undefined) return false;
+  const unwrappedOriginalState = unwrapMultipleItemState(originalState);
+  return unwrappedState.value === unwrappedOriginalState.value &&
+    (
+      unwrappedState.viaBoundCliWrapper ||
+      unwrappedOriginalState.viaBoundCliWrapper ||
+      (
+        unwrappedOriginalState.value != null &&
+        typeof unwrappedOriginalState.value === "object"
+      )
+    );
+}
+
+function isBoundCliWrapperState(
+  state: unknown,
+): state is {
+  readonly hasCliValue: boolean;
+  readonly cliState?: unknown;
+} {
+  return state != null &&
+    typeof state === "object" &&
+    Object.hasOwn(state, "hasCliValue") &&
+    typeof (state as { readonly hasCliValue?: unknown }).hasCliValue ===
+      "boolean" &&
+    (
+      Object.hasOwn(state, "cliState") ||
+      (state as { readonly hasCliValue: boolean }).hasCliValue === false
+    );
+}
+
+function unwrapMultipleItemState(
+  state: unknown,
+): {
+  readonly value: unknown;
+  readonly viaBoundCliWrapper: boolean;
+} {
+  let unwrapped = state;
+  let viaBoundCliWrapper = false;
+  while (true) {
+    if (isInjectedAnnotationWrapper(unwrapped)) {
+      unwrapped = unwrapInjectedAnnotationWrapper(unwrapped);
+      continue;
+    }
+    if (Array.isArray(unwrapped) && unwrapped.length === 1) {
+      unwrapped = unwrapped[0];
+      continue;
+    }
+    if (isBoundCliWrapperState(unwrapped)) {
+      viaBoundCliWrapper = true;
+      unwrapped = unwrapped.cliState;
+      continue;
+    }
+    return { value: unwrapped, viaBoundCliWrapper };
+  }
+}
+
+function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
+  return value != null &&
+    (typeof value === "object" || typeof value === "function") &&
+    "then" in value &&
+    typeof (value as Record<string, unknown>).then === "function";
+}
 
 /**
  * Internal helper for optional-style parsing logic shared by optional()
@@ -144,18 +261,33 @@ function adaptShouldDeferCompletion<TState>(
 ): (state: [TState] | undefined, exec?: ExecutionContext) => boolean {
   return (state: [TState] | undefined, exec?: ExecutionContext): boolean => {
     if (Array.isArray(state)) {
-      const inner = getAnnotations(state) != null &&
-          state[0] != null &&
-          typeof state[0] === "object"
-        ? inheritAnnotations(state, state[0]) as TState
-        : state[0];
-      return innerCheck(inner, exec);
+      return innerCheck(
+        normalizeOptionalLikeInnerState(state, state[0]),
+        exec,
+      );
     }
     if (state != null && typeof state === "object") {
-      return innerCheck(state as unknown as TState, exec);
+      return innerCheck(state, exec);
     }
     return false;
   };
+}
+
+function normalizeOptionalLikeInnerState<TState>(
+  state: [TState] | TState | undefined,
+  initialState: TState,
+): TState {
+  if (Array.isArray(state)) {
+    return getAnnotations(state) != null &&
+        state[0] != null &&
+        typeof state[0] === "object"
+      ? inheritAnnotations(state, state[0]) as TState
+      : state[0];
+  }
+  if (state != null && typeof state === "object") {
+    return state;
+  }
+  return initialState;
 }
 
 /**
@@ -181,9 +313,10 @@ export function optional<M extends Mode, TValue, TState>(
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): Generator<Suggestion> {
-    const innerState = Array.isArray(context.state)
-      ? context.state[0]
-      : syncParser.initialState;
+    const innerState = normalizeOptionalLikeInnerState(
+      context.state,
+      syncParser.initialState,
+    );
     yield* syncParser.suggest({ ...context, state: innerState }, prefix);
   }
 
@@ -192,9 +325,10 @@ export function optional<M extends Mode, TValue, TState>(
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): AsyncGenerator<Suggestion> {
-    const innerState = Array.isArray(context.state)
-      ? context.state[0]
-      : syncParser.initialState;
+    const innerState = normalizeOptionalLikeInnerState(
+      context.state,
+      syncParser.initialState,
+    );
     const suggestions = parser.suggest(
       { ...context, state: innerState },
       prefix,
@@ -203,35 +337,6 @@ export function optional<M extends Mode, TValue, TState>(
       yield s;
     }
   }
-
-  // Track whether the inner parser is a wrapped dependency source (via withDefault)
-  // or a direct dependency source (option with dependency source as initialState).
-  // This affects the behavior when the option is not provided:
-  // - Direct dependency source: return undefined, don't register dependency
-  // - Wrapped dependency source: delegate to inner parser to provide default and register dependency
-  const innerHasWrappedDependency = isWrappedDependencySource(parser);
-  const innerHasDirectDependency = isPendingDependencySourceState(
-    syncParser.initialState,
-  );
-
-  // Propagate wrappedDependencySourceMarker so outer wrappers (like withDefault)
-  // can detect that we wrap a dependency source.
-  // For direct dependency sources, we set the marker from inner's initialState.
-  // For wrapped dependency sources, we propagate the inner's marker.
-  const wrappedDependencyMarker: {
-    [wrappedDependencySourceMarker]?: PendingDependencySourceState;
-  } = innerHasWrappedDependency
-    ? { [wrappedDependencySourceMarker]: parser[wrappedDependencySourceMarker] }
-    : innerHasDirectDependency
-    ? { [wrappedDependencySourceMarker]: syncParser.initialState }
-    : {};
-
-  // Check if this optional parser wraps any dependency source
-  const hasWrappedDependencySource = wrappedDependencySourceMarker in
-    wrappedDependencyMarker;
-  const wrappedPendingState = hasWrappedDependencySource
-    ? wrappedDependencyMarker[wrappedDependencySourceMarker]
-    : undefined;
 
   // Type cast needed due to TypeScript's conditional type limitations with generic M
   const optionalParser = {
@@ -246,7 +351,6 @@ export function optional<M extends Mode, TValue, TState>(
     // parser's catch-all status does not apply to the wrapper.
     acceptingAnyToken: false,
     initialState: undefined,
-    ...wrappedDependencyMarker,
     // Forward completion deferral hook from inner parser, adapting the
     // outer state shape ([TState] | undefined) to the inner TState.
     ...(typeof parser.shouldDeferCompletion === "function"
@@ -256,6 +360,22 @@ export function optional<M extends Mode, TValue, TState>(
         ),
       }
       : {}),
+    getSuggestRuntimeNodes(
+      state: [TState] | undefined,
+      path: readonly PropertyKey[],
+    ) {
+      if (optionalParser.dependencyMetadata?.source != null) {
+        return [{ path, parser: optionalParser, state }];
+      }
+      const innerState = normalizeOptionalLikeInnerState(
+        state,
+        parser.initialState,
+      );
+      return parser.getSuggestRuntimeNodes?.(innerState, path) ??
+        (parser.dependencyMetadata?.source != null
+          ? [{ path, parser, state: innerState }]
+          : []);
+    },
     parse(context: ParserContext<[TState] | undefined>) {
       return dispatchByMode(
         parser.$mode,
@@ -264,32 +384,7 @@ export function optional<M extends Mode, TValue, TState>(
       );
     },
     complete(state: [TState] | undefined, exec?: ExecutionContext) {
-      // If state was not wrapped (inner parser didn't match) and this
-      // optional wraps a dependency source:
       if (!Array.isArray(state)) {
-        // Inner parser has a wrapped dependency source (e.g., optional(withDefault(...)))
-        // Delegate to inner parser which will provide its default value and register dependency
-        if (innerHasWrappedDependency && wrappedPendingState) {
-          // Delegate to inner parser with the pending state wrapped in array
-          // (inner parser like withDefault expects [PendingDependencySourceState])
-          return dispatchByMode(
-            parser.$mode,
-            () =>
-              syncParser.complete(
-                [wrappedPendingState] as unknown as TState,
-                exec,
-              ),
-            // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
-            () =>
-              parser.complete(
-                [wrappedPendingState] as unknown as TState,
-                exec,
-              ) as Promise<ValueParserResult<TValue | undefined>>,
-          );
-        }
-        // Inner parser has completion deferral hook (e.g.,
-        // optional(bindConfig(...))). Delegate to inner parser so it can
-        // resolve from config during phase-two completion.
         if (
           typeof parser.shouldDeferCompletion === "function" &&
           state != null &&
@@ -299,13 +394,18 @@ export function optional<M extends Mode, TValue, TState>(
             M,
             ValueParserResult<TValue | undefined>
           > => {
+            const innerState = normalizeOptionalLikeInnerState(
+              state,
+              parser.initialState,
+            );
             const innerResult = dispatchByMode(
               parser.$mode,
-              () => syncParser.complete(state as unknown as TState, exec),
-              () =>
-                parser.complete(state as unknown as TState, exec) as Promise<
-                  ValueParserResult<TValue | undefined>
-                >,
+              () => syncParser.complete(innerState, exec),
+              async () =>
+                (await parser.complete(
+                  innerState,
+                  exec,
+                )) as ValueParserResult<TValue | undefined>,
             );
             return mapModeValue(
               parser.$mode,
@@ -320,34 +420,28 @@ export function optional<M extends Mode, TValue, TState>(
           };
           return innerComplete();
         }
-        // Inner parser is a direct dependency source (e.g., optional(option(..., dep)))
-        // Return undefined and DON'T register dependency - derived parsers use their defaultValue
-        return { success: true, value: undefined };
-      }
-      // If state contains a PendingDependencySourceState:
-      // This happens when object() calls complete with [pendingState] for wrapped dependency sources.
-      if (
-        Array.isArray(state) &&
-        state.length === 1 &&
-        isPendingDependencySourceState(state[0])
-      ) {
-        // Only pass through to inner parser if inner HAS its own wrapped dependency
-        // (e.g., optional(withDefault(...))). Otherwise, return undefined.
-        if (innerHasWrappedDependency) {
-          // Pass the state as-is to the inner parser (it's already in the
-          // right format [PendingDependencySourceState])
+        // When the inner parser preserves an omitted-source default via
+        // dependency metadata (e.g. optional(withDefault(source))), delegate
+        // to it so the user-visible value matches the dependency runtime.
+        const sourceMetadata = parser.dependencyMetadata?.source;
+        if (
+          sourceMetadata?.preservesSourceValue !== false &&
+          sourceMetadata?.getMissingSourceValue != null
+        ) {
+          const delegatedState = normalizeOptionalLikeInnerState(
+            state,
+            parser.initialState,
+          );
           return dispatchByMode(
             parser.$mode,
-            () => syncParser.complete(state as unknown as TState, exec),
-            // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
-            () =>
-              parser.complete(state as unknown as TState, exec) as Promise<
-                ValueParserResult<TValue | undefined>
-              >,
+            () => syncParser.complete(delegatedState, exec),
+            async () =>
+              (await parser.complete(
+                delegatedState,
+                exec,
+              )) as ValueParserResult<TValue | undefined>,
           );
         }
-        // Inner parser is a direct dependency source (e.g., optional(option(..., dep)))
-        // Return undefined - the dependency is not provided
         return { success: true, value: undefined };
       }
       // Propagate annotations from the outer array state into the inner
@@ -355,19 +449,18 @@ export function optional<M extends Mode, TValue, TState>(
       // them during phase-two resolution.  Only propagate when the inner
       // element is an object; primitive states cannot carry annotations
       // without changing their shape, which would break inner parsers.
-      const innerElement = getAnnotations(state) != null &&
-          state[0] != null &&
-          typeof state[0] === "object"
-        ? inheritAnnotations(state, state[0])
-        : state[0];
+      const innerElement = normalizeOptionalLikeInnerState(
+        state,
+        parser.initialState,
+      );
       return dispatchByMode(
         parser.$mode,
         () => syncParser.complete(innerElement as TState, exec),
-        // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
-        () =>
-          parser.complete(innerElement as TState, exec) as Promise<
-            ValueParserResult<TValue | undefined>
-          >,
+        async () =>
+          (await parser.complete(
+            innerElement as TState,
+            exec,
+          )) as ValueParserResult<TValue | undefined>,
       );
     },
     suggest(
@@ -571,9 +664,10 @@ export function withDefault<
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): Generator<Suggestion> {
-    const innerState = Array.isArray(context.state)
-      ? context.state[0]
-      : syncParser.initialState;
+    const innerState = normalizeOptionalLikeInnerState(
+      context.state,
+      syncParser.initialState,
+    );
     yield* syncParser.suggest({ ...context, state: innerState }, prefix);
   }
 
@@ -582,9 +676,10 @@ export function withDefault<
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): AsyncGenerator<Suggestion> {
-    const innerState = Array.isArray(context.state)
-      ? context.state[0]
-      : syncParser.initialState;
+    const innerState = normalizeOptionalLikeInnerState(
+      context.state,
+      syncParser.initialState,
+    );
     const suggestions = parser.suggest(
       { ...context, state: innerState },
       prefix,
@@ -593,19 +688,6 @@ export function withDefault<
       yield s;
     }
   }
-
-  // Check if inner parser's initialState is a PendingDependencySourceState,
-  // or if inner parser has a wrappedDependencySourceMarker.
-  // If so, we need to mark this parser so that object() can find it during
-  // dependency resolution (Phase 1).
-  const innerInitialState = syncParser.initialState;
-  const wrappedDependencyMarker: {
-    [wrappedDependencySourceMarker]?: PendingDependencySourceState;
-  } = isPendingDependencySourceState(innerInitialState)
-    ? { [wrappedDependencySourceMarker]: innerInitialState }
-    : isWrappedDependencySource(parser)
-    ? { [wrappedDependencySourceMarker]: parser[wrappedDependencySourceMarker] }
-    : {};
 
   // Type cast needed due to TypeScript's conditional type limitations with generic M
   const withDefaultParser = {
@@ -619,7 +701,6 @@ export function withDefault<
     // parser's catch-all status does not apply to the wrapper.
     acceptingAnyToken: false,
     initialState: undefined,
-    ...wrappedDependencyMarker,
     // Forward completion deferral hook from inner parser, adapting the
     // outer state shape ([TState] | undefined) to the inner TState.
     ...(typeof parser.shouldDeferCompletion === "function"
@@ -629,6 +710,22 @@ export function withDefault<
         ),
       }
       : {}),
+    getSuggestRuntimeNodes(
+      state: [TState] | undefined,
+      path: readonly PropertyKey[],
+    ) {
+      if (withDefaultParser.dependencyMetadata?.source != null) {
+        return [{ path, parser: withDefaultParser, state }];
+      }
+      const innerState = normalizeOptionalLikeInnerState(
+        state,
+        parser.initialState,
+      );
+      return parser.getSuggestRuntimeNodes?.(innerState, path) ??
+        (parser.dependencyMetadata?.source != null
+          ? [{ path, parser, state: innerState }]
+          : []);
+    },
     parse(context: ParserContext<[TState] | undefined>) {
       return dispatchByMode(
         parser.$mode,
@@ -658,84 +755,6 @@ export function withDefault<
       }
 
       if (!Array.isArray(state)) {
-        // If inner parser transforms the dependency value (e.g., map()),
-        // we need to delegate to see if the chain actually wants to register.
-        // A transform means our default value is NOT a valid dependency source value.
-        if (transformsDependencyValue(parser)) {
-          // Call inner parser's complete(undefined) to see if it returns
-          // a DependencySourceState. If it does, we should also return one
-          // with our default value. If not (e.g., optional returned undefined),
-          // we should NOT register the dependency.
-          const innerResult = dispatchByMode(
-            parser.$mode,
-            () => syncParser.complete(undefined as unknown as TState, exec),
-            // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
-            () =>
-              parser.complete(
-                undefined as unknown as TState,
-                exec,
-              ) as Promise<
-                ValueParserResult<TValue>
-              >,
-          );
-          const handleInnerResult = (
-            res: ValueParserResult<TValue>,
-          ): ValueParserResult<TValue | TDefault> => {
-            // If inner result is a DependencySourceState, we should also
-            // return one with our default value (though this shouldn't happen
-            // with transforms since they break the dependency chain)
-            if (isDependencySourceState(res)) {
-              try {
-                const value = evaluateDefault();
-                return createDependencySourceState(
-                  { success: true, value },
-                  res[dependencyId],
-                ) as unknown as ValueParserResult<TValue | TDefault>;
-              } catch (error) {
-                return {
-                  success: false,
-                  error: error instanceof WithDefaultError
-                    ? error.errorMessage
-                    : message`${text(String(error))}`,
-                };
-              }
-            }
-            // Inner parser didn't return a DependencySourceState (e.g., optional
-            // returned undefined). Return our default value WITHOUT registering
-            // the dependency.
-            try {
-              const value = evaluateDefault();
-              return { success: true, value };
-            } catch (error) {
-              return {
-                success: false,
-                error: error instanceof WithDefaultError
-                  ? error.errorMessage
-                  : message`${text(String(error))}`,
-              };
-            }
-          };
-          return mapModeValue(parser.$mode, innerResult, handleInnerResult);
-        }
-        // Inner parser does NOT transform the dependency value. If there's a
-        // wrapped dependency source, we should register with the default value.
-        if (isWrappedDependencySource(parser)) {
-          try {
-            const value = evaluateDefault();
-            const pendingState = parser[wrappedDependencySourceMarker];
-            return createDependencySourceState(
-              { success: true, value },
-              pendingState[dependencyId],
-            ) as unknown as ValueParserResult<TValue | TDefault>;
-          } catch (error) {
-            return {
-              success: false,
-              error: error instanceof WithDefaultError
-                ? error.errorMessage
-                : message`${text(String(error))}`,
-            };
-          }
-        }
         // Case: Inner parser has completion deferral hook (e.g.,
         // withDefault(bindConfig(...), val)). Delegate to inner parser so
         // it can resolve from config during phase-two completion.
@@ -744,13 +763,18 @@ export function withDefault<
           state != null &&
           typeof state === "object"
         ) {
+          const innerState = normalizeOptionalLikeInnerState(
+            state,
+            parser.initialState,
+          );
           const innerResult = dispatchByMode(
             parser.$mode,
-            () => syncParser.complete(state as unknown as TState, exec),
-            () =>
-              parser.complete(state as unknown as TState, exec) as Promise<
-                ValueParserResult<TValue>
-              >,
+            () => syncParser.complete(innerState, exec),
+            async () =>
+              (await parser.complete(
+                innerState,
+                exec,
+              )) as ValueParserResult<TValue>,
           );
           // Propagate the inner result as-is.  When wrapping
           // bindConfig(), success means config resolved; failure means
@@ -762,85 +786,9 @@ export function withDefault<
             ValueParserResult<TValue | TDefault>
           >;
         }
-        // No wrapped dependency source - just return the default value.
         try {
           const value = evaluateDefault();
           return { success: true, value };
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof WithDefaultError
-              ? error.errorMessage
-              : message`${text(String(error))}`,
-          };
-        }
-      }
-      // Check if the inner state is a PendingDependencySourceState.
-      // This means the option uses a DependencySource but wasn't provided.
-      // We need to check if the inner chain wants to register the dependency.
-      // For example, withDefault(map(optional(...))) should NOT register
-      // the dependency when the optional's inner parser wasn't matched.
-      if (isPendingDependencySourceState(state[0])) {
-        // If inner parser transforms the dependency value (e.g., map()),
-        // we need to delegate to see if the chain actually wants to register.
-        // A transform means our default value is NOT a valid dependency source value.
-        if (transformsDependencyValue(parser)) {
-          const innerResult = dispatchByMode(
-            parser.$mode,
-            () => syncParser.complete(state as unknown as TState, exec),
-            // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
-            () =>
-              parser.complete(state as unknown as TState, exec) as Promise<
-                ValueParserResult<TValue>
-              >,
-          );
-          const handleInnerResult = (
-            res: ValueParserResult<TValue>,
-          ): ValueParserResult<TValue | TDefault> => {
-            // If inner result is a DependencySourceState, return one with our default
-            // (but this shouldn't normally happen since transforms break the chain)
-            if (isDependencySourceState(res)) {
-              try {
-                const value = evaluateDefault();
-                return createDependencySourceState(
-                  { success: true, value },
-                  res[dependencyId],
-                ) as unknown as ValueParserResult<TValue | TDefault>;
-              } catch (error) {
-                return {
-                  success: false,
-                  error: error instanceof WithDefaultError
-                    ? error.errorMessage
-                    : message`${text(String(error))}`,
-                };
-              }
-            }
-            // Inner parser didn't return a DependencySourceState. Return default
-            // value WITHOUT registering the dependency.
-            try {
-              const value = evaluateDefault();
-              return { success: true, value };
-            } catch (error) {
-              return {
-                success: false,
-                error: error instanceof WithDefaultError
-                  ? error.errorMessage
-                  : message`${text(String(error))}`,
-              };
-            }
-          };
-          return mapModeValue(parser.$mode, innerResult, handleInnerResult);
-        }
-        // Inner parser does NOT transform the dependency value (e.g., optional()).
-        // Register the dependency with default value.
-        try {
-          const value = evaluateDefault();
-          // Return a DependencySourceState with the default value so that
-          // dependency resolution can find this value
-          return createDependencySourceState(
-            { success: true, value },
-            state[0][dependencyId],
-          ) as unknown as ValueParserResult<TValue | TDefault>;
         } catch (error) {
           return {
             success: false,
@@ -855,19 +803,18 @@ export function withDefault<
       // them during phase-two resolution.  Only propagate when the inner
       // element is an object; primitive states cannot carry annotations
       // without changing their shape, which would break inner parsers.
-      const innerElement = getAnnotations(state) != null &&
-          state[0] != null &&
-          typeof state[0] === "object"
-        ? inheritAnnotations(state, state[0])
-        : state[0];
+      const innerElement = normalizeOptionalLikeInnerState(
+        state,
+        parser.initialState,
+      );
       return dispatchByMode(
         parser.$mode,
         () => syncParser.complete(innerElement as TState, exec),
-        // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
-        () =>
-          parser.complete(innerElement as TState, exec) as Promise<
-            ValueParserResult<TValue | TDefault>
-          >,
+        async () =>
+          (await parser.complete(
+            innerElement as TState,
+            exec,
+          )) as ValueParserResult<TValue | TDefault>,
       );
     },
     suggest(
@@ -1128,25 +1075,19 @@ export function map<M extends Mode, T, U, TState>(
     );
   };
 
-  // Propagate wrappedDependencySourceMarker from inner parser, and mark
-  // this wrapper as transforming the dependency value. This allows outer
-  // wrappers like withDefault to know that the default value is NOT a valid
-  // dependency source value.
-  const dependencyMarkers: {
-    [wrappedDependencySourceMarker]?: PendingDependencySourceState;
-    [transformsDependencyValueMarker]?: true;
-  } = isWrappedDependencySource(parser)
-    ? {
-      [wrappedDependencySourceMarker]: parser[wrappedDependencySourceMarker],
-      [transformsDependencyValueMarker]: true,
-    }
-    : {};
-
   const mappedParser = {
     ...parser,
     $valueType: [] as readonly U[],
     complete,
-    ...dependencyMarkers,
+    getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
+      if (mappedParser.dependencyMetadata?.source != null) {
+        return [{ path, parser: mappedParser, state }];
+      }
+      return parser.getSuggestRuntimeNodes?.(state, path) ??
+        (parser.dependencyMetadata?.source != null
+          ? [{ path, parser, state }]
+          : []);
+    },
     getDocFragments(state: DocState<TState>, _defaultValue?: U) {
       // Since we can't reverse the transformation, we delegate to the original
       // parser with undefined default value. This is acceptable since
@@ -1217,7 +1158,7 @@ export function map<M extends Mode, T, U, TState>(
             depValues: readonly unknown[],
           ) => {
             const result = innerReplay(rawInput, depValues);
-            return result instanceof Promise
+            return isPromiseLike(result)
               ? result.then(applyMappedReplay)
               : applyMappedReplay(result);
           },
@@ -1308,7 +1249,11 @@ export function multiple<M extends Mode, TValue, TState>(
     exec?: ExecutionContext,
   ): ReturnType<typeof syncParser.complete> => {
     try {
-      return syncParser.complete(state, exec);
+      const result = syncParser.complete(state, exec);
+      if (!result.success && isInjectedAnnotationWrapper(state)) {
+        return syncParser.complete(unwrapInjectedWrapper(state), exec);
+      }
+      return result;
     } catch (error) {
       if (!isInjectedAnnotationWrapper(state)) {
         throw error;
@@ -1347,7 +1292,11 @@ export function multiple<M extends Mode, TValue, TState>(
     exec?: ExecutionContext,
   ): Promise<Awaited<ReturnType<typeof parser.complete>>> => {
     try {
-      return await parser.complete(state, exec);
+      const result = await parser.complete(state, exec);
+      if (!result.success && isInjectedAnnotationWrapper(state)) {
+        return await parser.complete(unwrapInjectedWrapper(state), exec);
+      }
+      return result;
     } catch (error) {
       if (!isInjectedAnnotationWrapper(state)) {
         throw error;
@@ -1381,37 +1330,113 @@ export function multiple<M extends Mode, TValue, TState>(
       });
     }
   };
+  const getInnerSuggestRuntimeNodes = (
+    state: TState,
+    path: readonly PropertyKey[],
+  ) =>
+    parser.getSuggestRuntimeNodes?.(state, path) ??
+      (parser.dependencyMetadata?.source != null
+        ? [{ path, parser, state }]
+        : []);
 
   // Sync parse implementation
   const parseSync = (
     context: ParserContext<MultipleState>,
   ): ParseResult => {
-    let added = context.state.length < 1;
-    const currentItemStateWithAnnotations = context.state.at(-1) ??
-      inheritAnnotations(context.state, syncParser.initialState);
-    let result = parseSyncWithUnwrappedFallback({
-      ...context,
-      state: currentItemStateWithAnnotations as TState,
-    });
+    const currentItemState = context.state.at(-1);
+    const canExtendCurrent = currentItemState != null &&
+      !isTerminalMultipleItemState(currentItemState);
+    const canOpenFreshItem = context.state.length < max;
+    if (!canExtendCurrent && !canOpenFreshItem) {
+      return {
+        success: true,
+        next: context,
+        consumed: [],
+      };
+    }
+    let added = !canExtendCurrent;
+    let itemIndex = canExtendCurrent
+      ? context.state.length - 1
+      : context.state.length;
+    const currentItemStateWithAnnotations = canExtendCurrent
+      ? currentItemState
+      : inheritAnnotations(context.state, syncParser.initialState);
+    let result = parseSyncWithUnwrappedFallback(
+      withChildContext(
+        context,
+        itemIndex,
+        currentItemStateWithAnnotations as TState,
+      ),
+    );
     if (!result.success) {
-      if (!added) {
+      if (!added && canOpenFreshItem && result.consumed === 0) {
         const nextInitialState = inheritAnnotations(
           context.state,
           syncParser.initialState,
         );
-        result = parseSyncWithUnwrappedFallback({
-          ...context,
-          state: nextInitialState,
-        });
+        itemIndex = context.state.length;
+        result = parseSyncWithUnwrappedFallback(
+          withChildContext(context, itemIndex, nextInitialState),
+        );
         if (!result.success) return result;
         added = true;
       } else {
         return result;
       }
     }
+    const mergedExec = mergeChildExec(context.exec, result.next.exec);
+    if (
+      added &&
+      result.consumed.length === 0 &&
+      result.next.optionsTerminated === context.optionsTerminated &&
+      isUnstartedMultipleItemState(
+        result.next.state,
+        currentItemStateWithAnnotations,
+      )
+    ) {
+      return {
+        success: true,
+        next: {
+          ...result.next,
+          state: context.state,
+          ...(mergedExec != null
+            ? {
+              trace: mergedExec.trace,
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        },
+        consumed: result.consumed,
+      };
+    }
     const itemAnnotationSource = added
       ? context.state
       : currentItemStateWithAnnotations;
+    if (
+      result.next.state === currentItemStateWithAnnotations &&
+      result.consumed.length > 0 &&
+      (
+        !added ||
+        result.next.optionsTerminated !== context.optionsTerminated
+      )
+    ) {
+      return {
+        success: true,
+        next: {
+          ...result.next,
+          state: context.state,
+          ...(mergedExec != null
+            ? {
+              trace: mergedExec.trace,
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        },
+        consumed: result.consumed,
+      };
+    }
     const nextItemState = inheritAnnotations(
       itemAnnotationSource,
       result.next.state,
@@ -1424,6 +1449,13 @@ export function multiple<M extends Mode, TValue, TState>(
           ...(added ? context.state : context.state.slice(0, -1)),
           nextItemState,
         ]),
+        ...(mergedExec != null
+          ? {
+            trace: mergedExec.trace,
+            exec: mergedExec,
+            dependencyRegistry: mergedExec.dependencyRegistry,
+          }
+          : {}),
       },
       consumed: result.consumed,
     };
@@ -1433,32 +1465,100 @@ export function multiple<M extends Mode, TValue, TState>(
   const parseAsync = async (
     context: ParserContext<MultipleState>,
   ): Promise<ParseResult> => {
-    let added = context.state.length < 1;
-    const currentItemStateWithAnnotations = context.state.at(-1) ??
-      inheritAnnotations(context.state, parser.initialState);
-    let result = await parseAsyncWithUnwrappedFallback({
-      ...context,
-      state: currentItemStateWithAnnotations as TState,
-    });
+    const currentItemState = context.state.at(-1);
+    const canExtendCurrent = currentItemState != null &&
+      !isTerminalMultipleItemState(currentItemState);
+    const canOpenFreshItem = context.state.length < max;
+    if (!canExtendCurrent && !canOpenFreshItem) {
+      return {
+        success: true,
+        next: context,
+        consumed: [],
+      };
+    }
+    let added = !canExtendCurrent;
+    let itemIndex = canExtendCurrent
+      ? context.state.length - 1
+      : context.state.length;
+    const currentItemStateWithAnnotations = canExtendCurrent
+      ? currentItemState
+      : inheritAnnotations(context.state, parser.initialState);
+    let result = await parseAsyncWithUnwrappedFallback(
+      withChildContext(
+        context,
+        itemIndex,
+        currentItemStateWithAnnotations as TState,
+      ),
+    );
     if (!result.success) {
-      if (!added) {
+      if (!added && canOpenFreshItem && result.consumed === 0) {
         const nextInitialState = inheritAnnotations(
           context.state,
           parser.initialState,
         );
-        result = await parseAsyncWithUnwrappedFallback({
-          ...context,
-          state: nextInitialState,
-        });
+        itemIndex = context.state.length;
+        result = await parseAsyncWithUnwrappedFallback(
+          withChildContext(context, itemIndex, nextInitialState),
+        );
         if (!result.success) return result;
         added = true;
       } else {
         return result;
       }
     }
+    const mergedExec = mergeChildExec(context.exec, result.next.exec);
+    if (
+      added &&
+      result.consumed.length === 0 &&
+      result.next.optionsTerminated === context.optionsTerminated &&
+      isUnstartedMultipleItemState(
+        result.next.state,
+        currentItemStateWithAnnotations,
+      )
+    ) {
+      return {
+        success: true,
+        next: {
+          ...result.next,
+          state: context.state,
+          ...(mergedExec != null
+            ? {
+              trace: mergedExec.trace,
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        },
+        consumed: result.consumed,
+      };
+    }
     const itemAnnotationSource = added
       ? context.state
       : currentItemStateWithAnnotations;
+    if (
+      result.next.state === currentItemStateWithAnnotations &&
+      result.consumed.length > 0 &&
+      (
+        !added ||
+        result.next.optionsTerminated !== context.optionsTerminated
+      )
+    ) {
+      return {
+        success: true,
+        next: {
+          ...result.next,
+          state: context.state,
+          ...(mergedExec != null
+            ? {
+              trace: mergedExec.trace,
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        },
+        consumed: result.consumed,
+      };
+    }
     const nextItemState = inheritAnnotations(
       itemAnnotationSource,
       result.next.state,
@@ -1471,6 +1571,13 @@ export function multiple<M extends Mode, TValue, TState>(
           ...(added ? context.state : context.state.slice(0, -1)),
           nextItemState,
         ]),
+        ...(mergedExec != null
+          ? {
+            trace: mergedExec.trace,
+            exec: mergedExec,
+            dependencyRegistry: mergedExec.dependencyRegistry,
+          }
+          : {}),
       },
       consumed: result.consumed,
     };
@@ -1487,6 +1594,14 @@ export function multiple<M extends Mode, TValue, TState>(
     // catch-all status when at least one match is required.
     acceptingAnyToken: min > 0 && (parser.acceptingAnyToken ?? false),
     initialState: [] as readonly TState[],
+    getSuggestRuntimeNodes(state: MultipleState, path: readonly PropertyKey[]) {
+      const innerNodes = state.flatMap((item, i) => [
+        ...getInnerSuggestRuntimeNodes(item as TState, [...path, i]),
+      ]);
+      return resultParser.dependencyMetadata?.source != null
+        ? [{ path, parser: resultParser, state }, ...innerNodes]
+        : innerNodes;
+    },
     parse(context: ParserContext<MultipleState>) {
       return dispatchByMode(
         parser.$mode,
@@ -1505,7 +1620,7 @@ export function multiple<M extends Mode, TValue, TState>(
           for (let i = 0; i < state.length; i++) {
             const valueResult = completeSyncWithUnwrappedFallback(
               state[i] as TState,
-              exec,
+              withChildExecPath(exec, i),
             );
             if (valueResult.success) {
               const unwrappedValue = unwrapInjectedWrapper(valueResult.value);
@@ -1531,15 +1646,14 @@ export function multiple<M extends Mode, TValue, TState>(
           return validateMultipleResult(result, deferredIndices, hasDeferred);
         },
         async () => {
-          // Async complete - use Promise.all for parallel execution
-          const results = await Promise.all(
-            state.map((s) => completeAsyncWithUnwrappedFallback(s, exec)),
-          );
           const values: TValue[] = [];
           const deferredIndices = new Map<PropertyKey, DeferredMap | null>();
           let hasDeferred = false;
-          for (let i = 0; i < results.length; i++) {
-            const valueResult = results[i];
+          for (let i = 0; i < state.length; i++) {
+            const valueResult = await completeAsyncWithUnwrappedFallback(
+              state[i] as TState,
+              withChildExecPath(exec, i),
+            );
             if (valueResult.success) {
               const unwrappedValue = unwrapInjectedWrapper(valueResult.value);
               values.push(unwrappedValue);
@@ -1566,27 +1680,73 @@ export function multiple<M extends Mode, TValue, TState>(
     suggest(context: ParserContext<MultipleState>, prefix: string) {
       // Extract already-selected values from completed states to exclude them
       // from suggestions (fixes https://github.com/dahlia/optique/issues/73)
-      const selectedValues = new Set<string>();
-      const suggestInitialState = inheritAnnotations(
-        context.state,
-        parser.initialState,
-      );
+      const currentItemState = context.state.at(-1);
+      const canExtendCurrent = currentItemState != null &&
+        !isTerminalMultipleItemState(currentItemState);
+      const canOpenNew = context.state.length < max;
+      if (!canExtendCurrent && !canOpenNew) {
+        return dispatchIterableByMode(
+          parser.$mode,
+          function* () {},
+          async function* () {},
+        );
+      }
+      const itemIndex = canExtendCurrent
+        ? context.state.length - 1
+        : context.state.length;
+      const suggestInitialState = canExtendCurrent
+        ? currentItemState
+        : inheritAnnotations(
+          context.state,
+          parser.initialState,
+        );
       const suggestFallbackState = unwrapInjectedWrapper(
         suggestInitialState,
       ) as TState;
       const hasSuggestFallbackState = suggestFallbackState !==
         suggestInitialState;
-      for (const s of context.state) {
-        const completed = completeSyncWithUnwrappedFallback(s as TState);
-        if (completed.success) {
-          // Convert value to string for comparison with suggestion text
-          const valueStr = String(unwrapInjectedWrapper(completed.value));
-          selectedValues.add(valueStr);
+      const collectSelectedValuesSync = () => {
+        const selectedValues = new Set<string>();
+        for (let i = 0; i < context.state.length; i++) {
+          const childContext = withChildContext(
+            context,
+            i,
+            context.state[i] as TState,
+          );
+          const completed = completeSyncWithUnwrappedFallback(
+            childContext.state,
+            childContext.exec,
+          );
+          if (completed.success) {
+            selectedValues.add(String(unwrapInjectedWrapper(completed.value)));
+          }
         }
-      }
+        return selectedValues;
+      };
+      const collectSelectedValuesAsync = async () => {
+        const selectedValues = new Set<string>();
+        for (let i = 0; i < context.state.length; i++) {
+          const childContext = withChildContext(
+            context,
+            i,
+            context.state[i] as TState,
+          );
+          const completed = await completeAsyncWithUnwrappedFallback(
+            childContext.state,
+            childContext.exec,
+          );
+          if (completed.success) {
+            selectedValues.add(String(unwrapInjectedWrapper(completed.value)));
+          }
+        }
+        return selectedValues;
+      };
 
       // Helper to filter suggestions
-      const shouldInclude = (suggestion: Suggestion) => {
+      const shouldInclude = (
+        selectedValues: ReadonlySet<string>,
+        suggestion: Suggestion,
+      ) => {
         if (suggestion.kind === "literal") {
           return !selectedValues.has(suggestion.text);
         }
@@ -1614,11 +1774,12 @@ export function multiple<M extends Mode, TValue, TState>(
       return dispatchIterableByMode(
         parser.$mode,
         function* () {
+          const selectedValues = collectSelectedValuesSync();
           const emitted = new Set<string>();
           const yieldUnique = function* (suggestions: Iterable<Suggestion>) {
             for (const s of suggestions) {
               const key = suggestionKey(s);
-              if (shouldInclude(s) && !emitted.has(key)) {
+              if (shouldInclude(selectedValues, s) && !emitted.has(key)) {
                 emitted.add(key);
                 yield s;
               }
@@ -1627,10 +1788,14 @@ export function multiple<M extends Mode, TValue, TState>(
           let shouldTryFallback = false;
           try {
             yield* yieldUnique(
-              syncParser.suggest({
-                ...context,
-                state: suggestInitialState as TState,
-              }, prefix),
+              syncParser.suggest(
+                withChildContext(
+                  context,
+                  itemIndex,
+                  suggestInitialState as TState,
+                ),
+                prefix,
+              ),
             );
           } catch (error) {
             if (!hasSuggestFallbackState) throw error;
@@ -1638,21 +1803,26 @@ export function multiple<M extends Mode, TValue, TState>(
           }
           if (shouldTryFallback) {
             yield* yieldUnique(
-              syncParser.suggest({
-                ...context,
-                state: suggestFallbackState,
-              }, prefix),
+              syncParser.suggest(
+                withChildContext(
+                  context,
+                  itemIndex,
+                  suggestFallbackState,
+                ),
+                prefix,
+              ),
             );
           }
         },
         async function* () {
+          const selectedValues = await collectSelectedValuesAsync();
           const emitted = new Set<string>();
           const yieldUnique = async function* (
             suggestions: AsyncIterable<Suggestion>,
           ) {
             for await (const s of suggestions) {
               const key = suggestionKey(s);
-              if (shouldInclude(s) && !emitted.has(key)) {
+              if (shouldInclude(selectedValues, s) && !emitted.has(key)) {
                 emitted.add(key);
                 yield s;
               }
@@ -1661,10 +1831,14 @@ export function multiple<M extends Mode, TValue, TState>(
           let shouldTryFallback = false;
           try {
             yield* yieldUnique(
-              parser.suggest({
-                ...context,
-                state: suggestInitialState,
-              }, prefix) as AsyncIterable<Suggestion>,
+              parser.suggest(
+                withChildContext(
+                  context,
+                  itemIndex,
+                  suggestInitialState,
+                ),
+                prefix,
+              ) as AsyncIterable<Suggestion>,
             );
           } catch (error) {
             if (!hasSuggestFallbackState) throw error;
@@ -1672,10 +1846,14 @@ export function multiple<M extends Mode, TValue, TState>(
           }
           if (shouldTryFallback) {
             yield* yieldUnique(
-              parser.suggest({
-                ...context,
-                state: suggestFallbackState,
-              }, prefix) as AsyncIterable<Suggestion>,
+              parser.suggest(
+                withChildContext(
+                  context,
+                  itemIndex,
+                  suggestFallbackState,
+                ),
+                prefix,
+              ) as AsyncIterable<Suggestion>,
             );
           }
         },
@@ -1795,6 +1973,53 @@ export function multiple<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
+  if (parser.dependencyMetadata?.source != null) {
+    const innerSource = parser.dependencyMetadata.source;
+    Object.defineProperty(resultParser, "dependencyMetadata", {
+      value: {
+        ...parser.dependencyMetadata,
+        source: {
+          ...innerSource,
+          preservesSourceValue: false,
+          extractSourceValue: (
+            state: unknown,
+          ):
+            | ValueParserResult<unknown>
+            | Promise<ValueParserResult<unknown> | undefined>
+            | undefined => {
+            if (!Array.isArray(state)) {
+              return innerSource.extractSourceValue(state);
+            }
+            const scan = (
+              index: number,
+            ):
+              | ValueParserResult<unknown>
+              | Promise<ValueParserResult<unknown> | undefined>
+              | undefined => {
+              for (let i = index; i >= 0; i--) {
+                const result = innerSource.extractSourceValue(state[i]);
+                if (result == null) continue;
+                if (
+                  isPromiseLike<ValueParserResult<unknown> | undefined>(
+                    result,
+                  )
+                ) {
+                  return Promise.resolve(result).then(
+                    (resolved) => resolved ?? scan(i - 1),
+                  );
+                }
+                return result;
+              }
+              return undefined;
+            };
+            return scan(state.length - 1);
+          },
+        },
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
 
   return resultParser;
 }
@@ -1889,6 +2114,12 @@ export function nonEmpty<M extends Mode, T, TState>(
     ...(typeof parser.shouldDeferCompletion === "function"
       ? { shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser) }
       : {}),
+    getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
+      return parser.getSuggestRuntimeNodes?.(state, path) ??
+        (parser.dependencyMetadata?.source != null
+          ? [{ path, parser, state }]
+          : []);
+    },
     parse(context: ParserContext<TState>) {
       return dispatchByMode(
         parser.$mode,

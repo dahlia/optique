@@ -5,14 +5,21 @@
  */
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
-import { dependency, deriveFrom } from "./dependency.ts";
+import {
+  createDependencySourceState,
+  dependency,
+  dependencyId,
+  deriveFrom,
+  isDependencySourceState,
+} from "./dependency.ts";
 import { choice } from "./valueparser.ts";
 import type { NonEmptyString } from "./nonempty.ts";
 import {
   composeDependencyMetadata,
   extractDependencyMetadata,
+  type ParserDependencyMetadata,
 } from "./dependency-metadata.ts";
-import { createDependencySourceState } from "./dependency.ts";
+import { message } from "./message.ts";
 
 // =============================================================================
 // Shared test fixtures
@@ -40,6 +47,16 @@ function createDerivedLogLevel(env: ReturnType<typeof createEnvSource>) {
   });
 }
 
+async function resolveExtractResult(
+  result:
+    | ReturnType<
+      NonNullable<ParserDependencyMetadata["source"]>["extractSourceValue"]
+    >
+    | undefined,
+) {
+  return await result;
+}
+
 function createDerivedFromMulti(
   env: ReturnType<typeof createEnvSource>,
   region: ReturnType<typeof createEnvSource>,
@@ -54,6 +71,25 @@ function createDerivedFromMulti(
       }),
     defaultValues: (): [Env, Env] => ["dev", "dev"],
   });
+}
+
+function createAsyncSourceMetadata(
+  sourceId: symbol,
+): ParserDependencyMetadata {
+  return {
+    source: {
+      kind: "source",
+      sourceId,
+      preservesSourceValue: true,
+      async extractSourceValue(state) {
+        await Promise.resolve();
+        return isDependencySourceState(state) &&
+            state[dependencyId] === sourceId
+          ? state.result
+          : undefined;
+      },
+    },
+  };
 }
 
 // =============================================================================
@@ -73,7 +109,7 @@ describe("extractDependencyMetadata", () => {
     assert.equal(metadata.derived, undefined);
   });
 
-  test("extractSourceValue returns result from DependencySourceState", () => {
+  test("extractSourceValue returns result from DependencySourceState", async () => {
     const env = createEnvSource();
     const metadata = extractDependencyMetadata(env);
     assert.ok(metadata?.source?.extractSourceValue !== undefined);
@@ -81,46 +117,74 @@ describe("extractDependencyMetadata", () => {
       { success: true, value: "prod" },
       metadata.source.sourceId,
     );
-    const result = metadata.source.extractSourceValue(sourceState);
+    const result = await resolveExtractResult(
+      metadata.source.extractSourceValue(sourceState),
+    );
     assert.ok(result !== undefined);
     assert.ok(result.success);
     if (result.success) assert.equal(result.value, "prod");
   });
 
-  test("extractSourceValue returns failed result for failed parse", () => {
-    const env = createEnvSource();
-    const metadata = extractDependencyMetadata(env);
+  test("extractSourceValue returns failed result for failed parse", async () => {
+    const sourceId = Symbol("async-source");
+    const metadata = createAsyncSourceMetadata(sourceId);
     assert.ok(metadata?.source?.extractSourceValue !== undefined);
+    const parseError = message`invalid env`;
     const sourceState = createDependencySourceState(
-      { success: false, error: undefined! },
-      metadata.source.sourceId,
+      { success: false, error: parseError },
+      sourceId,
     );
-    const result = metadata.source.extractSourceValue(sourceState);
+    const result = await resolveExtractResult(
+      metadata.source.extractSourceValue(sourceState),
+    );
     assert.ok(result !== undefined);
     assert.ok(!result.success);
+    if (!result.success) assert.equal(result.error, parseError);
   });
 
-  test("extractSourceValue preserves successful undefined value", () => {
+  test(
+    "extractSourceValue preserves successful undefined value",
+    async () => {
+      const sourceId = Symbol("async-source");
+      const metadata = createAsyncSourceMetadata(sourceId);
+      assert.ok(metadata?.source?.extractSourceValue !== undefined);
+      const sourceState = createDependencySourceState(
+        { success: true, value: undefined },
+        sourceId,
+      );
+      const result = await resolveExtractResult(
+        metadata.source.extractSourceValue(sourceState),
+      );
+      assert.ok(result !== undefined);
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, undefined);
+    },
+  );
+
+  test(
+    "extractSourceValue returns undefined for undefined input and passes through plain results",
+    () => {
+      const env = createEnvSource();
+      const metadata = extractDependencyMetadata(env);
+      assert.ok(metadata?.source?.extractSourceValue !== undefined);
+      assert.equal(metadata.source.extractSourceValue(undefined), undefined);
+      assert.deepEqual(
+        metadata.source.extractSourceValue({ success: true, value: "x" }),
+        { success: true, value: "x" },
+      );
+    },
+  );
+
+  test("extractSourceValue rejects malformed bare results", () => {
     const env = createEnvSource();
     const metadata = extractDependencyMetadata(env);
     assert.ok(metadata?.source?.extractSourceValue !== undefined);
-    const sourceState = createDependencySourceState(
-      { success: true, value: undefined },
-      metadata.source.sourceId,
-    );
-    const result = metadata.source.extractSourceValue(sourceState);
-    assert.ok(result !== undefined);
-    assert.ok(result.success);
-    if (result.success) assert.equal(result.value, undefined);
-  });
-
-  test("extractSourceValue returns undefined for non-source state", () => {
-    const env = createEnvSource();
-    const metadata = extractDependencyMetadata(env);
-    assert.ok(metadata?.source?.extractSourceValue !== undefined);
-    assert.equal(metadata.source.extractSourceValue(undefined), undefined);
     assert.equal(
-      metadata.source.extractSourceValue({ success: true, value: "x" }),
+      metadata.source.extractSourceValue({ success: true }),
+      undefined,
+    );
+    assert.equal(
+      metadata.source.extractSourceValue({ success: false }),
       undefined,
     );
   });
@@ -299,7 +363,7 @@ describe("composeDependencyMetadata", () => {
     assert.ok(afterOptional.source?.getMissingSourceValue !== undefined);
   });
 
-  test("optional extractSourceValue unwraps [state]", () => {
+  test("optional extractSourceValue unwraps [state]", async () => {
     const env = createEnvSource();
     const inner = extractDependencyMetadata(env);
     assert.ok(inner !== undefined);
@@ -310,14 +374,38 @@ describe("composeDependencyMetadata", () => {
       composed.source.sourceId,
     );
     // optional wraps state in [state]
-    const result = composed.source.extractSourceValue([sourceState]);
+    const result = await resolveExtractResult(
+      composed.source.extractSourceValue([sourceState]),
+    );
     assert.ok(result !== undefined && result.success);
     if (result.success) assert.equal(result.value, "prod");
     // undefined inner state (not provided)
     assert.equal(composed.source.extractSourceValue(undefined), undefined);
   });
 
-  test("withDefault extractSourceValue unwraps [state]", () => {
+  test("optional extractSourceValue unwraps [state] for async sources", async () => {
+    const sourceId = Symbol("async-source");
+    const composed = composeDependencyMetadata(
+      createAsyncSourceMetadata(sourceId),
+      "optional",
+    );
+    assert.ok(composed?.source?.extractSourceValue !== undefined);
+    const sourceState = createDependencySourceState(
+      { success: true, value: "prod" },
+      sourceId,
+    );
+    const result = await resolveExtractResult(
+      composed.source.extractSourceValue([sourceState]),
+    );
+    assert.ok(result !== undefined && result.success);
+    if (result.success) assert.equal(result.value, "prod");
+    assert.equal(
+      await resolveExtractResult(composed.source.extractSourceValue(undefined)),
+      undefined,
+    );
+  });
+
+  test("withDefault extractSourceValue unwraps [state]", async () => {
     const env = createEnvSource();
     const inner = extractDependencyMetadata(env);
     assert.ok(inner !== undefined);
@@ -329,12 +417,14 @@ describe("composeDependencyMetadata", () => {
       { success: true, value: "prod" },
       composed.source.sourceId,
     );
-    const result = composed.source.extractSourceValue([sourceState]);
+    const result = await resolveExtractResult(
+      composed.source.extractSourceValue([sourceState]),
+    );
     assert.ok(result !== undefined && result.success);
     if (result.success) assert.equal(result.value, "prod");
   });
 
-  test("map extractSourceValue extracts pre-transform value", () => {
+  test("map extractSourceValue extracts pre-transform value", async () => {
     const env = createEnvSource();
     const inner = extractDependencyMetadata(env);
     assert.ok(inner !== undefined);
@@ -345,7 +435,9 @@ describe("composeDependencyMetadata", () => {
       composed.source.sourceId,
     );
     // map does not wrap state — inner state is passed through
-    const result = composed.source.extractSourceValue(sourceState);
+    const result = await resolveExtractResult(
+      composed.source.extractSourceValue(sourceState),
+    );
     assert.ok(result !== undefined && result.success);
     if (result.success) assert.equal(result.value, "prod");
   });
@@ -393,6 +485,19 @@ describe("composeDependencyMetadata", () => {
     assert.ok(!composed.source.preservesSourceValue);
     assert.ok(composed.transform !== undefined);
     assert.ok(composed.transform.transformsSourceValue);
+  });
+
+  test("withDefault after map does not add missing-source fallback", () => {
+    const env = createEnvSource();
+    const inner = extractDependencyMetadata(env);
+    assert.ok(inner !== undefined);
+    const mapped = composeDependencyMetadata(inner, "map");
+    const composed = composeDependencyMetadata(mapped, "withDefault", {
+      defaultValue: () => ({ success: true as const, value: "dev" as Env }),
+    });
+    assert.ok(composed?.source !== undefined);
+    assert.ok(!composed.source.preservesSourceValue);
+    assert.equal(composed.source.getMissingSourceValue, undefined);
   });
 
   test("map preserves derived capability", () => {

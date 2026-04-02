@@ -1078,6 +1078,140 @@ describe("prompt()", () => {
       assert.ok(promptCalled, "Prompt should have been called");
       assert.equal(result.value, "prompted-value");
     });
+
+    it("preserves zero-consumption cliState in getSuggestRuntimeNodes", async () => {
+      const inner: Parser<"async", string, string> = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "initial",
+        parse(parseContext) {
+          return Promise.resolve({
+            success: true as const,
+            next: { ...parseContext, state: "cli-state" },
+            consumed: [],
+          });
+        },
+        complete() {
+          return Promise.resolve({
+            success: true as const,
+            value: "cli-state",
+          });
+        },
+        async *suggest() {},
+        getSuggestRuntimeNodes(state, path) {
+          return [{ path, parser: inner, state }];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      const wrapped = prompt(inner, {
+        type: "input",
+        message: "input?",
+      });
+
+      const parsed = await wrapped.parse({
+        buffer: [],
+        state: wrapped.initialState,
+        optionsTerminated: false,
+        usage: wrapped.usage,
+      });
+      assert.ok(parsed.success);
+      if (!parsed.success) return;
+
+      const nodes = wrapped.getSuggestRuntimeNodes?.(
+        parsed.next.state as Parameters<
+          NonNullable<typeof wrapped.getSuggestRuntimeNodes>
+        >[0],
+        ["prompt"],
+      );
+      assert.ok(nodes != null);
+      if (nodes == null) return;
+      assert.equal(nodes.length, 1);
+      assert.deepEqual(nodes[0]?.path, ["prompt"]);
+      assert.equal(nodes[0]?.parser, inner);
+      assert.equal(nodes[0]?.state, "cli-state");
+    });
+
+    it("preserves delegated suggest nodes for source wrappers", async () => {
+      const sourceId = Symbol("prompt-multiple-source");
+      const item = {
+        $mode: "async" as const,
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "",
+        parse(parseContext: ParserContext<string>) {
+          return Promise.resolve({
+            success: true as const,
+            next: { ...parseContext, state: parseContext.state },
+            consumed: [],
+          });
+        },
+        complete(state: string) {
+          return Promise.resolve({
+            success: true as const,
+            value: state ?? "mode",
+          });
+        },
+        async *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+        dependencyMetadata: {
+          source: {
+            kind: "source" as const,
+            sourceId,
+            preservesSourceValue: true,
+            extractSourceValue(state: unknown) {
+              return typeof state === "string"
+                ? { success: true as const, value: state }
+                : undefined;
+            },
+          },
+        },
+      } as const satisfies Parser<"async", string, string>;
+      const inner = multiple(item);
+      const wrapped = prompt(inner, {
+        type: "checkbox",
+        message: "input?",
+        choices: [],
+      });
+
+      const parsed = await wrapped.parse({
+        buffer: [],
+        state: wrapped.initialState,
+        optionsTerminated: false,
+        usage: wrapped.usage,
+      });
+      assert.ok(parsed.success);
+      if (!parsed.success) return;
+
+      const nodes = wrapped.getSuggestRuntimeNodes?.(
+        parsed.next.state as Parameters<
+          NonNullable<typeof wrapped.getSuggestRuntimeNodes>
+        >[0],
+        ["prompt"],
+      );
+      assert.ok(nodes != null);
+      if (nodes == null) return;
+
+      assert.equal(nodes.length, 3);
+      assert.equal(nodes[0]?.parser, wrapped);
+      assert.deepEqual(nodes[0]?.path, ["prompt"]);
+      assert.equal(nodes[1]?.parser, inner);
+      assert.deepEqual(nodes[1]?.path, ["prompt"]);
+      assert.equal(nodes[2]?.parser, item);
+      assert.deepEqual(nodes[2]?.path, ["prompt", 0]);
+    });
   });
 
   describe("composition with non-CLI sources", () => {
@@ -3273,6 +3407,69 @@ describe("prompt()", () => {
       }
     });
 
+    it(
+      "does not rebox omitted cliState without the inheritance marker",
+      async () => {
+        const annotations = { [Symbol("annotation")]: true };
+        const seenStates: unknown[] = [];
+        const inner: Parser<"async", string, undefined> = {
+          $mode: "async",
+          $valueType: [] as readonly string[],
+          $stateType: [] as readonly undefined[],
+          priority: 5,
+          usage: [],
+          leadingNames: new Set(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context) {
+            seenStates.push(context.state);
+            return Promise.resolve({
+              success: true as const,
+              next: {
+                ...context,
+                state: undefined,
+              },
+              consumed: [],
+            });
+          },
+          complete() {
+            return Promise.resolve({
+              success: true as const,
+              value: "ok",
+            });
+          },
+          shouldDeferCompletion: () => true,
+          async *suggest() {},
+          getDocFragments(): DocFragments {
+            return { fragments: [] };
+          },
+        };
+
+        const parser = prompt(inner, {
+          type: "input",
+          message: "Enter value",
+        });
+        const first = await parser.parse({
+          buffer: [],
+          state: injectAnnotations(parser.initialState, annotations),
+          optionsTerminated: false,
+          usage: parser.usage,
+        });
+        assert.ok(first.success);
+        if (!first.success) return;
+
+        const second = await parser.parse({
+          buffer: [],
+          state: first.next.state,
+          optionsTerminated: false,
+          usage: parser.usage,
+        });
+        assert.ok(second.success);
+        assert.equal(seenStates.length, 2);
+        assert.equal(seenStates[1], undefined);
+      },
+    );
+
     it("executes built-in prompt branches via prompt-function override", async () => {
       const calls: Array<{ name: string; config: Record<string, unknown> }> =
         [];
@@ -4528,4 +4725,134 @@ describe("prompt() with dependency sources", () => {
     assert.equal(result.value.mode, "prod");
     assert.equal(result.value.level, "debug");
   });
+
+  it("preserves inner source extraction when prompt() wraps bindEnv()", async () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const modeParser = prompt(
+      bindEnv(option("--mode", mode), {
+        context: envContext,
+        key: "MODE",
+        parser: choice(["dev", "prod"] as const),
+      }),
+      {
+        type: "select",
+        message: "Select mode:",
+        choices: ["dev", "prod"],
+        prompter: () =>
+          Promise.reject(new Error("Prompt should not be called")),
+      },
+    );
+    const parseResult = await modeParser.parse({
+      buffer: [],
+      state: modeParser.initialState,
+      optionsTerminated: false,
+      usage: modeParser.usage,
+    });
+    assert.ok(parseResult.success);
+    assert.ok(
+      modeParser.dependencyMetadata?.source != null,
+      "Expected source metadata.",
+    );
+    const extracted = await modeParser.dependencyMetadata.source
+      .extractSourceValue(parseResult.next.state);
+    assert.deepEqual(extracted, { success: true, value: "prod" });
+  });
+
+  it(
+    "preserves inner source extraction when prompt() wraps bindEnv() at initial state",
+    async () => {
+      const envContext = createEnvContext({
+        prefix: "APP_",
+        source: (key) => ({ APP_MODE: "prod" })[key],
+      });
+      const annotations = envContext.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const modeParser = prompt(
+        bindEnv(option("--mode", mode), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+        {
+          type: "select",
+          message: "Select mode:",
+          choices: ["dev", "prod"],
+          prompter: () =>
+            Promise.reject(new Error("Prompt should not be called")),
+        },
+      );
+
+      assert.ok(
+        modeParser.dependencyMetadata?.source != null,
+        "Expected source metadata.",
+      );
+      const extracted = await modeParser.dependencyMetadata.source
+        .extractSourceValue(
+          injectAnnotations(modeParser.initialState, annotations),
+        );
+      assert.deepEqual(extracted, { success: true, value: "prod" });
+    },
+  );
+
+  it(
+    "preserves inner source extraction when prompt() wraps bindConfig() at initial state",
+    async () => {
+      const configContext = createConfigContext<
+        { readonly mode?: "dev" | "prod" }
+      >({
+        schema: {
+          "~standard": {
+            version: 1,
+            vendor: "optique-test",
+            validate(input: unknown) {
+              return {
+                value: input as { readonly mode?: "dev" | "prod" },
+              };
+            },
+          },
+        },
+      });
+      const annotations = await configContext.getAnnotations(
+        {},
+        {
+          load: () => ({
+            config: { mode: "prod" as const },
+            meta: undefined,
+          }),
+        },
+      );
+      const modeParser = prompt(
+        bindConfig(option("--mode", mode), {
+          context: configContext,
+          key: "mode",
+        }),
+        {
+          type: "select",
+          message: "Select mode:",
+          choices: ["dev", "prod"],
+          prompter: () =>
+            Promise.reject(new Error("Prompt should not be called")),
+        },
+      );
+
+      assert.ok(
+        modeParser.dependencyMetadata?.source != null,
+        "Expected source metadata.",
+      );
+      const extracted = await modeParser.dependencyMetadata.source
+        .extractSourceValue(
+          injectAnnotations(modeParser.initialState, annotations),
+        );
+      assert.deepEqual(extracted, { success: true, value: "prod" });
+    },
+  );
 });

@@ -8,7 +8,6 @@ import {
   createDependencySourceState,
   createPendingDependencySourceState,
   dependency,
-  dependencyId,
   isDependencySourceState,
   transformsDependencyValueMarker,
   wrappedDependencySourceMarker,
@@ -29,7 +28,14 @@ import {
   withDefault,
   WithDefaultError,
 } from "@optique/core/modifiers";
-import { parse, type Parser, type Suggestion } from "@optique/core/parser";
+import { createDependencyRuntimeContext } from "./dependency-runtime.ts";
+import {
+  parse,
+  parseAsync,
+  type Parser,
+  type ParserContext,
+  type Suggestion,
+} from "@optique/core/parser";
 import { argument, constant, flag, option } from "@optique/core/primitives";
 import {
   choice,
@@ -46,6 +52,34 @@ import { describe, it } from "node:test";
 function assertErrorIncludes(error: Message, text: string): void {
   const formatted = formatMessage(error);
   assert.ok(formatted.includes(text));
+}
+
+function createPromiseLike<T>(value: T): PromiseLike<T> {
+  const promise = Promise.resolve(value);
+  return {
+    then<TResult1 = T, TResult2 = never>(
+      onFulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+      onRejected?:
+        | ((reason: unknown) => TResult2 | PromiseLike<TResult2>)
+        | null,
+    ): PromiseLike<TResult1 | TResult2> {
+      return promise.then(onFulfilled, onRejected);
+    },
+  };
+}
+
+async function waitForStartedCount(
+  started: readonly unknown[],
+  count: number,
+  messageText: string,
+): Promise<void> {
+  const timeoutAt = Date.now() + 1_000;
+  while (started.length < count) {
+    if (Date.now() >= timeoutAt) {
+      throw new TypeError(messageText);
+    }
+    await Promise.resolve();
+  }
 }
 
 function asyncChoice<T extends string>(
@@ -128,6 +162,130 @@ describe("optional", () => {
         assert.equal(completeResult.value, true);
       }
     }
+  });
+
+  it("should preserve delegated object state for missing-source completion", () => {
+    const annotation = Symbol.for("@test/optional-complete-state");
+    const sourceId = Symbol("mode");
+    const receivedStates: unknown[] = [];
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`No match.`,
+        };
+      },
+      complete(state: unknown) {
+        receivedStates.push(state);
+        return {
+          success: true as const,
+          value: getAnnotations(state)?.[annotation] === "ok"
+            ? "annotated"
+            : "missing",
+        };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue: () => undefined,
+          getMissingSourceValue: () => ({
+            success: true as const,
+            value: "fallback",
+          }),
+        },
+      },
+    } as const satisfies Parser<"sync", string, undefined> & {
+      readonly dependencyMetadata: {
+        readonly source: {
+          readonly kind: "source";
+          readonly sourceId: typeof sourceId;
+          readonly preservesSourceValue: true;
+          readonly extractSourceValue: (
+            state: unknown,
+          ) => ValueParserResult<unknown> | undefined;
+          readonly getMissingSourceValue: () => ValueParserResult<string>;
+        };
+      };
+    };
+    const parser = optional(inner);
+    const deferredState = injectAnnotations(undefined, {
+      [annotation]: "ok",
+    });
+    const result = (
+      parser.complete as (
+        state: unknown,
+      ) => ValueParserResult<string | undefined>
+    )(deferredState);
+
+    assert.equal(receivedStates.length, 1);
+    assert.strictEqual(receivedStates[0], deferredState);
+    assert.deepEqual(result, { success: true, value: "annotated" });
+  });
+
+  it("should not delegate omitted completion to non-preserving multiple sources", () => {
+    const sourceId = Symbol("multiple-source");
+    const source = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No match.`,
+      }),
+      complete: () => ({
+        success: true as const,
+        value: "fallback",
+      }),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue: () => undefined,
+          getMissingSourceValue: () => ({
+            success: true as const,
+            value: "fallback",
+          }),
+        },
+      },
+    } as const satisfies Parser<"sync", string, undefined> & {
+      readonly dependencyMetadata: {
+        readonly source: {
+          readonly kind: "source";
+          readonly sourceId: typeof sourceId;
+          readonly preservesSourceValue: true;
+          readonly extractSourceValue: (
+            state: unknown,
+          ) => ValueParserResult<unknown> | undefined;
+          readonly getMissingSourceValue: () => ValueParserResult<string>;
+        };
+      };
+    };
+    const parser = optional(multiple(source, { min: 1 }));
+
+    const result = parser.complete(undefined);
+    assert.deepEqual(result, { success: true, value: undefined });
   });
 
   it("should propagate successful parse results correctly", () => {
@@ -593,7 +751,7 @@ describe("optional", () => {
     );
   });
 
-  it("should delegate completion to wrapped dependency default source", () => {
+  it("should return the wrapped default value as a plain result", () => {
     const modeSource = dependency(choice(["dev", "prod"] as const));
     const defaultedSource = withDefault(
       option("--mode", modeSource),
@@ -602,15 +760,338 @@ describe("optional", () => {
     const optionalParser = optional(defaultedSource);
 
     const completeResult = optionalParser.complete(undefined);
+    assert.deepEqual(completeResult, { success: true, value: "dev" });
+  });
 
-    assert.ok(isDependencySourceState(completeResult));
-    if (isDependencySourceState(completeResult)) {
-      assert.ok(completeResult.result.success);
-      if (completeResult.result.success) {
-        assert.equal(completeResult.result.value, "dev");
-      }
-      assert.equal(completeResult[dependencyId], modeSource[dependencyId]);
-    }
+  it("delegates omitted source completion from the inner initial state", () => {
+    const sourceId = Symbol("optional-initial-source");
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly ("fallback" | "initial" | "live")[],
+      $stateType: [] as readonly {
+        readonly value: "fallback" | "initial" | "live";
+      }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "initial" as const },
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No parse.`,
+      }),
+      complete(state: { readonly value: "fallback" | "initial" | "live" }) {
+        return {
+          success: true as const,
+          value: state.value,
+        };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          getMissingSourceValue() {
+            return { success: true as const, value: "fallback" };
+          },
+          extractSourceValue() {
+            return undefined;
+          },
+        },
+      },
+    } as const satisfies Parser<
+      "sync",
+      "fallback" | "initial" | "live",
+      { readonly value: "fallback" | "initial" | "live" }
+    >;
+    const parser = optional(inner);
+
+    assert.deepEqual(parser.complete(undefined), {
+      success: true,
+      value: "initial",
+    });
+  });
+
+  it("delegates omitted async source completion from the inner initial state", async () => {
+    const sourceId = Symbol("optional-initial-source-async");
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly ("fallback" | "initial" | "live")[],
+      $stateType: [] as readonly {
+        readonly value: "fallback" | "initial" | "live";
+      }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "initial" as const },
+      parse: () =>
+        Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`No parse.`,
+        }),
+      complete(state: { readonly value: "fallback" | "initial" | "live" }) {
+        return Promise.resolve({
+          success: true as const,
+          value: state.value,
+        });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          getMissingSourceValue() {
+            return Promise.resolve({
+              success: true as const,
+              value: "fallback",
+            });
+          },
+          extractSourceValue() {
+            return Promise.resolve(undefined);
+          },
+        },
+      },
+    } as const satisfies Parser<
+      "async",
+      "fallback" | "initial" | "live",
+      { readonly value: "fallback" | "initial" | "live" }
+    >;
+    const parser = optional(inner);
+
+    assert.deepEqual(await parser.complete(undefined), {
+      success: true,
+      value: "initial",
+    });
+  });
+
+  it("rejects instead of throwing when async omitted-source completion throws synchronously", async () => {
+    const sourceId = Symbol("optional-sync-throw-omitted-source");
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { readonly value: string }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "fallback" },
+      parse: () =>
+        Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`No parse.`,
+        }),
+      complete() {
+        throw new TypeError("Synchronous optional complete failure.");
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          getMissingSourceValue() {
+            return Promise.resolve({
+              success: true as const,
+              value: "fallback",
+            });
+          },
+          extractSourceValue() {
+            return Promise.resolve(undefined);
+          },
+        },
+      },
+    } as const satisfies Parser<
+      "async",
+      string,
+      { readonly value: string }
+    >;
+    const parser = optional(inner);
+    let result: ReturnType<typeof parser.complete> | undefined;
+
+    assert.doesNotThrow(() => {
+      result = parser.complete(undefined);
+    });
+    assert.ok(result instanceof Promise);
+    await assert.rejects(result, {
+      name: "TypeError",
+      message: "Synchronous optional complete failure.",
+    });
+  });
+
+  it("rejects instead of throwing when async wrapped-state completion throws synchronously", async () => {
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { readonly value: string }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "fallback" },
+      parse: () =>
+        Promise.resolve({
+          success: true as const,
+          next: {
+            buffer: [] as const,
+            state: { value: "live" },
+            optionsTerminated: false,
+            usage: [] as const,
+          },
+          consumed: [] as const,
+        }),
+      complete() {
+        throw new TypeError("Synchronous optional wrapped-state failure.");
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<
+      "async",
+      string,
+      { readonly value: string }
+    >;
+    const parser = optional(inner);
+    let result: ReturnType<typeof parser.complete> | undefined;
+
+    assert.doesNotThrow(() => {
+      result = parser.complete([{ value: "live" }]);
+    });
+    assert.ok(result instanceof Promise);
+    await assert.rejects(result, {
+      name: "TypeError",
+      message: "Synchronous optional wrapped-state failure.",
+    });
+  });
+
+  it("should collapse deferred missing-source failures to undefined", () => {
+    const sourceId = Symbol("optional-deferred-missing-source");
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly ({ readonly pending: true } | undefined)[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<{ readonly pending: true } | undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return {
+          success: false as const,
+          error: message`Missing config value.`,
+        };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      shouldDeferCompletion() {
+        return true;
+      },
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          getMissingSourceValue() {
+            return { success: true as const, value: "fallback" };
+          },
+          extractSourceValue() {
+            return undefined;
+          },
+        },
+      },
+    } as const satisfies Parser<
+      "sync",
+      string,
+      { readonly pending: true } | undefined
+    >;
+    const parser = optional(withDefault(inner, "fallback"));
+
+    assert.deepEqual(
+      (
+        parser.complete as (
+          state: unknown,
+        ) => ValueParserResult<string | undefined>
+      )({ pending: true }),
+      {
+        success: true,
+        value: undefined,
+      },
+    );
+  });
+
+  it("should collapse async deferred missing-source failures to undefined", async () => {
+    const sourceId = Symbol("optional-deferred-missing-source-async");
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly ({ readonly pending: true } | undefined)[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<{ readonly pending: true } | undefined>) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`Missing config value.`,
+        });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      shouldDeferCompletion() {
+        return true;
+      },
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          getMissingSourceValue() {
+            return Promise.resolve({
+              success: true as const,
+              value: "fallback",
+            });
+          },
+          extractSourceValue() {
+            return Promise.resolve(undefined);
+          },
+        },
+      },
+    } as const satisfies Parser<
+      "async",
+      string,
+      { readonly pending: true } | undefined
+    >;
+    const parser = optional(withDefault(inner, "fallback"));
+
+    assert.deepEqual(
+      await (
+        parser.complete as (
+          state: unknown,
+        ) => Promise<ValueParserResult<string | undefined>>
+      )({ pending: true }),
+      {
+        success: true,
+        value: undefined,
+      },
+    );
   });
 });
 
@@ -680,6 +1161,101 @@ describe("withDefault", () => {
     if (completeResult2.success) {
       assert.equal(completeResult2.value, true);
     }
+  });
+
+  it("rejects instead of throwing when async deferred completion throws synchronously", async () => {
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { readonly pending: true }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { pending: true as const },
+      parse: () =>
+        Promise.resolve({
+          success: true as const,
+          next: {
+            buffer: [] as const,
+            state: { pending: true as const },
+            optionsTerminated: false,
+            usage: [] as const,
+          },
+          consumed: [] as const,
+        }),
+      complete() {
+        throw new TypeError("Synchronous withDefault deferred failure.");
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      shouldDeferCompletion() {
+        return true;
+      },
+    } as const satisfies Parser<
+      "async",
+      string,
+      { readonly pending: true }
+    >;
+    const parser = withDefault(inner, "fallback");
+    let result: Promise<ValueParserResult<string>> | undefined;
+
+    assert.doesNotThrow(() => {
+      result = (
+        parser.complete as (
+          state: unknown,
+        ) => Promise<ValueParserResult<string>>
+      )({ pending: true });
+    });
+    assert.ok(result instanceof Promise);
+    await assert.rejects(result, {
+      name: "TypeError",
+      message: "Synchronous withDefault deferred failure.",
+    });
+  });
+
+  it("rejects instead of throwing when async wrapped completion throws synchronously", async () => {
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { readonly value: string }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "fallback" },
+      parse: () =>
+        Promise.resolve({
+          success: true as const,
+          next: {
+            buffer: [] as const,
+            state: { value: "live" },
+            optionsTerminated: false,
+            usage: [] as const,
+          },
+          consumed: [] as const,
+        }),
+      complete() {
+        throw new TypeError("Synchronous withDefault complete failure.");
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<
+      "async",
+      string,
+      { readonly value: string }
+    >;
+    const parser = withDefault(inner, "fallback");
+    let result: ReturnType<typeof parser.complete> | undefined;
+
+    assert.doesNotThrow(() => {
+      result = parser.complete([{ value: "live" }]);
+    });
+    assert.ok(result instanceof Promise);
+    await assert.rejects(result, {
+      name: "TypeError",
+      message: "Synchronous withDefault complete failure.",
+    });
   });
 
   it("should propagate successful parse results correctly", () => {
@@ -1943,6 +2519,32 @@ describe("map", () => {
       assert.equal(result.value, "ecila"); // "ALICE" -> "alice" -> "ecila"
     }
   });
+
+  it("should map thenable replay results for derived metadata", async () => {
+    const sourceId = Symbol("mode");
+    const baseParser = option("--level", string());
+    Object.defineProperty(baseParser, "dependencyMetadata", {
+      value: {
+        derived: {
+          kind: "derived" as const,
+          dependencyIds: [sourceId],
+          replayParse: () =>
+            createPromiseLike({
+              success: true as const,
+              value: "debug",
+            }),
+        },
+      },
+      configurable: true,
+    });
+
+    const mappedParser = map(baseParser, (value) => value.toUpperCase());
+    const replayParse = mappedParser.dependencyMetadata?.derived?.replayParse;
+    assert.ok(replayParse);
+
+    const result = await Promise.resolve(replayParse("ignored", ["prod"]));
+    assert.deepEqual(result, { success: true, value: "DEBUG" });
+  });
 });
 
 describe("multiple", () => {
@@ -2565,7 +3167,8 @@ describe("multiple", () => {
     }
   });
 
-  it("should keep complete failure on annotated wrapper state", () => {
+  it("should retry complete on annotated wrapper state failures", () => {
+    const seenStates: string[] = [];
     const baseParser: Parser<"sync", string, string> = {
       $mode: "sync",
       $valueType: [] as const,
@@ -2591,6 +3194,7 @@ describe("multiple", () => {
         };
       },
       complete(state) {
+        seenStates.push(typeof state === "string" ? state : "wrapped");
         if (typeof state !== "string") {
           return {
             success: false as const,
@@ -2611,13 +3215,15 @@ describe("multiple", () => {
     const result = parse(parser, ["alpha"], {
       annotations: { [Symbol.for("@test/fallback-complete-failure")]: true },
     });
-    assert.ok(!result.success);
-    if (!result.success) {
-      assert.ok(formatMessage(result.error).includes("Expected string state."));
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ALPHA"]);
     }
+    assert.deepEqual(seenStates, ["wrapped", "alpha"]);
   });
 
-  it("should keep async complete failure on annotated wrapper state", async () => {
+  it("should retry async complete on annotated wrapper state failures", async () => {
+    const seenStates: string[] = [];
     const baseParser: Parser<"async", string, string> = {
       $mode: "async",
       $valueType: [] as const,
@@ -2643,6 +3249,7 @@ describe("multiple", () => {
         });
       },
       complete(state) {
+        seenStates.push(typeof state === "string" ? state : "wrapped");
         if (typeof state !== "string") {
           return Promise.resolve({
             success: false as const,
@@ -2666,10 +3273,11 @@ describe("multiple", () => {
         [Symbol.for("@test/fallback-complete-failure-async")]: true,
       },
     });
-    assert.ok(!result.success);
-    if (!result.success) {
-      assert.ok(formatMessage(result.error).includes("Expected string state."));
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ALPHA"]);
     }
+    assert.deepEqual(seenStates, ["wrapped", "alpha"]);
   });
 
   it("should fallback to unwrapped primitive state in suggest()", () => {
@@ -2835,6 +3443,110 @@ describe("multiple", () => {
     assert.ok(
       suggestions.some((s) => s.kind === "literal" && s.text === "beta"),
     );
+  });
+
+  it("should continue suggestions from the in-progress sync item", () => {
+    const baseParser: Parser<"sync", string, { readonly step: number }> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { step: 0 },
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`Expected a value.`,
+        };
+      },
+      complete(state) {
+        return { success: true as const, value: `step-${state.step}` };
+      },
+      suggest(context) {
+        if (
+          context.state.step === 1 &&
+          JSON.stringify(context.exec?.path) === JSON.stringify(["root", 0])
+        ) {
+          return [{ kind: "literal" as const, text: "second" }];
+        }
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const suggestions = [...parser.suggest({
+      buffer: [],
+      state: [{ step: 1 }],
+      optionsTerminated: false,
+      usage: parser.usage,
+      exec: {
+        usage: parser.usage,
+        phase: "suggest",
+        path: ["root"],
+        trace: undefined,
+      },
+    }, "")];
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "second" }]);
+  });
+
+  it("should continue suggestions from the in-progress async item", async () => {
+    const baseParser: Parser<"async", string, { readonly step: number }> = {
+      $mode: "async",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { step: 0 },
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`Expected a value.`,
+        });
+      },
+      complete(state) {
+        return Promise.resolve({
+          success: true as const,
+          value: `step-${state.step}`,
+        });
+      },
+      async *suggest(context) {
+        if (
+          context.state.step === 1 &&
+          JSON.stringify(context.exec?.path) === JSON.stringify(["root", 0])
+        ) {
+          yield { kind: "literal" as const, text: "second" };
+        }
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const suggestions = await collectSuggestions(parser.suggest({
+      buffer: [],
+      state: [{ step: 1 }],
+      optionsTerminated: false,
+      usage: parser.usage,
+      exec: {
+        usage: parser.usage,
+        phase: "suggest",
+        path: ["root"],
+        trace: undefined,
+      },
+    }, ""));
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "second" }]);
   });
 
   it("should not fallback to unwrapped primitive state after async suggest succeeds", async () => {
@@ -3134,7 +3846,7 @@ describe("multiple", () => {
     if (!resultTooMany.success) {
       assertErrorIncludes(
         resultTooMany.error,
-        "Expected at most 2 values, but got 3",
+        "Unexpected option or argument",
       );
     }
 
@@ -3164,7 +3876,7 @@ describe("multiple", () => {
     if (!resultTooMany.success) {
       assertErrorIncludes(
         resultTooMany.error,
-        "Expected at most 3 values, but got 4",
+        "Unexpected option or argument",
       );
     }
 
@@ -3417,7 +4129,7 @@ describe("multiple", () => {
     if (!result3.success) {
       assertErrorIncludes(
         result3.error,
-        "Expected at most 3 values, but got 4",
+        "Unexpected option or argument",
       );
     }
   });
@@ -3513,7 +4225,7 @@ describe("multiple", () => {
     if (!tooManyResult.success) {
       assertErrorIncludes(
         tooManyResult.error,
-        "Expected at most 5 values, but got 6",
+        "Unexpected option or argument",
       );
     }
   });
@@ -3526,6 +4238,8 @@ describe("multiple", () => {
     const stringResult = parse(stringMultiple, ["-s", "hello", "-s", "world"]);
     assert.ok(stringResult.success);
     if (stringResult.success) {
+      const typedStrings: readonly string[] = stringResult.value;
+      void typedStrings;
       assert.equal(stringResult.value.length, 2);
       assert.equal(typeof stringResult.value[0], "string");
       assert.deepEqual(stringResult.value, ["hello", "world"]);
@@ -3534,6 +4248,8 @@ describe("multiple", () => {
     const integerResult = parse(integerMultiple, ["-i", "42", "-i", "100"]);
     assert.ok(integerResult.success);
     if (integerResult.success) {
+      const typedIntegers: readonly number[] = integerResult.value;
+      void typedIntegers;
       assert.equal(integerResult.value.length, 2);
       assert.equal(typeof integerResult.value[0], "number");
       assert.deepEqual(integerResult.value, [42, 100]);
@@ -3542,10 +4258,418 @@ describe("multiple", () => {
     const booleanResult = parse(booleanMultiple, ["-b", "-b"]);
     assert.ok(booleanResult.success);
     if (booleanResult.success) {
+      const typedBooleans: readonly boolean[] = booleanResult.value;
+      void typedBooleans;
       assert.equal(booleanResult.value.length, 2);
       assert.equal(typeof booleanResult.value[0], "boolean");
       assert.deepEqual(booleanResult.value, [true, true]);
     }
+  });
+
+  it("should append a sync item when a new slot reuses undefined state", () => {
+    const itemParser = {
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: context.state,
+          },
+          consumed: [context.buffer[0]!],
+        };
+      },
+      complete() {
+        return { success: true as const, value: "item" };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, undefined>;
+    const parser = multiple(itemParser);
+
+    const first = parser.parse({
+      buffer: ["first"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const second = parser.parse({
+      buffer: ["second"],
+      state: first.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(second.success);
+    if (!second.success) return;
+
+    assert.deepEqual(second.next.state, [undefined, undefined]);
+    assert.deepEqual(parser.complete(second.next.state), {
+      success: true,
+      value: ["item", "item"],
+    });
+  });
+
+  it("should append an async item when a new slot reuses undefined state", async () => {
+    const itemParser = {
+      $mode: "async" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: context.state,
+          },
+          consumed: [context.buffer[0]!],
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "item" });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"async", string, undefined>;
+    const parser = multiple(itemParser);
+
+    const first = await parser.parse({
+      buffer: ["first"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const second = await parser.parse({
+      buffer: ["second"],
+      state: first.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(second.success);
+    if (!second.success) return;
+
+    assert.deepEqual(second.next.state, [undefined, undefined]);
+    assert.deepEqual(await parser.complete(second.next.state), {
+      success: true,
+      value: ["item", "item"],
+    });
+  });
+
+  it("should not append an empty optional slot on empty input", () => {
+    const parser = multiple(optional(option("--name", string())));
+
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (!result.success) return;
+    assert.deepEqual(result.value, []);
+  });
+
+  it("should not append an empty withDefault slot on empty input", () => {
+    const parser = multiple(withDefault(option("--name", string()), "guest"));
+
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (!result.success) return;
+    assert.deepEqual(result.value, []);
+  });
+
+  it("should not append an empty async optional slot on empty input", async () => {
+    const parser = multiple(optional(option("--mode", asyncChoice(["dev"]))));
+
+    const result = await parseAsync(parser, []);
+    assert.ok(result.success);
+    if (!result.success) return;
+    assert.deepEqual(result.value, []);
+  });
+
+  it("should not append an empty slot for zero-consumption wrapper state", () => {
+    type WrappedState = {
+      readonly hasCliValue: boolean;
+      readonly cliState?: string;
+    };
+    const parser = multiple({
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly WrappedState[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { hasCliValue: false, cliState: "" },
+      parse(context: ParserContext<WrappedState>) {
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            state: { hasCliValue: false, cliState: "" },
+          },
+          consumed: [],
+        };
+      },
+      complete(state: WrappedState) {
+        return { success: true as const, value: state.cliState ?? "" };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    });
+
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (!result.success) return;
+    assert.deepEqual(result.value, []);
+  });
+
+  it("should reopen a wrapped terminal slot before parsing the next item", () => {
+    type WrappedState = {
+      readonly hasCliValue: boolean;
+      readonly cliState?: ValueParserResult<string>;
+    };
+    const parser = multiple({
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly WrappedState[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { hasCliValue: false },
+      parse(context: ParserContext<WrappedState>) {
+        if (context.buffer.length === 0) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        }
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: {
+              hasCliValue: true,
+              cliState: {
+                success: true as const,
+                value: context.buffer[0],
+              },
+            },
+          },
+          consumed: [context.buffer[0]],
+        };
+      },
+      complete(state: WrappedState) {
+        if (state.cliState?.success) {
+          return { success: true as const, value: state.cliState.value };
+        }
+        return { success: false as const, error: message`Missing value.` };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    });
+
+    const first = parser.parse({
+      buffer: ["first"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const second = parser.parse({
+      buffer: ["second"],
+      state: first.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(second.success);
+    if (!second.success) return;
+
+    assert.deepEqual(parser.complete(second.next.state), {
+      success: true,
+      value: ["first", "second"],
+    });
+  });
+
+  it("should not reopen a sync slot after a consumed extension failure", () => {
+    type ItemState =
+      | { readonly first: string }
+      | ValueParserResult<string>
+      | undefined;
+    const itemParser = {
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<ItemState>) {
+        if (context.state == null) {
+          return {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: { first: context.buffer[0]! },
+            },
+            consumed: [context.buffer[0]!],
+          };
+        }
+        if (!("success" in context.state) && context.buffer[0] === "ok") {
+          return {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: {
+                success: true as const,
+                value: `${context.state.first}:ok`,
+              },
+            },
+            consumed: [context.buffer[0]!],
+          };
+        }
+        return {
+          success: false as const,
+          consumed: 1,
+          error: message`Expected closing token.`,
+        };
+      },
+      complete(state: ItemState) {
+        if (state != null && typeof state === "object" && "success" in state) {
+          return state;
+        }
+        return {
+          success: false as const,
+          error: message`Expected closing token.`,
+        };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, ItemState>;
+    const parser = multiple(itemParser);
+
+    const first = parser.parse({
+      buffer: ["start"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const second = parser.parse({
+      buffer: ["bad"],
+      state: first.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(!second.success);
+    if (second.success) return;
+    assert.equal(second.consumed, 1);
+    assert.deepEqual(second.error, message`Expected closing token.`);
+  });
+
+  it("should not reopen an async slot after a consumed extension failure", async () => {
+    type ItemState =
+      | { readonly first: string }
+      | ValueParserResult<string>
+      | undefined;
+    const itemParser = {
+      $mode: "async" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<ItemState>) {
+        if (context.state == null) {
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: { first: context.buffer[0]! },
+            },
+            consumed: [context.buffer[0]!],
+          });
+        }
+        if (!("success" in context.state) && context.buffer[0] === "ok") {
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: {
+                success: true as const,
+                value: `${context.state.first}:ok`,
+              },
+            },
+            consumed: [context.buffer[0]!],
+          });
+        }
+        return Promise.resolve({
+          success: false as const,
+          consumed: 1,
+          error: message`Expected closing token.`,
+        });
+      },
+      complete(state: ItemState) {
+        if (state != null && typeof state === "object" && "success" in state) {
+          return Promise.resolve(state);
+        }
+        return Promise.resolve({
+          success: false as const,
+          error: message`Expected closing token.`,
+        });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"async", string, ItemState>;
+    const parser = multiple(itemParser);
+
+    const first = await parser.parse({
+      buffer: ["start"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const second = await parser.parse({
+      buffer: ["bad"],
+      state: first.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(!second.success);
+    if (second.success) return;
+    assert.equal(second.consumed, 1);
+    assert.deepEqual(second.error, message`Expected closing token.`);
   });
 
   describe("getDocFragments", () => {
@@ -4438,64 +5562,219 @@ describe("branch coverage: modifiers edge cases", () => {
   });
 
   // Line 982: async multiple() complete — inner complete() failure.
-  // Build a custom async multiple-like parser whose complete() always fails to
-  // exercise the error-return path in async complete().
   it("multiple: async complete fails when inner completion fails", async () => {
-    const failComplete = {
-      ...multiple(option("--x", string())),
+    const inner: Parser<"async", string, string> = {
       $mode: "async" as const,
-      parse(
-        context: {
-          buffer: readonly string[];
-          state: readonly string[];
-          optionsTerminated: boolean;
-          usage: readonly unknown[];
-        },
-      ) {
-        // Succeed and add a string item to state
-        if (context.buffer[0] === "--x" && context.buffer[1]) {
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: true,
+      initialState: "",
+      parse(context) {
+        if (context.buffer.length === 0) {
           return Promise.resolve({
-            success: true as const,
-            next: {
-              ...context,
-              buffer: context.buffer.slice(2),
-              state: [...context.state, context.buffer[1]],
-            },
-            consumed: [context.buffer[0], context.buffer[1]],
+            success: false as const,
+            consumed: 0,
+            error: message`No parse.`,
           });
         }
         return Promise.resolve({
-          success: false as const,
-          consumed: 0,
-          error: message`Expected --x VALUE`,
+          success: true as const,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: context.buffer[0],
+          },
+          consumed: [context.buffer[0]],
         });
       },
-      complete(
-        _state: readonly string[],
-      ): Promise<{ success: false; error: Message }> {
-        return Promise.resolve({
-          success: false as const,
-          error: message`Async complete failure.`,
-        });
+      complete(state: string): Promise<ValueParserResult<string>> {
+        return Promise.resolve(
+          state === "bad"
+            ? {
+              success: false as const,
+              error: message`Async complete failure.`,
+            }
+            : { success: true as const, value: state },
+        );
       },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
     };
+    const failComplete = multiple(inner);
 
-    const ctx = {
-      buffer: ["--x", "hello"],
-      state: [] as readonly string[],
-      optionsTerminated: false,
-      usage: failComplete.usage,
-    };
-    const r = await failComplete.parse(ctx);
-    assert.ok(r.success);
-    if (r.success) {
-      const result = await failComplete.complete(r.next.state);
-      assert.ok(!result.success);
+    const result = await failComplete.complete(["ok", "bad"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(result.error, message`Async complete failure.`);
     }
+  });
+
+  it("multiple: async complete preserves later source registration order", async () => {
+    const sourceId = Symbol("mode");
+    const gates = new Map<
+      string,
+      { readonly promise: Promise<void>; readonly resolve: () => void }
+    >();
+    for (const state of ["slow", "fast"] as const) {
+      let resolve!: () => void;
+      const promise = new Promise<void>((res) => {
+        resolve = res;
+      });
+      gates.set(state, { promise, resolve });
+    }
+    const started: string[] = [];
+    const child: Parser<"async", string, string> = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [] as const,
+        });
+      },
+      async complete(state, exec) {
+        started.push(state);
+        await gates.get(state)?.promise;
+        exec?.dependencyRuntime?.registerSource(sourceId, state, "cli");
+        return { success: true as const, value: `item-${state}` };
+      },
+      async *suggest() {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser = multiple(child);
+    const runtime = createDependencyRuntimeContext();
+
+    const pending = parser.complete(
+      ["slow", "fast"],
+      {
+        usage: parser.usage,
+        phase: "complete",
+        path: ["root"],
+        dependencyRuntime: runtime,
+        dependencyRegistry: runtime.registry,
+      },
+    );
+
+    assert.deepEqual(started, ["slow"]);
+    gates.get("slow")?.resolve();
+    await waitForStartedCount(
+      started,
+      2,
+      "multiple() async completion did not start the second item.",
+    );
+    assert.deepEqual(started, ["slow", "fast"]);
+    gates.get("fast")?.resolve();
+
+    const result = await pending;
+    assert.ok(result.success);
+    assert.equal(runtime.getSource(sourceId), "fast");
+  });
+
+  it("multiple: async suggest preserves later source registration order", async () => {
+    const sourceId = Symbol("mode");
+    const gates = new Map<
+      string,
+      { readonly promise: Promise<void>; readonly resolve: () => void }
+    >();
+    for (const state of ["slow", "fast"] as const) {
+      let resolve!: () => void;
+      const promise = new Promise<void>((res) => {
+        resolve = res;
+      });
+      gates.set(state, { promise, resolve });
+    }
+    const started: string[] = [];
+    const child: Parser<"async", string, string> = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [] as const,
+        });
+      },
+      async complete(state, exec) {
+        started.push(state);
+        await gates.get(state)?.promise;
+        exec?.dependencyRuntime?.registerSource(sourceId, state, "cli");
+        return { success: true as const, value: `item-${state}` };
+      },
+      async *suggest(context) {
+        yield {
+          kind: "literal" as const,
+          text: `latest-${
+            String(
+              context.exec?.dependencyRuntime?.getSource(sourceId),
+            )
+          }`,
+        };
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser = multiple(child);
+    const runtime = createDependencyRuntimeContext();
+
+    const suggestionsPromise = (async () => {
+      const suggestions: Suggestion[] = [];
+      for await (
+        const suggestion of parser.suggest({
+          buffer: [],
+          state: ["slow", "fast"],
+          optionsTerminated: false,
+          usage: parser.usage,
+          dependencyRegistry: runtime.registry,
+          exec: {
+            usage: parser.usage,
+            phase: "suggest",
+            path: ["root"],
+            dependencyRuntime: runtime,
+            dependencyRegistry: runtime.registry,
+          },
+        }, "")
+      ) {
+        suggestions.push(suggestion);
+      }
+      return suggestions;
+    })();
+
+    assert.deepEqual(started, ["slow"]);
+    gates.get("slow")?.resolve();
+    await waitForStartedCount(
+      started,
+      2,
+      "multiple() async suggest did not start the second item.",
+    );
+    assert.deepEqual(started, ["slow", "fast"]);
+    gates.get("fast")?.resolve();
+
+    const suggestions = await suggestionsPromise;
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "latest-fast" }]);
   });
 
   // Line 1012: multiple() suggest — shouldInclude returns true for non-literal
   // suggestion kind (e.g., "file" or "directory" kinds pass through always).
+  function coerceRuntimeSuggestState<TState>(state: unknown): TState {
+    // @ts-expect-error: intentionally exercise runtime-only state shapes.
+    return state;
+  }
+
   it("multiple: suggest passes through non-literal suggestions", () => {
     const fileValueParser: ValueParser<"sync", string> = {
       $mode: "sync",
@@ -4524,6 +5803,119 @@ describe("branch coverage: modifiers edge cases", () => {
     ];
     // The file-kind suggestion should pass through shouldInclude (returns true)
     assert.ok(suggestions.some((s) => s.kind === "file"));
+  });
+
+  it("multiple: suggest does not open a new slot after reaching max", () => {
+    const parser = multiple(argument(choice(["one", "two"] as const)), {
+      max: 1,
+    });
+    const parsed = parser.parse({
+      buffer: ["one"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const suggestions = [
+      ...parser.suggest(parsed.next, "") as Iterable<Suggestion>,
+    ];
+
+    assert.deepEqual(suggestions, []);
+  });
+
+  it("multiple: sync parse stops consuming after reaching max", () => {
+    const parser = multiple(argument(string()), { max: 1 });
+    const first = parser.parse({
+      buffer: ["a"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const second = parser.parse({
+      buffer: ["b"],
+      state: first.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(second.success);
+    if (!second.success) return;
+
+    assert.deepEqual(second.consumed, []);
+    assert.equal(second.next.buffer[0], "b");
+    assert.deepEqual(second.next.state, first.next.state);
+  });
+
+  it("multiple: async parse stops consuming after reaching max", async () => {
+    const parser = multiple(argument(asyncChoice(["a", "b"] as const)), {
+      max: 1,
+    });
+    const first = await parser.parse({
+      buffer: ["a"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const second = await parser.parse({
+      buffer: ["b"],
+      state: first.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(second.success);
+    if (!second.success) return;
+
+    assert.deepEqual(second.consumed, []);
+    assert.equal(second.next.buffer[0], "b");
+    assert.deepEqual(second.next.state, first.next.state);
+  });
+
+  it("multiple: zero-consumption fresh object state does not add a slot", () => {
+    const inner: Parser<
+      "sync",
+      "idle",
+      { readonly kind: "idle" }
+    > = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly "idle"[],
+      $stateType: [] as readonly { readonly kind: "idle" }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { kind: "idle" as const },
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete: (state) => ({ success: true as const, value: state.kind }),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser = multiple(inner);
+
+    const result = parser.parse({
+      buffer: [],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(result.success);
+    if (!result.success) return;
+    assert.deepEqual(result.next.state, []);
   });
 
   // Line 155/442: async optional/withDefault suggestAsync — state is undefined
@@ -4564,7 +5956,89 @@ describe("branch coverage: modifiers edge cases", () => {
     assert.ok(Array.isArray(suggestions));
   });
 
-  it("withDefault: transformed async parser keeps dependency state", async () => {
+  it("optional: suggest uses direct object state when present", () => {
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly ("initial" | "live")[],
+      $stateType: [] as readonly { readonly value: "initial" | "live" }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "initial" as const },
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No parse.`,
+      }),
+      complete: (state: { readonly value: "initial" | "live" }) => ({
+        success: true as const,
+        value: state.value,
+      }),
+      *suggest(context: ParserContext<{ readonly value: "initial" | "live" }>) {
+        yield { kind: "literal" as const, text: context.state.value };
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<
+      "sync",
+      "initial" | "live",
+      { readonly value: "initial" | "live" }
+    >;
+    const parser = optional(inner);
+
+    const suggestContext: Parameters<typeof parser.suggest>[0] = {
+      buffer: [],
+      state: coerceRuntimeSuggestState({ value: "live" }),
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+    const suggestions = [...parser.suggest(suggestContext, "")];
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "live" }]);
+  });
+
+  it("withDefault: suggest uses direct object state when present", () => {
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly ("initial" | "live")[],
+      $stateType: [] as readonly { readonly value: "initial" | "live" }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "initial" as const },
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No parse.`,
+      }),
+      complete: (state: { readonly value: "initial" | "live" }) => ({
+        success: true as const,
+        value: state.value,
+      }),
+      *suggest(context: ParserContext<{ readonly value: "initial" | "live" }>) {
+        yield { kind: "literal" as const, text: context.state.value };
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<
+      "sync",
+      "initial" | "live",
+      { readonly value: "initial" | "live" }
+    >;
+    const parser = withDefault(inner, "initial" as const);
+
+    const suggestContext: Parameters<typeof parser.suggest>[0] = {
+      buffer: [],
+      state: coerceRuntimeSuggestState({ value: "live" }),
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+    const suggestions = [...parser.suggest(suggestContext, "")];
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "live" }]);
+  });
+
+  it("withDefault: transformed async parser returns plain fallback result", async () => {
     const depId = Symbol("dep");
     const transformedAsyncParser = {
       $mode: "async" as const,
@@ -4598,10 +6072,7 @@ describe("branch coverage: modifiers edge cases", () => {
     );
 
     const result = await parser.complete(undefined);
-    assert.ok(isDependencySourceState(result));
-    if (isDependencySourceState(result) && result.result.success) {
-      assert.equal(result.result.value, "fallback");
-    }
+    assert.deepEqual(result, { success: true, value: "fallback" });
   });
 
   it("withDefault: transformed async parser without dependency returns default", async () => {
@@ -4632,13 +6103,10 @@ describe("branch coverage: modifiers edge cases", () => {
     );
 
     const result = await parser.complete(undefined);
-    assert.ok(result.success);
-    if (result.success) {
-      assert.equal(result.value, "fallback");
-    }
+    assert.deepEqual(result, { success: true, value: "fallback" });
   });
 
-  it("withDefault: wrapped dependency source uses default dependency value", () => {
+  it("withDefault: wrapped dependency source uses plain fallback value", () => {
     const pending = createPendingDependencySourceState(Symbol("wrapped-dep"));
     const wrappedParser = {
       $mode: "sync" as const,
@@ -4665,13 +6133,10 @@ describe("branch coverage: modifiers edge cases", () => {
     );
 
     const result = parser.complete(undefined);
-    assert.ok(isDependencySourceState(result));
-    if (isDependencySourceState(result) && result.result.success) {
-      assert.equal(result.result.value, "fallback");
-    }
+    assert.deepEqual(result, { success: true, value: "fallback" });
   });
 
-  it("withDefault: pending dependency state in async transform uses default", async () => {
+  it("withDefault: defined async transform state delegates to inner parser", async () => {
     const depId = Symbol("pending-dep");
     const transformedAsyncParser = {
       $mode: "async" as const,
@@ -4703,33 +6168,24 @@ describe("branch coverage: modifiers edge cases", () => {
       transformedAsyncParser as unknown as ReturnType<typeof option>,
       "fallback",
     );
-    const pending = createPendingDependencySourceState(depId);
-
-    const result = await parser.complete([pending] as unknown as [undefined]);
+    const result = await parser.complete([undefined] as unknown as [undefined]);
     assert.ok(isDependencySourceState(result));
-    if (isDependencySourceState(result) && result.result.success) {
-      assert.equal(result.result.value, "fallback");
+    if (!isDependencySourceState(result)) return;
+    assert.ok(result.result.success);
+    if (result.result.success) {
+      assert.equal(result.result.value, "inner");
     }
   });
 
-  it("withDefault: pending dependency in sync parser preserves dependency id", () => {
-    const depId = Symbol("pending-sync");
+  it("withDefault: sync parser returns plain fallback for missing value", () => {
     const baseParser = option("--name", string());
     const parser = withDefault(baseParser, "fallback");
-    const pending = createPendingDependencySourceState(depId);
 
-    const result = parser.complete([pending] as unknown as [undefined]);
-    assert.ok(isDependencySourceState(result));
-    if (isDependencySourceState(result)) {
-      assert.equal(result[dependencyId], depId);
-      assert.ok(result.result.success);
-      if (result.result.success) {
-        assert.equal(result.result.value, "fallback");
-      }
-    }
+    const result = parser.complete(undefined);
+    assert.deepEqual(result, { success: true, value: "fallback" });
   });
 
-  it("optional: wrapped async dependency complete delegates inner pending state", async () => {
+  it("optional: wrapped async dependency complete returns undefined when missing", async () => {
     const depId = Symbol("opt-async-dep");
     const pending = createPendingDependencySourceState(depId);
     const asyncWrapped = {
@@ -4761,7 +6217,7 @@ describe("branch coverage: modifiers edge cases", () => {
 
     const parser = optional(asyncWrapped);
     const result = await parser.complete(undefined);
-    assert.ok(isDependencySourceState(result));
+    assert.deepEqual(result, { success: true, value: undefined });
   });
 
   it("optional: async wrapped dependency pending state delegates inner parser", async () => {
@@ -4937,8 +6393,7 @@ describe("branch coverage: modifiers edge cases", () => {
     assert.ok(!result.success);
   });
 
-  it("withDefault: pending dependency path handles callback errors", () => {
-    const depId = Symbol("pending-sync-fail");
+  it("withDefault: plain missing path handles callback errors", () => {
     const baseParser = option("--name", string());
     const parser = withDefault(
       baseParser,
@@ -4946,10 +6401,12 @@ describe("branch coverage: modifiers edge cases", () => {
         throw new Error("pending callback failed");
       },
     );
-    const pending = createPendingDependencySourceState(depId);
 
-    const result = parser.complete([pending] as unknown as [undefined]);
+    const result = parser.complete(undefined);
     assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "pending callback failed");
+    }
   });
 
   it("multiple: async parse updates existing slot without appending", async () => {
@@ -5045,6 +6502,178 @@ describe("branch coverage: modifiers edge cases", () => {
     assert.ok(!result.success);
   });
 
+  it("multiple: complete retries unwrapped injected states after failure", () => {
+    const seenStates: string[] = [];
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No parse.`,
+      }),
+      complete(state: unknown) {
+        seenStates.push(typeof state === "string" ? state : "wrapped");
+        if (typeof state !== "string") {
+          return { success: false as const, error: message`wrapped state` };
+        }
+        return { success: true as const, value: state };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, string>;
+    const parser = multiple(inner);
+    const wrappedState = injectAnnotations("alpha", {
+      [Symbol("annotation")]: true,
+    });
+
+    const result = parser.complete([wrappedState]);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["alpha"]);
+    }
+    assert.deepEqual(seenStates, ["wrapped", "alpha"]);
+  });
+
+  it("multiple: async suggest derives selected values with child exec paths", async () => {
+    const seenPaths: PropertyKey[][] = [];
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse: () =>
+        Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`No parse.`,
+        }),
+      complete(
+        _state: string,
+        exec?: { readonly path: readonly PropertyKey[] },
+      ) {
+        const path = [...(exec?.path ?? ["root"])];
+        seenPaths.push(path);
+        const pathText = path.map(String).join("/");
+        return Promise.resolve({
+          success: true as const,
+          value: `item-${pathText}`,
+        });
+      },
+      async *suggest() {
+        yield { kind: "literal" as const, text: "item-root/0" };
+        yield { kind: "literal" as const, text: "item-root/1" };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    } as const satisfies Parser<"async", string, string>;
+    const parser = multiple(inner);
+
+    const suggestions = await collectSuggestions(
+      parser.suggest(
+        {
+          buffer: [],
+          state: ["first", "second"],
+          optionsTerminated: false,
+          usage: parser.usage,
+          exec: {
+            usage: parser.usage,
+            phase: "suggest",
+            path: ["root"],
+          },
+        },
+        "",
+      ) as AsyncIterable<Suggestion>,
+    );
+
+    assert.deepEqual(suggestions, []);
+    assert.deepEqual(seenPaths, [["root", 0], ["root", 1]]);
+  });
+
+  it("optional: getSuggestRuntimeNodes preserves outer annotations", () => {
+    const annotations = { [Symbol("annotation")]: true };
+    let seenState: unknown;
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly unknown[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: { kind: "initial" as const },
+      getSuggestRuntimeNodes(state: unknown) {
+        seenState = state;
+        return [];
+      },
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No parse.`,
+      }),
+      complete: () => ({ success: true as const, value: "ok" }),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, unknown>;
+    const parser = optional(inner);
+    const state = injectAnnotations([{ kind: "value" as const }], annotations);
+
+    parser.getSuggestRuntimeNodes?.(state as [unknown], ["root"]);
+
+    assert.ok(seenState != null && typeof seenState === "object");
+    assert.deepEqual(getAnnotations(seenState), annotations);
+    assert.equal((seenState as { readonly kind: "value" }).kind, "value");
+  });
+
+  it("withDefault: getSuggestRuntimeNodes preserves object wrapper state", () => {
+    const annotations = { [Symbol("annotation")]: true };
+    const wrappedState = injectAnnotations(undefined, annotations);
+    let seenState: unknown;
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly unknown[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "initial",
+      getSuggestRuntimeNodes(state: unknown) {
+        seenState = state;
+        return [];
+      },
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No parse.`,
+      }),
+      complete: () => ({ success: true as const, value: "ok" }),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, unknown>;
+    const parser = withDefault(inner, "fallback");
+
+    parser.getSuggestRuntimeNodes?.(
+      wrappedState as unknown as [unknown] | undefined,
+      ["root"],
+    );
+
+    assert.equal(seenState, wrappedState);
+    assert.deepEqual(getAnnotations(seenState), annotations);
+  });
+
   it("withDefault: transformed complete(undefined) catches callback errors", async () => {
     const depId = Symbol("wd-catch-undefined");
     const transformedAsyncParser = {
@@ -5089,8 +6718,7 @@ describe("branch coverage: modifiers edge cases", () => {
     }
   });
 
-  it("withDefault: transformed pending complete catches callback errors", async () => {
-    const depId = Symbol("wd-catch-pending");
+  it("withDefault: transformed missing complete catches callback errors", async () => {
     const transformedAsyncParser = {
       $mode: "async" as const,
       $valueType: undefined,
@@ -5122,8 +6750,7 @@ describe("branch coverage: modifiers edge cases", () => {
         throw new Error("pending default callback exploded");
       },
     );
-    const pending = createPendingDependencySourceState(depId);
-    const result = await parser.complete([pending] as unknown as [undefined]);
+    const result = await parser.complete(undefined);
     assert.ok(!result.success);
     if (!result.success) {
       assert.ok(
@@ -5413,5 +7040,68 @@ describe("acceptingAnyToken", () => {
     assert.ok(
       nonEmpty(multiple(argument(string()), { min: 1 })).acceptingAnyToken,
     );
+  });
+});
+
+describe("multiple() dependency source extraction", () => {
+  it("keeps scanning when the newest async source is thenable", async () => {
+    const sourceId = Symbol("mode");
+    const earlier = Symbol("earlier");
+    const latest = Symbol("latest");
+    const visited: unknown[] = [];
+    const inner: Parser<"async", string, symbol | null> = {
+      $mode: "async" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: () =>
+        Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`No parse.`,
+        }),
+      complete: () =>
+        Promise.resolve({
+          success: false as const,
+          error: message`No completion.`,
+        }),
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    Object.defineProperty(inner, "dependencyMetadata", {
+      value: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue(state: unknown) {
+            visited.push(state);
+            if (state === latest) {
+              return createPromiseLike(undefined);
+            }
+            if (state === earlier) {
+              return createPromiseLike({
+                success: true as const,
+                value: "prod",
+              });
+            }
+            return undefined;
+          },
+        },
+      },
+      configurable: true,
+      enumerable: false,
+    });
+    const parser = multiple(inner);
+    const result = await parser.dependencyMetadata?.source?.extractSourceValue([
+      earlier,
+      latest,
+    ]);
+    assert.deepEqual(result, { success: true, value: "prod" });
+    assert.deepEqual(visited, [latest, earlier]);
   });
 });

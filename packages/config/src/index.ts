@@ -22,12 +22,24 @@ import type {
   ParserResult,
   Result,
 } from "@optique/core/parser";
-import { annotationKey, getAnnotations } from "@optique/core/annotations";
+import {
+  unmatchedNonCliDependencySourceStateMarker,
+} from "@optique/core/parser";
+import {
+  annotationKey,
+  getAnnotations,
+  inheritAnnotations,
+} from "@optique/core/annotations";
 import { message } from "@optique/core/message";
 import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
+import type { ValueParserResult } from "@optique/core/valueparser";
 
 const phase2UndefinedParsedValueKey = Symbol(
   "@optique/config/phase2UndefinedParsedValue",
+);
+
+const inheritParentAnnotationsKey = Symbol.for(
+  "@optique/core/inheritParentAnnotations",
 );
 
 /**
@@ -707,23 +719,38 @@ export function bindConfig<
     return annotations?.[options.context.id] === phase1ConfigAnnotationMarker;
   }
 
-  // Do NOT propagate wrappedDependencySourceMarker to the returned parser.
-  // Unlike withDefault(), bindConfig() cannot resolve dependencies from a
-  // synthetic pending state (it needs config annotations).  Propagating the
-  // marker would cause optional() to delegate into bindConfig with an
-  // unannotated state, surfacing "Missing config" errors instead of undefined.
+  // bindConfig() resolves fallbacks through config annotations at completion
+  // time, not through synthetic dependency-wrapper states.  Keeping the bound
+  // parser isolated from those legacy markers prevents optional()/withDefault()
+  // wrappers from invoking it without the annotation context it requires.
+
+  const getSuggestInnerState = (state: TState): TState =>
+    isConfigBindState(state)
+      ? (state.cliState === undefined
+        ? inheritAnnotations(state, parser.initialState)
+        : state.cliState as TState)
+      : state;
 
   const boundParser: Parser<M, TValue, TState> = {
     $mode: parser.$mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
+    [unmatchedNonCliDependencySourceStateMarker]: true,
     usage: options.default !== undefined
       ? [{ type: "optional", terms: parser.usage }]
       : parser.usage,
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
+    getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
+      const innerState = getSuggestInnerState(state);
+      const innerNodes = parser.getSuggestRuntimeNodes?.(innerState, path) ??
+        [];
+      return boundParser.dependencyMetadata?.source != null
+        ? [...innerNodes, { path, parser: boundParser, state }]
+        : innerNodes;
+    },
 
     parse: (context) => {
       // Extract annotations from context to preserve them
@@ -804,7 +831,13 @@ export function bindConfig<
       return wrapForMode(parser.$mode, getConfigOrDefault(state, options));
     },
 
-    suggest: parser.suggest,
+    suggest: (context, prefix) => {
+      const innerState = getSuggestInnerState(context.state);
+      const innerContext = innerState !== context.state
+        ? { ...context, state: innerState }
+        : context;
+      return parser.suggest(innerContext, prefix);
+    },
     shouldDeferCompletion: shouldDeferPromptUntilConfigResolves,
     getDocFragments(state, upperDefaultValue?) {
       const defaultValue = upperDefaultValue ?? options.default;
@@ -828,6 +861,60 @@ export function bindConfig<
   if (typeof parser.normalizeValue === "function") {
     Object.defineProperty(boundParser, "normalizeValue", {
       value: parser.normalizeValue.bind(parser),
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  Object.defineProperty(boundParser, inheritParentAnnotationsKey, {
+    value: true,
+    configurable: true,
+    enumerable: false,
+  });
+  const dependencyMetadata = parser.dependencyMetadata;
+  if (dependencyMetadata != null) {
+    const sourceMetadata = dependencyMetadata.source;
+    Object.defineProperty(boundParser, "dependencyMetadata", {
+      value: sourceMetadata == null ? dependencyMetadata : {
+        ...dependencyMetadata,
+        source: {
+          ...sourceMetadata,
+          getMissingSourceValue:
+            sourceMetadata.preservesSourceValue !== false &&
+              options.default !== undefined
+              ? () => ({ success: true as const, value: options.default })
+              : undefined,
+          extractSourceValue: (state: unknown) => {
+            if (!isConfigBindState(state)) {
+              if (sourceMetadata.preservesSourceValue) {
+                return getConfigSourceValue(
+                  state,
+                  options,
+                  state,
+                  sourceMetadata.extractSourceValue,
+                );
+              }
+              return sourceMetadata.extractSourceValue(state);
+            }
+            if (state.hasCliValue) {
+              return sourceMetadata.extractSourceValue(
+                state.cliState,
+              );
+            }
+            const fallbackState = state.cliState ?? state;
+            if (!sourceMetadata.preservesSourceValue) {
+              return sourceMetadata.extractSourceValue(
+                fallbackState,
+              );
+            }
+            return getConfigSourceValue(
+              state,
+              options,
+              fallbackState,
+              sourceMetadata.extractSourceValue,
+            );
+          },
+        },
+      },
       configurable: true,
       enumerable: false,
     });
@@ -902,4 +989,51 @@ function getConfigOrDefault<T, TValue, TConfigMeta>(
     success: false,
     error: message`Missing required configuration value.`,
   };
+}
+
+/**
+ * Resolves a config-backed dependency source with fallback priority.
+ *
+ * This first checks annotations or the active config registry via
+ * {@link getConfigOrDefault}. If no config-backed value is available, it falls
+ * back to `options.default` and finally delegates to the wrapped parser's
+ * source extractor.
+ *
+ * @param state The wrapper state, which may carry config annotations.
+ * @param options The binding options with lookup and default settings.
+ * @param innerState The unwrapped inner state for delegated extraction.
+ * @param extractInnerSourceValue The wrapped parser's source extractor.
+ * @returns The resolved source value, an async source value, or `undefined`.
+ * @throws {TypeError} If {@link getConfigOrDefault} rejects a thenable-returning
+ *                     key callback.
+ */
+function getConfigSourceValue<T, TValue, TConfigMeta>(
+  state: unknown,
+  options: BindConfigOptions<T, TValue, TConfigMeta>,
+  innerState: unknown,
+  extractInnerSourceValue: (
+    state: unknown,
+  ) =>
+    | ValueParserResult<unknown>
+    | Promise<ValueParserResult<unknown> | undefined>
+    | undefined,
+):
+  | ValueParserResult<unknown>
+  | Promise<ValueParserResult<unknown> | undefined>
+  | undefined {
+  const annotations = getAnnotations(state);
+  const contextId = options.context.id;
+  const annotationValue = annotations?.[contextId] as
+    | { readonly data: T; readonly meta?: TConfigMeta | undefined }
+    | undefined;
+  const configData = annotationValue?.data ?? getActiveConfig<T>(contextId);
+
+  if (configData !== undefined && configData !== null) {
+    const resolved = getConfigOrDefault(state, options);
+    if (resolved.success) return resolved;
+  }
+  if (options.default !== undefined) {
+    return { success: true as const, value: options.default };
+  }
+  return extractInnerSourceValue(innerState);
 }

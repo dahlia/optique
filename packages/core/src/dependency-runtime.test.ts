@@ -10,6 +10,8 @@ import {
   buildRuntimeNodesFromArray,
   buildRuntimeNodesFromPairs,
   collectExplicitSourceValues,
+  collectExplicitSourceValuesAsync,
+  collectSourcesFromState,
   createDependencyFingerprint,
   createDependencyRuntimeContext,
   createReplayKey,
@@ -18,6 +20,7 @@ import {
   fillMissingSourceDefaultsAsync,
   replayDerivedParser,
   replayDerivedParserAsync,
+  resolveStateWithRuntime,
   type RuntimeNode,
 } from "./dependency-runtime.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
@@ -25,10 +28,14 @@ import {
   createDeferredParseState,
   createDependencySourceState,
   createPendingDependencySourceState,
+  dependencyId,
   DependencyRegistry,
   isDependencySourceState,
   parseWithDependency,
 } from "./dependency.ts";
+import { message } from "./message.ts";
+import { unmatchedNonCliDependencySourceStateMarker } from "./parser.ts";
+import type { DependencyRegistryLike } from "./registry-types.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 
 // =============================================================================
@@ -150,6 +157,65 @@ describe("DependencyRuntimeContext", () => {
     const runtime = createDependencyRuntimeContext(registry);
     assert.ok(runtime.hasSource(id));
     assert.equal(runtime.getSource(id), "prod");
+  });
+
+  test("preserves failed sources when wrapping a cloned registry", () => {
+    const sourceId = Symbol("env");
+    const runtime = createDependencyRuntimeContext();
+    runtime.registerSource(sourceId, "prod", "cli");
+    runtime.markSourceFailed(sourceId);
+
+    const cloned = createDependencyRuntimeContext(runtime.registry.clone());
+    assert.ok(!cloned.hasSource(sourceId));
+    assert.equal(cloned.getSource(sourceId), undefined);
+    assert.ok(cloned.isSourceFailed(sourceId));
+    assert.notEqual(
+      cloned.resolveDependencies({
+        dependencyIds: [sourceId],
+        defaultValues: ["dev"],
+      }).kind,
+      "resolved",
+    );
+  });
+
+  test("keeps failed sources hidden when wrapped registry set throws", () => {
+    const sourceId = Symbol("env");
+    class ThrowingRegistry implements DependencyRegistryLike {
+      readonly #values: Map<symbol, unknown>;
+
+      constructor(entries: readonly (readonly [symbol, unknown])[]) {
+        this.#values = new Map(entries);
+      }
+
+      set<T>(_id: symbol, _value: T): void {
+        throw new TypeError("Registry exploded.");
+      }
+
+      get<T>(id: symbol): T | undefined {
+        return this.#values.get(id) as T | undefined;
+      }
+
+      has(id: symbol): boolean {
+        return this.#values.has(id);
+      }
+
+      clone(): DependencyRegistryLike {
+        return new ThrowingRegistry([...this.#values]);
+      }
+    }
+
+    const runtime = createDependencyRuntimeContext(
+      new ThrowingRegistry([[sourceId, "stale"]]),
+    );
+
+    runtime.markSourceFailed(sourceId);
+    assert.throws(() => runtime.registerSource(sourceId, "fresh", "cli"), {
+      name: "TypeError",
+      message: "Registry exploded.",
+    });
+    assert.ok(!runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), undefined);
+    assert.ok(runtime.isSourceFailed(sourceId));
   });
 });
 
@@ -322,6 +388,98 @@ describe("collectExplicitSourceValues", () => {
     assert.equal(runtime.getSource(sourceId), "prod");
   });
 
+  test("awaits async source extractors in async mode", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const sourceState = createDependencySourceState(
+      { success: true, value: "prod" } as ValueParserResult<string>,
+      sourceId,
+    );
+    let resolveExtract!: (
+      value: ValueParserResult<unknown> | undefined,
+    ) => void;
+    const extractPromise = new Promise<ValueParserResult<unknown> | undefined>(
+      (resolve) => {
+        resolveExtract = resolve;
+      },
+    );
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            extractSourceValue: (_state: unknown) => extractPromise,
+            preservesSourceValue: true,
+          },
+        },
+      },
+      state: sourceState,
+    }];
+
+    assert.throws(() => collectExplicitSourceValues(nodes, runtime), {
+      name: "TypeError",
+      message:
+        /collectExplicitSourceValues\(\).*extractSourceValue.*Symbol\(env\)/,
+    });
+    assert.ok(!runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), undefined);
+    assert.ok(!runtime.isSourceFailed(sourceId));
+
+    const pending = collectExplicitSourceValuesAsync(nodes, runtime);
+    assert.ok(!runtime.hasSource(sourceId));
+    resolveExtract(bareExtract(sourceState));
+    await pending;
+    assert.ok(runtime.hasSource(sourceId));
+    assert.ok(!runtime.isSourceFailed(sourceId));
+    assert.equal(runtime.getSource(sourceId), "prod");
+  });
+
+  test("treats thenable source extractors as async in sync mode", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const sourceState = createDependencySourceState(
+      { success: true, value: "prod" } as ValueParserResult<string>,
+      sourceId,
+    );
+    const thenable = {
+      then(
+        resolve: (value: ValueParserResult<unknown> | undefined) => void,
+      ) {
+        resolve(bareExtract(sourceState));
+      },
+    };
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            extractSourceValue: (_state: unknown) => thenable as never,
+            preservesSourceValue: true,
+          },
+        },
+      },
+      state: sourceState,
+    }];
+
+    assert.throws(() => collectExplicitSourceValues(nodes, runtime), {
+      name: "TypeError",
+      message:
+        /collectExplicitSourceValues\(\).*extractSourceValue.*Symbol\(env\)/,
+    });
+    assert.ok(!runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), undefined);
+    assert.ok(!runtime.isSourceFailed(sourceId));
+
+    await collectExplicitSourceValuesAsync(nodes, runtime);
+    assert.ok(runtime.hasSource(sourceId));
+    assert.ok(!runtime.isSourceFailed(sourceId));
+    assert.equal(runtime.getSource(sourceId), "prod");
+  });
+
   test("registers source from optional-wrapped state", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
@@ -416,6 +574,96 @@ describe("collectExplicitSourceValues — failed sources", () => {
     });
     // Failed source blocks default fallback — resolution stays unresolved.
     assert.notEqual(resolution.kind, "resolved");
+  });
+
+  test("later failed extraction shadows an earlier registered value", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env", "first"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: bareExtract,
+              preservesSourceValue: true,
+            },
+          },
+        },
+        state: createDependencySourceState(
+          { success: true, value: "prod" } as ValueParserResult<string>,
+          sourceId,
+        ),
+      },
+      {
+        path: ["env", "second"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: bareExtract,
+              preservesSourceValue: true,
+            },
+          },
+        },
+        state: createDependencySourceState(
+          { success: false, error: undefined! } as ValueParserResult<string>,
+          sourceId,
+        ),
+      },
+    ];
+
+    collectExplicitSourceValues(nodes, runtime);
+
+    assert.ok(!runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), undefined);
+    assert.ok(runtime.isSourceFailed(sourceId));
+    assert.notEqual(
+      runtime.resolveDependencies({
+        dependencyIds: [sourceId],
+        defaultValues: ["dev"],
+      }).kind,
+      "resolved",
+    );
+  });
+});
+
+describe("collectSourcesFromState", () => {
+  test("only applies excluded fields at the current object depth", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("shared");
+    let topLevelSharedReads = 0;
+    const topLevelShared = createDependencySourceState(
+      { success: true as const, value: "top" },
+      sourceId,
+    );
+    const state = {
+      get shared() {
+        topLevelSharedReads++;
+        return topLevelShared;
+      },
+      nested: {
+        shared: createDependencySourceState(
+          { success: true as const, value: "nested" },
+          sourceId,
+        ),
+      },
+    };
+
+    collectSourcesFromState(
+      state,
+      runtime,
+      new WeakSet<object>(),
+      new Set<PropertyKey>(["shared"]),
+    );
+
+    assert.equal(topLevelSharedReads, 0);
+    assert.ok(runtime.hasSource(sourceId));
+    assert.ok(!runtime.isSourceFailed(sourceId));
+    assert.equal(runtime.getSource(sourceId), "nested");
   });
 });
 
@@ -526,6 +774,36 @@ describe("fillMissingSourceDefaults", () => {
     assert.ok(!runtime.hasSource(sourceId));
   });
 
+  test("fills default for wrapped no-CLI source state", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const parser = {
+      initialState: undefined,
+      [unmatchedNonCliDependencySourceStateMarker]: true,
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          extractSourceValue: bareExtract,
+          preservesSourceValue: true,
+          getMissingSourceValue: () => ({
+            success: true as const,
+            value: "dev",
+          }),
+        },
+      },
+    };
+    const nodes = buildRuntimeNodesFromPairs(
+      [["env", parser]],
+      { env: [{ hasCliValue: false, cliState: undefined }] },
+    );
+
+    fillMissingSourceDefaults(nodes, runtime);
+
+    assert.ok(runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), "dev");
+  });
+
   test("handles throwing default thunks gracefully", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
@@ -552,6 +830,36 @@ describe("fillMissingSourceDefaults", () => {
     assert.equal(failures.length, 1);
     assert.equal(failures[0].sourceId, sourceId);
     assert.ok(!failures[0].error.success);
+  });
+
+  test("throws when sync default seeding receives a thenable", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            extractSourceValue: bareExtract,
+            preservesSourceValue: true,
+            getMissingSourceValue: () => ({ then() {} }) as never,
+          },
+        },
+      },
+      state: undefined,
+    }];
+
+    assert.throws(
+      () => fillMissingSourceDefaults(nodes, runtime),
+      {
+        name: "TypeError",
+        message:
+          /fillMissingSourceDefaults\(\) received an async getMissingSourceValue\(\) result/i,
+      },
+    );
+    assert.ok(!runtime.hasSource(sourceId));
   });
 });
 
@@ -609,6 +917,38 @@ describe("fillMissingSourceDefaultsAsync", () => {
     const failures = await fillMissingSourceDefaultsAsync(nodes, runtime);
     assert.equal(failures.length, 1);
     assert.ok(!runtime.hasSource(sourceId));
+  });
+
+  test("fills async default for wrapped no-CLI source state", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const parser = {
+      initialState: undefined,
+      [unmatchedNonCliDependencySourceStateMarker]: true,
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          extractSourceValue: bareExtract,
+          preservesSourceValue: true,
+          getMissingSourceValue: () =>
+            Promise.resolve({
+              success: true as const,
+              value: "async-dev",
+            }),
+        },
+      },
+    };
+    const nodes = buildRuntimeNodesFromPairs(
+      [["env", parser]],
+      { env: [{ hasCliValue: false, cliState: undefined }] },
+    );
+
+    const failures = await fillMissingSourceDefaultsAsync(nodes, runtime);
+
+    assert.equal(failures.length, 0);
+    assert.ok(runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), "async-dev");
   });
 });
 
@@ -697,6 +1037,37 @@ describe("replayDerivedParser", () => {
     if (result.success) {
       assert.equal(result.value, "parsed-snapshotted-dev");
     }
+  });
+
+  test("throws when sync replay receives a thenable", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    runtime.registerSource(sourceId, "prod", "cli");
+    const metadata: ParserDependencyMetadata = {
+      derived: {
+        kind: "derived",
+        dependencyIds: [sourceId],
+        replayParse: () => ({ then() {} }) as never,
+      },
+    };
+
+    assert.throws(
+      () =>
+        replayDerivedParser(
+          {
+            path: ["level"],
+            parser: { dependencyMetadata: metadata },
+            state: {},
+          },
+          "warn",
+          runtime,
+        ),
+      {
+        name: "TypeError",
+        message:
+          /replayDerivedParser\(\) received an async replayParse\(\) result/i,
+      },
+    );
   });
 });
 
@@ -790,6 +1161,37 @@ describe("extractRawInputFromState", () => {
 
   test("returns undefined for array with non-deferred element", () => {
     assert.equal(extractRawInputFromState(["foo"]), undefined);
+  });
+});
+
+describe("resolveStateWithRuntime", () => {
+  test("throws when sync deferred replay receives a thenable", () => {
+    const depId = Symbol("env");
+    const deferred = createDeferredParseState(
+      "warn",
+      {
+        [dependencyId]: depId,
+        [parseWithDependency]: () =>
+          ({ then() {} }) as PromiseLike<
+            ValueParserResult<unknown>
+          >,
+      } as never,
+      {
+        success: false,
+        error: message`pending callback failed`,
+      },
+    );
+    const runtime = createDependencyRuntimeContext();
+    runtime.registerSource(depId, "prod", "cli");
+
+    assert.throws(
+      () => resolveStateWithRuntime(deferred, runtime),
+      {
+        name: "TypeError",
+        message:
+          /resolveStateWithRuntime\(\) received an async parseWithDependency\(\) result/i,
+      },
+    );
   });
 });
 

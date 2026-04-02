@@ -29,6 +29,7 @@ import {
   flag,
   option,
 } from "@optique/core/primitives";
+import { dependency, deriveFromSync } from "@optique/core/dependency";
 import { getAnnotations, type ParseOptions } from "@optique/core/annotations";
 import type { Usage } from "@optique/core/usage";
 import { choice, integer, string } from "@optique/core/valueparser";
@@ -101,6 +102,52 @@ describe("parse", () => {
       assert.equal(result.value.verbose, true);
       assert.equal(result.value.port, 8080);
     }
+  });
+
+  it("should preserve flat trace when wrappers drop exec", () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = deriveFromSync({
+      metavar: "LEVEL",
+      dependencies: [mode] as const,
+      defaultValues: () => ["dev"] as const,
+      factory: (currentMode) =>
+        choice(
+          currentMode === "dev" ? ["debug"] as const : ["strict"] as const,
+        ),
+    });
+    const inner = object({
+      mode: option("--mode", mode),
+      level: option("--level", level),
+    });
+    const wrapper: Parser<
+      "sync",
+      { readonly mode: "dev" | "prod"; readonly level: string },
+      typeof inner.initialState
+    > = {
+      ...inner,
+      parse(context) {
+        const result = inner.parse(context);
+        if (!result.success) return result;
+        return {
+          success: true as const,
+          next: {
+            ...result.next,
+            exec: undefined,
+            trace: result.next.trace,
+          },
+          consumed: result.consumed,
+        };
+      },
+    };
+
+    const result = parse(wrapper, ["--mode", "prod", "--level", "strict"]);
+    assert.deepEqual(result, {
+      success: true,
+      value: {
+        mode: "prod",
+        level: "strict",
+      },
+    });
   });
 
   it("should handle options terminator", () => {
@@ -1039,6 +1086,350 @@ describe("Parser usage field", () => {
       if (mainCommand.usage[1].type === "command") {
         assert.equal(mainCommand.usage[1].name, "subcommand");
       }
+    });
+
+    it("should seed top-level suggest runtime through command wrappers", () => {
+      const dependencyId = Symbol("command-child-source");
+      const childParser = {
+        $mode: "sync" as const,
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "",
+        dependencyMetadata: {
+          source: {
+            kind: "source" as const,
+            sourceId: dependencyId,
+            preservesSourceValue: true,
+            extractSourceValue(state: unknown) {
+              if (typeof state !== "string" || state.length === 0) {
+                return undefined;
+              }
+              return { success: true as const, value: state };
+            },
+          },
+        },
+        parse(context: {
+          readonly buffer: readonly string[];
+          readonly state: string;
+          readonly optionsTerminated: boolean;
+          readonly usage: Usage;
+        }) {
+          const token = context.buffer[0];
+          if (token == null) {
+            return {
+              success: false as const,
+              consumed: 0,
+              error: message`Expected value.`,
+            };
+          }
+          return {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: token,
+            },
+            consumed: [token],
+          };
+        },
+        complete(state: string) {
+          return { success: true as const, value: state };
+        },
+        *suggest(context: {
+          readonly dependencyRegistry?: {
+            get(key: symbol): unknown;
+          };
+        }) {
+          if (context.dependencyRegistry?.get(dependencyId) === "prod") {
+            yield { kind: "literal" as const, text: "prod-only" };
+          }
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      } as const satisfies Parser<"sync", string, string>;
+      const parser = command("deploy", childParser);
+
+      const suggestions = suggestSync(parser, ["deploy", "prod", ""]);
+
+      assert.deepEqual(suggestions, [{
+        kind: "literal",
+        text: "prod-only",
+      }]);
+    });
+
+    it("should seed top-level suggest runtime through async command wrappers", async () => {
+      const dependencyId = Symbol("async-command-child-source");
+      const childParser = {
+        $mode: "async" as const,
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "",
+        dependencyMetadata: {
+          source: {
+            kind: "source" as const,
+            sourceId: dependencyId,
+            preservesSourceValue: true,
+            extractSourceValue(state: unknown) {
+              if (typeof state !== "string" || state.length === 0) {
+                return undefined;
+              }
+              return Promise.resolve({
+                success: true as const,
+                value: state,
+              });
+            },
+          },
+        },
+        parse(context: {
+          readonly buffer: readonly string[];
+          readonly state: string;
+          readonly optionsTerminated: boolean;
+          readonly usage: Usage;
+        }) {
+          const token = context.buffer[0];
+          if (token == null) {
+            return Promise.resolve({
+              success: false as const,
+              consumed: 0,
+              error: message`Expected value.`,
+            });
+          }
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: token,
+            },
+            consumed: [token],
+          });
+        },
+        complete(state: string) {
+          return Promise.resolve({ success: true as const, value: state });
+        },
+        async *suggest(context: {
+          readonly dependencyRegistry?: {
+            get(key: symbol): unknown;
+          };
+        }) {
+          if (context.dependencyRegistry?.get(dependencyId) === "prod") {
+            yield { kind: "literal" as const, text: "prod-only" };
+          }
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      } as const satisfies Parser<"async", string, string>;
+      const parser = command("deploy", childParser);
+
+      const suggestions = await suggestAsync(parser, ["deploy", "prod", ""]);
+
+      assert.deepEqual(suggestions, [{
+        kind: "literal",
+        text: "prod-only",
+      }]);
+    });
+
+    it("should seed top-level suggest runtime through or() wrappers", () => {
+      const prodId = Symbol("or-prod-source");
+      const otherId = Symbol("or-other-source");
+      const prodBranch = {
+        $mode: "sync" as const,
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "",
+        dependencyMetadata: {
+          source: {
+            kind: "source" as const,
+            sourceId: prodId,
+            preservesSourceValue: true,
+            extractSourceValue(state: unknown) {
+              if (typeof state !== "string" || state.length === 0) {
+                return undefined;
+              }
+              return { success: true as const, value: state };
+            },
+          },
+        },
+        parse(context: {
+          readonly buffer: readonly string[];
+          readonly state: string;
+          readonly optionsTerminated: boolean;
+          readonly usage: Usage;
+        }) {
+          const token = context.buffer[0];
+          if (token == null) {
+            return {
+              success: false as const,
+              consumed: 0,
+              error: message`Expected value.`,
+            };
+          }
+          return {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: token,
+            },
+            consumed: [token],
+          };
+        },
+        complete(state: string) {
+          return { success: true as const, value: state };
+        },
+        *suggest(context: {
+          readonly dependencyRegistry?: {
+            get(key: symbol): unknown;
+          };
+        }) {
+          if (context.dependencyRegistry?.get(prodId) === "prod") {
+            yield { kind: "literal" as const, text: "prod-only" };
+          }
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      } as const satisfies Parser<"sync", string, string>;
+      const otherBranch = {
+        ...prodBranch,
+        dependencyMetadata: {
+          source: {
+            ...prodBranch.dependencyMetadata.source,
+            sourceId: otherId,
+          },
+        },
+        parse(context: Parameters<typeof prodBranch.parse>[0]) {
+          if (context.buffer[0] === "prod") {
+            return {
+              success: false as const,
+              consumed: 0,
+              error: message`Expected non-prod control branch value.`,
+            };
+          }
+          return prodBranch.parse(context);
+        },
+        *suggest() {},
+      } as const satisfies Parser<"sync", string, string>;
+      const parser = or(prodBranch, otherBranch);
+
+      const suggestions = suggestSync(parser, ["prod", ""]);
+
+      assert.deepEqual(suggestions, [{
+        kind: "literal",
+        text: "prod-only",
+      }]);
+    });
+
+    it("should seed top-level suggest runtime through async longestMatch() wrappers", async () => {
+      const prodId = Symbol("longest-prod-source");
+      const otherId = Symbol("longest-other-source");
+      const prodBranch = {
+        $mode: "async" as const,
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "",
+        dependencyMetadata: {
+          source: {
+            kind: "source" as const,
+            sourceId: prodId,
+            preservesSourceValue: true,
+            extractSourceValue(state: unknown) {
+              if (typeof state !== "string" || state.length === 0) {
+                return undefined;
+              }
+              return Promise.resolve({
+                success: true as const,
+                value: state,
+              });
+            },
+          },
+        },
+        parse(context: {
+          readonly buffer: readonly string[];
+          readonly state: string;
+          readonly optionsTerminated: boolean;
+          readonly usage: Usage;
+        }) {
+          const token = context.buffer[0];
+          if (token == null) {
+            return Promise.resolve({
+              success: false as const,
+              consumed: 0,
+              error: message`Expected value.`,
+            });
+          }
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: token,
+            },
+            consumed: [token],
+          });
+        },
+        complete(state: string) {
+          return Promise.resolve({ success: true as const, value: state });
+        },
+        async *suggest(context: {
+          readonly dependencyRegistry?: {
+            get(key: symbol): unknown;
+          };
+        }) {
+          if (context.dependencyRegistry?.get(prodId) === "prod") {
+            yield { kind: "literal" as const, text: "prod-only" };
+          }
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      } as const satisfies Parser<"async", string, string>;
+      const otherBranch = {
+        ...prodBranch,
+        dependencyMetadata: {
+          source: {
+            ...prodBranch.dependencyMetadata.source,
+            sourceId: otherId,
+          },
+        },
+        parse(context: Parameters<typeof prodBranch.parse>[0]) {
+          if (context.buffer[0] === "prod") {
+            return Promise.resolve({
+              success: false as const,
+              consumed: 0,
+              error: message`Expected non-prod control branch value.`,
+            });
+          }
+          return prodBranch.parse(context);
+        },
+        async *suggest() {},
+      } as const satisfies Parser<"async", string, string>;
+      const parser = longestMatch(prodBranch, otherBranch);
+
+      const suggestions = await suggestAsync(parser, ["prod", ""]);
+
+      assert.deepEqual(suggestions, [{
+        kind: "literal",
+        text: "prod-only",
+      }]);
     });
   });
 });

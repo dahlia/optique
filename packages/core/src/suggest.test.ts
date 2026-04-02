@@ -849,7 +849,7 @@ describe("suggest function", () => {
     });
 
     it(
-      "should suggest values based on withDefault() source value with async map()",
+      "should not treat mapped defaults as dependency source values",
       async () => {
         const mode = dependency(asyncChoice(["dev", "prod"] as const));
         const level = mode.derive({
@@ -874,10 +874,10 @@ describe("suggest function", () => {
           level: option("--level", level),
         });
 
-        const result = await suggestAsync(parser, ["--level", "s"]);
+        const result = await suggestAsync(parser, ["--level", "d"]);
         deepStrictEqual(
           result.map(extractText),
-          ["silent", "strict"],
+          ["debug"],
         );
       },
     );

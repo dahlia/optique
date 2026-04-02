@@ -31,6 +31,15 @@ export interface TraceEntry {
   /** The preliminary parse result using default dependency values. */
   readonly preliminaryResult?: ValueParserResult<unknown>;
 
+  /**
+   * Snapshotted default dependency values captured during parse.
+   *
+   * Present when a derived parser snapshots default dependency values during
+   * parse, including both `derive()` and `deriveFrom()` parsers.
+   * This avoids re-evaluating dynamic default thunks during replay.
+   */
+  readonly defaultDependencyValues?: readonly unknown[];
+
   /** The option names that matched (e.g., `["--env", "-e"]`). */
   readonly optionNames?: readonly string[];
 

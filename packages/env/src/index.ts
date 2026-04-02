@@ -1,4 +1,9 @@
-import { annotationKey, getAnnotations } from "@optique/core/annotations";
+import {
+  annotationKey,
+  getAnnotations,
+  injectAnnotations,
+  isInjectedAnnotationWrapper,
+} from "@optique/core/annotations";
 import type { Annotations, SourceContext } from "@optique/core/context";
 import { envVar, type Message, message, valueSet } from "@optique/core/message";
 import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
@@ -9,6 +14,9 @@ import type {
   Parser,
   ParserResult,
   Result,
+} from "@optique/core/parser";
+import {
+  unmatchedNonCliDependencySourceStateMarker,
 } from "@optique/core/parser";
 import {
   ensureNonEmptyString,
@@ -29,6 +37,10 @@ interface EnvSourceData {
   readonly prefix: string;
   readonly source: EnvSource;
 }
+
+const inheritParentAnnotationsKey = Symbol.for(
+  "@optique/core/inheritParentAnnotations",
+);
 
 /**
  * Context for environment-variable-based fallback values.
@@ -279,23 +291,35 @@ export function bindEnv<
 
   const deferPromptUntilConfigResolves = parser.shouldDeferCompletion;
 
-  // Do NOT propagate wrappedDependencySourceMarker to the returned parser.
-  // Unlike withDefault(), bindEnv() cannot resolve dependencies from a
-  // synthetic pending state (it needs env annotations).  Propagating the
-  // marker would cause optional() to delegate into bindEnv with an
-  // unannotated state, surfacing "Missing env" errors instead of undefined.
+  // bindEnv() resolves fallbacks through env annotations at completion time,
+  // not through synthetic dependency-wrapper states.  Keeping the bound
+  // parser isolated from those legacy markers prevents optional()/withDefault()
+  // wrappers from invoking it without the annotation context it requires.
 
   const boundParser: Parser<M, TValue, TState> = {
     $mode: parser.$mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
+    [unmatchedNonCliDependencySourceStateMarker]: true,
     usage: options.default !== undefined
       ? [{ type: "optional", terms: parser.usage }]
       : parser.usage,
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
+    getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
+      const innerState = isEnvBindState(state)
+        ? (state.cliState === undefined
+          ? parser.initialState
+          : state.cliState as TState)
+        : state;
+      const innerNodes = parser.getSuggestRuntimeNodes?.(innerState, path) ??
+        [];
+      return boundParser.dependencyMetadata?.source != null
+        ? [...innerNodes, { path, parser: boundParser, state }]
+        : innerNodes;
+    },
 
     parse: (context) => {
       const annotations = getAnnotations(context.state);
@@ -374,7 +398,11 @@ export function bindEnv<
         options,
         parser.$mode,
         parser,
-        isEnvBindState(state) ? state.cliState : undefined,
+        isEnvBindState(state)
+          ? state.cliState
+          : isInjectedAnnotationWrapper(state)
+          ? undefined
+          : state,
         exec,
       );
     },
@@ -393,6 +421,10 @@ export function bindEnv<
       return parser.getDocFragments(state, defaultValue);
     },
   };
+  Object.defineProperty(boundParser, inheritParentAnnotationsKey, {
+    value: true,
+    configurable: true,
+  });
   // Lazily forward placeholder from inner parser to avoid eagerly
   // evaluating derived value parser factories at construction time.
   if ("placeholder" in parser) {
@@ -409,6 +441,61 @@ export function bindEnv<
   if (typeof parser.normalizeValue === "function") {
     Object.defineProperty(boundParser, "normalizeValue", {
       value: parser.normalizeValue.bind(parser),
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  const dependencyMetadata = (
+    parser as Parser<M, TValue, TState> & {
+      readonly dependencyMetadata?: {
+        readonly source?: {
+          readonly extractSourceValue: (
+            state: unknown,
+          ) =>
+            | ValueParserResult<unknown>
+            | Promise<ValueParserResult<unknown> | undefined>
+            | undefined;
+        };
+      };
+    }
+  ).dependencyMetadata;
+  if (dependencyMetadata != null) {
+    const sourceMetadata = dependencyMetadata.source;
+    Object.defineProperty(boundParser, "dependencyMetadata", {
+      value: sourceMetadata == null ? dependencyMetadata : {
+        ...dependencyMetadata,
+        source: {
+          ...sourceMetadata,
+          extractSourceValue: (state: unknown) => {
+            if (!isEnvBindState(state)) {
+              if (sourceMetadata.preservesSourceValue) {
+                return getEnvSourceValue(
+                  state,
+                  options,
+                  state,
+                  sourceMetadata.extractSourceValue,
+                );
+              }
+              return sourceMetadata.extractSourceValue(state);
+            }
+            if (state.hasCliValue) {
+              return sourceMetadata.extractSourceValue(
+                state.cliState,
+              );
+            }
+            const innerState = state.cliState ?? state;
+            if (!sourceMetadata.preservesSourceValue) {
+              return sourceMetadata.extractSourceValue(innerState);
+            }
+            return getEnvSourceValue(
+              state,
+              options,
+              innerState,
+              sourceMetadata.extractSourceValue,
+            );
+          },
+        },
+      },
       configurable: true,
       enumerable: false,
     });
@@ -468,7 +555,12 @@ function getEnvOrDefault<M extends Mode, TValue>(
   // environment variable" when the env var is unset, even if the config
   // layer has a value.
   if (innerParser != null) {
-    const completeState = innerState ?? innerParser.initialState;
+    const completeState = innerState ??
+      (annotations != null &&
+          innerParser.initialState == null &&
+          Reflect.get(innerParser, inheritParentAnnotationsKey) === true
+        ? injectAnnotations(innerParser.initialState, annotations)
+        : innerParser.initialState);
     return wrapForMode(mode, innerParser.complete(completeState, exec));
   }
 
@@ -476,6 +568,74 @@ function getEnvOrDefault<M extends Mode, TValue>(
     success: false as const,
     error: message`Missing required environment variable: ${envVar(fullKey)}`,
   });
+}
+
+/**
+ * Resolves an env-backed dependency source with env and default fallbacks.
+ *
+ * This first checks annotations or the active env registry for the bound
+ * variable. If no env-backed value is available, it falls back to
+ * `options.default` and finally delegates to the wrapped parser's source
+ * extractor.
+ *
+ * @param state The wrapper state, which may carry env annotations.
+ * @param options The binding options with lookup and default settings.
+ * @param innerState The unwrapped inner state for delegated extraction.
+ * @param extractInnerSourceValue The wrapped parser's source extractor.
+ * @returns The resolved source value, an async source value, or `undefined`.
+ * @throws {Error} Propagates errors thrown by the env source callback
+ *                 (`sourceData.source(fullKey)`).
+ * @throws {Error} Propagates errors thrown by `options.parser.parse(rawValue)`.
+ */
+function getEnvSourceValue<M extends Mode, TValue>(
+  state: unknown,
+  options: BindEnvOptions<M, TValue>,
+  innerState: unknown,
+  extractInnerSourceValue: (
+    state: unknown,
+  ) =>
+    | ValueParserResult<unknown>
+    | Promise<ValueParserResult<unknown> | undefined>
+    | undefined,
+):
+  | ValueParserResult<unknown>
+  | Promise<ValueParserResult<unknown> | undefined>
+  | undefined {
+  const annotations = getAnnotations(state);
+  const sourceData =
+    (annotations?.[options.context.id] as EnvSourceData | undefined) ??
+      getActiveEnvSource(options.context.id);
+
+  const fullKey = `${
+    sourceData?.prefix ?? options.context.prefix
+  }${options.key}`;
+  const rawValue = sourceData?.source(fullKey);
+  if (rawValue !== undefined) {
+    if (typeof rawValue !== "string") {
+      const type = rawValue === null
+        ? "null"
+        : Array.isArray(rawValue)
+        ? "array"
+        : typeof rawValue;
+      return {
+        success: false as const,
+        error: message`Environment variable ${
+          envVar(fullKey)
+        } must be a string, but got: ${type}.`,
+      };
+    }
+    const parsed = options.parser.parse(rawValue);
+    return parsed;
+  }
+
+  if (options.default !== undefined) {
+    return {
+      success: true as const,
+      value: options.default,
+    };
+  }
+
+  return extractInnerSourceValue(innerState);
 }
 
 /**

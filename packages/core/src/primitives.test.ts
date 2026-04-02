@@ -32,9 +32,6 @@ import {
   type ValueParserResult,
 } from "@optique/core/valueparser";
 import {
-  createDeferredParseState,
-  createDependencySourceState,
-  createPendingDependencySourceState,
   dependency,
   dependencyId,
   DependencyRegistry,
@@ -42,6 +39,7 @@ import {
   deriveFromSync,
 } from "@optique/core/dependency";
 import { annotationKey } from "@optique/core/annotations";
+import { extractDependencyMetadata } from "./dependency-metadata.ts";
 import {
   type InferValue,
   parse,
@@ -666,11 +664,11 @@ describe("option", () => {
       assert.deepEqual(suggestions, [{ kind: "literal", text: "-v" }]);
     });
 
-    it("should suggest value candidates on empty buffer with undefined state", () => {
+    it("should suggest value candidates on empty buffer", () => {
       const parser = option("--env", choice(["dev", "prod"]));
       const suggestions = Array.from(parser.suggest({
         buffer: [],
-        state: undefined,
+        state: parser.initialState,
         usage: parser.usage,
         optionsTerminated: false,
       }, "p"));
@@ -1250,6 +1248,30 @@ describe("option() error customization", () => {
     if (!result.success) {
       const errorMessage = formatMessage(result.error);
       assert.ok(errorMessage.includes("Invalid port number:"));
+    }
+  });
+
+  it("should keep missing and invalidValue completion paths distinct", () => {
+    const parser = option("--port", integer(), {
+      errors: {
+        missing: message`Port is required.`,
+        invalidValue: () => message`Port is invalid.`,
+      },
+    });
+
+    const result = parser.complete(parser.initialState);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(result.error, message`Port is required.`);
+    }
+
+    const invalidResult = parser.complete({
+      success: false,
+      error: message`bad`,
+    });
+    assert.ok(!invalidResult.success);
+    if (!invalidResult.success) {
+      assert.deepEqual(invalidResult.error, message`Port is invalid.`);
     }
   });
 
@@ -2025,6 +2047,154 @@ describe("primitives additional branch coverage", () => {
     }
   });
 
+  it("option parse rejects instead of throwing when async value parsing throws synchronously", async () => {
+    const throwingParser: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "VALUE",
+      placeholder: "",
+      parse() {
+        throw new TypeError("Synchronous option parse failure.");
+      },
+      format(value) {
+        return value;
+      },
+    };
+    const parser = option("--name", throwingParser);
+    let result: ReturnType<typeof parser.parse> | undefined;
+    assert.doesNotThrow(() => {
+      result = parser.parse({
+        buffer: ["--name", "alice"],
+        state: undefined,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+    });
+    assert.ok(result instanceof Promise);
+    await assert.rejects(result, {
+      name: "TypeError",
+      message: "Synchronous option parse failure.",
+    });
+  });
+
+  it("argument parse rejects instead of throwing when async value parsing throws synchronously", async () => {
+    const throwingParser: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "VALUE",
+      placeholder: "",
+      parse() {
+        throw new TypeError("Synchronous argument parse failure.");
+      },
+      format(value) {
+        return value;
+      },
+    };
+    const parser = argument(throwingParser);
+    let result: ReturnType<typeof parser.parse> | undefined;
+    assert.doesNotThrow(() => {
+      result = parser.parse({
+        buffer: ["alice"],
+        state: undefined,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+    });
+    assert.ok(result instanceof Promise);
+    await assert.rejects(result, {
+      name: "TypeError",
+      message: "Synchronous argument parse failure.",
+    });
+  });
+
+  it("command parse rejects instead of throwing when async child parsing throws synchronously", async () => {
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse() {
+        throw new TypeError("Synchronous command parse failure.");
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "ok" });
+      },
+      suggest: async function* () {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    } as const satisfies Parser<"async", string, undefined>;
+    const parser = command("deploy", inner);
+    let result: ReturnType<typeof parser.parse> | undefined;
+    assert.doesNotThrow(() => {
+      result = parser.parse({
+        buffer: [],
+        state: ["matched", "deploy"],
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+    });
+    assert.ok(result instanceof Promise);
+    await assert.rejects(result, {
+      name: "TypeError",
+      message: "Synchronous command parse failure.",
+    });
+  });
+
+  it("command complete rejects instead of throwing when async child completion throws synchronously", async () => {
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "initial",
+      parse() {
+        return Promise.resolve({
+          success: true as const,
+          next: {
+            buffer: [] as readonly string[],
+            state: "parsed",
+            optionsTerminated: false,
+            usage: [] as const,
+          },
+          consumed: [] as const,
+        });
+      },
+      complete() {
+        throw new TypeError("Synchronous command complete failure.");
+      },
+      suggest: async function* () {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    } as const satisfies Parser<"async", string, string>;
+    const parser = command("deploy", inner);
+    let matchedResult: ReturnType<typeof parser.complete> | undefined;
+    assert.doesNotThrow(() => {
+      matchedResult = parser.complete(["matched", "deploy"]);
+    });
+    assert.ok(matchedResult instanceof Promise);
+    await assert.rejects(matchedResult, {
+      name: "TypeError",
+      message: "Synchronous command complete failure.",
+    });
+
+    let parsingResult: ReturnType<typeof parser.complete> | undefined;
+    assert.doesNotThrow(() => {
+      parsingResult = parser.complete(["parsing", "parsed"]);
+    });
+    assert.ok(parsingResult instanceof Promise);
+    await assert.rejects(parsingResult, {
+      name: "TypeError",
+      message: "Synchronous command complete failure.",
+    });
+  });
+
   it("option duplicate error function handles direct and joined forms", () => {
     const parser = option("--count", integer(), {
       errors: {
@@ -2112,112 +2282,43 @@ describe("primitives additional branch coverage", () => {
     }
   });
 
-  it("option complete covers deferred success and custom invalid branches", () => {
-    const dep = dependency(string({ metavar: "MODE" }));
+  it("option complete handles plain success and custom invalid branches", () => {
     const parser = option("--port", integer(), {
       errors: {
         invalidValue: (error) => message`invalid ${error}`,
       },
     });
 
-    const deferredSuccess = parser.complete(
-      createDeferredParseState(
-        "42",
-        deriveFromSync({
-          metavar: "INT",
-          dependencies: [dep] as const,
-          defaultValues: () => ["10"] as const,
-          factory: () => integer(),
-        }),
-        { success: true, value: 42 },
-      ) as unknown as Parameters<typeof parser.complete>[0],
-    );
-    assert.ok(deferredSuccess.success);
-    if (deferredSuccess.success) {
-      assert.equal(deferredSuccess.value, 42);
+    const plainSuccess = parser.complete({ success: true, value: 42 });
+    assert.ok(plainSuccess.success);
+    if (plainSuccess.success) {
+      assert.equal(plainSuccess.value, 42);
     }
 
-    const deferredFailure = parser.complete(
-      createDeferredParseState(
-        "x",
-        deriveFromSync({
-          metavar: "INT",
-          dependencies: [dep] as const,
-          defaultValues: () => ["10"] as const,
-          factory: () => integer(),
-        }),
-        { success: false, error: message`bad-int` },
-      ) as unknown as Parameters<typeof parser.complete>[0],
-    );
-    assert.ok(!deferredFailure.success);
-    if (!deferredFailure.success) {
-      assert.equal(formatMessage(deferredFailure.error), "invalid bad-int");
-    }
-
-    const dependencyFailure = parser.complete(
-      createDependencySourceState(
-        { success: false, error: message`dep-fail` },
-        dep[dependencyId],
-      ) as unknown as Parameters<typeof parser.complete>[0],
-    );
-    assert.ok(!dependencyFailure.success);
-    if (!dependencyFailure.success) {
-      assert.equal(formatMessage(dependencyFailure.error), "invalid dep-fail");
-    }
-
-    const plainFailure = parser.complete({
+    const failure = parser.complete({
       success: false,
-      error: message`plain-fail`,
+      error: message`bad-int`,
     });
-    assert.ok(!plainFailure.success);
-    if (!plainFailure.success) {
-      assert.equal(formatMessage(plainFailure.error), "invalid plain-fail");
+    assert.ok(!failure.success);
+    if (!failure.success) {
+      assert.equal(formatMessage(failure.error), "invalid bad-int");
     }
   });
 
-  it("argument complete covers custom invalid branches", () => {
-    const dep = dependency(string({ metavar: "MODE" }));
+  it("argument complete formats plain failures with custom invalid branches", () => {
     const parser = argument(integer(), {
       errors: {
         invalidValue: (error) => message`bad ${error}`,
       },
     });
 
-    const deferredFailure = parser.complete(
-      createDeferredParseState(
-        "oops",
-        deriveFromSync({
-          metavar: "INT",
-          dependencies: [dep] as const,
-          defaultValues: () => ["10"] as const,
-          factory: () => integer(),
-        }),
-        { success: false, error: message`deferred-fail` },
-      ) as unknown as Parameters<typeof parser.complete>[0],
-    );
-    assert.ok(!deferredFailure.success);
-    if (!deferredFailure.success) {
-      assert.equal(formatMessage(deferredFailure.error), "bad deferred-fail");
-    }
-
-    const dependencyFailure = parser.complete(
-      createDependencySourceState(
-        { success: false, error: message`dep-fail` },
-        dep[dependencyId],
-      ) as unknown as Parameters<typeof parser.complete>[0],
-    );
-    assert.ok(!dependencyFailure.success);
-    if (!dependencyFailure.success) {
-      assert.equal(formatMessage(dependencyFailure.error), "bad dep-fail");
-    }
-
-    const plainFailure = parser.complete({
+    const failure = parser.complete({
       success: false,
       error: message`plain-fail`,
     });
-    assert.ok(!plainFailure.success);
-    if (!plainFailure.success) {
-      assert.equal(formatMessage(plainFailure.error), "bad plain-fail");
+    assert.ok(!failure.success);
+    if (!failure.success) {
+      assert.equal(formatMessage(failure.error), "bad plain-fail");
     }
   });
 });
@@ -2286,6 +2387,26 @@ describe("argument() error customization", () => {
 });
 
 describe("command", () => {
+  function createRegistry(
+    entries: readonly (readonly [symbol, unknown])[] = [],
+  ): import("./registry-types.ts").DependencyRegistryLike {
+    const map = new Map<symbol, unknown>(entries);
+    return {
+      set<T>(id: symbol, value: T): void {
+        map.set(id, value);
+      },
+      get<T>(id: symbol): T | undefined {
+        return map.get(id) as T | undefined;
+      },
+      has(id: symbol): boolean {
+        return map.has(id);
+      },
+      clone() {
+        return createRegistry([...map.entries()]);
+      },
+    };
+  }
+
   it("should create a parser that matches a subcommand and applies inner parser", () => {
     const showParser = command(
       "show",
@@ -2930,6 +3051,21 @@ describe("command", () => {
     }
   });
 
+  it("should suggest nested child commands after the parent matches", () => {
+    const parser = command(
+      "root",
+      command("child", object({ foo: flag("--foo") })),
+    );
+
+    const result = parse(parser, ["root", "chil"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Expected command `child`");
+      assertErrorIncludes(result.error, "Did you mean");
+      assertErrorIncludes(result.error, "`child`");
+    }
+  });
+
   it("should not suggest nested sub-commands in or() sibling context", () => {
     // or(command("file", or(add, remove)), command("other", ...))
     // When "add" is given, "add" should not be suggested (it's a child of "file").
@@ -2985,6 +3121,235 @@ describe("command", () => {
       assert.strictEqual(resultWithOptions.value.cwd, "./");
       assert.strictEqual(resultWithOptions.value.key, "foo");
     }
+  });
+
+  it("should preserve the fresher dependency registry during command parse", () => {
+    const dependencyId = Symbol("command-parse-dependency");
+    const staleRegistry = createRegistry();
+    const freshRegistry = createRegistry([[dependencyId, "fresh"]]);
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return context.dependencyRegistry?.has(dependencyId)
+          ? { success: true as const, next: context, consumed: [] }
+          : {
+            success: false as const,
+            consumed: 0,
+            error: message`missing dependency`,
+          };
+      },
+      complete() {
+        return { success: true as const, value: "ok" };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, undefined>;
+    const parser = command("deploy", inner);
+
+    const result = parser.parse({
+      buffer: [],
+      state: ["matched", "deploy"],
+      optionsTerminated: false,
+      usage: parser.usage,
+      exec: {
+        usage: parser.usage,
+        phase: "parse",
+        path: ["root"],
+        trace: undefined,
+        dependencyRegistry: staleRegistry,
+      },
+      dependencyRegistry: freshRegistry,
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      const childRegistry = result.next.dependencyRegistry;
+      assert.ok(childRegistry);
+      assert.notStrictEqual(childRegistry, staleRegistry);
+      assert.ok(childRegistry.has(dependencyId));
+      assert.strictEqual(result.next.exec?.dependencyRegistry, childRegistry);
+    }
+  });
+
+  it("should preserve the fresher dependency registry during command suggest", () => {
+    let childRegistry: ParserContext<undefined>["dependencyRegistry"];
+    let childExecRegistry: ParserContext<undefined>["exec"];
+    const dependencyId = Symbol("command-suggest-dependency");
+    const staleRegistry = createRegistry();
+    const freshRegistry = createRegistry([[dependencyId, "fresh"]]);
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: "ok" };
+      },
+      suggest: function* (context: ParserContext<undefined>) {
+        childRegistry = context.dependencyRegistry;
+        childExecRegistry = context.exec;
+        if (context.dependencyRegistry?.has(dependencyId)) {
+          yield { kind: "literal" as const, text: "fresh" };
+        }
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, undefined>;
+    const parser = command("deploy", inner);
+
+    const suggestions = [...parser.suggest({
+      buffer: [],
+      state: ["matched", "deploy"],
+      optionsTerminated: false,
+      usage: parser.usage,
+      exec: {
+        usage: parser.usage,
+        phase: "suggest",
+        path: ["root"],
+        trace: undefined,
+        dependencyRegistry: staleRegistry,
+      },
+      dependencyRegistry: freshRegistry,
+    }, "")];
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "fresh" }]);
+    assert.ok(childRegistry);
+    assert.notStrictEqual(childRegistry, staleRegistry);
+    assert.ok(childRegistry.has(dependencyId));
+    assert.strictEqual(childExecRegistry?.dependencyRegistry, childRegistry);
+  });
+
+  it("should forward synthetic sync parse exec into command complete", () => {
+    const dependencyId = Symbol("command-complete-dependency");
+    const staleRegistry = createRegistry();
+    const freshRegistry = createRegistry([[dependencyId, "fresh"]]);
+    let completeExec: ParserContext<undefined>["exec"];
+    const inner = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            exec: context.exec == null
+              ? undefined
+              : { ...context.exec, dependencyRegistry: freshRegistry },
+            dependencyRegistry: freshRegistry,
+          },
+          consumed: [],
+        };
+      },
+      complete(_state: undefined, exec?: ParserContext<undefined>["exec"]) {
+        completeExec = exec;
+        return exec?.dependencyRegistry?.has(dependencyId)
+          ? { success: true as const, value: "ok" }
+          : {
+            success: false as const,
+            error: message`Missing forwarded exec.`,
+          };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"sync", string, undefined>;
+    const parser = command("deploy", inner);
+
+    const result = parser.complete(
+      ["matched", "deploy"],
+      {
+        usage: parser.usage,
+        phase: "complete",
+        path: ["root"],
+        trace: undefined,
+        dependencyRegistry: staleRegistry,
+      },
+    );
+
+    assert.ok(result.success);
+    assert.strictEqual(completeExec?.dependencyRegistry, freshRegistry);
+  });
+
+  it("should forward synthetic async parse exec into command complete", async () => {
+    const dependencyId = Symbol("command-complete-async-dependency");
+    const staleRegistry = createRegistry();
+    const freshRegistry = createRegistry([[dependencyId, "fresh"]]);
+    let completeExec: ParserContext<undefined>["exec"];
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return Promise.resolve({
+          success: true as const,
+          next: {
+            ...context,
+            exec: context.exec == null
+              ? undefined
+              : { ...context.exec, dependencyRegistry: freshRegistry },
+            dependencyRegistry: freshRegistry,
+          },
+          consumed: [],
+        });
+      },
+      complete(_state: undefined, exec?: ParserContext<undefined>["exec"]) {
+        completeExec = exec;
+        return Promise.resolve(
+          exec?.dependencyRegistry?.has(dependencyId)
+            ? { success: true as const, value: "ok" }
+            : {
+              success: false as const,
+              error: message`Missing forwarded exec.`,
+            },
+        );
+      },
+      suggest() {
+        return {
+          async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+            yield* [];
+          },
+        };
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<"async", string, undefined>;
+    const parser = command("deploy", inner);
+
+    const result = await parser.complete(
+      ["matched", "deploy"],
+      {
+        usage: parser.usage,
+        phase: "complete",
+        path: ["root"],
+        trace: undefined,
+        dependencyRegistry: staleRegistry,
+      },
+    );
+
+    assert.ok(result.success);
+    assert.strictEqual(completeExec?.dependencyRegistry, freshRegistry);
   });
 });
 
@@ -5828,43 +6193,31 @@ describe("branch coverage: primitives edge cases", () => {
     const missing = withMissingFn.complete(undefined);
     assert.ok(!missing.success);
 
-    const depId = Symbol("dep");
     const withPending = option("--mode", string({ metavar: "MODE" }), {
       errors: { missing: message`mode required` },
     });
-    const pending = createPendingDependencySourceState(depId);
     const completeWithPending = withPending.complete as (
       state: unknown,
     ) => ReturnType<typeof withPending.complete>;
-    const pendingResult = await completeWithPending(pending);
+    const pendingResult = await completeWithPending(undefined);
     assert.ok(!pendingResult.success);
 
-    const dep = dependency(string({ metavar: "MODE" }));
-    const derived = deriveFromSync({
-      metavar: "TARGET",
-      dependencies: [dep] as const,
-      defaultValues: () => ["dev"] as const,
-      factory: (_mode: string) => string({ metavar: "TARGET" }),
-    });
-    const withDeferred = option("--target", derived, {
+    const withDeferred = option("--target", string({ metavar: "TARGET" }), {
       errors: { invalidValue: (err) => message`invalid ${err}` },
     });
-    const deferredState = createDeferredParseState(
-      "bad",
-      derived,
-      { success: false, error: message`bad value` },
-    );
     const completeWithDeferred = withDeferred.complete as (
       state: unknown,
     ) => ReturnType<typeof withDeferred.complete>;
-    const deferredResult = await completeWithDeferred(deferredState);
+    const deferredResult = await completeWithDeferred({
+      success: false,
+      error: message`bad value`,
+    });
     assert.ok(!deferredResult.success);
 
-    const depFailState = createDependencySourceState(
-      { success: false, error: message`source failed` },
-      depId,
-    );
-    const depFail = await completeWithPending(depFailState);
+    const depFail = await completeWithPending({
+      success: false,
+      error: message`source failed`,
+    });
     assert.ok(!depFail.success);
 
     const plainFailure = await withDeferred.complete({
@@ -5888,39 +6241,25 @@ describe("branch coverage: primitives edge cases", () => {
   });
 
   it("argument complete/suggest: covers dependency and async branches", async () => {
-    const dep = dependency(string({ metavar: "MODE" }));
-    const derived = deriveFromSync({
-      metavar: "PATH",
-      dependencies: [dep] as const,
-      defaultValues: () => ["dev"] as const,
-      factory: (_mode: string) => string({ metavar: "PATH" }),
-    });
-    const arg = argument(derived, {
+    const arg = argument(string({ metavar: "PATH" }), {
       errors: { invalidValue: (err) => message`invalid ${err}` },
     });
-    const deferredState = createDeferredParseState(
-      "bad",
-      derived,
-      { success: false, error: message`bad arg` },
-    );
     const completeArg = arg.complete as (
       state: unknown,
     ) => ReturnType<typeof arg.complete>;
-    const deferredResult = await completeArg(deferredState);
+    const deferredResult = await completeArg({
+      success: false,
+      error: message`bad arg`,
+    });
     assert.ok(!deferredResult.success);
 
-    const depSuccessState = createDependencySourceState(
-      { success: true, value: "ok" },
-      dep[dependencyId],
-    );
-    const depSuccess = await completeArg(depSuccessState);
+    const depSuccess = await completeArg({ success: true, value: "ok" });
     assert.ok(depSuccess.success);
 
-    const depFailState = createDependencySourceState(
-      { success: false, error: message`dep fail` },
-      dep[dependencyId],
-    );
-    const depFail = await completeArg(depFailState);
+    const depFail = await completeArg({
+      success: false,
+      error: message`dep fail`,
+    });
     assert.ok(!depFail.success);
 
     const plainFail = await arg.complete({
@@ -6236,16 +6575,7 @@ describe("branch coverage: primitives edge cases", () => {
     const duplicateOption = option("--name", string({ metavar: "TEXT" }));
     const duplicateResult = duplicateOption.parse({
       buffer: ["--name", "alice"] as readonly string[],
-      state: createDeferredParseState(
-        "old",
-        deriveFromSync({
-          metavar: "TEXT",
-          dependencies: [dependency(string({ metavar: "TEXT_DEP" }))] as const,
-          defaultValues: () => ["default"] as const,
-          factory: (_dep: string) => string({ metavar: "TEXT" }),
-        }),
-        { success: true, value: "old" },
-      ) as unknown as Parameters<typeof duplicateOption.parse>[0]["state"],
+      state: { success: true, value: "old" },
       optionsTerminated: false,
       usage: duplicateOption.usage,
     });
@@ -6261,33 +6591,16 @@ describe("branch coverage: primitives edge cases", () => {
     assert.ok(!shortDuplicateResult.success);
 
     const completeOption = option("--mode", string({ metavar: "MODE" }));
-    const modeDep = dependency(string({ metavar: "MODE_DEP" }));
-    const modeDerived = deriveFromSync({
-      metavar: "MODE",
-      dependencies: [modeDep] as const,
-      defaultValues: () => ["dev"] as const,
-      factory: (_dep: string) => string({ metavar: "MODE" }),
-    });
-    const pending = createPendingDependencySourceState(Symbol("missing"));
-    const pendingComplete = completeOption.complete(
-      pending as unknown as Parameters<typeof completeOption.complete>[0],
-    );
+    const pendingComplete = completeOption.complete(undefined);
     assert.ok(!pendingComplete.success);
 
     const deferredOptionFail = completeOption.complete(
-      createDeferredParseState(
-        "bad",
-        modeDerived,
-        { success: false, error: message`bad mode` },
-      ) as unknown as Parameters<typeof completeOption.complete>[0],
+      { success: false, error: message`bad mode` },
     );
     assert.ok(!deferredOptionFail.success);
 
     const depOptionFail = completeOption.complete(
-      createDependencySourceState(
-        { success: false, error: message`source failed` },
-        Symbol("dep"),
-      ) as unknown as Parameters<typeof completeOption.complete>[0],
+      { success: false, error: message`source failed` },
     );
     assert.ok(!depOptionFail.success);
 
@@ -6316,27 +6629,13 @@ describe("branch coverage: primitives edge cases", () => {
     assert.ok(!duplicateBundledFlagResult.success);
 
     const completeArgument = argument(string({ metavar: "NAME" }));
-    const nameDep = dependency(string({ metavar: "NAME_DEP" }));
-    const nameDerived = deriveFromSync({
-      metavar: "NAME",
-      dependencies: [nameDep] as const,
-      defaultValues: () => ["guest"] as const,
-      factory: (_dep: string) => string({ metavar: "NAME" }),
-    });
     const deferredArgFail = completeArgument.complete(
-      createDeferredParseState(
-        "bad",
-        nameDerived,
-        { success: false, error: message`bad argument` },
-      ) as unknown as Parameters<typeof completeArgument.complete>[0],
+      { success: false, error: message`bad argument` },
     );
     assert.ok(!deferredArgFail.success);
 
     const depArgFail = completeArgument.complete(
-      createDependencySourceState(
-        { success: false, error: message`dependency failed` },
-        Symbol("arg-dep"),
-      ) as unknown as Parameters<typeof completeArgument.complete>[0],
+      { success: false, error: message`dependency failed` },
     );
     assert.ok(!depArgFail.success);
 
@@ -6356,6 +6655,19 @@ describe("branch coverage: primitives edge cases", () => {
       usage: cmd.usage,
     });
     assert.ok(!invalidStateResult.success);
+  });
+
+  it("option parse treats failed value parses as consumed for duplicates", () => {
+    const parser = option("--port", integer());
+    const result = parseSync(parser, ["--port", "bad", "--port", "42"]);
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(
+        formatMessage(result.error),
+        "`--port` cannot be used multiple times.",
+      );
+    }
   });
 
   it("covers async suggestion and custom error edge branches", async () => {
@@ -6481,11 +6793,7 @@ describe("branch coverage: primitives edge cases", () => {
     const tokenOption = option("--token", string({ metavar: "TOKEN" }), {
       errors: { missing: (names) => message`missing ${text(names.join(","))}` },
     });
-    const missingViaPending = tokenOption.complete(
-      createPendingDependencySourceState(
-        Symbol("token"),
-      ) as unknown as Parameters<typeof tokenOption.complete>[0],
-    );
+    const missingViaPending = tokenOption.complete(undefined);
     assert.ok(!missingViaPending.success);
     if (!missingViaPending.success) {
       assert.equal(formatMessage(missingViaPending.error), "missing --token");
@@ -6525,55 +6833,27 @@ describe("branch coverage: primitives edge cases", () => {
     const argWithCustomInvalid = argument(string({ metavar: "NAME" }), {
       errors: { invalidValue: (error) => message`bad ${error}` },
     });
-    const deferredSuccess = argWithCustomInvalid.complete(
-      createDeferredParseState(
-        "ok",
-        deriveFromSync({
-          metavar: "NAME",
-          dependencies: [dep] as const,
-          defaultValues: () => ["default"] as const,
-          factory: (_mode: string) => string({ metavar: "NAME" }),
-        }),
-        { success: true, value: "ok" },
-      ) as unknown as Parameters<typeof argWithCustomInvalid.complete>[0],
-    );
-    assert.ok(deferredSuccess.success);
-
-    const dependencyFailure = argWithCustomInvalid.complete(
-      createDependencySourceState(
-        { success: false, error: message`dep-fail` },
-        dep[dependencyId],
-      ) as unknown as Parameters<typeof argWithCustomInvalid.complete>[0],
-    );
-    assert.ok(!dependencyFailure.success);
-    if (!dependencyFailure.success) {
-      assert.equal(formatMessage(dependencyFailure.error), "bad dep-fail");
-    }
-
-    const plainFailure = argWithCustomInvalid.complete({
-      success: false,
-      error: message`plain-fail`,
+    const plainSuccess = argWithCustomInvalid.complete({
+      success: true,
+      value: "ok",
     });
-    assert.ok(!plainFailure.success);
-    if (!plainFailure.success) {
-      assert.equal(formatMessage(plainFailure.error), "bad plain-fail");
-    }
+    assert.ok(plainSuccess.success);
 
-    const deferredFailure = argWithCustomInvalid.complete(
-      createDeferredParseState(
-        "oops",
-        deriveFromSync({
-          metavar: "NAME",
-          dependencies: [dep] as const,
-          defaultValues: () => ["default"] as const,
-          factory: () => string({ metavar: "NAME" }),
-        }),
-        { success: false, error: message`deferred-fail` },
-      ) as unknown as Parameters<typeof argWithCustomInvalid.complete>[0],
-    );
-    assert.ok(!deferredFailure.success);
-    if (!deferredFailure.success) {
-      assert.equal(formatMessage(deferredFailure.error), "bad deferred-fail");
+    for (
+      const [error, expected] of [
+        [message`dep-fail`, "bad dep-fail"],
+        [message`plain-fail`, "bad plain-fail"],
+        [message`deferred-fail`, "bad deferred-fail"],
+      ] as const
+    ) {
+      const failure = argWithCustomInvalid.complete({
+        success: false,
+        error,
+      });
+      assert.ok(!failure.success);
+      if (!failure.success) {
+        assert.equal(formatMessage(failure.error), expected);
+      }
     }
 
     const optionWithCustomErrors = option("--port", integer(), {
@@ -6588,50 +6868,24 @@ describe("branch coverage: primitives edge cases", () => {
       assert.equal(formatMessage(missingOption.error), "missing --port");
     }
 
-    const deferredOptionFailure = optionWithCustomErrors.complete(
-      createDeferredParseState(
-        "bad",
-        deriveFromSync({
-          metavar: "INT",
-          dependencies: [dep] as const,
-          defaultValues: () => ["default"] as const,
-          factory: () => integer(),
-        }),
-        { success: false, error: message`not-int` },
-      ) as unknown as Parameters<typeof optionWithCustomErrors.complete>[0],
-    );
-    assert.ok(!deferredOptionFailure.success);
-    if (!deferredOptionFailure.success) {
-      assert.equal(
-        formatMessage(deferredOptionFailure.error),
-        "invalid not-int",
-      );
-    }
-
-    const dependencyOptionFailure = optionWithCustomErrors.complete(
-      createDependencySourceState(
-        { success: false, error: message`dep-not-int` },
-        dep[dependencyId],
-      ) as unknown as Parameters<typeof optionWithCustomErrors.complete>[0],
-    );
-    assert.ok(!dependencyOptionFailure.success);
-    if (!dependencyOptionFailure.success) {
-      assert.equal(
-        formatMessage(dependencyOptionFailure.error),
-        "invalid dep-not-int",
-      );
-    }
-
-    const plainOptionFailure = optionWithCustomErrors.complete({
-      success: false,
-      error: message`plain-not-int`,
-    });
-    assert.ok(!plainOptionFailure.success);
-    if (!plainOptionFailure.success) {
-      assert.equal(
-        formatMessage(plainOptionFailure.error),
-        "invalid plain-not-int",
-      );
+    for (
+      const [error, expected] of [
+        [message`not-int`, "invalid not-int"],
+        [message`dep-not-int`, "invalid dep-not-int"],
+        [message`plain-not-int`, "invalid plain-not-int"],
+      ] as const
+    ) {
+      const invalidOptionFailure = optionWithCustomErrors.complete({
+        success: false,
+        error,
+      });
+      assert.ok(!invalidOptionFailure.success);
+      if (!invalidOptionFailure.success) {
+        assert.equal(
+          formatMessage(invalidOptionFailure.error),
+          expected,
+        );
+      }
     }
 
     const staticDuplicateOption = option("--count", integer(), {
@@ -6737,6 +6991,48 @@ describe("branch coverage: primitives edge cases", () => {
         "custom invalid state",
       );
     }
+  });
+
+  it("wrapped derived value parsers preserve parse-time default snapshots", () => {
+    let callCount = 0;
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: () => {
+        callCount++;
+        return choice(
+          callCount % 2 === 1 ? (["debug"] as const) : (["strict"] as const),
+        );
+      },
+      defaultValue: () => "dev" as const,
+    });
+    const dependencyMetadata = extractDependencyMetadata(level);
+    assert.ok(dependencyMetadata != null);
+    const wrappedLevel = Object.defineProperties(
+      {},
+      {
+        ...Object.getOwnPropertyDescriptors(level),
+        dependencyMetadata: {
+          value: dependencyMetadata,
+          configurable: true,
+          enumerable: true,
+          writable: true,
+        },
+      },
+    ) as typeof level & {
+      readonly dependencyMetadata: typeof dependencyMetadata;
+    };
+    const parser = option("--level", wrappedLevel);
+
+    callCount = 0;
+    const result = parseSync(parser, ["--level", "debug"]);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "debug");
+    }
+    assert.equal(callCount, 1);
   });
 });
 

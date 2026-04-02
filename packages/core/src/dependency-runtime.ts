@@ -19,6 +19,7 @@ import {
   parseWithDependency,
 } from "./dependency.ts";
 import { message } from "./message.ts";
+import { unmatchedNonCliDependencySourceStateMarker } from "./parser.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
@@ -242,7 +243,11 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
   readonly #failedSources = new Set<symbol>();
 
   constructor(registry: DependencyRegistryLike) {
-    this.registry = registry;
+    if (registry instanceof FailedAwareRegistry) {
+      this.registry = registry.rebindFailedSources(this.#failedSources);
+      return;
+    }
+    this.registry = new FailedAwareRegistry(registry, this.#failedSources);
   }
 
   registerSource(
@@ -289,6 +294,59 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
   }
 }
 
+/**
+ * Registry wrapper that hides values for sources that have failed.
+ *
+ * The wrapper lets clones share an underlying registry while maintaining
+ * an isolated failed-source view, so later lookups do not reuse stale
+ * values after extraction errors.
+ *
+ * @internal
+ */
+class FailedAwareRegistry implements DependencyRegistryLike {
+  readonly #inner: DependencyRegistryLike;
+  readonly #failedSources: Set<symbol>;
+
+  constructor(inner: DependencyRegistryLike, failedSources: Set<symbol>) {
+    this.#inner = inner;
+    this.#failedSources = failedSources;
+  }
+
+  set<T>(id: symbol, value: T): void {
+    this.#inner.set(id, value);
+    this.#failedSources.delete(id);
+  }
+
+  get<T>(id: symbol): T | undefined {
+    if (this.#failedSources.has(id)) return undefined;
+    return this.#inner.get(id);
+  }
+
+  has(id: symbol): boolean {
+    if (this.#failedSources.has(id)) return false;
+    return this.#inner.has(id);
+  }
+
+  copyFailedSources(target: Set<symbol>): void {
+    for (const sourceId of this.#failedSources) {
+      target.add(sourceId);
+    }
+  }
+
+  rebindFailedSources(target: Set<symbol>): FailedAwareRegistry {
+    this.copyFailedSources(target);
+    return new FailedAwareRegistry(this.#inner, target);
+  }
+
+  clone(): DependencyRegistryLike {
+    const failedSources = new Set(this.#failedSources);
+    const innerClone = this.#inner.clone();
+    return innerClone instanceof FailedAwareRegistry
+      ? innerClone.rebindFailedSources(failedSources)
+      : new FailedAwareRegistry(innerClone, failedSources);
+  }
+}
+
 function resolveRequest(
   ctx: DependencyRuntimeContext,
   request: DependencyRequest,
@@ -300,15 +358,15 @@ function resolveRequest(
 
   for (let i = 0; i < request.dependencyIds.length; i++) {
     const id = request.dependencyIds[i];
-    if (ctx.hasSource(id)) {
-      values.push(ctx.getSource(id));
-      usedDefaults.push(false);
-      resolvedCount++;
-    } else if (ctx.isSourceFailed(id)) {
+    if (ctx.isSourceFailed(id)) {
       // Source was explicitly provided but failed validation.
       // Do not fall back to defaults — treat as unresolvable.
       values.push(undefined);
       usedDefaults.push(false);
+    } else if (ctx.hasSource(id)) {
+      values.push(ctx.getSource(id));
+      usedDefaults.push(false);
+      resolvedCount++;
     } else if (
       request.defaultValues != null && i < request.defaultValues.length
     ) {
@@ -500,6 +558,10 @@ export function createReplayKey(
  *
  * @param nodes The runtime nodes to inspect.
  * @param runtime The dependency runtime context.
+ * @throws Propagates synchronous errors thrown by `extractSourceValue()`.
+ * @throws {TypeError} If `extractSourceValue()` returns a promise-like result.
+ *         Use {@link collectExplicitSourceValuesAsync} when async source
+ *         extraction is expected.
  * @internal
  * @since 1.0.0
  */
@@ -513,17 +575,64 @@ export function collectExplicitSourceValues(
     if (meta.source.extractSourceValue == null) continue;
 
     const result = meta.source.extractSourceValue(node.state);
-    // undefined = state doesn't contain a source result (unpopulated).
-    // { success: false } = source was provided but failed validation.
-    // { success: true, value } = source value (value may be undefined).
-    if (result == null) continue;
-    if (result.success) {
-      runtime.registerSource(meta.source.sourceId, result.value, "cli");
-    } else {
-      // Mark the source as explicitly failed so that derived parsers
-      // do not fall back to defaults for this source.
-      runtime.markSourceFailed(meta.source.sourceId);
+    if (isPromiseLike(result)) {
+      throw new TypeError(
+        `collectExplicitSourceValues() received an async extractSourceValue() result for ${
+          String(meta.source.sourceId)
+        }. Use collectExplicitSourceValuesAsync() instead.`,
+      );
     }
+    registerExplicitSourceValue(meta.source.sourceId, result, runtime);
+  }
+}
+
+function registerExplicitSourceValue(
+  sourceId: symbol,
+  result: ValueParserResult<unknown> | undefined,
+  runtime: DependencyRuntimeContext,
+): void {
+  // undefined = state doesn't contain a source result (unpopulated).
+  // { success: false } = source was provided but failed validation.
+  // { success: true, value } = source value (value may be undefined).
+  if (result == null) return;
+  if (result.success) {
+    runtime.registerSource(sourceId, result.value, "cli");
+  } else {
+    // Mark the source as explicitly failed so that derived parsers
+    // do not fall back to defaults for this source.
+    runtime.markSourceFailed(sourceId);
+  }
+}
+
+function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
+  return value != null &&
+    (typeof value === "object" || typeof value === "function") &&
+    "then" in value &&
+    typeof (value as Record<PropertyKey, unknown>).then === "function";
+}
+
+/**
+ * Async version of {@link collectExplicitSourceValues}.
+ * Awaits async `extractSourceValue` results instead of rejecting
+ * promise-like values as the synchronous variant does.
+ *
+ * @param nodes The runtime nodes to inspect.
+ * @param runtime The dependency runtime context.
+ * @throws Propagates errors thrown or rejected by `extractSourceValue()`.
+ * @internal
+ * @since 1.0.0
+ */
+export async function collectExplicitSourceValuesAsync(
+  nodes: readonly RuntimeNode[],
+  runtime: DependencyRuntimeContext,
+): Promise<void> {
+  for (const node of nodes) {
+    const meta = node.parser.dependencyMetadata;
+    if (meta?.source == null) continue;
+    if (meta.source.extractSourceValue == null) continue;
+
+    const result = await meta.source.extractSourceValue(node.state);
+    registerExplicitSourceValue(meta.source.sourceId, result, runtime);
   }
 }
 
@@ -539,6 +648,9 @@ export function collectExplicitSourceValues(
  * @param nodes The runtime nodes to inspect.
  * @param runtime The dependency runtime context.
  * @returns Failures from default evaluation (empty if all succeeded).
+ * @throws {TypeError} If `getMissingSourceValue()` returns a promise-like
+ *         result. Use {@link fillMissingSourceDefaultsAsync} when async
+ *         default extraction is expected.
  * @internal
  * @since 1.0.0
  */
@@ -580,8 +692,13 @@ export function fillMissingSourceDefaults(
       });
       continue;
     }
-    // Only handle sync results here; async handled by async variant
-    if (result instanceof Promise) continue;
+    if (isPromiseLike(result)) {
+      throw new TypeError(
+        `fillMissingSourceDefaults() received an async getMissingSourceValue() result for ${
+          String(meta.source.sourceId)
+        }. Use fillMissingSourceDefaultsAsync() instead.`,
+      );
+    }
     if (result.success) {
       runtime.registerSource(
         meta.source.sourceId,
@@ -665,6 +782,8 @@ export async function fillMissingSourceDefaultsAsync(
  * @param rawInput The raw input to replay.
  * @param runtime The dependency runtime context.
  * @returns The replay result, or `undefined`.
+ * @throws {TypeError} If `replayParse()` returns a promise-like result.
+ *         Use {@link replayDerivedParserAsync} for async replay.
  * @internal
  * @since 1.0.0
  */
@@ -708,8 +827,11 @@ export function replayDerivedParser(
   if (cached != null) return cached;
 
   const result = meta.derived.replayParse(rawInput, resolution.values);
-  // Handle sync result only
-  if (result instanceof Promise) return undefined;
+  if (isPromiseLike(result)) {
+    throw new TypeError(
+      "replayDerivedParser() received an async replayParse() result. Use replayDerivedParserAsync() instead.",
+    );
+  }
 
   runtime.setReplayResult(key, result);
   return result;
@@ -858,7 +980,11 @@ function resolveSingleDeferred(
     deferred.rawInput,
     depValue,
   );
-  if (result instanceof Promise) return deferred.preliminaryResult;
+  if (isPromiseLike(result)) {
+    throw new TypeError(
+      "resolveStateWithRuntime() received an async parseWithDependency() result. Use resolveStateWithRuntimeAsync() instead.",
+    );
+  }
   return result;
 }
 
@@ -868,11 +994,18 @@ function resolveSingleDeferred(
  *
  * This must run BEFORE deferred resolution so that all source values
  * are available when replaying derived parsers.
+ *
+ * @param state The state tree to traverse.
+ * @param runtime The dependency runtime context to populate.
+ * @param visited Cycle guard for recursive traversal.
+ * @param excludedFields Optional property keys to skip at the current level.
+ *                       This exclusion set is not propagated recursively.
  */
 export function collectSourcesFromState(
   state: unknown,
   runtime: DependencyRuntimeContext,
   visited: WeakSet<object> = new WeakSet<object>(),
+  excludedFields?: ReadonlySet<PropertyKey>,
 ): void {
   if (state == null || typeof state !== "object") return;
   if (visited.has(state)) return;
@@ -909,6 +1042,7 @@ export function collectSourcesFromState(
   // custom parser states that are class instances.
   if (typeof state === "object") {
     for (const key of Reflect.ownKeys(state as object)) {
+      if (excludedFields?.has(key)) continue;
       collectSourcesFromState(
         (state as Record<string | symbol, unknown>)[key],
         runtime,
@@ -933,6 +1067,9 @@ export function collectSourcesFromState(
  * @param state The state tree to resolve.
  * @param runtime The dependency runtime context.
  * @returns The resolved state tree.
+ * @throws {TypeError} If a deferred parser returns a promise-like result from
+ *         `parseWithDependency()`. Use {@link resolveStateWithRuntimeAsync}
+ *         for async resolution.
  * @internal
  * @since 1.0.0
  */
@@ -1072,19 +1209,26 @@ async function resolveDeferredInStateAsync(
  */
 function isMatchedState(
   fieldState: unknown,
-  parser: { readonly initialState?: unknown },
+  parser: {
+    readonly initialState?: unknown;
+    readonly [unmatchedNonCliDependencySourceStateMarker]?: true;
+  },
 ): boolean {
   if (fieldState === undefined) return false;
-  // PendingDependencySourceState in an array means the option was not provided
+  const innerState = Array.isArray(fieldState) && fieldState.length === 1
+    ? fieldState[0]
+    : fieldState;
+  // PendingDependencySourceState means the option was not provided.
+  if (isPendingDependencySourceState(innerState)) return false;
   if (
-    Array.isArray(fieldState) &&
-    fieldState.length === 1 &&
-    isPendingDependencySourceState(fieldState[0])
+    parser[unmatchedNonCliDependencySourceStateMarker] === true &&
+    innerState != null &&
+    typeof innerState === "object" &&
+    Object.hasOwn(innerState, "hasCliValue") &&
+    (innerState as { readonly hasCliValue?: unknown }).hasCliValue === false
   ) {
     return false;
   }
-  // Bare PendingDependencySourceState
-  if (isPendingDependencySourceState(fieldState)) return false;
   // If state equals the parser's initialState, it was not matched
   if (fieldState === parser.initialState) return false;
   return true;

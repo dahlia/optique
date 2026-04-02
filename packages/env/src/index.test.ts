@@ -3,16 +3,21 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { injectAnnotations } from "@optique/core/annotations";
-import { group, merge, object } from "@optique/core/constructs";
+import { concat, group, merge, object, tuple } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Parser } from "@optique/core/parser";
-import { parse, suggestSync } from "@optique/core/parser";
-import { optional } from "@optique/core/modifiers";
+import { parse, suggestAsync, suggestSync } from "@optique/core/parser";
+import { map, multiple, optional } from "@optique/core/modifiers";
 import { fail, flag, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
+import { bindConfig, createConfigContext } from "../../config/src/index.ts";
+import {
+  collectExplicitSourceValues,
+  createDependencyRuntimeContext,
+} from "../../core/src/dependency-runtime.ts";
 import {
   bindEnv,
   bool,
@@ -21,6 +26,23 @@ import {
 } from "./index.ts";
 
 const sourcePath = fileURLToPath(new URL("./index.ts", import.meta.url));
+
+function asyncChoice<const T extends readonly string[]>(
+  choices: T,
+): ValueParser<"async", T[number]> {
+  const parser = choice(choices);
+  return {
+    ...parser,
+    $mode: "async",
+    async parse(input: string) {
+      return await parser.parse(input);
+    },
+    async *suggest(prefix: string) {
+      if (parser.suggest == null) return;
+      yield* parser.suggest(prefix);
+    },
+  };
+}
 
 function getJsDocFor(sourceText: string, functionName: string): string {
   const declaration = `export function ${functionName}`;
@@ -654,6 +676,85 @@ describe("bindEnv()", () => {
     assert.equal(result.timeout, 30);
   });
 
+  it("tuple() does not re-evaluate env fallback parsers", () => {
+    const source = dependency(string());
+    let parseCalls = 0;
+    const flakyEnvParser: ValueParser<"sync", string> = {
+      $mode: "sync",
+      metavar: "MODE",
+      placeholder: "",
+      parse(input: string) {
+        parseCalls += 1;
+        return parseCalls === 1
+          ? { success: true, value: input }
+          : { success: false, error: message`env parser re-ran` };
+      },
+      format(value: string) {
+        return value;
+      },
+    };
+    const context = createEnvContext({
+      source: (key) => key === "MODE" ? "prod" : undefined,
+    });
+    const parser = tuple([
+      bindEnv(option("--mode", source), {
+        context,
+        key: "MODE",
+        parser: flakyEnvParser,
+      }),
+    ]);
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const result = parse(parser, [], { annotations });
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["prod"]);
+    assert.equal(parseCalls, 1);
+  });
+
+  it("concat() does not re-evaluate env fallback parsers", () => {
+    const source = dependency(string());
+    let parseCalls = 0;
+    const flakyEnvParser: ValueParser<"sync", string> = {
+      $mode: "sync",
+      metavar: "MODE",
+      placeholder: "",
+      parse(input: string) {
+        parseCalls += 1;
+        return parseCalls === 1
+          ? { success: true, value: input }
+          : { success: false, error: message`env parser re-ran` };
+      },
+      format(value: string) {
+        return value;
+      },
+    };
+    const context = createEnvContext({
+      source: (key) => key === "MODE" ? "prod" : undefined,
+    });
+    const parser = concat(
+      tuple([
+        bindEnv(option("--mode", source), {
+          context,
+          key: "MODE",
+          parser: flakyEnvParser,
+        }),
+      ]),
+      tuple([]),
+    );
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const result = parse(parser, [], { annotations });
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["prod"]);
+    assert.equal(parseCalls, 1);
+  });
+
   it("uses env values when prefix is omitted", () => {
     const context = createEnvContext({
       source: (key) => ({ PORT: "8080" })[key],
@@ -819,6 +920,84 @@ describe("bindEnv()", () => {
     assert.equal(result.value, "from-config");
   });
 
+  it("preserves raw inner state when env fallback delegates complete()", () => {
+    const configContext = createConfigContext<
+      { readonly mode?: "dev" | "prod" }
+    >({
+      schema: {
+        "~standard": {
+          version: 1,
+          vendor: "optique-test",
+          validate(input: unknown) {
+            return {
+              value: input as { readonly mode?: "dev" | "prod" },
+            };
+          },
+        },
+      },
+    });
+    const annotations = configContext.getAnnotations(
+      {},
+      {
+        load: () => ({
+          config: { mode: "prod" as const },
+          meta: undefined,
+        }),
+      },
+    );
+    assert.ok(!(annotations instanceof Promise));
+    if (annotations instanceof Promise) return;
+
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const inner = object({
+      mode: bindConfig(option("--mode", mode), {
+        context: configContext,
+        key: "mode",
+      }),
+    });
+    const parser = bindEnv(inner, {
+      context: createEnvContext({
+        prefix: "APP_",
+        source: () => undefined,
+      }),
+      key: "CONFIG",
+      parser: {
+        $mode: "sync",
+        metavar: "CONFIG",
+        placeholder: { mode: "dev" as const },
+        parse(input) {
+          if (input === "prod") {
+            return {
+              success: true as const,
+              value: { mode: "prod" as const },
+            };
+          }
+          if (input === "dev") {
+            return {
+              success: true as const,
+              value: { mode: "dev" as const },
+            };
+          }
+          return {
+            success: false as const,
+            error: message`Invalid config.`,
+          };
+        },
+        format(value) {
+          return value.mode;
+        },
+      },
+    });
+
+    const result = parser.complete(
+      injectAnnotations(parser.initialState, annotations),
+    );
+    assert.deepEqual(result, {
+      success: true,
+      value: { mode: "prod" },
+    });
+  });
+
   it("prefers env value over inner parser complete()", () => {
     const mockConfigParser = {
       $mode: "sync" as const,
@@ -892,11 +1071,7 @@ describe("bindEnv()", () => {
     // complete() with a state that has no CLI value should fall through
     // to getEnvOrDefault, which takes the default path.  In async mode
     // the return value must be a Promise.
-    const completeResult = parser.complete(
-      { hasCliValue: false } as unknown as Parameters<
-        typeof parser.complete
-      >[0],
-    );
+    const completeResult = parser.complete(parser.initialState);
     assert.ok(
       completeResult instanceof Promise,
       "Expected complete() to return a Promise in async mode",
@@ -907,47 +1082,231 @@ describe("bindEnv()", () => {
   });
 
   it("returns a Promise from complete() in async mode for error path", async () => {
-    const asyncInt: ValueParser<"async", number> = {
+    const asyncFailureParser: Parser<"async", number, undefined> = {
       $mode: "async",
-      metavar: "INT",
-      placeholder: 0,
-      parse(input: string): Promise<ValueParserResult<number>> {
-        const n = parseInt(input, 10);
-        if (isNaN(n)) {
-          return Promise.resolve({
-            success: false,
-            error: message`Invalid integer: ${input}`,
-          });
-        }
-        return Promise.resolve({ success: true, value: n });
+      $valueType: [] as readonly number[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
       },
-      format(v: number): string {
-        return v.toString();
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`Missing port.`,
+        });
       },
+      suggest() {
+        return (async function* () {})();
+      },
+      getDocFragments: () => ({ fragments: [] }),
     };
 
     const context = createEnvContext({
       source: () => undefined,
       prefix: "APP_",
     });
-    const parser = bindEnv(option("--port", asyncInt), {
+    const parser = bindEnv(asyncFailureParser, {
       context,
       key: "PORT",
-      parser: asyncInt,
+      parser: {
+        $mode: "async",
+        metavar: "INT",
+        placeholder: 0,
+        parse(input: string): Promise<ValueParserResult<number>> {
+          const n = parseInt(input, 10);
+          if (isNaN(n)) {
+            return Promise.resolve({
+              success: false,
+              error: message`Invalid integer: ${input}`,
+            });
+          }
+          return Promise.resolve({ success: true, value: n });
+        },
+        format(v: number): string {
+          return v.toString();
+        },
+      },
       // No default — should take the error path.
     });
 
-    const completeResult = parser.complete(
-      { hasCliValue: false } as unknown as Parameters<
-        typeof parser.complete
-      >[0],
-    );
+    const completeResult = parser.complete(parser.initialState);
     assert.ok(
       completeResult instanceof Promise,
       "Expected complete() to return a Promise in async mode",
     );
     const value = await completeResult;
     assert.ok(!value.success);
+  });
+
+  it("bindEnv getSuggestRuntimeNodes preserves zero-consumption cliState", () => {
+    const context = createEnvContext({
+      prefix: "APP_",
+      source: () => undefined,
+    });
+    const inner: Parser<"sync", string, string> = {
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "initial",
+      parse(parseContext) {
+        return {
+          success: true as const,
+          next: { ...parseContext, state: "cli-state" },
+          consumed: [],
+        };
+      },
+      complete: () => ({ success: true as const, value: "cli-state" }),
+      suggest: () => [],
+      getSuggestRuntimeNodes(state, path) {
+        return [{ path, parser: inner, state }];
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser: Parser<"sync", string, string> = bindEnv(inner, {
+      context,
+      key: "NAME",
+      parser: string(),
+      default: "fallback",
+    });
+
+    const parsed = parser.parse({
+      buffer: [],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const nodes = parser.getSuggestRuntimeNodes?.(parsed.next.state, ["name"]);
+    assert.ok(nodes != null);
+    if (nodes == null) return;
+    assert.equal(nodes.length, 1);
+    assert.deepEqual(nodes[0]?.path, ["name"]);
+    assert.equal(nodes[0]?.parser, inner);
+    assert.equal(nodes[0]?.state, "cli-state");
+  });
+
+  it("bindEnv getSuggestRuntimeNodes preserves inner nodes for source parsers", () => {
+    const context = createEnvContext({ source: () => undefined });
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const inner = multiple(option("--mode", mode));
+    const modeListParser: ValueParser<"sync", readonly ("dev" | "prod")[]> = {
+      $mode: "sync",
+      metavar: "MODE",
+      placeholder: ["dev"],
+      parse(input) {
+        if (input === "dev" || input === "prod") {
+          return { success: true as const, value: [input] as const };
+        }
+        return { success: false as const, error: message`Invalid mode.` };
+      },
+      format(value) {
+        return value.join(",");
+      },
+    };
+    const parser = bindEnv(inner, {
+      context,
+      key: "MODE",
+      parser: modeListParser,
+    });
+
+    const parsed = parser.parse({
+      buffer: ["--mode", "prod"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const nodes = parser.getSuggestRuntimeNodes?.(parsed.next.state, ["mode"]);
+    assert.ok(nodes != null);
+    if (nodes == null) return;
+
+    assert.equal(nodes.at(-1)?.parser, parser);
+    assert.deepEqual(nodes.at(-1)?.path, ["mode"]);
+    assert.equal(nodes.at(-1)?.state, parsed.next.state);
+    assert.ok(nodes.some((node) => node.parser === inner));
+    assert.ok(
+      nodes.some((node) =>
+        JSON.stringify(node.path) === JSON.stringify(["mode", 0])
+      ),
+    );
+  });
+
+  it("bindEnv getSuggestRuntimeNodes keeps outer source precedence", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source(key) {
+        return ({ APP_MODE: "prod" } as const)[key as "APP_MODE"];
+      },
+    });
+    const envAnnotations = envContext.getAnnotations();
+    if (envAnnotations instanceof Promise) {
+      throw new TypeError("Expected synchronous env annotations.");
+    }
+    const configContext = createConfigContext<
+      { readonly mode?: "dev" | "prod" }
+    >({
+      schema: {
+        "~standard": {
+          version: 1,
+          vendor: "optique-test",
+          validate(input: unknown) {
+            return {
+              value: input as { readonly mode?: "dev" | "prod" },
+            };
+          },
+        },
+      },
+    });
+    const parser = bindEnv(
+      bindConfig(
+        option("--mode", dependency(choice(["dev", "prod"] as const))),
+        {
+          context: configContext,
+          key: "mode",
+        },
+      ),
+      {
+        context: envContext,
+        key: "MODE",
+        parser: choice(["dev", "prod"] as const),
+      },
+    );
+    const state = injectAnnotations(
+      injectAnnotations(parser.initialState, envAnnotations),
+      {
+        [configContext.id]: { data: { mode: "dev" as const } },
+      },
+    );
+    const nodes = parser.getSuggestRuntimeNodes?.(state, ["mode"]);
+    assert.ok(nodes != null);
+    if (nodes == null) return;
+
+    const runtime = createDependencyRuntimeContext();
+    collectExplicitSourceValues(nodes, runtime);
+
+    const sourceId = parser.dependencyMetadata?.source?.sourceId;
+    assert.ok(sourceId != null);
+    if (sourceId == null) return;
+    assert.ok(runtime.hasSource(sourceId));
+    assert.ok(!runtime.isSourceFailed(sourceId));
+    assert.equal(runtime.getSource(sourceId), "prod");
   });
 
   it("returns a Promise from complete() in async mode for env path", async () => {
@@ -1607,6 +1966,27 @@ describe("bindEnv() with dependency sources", () => {
     assert.equal(result.value.level, "silent");
   });
 
+  it("exposes env fallback as a source from raw annotated state", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const parser = bindEnv(option("--mode", mode), {
+      context: envContext,
+      key: "MODE",
+      parser: choice(["dev", "prod"] as const),
+    });
+    const state = injectAnnotations(
+      parser.initialState,
+      envContext.getAnnotations() as Record<symbol, unknown>,
+    );
+
+    assert.deepEqual(
+      parser.dependencyMetadata?.source?.extractSourceValue(state),
+      { success: true, value: "prod" },
+    );
+  });
+
   it("propagates env value as dependency to derived parser (suggest)", () => {
     const { parser, annotations } = createParser(
       (key) => ({ APP_MODE: "prod" })[key],
@@ -1685,6 +2065,322 @@ describe("bindEnv() with dependency sources", () => {
     assert.ok(result.success);
     assert.equal(result.value.mode, undefined);
     assert.equal(result.value.level, "debug");
+  });
+
+  it("propagates async env value as dependency to derived parser (parse)", async () => {
+    const asyncMode = dependency(asyncChoice(["dev", "prod"] as const));
+    const asyncLevel = asyncMode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value: "dev" | "prod") =>
+        choice(
+          value === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = object({
+      mode: bindEnv(option("--mode", asyncMode), {
+        context: envContext,
+        key: "MODE",
+        parser: asyncChoice(["dev", "prod"] as const),
+      }),
+      level: option("--level", asyncLevel),
+    });
+
+    const result = await parse(parser, ["--level", "silent"], {
+      annotations,
+    });
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "prod");
+    assert.equal(result.value.level, "silent");
+  });
+
+  it("propagates async env value as dependency to derived parser (suggest)", async () => {
+    const asyncMode = dependency(asyncChoice(["dev", "prod"] as const));
+    const asyncLevel = asyncMode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value: "dev" | "prod") =>
+        choice(
+          value === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = object({
+      mode: bindEnv(option("--mode", asyncMode), {
+        context: envContext,
+        key: "MODE",
+        parser: asyncChoice(["dev", "prod"] as const),
+      }),
+      level: option("--level", asyncLevel),
+    });
+
+    const suggestions = await suggestAsync(parser, ["--level", "s"], {
+      annotations,
+    });
+    const texts = suggestions
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+    assert.ok(texts.includes("silent"));
+    assert.ok(texts.includes("strict"));
+    assert.ok(!texts.includes("debug"));
+    assert.ok(!texts.includes("verbose"));
+  });
+
+  it("keeps dependency source extraction side-effect free for inner fallbacks", () => {
+    const sourceId = Symbol("mode");
+    const innerState = { kind: "inner-state" } as const;
+    let completeCalls = 0;
+    const innerParser = {
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined as typeof innerState | undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: { ...context, state: innerState },
+          consumed: [],
+        };
+      },
+      complete() {
+        completeCalls += 1;
+        return { success: true as const, value: "prod" as const };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue(state: unknown) {
+            return state === innerState
+              ? { success: true as const, value: "prod" as const }
+              : undefined;
+          },
+        },
+      },
+    } as const satisfies
+      & Parser<"sync", "prod", typeof innerState | undefined>
+      & {
+        readonly dependencyMetadata: {
+          readonly source: {
+            readonly kind: "source";
+            readonly sourceId: typeof sourceId;
+            readonly preservesSourceValue: true;
+            readonly extractSourceValue: (
+              state: unknown,
+            ) => ValueParserResult<unknown> | undefined;
+          };
+        };
+      };
+    const parser = bindEnv(innerParser, {
+      context: createEnvContext({ source: () => undefined }),
+      key: "MODE",
+      parser: string(),
+    });
+    const parseResult = parser.parse({
+      buffer: [],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success);
+    const extracted = parser.dependencyMetadata?.source?.extractSourceValue(
+      parseResult.next.state,
+    );
+    assert.deepEqual(extracted, { success: true, value: "prod" });
+    assert.equal(completeCalls, 0);
+  });
+
+  it("preserves outer annotations when no-CLI fallback delegates source extraction", () => {
+    const configContext = createConfigContext<
+      { readonly mode?: "dev" | "prod" }
+    >({
+      schema: {
+        "~standard": {
+          version: 1,
+          vendor: "optique-test",
+          validate(input: unknown) {
+            return {
+              value: input as { readonly mode?: "dev" | "prod" },
+            };
+          },
+        },
+      },
+    });
+    const source = dependency(choice(["dev", "prod"] as const));
+    const innerParser = bindConfig(option("--mode", source), {
+      context: configContext,
+      key: "mode",
+    });
+    const parser = bindEnv(innerParser, {
+      context: createEnvContext({ source: () => undefined }),
+      key: "MODE",
+      parser: string(),
+    });
+    const annotations = configContext.getAnnotations(
+      {},
+      {
+        load: () => ({
+          config: { mode: "prod" as const },
+          meta: undefined,
+        }),
+      },
+    );
+    assert.ok(!(annotations instanceof Promise));
+    if (annotations instanceof Promise) return;
+    const parseResult = parser.parse({
+      buffer: [],
+      state: injectAnnotations(parser.initialState, annotations),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success);
+    if (!parseResult.success) return;
+
+    const extracted = parser.dependencyMetadata?.source?.extractSourceValue(
+      parseResult.next.state,
+    );
+    assert.deepEqual(extracted, { success: true, value: "prod" });
+  });
+
+  it("only injects annotations into fallback state for inheriting parsers", () => {
+    const envContext = createEnvContext({ source: () => undefined });
+    const annotations = envContext.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+
+    let completedState: unknown;
+    const innerParser = {
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`No CLI value.`,
+        };
+      },
+      complete(state: unknown) {
+        completedState = state;
+        return { success: true as const, value: "fallback" as const };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+      shouldDeferCompletion() {
+        return true;
+      },
+    } as const satisfies Parser<"sync", "fallback", undefined>;
+    const parser = bindEnv(innerParser, {
+      context: envContext,
+      key: "MODE",
+      parser: string(),
+    });
+    const parseResult = parser.parse({
+      buffer: [],
+      state: injectAnnotations(parser.initialState, annotations),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success);
+    if (!parseResult.success) return;
+
+    const completed = parser.complete(parseResult.next.state);
+
+    assert.deepEqual(completed, { success: true, value: "fallback" });
+    assert.equal(completedState, undefined);
+  });
+
+  it("treats injected annotation wrappers as omitted CLI state during complete()", () => {
+    const envContext = createEnvContext({ source: () => undefined });
+    const annotations = envContext.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+
+    const inner = option("--mode", string());
+    const parser = bindEnv(inner, {
+      context: envContext,
+      key: "MODE",
+      parser: string(),
+    });
+    const completed = parser.complete(
+      injectAnnotations(parser.initialState, annotations),
+    );
+
+    assert.deepEqual(completed, inner.complete(undefined));
+  });
+
+  it("does not invent mapped dependency source values from env fallbacks", () => {
+    const source = dependency(choice(["dev", "prod"] as const));
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "production" })[key],
+    });
+    const parser = bindEnv(
+      map(
+        option("--mode", source),
+        (value) => value === "dev" ? "development" : "production",
+      ),
+      {
+        context: envContext,
+        key: "MODE",
+        parser: choice(["development", "production"] as const),
+      },
+    );
+    envContext.getAnnotations();
+    try {
+      const parseResult = parser.parse({
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(parseResult.success);
+      assert.equal(
+        parser.dependencyMetadata?.source?.extractSourceValue(
+          parseResult.next.state,
+        ),
+        undefined,
+      );
+    } finally {
+      envContext[Symbol.dispose]?.();
+    }
   });
 });
 
