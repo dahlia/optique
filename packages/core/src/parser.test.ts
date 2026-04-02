@@ -1312,6 +1312,16 @@ describe("Parser usage field", () => {
             sourceId: otherId,
           },
         },
+        parse(context: Parameters<typeof prodBranch.parse>[0]) {
+          if (context.buffer[0] === "prod") {
+            return {
+              success: false as const,
+              consumed: 0,
+              error: message`Expected non-prod control branch value.`,
+            };
+          }
+          return prodBranch.parse(context);
+        },
         *suggest() {},
       } as const satisfies Parser<"sync", string, string>;
       const parser = or(prodBranch, otherBranch);
@@ -1399,6 +1409,16 @@ describe("Parser usage field", () => {
             ...prodBranch.dependencyMetadata.source,
             sourceId: otherId,
           },
+        },
+        parse(context: Parameters<typeof prodBranch.parse>[0]) {
+          if (context.buffer[0] === "prod") {
+            return Promise.resolve({
+              success: false as const,
+              consumed: 0,
+              error: message`Expected non-prod control branch value.`,
+            });
+          }
+          return prodBranch.parse(context);
         },
         async *suggest() {},
       } as const satisfies Parser<"async", string, string>;

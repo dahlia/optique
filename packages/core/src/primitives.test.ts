@@ -664,7 +664,7 @@ describe("option", () => {
       assert.deepEqual(suggestions, [{ kind: "literal", text: "-v" }]);
     });
 
-    it("should suggest value candidates on empty buffer from initialState", () => {
+    it("should suggest value candidates on empty buffer", () => {
       const parser = option("--env", choice(["dev", "prod"]));
       const suggestions = Array.from(parser.suggest({
         buffer: [],

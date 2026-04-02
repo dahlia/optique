@@ -4232,6 +4232,8 @@ describe("multiple", () => {
     const stringResult = parse(stringMultiple, ["-s", "hello", "-s", "world"]);
     assert.ok(stringResult.success);
     if (stringResult.success) {
+      const typedStrings: readonly string[] = stringResult.value;
+      void typedStrings;
       assert.equal(stringResult.value.length, 2);
       assert.equal(typeof stringResult.value[0], "string");
       assert.deepEqual(stringResult.value, ["hello", "world"]);
@@ -4240,6 +4242,8 @@ describe("multiple", () => {
     const integerResult = parse(integerMultiple, ["-i", "42", "-i", "100"]);
     assert.ok(integerResult.success);
     if (integerResult.success) {
+      const typedIntegers: readonly number[] = integerResult.value;
+      void typedIntegers;
       assert.equal(integerResult.value.length, 2);
       assert.equal(typeof integerResult.value[0], "number");
       assert.deepEqual(integerResult.value, [42, 100]);
@@ -4248,6 +4252,8 @@ describe("multiple", () => {
     const booleanResult = parse(booleanMultiple, ["-b", "-b"]);
     assert.ok(booleanResult.success);
     if (booleanResult.success) {
+      const typedBooleans: readonly boolean[] = booleanResult.value;
+      void typedBooleans;
       assert.equal(booleanResult.value.length, 2);
       assert.equal(typeof booleanResult.value[0], "boolean");
       assert.deepEqual(booleanResult.value, [true, true]);
