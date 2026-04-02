@@ -356,8 +356,7 @@ function getAnnotatedChildState(
 ): unknown {
   const annotations = getAnnotations(parentState);
   const shouldInheritAnnotations =
-    Reflect.get(parser, inheritParentAnnotationsKey) === true ||
-    parser.dependencyMetadata?.source != null;
+    Reflect.get(parser, inheritParentAnnotationsKey) === true;
   if (childState == null) {
     if (annotations !== undefined && shouldInheritAnnotations) {
       return injectAnnotations({}, annotations);

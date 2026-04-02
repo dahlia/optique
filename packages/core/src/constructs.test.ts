@@ -10484,6 +10484,42 @@ describe("branch coverage: constructs.ts edge cases", () => {
     }
   });
 
+  it("shared-buffer constructs skip annotation injection for missing plain dependency sources", () => {
+    const modeSource = dependency(choice(["dev", "prod"] as const));
+    const annotations = { source: "annotation" };
+    const parsers: ReadonlyArray<
+      readonly [string, Parser<"sync", unknown, unknown>]
+    > = [
+      ["object", object({ mode: option("--mode", modeSource) })],
+      ["tuple", tuple([option("--mode", modeSource)])],
+      ["concat", concat(tuple([option("--mode", modeSource)]))],
+      ["merge", merge(object({ mode: option("--mode", modeSource) }))],
+    ];
+
+    for (const [name, parser] of parsers) {
+      const parseResult = parseSync(parser, [], { annotations });
+      assert.ok(!parseResult.success, `${name} parse should fail.`);
+      if (!parseResult.success) {
+        assert.ok(
+          formatMessage(parseResult.error).length > 0,
+          `${name} parse should produce a normal parse error.`,
+        );
+      }
+
+      const suggestionTexts = suggestSync(parser, ["--mode", ""], {
+        annotations,
+      })
+        .filter((suggestion) => suggestion.kind === "literal")
+        .map((suggestion) => suggestion.text)
+        .sort();
+      assert.deepEqual(
+        suggestionTexts,
+        ["dev", "prod"],
+        `${name} suggest should preserve the source suggestions.`,
+      );
+    }
+  });
+
   it("conditional() suggest handles undefined and selected branch states", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",

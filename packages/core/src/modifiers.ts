@@ -12,6 +12,10 @@ import {
   dispatchIterableByMode,
   mapModeValue,
 } from "./mode-dispatch.ts";
+import {
+  defineInheritedAnnotationParser,
+  defineSourceBindingOnlyAnnotationCompletionParser,
+} from "./parser.ts";
 import type {
   DocState,
   ExecutionContext,
@@ -511,6 +515,8 @@ export function optional<M extends Mode, TValue, TState>(
         .dependencyMetadata = composed;
     }
   }
+  defineInheritedAnnotationParser(optionalParser);
+  defineSourceBindingOnlyAnnotationCompletionParser(optionalParser);
   return optionalParser;
 }
 
@@ -950,6 +956,8 @@ export function withDefault<
         .dependencyMetadata = composed;
     }
   }
+  defineInheritedAnnotationParser(withDefaultParser);
+  defineSourceBindingOnlyAnnotationCompletionParser(withDefaultParser);
   return withDefaultParser;
 }
 

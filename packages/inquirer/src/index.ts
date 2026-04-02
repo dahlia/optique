@@ -32,6 +32,7 @@ import type {
   ParserResult,
 } from "@optique/core/parser";
 import {
+  annotationWrapperRequiresSourceBindingKey,
   composeWrappedSourceMetadata,
   defineInheritedAnnotationParser,
   getDelegatingSuggestRuntimeNodes,
@@ -741,6 +742,41 @@ export function prompt<M extends Mode, TValue, TState>(
     return prototype !== Object.prototype && prototype !== null;
   }
 
+  function hasSourceBindingMarker(state: unknown): boolean {
+    return state != null &&
+      typeof state === "object" &&
+      "hasCliValue" in state &&
+      Object.getOwnPropertySymbols(state).length > 0;
+  }
+
+  function shouldCompleteFromSourceBinding(
+    cliState: unknown,
+    state: unknown,
+  ): boolean {
+    const cliStateIsInjectedAnnotationWrapper = cliState != null &&
+      typeof cliState === "object" &&
+      unwrapInjectedAnnotationWrapper(cliState) !== cliState;
+    const requiresSourceBindingForAnnotationWrapper =
+      Reflect.get(parser, annotationWrapperRequiresSourceBindingKey) === true;
+    const hasNestedSourceBinding = hasSourceBindingMarker(cliState) ||
+      (Array.isArray(cliState) &&
+        cliState.length === 1 &&
+        (hasSourceBindingMarker(cliState[0]) ||
+          (
+            cliState[0] != null &&
+            typeof cliState[0] === "object" &&
+            annotationKey in cliState[0]
+          )));
+    if (
+      cliStateIsInjectedAnnotationWrapper &&
+      requiresSourceBindingForAnnotationWrapper
+    ) {
+      return hasNestedSourceBinding;
+    }
+    return shouldAttemptInnerCompletion(cliState, state) ||
+      hasNestedSourceBinding;
+  }
+
   /**
    * Executes the configured prompt and normalizes its result.
    *
@@ -1182,26 +1218,10 @@ export function prompt<M extends Mode, TValue, TState>(
           // Symbol key plus a hasCliValue flag.  Check for both to avoid
           // false positives from unrelated objects that happen to have a
           // hasCliValue property.
-          const hasSourceBindingMarker = (
-            s: unknown,
-          ): boolean =>
-            s != null &&
-            typeof s === "object" &&
-            "hasCliValue" in s &&
-            Object.getOwnPropertySymbols(s).length > 0;
-          const cliStateIsPassthrough = cliState != null &&
-            typeof cliState === "object" &&
-            unwrapInjectedAnnotationWrapper(cliState) !== cliState;
-          const isSourceBinding =
-            (shouldAttemptInnerCompletion(cliState, state) &&
-              !cliStateIsPassthrough) ||
-            hasSourceBindingMarker(cliState) ||
-            (Array.isArray(cliState) &&
-              cliState.length === 1 &&
-              (hasSourceBindingMarker(cliState[0]) ||
-                (typeof cliState[0] === "object" &&
-                  cliState[0] != null &&
-                  annotationKey in cliState[0])));
+          const isSourceBinding = shouldCompleteFromSourceBinding(
+            cliState,
+            state,
+          );
           if (isSourceBinding) {
             // Source-binding wrapper detected — complete from the state
             // produced by parse() (not from initialState) so that any
@@ -1261,7 +1281,7 @@ export function prompt<M extends Mode, TValue, TState>(
         typeof cliState === "object" &&
         unwrapInjectedAnnotationWrapper(cliState) !== cliState;
 
-      if (shouldAttemptInnerCompletion(cliState, state)) {
+      if (shouldCompleteFromSourceBinding(cliState, state)) {
         const useCompleteResultOrPrompt = (
           result: ValueParserResult<TValue>,
         ): Promise<ValueParserResult<TValue>> => {

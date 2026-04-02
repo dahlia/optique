@@ -494,6 +494,18 @@ export const inheritParentAnnotationsKey: unique symbol = Symbol.for(
 );
 
 /**
+ * Internal marker for wrapper parsers that should only treat annotation-only
+ * primitive wrapper states as completable when a nested source-binding wrapper
+ * produced them.
+ *
+ * @internal
+ */
+export const annotationWrapperRequiresSourceBindingKey: unique symbol = Symbol
+  .for(
+    "@optique/core/annotationWrapperRequiresSourceBinding",
+  );
+
+/**
  * The context of the parser, which includes the input buffer and the state.
  *
  * `ParserContext` provides structured access to shared execution context
@@ -1176,6 +1188,22 @@ export function defineInheritedAnnotationParser(
   parser: object,
 ): void {
   Object.defineProperty(parser, inheritParentAnnotationsKey, {
+    value: true,
+    configurable: true,
+    enumerable: false,
+  });
+}
+
+/**
+ * Marks a wrapper parser as requiring a real source-binding state before
+ * annotation-only primitive wrappers should trigger completion.
+ *
+ * @internal
+ */
+export function defineSourceBindingOnlyAnnotationCompletionParser(
+  parser: object,
+): void {
+  Object.defineProperty(parser, annotationWrapperRequiresSourceBindingKey, {
     value: true,
     configurable: true,
     enumerable: false,
