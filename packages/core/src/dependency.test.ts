@@ -693,11 +693,10 @@ describe("DeferredParseState", () => {
       const derived = mode.derive<"ok", "sync">({
         metavar: "VALUE",
         mode: "sync",
-        factory: () =>
-          asyncChoice(["ok"] as const) as unknown as ValueParser<
-            "sync",
-            "ok"
-          >,
+        // @ts-expect-error: intentional sync/async mode mismatch coverage.
+        factory: () => {
+          return asyncChoice(["ok"] as const);
+        },
         defaultValue: () => {
           defaultCalls++;
           return defaultCalls === 1 ? "dev" : "prod";
@@ -739,11 +738,10 @@ describe("DeferredParseState", () => {
         metavar: "VALUE",
         mode: "sync",
         dependencies: [env, region] as const,
-        factory: () =>
-          asyncChoice(["ok"] as const) as unknown as ValueParser<
-            "sync",
-            "ok"
-          >,
+        // @ts-expect-error: intentional sync/async mode mismatch coverage.
+        factory: () => {
+          return asyncChoice(["ok"] as const);
+        },
         defaultValues: () => {
           defaultCalls++;
           return defaultCalls === 1
@@ -898,6 +896,43 @@ describe("snapshotDefaultDependencyValues", () => {
     releaseParse();
 
     const result = await pending;
+    assert.ok(result.success);
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(result), [
+      "dev",
+      "us",
+    ]);
+  });
+
+  test("deriveFromSync snapshots defaults before parse mutates the tuple", () => {
+    const env = dependency(choice(["dev", "prod"] as const));
+    const region = dependency(choice(["us", "eu"] as const));
+    const defaults: ["dev" | "prod", "us" | "eu"] = ["dev", "us"];
+
+    const derived = deriveFromSync({
+      metavar: "URL",
+      dependencies: [env, region] as const,
+      factory: (currentEnv, currentRegion) => ({
+        $mode: "sync" as const,
+        metavar: "URL",
+        placeholder: "",
+        parse(input: string): ValueParserResult<string> {
+          defaults[0] = "prod";
+          defaults[1] = "eu";
+          return input === `https://${currentEnv}.${currentRegion}.example.com`
+            ? { success: true as const, value: input }
+            : {
+              success: false as const,
+              error: message`Unexpected URL.`,
+            };
+        },
+        format(value: string): string {
+          return value;
+        },
+      }),
+      defaultValues: () => defaults,
+    });
+
+    const result = derived.parse("https://dev.us.example.com");
     assert.ok(result.success);
     assert.deepEqual(getSnapshottedDefaultDependencyValues(result), [
       "dev",
@@ -3951,16 +3986,14 @@ describe("coverage-guided dependency parser tests", () => {
 
   test("deriveFrom sync parser should reject async parser mode at parse time", async () => {
     // Intentionally declare mode: "sync" but return an async parser from the
-    // factory (via cast) to test runtime mode-mismatch detection.
+    // factory to test runtime mode-mismatch detection.
     const derived = deriveFrom<readonly [], "ok", "sync">({
       metavar: "VALUE",
       mode: "sync",
       dependencies: [] as const,
+      // @ts-expect-error: intentional sync/async mode mismatch coverage.
       factory: () => {
-        return asyncChoice(["ok"] as const) as unknown as ValueParser<
-          "sync",
-          "ok"
-        >;
+        return asyncChoice(["ok"] as const);
       },
       defaultValues: () => [] as const,
     });
@@ -4085,14 +4118,12 @@ describe("coverage-guided dependency parser tests", () => {
       metavar: "VALUE",
       mode: "sync",
       dependencies: [modeParser, envParser] as const,
+      // @ts-expect-error: intentional sync/async mode mismatch coverage.
       factory: (
         _mode: "sync" | "async",
         _env: "dev" | "prod",
       ) => {
-        return asyncChoice(["ok"] as const) as unknown as ValueParser<
-          "sync",
-          "ok"
-        >;
+        return asyncChoice(["ok"] as const);
       },
       defaultValues: () => ["sync", "dev"] as const,
     });
@@ -4110,15 +4141,13 @@ describe("coverage-guided dependency parser tests", () => {
     }
 
     // Intentionally declare mode: "sync" while factory returns async parser
-    // (via cast) to test runtime mode-mismatch detection in single derive.
+    // to test runtime mode-mismatch detection in single derive.
     const singleDerived = modeParser.derive<"ok", "sync">({
       metavar: "VALUE",
       mode: "sync",
+      // @ts-expect-error: intentional sync/async mode mismatch coverage.
       factory: (_mode: "sync" | "async") => {
-        return asyncChoice(["ok"] as const) as unknown as ValueParser<
-          "sync",
-          "ok"
-        >;
+        return asyncChoice(["ok"] as const);
       },
       defaultValue: () => "sync" as const,
     });

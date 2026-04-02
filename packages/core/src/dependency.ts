@@ -937,9 +937,10 @@ function createSyncDerivedFromParser<
           ? failure
           : snapshotDefaultDependencyValues(failure, sourceValues);
       }
+      const snapshot = [...sourceValues];
       return snapshotDefaultDependencyValues(
         derivedParser.parse(input),
-        sourceValues,
+        snapshot,
       );
     },
 
