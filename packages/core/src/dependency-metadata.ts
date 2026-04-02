@@ -248,8 +248,12 @@ export function extractDependencyMetadata<M extends Mode, T>(
 // =============================================================================
 
 /**
- * Extracts the source parse result from a bare `DependencySourceState`.
- * Used as the base `extractSourceValue` for plain dependency sources.
+ * Extracts the source parse result from a plain source state.
+ *
+ * Accepts either a `DependencySourceState` or a bare
+ * `ValueParserResult`-shaped object, and returns `undefined` for
+ * unrelated states. Used as the base `extractSourceValue` for plain
+ * dependency sources.
  */
 function extractFromBareState(
   state: unknown,

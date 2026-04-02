@@ -20,6 +20,7 @@ import {
   fillMissingSourceDefaultsAsync,
   replayDerivedParser,
   replayDerivedParserAsync,
+  resolveStateWithRuntime,
   type RuntimeNode,
 } from "./dependency-runtime.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
@@ -27,10 +28,12 @@ import {
   createDeferredParseState,
   createDependencySourceState,
   createPendingDependencySourceState,
+  dependencyId,
   DependencyRegistry,
   isDependencySourceState,
   parseWithDependency,
 } from "./dependency.ts";
+import { message } from "./message.ts";
 import { unmatchedNonCliDependencySourceStateMarker } from "./parser.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 
@@ -787,6 +790,36 @@ describe("fillMissingSourceDefaults", () => {
     assert.equal(failures[0].sourceId, sourceId);
     assert.ok(!failures[0].error.success);
   });
+
+  test("throws when sync default seeding receives a thenable", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            extractSourceValue: bareExtract,
+            preservesSourceValue: true,
+            getMissingSourceValue: () => ({ then() {} }) as never,
+          },
+        },
+      },
+      state: undefined,
+    }];
+
+    assert.throws(
+      () => fillMissingSourceDefaults(nodes, runtime),
+      {
+        name: "TypeError",
+        message:
+          /fillMissingSourceDefaults\(\) received an async getMissingSourceValue\(\) result/i,
+      },
+    );
+    assert.ok(!runtime.hasSource(sourceId));
+  });
 });
 
 describe("fillMissingSourceDefaultsAsync", () => {
@@ -964,6 +997,37 @@ describe("replayDerivedParser", () => {
       assert.equal(result.value, "parsed-snapshotted-dev");
     }
   });
+
+  test("throws when sync replay receives a thenable", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    runtime.registerSource(sourceId, "prod", "cli");
+    const metadata: ParserDependencyMetadata = {
+      derived: {
+        kind: "derived",
+        dependencyIds: [sourceId],
+        replayParse: () => ({ then() {} }) as never,
+      },
+    };
+
+    assert.throws(
+      () =>
+        replayDerivedParser(
+          {
+            path: ["level"],
+            parser: { dependencyMetadata: metadata },
+            state: {},
+          },
+          "warn",
+          runtime,
+        ),
+      {
+        name: "TypeError",
+        message:
+          /replayDerivedParser\(\) received an async replayParse\(\) result/i,
+      },
+    );
+  });
 });
 
 describe("replayDerivedParserAsync", () => {
@@ -1056,6 +1120,37 @@ describe("extractRawInputFromState", () => {
 
   test("returns undefined for array with non-deferred element", () => {
     assert.equal(extractRawInputFromState(["foo"]), undefined);
+  });
+});
+
+describe("resolveStateWithRuntime", () => {
+  test("throws when sync deferred replay receives a thenable", () => {
+    const depId = Symbol("env");
+    const deferred = createDeferredParseState(
+      "warn",
+      {
+        [dependencyId]: depId,
+        [parseWithDependency]: () =>
+          ({ then() {} }) as PromiseLike<
+            ValueParserResult<unknown>
+          >,
+      } as never,
+      {
+        success: false,
+        error: message`pending callback failed`,
+      },
+    );
+    const runtime = createDependencyRuntimeContext();
+    runtime.registerSource(depId, "prod", "cli");
+
+    assert.throws(
+      () => resolveStateWithRuntime(deferred, runtime),
+      {
+        name: "TypeError",
+        message:
+          /resolveStateWithRuntime\(\) received an async parseWithDependency\(\) result/i,
+      },
+    );
   });
 });
 

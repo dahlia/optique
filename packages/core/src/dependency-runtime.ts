@@ -647,6 +647,9 @@ export async function collectExplicitSourceValuesAsync(
  * @param nodes The runtime nodes to inspect.
  * @param runtime The dependency runtime context.
  * @returns Failures from default evaluation (empty if all succeeded).
+ * @throws {TypeError} If `getMissingSourceValue()` returns a promise-like
+ *         result. Use {@link fillMissingSourceDefaultsAsync} when async
+ *         default extraction is expected.
  * @internal
  * @since 1.0.0
  */
@@ -688,8 +691,13 @@ export function fillMissingSourceDefaults(
       });
       continue;
     }
-    // Only handle sync results here; async handled by async variant
-    if (isPromiseLike(result)) continue;
+    if (isPromiseLike(result)) {
+      throw new TypeError(
+        `fillMissingSourceDefaults() received an async getMissingSourceValue() result for ${
+          String(meta.source.sourceId)
+        }. Use fillMissingSourceDefaultsAsync() instead.`,
+      );
+    }
     if (result.success) {
       runtime.registerSource(
         meta.source.sourceId,
@@ -773,6 +781,8 @@ export async function fillMissingSourceDefaultsAsync(
  * @param rawInput The raw input to replay.
  * @param runtime The dependency runtime context.
  * @returns The replay result, or `undefined`.
+ * @throws {TypeError} If `replayParse()` returns a promise-like result.
+ *         Use {@link replayDerivedParserAsync} for async replay.
  * @internal
  * @since 1.0.0
  */
@@ -816,8 +826,11 @@ export function replayDerivedParser(
   if (cached != null) return cached;
 
   const result = meta.derived.replayParse(rawInput, resolution.values);
-  // Handle sync result only
-  if (isPromiseLike(result)) return undefined;
+  if (isPromiseLike(result)) {
+    throw new TypeError(
+      "replayDerivedParser() received an async replayParse() result. Use replayDerivedParserAsync() instead.",
+    );
+  }
 
   runtime.setReplayResult(key, result);
   return result;
@@ -966,7 +979,11 @@ function resolveSingleDeferred(
     deferred.rawInput,
     depValue,
   );
-  if (isPromiseLike(result)) return deferred.preliminaryResult;
+  if (isPromiseLike(result)) {
+    throw new TypeError(
+      "resolveStateWithRuntime() received an async parseWithDependency() result. Use resolveStateWithRuntimeAsync() instead.",
+    );
+  }
   return result;
 }
 
@@ -1049,6 +1066,9 @@ export function collectSourcesFromState(
  * @param state The state tree to resolve.
  * @param runtime The dependency runtime context.
  * @returns The resolved state tree.
+ * @throws {TypeError} If a deferred parser returns a promise-like result from
+ *         `parseWithDependency()`. Use {@link resolveStateWithRuntimeAsync}
+ *         for async resolution.
  * @internal
  * @since 1.0.0
  */

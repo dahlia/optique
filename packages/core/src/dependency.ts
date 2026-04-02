@@ -1882,15 +1882,16 @@ export function createDeferredParseState<T, S>(
 
   // Get the default values if available
   const defaultValuesFn = Object.hasOwn(parser, defaultValues)
-    ? (parser as unknown as { [defaultValues]: () => readonly unknown[] })[
-      defaultValues
-    ]
+    ? parser[defaultValues]
     : undefined;
 
   let defaultVals = getSnapshottedDefaultDependencyValues(preliminaryResult);
+  if (defaultVals != null) {
+    defaultVals = [...defaultVals];
+  }
   if (defaultVals == null && defaultValuesFn != null) {
     try {
-      defaultVals = defaultValuesFn();
+      defaultVals = [...defaultValuesFn()];
     } catch {
       defaultVals = undefined;
     }

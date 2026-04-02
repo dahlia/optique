@@ -243,9 +243,11 @@ When `withDefault()` wraps a dependency source, the default also participates
 in dependency resolution. Derived parsers see the same fallback value that the
 user-facing parser returns, even through larger compositions such as
 `object()` or `merge()`. One exception is `map()`: once a
-source value has been transformed, a later `withDefault()` only supplies a
-fallback for the mapped output. It does not invent a dependency-source value
-for downstream derived parsers.
+source value has been transformed anywhere in the wrapper chain,
+`withDefault()` only supplies a fallback for the mapped output. This applies
+both to `withDefault(map(source), ...)` and to `map(withDefault(source), ...)`.
+In either form, the default does not invent a dependency-source value for
+downstream derived parsers.
 
 ### Default normalization
 

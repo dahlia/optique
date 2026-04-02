@@ -772,6 +772,74 @@ describe("DeferredParseState", () => {
       assert.equal(defaultCalls, 2);
     },
   );
+
+  test(
+    "createDeferredParseState clones snapshotted default values",
+    () => {
+      const env = dependency(choice(["dev", "prod"] as const));
+      const region = dependency(choice(["us", "eu"] as const));
+      const parser = deriveFromSync({
+        metavar: "URL",
+        dependencies: [env, region] as const,
+        factory: (currentEnv, currentRegion) =>
+          choice(
+            [`https://${currentEnv}.${currentRegion}.example.com`] as const,
+          ),
+        defaultValues: () => ["dev", "us"] as const,
+      });
+      const preliminaryResult = snapshotDefaultDependencyValues(
+        {
+          success: false as const,
+          error: message`pending callback failed`,
+        },
+        ["dev", "us"] as const,
+      );
+      const deferred = createDeferredParseState(
+        "https://dev.us.example.com",
+        parser,
+        preliminaryResult,
+      );
+      const snapshot = getSnapshottedDefaultDependencyValues(preliminaryResult);
+
+      assert.ok(snapshot != null);
+      if (snapshot == null) return;
+      (snapshot as ["dev" | "prod", "us" | "eu"])[0] = "prod";
+      (snapshot as ["dev" | "prod", "us" | "eu"])[1] = "eu";
+
+      assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
+    },
+  );
+
+  test(
+    "createDeferredParseState clones fallback default values",
+    () => {
+      const env = dependency(choice(["dev", "prod"] as const));
+      const region = dependency(choice(["us", "eu"] as const));
+      const defaults: ["dev" | "prod", "us" | "eu"] = ["dev", "us"];
+      const parser = deriveFromSync({
+        metavar: "URL",
+        dependencies: [env, region] as const,
+        factory: (currentEnv, currentRegion) =>
+          choice(
+            [`https://${currentEnv}.${currentRegion}.example.com`] as const,
+          ),
+        defaultValues: () => defaults,
+      });
+      const deferred = createDeferredParseState(
+        "https://dev.us.example.com",
+        parser,
+        {
+          success: false,
+          error: message`pending callback failed`,
+        },
+      );
+
+      defaults[0] = "prod";
+      defaults[1] = "eu";
+
+      assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
+    },
+  );
 });
 
 describe("snapshotDefaultDependencyValues", () => {
