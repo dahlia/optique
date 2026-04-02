@@ -2725,6 +2725,26 @@ describe("bindConfig() with dependency sources across tuple()/concat() boundarie
     );
   });
 
+  test("tuple() suggest does not override invalid CLI source with config", () => {
+    const { parser, annotations } = createTupleParser();
+    const texts = suggestSync(
+      parser,
+      ["--mode", "invalid", "--level", "s"],
+      { annotations },
+    )
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+
+    assert.ok(
+      !texts.includes("silent"),
+      `Did not expect "silent" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("strict"),
+      `Did not expect "strict" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+  });
+
   test("concat() parse uses config-backed dependency source", () => {
     const { parser, annotations } = createConcatParser();
     const result = parse(parser, ["--level", "silent"], { annotations });
@@ -2758,6 +2778,26 @@ describe("bindConfig() with dependency sources across tuple()/concat() boundarie
     assert.ok(
       !texts.includes("verbose"),
       `Did not expect "verbose" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+  });
+
+  test("concat() suggest does not override invalid CLI source with config", () => {
+    const { parser, annotations } = createConcatParser();
+    const texts = suggestSync(
+      parser,
+      ["--mode", "invalid", "--level", "s"],
+      { annotations },
+    )
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+
+    assert.ok(
+      !texts.includes("silent"),
+      `Did not expect "silent" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("strict"),
+      `Did not expect "strict" in suggestions, got: ${JSON.stringify(texts)}`,
     );
   });
 });

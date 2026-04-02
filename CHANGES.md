@@ -38,6 +38,9 @@ To be released.
     suggestion flows through the same wrapper contract used by `object()` and
     `merge()`, so `bindConfig()`, `bindEnv()`, and `prompt()` compositions
     expose fallback-resolved source values to derived parsers consistently.
+    `tuple().suggest()` also keeps explicit source matches and validation
+    failures sticky, so later derived suggestions no longer fall back to
+    defaults after an invalid source token.
     [[#750], [#768], [#769]]
 
  -  Removed the last built-in uses of the old dependency-state bridge in

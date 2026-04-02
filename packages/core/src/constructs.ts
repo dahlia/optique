@@ -5289,36 +5289,45 @@ function suggestTupleSync(
   parsers: readonly Parser<"sync", unknown, unknown>[],
 ): Suggestion[] {
   const suggestions: Suggestion[] = [];
-  const stateArray = context.state as unknown[] | undefined;
+  const advanced = advanceTupleSuggestContextSync(context, parsers);
+  const advancedContext = advanced.context;
+  const stateArray = advancedContext.state as unknown[] | undefined;
   const runtime = createDependencyRuntimeContext(
-    context.dependencyRegistry?.clone(),
+    advancedContext.dependencyRegistry?.clone(),
   );
   if (stateArray && Array.isArray(stateArray)) {
     const nodes = buildSuggestRuntimeNodesFromArray(
       parsers,
       stateArray,
-      context.exec?.path,
+      advancedContext.exec?.path,
     );
     collectExplicitSourceValues(nodes, runtime);
     fillMissingSourceDefaults(nodes, runtime);
     collectSourcesFromState(stateArray, runtime);
     completeDependencySourceDefaults(
       {
-        ...context,
+        ...advancedContext,
         state: createAnnotatedArrayStateRecord(stateArray),
       },
       buildIndexedParserPairs(parsers),
       runtime.registry,
-      context.exec,
+      advancedContext.exec,
     );
   }
+  markFailedTupleSuggestSources(
+    parsers,
+    stateArray,
+    advanced.failedParserIndexes,
+    runtime,
+    advancedContext.exec?.path,
+  );
   const contextWithRegistry = {
-    ...context,
+    ...advancedContext,
     dependencyRegistry: runtime.registry,
-    ...(context.exec != null
+    ...(advancedContext.exec != null
       ? {
         exec: {
-          ...context.exec,
+          ...advancedContext.exec,
           dependencyRuntime: runtime,
           dependencyRegistry: runtime.registry,
         },
@@ -5349,36 +5358,48 @@ async function* suggestTupleAsync(
   parsers: readonly Parser<Mode, unknown, unknown>[],
 ): AsyncGenerator<Suggestion> {
   const suggestions: Suggestion[] = [];
-  const stateArray = context.state as unknown[] | undefined;
+  const advanced = await advanceTupleSuggestContextAsync(
+    context,
+    parsers,
+  );
+  const advancedContext = advanced.context;
+  const stateArray = advancedContext.state as unknown[] | undefined;
   const runtime = createDependencyRuntimeContext(
-    context.dependencyRegistry?.clone(),
+    advancedContext.dependencyRegistry?.clone(),
   );
   if (stateArray && Array.isArray(stateArray)) {
     const nodes = buildSuggestRuntimeNodesFromArray(
       parsers,
       stateArray,
-      context.exec?.path,
+      advancedContext.exec?.path,
     );
     await collectExplicitSourceValuesAsync(nodes, runtime);
     await fillMissingSourceDefaultsAsync(nodes, runtime);
     collectSourcesFromState(stateArray, runtime);
     await completeDependencySourceDefaultsAsync(
       {
-        ...context,
+        ...advancedContext,
         state: createAnnotatedArrayStateRecord(stateArray),
       },
       buildIndexedParserPairs(parsers),
       runtime.registry,
-      context.exec,
+      advancedContext.exec,
     );
   }
+  markFailedTupleSuggestSources(
+    parsers,
+    stateArray,
+    advanced.failedParserIndexes,
+    runtime,
+    advancedContext.exec?.path,
+  );
   const contextWithRegistry = {
-    ...context,
+    ...advancedContext,
     dependencyRegistry: runtime.registry,
-    ...(context.exec != null
+    ...(advancedContext.exec != null
       ? {
         exec: {
-          ...context.exec,
+          ...advancedContext.exec,
           dependencyRuntime: runtime,
           dependencyRegistry: runtime.registry,
         },
@@ -5407,6 +5428,257 @@ async function* suggestTupleAsync(
   }
 
   yield* deduplicateSuggestions(suggestions);
+}
+
+interface TupleSuggestAdvanceResult {
+  readonly context: ParserContext<readonly unknown[]>;
+  readonly failedParserIndexes: readonly number[];
+}
+
+function advanceTupleSuggestContextSync(
+  context: ParserContext<readonly unknown[]>,
+  parsers: readonly Parser<"sync", unknown, unknown>[],
+): TupleSuggestAdvanceResult {
+  let currentContext = context;
+  const matchedParsers = new Set<number>();
+
+  while (currentContext.buffer.length > 0 && matchedParsers.size < parsers.length) {
+    let foundMatch = false;
+    let failedParserIndexes: number[] = [];
+    let deepestFailure = 0;
+    const stateArray = Array.isArray(currentContext.state)
+      ? [...currentContext.state]
+      : parsers.map((parser) => parser.initialState);
+    const remainingParsers = parsers
+      .map((parser, index) => [parser, index] as const)
+      .filter(([_, index]) => !matchedParsers.has(index))
+      .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
+
+    for (const [parser, index] of remainingParsers) {
+      const result = parser.parse(
+        withChildContext(currentContext, index, stateArray[index], parser),
+      );
+
+      if (result.success && result.consumed.length > 0) {
+        const newStateArray = annotateFreshArray(
+          currentContext.state,
+          stateArray.map((state, idx) =>
+            idx === index ? result.next.state : state
+          ),
+        );
+        const mergedExec = mergeChildExec(currentContext.exec, result.next.exec);
+        currentContext = {
+          ...currentContext,
+          buffer: result.next.buffer,
+          optionsTerminated: result.next.optionsTerminated,
+          state: newStateArray as readonly unknown[],
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        };
+        matchedParsers.add(index);
+        foundMatch = true;
+        break;
+      } else if (!result.success && result.consumed > 0) {
+        if (result.consumed > deepestFailure) {
+          deepestFailure = result.consumed;
+          failedParserIndexes = [index];
+        } else if (result.consumed === deepestFailure) {
+          failedParserIndexes.push(index);
+        }
+      }
+    }
+
+    if (!foundMatch) {
+      for (const [parser, index] of remainingParsers) {
+        const result = parser.parse(
+          withChildContext(currentContext, index, stateArray[index], parser),
+        );
+
+        if (result.success && result.consumed.length < 1) {
+          const newStateArray = annotateFreshArray(
+            currentContext.state,
+            stateArray.map((state, idx) =>
+              idx === index ? result.next.state : state
+            ),
+          );
+          const mergedExec = mergeChildExec(currentContext.exec, result.next.exec);
+          currentContext = {
+            ...currentContext,
+            state: newStateArray as readonly unknown[],
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
+          };
+          matchedParsers.add(index);
+          foundMatch = true;
+          break;
+        } else if (!result.success && result.consumed < 1) {
+          matchedParsers.add(index);
+          foundMatch = true;
+          break;
+        }
+      }
+    }
+
+    if (!foundMatch) {
+      return {
+        context: currentContext,
+        failedParserIndexes,
+      };
+    }
+  }
+
+  return {
+    context: currentContext,
+    failedParserIndexes: [],
+  };
+}
+
+async function advanceTupleSuggestContextAsync(
+  context: ParserContext<readonly unknown[]>,
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+): Promise<TupleSuggestAdvanceResult> {
+  let currentContext = context;
+  const matchedParsers = new Set<number>();
+
+  while (currentContext.buffer.length > 0 && matchedParsers.size < parsers.length) {
+    let foundMatch = false;
+    let failedParserIndexes: number[] = [];
+    let deepestFailure = 0;
+    const stateArray = Array.isArray(currentContext.state)
+      ? [...currentContext.state]
+      : parsers.map((parser) => parser.initialState);
+    const remainingParsers = parsers
+      .map((parser, index) => [parser, index] as const)
+      .filter(([_, index]) => !matchedParsers.has(index))
+      .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
+
+    for (const [parser, index] of remainingParsers) {
+      const result = await parser.parse(
+        withChildContext(currentContext, index, stateArray[index], parser),
+      );
+
+      if (result.success && result.consumed.length > 0) {
+        const newStateArray = annotateFreshArray(
+          currentContext.state,
+          stateArray.map((state, idx) =>
+            idx === index ? result.next.state : state
+          ),
+        );
+        const mergedExec = mergeChildExec(currentContext.exec, result.next.exec);
+        currentContext = {
+          ...currentContext,
+          buffer: result.next.buffer,
+          optionsTerminated: result.next.optionsTerminated,
+          state: newStateArray as readonly unknown[],
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        };
+        matchedParsers.add(index);
+        foundMatch = true;
+        break;
+      } else if (!result.success && result.consumed > 0) {
+        if (result.consumed > deepestFailure) {
+          deepestFailure = result.consumed;
+          failedParserIndexes = [index];
+        } else if (result.consumed === deepestFailure) {
+          failedParserIndexes.push(index);
+        }
+      }
+    }
+
+    if (!foundMatch) {
+      for (const [parser, index] of remainingParsers) {
+        const result = await parser.parse(
+          withChildContext(currentContext, index, stateArray[index], parser),
+        );
+
+        if (result.success && result.consumed.length < 1) {
+          const newStateArray = annotateFreshArray(
+            currentContext.state,
+            stateArray.map((state, idx) =>
+              idx === index ? result.next.state : state
+            ),
+          );
+          const mergedExec = mergeChildExec(currentContext.exec, result.next.exec);
+          currentContext = {
+            ...currentContext,
+            state: newStateArray as readonly unknown[],
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
+          };
+          matchedParsers.add(index);
+          foundMatch = true;
+          break;
+        } else if (!result.success && result.consumed < 1) {
+          matchedParsers.add(index);
+          foundMatch = true;
+          break;
+        }
+      }
+    }
+
+    if (!foundMatch) {
+      return {
+        context: currentContext,
+        failedParserIndexes,
+      };
+    }
+  }
+
+  return {
+    context: currentContext,
+    failedParserIndexes: [],
+  };
+}
+
+function markFailedTupleSuggestSources(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+  stateArray: readonly unknown[] | undefined,
+  failedParserIndexes: readonly number[],
+  runtime: ReturnType<typeof createDependencyRuntimeContext>,
+  parentPath?: readonly PropertyKey[],
+): void {
+  if (failedParserIndexes.length < 1) return;
+  const prefix = parentPath ?? [];
+  const failedSourceIds = new Set<symbol>();
+
+  for (const index of failedParserIndexes) {
+    const parser = parsers[index];
+    if (parser == null) continue;
+
+    const parserState = stateArray && Array.isArray(stateArray)
+      ? stateArray[index]
+      : parser.initialState;
+    const nodes = getParserSuggestRuntimeNodes(
+      parser,
+      getAnnotatedChildState(stateArray, parserState, parser),
+      [...prefix, index],
+    );
+    for (const node of nodes) {
+      const sourceId = node.parser.dependencyMetadata?.source?.sourceId;
+      if (sourceId != null) failedSourceIds.add(sourceId);
+    }
+  }
+
+  for (const sourceId of failedSourceIds) {
+    runtime.markSourceFailed(sourceId);
+  }
 }
 
 /**

@@ -455,11 +455,7 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     assert.ok(texts.includes("trace"), `Expected "trace" in ${texts}`);
   });
 
-  test("B.3 tuple() — suggests with default (tuple does not pre-complete sources)", () => {
-    // Note: tuple() currently does not pre-complete dependency sources
-    // during the suggest path, so suggestions use the default value
-    // rather than the resolved source.  The target behavior (resolving
-    // from the parsed source) is tracked in #750.
+  test("B.3 tuple() — suggests from the parsed source value", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = tuple([
@@ -468,9 +464,29 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     ]);
     const suggestions = suggestSync(parser, ["--env", "prod", "--log", ""]);
     const texts = literalTexts(suggestions);
-    // Current: falls back to default "dev"
-    assert.ok(texts.includes("debug"), `Expected "debug" in ${texts}`);
-    assert.ok(texts.includes("trace"), `Expected "trace" in ${texts}`);
+    assert.ok(texts.includes("info"), `Expected "info" in ${texts}`);
+    assert.ok(texts.includes("warn"), `Expected "warn" in ${texts}`);
+    assert.ok(!texts.includes("debug"), `Unexpected "debug" in ${texts}`);
+  });
+
+  test("B.3a tuple() — does not fall back after invalid source input", () => {
+    const env = createEnvSource();
+    const log = createDerivedLogLevel(env);
+    const parser = tuple([
+      option("--env", env),
+      option("--log", log),
+    ]);
+    const suggestions = suggestSync(parser, [
+      "--env",
+      "invalid",
+      "--log",
+      "",
+    ]);
+    const texts = literalTexts(suggestions);
+    assert.ok(!texts.includes("debug"), `Unexpected "debug" in ${texts}`);
+    assert.ok(!texts.includes("trace"), `Unexpected "trace" in ${texts}`);
+    assert.ok(!texts.includes("info"), `Unexpected "info" in ${texts}`);
+    assert.ok(!texts.includes("warn"), `Unexpected "warn" in ${texts}`);
   });
 
   test("B.4 concat() — suggests with cross-boundary source", () => {
