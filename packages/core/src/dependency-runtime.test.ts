@@ -31,6 +31,7 @@ import {
   isDependencySourceState,
   parseWithDependency,
 } from "./dependency.ts";
+import { unmatchedNonCliDependencySourceStateMarker } from "./parser.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 
 // =============================================================================
@@ -729,6 +730,36 @@ describe("fillMissingSourceDefaults", () => {
     assert.ok(!runtime.hasSource(sourceId));
   });
 
+  test("fills default for wrapped no-CLI source state", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const parser = {
+      initialState: undefined,
+      [unmatchedNonCliDependencySourceStateMarker]: true,
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          extractSourceValue: bareExtract,
+          preservesSourceValue: true,
+          getMissingSourceValue: () => ({
+            success: true as const,
+            value: "dev",
+          }),
+        },
+      },
+    };
+    const nodes = buildRuntimeNodesFromPairs(
+      [["env", parser]],
+      { env: [{ hasCliValue: false, cliState: undefined }] },
+    );
+
+    fillMissingSourceDefaults(nodes, runtime);
+
+    assert.ok(runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), "dev");
+  });
+
   test("handles throwing default thunks gracefully", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
@@ -812,6 +843,38 @@ describe("fillMissingSourceDefaultsAsync", () => {
     const failures = await fillMissingSourceDefaultsAsync(nodes, runtime);
     assert.equal(failures.length, 1);
     assert.ok(!runtime.hasSource(sourceId));
+  });
+
+  test("fills async default for wrapped no-CLI source state", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const parser = {
+      initialState: undefined,
+      [unmatchedNonCliDependencySourceStateMarker]: true,
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          extractSourceValue: bareExtract,
+          preservesSourceValue: true,
+          getMissingSourceValue: () =>
+            Promise.resolve({
+              success: true as const,
+              value: "async-dev",
+            }),
+        },
+      },
+    };
+    const nodes = buildRuntimeNodesFromPairs(
+      [["env", parser]],
+      { env: [{ hasCliValue: false, cliState: undefined }] },
+    );
+
+    const failures = await fillMissingSourceDefaultsAsync(nodes, runtime);
+
+    assert.equal(failures.length, 0);
+    assert.ok(runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), "async-dev");
   });
 });
 

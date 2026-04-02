@@ -1194,22 +1194,17 @@ function isMatchedState(
   },
 ): boolean {
   if (fieldState === undefined) return false;
-  // PendingDependencySourceState in an array means the option was not provided
-  if (
-    Array.isArray(fieldState) &&
-    fieldState.length === 1 &&
-    isPendingDependencySourceState(fieldState[0])
-  ) {
-    return false;
-  }
-  // Bare PendingDependencySourceState
-  if (isPendingDependencySourceState(fieldState)) return false;
+  const innerState = Array.isArray(fieldState) && fieldState.length === 1
+    ? fieldState[0]
+    : fieldState;
+  // PendingDependencySourceState means the option was not provided.
+  if (isPendingDependencySourceState(innerState)) return false;
   if (
     parser[unmatchedNonCliDependencySourceStateMarker] === true &&
-    fieldState != null &&
-    typeof fieldState === "object" &&
-    Object.hasOwn(fieldState, "hasCliValue") &&
-    (fieldState as { readonly hasCliValue?: unknown }).hasCliValue === false
+    innerState != null &&
+    typeof innerState === "object" &&
+    Object.hasOwn(innerState, "hasCliValue") &&
+    (innerState as { readonly hasCliValue?: unknown }).hasCliValue === false
   ) {
     return false;
   }

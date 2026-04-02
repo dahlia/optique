@@ -911,7 +911,7 @@ function createSyncDerivedFromParser<
 
     parse(input: string): ValueParserResult<T> {
       let derivedParser;
-      let sourceValues: readonly unknown[];
+      let sourceValues: readonly unknown[] | undefined;
       try {
         sourceValues = options.defaultValues();
         derivedParser = options.factory(
@@ -919,10 +919,13 @@ function createSyncDerivedFromParser<
         );
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        return {
+        const failure: ValueParserResult<T> = {
           success: false,
           error: message`Derived parser error: ${msg}`,
         };
+        return sourceValues == null
+          ? failure
+          : snapshotDefaultDependencyValues(failure, sourceValues);
       }
       if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
         return {
@@ -1066,7 +1069,7 @@ function createAsyncDerivedFromParserFromAsyncFactory<
 
     async parse(input: string): Promise<ValueParserResult<T>> {
       let derivedParser;
-      let sourceValues: readonly unknown[];
+      let sourceValues: readonly unknown[] | undefined;
       try {
         sourceValues = options.defaultValues();
         derivedParser = options.factory(
@@ -1074,10 +1077,13 @@ function createAsyncDerivedFromParserFromAsyncFactory<
         );
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        return {
+        const failure: ValueParserResult<T> = {
           success: false,
           error: message`Derived parser error: ${msg}`,
         };
+        return sourceValues == null
+          ? failure
+          : snapshotDefaultDependencyValues(failure, sourceValues);
       }
       return await parseDerivedResultWithSnapshotAsync(
         derivedParser,
@@ -1207,7 +1213,7 @@ function createAsyncDerivedFromParserFromSyncFactory<
 
     async parse(input: string): Promise<ValueParserResult<T>> {
       let derivedParser;
-      let sourceValues: readonly unknown[];
+      let sourceValues: readonly unknown[] | undefined;
       try {
         sourceValues = options.defaultValues();
         derivedParser = options.factory(
@@ -1215,10 +1221,13 @@ function createAsyncDerivedFromParserFromSyncFactory<
         );
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        return {
+        const failure: ValueParserResult<T> = {
           success: false,
           error: message`Derived parser error: ${msg}`,
         };
+        return sourceValues == null
+          ? failure
+          : snapshotDefaultDependencyValues(failure, sourceValues);
       }
       return await parseDerivedResultWithSnapshotAsync(
         derivedParser,
@@ -1366,16 +1375,21 @@ function createSyncDerivedParser<S, T>(
 
     parse(input: string): ValueParserResult<T> {
       let derivedParser;
-      let sourceValue: S;
+      let hasSourceValue = false;
+      let sourceValue!: S;
       try {
         sourceValue = options.defaultValue();
+        hasSourceValue = true;
         derivedParser = options.factory(sourceValue);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        return {
+        const failure: ValueParserResult<T> = {
           success: false,
           error: message`Derived parser error: ${msg}`,
         };
+        return hasSourceValue
+          ? snapshotDefaultDependencyValues(failure, [sourceValue])
+          : failure;
       }
       if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
         return {
@@ -1499,16 +1513,21 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
 
     async parse(input: string): Promise<ValueParserResult<T>> {
       let derivedParser;
-      let sourceValue: S;
+      let hasSourceValue = false;
+      let sourceValue!: S;
       try {
         sourceValue = options.defaultValue();
+        hasSourceValue = true;
         derivedParser = options.factory(sourceValue);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        return {
+        const failure: ValueParserResult<T> = {
           success: false,
           error: message`Derived parser error: ${msg}`,
         };
+        return hasSourceValue
+          ? snapshotDefaultDependencyValues(failure, [sourceValue])
+          : failure;
       }
       return await parseDerivedResultWithSnapshotAsync(
         derivedParser,
@@ -1615,16 +1634,21 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
 
     async parse(input: string): Promise<ValueParserResult<T>> {
       let derivedParser;
-      let sourceValue: S;
+      let hasSourceValue = false;
+      let sourceValue!: S;
       try {
         sourceValue = options.defaultValue();
+        hasSourceValue = true;
         derivedParser = options.factory(sourceValue);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        return {
+        const failure: ValueParserResult<T> = {
           success: false,
           error: message`Derived parser error: ${msg}`,
         };
+        return hasSourceValue
+          ? snapshotDefaultDependencyValues(failure, [sourceValue])
+          : failure;
       }
       return await parseDerivedResultWithSnapshotAsync(
         derivedParser,
@@ -1856,9 +1880,14 @@ export function createDeferredParseState<T, S>(
     ]
     : undefined;
 
-  const defaultVals = getSnapshottedDefaultDependencyValues(
-    preliminaryResult,
-  ) ?? (defaultValuesFn ? defaultValuesFn() : undefined);
+  let defaultVals = getSnapshottedDefaultDependencyValues(preliminaryResult);
+  if (defaultVals == null && defaultValuesFn != null) {
+    try {
+      defaultVals = defaultValuesFn();
+    } catch {
+      defaultVals = undefined;
+    }
+  }
 
   return {
     [deferredParseMarker]: true,

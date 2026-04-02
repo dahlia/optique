@@ -607,6 +607,83 @@ describe("DeferredParseState", () => {
     assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
     assert.equal(defaultCalls, 1);
   });
+
+  test(
+    "createDeferredParseState reuses snapshotted single-source defaults on factory failure",
+    () => {
+      const mode = dependency(choice(["dev", "prod"] as const));
+      let defaultCalls = 0;
+      const derived = mode.derive({
+        metavar: "LEVEL",
+        mode: "sync",
+        factory: () => {
+          throw new Error("Factory exploded.");
+        },
+        defaultValue: () => {
+          defaultCalls++;
+          return defaultCalls === 1 ? "dev" : "prod";
+        },
+      });
+
+      const preliminaryResult = derived.parse("warn");
+      assert.ok(!preliminaryResult.success);
+      assert.equal(defaultCalls, 1);
+      assert.deepEqual(
+        getSnapshottedDefaultDependencyValues(preliminaryResult),
+        ["dev"],
+      );
+
+      const deferred = createDeferredParseState(
+        "warn",
+        derived,
+        preliminaryResult,
+      );
+
+      assert.deepEqual(deferred.defaultValues, ["dev"]);
+      assert.equal(defaultCalls, 1);
+    },
+  );
+
+  test(
+    "createDeferredParseState reuses snapshotted multi-source defaults on async factory failure",
+    async () => {
+      const env = dependency(choice(["dev", "prod"] as const));
+      const region = dependency(choice(["us", "eu"] as const));
+      let defaultCalls = 0;
+      const derived = deriveFromAsync({
+        metavar: "URL",
+        dependencies: [env, region] as const,
+        factory: () => {
+          throw new Error("Factory exploded.");
+        },
+        defaultValues: () => {
+          defaultCalls++;
+          return defaultCalls === 1
+            ? ["dev", "us"] as const
+            : ["prod", "eu"] as const;
+        },
+      });
+
+      const preliminaryResult = await derived.parse(
+        "https://dev.us.example.com",
+      );
+      assert.ok(!preliminaryResult.success);
+      assert.equal(defaultCalls, 1);
+      assert.deepEqual(
+        getSnapshottedDefaultDependencyValues(preliminaryResult),
+        ["dev", "us"],
+      );
+
+      const deferred = createDeferredParseState(
+        "https://dev.us.example.com",
+        derived,
+        preliminaryResult,
+      );
+
+      assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
+      assert.equal(defaultCalls, 1);
+    },
+  );
 });
 
 describe("snapshotDefaultDependencyValues", () => {
