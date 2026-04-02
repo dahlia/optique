@@ -55,6 +55,7 @@ import type {
   Suggestion,
 } from "./parser.ts";
 import {
+  defineInheritedAnnotationParser,
   getParserSuggestRuntimeNodes,
   inheritParentAnnotationsKey,
   unmatchedNonCliDependencySourceStateMarker,
@@ -378,7 +379,7 @@ function getAnnotatedChildState(
     }
     return withAnnotationView(childState, annotations);
   }
-  return inheritAnnotations(parentState, childState);
+  return childState;
 }
 
 function buildSuggestRuntimeNodesFromPairs(
@@ -5263,6 +5264,7 @@ export function object<
     });
   }
 
+  defineInheritedAnnotationParser(objectParser);
   return objectParser;
 }
 
@@ -6081,6 +6083,7 @@ export function tuple<
     });
   }
 
+  defineInheritedAnnotationParser(tupleParser);
   return tupleParser;
 }
 
@@ -7307,6 +7310,7 @@ export function merge(
   // merge() does NOT forward normalizeValue because children may have
   // overlapping keys with last-write-wins semantics.  Normalizing through
   // an earlier child's normalizer would change keys owned by a later child.
+  defineInheritedAnnotationParser(mergeParser);
   return mergeParser;
 }
 
@@ -8344,7 +8348,7 @@ export function concat(
     };
   };
 
-  return {
+  const concatParser = {
     $mode: combinedMode,
     $valueType: [],
     $stateType: [],
@@ -8462,7 +8466,9 @@ export function concat(
       }
       return { fragments: result };
     },
-  };
+  } as Parser<Mode, readonly unknown[], readonly unknown[]>;
+  defineInheritedAnnotationParser(concatParser);
+  return concatParser;
 }
 
 /**
@@ -9901,7 +9907,7 @@ export function conditional(
     }
   }
 
-  return {
+  const conditionalParser = {
     $mode: combinedMode,
     $valueType: [],
     $stateType: [],
@@ -10006,5 +10012,11 @@ export function conditional(
 
       return { fragments };
     },
-  };
+  } as Parser<
+    Mode,
+    readonly [string | undefined, unknown],
+    ConditionalState<string>
+  >;
+  defineInheritedAnnotationParser(conditionalParser);
+  return conditionalParser;
 }

@@ -3324,6 +3324,22 @@ describe("tuple", () => {
     assert.equal(parser.initialState.length, 2);
   });
 
+  it("should preserve non-opt-in object child state identity with annotations", () => {
+    const marker = Symbol.for("@test/tuple-annotations");
+    const value = { source: "tuple" };
+    const parser = tuple([constant(value)]);
+
+    const result = parseSync(parser, [], {
+      annotations: { [marker]: true } satisfies Annotations,
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], value);
+      assert.ok(!Reflect.ownKeys(result.value[0]).includes(annotationKey));
+    }
+  });
+
   it("should parse parsers sequentially in array order", () => {
     const parser = tuple([
       option("-n", "--name", string()),
@@ -5780,6 +5796,28 @@ describe("concat", () => {
     );
   });
 
+  it("should preserve non-opt-in object child state identity with annotations", () => {
+    const marker = Symbol.for("@test/concat-annotations");
+    const left = { side: "left" };
+    const right = { side: "right" };
+    const parser = concat(
+      tuple([constant(left)]),
+      tuple([constant(right)]),
+    );
+
+    const result = parseSync(parser, [], {
+      annotations: { [marker]: true } satisfies Annotations,
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], left);
+      assert.equal(result.value[1], right);
+      assert.ok(!Reflect.ownKeys(result.value[0]).includes(annotationKey));
+      assert.ok(!Reflect.ownKeys(result.value[1]).includes(annotationKey));
+    }
+  });
+
   it("should preserve inferred tuple flattening up to fifteen parsers", () => {
     const parser = concat(
       tuple([constant("v1" as const)]),
@@ -6891,6 +6929,27 @@ describe("group() - duplicate option detection", () => {
 
 describe("conditional", () => {
   describe("basic parsing", () => {
+    it("should preserve non-opt-in branch state identity with annotations", () => {
+      const marker = Symbol.for("@test/conditional-annotations");
+      const branchValue = { source: "conditional" };
+      const parser = conditional(
+        option("--mode", choice(["fast"])),
+        {
+          fast: constant(branchValue),
+        },
+      );
+
+      const result = parseSync(parser, ["--mode", "fast"], {
+        annotations: { [marker]: true } satisfies Annotations,
+      });
+
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value[1], branchValue);
+        assert.ok(!Reflect.ownKeys(result.value[1]).includes(annotationKey));
+      }
+    });
+
     it("should select correct branch based on discriminator value", () => {
       const parser = conditional(
         option("--type", choice(["a", "b"])),
