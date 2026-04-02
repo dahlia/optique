@@ -2632,7 +2632,132 @@ describe("bindConfig() with dependency sources across merge() boundaries", () =>
   });
 });
 
-// Note: bindConfig() with dependency sources does not currently work inside
-// tuple() or concat().  Config-backed dependency resolution only works inside
-// object() and merge().  This gap is tracked in
-// https://github.com/dahlia/optique/issues/750
+// https://github.com/dahlia/optique/issues/768
+describe("bindConfig() with dependency sources across tuple()/concat() boundaries", () => {
+  const mode = dependency(choice(["dev", "prod"] as const));
+  const level = mode.derive({
+    metavar: "LEVEL",
+    mode: "sync",
+    factory: (value: "dev" | "prod") =>
+      choice(
+        value === "dev"
+          ? (["debug", "verbose"] as const)
+          : (["silent", "strict"] as const),
+      ),
+    defaultValue: () => "dev" as const,
+  });
+
+  function createTupleParser() {
+    const context = createConfigContext({
+      schema: z.object({
+        mode: z.enum(["dev", "prod"]).optional(),
+      }),
+    });
+    const parser = tuple([
+      bindConfig(option("--mode", mode), {
+        context,
+        key: "mode",
+      }),
+      option("--level", level),
+    ]);
+    const annotations = {
+      [context.id]: { data: { mode: "prod" as const } },
+    } satisfies Annotations;
+    return { parser, annotations };
+  }
+
+  function createConcatParser() {
+    const context = createConfigContext({
+      schema: z.object({
+        mode: z.enum(["dev", "prod"]).optional(),
+      }),
+    });
+    const parser = concat(
+      tuple([
+        bindConfig(option("--mode", mode), {
+          context,
+          key: "mode",
+        }),
+      ]),
+      tuple([
+        option("--level", level),
+      ]),
+    );
+    const annotations = {
+      [context.id]: { data: { mode: "prod" as const } },
+    } satisfies Annotations;
+    return { parser, annotations };
+  }
+
+  test("tuple() parse uses config-backed dependency source", () => {
+    const { parser, annotations } = createTupleParser();
+    const result = parse(parser, ["--level", "silent"], { annotations });
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["prod", "silent"]);
+  });
+
+  test("tuple() suggest uses config-backed dependency source", () => {
+    const { parser, annotations } = createTupleParser();
+    const texts = suggestSync(
+      parser,
+      ["--level", "s"],
+      { annotations },
+    )
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+
+    assert.ok(
+      texts.includes("silent"),
+      `Expected "silent" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      texts.includes("strict"),
+      `Expected "strict" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("debug"),
+      `Did not expect "debug" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("verbose"),
+      `Did not expect "verbose" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+  });
+
+  test("concat() parse uses config-backed dependency source", () => {
+    const { parser, annotations } = createConcatParser();
+    const result = parse(parser, ["--level", "silent"], { annotations });
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["prod", "silent"]);
+  });
+
+  test("concat() suggest uses config-backed dependency source", () => {
+    const { parser, annotations } = createConcatParser();
+    const texts = suggestSync(
+      parser,
+      ["--level", "s"],
+      { annotations },
+    )
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+
+    assert.ok(
+      texts.includes("silent"),
+      `Expected "silent" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      texts.includes("strict"),
+      `Expected "strict" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("debug"),
+      `Did not expect "debug" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("verbose"),
+      `Did not expect "verbose" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+  });
+});

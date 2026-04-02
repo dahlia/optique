@@ -23,6 +23,9 @@ import type {
   Result,
 } from "@optique/core/parser";
 import {
+  composeWrappedSourceMetadata,
+  defineInheritedAnnotationParser,
+  getDelegatingSuggestRuntimeNodes,
   unmatchedNonCliDependencySourceStateMarker,
 } from "@optique/core/parser";
 import {
@@ -36,10 +39,6 @@ import type { ValueParserResult } from "@optique/core/valueparser";
 
 const phase2UndefinedParsedValueKey = Symbol(
   "@optique/config/phase2UndefinedParsedValue",
-);
-
-const inheritParentAnnotationsKey = Symbol.for(
-  "@optique/core/inheritParentAnnotations",
 );
 
 /**
@@ -745,11 +744,13 @@ export function bindConfig<
     initialState: parser.initialState,
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
       const innerState = getSuggestInnerState(state);
-      const innerNodes = parser.getSuggestRuntimeNodes?.(innerState, path) ??
-        [];
-      return boundParser.dependencyMetadata?.source != null
-        ? [...innerNodes, { path, parser: boundParser, state }]
-        : innerNodes;
+      return getDelegatingSuggestRuntimeNodes(
+        parser,
+        boundParser,
+        state,
+        path,
+        innerState,
+      );
     },
 
     parse: (context) => {
@@ -865,56 +866,50 @@ export function bindConfig<
       enumerable: false,
     });
   }
-  Object.defineProperty(boundParser, inheritParentAnnotationsKey, {
-    value: true,
-    configurable: true,
-    enumerable: false,
-  });
-  const dependencyMetadata = parser.dependencyMetadata;
-  if (dependencyMetadata != null) {
-    const sourceMetadata = dependencyMetadata.source;
-    Object.defineProperty(boundParser, "dependencyMetadata", {
-      value: sourceMetadata == null ? dependencyMetadata : {
-        ...dependencyMetadata,
-        source: {
-          ...sourceMetadata,
-          getMissingSourceValue:
-            sourceMetadata.preservesSourceValue !== false &&
-              options.default !== undefined
-              ? () => ({ success: true as const, value: options.default })
-              : undefined,
-          extractSourceValue: (state: unknown) => {
-            if (!isConfigBindState(state)) {
-              if (sourceMetadata.preservesSourceValue) {
-                return getConfigSourceValue(
-                  state,
-                  options,
-                  state,
-                  sourceMetadata.extractSourceValue,
-                );
-              }
-              return sourceMetadata.extractSourceValue(state);
-            }
-            if (state.hasCliValue) {
-              return sourceMetadata.extractSourceValue(
-                state.cliState,
-              );
-            }
-            const fallbackState = state.cliState ?? state;
-            if (!sourceMetadata.preservesSourceValue) {
-              return sourceMetadata.extractSourceValue(
-                fallbackState,
-              );
-            }
+  defineInheritedAnnotationParser(boundParser);
+  const dependencyMetadata = composeWrappedSourceMetadata(
+    parser.dependencyMetadata,
+    (sourceMetadata) => ({
+      ...sourceMetadata,
+      getMissingSourceValue: sourceMetadata.preservesSourceValue !== false &&
+          options.default !== undefined
+        ? () => ({ success: true as const, value: options.default })
+        : undefined,
+      extractSourceValue: (state: unknown) => {
+        if (!isConfigBindState(state)) {
+          if (sourceMetadata.preservesSourceValue) {
             return getConfigSourceValue(
               state,
               options,
-              fallbackState,
+              state,
               sourceMetadata.extractSourceValue,
             );
-          },
-        },
+          }
+          return sourceMetadata.extractSourceValue(state);
+        }
+        if (state.hasCliValue) {
+          return sourceMetadata.extractSourceValue(
+            state.cliState,
+          );
+        }
+        const fallbackState = state.cliState ?? state;
+        if (!sourceMetadata.preservesSourceValue) {
+          return sourceMetadata.extractSourceValue(
+            fallbackState,
+          );
+        }
+        return getConfigSourceValue(
+          state,
+          options,
+          fallbackState,
+          sourceMetadata.extractSourceValue,
+        );
       },
+    }),
+  );
+  if (dependencyMetadata != null) {
+    Object.defineProperty(boundParser, "dependencyMetadata", {
+      value: dependencyMetadata,
       configurable: true,
       enumerable: false,
     });

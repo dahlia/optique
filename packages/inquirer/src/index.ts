@@ -31,6 +31,12 @@ import type {
   Parser,
   ParserResult,
 } from "@optique/core/parser";
+import {
+  composeWrappedSourceMetadata,
+  defineInheritedAnnotationParser,
+  getDelegatingSuggestRuntimeNodes,
+  inheritParentAnnotationsKey,
+} from "@optique/core/parser";
 import { message } from "@optique/core/message";
 import type { ValueParserResult } from "@optique/core/valueparser";
 
@@ -130,10 +136,6 @@ function isExitPromptError(error: unknown): boolean {
     "name" in error &&
     error.name === "ExitPromptError";
 }
-
-const inheritParentAnnotationsKey = Symbol.for(
-  "@optique/core/inheritParentAnnotations",
-);
 
 function shouldDeferPrompt(
   parser: Parser<Mode, unknown, unknown>,
@@ -955,12 +957,14 @@ export function prompt<M extends Mode, TValue, TState>(
           ? parser.initialState
           : state.cliState as TState)
         : state;
-      const innerNodes = parser.getSuggestRuntimeNodes?.(innerState, path) ??
-        [];
-      if (promptedParser.dependencyMetadata?.source != null) {
-        return [{ path, parser: promptedParser, state }, ...innerNodes];
-      }
-      return innerNodes;
+      return getDelegatingSuggestRuntimeNodes(
+        parser,
+        promptedParser,
+        state,
+        path,
+        innerState,
+        "prepend",
+      );
     },
     // Use the sentinel as initialState so complete() can detect the
     // completability-check call and deduplicate prompt execution.
@@ -1318,6 +1322,7 @@ export function prompt<M extends Mode, TValue, TState>(
       return parser.getDocFragments(state, defaultValue as TValue);
     },
   };
+  defineInheritedAnnotationParser(promptedParser);
 
   // Lazily forward placeholder from inner parser so that outer wrappers
   // (withDefault, group, etc.) can see it without triggering eager
@@ -1344,36 +1349,36 @@ export function prompt<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
-  const dependencyMetadata = (
-    parser as Parser<M, TValue, TState> & {
-      readonly dependencyMetadata?: {
-        readonly source?: {
-          readonly extractSourceValue: (
-            state: unknown,
-          ) =>
-            | ValueParserResult<unknown>
-            | Promise<ValueParserResult<unknown> | undefined>
-            | undefined;
+  const dependencyMetadata = composeWrappedSourceMetadata(
+    (
+      parser as Parser<M, TValue, TState> & {
+        readonly dependencyMetadata?: {
+          readonly source?: {
+            readonly extractSourceValue: (
+              state: unknown,
+            ) =>
+              | ValueParserResult<unknown>
+              | Promise<ValueParserResult<unknown> | undefined>
+              | undefined;
+          };
         };
-      };
-    }
-  ).dependencyMetadata;
+      }
+    ).dependencyMetadata,
+    (source) => ({
+      ...source,
+      extractSourceValue: (state: unknown) => {
+        if (!isPromptBindState(state)) {
+          return source.extractSourceValue(state);
+        }
+        return source.extractSourceValue(
+          state.cliState ?? state,
+        );
+      },
+    }),
+  );
   if (dependencyMetadata != null) {
     Object.defineProperty(promptedParser, "dependencyMetadata", {
-      value: dependencyMetadata.source == null ? dependencyMetadata : {
-        ...dependencyMetadata,
-        source: {
-          ...dependencyMetadata.source,
-          extractSourceValue: (state: unknown) => {
-            if (!isPromptBindState(state)) {
-              return dependencyMetadata.source?.extractSourceValue(state);
-            }
-            return dependencyMetadata.source?.extractSourceValue(
-              state.cliState ?? state,
-            );
-          },
-        },
-      },
+      value: dependencyMetadata,
       configurable: true,
       enumerable: false,
     });
