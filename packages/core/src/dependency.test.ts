@@ -615,14 +615,61 @@ describe("snapshotDefaultDependencyValues", () => {
       success: true as const,
       value: "prod",
     });
+    const defaults = ["dev"];
 
-    const snapshotted = snapshotDefaultDependencyValues(result, ["dev"]);
+    const snapshotted = snapshotDefaultDependencyValues(result, defaults);
+    defaults[0] = "prod";
 
     assert.notEqual(snapshotted, result);
     assert.deepEqual(getSnapshottedDefaultDependencyValues(snapshotted), [
       "dev",
     ]);
     assert.equal(getSnapshottedDefaultDependencyValues(result), undefined);
+  });
+
+  test("deriveFromAsync snapshots defaults before awaiting parse", async () => {
+    const env = dependency(choice(["dev", "prod"] as const));
+    const region = dependency(choice(["us", "eu"] as const));
+    const defaults: ["dev" | "prod", "us" | "eu"] = ["dev", "us"];
+    let releaseParse!: () => void;
+    const parseGate = new Promise<void>((resolve) => {
+      releaseParse = resolve;
+    });
+
+    const derived = deriveFromAsync({
+      metavar: "URL",
+      dependencies: [env, region] as const,
+      factory: (currentEnv, currentRegion) => ({
+        $mode: "async" as const,
+        metavar: "URL",
+        placeholder: "",
+        async parse(input: string): Promise<ValueParserResult<string>> {
+          await parseGate;
+          return input === `https://${currentEnv}.${currentRegion}.example.com`
+            ? { success: true as const, value: input }
+            : {
+              success: false as const,
+              error: message`Unexpected URL.`,
+            };
+        },
+        format(value: string): string {
+          return value;
+        },
+      }),
+      defaultValues: () => defaults,
+    });
+
+    const pending = derived.parse("https://dev.us.example.com");
+    defaults[0] = "prod";
+    defaults[1] = "eu";
+    releaseParse();
+
+    const result = await pending;
+    assert.ok(result.success);
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(result), [
+      "dev",
+      "us",
+    ]);
   });
 });
 

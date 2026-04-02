@@ -872,9 +872,10 @@ async function parseDerivedResultWithSnapshotAsync<T>(
   input: string,
   sourceValues: readonly unknown[],
 ): Promise<ValueParserResult<T>> {
+  const snapshot = [...sourceValues];
   return snapshotDefaultDependencyValues(
     await parseDerivedResultAsync(parser, input),
-    sourceValues,
+    snapshot,
   );
 }
 
