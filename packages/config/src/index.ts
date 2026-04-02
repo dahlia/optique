@@ -974,6 +974,22 @@ function getConfigOrDefault<T, TValue, TConfigMeta>(
   };
 }
 
+/**
+ * Resolves a config-backed dependency source with fallback priority.
+ *
+ * This first checks annotations or the active config registry via
+ * {@link getConfigOrDefault}. If no config-backed value is available, it falls
+ * back to `options.default` and finally delegates to the wrapped parser's
+ * source extractor.
+ *
+ * @param state The wrapper state, which may carry config annotations.
+ * @param options The binding options with lookup and default settings.
+ * @param innerState The unwrapped inner state for delegated extraction.
+ * @param extractInnerSourceValue The wrapped parser's source extractor.
+ * @returns The resolved source value, an async source value, or `undefined`.
+ * @throws {TypeError} If {@link getConfigOrDefault} rejects a thenable-returning
+ *                     key callback.
+ */
 function getConfigSourceValue<T, TValue, TConfigMeta>(
   state: unknown,
   options: BindConfigOptions<T, TValue, TConfigMeta>,

@@ -373,16 +373,18 @@ describe("collectExplicitSourceValues", () => {
       state: sourceState,
     }];
 
-    assert.throws(
-      () => collectExplicitSourceValues(nodes, runtime),
-      /collectExplicitSourceValues\(\).*extractSourceValue.*Symbol\(env\)/,
-    );
+    assert.throws(() => collectExplicitSourceValues(nodes, runtime), {
+      name: "TypeError",
+      message:
+        /collectExplicitSourceValues\(\).*extractSourceValue.*Symbol\(env\)/,
+    });
 
     const pending = collectExplicitSourceValuesAsync(nodes, runtime);
     assert.ok(!runtime.hasSource(sourceId));
     resolveExtract(bareExtract(sourceState));
     await pending;
     assert.ok(runtime.hasSource(sourceId));
+    assert.ok(!runtime.isSourceFailed(sourceId));
     assert.equal(runtime.getSource(sourceId), "prod");
   });
 
@@ -415,13 +417,15 @@ describe("collectExplicitSourceValues", () => {
       state: sourceState,
     }];
 
-    assert.throws(
-      () => collectExplicitSourceValues(nodes, runtime),
-      /collectExplicitSourceValues\(\).*extractSourceValue.*Symbol\(env\)/,
-    );
+    assert.throws(() => collectExplicitSourceValues(nodes, runtime), {
+      name: "TypeError",
+      message:
+        /collectExplicitSourceValues\(\).*extractSourceValue.*Symbol\(env\)/,
+    });
 
     await collectExplicitSourceValuesAsync(nodes, runtime);
     assert.ok(runtime.hasSource(sourceId));
+    assert.ok(!runtime.isSourceFailed(sourceId));
     assert.equal(runtime.getSource(sourceId), "prod");
   });
 
