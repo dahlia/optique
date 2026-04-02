@@ -11894,440 +11894,396 @@ describe("branch coverage: constructs.ts edge cases", () => {
     });
   });
 
-  it("merge() suggest preserves child-local duplicate sources", async () => {
-    const sourceId = Symbol("merge-duplicate-source-suggest-local");
-    const syncSharedSource = {
-      $mode: "sync" as const,
-      $valueType: [] as readonly (string | undefined)[],
-      $stateType: [] as readonly unknown[],
-      priority: 0,
-      usage: [],
-      leadingNames: new Set(),
-      acceptingAnyToken: false,
-      initialState: undefined,
-      parse(context: ParserContext<unknown>) {
-        if (context.buffer[0] !== "first") {
+  describe("merge() suggest preserves child-local duplicate sources", () => {
+    function createSyncParser(failed = false) {
+      const sourceId = Symbol("merge-duplicate-source-suggest-local-sync");
+      const expectedToken = failed ? "broken" : "first";
+      const sharedSource = {
+        $mode: "sync" as const,
+        $valueType: [] as readonly (string | undefined)[],
+        $stateType: [] as readonly unknown[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context: ParserContext<unknown>) {
+          if (context.buffer[0] !== expectedToken) {
+            return {
+              success: false as const,
+              consumed: 0,
+              error: message`Expected ${expectedToken} source token.`,
+            };
+          }
           return {
-            success: false as const,
-            consumed: 0,
-            error: message`Expected first source token.`,
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: failed
+                ? { kind: "broken" as const }
+                : { kind: "first" as const, value: "prod" as const },
+            },
+            consumed: [expectedToken],
           };
-        }
-        return {
-          success: true as const,
-          next: {
-            ...context,
-            buffer: context.buffer.slice(1),
-            state: { kind: "first" as const, value: "prod" as const },
-          },
-          consumed: ["first"],
-        };
-      },
-      complete(state: unknown) {
-        return {
-          success: true as const,
-          value: typeof state === "object" && state !== null &&
-              "kind" in state && state.kind === "first"
-            ? "prod"
-            : undefined,
-        };
-      },
-      suggest: function* () {},
-      getDocFragments: () => ({ fragments: [] }),
-      dependencyMetadata: {
-        source: {
-          kind: "source" as const,
-          sourceId,
-          preservesSourceValue: true,
-          extractSourceValue(state: unknown) {
-            if (
-              typeof state === "object" && state !== null && "value" in state
-            ) {
-              return {
-                success: true as const,
-                value: (state as { readonly value: string }).value,
-              };
-            }
-            return undefined;
-          },
         },
-      },
-    } as const satisfies Parser<"sync", string | undefined, unknown>;
-    const syncDerivedField = {
-      $mode: "sync" as const,
-      $valueType: [] as readonly string[],
-      $stateType: [] as readonly undefined[],
-      priority: 0,
-      usage: [],
-      leadingNames: new Set(),
-      acceptingAnyToken: false,
-      initialState: undefined,
-      parse(context: ParserContext<undefined>) {
-        return { success: true as const, next: context, consumed: [] };
-      },
-      complete() {
-        return { success: true as const, value: "complete" };
-      },
-      suggest: function* (context: ParserContext<undefined>) {
-        yield {
-          kind: "literal" as const,
-          text: describeDuplicateSourceState(context, sourceId),
-        };
-      },
-      getDocFragments: () => ({ fragments: [] }),
-    } as const satisfies Parser<"sync", string, undefined>;
-    const syncUnrelatedShared = {
-      $mode: "sync" as const,
-      $valueType: [] as readonly string[],
-      $stateType: [] as readonly unknown[],
-      priority: 0,
-      usage: [],
-      leadingNames: new Set(),
-      acceptingAnyToken: false,
-      initialState: undefined,
-      parse(context: ParserContext<unknown>) {
-        return { success: true as const, next: context, consumed: [] };
-      },
-      complete() {
-        return { success: true as const, value: "other" };
-      },
-      suggest: function* () {},
-      getDocFragments: () => ({ fragments: [] }),
-    } as const satisfies Parser<"sync", string, unknown>;
-    const syncParser = merge(
-      object({
-        shared: syncSharedSource,
-        derived: syncDerivedField,
-      }),
-      object({
-        shared: syncUnrelatedShared,
-      }),
-    );
-    const syncParsed = syncParser.parse({
-      buffer: ["first"],
-      state: syncParser.initialState,
-      optionsTerminated: false,
-      usage: syncParser.usage,
-    });
-    assert.ok(syncParsed.success);
-    if (!syncParsed.success) return;
-
-    assert.deepEqual(
-      [...syncParser.suggest({
-        buffer: [],
-        state: syncParsed.next.state,
-        optionsTerminated: false,
-        usage: syncParser.usage,
-        exec: {
-          usage: syncParser.usage,
-          phase: "suggest",
-          path: [],
-          trace: undefined,
-        },
-      }, "")],
-      [{ kind: "literal", text: "from-source" }],
-    );
-
-    const asyncSharedSource = {
-      $mode: "async" as const,
-      $valueType: [] as readonly (string | undefined)[],
-      $stateType: [] as readonly unknown[],
-      priority: 0,
-      usage: [],
-      leadingNames: new Set(),
-      acceptingAnyToken: false,
-      initialState: undefined,
-      parse(context: ParserContext<unknown>) {
-        if (context.buffer[0] !== "first") {
-          return Promise.resolve({
-            success: false as const,
-            consumed: 0,
-            error: message`Expected first source token.`,
-          });
-        }
-        return Promise.resolve({
-          success: true as const,
-          next: {
-            ...context,
-            buffer: context.buffer.slice(1),
-            state: { kind: "first" as const, value: "prod" as const },
-          },
-          consumed: ["first"],
-        });
-      },
-      complete(state: unknown) {
-        return Promise.resolve({
-          success: true as const,
-          value: typeof state === "object" && state !== null &&
-              "kind" in state && state.kind === "first"
-            ? "prod"
-            : undefined,
-        });
-      },
-      suggest: async function* () {},
-      getDocFragments: () => ({ fragments: [] }),
-      dependencyMetadata: {
-        source: {
-          kind: "source" as const,
-          sourceId,
-          preservesSourceValue: true,
-          extractSourceValue(state: unknown) {
-            if (
-              typeof state === "object" && state !== null && "value" in state
-            ) {
-              return Promise.resolve({
-                success: true as const,
-                value: (state as { readonly value: string }).value,
-              });
-            }
-            return Promise.resolve(undefined);
-          },
-        },
-      },
-    } as const satisfies Parser<"async", string | undefined, unknown>;
-    const asyncDerivedField = {
-      $mode: "async" as const,
-      $valueType: [] as readonly string[],
-      $stateType: [] as readonly undefined[],
-      priority: 0,
-      usage: [],
-      leadingNames: new Set(),
-      acceptingAnyToken: false,
-      initialState: undefined,
-      parse(context: ParserContext<undefined>) {
-        return Promise.resolve({
-          success: true as const,
-          next: context,
-          consumed: [],
-        });
-      },
-      complete() {
-        return Promise.resolve({ success: true as const, value: "complete" });
-      },
-      suggest: async function* (context: ParserContext<undefined>) {
-        yield {
-          kind: "literal" as const,
-          text: describeDuplicateSourceState(context, sourceId),
-        };
-      },
-      getDocFragments: () => ({ fragments: [] }),
-    } as const satisfies Parser<"async", string, undefined>;
-    const asyncUnrelatedShared = {
-      $mode: "async" as const,
-      $valueType: [] as readonly string[],
-      $stateType: [] as readonly unknown[],
-      priority: 0,
-      usage: [],
-      leadingNames: new Set(),
-      acceptingAnyToken: false,
-      initialState: undefined,
-      parse(context: ParserContext<unknown>) {
-        return Promise.resolve({
-          success: true as const,
-          next: context,
-          consumed: [],
-        });
-      },
-      complete() {
-        return Promise.resolve({ success: true as const, value: "other" });
-      },
-      suggest: async function* () {},
-      getDocFragments: () => ({ fragments: [] }),
-    } as const satisfies Parser<"async", string, unknown>;
-    const asyncParser = merge(
-      object({
-        shared: asyncSharedSource,
-        derived: asyncDerivedField,
-      }),
-      object({
-        shared: asyncUnrelatedShared,
-      }),
-    );
-    const asyncParsed = await asyncParser.parse({
-      buffer: ["first"],
-      state: asyncParser.initialState,
-      optionsTerminated: false,
-      usage: asyncParser.usage,
-    });
-    assert.ok(asyncParsed.success);
-    if (!asyncParsed.success) return;
-
-    const asyncSuggestions: Suggestion[] = [];
-    for await (
-      const suggestion of asyncParser.suggest({
-        buffer: [],
-        state: asyncParsed.next.state,
-        optionsTerminated: false,
-        usage: asyncParser.usage,
-        exec: {
-          usage: asyncParser.usage,
-          phase: "suggest",
-          path: [],
-          trace: undefined,
-        },
-      }, "")
-    ) {
-      asyncSuggestions.push(suggestion);
-    }
-    assert.deepEqual(asyncSuggestions, [{
-      kind: "literal",
-      text: "from-source",
-    }]);
-
-    const syncFailedSource = {
-      ...syncSharedSource,
-      parse(context: ParserContext<unknown>) {
-        if (context.buffer[0] !== "broken") {
+        complete(state: unknown) {
           return {
-            success: false as const,
-            consumed: 0,
-            error: message`Expected broken source token.`,
+            success: true as const,
+            value: typeof state === "object" && state !== null &&
+                "kind" in state && state.kind === "first"
+              ? "prod"
+              : undefined,
           };
-        }
-        return {
-          success: true as const,
-          next: {
-            ...context,
-            buffer: context.buffer.slice(1),
-            state: { kind: "broken" as const },
-          },
-          consumed: ["broken"],
-        };
-      },
-      dependencyMetadata: {
-        source: {
-          ...syncSharedSource.dependencyMetadata.source,
-          extractSourceValue(state: unknown) {
-            if (
-              typeof state === "object" && state !== null &&
-              "kind" in state && state.kind === "broken"
-            ) {
-              return {
-                success: false as const,
-                error: message`Broken source.`,
-              };
-            }
-            return syncSharedSource.dependencyMetadata.source
-              .extractSourceValue(
-                state,
-              );
-          },
         },
-      },
-    } as const satisfies Parser<"sync", string | undefined, unknown>;
-    const syncFailedParser = merge(
-      object({
-        shared: syncFailedSource,
-        derived: syncDerivedField,
-      }),
-      object({
-        shared: syncUnrelatedShared,
-      }),
-    );
-    const syncFailedParsed = syncFailedParser.parse({
-      buffer: ["broken"],
-      state: syncFailedParser.initialState,
-      optionsTerminated: false,
-      usage: syncFailedParser.usage,
-    });
-    assert.ok(syncFailedParsed.success);
-    if (!syncFailedParsed.success) return;
-    assert.deepEqual(
-      [...syncFailedParser.suggest({
-        buffer: [],
-        state: syncFailedParsed.next.state,
-        optionsTerminated: false,
-        usage: syncFailedParser.usage,
-        exec: {
-          usage: syncFailedParser.usage,
-          phase: "suggest",
-          path: [],
-          trace: undefined,
-        },
-      }, "")],
-      [{ kind: "literal", text: "failed-source" }],
-    );
-
-    const asyncFailedSource = {
-      ...asyncSharedSource,
-      parse(context: ParserContext<unknown>) {
-        if (context.buffer[0] !== "broken") {
-          return Promise.resolve({
-            success: false as const,
-            consumed: 0,
-            error: message`Expected broken source token.`,
-          });
-        }
-        return Promise.resolve({
-          success: true as const,
-          next: {
-            ...context,
-            buffer: context.buffer.slice(1),
-            state: { kind: "broken" as const },
-          },
-          consumed: ["broken"],
-        });
-      },
-      dependencyMetadata: {
-        source: {
-          ...asyncSharedSource.dependencyMetadata.source,
-          extractSourceValue(state: unknown) {
-            if (
-              typeof state === "object" && state !== null &&
-              "kind" in state && state.kind === "broken"
-            ) {
-              return Promise.resolve({
-                success: false as const,
-                error: message`Broken source.`,
-              });
-            }
-            return asyncSharedSource.dependencyMetadata.source
-              .extractSourceValue(
-                state,
-              );
+        suggest: function* () {},
+        getDocFragments: () => ({ fragments: [] }),
+        dependencyMetadata: {
+          source: {
+            kind: "source" as const,
+            sourceId,
+            preservesSourceValue: true,
+            extractSourceValue(state: unknown) {
+              if (
+                failed &&
+                typeof state === "object" &&
+                state !== null &&
+                "kind" in state &&
+                state.kind === "broken"
+              ) {
+                return {
+                  success: false as const,
+                  error: message`Broken source.`,
+                };
+              }
+              if (
+                typeof state === "object" && state !== null && "value" in state
+              ) {
+                return {
+                  success: true as const,
+                  value: (state as { readonly value: string }).value,
+                };
+              }
+              return undefined;
+            },
           },
         },
-      },
-    } as const satisfies Parser<"async", string | undefined, unknown>;
-    const asyncFailedParser = merge(
-      object({
-        shared: asyncFailedSource,
-        derived: asyncDerivedField,
-      }),
-      object({
-        shared: asyncUnrelatedShared,
-      }),
-    );
-    const asyncFailedParsed = await asyncFailedParser.parse({
-      buffer: ["broken"],
-      state: asyncFailedParser.initialState,
-      optionsTerminated: false,
-      usage: asyncFailedParser.usage,
-    });
-    assert.ok(asyncFailedParsed.success);
-    if (!asyncFailedParsed.success) return;
-
-    const asyncFailedSuggestions: Suggestion[] = [];
-    for await (
-      const suggestion of asyncFailedParser.suggest({
-        buffer: [],
-        state: asyncFailedParsed.next.state,
-        optionsTerminated: false,
-        usage: asyncFailedParser.usage,
-        exec: {
-          usage: asyncFailedParser.usage,
-          phase: "suggest",
-          path: [],
-          trace: undefined,
+      } as const satisfies Parser<"sync", string | undefined, unknown>;
+      const derivedField = {
+        $mode: "sync" as const,
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context: ParserContext<undefined>) {
+          return { success: true as const, next: context, consumed: [] };
         },
-      }, "")
-    ) {
-      asyncFailedSuggestions.push(suggestion);
+        complete() {
+          return { success: true as const, value: "complete" };
+        },
+        suggest: function* (context: ParserContext<undefined>) {
+          yield {
+            kind: "literal" as const,
+            text: describeDuplicateSourceState(context, sourceId),
+          };
+        },
+        getDocFragments: () => ({ fragments: [] }),
+      } as const satisfies Parser<"sync", string, undefined>;
+      const unrelatedShared = {
+        $mode: "sync" as const,
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly unknown[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context: ParserContext<unknown>) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete() {
+          return { success: true as const, value: "other" };
+        },
+        suggest: function* () {},
+        getDocFragments: () => ({ fragments: [] }),
+      } as const satisfies Parser<"sync", string, unknown>;
+      return {
+        expectedToken,
+        parser: merge(
+          object({
+            shared: sharedSource,
+            derived: derivedField,
+          }),
+          object({
+            shared: unrelatedShared,
+          }),
+        ),
+      };
     }
-    assert.deepEqual(asyncFailedSuggestions, [{
-      kind: "literal",
-      text: "failed-source",
-    }]);
+
+    function createAsyncParser(failed = false) {
+      const sourceId = Symbol("merge-duplicate-source-suggest-local-async");
+      const expectedToken = failed ? "broken" : "first";
+      const sharedSource = {
+        $mode: "async" as const,
+        $valueType: [] as readonly (string | undefined)[],
+        $stateType: [] as readonly unknown[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context: ParserContext<unknown>) {
+          if (context.buffer[0] !== expectedToken) {
+            return Promise.resolve({
+              success: false as const,
+              consumed: 0,
+              error: message`Expected ${expectedToken} source token.`,
+            });
+          }
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: failed
+                ? { kind: "broken" as const }
+                : { kind: "first" as const, value: "prod" as const },
+            },
+            consumed: [expectedToken],
+          });
+        },
+        complete(state: unknown) {
+          return Promise.resolve({
+            success: true as const,
+            value: typeof state === "object" && state !== null &&
+                "kind" in state && state.kind === "first"
+              ? "prod"
+              : undefined,
+          });
+        },
+        suggest: async function* () {},
+        getDocFragments: () => ({ fragments: [] }),
+        dependencyMetadata: {
+          source: {
+            kind: "source" as const,
+            sourceId,
+            preservesSourceValue: true,
+            extractSourceValue(state: unknown) {
+              if (
+                failed &&
+                typeof state === "object" &&
+                state !== null &&
+                "kind" in state &&
+                state.kind === "broken"
+              ) {
+                return Promise.resolve({
+                  success: false as const,
+                  error: message`Broken source.`,
+                });
+              }
+              if (
+                typeof state === "object" && state !== null && "value" in state
+              ) {
+                return Promise.resolve({
+                  success: true as const,
+                  value: (state as { readonly value: string }).value,
+                });
+              }
+              return Promise.resolve(undefined);
+            },
+          },
+        },
+      } as const satisfies Parser<"async", string | undefined, unknown>;
+      const derivedField = {
+        $mode: "async" as const,
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context: ParserContext<undefined>) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        complete() {
+          return Promise.resolve({ success: true as const, value: "complete" });
+        },
+        suggest: async function* (context: ParserContext<undefined>) {
+          yield {
+            kind: "literal" as const,
+            text: describeDuplicateSourceState(context, sourceId),
+          };
+        },
+        getDocFragments: () => ({ fragments: [] }),
+      } as const satisfies Parser<"async", string, undefined>;
+      const unrelatedShared = {
+        $mode: "async" as const,
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly unknown[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context: ParserContext<unknown>) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        complete() {
+          return Promise.resolve({ success: true as const, value: "other" });
+        },
+        suggest: async function* () {},
+        getDocFragments: () => ({ fragments: [] }),
+      } as const satisfies Parser<"async", string, unknown>;
+      return {
+        expectedToken,
+        parser: merge(
+          object({
+            shared: sharedSource,
+            derived: derivedField,
+          }),
+          object({
+            shared: unrelatedShared,
+          }),
+        ),
+      };
+    }
+
+    it("marks sync duplicate sources as local when extraction succeeds", () => {
+      const { parser, expectedToken } = createSyncParser();
+      const parsed = parser.parse({
+        buffer: [expectedToken],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(parsed.success);
+      if (!parsed.success) return;
+
+      assert.deepEqual(
+        [...parser.suggest({
+          buffer: [],
+          state: parsed.next.state,
+          optionsTerminated: false,
+          usage: parser.usage,
+          exec: {
+            usage: parser.usage,
+            phase: "suggest",
+            path: [],
+            trace: undefined,
+          },
+        }, "")],
+        [{ kind: "literal", text: "from-source" }],
+      );
+    });
+
+    it("marks async duplicate sources as local when extraction succeeds", async () => {
+      const { parser, expectedToken } = createAsyncParser();
+      const parsed = await parser.parse({
+        buffer: [expectedToken],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(parsed.success);
+      if (!parsed.success) return;
+
+      const suggestions: Suggestion[] = [];
+      for await (
+        const suggestion of parser.suggest({
+          buffer: [],
+          state: parsed.next.state,
+          optionsTerminated: false,
+          usage: parser.usage,
+          exec: {
+            usage: parser.usage,
+            phase: "suggest",
+            path: [],
+            trace: undefined,
+          },
+        }, "")
+      ) {
+        suggestions.push(suggestion);
+      }
+      assert.deepEqual(suggestions, [{
+        kind: "literal",
+        text: "from-source",
+      }]);
+    });
+
+    it("marks sync duplicate sources as failed when local extraction fails", () => {
+      const { parser, expectedToken } = createSyncParser(true);
+      const parsed = parser.parse({
+        buffer: [expectedToken],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(parsed.success);
+      if (!parsed.success) return;
+
+      assert.deepEqual(
+        [...parser.suggest({
+          buffer: [],
+          state: parsed.next.state,
+          optionsTerminated: false,
+          usage: parser.usage,
+          exec: {
+            usage: parser.usage,
+            phase: "suggest",
+            path: [],
+            trace: undefined,
+          },
+        }, "")],
+        [{ kind: "literal", text: "failed-source" }],
+      );
+    });
+
+    it("marks async duplicate sources as failed when local extraction fails", async () => {
+      const { parser, expectedToken } = createAsyncParser(true);
+      const parsed = await parser.parse({
+        buffer: [expectedToken],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(parsed.success);
+      if (!parsed.success) return;
+
+      const suggestions: Suggestion[] = [];
+      for await (
+        const suggestion of parser.suggest({
+          buffer: [],
+          state: parsed.next.state,
+          optionsTerminated: false,
+          usage: parser.usage,
+          exec: {
+            usage: parser.usage,
+            phase: "suggest",
+            path: [],
+            trace: undefined,
+          },
+        }, "")
+      ) {
+        suggestions.push(suggestion);
+      }
+      assert.deepEqual(suggestions, [{
+        kind: "literal",
+        text: "failed-source",
+      }]);
+    });
   });
 
   it("merge() suggest ignores ambiguous duplicate source keys", async () => {

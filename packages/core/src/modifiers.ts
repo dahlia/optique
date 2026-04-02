@@ -1,5 +1,4 @@
 import { composeDependencyMetadata } from "./dependency-metadata.ts";
-import type { RuntimeNode } from "./dependency-runtime.ts";
 import { formatMessage, type Message, message, text } from "./message.ts";
 import {
   annotateFreshArray,
@@ -1590,17 +1589,12 @@ export function multiple<M extends Mode, TValue, TState>(
     acceptingAnyToken: min > 0 && (parser.acceptingAnyToken ?? false),
     initialState: [] as readonly TState[],
     getSuggestRuntimeNodes(state: MultipleState, path: readonly PropertyKey[]) {
-      const nodes: RuntimeNode[] =
-        resultParser.dependencyMetadata?.source != null
-          ? [{ path, parser: resultParser, state }]
-          : [];
-      for (let i = 0; i < state.length; i++) {
-        nodes.push(...getInnerSuggestRuntimeNodes(state[i] as TState, [
-          ...path,
-          i,
-        ]));
-      }
-      return nodes;
+      const innerNodes = state.flatMap((item, i) => [
+        ...getInnerSuggestRuntimeNodes(item as TState, [...path, i]),
+      ]);
+      return resultParser.dependencyMetadata?.source != null
+        ? [{ path, parser: resultParser, state }, ...innerNodes]
+        : innerNodes;
     },
     parse(context: ParserContext<MultipleState>) {
       return dispatchByMode(

@@ -5588,6 +5588,18 @@ describe("branch coverage: modifiers edge cases", () => {
 
   it("multiple: async complete preserves later source registration order", async () => {
     const sourceId = Symbol("mode");
+    const gates = new Map<
+      string,
+      { readonly promise: Promise<void>; readonly resolve: () => void }
+    >();
+    for (const state of ["slow", "fast"] as const) {
+      let resolve!: () => void;
+      const promise = new Promise<void>((res) => {
+        resolve = res;
+      });
+      gates.set(state, { promise, resolve });
+    }
+    const started: string[] = [];
     const child: Parser<"async", string, string> = {
       $mode: "async" as const,
       $valueType: [] as readonly string[],
@@ -5605,9 +5617,8 @@ describe("branch coverage: modifiers edge cases", () => {
         });
       },
       async complete(state, exec) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, state === "slow" ? 20 : 0)
-        );
+        started.push(state);
+        await gates.get(state)?.promise;
         exec?.dependencyRuntime?.registerSource(sourceId, state, "cli");
         return { success: true as const, value: `item-${state}` };
       },
@@ -5617,7 +5628,7 @@ describe("branch coverage: modifiers edge cases", () => {
     const parser = multiple(child);
     const runtime = createDependencyRuntimeContext();
 
-    const result = await parser.complete(
+    const pending = parser.complete(
       ["slow", "fast"],
       {
         usage: parser.usage,
@@ -5628,12 +5639,33 @@ describe("branch coverage: modifiers edge cases", () => {
       },
     );
 
+    assert.deepEqual(started, ["slow"]);
+    gates.get("slow")?.resolve();
+    while (started.length < 2) {
+      await Promise.resolve();
+    }
+    assert.deepEqual(started, ["slow", "fast"]);
+    gates.get("fast")?.resolve();
+
+    const result = await pending;
     assert.ok(result.success);
     assert.equal(runtime.getSource(sourceId), "fast");
   });
 
   it("multiple: async suggest preserves later source registration order", async () => {
     const sourceId = Symbol("mode");
+    const gates = new Map<
+      string,
+      { readonly promise: Promise<void>; readonly resolve: () => void }
+    >();
+    for (const state of ["slow", "fast"] as const) {
+      let resolve!: () => void;
+      const promise = new Promise<void>((res) => {
+        resolve = res;
+      });
+      gates.set(state, { promise, resolve });
+    }
+    const started: string[] = [];
     const child: Parser<"async", string, string> = {
       $mode: "async" as const,
       $valueType: [] as readonly string[],
@@ -5651,9 +5683,8 @@ describe("branch coverage: modifiers edge cases", () => {
         });
       },
       async complete(state, exec) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, state === "slow" ? 20 : 0)
-        );
+        started.push(state);
+        await gates.get(state)?.promise;
         exec?.dependencyRuntime?.registerSource(sourceId, state, "cli");
         return { success: true as const, value: `item-${state}` };
       },
@@ -5672,26 +5703,38 @@ describe("branch coverage: modifiers edge cases", () => {
     const parser = multiple(child);
     const runtime = createDependencyRuntimeContext();
 
-    const suggestions: Suggestion[] = [];
-    for await (
-      const suggestion of parser.suggest({
-        buffer: [],
-        state: ["slow", "fast"],
-        optionsTerminated: false,
-        usage: parser.usage,
-        dependencyRegistry: runtime.registry,
-        exec: {
+    const suggestionsPromise = (async () => {
+      const suggestions: Suggestion[] = [];
+      for await (
+        const suggestion of parser.suggest({
+          buffer: [],
+          state: ["slow", "fast"],
+          optionsTerminated: false,
           usage: parser.usage,
-          phase: "suggest",
-          path: ["root"],
-          dependencyRuntime: runtime,
           dependencyRegistry: runtime.registry,
-        },
-      }, "")
-    ) {
-      suggestions.push(suggestion);
-    }
+          exec: {
+            usage: parser.usage,
+            phase: "suggest",
+            path: ["root"],
+            dependencyRuntime: runtime,
+            dependencyRegistry: runtime.registry,
+          },
+        }, "")
+      ) {
+        suggestions.push(suggestion);
+      }
+      return suggestions;
+    })();
 
+    assert.deepEqual(started, ["slow"]);
+    gates.get("slow")?.resolve();
+    while (started.length < 2) {
+      await Promise.resolve();
+    }
+    assert.deepEqual(started, ["slow", "fast"]);
+    gates.get("fast")?.resolve();
+
+    const suggestions = await suggestionsPromise;
     assert.deepEqual(suggestions, [{ kind: "literal", text: "latest-fast" }]);
   });
 

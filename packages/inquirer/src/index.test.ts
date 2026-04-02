@@ -1159,7 +1159,7 @@ describe("prompt()", () => {
         complete(state: string) {
           return Promise.resolve({
             success: true as const,
-            value: state || "mode",
+            value: state ?? "mode",
           });
         },
         async *suggest() {},

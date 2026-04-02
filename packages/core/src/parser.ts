@@ -1169,6 +1169,8 @@ export async function suggestAsync<T>(
  * @param options Optional {@link ParseOptions} for customizing parsing behavior.
  * @returns An array of {@link Suggestion} objects (for sync) or Promise thereof
  *          (for async) containing completion candidates.
+ * @throws {TypeError} When a synchronous dependency source extractor returns a
+ *         thenable during suggestion seeding.
  * @since 0.6.0
  * @since 0.10.0 Added optional `options` parameter for annotations support.
  */
