@@ -12605,6 +12605,108 @@ describe("branch coverage: constructs.ts edge cases", () => {
       kind: "literal",
       text: "missing-source",
     }]);
+
+    const syncFailedSharedSource = {
+      ...syncSharedSource,
+      dependencyMetadata: {
+        source: {
+          ...syncSharedSource.dependencyMetadata.source,
+          extractSourceValue() {
+            return {
+              success: false as const,
+              error: message`Hidden duplicate failure.`,
+            };
+          },
+        },
+      },
+    } as const satisfies Parser<"sync", string | undefined, unknown>;
+    const syncFailedParser = merge(
+      object({
+        shared: syncFailedSharedSource,
+      }),
+      object({
+        shared: syncUnrelatedShared,
+        derived: syncDerivedField,
+      }),
+    );
+    const syncFailedParsed = syncFailedParser.parse({
+      buffer: ["first"],
+      state: syncFailedParser.initialState,
+      optionsTerminated: false,
+      usage: syncFailedParser.usage,
+    });
+    assert.ok(syncFailedParsed.success);
+    if (!syncFailedParsed.success) return;
+
+    assert.deepEqual(
+      [...syncFailedParser.suggest({
+        buffer: [],
+        state: syncFailedParsed.next.state,
+        optionsTerminated: false,
+        usage: syncFailedParser.usage,
+        exec: {
+          usage: syncFailedParser.usage,
+          phase: "suggest",
+          path: [],
+          trace: undefined,
+        },
+      }, "")],
+      [{ kind: "literal", text: "missing-source" }],
+    );
+
+    const asyncFailedSharedSource = {
+      ...asyncSharedSource,
+      dependencyMetadata: {
+        source: {
+          ...asyncSharedSource.dependencyMetadata.source,
+          extractSourceValue() {
+            return Promise.resolve({
+              success: false as const,
+              error: message`Hidden duplicate failure.`,
+            });
+          },
+        },
+      },
+    } as const satisfies Parser<"async", string | undefined, unknown>;
+    const asyncFailedParser = merge(
+      object({
+        shared: asyncFailedSharedSource,
+      }),
+      object({
+        shared: asyncUnrelatedShared,
+        derived: asyncDerivedField,
+      }),
+    );
+    const asyncFailedParsed = await asyncFailedParser.parse({
+      buffer: ["first"],
+      state: asyncFailedParser.initialState,
+      optionsTerminated: false,
+      usage: asyncFailedParser.usage,
+    });
+    assert.ok(asyncFailedParsed.success);
+    if (!asyncFailedParsed.success) return;
+
+    const asyncFailedSuggestions: Suggestion[] = [];
+    for await (
+      const suggestion of asyncFailedParser.suggest({
+        buffer: [],
+        state: asyncFailedParsed.next.state,
+        optionsTerminated: false,
+        usage: asyncFailedParser.usage,
+        exec: {
+          usage: asyncFailedParser.usage,
+          phase: "suggest",
+          path: [],
+          trace: undefined,
+        },
+      }, "")
+    ) {
+      asyncFailedSuggestions.push(suggestion);
+    }
+    assert.deepEqual(asyncFailedSuggestions, [{
+      kind: "literal",
+      text: "missing-source",
+    }]);
   });
 
   it("tuple() custom inspect covers unlabeled multi-parser format", () => {

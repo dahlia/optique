@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
-import { getAnnotations, injectAnnotations } from "@optique/core/annotations";
+import { injectAnnotations } from "@optique/core/annotations";
 import { concat, group, merge, object, tuple } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import { runWith } from "@optique/core/facade";
@@ -2152,67 +2152,45 @@ describe("bindEnv() with dependency sources", () => {
   });
 
   it("preserves outer annotations when no-CLI fallback delegates source extraction", () => {
-    const sourceId = Symbol("mode");
-    const marker = Symbol("outer-annotation");
-    const innerParser = {
-      $mode: "sync" as const,
-      $valueType: [] as const,
-      $stateType: [] as const,
-      priority: 0,
-      usage: [],
-      leadingNames: new Set<string>(),
-      acceptingAnyToken: false,
-      initialState: undefined,
-      parse(context) {
-        return {
-          success: true as const,
-          next: { ...context, state: undefined },
-          consumed: [],
-        };
-      },
-      complete() {
-        return { success: true as const, value: "prod" as const };
-      },
-      suggest() {
-        return [];
-      },
-      getDocFragments() {
-        return { fragments: [] };
-      },
-      dependencyMetadata: {
-        source: {
-          kind: "source" as const,
-          sourceId,
-          preservesSourceValue: true,
-          extractSourceValue(state: unknown) {
-            return getAnnotations(state)?.[marker] === true
-              ? { success: true as const, value: "prod" as const }
-              : undefined;
+    const configContext = createConfigContext<
+      { readonly mode?: "dev" | "prod" }
+    >({
+      schema: {
+        "~standard": {
+          version: 1,
+          vendor: "optique-test",
+          validate(input: unknown) {
+            return {
+              value: input as { readonly mode?: "dev" | "prod" },
+            };
           },
         },
       },
-    } as const satisfies
-      & Parser<"sync", "prod", undefined>
-      & {
-        readonly dependencyMetadata: {
-          readonly source: {
-            readonly kind: "source";
-            readonly sourceId: typeof sourceId;
-            readonly preservesSourceValue: true;
-            readonly extractSourceValue: (
-              state: unknown,
-            ) => ValueParserResult<unknown> | undefined;
-          };
-        };
-      };
+    });
+    const source = dependency(choice(["dev", "prod"] as const));
+    const innerParser = bindConfig(option("--mode", source), {
+      context: configContext,
+      key: "mode",
+    });
     const parser = bindEnv(innerParser, {
       context: createEnvContext({ source: () => undefined }),
       key: "MODE",
       parser: string(),
     });
+    const annotations = configContext.getAnnotations(
+      {},
+      {
+        load: () => ({
+          config: { mode: "prod" as const },
+          meta: undefined,
+        }),
+      },
+    );
+    assert.ok(!(annotations instanceof Promise));
+    if (annotations instanceof Promise) return;
     const parseResult = parser.parse({
       buffer: [],
-      state: injectAnnotations(parser.initialState, { [marker]: true }),
+      state: injectAnnotations(parser.initialState, annotations),
       optionsTerminated: false,
       usage: parser.usage,
     });

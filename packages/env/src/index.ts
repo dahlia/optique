@@ -565,6 +565,23 @@ function getEnvOrDefault<M extends Mode, TValue>(
   });
 }
 
+/**
+ * Resolves an env-backed dependency source with env and default fallbacks.
+ *
+ * This first checks annotations or the active env registry for the bound
+ * variable. If no env-backed value is available, it falls back to
+ * `options.default` and finally delegates to the wrapped parser's source
+ * extractor.
+ *
+ * @param state The wrapper state, which may carry env annotations.
+ * @param options The binding options with lookup and default settings.
+ * @param innerState The unwrapped inner state for delegated extraction.
+ * @param extractInnerSourceValue The wrapped parser's source extractor.
+ * @returns The resolved source value, an async source value, or `undefined`.
+ * @throws {Error} Propagates errors thrown by the env source callback
+ *                 (`sourceData.source(fullKey)`).
+ * @throws {Error} Propagates errors thrown by `options.parser.parse(rawValue)`.
+ */
 function getEnvSourceValue<M extends Mode, TValue>(
   state: unknown,
   options: BindEnvOptions<M, TValue>,
