@@ -4548,33 +4548,11 @@ export function object<
           fieldKey in parentState
         ? (parentState as Record<string | symbol, unknown>)[fieldKey]
         : parser.initialState;
-      const annotations = getAnnotations(parentState);
-      if (sourceState == null) {
-        if (
-          annotations !== undefined &&
-          Reflect.get(parser, inheritParentAnnotationsKey) === true
-        ) {
-          const inheritedState = injectAnnotations({}, annotations);
-          cache?.set(fieldKey, inheritedState);
-          return inheritedState;
-        }
-        cache?.set(fieldKey, sourceState);
-        return sourceState;
-      }
-      if (typeof sourceState !== "object") {
-        cache?.set(fieldKey, sourceState);
-        return sourceState;
-      }
-      if (
-        annotations === undefined || getAnnotations(sourceState) === annotations
-      ) {
-        cache?.set(fieldKey, sourceState);
-        return sourceState;
-      }
-      const inheritedState =
-        Reflect.get(parser, inheritParentAnnotationsKey) === true
-          ? injectAnnotations(sourceState, annotations)
-          : inheritAnnotations(parentState, sourceState);
+      const inheritedState = getAnnotatedChildState(
+        parentState,
+        sourceState,
+        parser,
+      );
       cache?.set(fieldKey, inheritedState);
       return inheritedState;
     };
@@ -5441,7 +5419,9 @@ function advanceTupleSuggestContextSync(
   let currentContext = context;
   const matchedParsers = new Set<number>();
 
-  while (currentContext.buffer.length > 0 && matchedParsers.size < parsers.length) {
+  while (
+    currentContext.buffer.length > 0 && matchedParsers.size < parsers.length
+  ) {
     let foundMatch = false;
     let failedParserIndexes: number[] = [];
     let deepestFailure = 0;
@@ -5465,7 +5445,10 @@ function advanceTupleSuggestContextSync(
             idx === index ? result.next.state : state
           ),
         );
-        const mergedExec = mergeChildExec(currentContext.exec, result.next.exec);
+        const mergedExec = mergeChildExec(
+          currentContext.exec,
+          result.next.exec,
+        );
         currentContext = {
           ...currentContext,
           buffer: result.next.buffer,
@@ -5504,7 +5487,10 @@ function advanceTupleSuggestContextSync(
               idx === index ? result.next.state : state
             ),
           );
-          const mergedExec = mergeChildExec(currentContext.exec, result.next.exec);
+          const mergedExec = mergeChildExec(
+            currentContext.exec,
+            result.next.exec,
+          );
           currentContext = {
             ...currentContext,
             state: newStateArray as readonly unknown[],
@@ -5547,7 +5533,9 @@ async function advanceTupleSuggestContextAsync(
   let currentContext = context;
   const matchedParsers = new Set<number>();
 
-  while (currentContext.buffer.length > 0 && matchedParsers.size < parsers.length) {
+  while (
+    currentContext.buffer.length > 0 && matchedParsers.size < parsers.length
+  ) {
     let foundMatch = false;
     let failedParserIndexes: number[] = [];
     let deepestFailure = 0;
@@ -5571,7 +5559,10 @@ async function advanceTupleSuggestContextAsync(
             idx === index ? result.next.state : state
           ),
         );
-        const mergedExec = mergeChildExec(currentContext.exec, result.next.exec);
+        const mergedExec = mergeChildExec(
+          currentContext.exec,
+          result.next.exec,
+        );
         currentContext = {
           ...currentContext,
           buffer: result.next.buffer,
@@ -5610,7 +5601,10 @@ async function advanceTupleSuggestContextAsync(
               idx === index ? result.next.state : state
             ),
           );
-          const mergedExec = mergeChildExec(currentContext.exec, result.next.exec);
+          const mergedExec = mergeChildExec(
+            currentContext.exec,
+            result.next.exec,
+          );
           currentContext = {
             ...currentContext,
             state: newStateArray as readonly unknown[],

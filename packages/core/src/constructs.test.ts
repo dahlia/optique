@@ -3340,6 +3340,22 @@ describe("tuple", () => {
     }
   });
 
+  it("should preserve nested object child values under annotations", () => {
+    const marker = Symbol.for("@test/tuple-nested-object-annotations");
+    const value = { source: "tuple-nested" };
+    const parser = tuple([object({ v: constant(value) })]);
+
+    const result = parseSync(parser, [], {
+      annotations: { [marker]: true } satisfies Annotations,
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0].v, value);
+      assert.ok(!Reflect.ownKeys(result.value[0].v).includes(annotationKey));
+    }
+  });
+
   it("should parse parsers sequentially in array order", () => {
     const parser = tuple([
       option("-n", "--name", string()),
