@@ -121,6 +121,10 @@ function describeDuplicateSourceState(
   sourceId: symbol,
 ): "from-source" | "missing-source" | "failed-source" {
   if (context.exec?.dependencyRuntime?.isSourceFailed(sourceId)) {
+    assert.ok(
+      context.dependencyRegistry?.has(sourceId) !== true,
+      "failed sources should be cleared from dependencyRegistry",
+    );
     return "failed-source";
   }
   return context.dependencyRegistry?.has(sourceId)

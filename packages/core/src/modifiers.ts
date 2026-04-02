@@ -395,12 +395,16 @@ export function optional<M extends Mode, TValue, TState>(
             M,
             ValueParserResult<TValue | undefined>
           > => {
+            const innerState = normalizeOptionalLikeInnerState(
+              state,
+              parser.initialState,
+            );
             const innerResult = dispatchByMode(
               parser.$mode,
-              () => syncParser.complete(state as unknown as TState, exec),
+              () => syncParser.complete(innerState, exec),
               async () =>
                 (await parser.complete(
-                  state as unknown as TState,
+                  innerState,
                   exec,
                 )) as ValueParserResult<TValue | undefined>,
             );
@@ -760,12 +764,16 @@ export function withDefault<
           state != null &&
           typeof state === "object"
         ) {
+          const innerState = normalizeOptionalLikeInnerState(
+            state,
+            parser.initialState,
+          );
           const innerResult = dispatchByMode(
             parser.$mode,
-            () => syncParser.complete(state as unknown as TState, exec),
+            () => syncParser.complete(innerState, exec),
             async () =>
               (await parser.complete(
-                state as unknown as TState,
+                innerState,
                 exec,
               )) as ValueParserResult<TValue>,
           );

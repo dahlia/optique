@@ -753,19 +753,21 @@ describe("optional", () => {
     const sourceId = Symbol("optional-initial-source");
     const inner = {
       $mode: "sync" as const,
-      $valueType: [] as readonly ("fallback" | "live")[],
-      $stateType: [] as readonly { readonly value: "fallback" | "live" }[],
+      $valueType: [] as readonly ("fallback" | "initial" | "live")[],
+      $stateType: [] as readonly {
+        readonly value: "fallback" | "initial" | "live";
+      }[],
       priority: 0,
       usage: [],
       leadingNames: new Set(),
       acceptingAnyToken: false,
-      initialState: { value: "fallback" as const },
+      initialState: { value: "initial" as const },
       parse: () => ({
         success: false as const,
         consumed: 0,
         error: message`No parse.`,
       }),
-      complete(state: { readonly value: "fallback" | "live" }) {
+      complete(state: { readonly value: "fallback" | "initial" | "live" }) {
         return {
           success: true as const,
           value: state.value,
@@ -788,14 +790,14 @@ describe("optional", () => {
       },
     } as const satisfies Parser<
       "sync",
-      "fallback" | "live",
-      { readonly value: "fallback" | "live" }
+      "fallback" | "initial" | "live",
+      { readonly value: "fallback" | "initial" | "live" }
     >;
     const parser = optional(inner);
 
     assert.deepEqual(parser.complete(undefined), {
       success: true,
-      value: "fallback",
+      value: "initial",
     });
   });
 
@@ -803,20 +805,22 @@ describe("optional", () => {
     const sourceId = Symbol("optional-initial-source-async");
     const inner = {
       $mode: "async" as const,
-      $valueType: [] as readonly ("fallback" | "live")[],
-      $stateType: [] as readonly { readonly value: "fallback" | "live" }[],
+      $valueType: [] as readonly ("fallback" | "initial" | "live")[],
+      $stateType: [] as readonly {
+        readonly value: "fallback" | "initial" | "live";
+      }[],
       priority: 0,
       usage: [],
       leadingNames: new Set(),
       acceptingAnyToken: false,
-      initialState: { value: "fallback" as const },
+      initialState: { value: "initial" as const },
       parse: () =>
         Promise.resolve({
           success: false as const,
           consumed: 0,
           error: message`No parse.`,
         }),
-      complete(state: { readonly value: "fallback" | "live" }) {
+      complete(state: { readonly value: "fallback" | "initial" | "live" }) {
         return Promise.resolve({
           success: true as const,
           value: state.value,
@@ -842,14 +846,14 @@ describe("optional", () => {
       },
     } as const satisfies Parser<
       "async",
-      "fallback" | "live",
-      { readonly value: "fallback" | "live" }
+      "fallback" | "initial" | "live",
+      { readonly value: "fallback" | "initial" | "live" }
     >;
     const parser = optional(inner);
 
     assert.deepEqual(await parser.complete(undefined), {
       success: true,
-      value: "fallback",
+      value: "initial",
     });
   });
 
@@ -5532,59 +5536,53 @@ describe("branch coverage: modifiers edge cases", () => {
   });
 
   // Line 982: async multiple() complete — inner complete() failure.
-  // Build a custom async multiple-like parser whose complete() always fails to
-  // exercise the error-return path in async complete().
   it("multiple: async complete fails when inner completion fails", async () => {
-    const failComplete = {
-      ...multiple(option("--x", string())),
+    const inner: Parser<"async", string, string> = {
       $mode: "async" as const,
-      parse(
-        context: {
-          buffer: readonly string[];
-          state: readonly string[];
-          optionsTerminated: boolean;
-          usage: readonly unknown[];
-        },
-      ) {
-        // Succeed and add a string item to state
-        if (context.buffer[0] === "--x" && context.buffer[1]) {
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: true,
+      initialState: "",
+      parse(context) {
+        if (context.buffer.length === 0) {
           return Promise.resolve({
-            success: true as const,
-            next: {
-              ...context,
-              buffer: context.buffer.slice(2),
-              state: [...context.state, context.buffer[1]],
-            },
-            consumed: [context.buffer[0], context.buffer[1]],
+            success: false as const,
+            consumed: 0,
+            error: message`No parse.`,
           });
         }
         return Promise.resolve({
-          success: false as const,
-          consumed: 0,
-          error: message`Expected --x VALUE`,
+          success: true as const,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: context.buffer[0],
+          },
+          consumed: [context.buffer[0]],
         });
       },
-      complete(
-        _state: readonly string[],
-      ): Promise<{ success: false; error: Message }> {
-        return Promise.resolve({
-          success: false as const,
-          error: message`Async complete failure.`,
-        });
+      complete(state: string): Promise<ValueParserResult<string>> {
+        return Promise.resolve(
+          state === "bad"
+            ? {
+              success: false as const,
+              error: message`Async complete failure.`,
+            }
+            : { success: true as const, value: state },
+        );
       },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
     };
+    const failComplete = multiple(inner);
 
-    const ctx = {
-      buffer: ["--x", "hello"],
-      state: [] as readonly string[],
-      optionsTerminated: false,
-      usage: failComplete.usage,
-    };
-    const r = await failComplete.parse(ctx);
-    assert.ok(r.success);
-    if (r.success) {
-      const result = await failComplete.complete(r.next.state);
-      assert.ok(!result.success);
+    const result = await failComplete.complete(["ok", "bad"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(result.error, message`Async complete failure.`);
     }
   });
 

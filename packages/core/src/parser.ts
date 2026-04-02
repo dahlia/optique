@@ -952,6 +952,8 @@ export function parse<M extends Mode, T>(
  * const suggestions2 = suggestSync(parser, ["-v", "--format="]);
  * // Returns: [{ text: "--format=json" }, { text: "--format=yaml" }]
  * ```
+ * @throws {TypeError} When a synchronous dependency source extractor returns a
+ *         thenable during suggestion seeding.
  * @since 0.6.0
  * @since 0.9.0 Renamed from the original `suggest` function.
  * @since 0.10.0 Added optional `options` parameter for annotations support.
