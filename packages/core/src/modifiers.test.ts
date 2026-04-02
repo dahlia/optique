@@ -4176,6 +4176,115 @@ describe("multiple", () => {
     assert.deepEqual(result.value, []);
   });
 
+  it("should not append an empty slot for zero-consumption wrapper state", () => {
+    type WrappedState = {
+      readonly hasCliValue: boolean;
+      readonly cliState?: string;
+    };
+    const parser = multiple({
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly WrappedState[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { hasCliValue: false, cliState: "" },
+      parse(context: ParserContext<WrappedState>) {
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            state: { hasCliValue: false, cliState: "" },
+          },
+          consumed: [],
+        };
+      },
+      complete(state: WrappedState) {
+        return { success: true as const, value: state.cliState ?? "" };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    });
+
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (!result.success) return;
+    assert.deepEqual(result.value, []);
+  });
+
+  it("should reopen a wrapped terminal slot before parsing the next item", () => {
+    type WrappedState = {
+      readonly hasCliValue: boolean;
+      readonly cliState?: ValueParserResult<string>;
+    };
+    const parser = multiple({
+      $mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly WrappedState[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { hasCliValue: false },
+      parse(context: ParserContext<WrappedState>) {
+        if (context.buffer.length === 0) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        }
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: {
+              hasCliValue: true,
+              cliState: {
+                success: true as const,
+                value: context.buffer[0],
+              },
+            },
+          },
+          consumed: [context.buffer[0]],
+        };
+      },
+      complete(state: WrappedState) {
+        if (state.cliState?.success) {
+          return { success: true as const, value: state.cliState.value };
+        }
+        return { success: false as const, error: message`Missing value.` };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    });
+
+    const first = parser.parse({
+      buffer: ["first"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const second = parser.parse({
+      buffer: ["second"],
+      state: first.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(second.success);
+    if (!second.success) return;
+
+    assert.deepEqual(parser.complete(second.next.state), {
+      success: true,
+      value: ["first", "second"],
+    });
+  });
+
   it("should not reopen a sync slot after a consumed extension failure", () => {
     type ItemState =
       | { readonly first: string }

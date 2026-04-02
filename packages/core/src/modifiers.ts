@@ -77,7 +77,57 @@ function withChildContext<TState>(
 }
 
 function isTerminalMultipleItemState(state: unknown): boolean {
+  const unwrapped = unwrapMultipleItemState(state).value;
+  return unwrapped != null && typeof unwrapped === "object" &&
+    Object.hasOwn(unwrapped, "success") &&
+    typeof (unwrapped as { success?: unknown }).success === "boolean";
+}
+
+function isUnstartedMultipleItemState(
+  state: unknown,
+  originalState?: unknown,
+): boolean {
+  const unwrappedState = unwrapMultipleItemState(state);
+  if (unwrappedState.value == null) return true;
+
+  if (originalState === undefined) return false;
+  const unwrappedOriginalState = unwrapMultipleItemState(originalState);
+  return unwrappedState.value === unwrappedOriginalState.value &&
+    (
+      unwrappedState.viaBoundCliWrapper ||
+      unwrappedOriginalState.viaBoundCliWrapper ||
+      (
+        unwrappedOriginalState.value != null &&
+        typeof unwrappedOriginalState.value === "object"
+      )
+    );
+}
+
+function isBoundCliWrapperState(
+  state: unknown,
+): state is {
+  readonly hasCliValue: boolean;
+  readonly cliState?: unknown;
+} {
+  return state != null &&
+    typeof state === "object" &&
+    Object.hasOwn(state, "hasCliValue") &&
+    typeof (state as { readonly hasCliValue?: unknown }).hasCliValue ===
+      "boolean" &&
+    (
+      Object.hasOwn(state, "cliState") ||
+      (state as { readonly hasCliValue: boolean }).hasCliValue === false
+    );
+}
+
+function unwrapMultipleItemState(
+  state: unknown,
+): {
+  readonly value: unknown;
+  readonly viaBoundCliWrapper: boolean;
+} {
   let unwrapped = state;
+  let viaBoundCliWrapper = false;
   while (true) {
     if (isInjectedAnnotationWrapper(unwrapped)) {
       unwrapped = unwrapInjectedAnnotationWrapper(unwrapped);
@@ -87,33 +137,13 @@ function isTerminalMultipleItemState(state: unknown): boolean {
       unwrapped = unwrapped[0];
       continue;
     }
-    return unwrapped != null && typeof unwrapped === "object" &&
-      Object.hasOwn(unwrapped, "success") &&
-      typeof (unwrapped as { success?: unknown }).success === "boolean";
+    if (isBoundCliWrapperState(unwrapped)) {
+      viaBoundCliWrapper = true;
+      unwrapped = unwrapped.cliState;
+      continue;
+    }
+    return { value: unwrapped, viaBoundCliWrapper };
   }
-}
-
-function isUnstartedMultipleItemState(
-  state: unknown,
-  originalState?: unknown,
-): boolean {
-  let unwrappedState = state;
-  while (isInjectedAnnotationWrapper(unwrappedState)) {
-    unwrappedState = unwrapInjectedAnnotationWrapper(unwrappedState);
-  }
-  if (unwrappedState == null) return true;
-
-  if (originalState === undefined) return false;
-
-  let unwrappedOriginalState = originalState;
-  while (isInjectedAnnotationWrapper(unwrappedOriginalState)) {
-    unwrappedOriginalState = unwrapInjectedAnnotationWrapper(
-      unwrappedOriginalState,
-    );
-  }
-  return unwrappedState === unwrappedOriginalState &&
-    unwrappedOriginalState != null &&
-    typeof unwrappedOriginalState === "object";
 }
 
 function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
