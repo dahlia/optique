@@ -4954,6 +4954,72 @@ describe("prompt() with dependency sources", () => {
         },
       );
 
+      for (
+        const wrapperKind of ["optional", "withDefault"] as const
+      ) {
+        it(
+          `${kind}() skips prompt when ${wrapperKind}(bindEnv(...)) resolves dependency source`,
+          async () => {
+            const envContext = createEnvContext({
+              prefix: "APP_",
+              source: (key) => ({ APP_MODE: "prod" })[key],
+            });
+            const annotations = envContext.getAnnotations();
+            if (annotations instanceof Promise) {
+              throw new TypeError("Expected synchronous annotations.");
+            }
+            const boundParser = bindEnv(option("--mode", mode), {
+              context: envContext,
+              key: "MODE",
+              parser: choice(["dev", "prod"] as const),
+            });
+            const wrappedParser = wrapperKind === "optional"
+              ? optional(boundParser)
+              : withDefault(boundParser, "dev" as const);
+            let promptCalls = 0;
+            const parser = kind === "tuple"
+              ? tuple([
+                prompt(wrappedParser, {
+                  type: "select",
+                  message: "Select mode:",
+                  choices: ["dev", "prod"],
+                  prompter: () => {
+                    promptCalls += 1;
+                    return Promise.resolve("dev" as const);
+                  },
+                }),
+                option("--level", level),
+              ])
+              : concat(
+                tuple([
+                  prompt(wrappedParser, {
+                    type: "select",
+                    message: "Select mode:",
+                    choices: ["dev", "prod"],
+                    prompter: () => {
+                      promptCalls += 1;
+                      return Promise.resolve("dev" as const);
+                    },
+                  }),
+                ]),
+                tuple([
+                  option("--level", level),
+                ]),
+              );
+
+            const result = await parseAsync(
+              parser,
+              ["--level", "silent"],
+              { annotations },
+            );
+
+            assert.ok(result.success);
+            assert.deepEqual(result.value, ["prod", "silent"]);
+            assert.equal(promptCalls, 0);
+          },
+        );
+      }
+
       it(
         `${kind}() skips prompt when bindConfig() resolves dependency source`,
         async () => {

@@ -1001,6 +1001,12 @@ export function prompt<M extends Mode, TValue, TState>(
         result: ParserResult<TState>,
       ): ParserResult<TState> => {
         if (result.success) {
+          const cliState = annotations != null &&
+              result.next.state != null &&
+              typeof result.next.state === "object" &&
+              getAnnotations(result.next.state) !== annotations
+            ? injectAnnotations(result.next.state, annotations)
+            : result.next.state;
           // Only mark hasCliValue when the inner parser actually consumed
           // input tokens.  Wrappers that return success with consumed: []
           // (e.g., withDefault, bindConfig) should NOT suppress the prompt.
@@ -1008,7 +1014,7 @@ export function prompt<M extends Mode, TValue, TState>(
           const nextState = {
             [promptBindStateKey]: true as const,
             hasCliValue: cliConsumed,
-            cliState: result.next.state,
+            cliState,
             ...(annotations != null ? { [annotationKey]: annotations } : {}),
           } as unknown as TState;
           return {

@@ -312,9 +312,9 @@ function prepareStateForCompletion(
 
 /**
  * Returns the field state with parent annotations inherited, respecting
- * the parser's {@link inheritParentAnnotationsKey} flag.  This is the
- * same logic as {@link createFieldStateGetter} inside `object()` but
- * without the per-state cache, for use in module-level helpers like
+ * the parser's annotation-inheritance contract. This is the same logic as
+ * {@link createFieldStateGetter} inside `object()` but without the per-state
+ * cache, for use in module-level helpers like
  * {@link pendingDependencyDefaults}.
  * @internal
  */
@@ -355,11 +355,11 @@ function getAnnotatedChildState(
   parser: Parser<Mode, unknown, unknown>,
 ): unknown {
   const annotations = getAnnotations(parentState);
+  const shouldInheritAnnotations =
+    Reflect.get(parser, inheritParentAnnotationsKey) === true ||
+    parser.dependencyMetadata?.source != null;
   if (childState == null) {
-    if (
-      annotations !== undefined &&
-      Reflect.get(parser, inheritParentAnnotationsKey) === true
-    ) {
+    if (annotations !== undefined && shouldInheritAnnotations) {
       return injectAnnotations({}, annotations);
     }
     return childState;
@@ -372,7 +372,7 @@ function getAnnotatedChildState(
   ) {
     return childState;
   }
-  if (Reflect.get(parser, inheritParentAnnotationsKey) === true) {
+  if (shouldInheritAnnotations) {
     const injectedState = injectAnnotations(childState, annotations);
     if (getAnnotations(injectedState) === annotations) {
       return injectedState;
