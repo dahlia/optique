@@ -316,7 +316,7 @@ export function bindEnv<
       const innerNodes = parser.getSuggestRuntimeNodes?.(innerState, path) ??
         [];
       return boundParser.dependencyMetadata?.source != null
-        ? [{ path, parser: boundParser, state }, ...innerNodes]
+        ? [...innerNodes, { path, parser: boundParser, state }]
         : innerNodes;
     },
 

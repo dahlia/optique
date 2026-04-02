@@ -34,6 +34,10 @@ const phase2UndefinedParsedValueKey = Symbol(
   "@optique/config/phase2UndefinedParsedValue",
 );
 
+const inheritParentAnnotationsKey = Symbol.for(
+  "@optique/core/inheritParentAnnotations",
+);
+
 /**
  * Metadata about the loaded config source.
  *
@@ -732,7 +736,6 @@ export function bindConfig<
     usage: options.default !== undefined
       ? [{ type: "optional", terms: parser.usage }]
       : parser.usage,
-    [Symbol.for("@optique/core/inheritParentAnnotations")]: true,
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
@@ -741,7 +744,7 @@ export function bindConfig<
       const innerNodes = parser.getSuggestRuntimeNodes?.(innerState, path) ??
         [];
       return boundParser.dependencyMetadata?.source != null
-        ? [{ path, parser: boundParser, state }, ...innerNodes]
+        ? [...innerNodes, { path, parser: boundParser, state }]
         : innerNodes;
     },
 
@@ -858,6 +861,11 @@ export function bindConfig<
       enumerable: false,
     });
   }
+  Object.defineProperty(boundParser, inheritParentAnnotationsKey, {
+    value: true,
+    configurable: true,
+    enumerable: false,
+  });
   const dependencyMetadata = parser.dependencyMetadata;
   if (dependencyMetadata != null) {
     const sourceMetadata = dependencyMetadata.source;

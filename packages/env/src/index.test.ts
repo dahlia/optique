@@ -15,6 +15,10 @@ import { fail, flag, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { bindConfig, createConfigContext } from "../../config/src/index.ts";
 import {
+  collectExplicitSourceValues,
+  createDependencyRuntimeContext,
+} from "../../core/src/dependency-runtime.ts";
+import {
   bindEnv,
   bool,
   createEnvContext,
@@ -1233,15 +1237,76 @@ describe("bindEnv()", () => {
     assert.ok(nodes != null);
     if (nodes == null) return;
 
-    assert.equal(nodes[0]?.parser, parser);
-    assert.deepEqual(nodes[0]?.path, ["mode"]);
-    assert.equal(nodes[0]?.state, parsed.next.state);
+    assert.equal(nodes.at(-1)?.parser, parser);
+    assert.deepEqual(nodes.at(-1)?.path, ["mode"]);
+    assert.equal(nodes.at(-1)?.state, parsed.next.state);
     assert.ok(nodes.some((node) => node.parser === inner));
     assert.ok(
       nodes.some((node) =>
         JSON.stringify(node.path) === JSON.stringify(["mode", 0])
       ),
     );
+  });
+
+  it("bindEnv getSuggestRuntimeNodes keeps outer source precedence", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source(key) {
+        return ({ APP_MODE: "prod" } as const)[key as "APP_MODE"];
+      },
+    });
+    const envAnnotations = envContext.getAnnotations();
+    if (envAnnotations instanceof Promise) {
+      throw new TypeError("Expected synchronous env annotations.");
+    }
+    const configContext = createConfigContext<
+      { readonly mode?: "dev" | "prod" }
+    >({
+      schema: {
+        "~standard": {
+          version: 1,
+          vendor: "optique-test",
+          validate(input: unknown) {
+            return {
+              value: input as { readonly mode?: "dev" | "prod" },
+            };
+          },
+        },
+      },
+    });
+    const parser = bindEnv(
+      bindConfig(
+        option("--mode", dependency(choice(["dev", "prod"] as const))),
+        {
+          context: configContext,
+          key: "mode",
+        },
+      ),
+      {
+        context: envContext,
+        key: "MODE",
+        parser: choice(["dev", "prod"] as const),
+      },
+    );
+    const state = injectAnnotations(
+      injectAnnotations(parser.initialState, envAnnotations),
+      {
+        [configContext.id]: { data: { mode: "dev" as const } },
+      },
+    );
+    const nodes = parser.getSuggestRuntimeNodes?.(state, ["mode"]);
+    assert.ok(nodes != null);
+    if (nodes == null) return;
+
+    const runtime = createDependencyRuntimeContext();
+    collectExplicitSourceValues(nodes, runtime);
+
+    const sourceId = parser.dependencyMetadata?.source?.sourceId;
+    assert.ok(sourceId != null);
+    if (sourceId == null) return;
+    assert.ok(runtime.hasSource(sourceId));
+    assert.ok(!runtime.isSourceFailed(sourceId));
+    assert.equal(runtime.getSource(sourceId), "prod");
   });
 
   it("returns a Promise from complete() in async mode for env path", async () => {
