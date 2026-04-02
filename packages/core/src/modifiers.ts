@@ -398,10 +398,11 @@ export function optional<M extends Mode, TValue, TState>(
             const innerResult = dispatchByMode(
               parser.$mode,
               () => syncParser.complete(state as unknown as TState, exec),
-              () =>
-                parser.complete(state as unknown as TState, exec) as Promise<
-                  ValueParserResult<TValue | undefined>
-                >,
+              async () =>
+                (await parser.complete(
+                  state as unknown as TState,
+                  exec,
+                )) as ValueParserResult<TValue | undefined>,
             );
             return mapModeValue(
               parser.$mode,
@@ -431,11 +432,11 @@ export function optional<M extends Mode, TValue, TState>(
           return dispatchByMode(
             parser.$mode,
             () => syncParser.complete(delegatedState, exec),
-            () =>
-              parser.complete(
+            async () =>
+              (await parser.complete(
                 delegatedState,
                 exec,
-              ) as Promise<ValueParserResult<TValue | undefined>>,
+              )) as ValueParserResult<TValue | undefined>,
           );
         }
         return { success: true, value: undefined };
@@ -452,11 +453,11 @@ export function optional<M extends Mode, TValue, TState>(
       return dispatchByMode(
         parser.$mode,
         () => syncParser.complete(innerElement as TState, exec),
-        // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
-        () =>
-          parser.complete(innerElement as TState, exec) as Promise<
-            ValueParserResult<TValue | undefined>
-          >,
+        async () =>
+          (await parser.complete(
+            innerElement as TState,
+            exec,
+          )) as ValueParserResult<TValue | undefined>,
       );
     },
     suggest(
@@ -762,10 +763,11 @@ export function withDefault<
           const innerResult = dispatchByMode(
             parser.$mode,
             () => syncParser.complete(state as unknown as TState, exec),
-            () =>
-              parser.complete(state as unknown as TState, exec) as Promise<
-                ValueParserResult<TValue>
-              >,
+            async () =>
+              (await parser.complete(
+                state as unknown as TState,
+                exec,
+              )) as ValueParserResult<TValue>,
           );
           // Propagate the inner result as-is.  When wrapping
           // bindConfig(), success means config resolved; failure means
@@ -801,11 +803,11 @@ export function withDefault<
       return dispatchByMode(
         parser.$mode,
         () => syncParser.complete(innerElement as TState, exec),
-        // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
-        () =>
-          parser.complete(innerElement as TState, exec) as Promise<
-            ValueParserResult<TValue | TDefault>
-          >,
+        async () =>
+          (await parser.complete(
+            innerElement as TState,
+            exec,
+          )) as ValueParserResult<TValue | TDefault>,
       );
     },
     suggest(

@@ -853,6 +853,106 @@ describe("optional", () => {
     });
   });
 
+  it("rejects instead of throwing when async omitted-source completion throws synchronously", async () => {
+    const sourceId = Symbol("optional-sync-throw-omitted-source");
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { readonly value: string }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "fallback" },
+      parse: () =>
+        Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`No parse.`,
+        }),
+      complete() {
+        throw new TypeError("Synchronous optional complete failure.");
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          getMissingSourceValue() {
+            return Promise.resolve({
+              success: true as const,
+              value: "fallback",
+            });
+          },
+          extractSourceValue() {
+            return Promise.resolve(undefined);
+          },
+        },
+      },
+    } as const satisfies Parser<
+      "async",
+      string,
+      { readonly value: string }
+    >;
+    const parser = optional(inner);
+    let result: ReturnType<typeof parser.complete> | undefined;
+
+    assert.doesNotThrow(() => {
+      result = parser.complete(undefined);
+    });
+    assert.ok(result instanceof Promise);
+    await assert.rejects(result, {
+      name: "TypeError",
+      message: "Synchronous optional complete failure.",
+    });
+  });
+
+  it("rejects instead of throwing when async wrapped-state completion throws synchronously", async () => {
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { readonly value: string }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "fallback" },
+      parse: () =>
+        Promise.resolve({
+          success: true as const,
+          next: {
+            buffer: [] as const,
+            state: { value: "live" },
+            optionsTerminated: false,
+            usage: [] as const,
+          },
+          consumed: [] as const,
+        }),
+      complete() {
+        throw new TypeError("Synchronous optional wrapped-state failure.");
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<
+      "async",
+      string,
+      { readonly value: string }
+    >;
+    const parser = optional(inner);
+    let result: ReturnType<typeof parser.complete> | undefined;
+
+    assert.doesNotThrow(() => {
+      result = parser.complete([{ value: "live" }]);
+    });
+    assert.ok(result instanceof Promise);
+    await assert.rejects(result, {
+      name: "TypeError",
+      message: "Synchronous optional wrapped-state failure.",
+    });
+  });
+
   it("should collapse deferred missing-source failures to undefined", () => {
     const sourceId = Symbol("optional-deferred-missing-source");
     const inner = {
@@ -1043,6 +1143,101 @@ describe("withDefault", () => {
     if (completeResult2.success) {
       assert.equal(completeResult2.value, true);
     }
+  });
+
+  it("rejects instead of throwing when async deferred completion throws synchronously", async () => {
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { readonly pending: true }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { pending: true as const },
+      parse: () =>
+        Promise.resolve({
+          success: true as const,
+          next: {
+            buffer: [] as const,
+            state: { pending: true as const },
+            optionsTerminated: false,
+            usage: [] as const,
+          },
+          consumed: [] as const,
+        }),
+      complete() {
+        throw new TypeError("Synchronous withDefault deferred failure.");
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      shouldDeferCompletion() {
+        return true;
+      },
+    } as const satisfies Parser<
+      "async",
+      string,
+      { readonly pending: true }
+    >;
+    const parser = withDefault(inner, "fallback");
+    let result: Promise<ValueParserResult<string>> | undefined;
+
+    assert.doesNotThrow(() => {
+      result = (
+        parser.complete as (
+          state: unknown,
+        ) => Promise<ValueParserResult<string>>
+      )({ pending: true });
+    });
+    assert.ok(result instanceof Promise);
+    await assert.rejects(result, {
+      name: "TypeError",
+      message: "Synchronous withDefault deferred failure.",
+    });
+  });
+
+  it("rejects instead of throwing when async wrapped completion throws synchronously", async () => {
+    const inner = {
+      $mode: "async" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { readonly value: string }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "fallback" },
+      parse: () =>
+        Promise.resolve({
+          success: true as const,
+          next: {
+            buffer: [] as const,
+            state: { value: "live" },
+            optionsTerminated: false,
+            usage: [] as const,
+          },
+          consumed: [] as const,
+        }),
+      complete() {
+        throw new TypeError("Synchronous withDefault complete failure.");
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as const satisfies Parser<
+      "async",
+      string,
+      { readonly value: string }
+    >;
+    const parser = withDefault(inner, "fallback");
+    let result: ReturnType<typeof parser.complete> | undefined;
+
+    assert.doesNotThrow(() => {
+      result = parser.complete([{ value: "live" }]);
+    });
+    assert.ok(result instanceof Promise);
+    await assert.rejects(result, {
+      name: "TypeError",
+      message: "Synchronous withDefault complete failure.",
+    });
   });
 
   it("should propagate successful parse results correctly", () => {
