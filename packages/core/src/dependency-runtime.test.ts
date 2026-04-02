@@ -35,6 +35,7 @@ import {
 } from "./dependency.ts";
 import { message } from "./message.ts";
 import { unmatchedNonCliDependencySourceStateMarker } from "./parser.ts";
+import type { DependencyRegistryLike } from "./registry-types.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 
 // =============================================================================
@@ -175,6 +176,46 @@ describe("DependencyRuntimeContext", () => {
       }).kind,
       "resolved",
     );
+  });
+
+  test("keeps failed sources hidden when wrapped registry set throws", () => {
+    const sourceId = Symbol("env");
+    class ThrowingRegistry implements DependencyRegistryLike {
+      readonly #values: Map<symbol, unknown>;
+
+      constructor(entries: readonly (readonly [symbol, unknown])[]) {
+        this.#values = new Map(entries);
+      }
+
+      set<T>(_id: symbol, _value: T): void {
+        throw new TypeError("Registry exploded.");
+      }
+
+      get<T>(id: symbol): T | undefined {
+        return this.#values.get(id) as T | undefined;
+      }
+
+      has(id: symbol): boolean {
+        return this.#values.has(id);
+      }
+
+      clone(): DependencyRegistryLike {
+        return new ThrowingRegistry([...this.#values]);
+      }
+    }
+
+    const runtime = createDependencyRuntimeContext(
+      new ThrowingRegistry([[sourceId, "stale"]]),
+    );
+
+    runtime.markSourceFailed(sourceId);
+    assert.throws(() => runtime.registerSource(sourceId, "fresh", "cli"), {
+      name: "TypeError",
+      message: "Registry exploded.",
+    });
+    assert.ok(!runtime.hasSource(sourceId));
+    assert.equal(runtime.getSource(sourceId), undefined);
+    assert.ok(runtime.isSourceFailed(sourceId));
   });
 });
 

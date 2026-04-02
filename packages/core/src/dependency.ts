@@ -831,12 +831,13 @@ export function snapshotDefaultDependencyValues<T>(
   result: ValueParserResult<T>,
   values: readonly unknown[],
 ): ValueParserResult<T> {
+  const snapshot = getSnapshottedDefaultDependencyValues(result) ?? values;
   const annotated = Object.create(
     Object.getPrototypeOf(result),
     Object.getOwnPropertyDescriptors(result),
   ) as ValueParserResult<T>;
   Object.defineProperty(annotated, defaultDependencyValueSnapshot, {
-    value: [...values],
+    value: [...snapshot],
     configurable: true,
     enumerable: false,
   });
@@ -865,6 +866,13 @@ async function parseDerivedResultAsync<T>(
   input: string,
 ): Promise<ValueParserResult<T>> {
   return await parser.parse(input);
+}
+
+function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
+  return value != null &&
+    (typeof value === "object" || typeof value === "function") &&
+    "then" in value &&
+    typeof (value as Record<PropertyKey, unknown>).then === "function";
 }
 
 async function parseDerivedResultWithSnapshotAsync<T>(
@@ -938,10 +946,13 @@ function createSyncDerivedFromParser<
           : snapshotDefaultDependencyValues(failure, sourceValues);
       }
       const snapshot = [...sourceValues];
-      return snapshotDefaultDependencyValues(
-        derivedParser.parse(input),
-        snapshot,
-      );
+      const result = derivedParser.parse(input);
+      if (isPromiseLike(result)) {
+        throw new TypeError(
+          "Sync derived parser parse() returned a promise-like result. Use an async derived parser instead.",
+        );
+      }
+      return snapshotDefaultDependencyValues(result, snapshot);
     },
 
     [parseWithDependency](
@@ -1406,10 +1417,13 @@ function createSyncDerivedParser<S, T>(
           ? snapshotDefaultDependencyValues(failure, [sourceValue])
           : failure;
       }
-      return snapshotDefaultDependencyValues(
-        derivedParser.parse(input),
-        [sourceValue],
-      );
+      const result = derivedParser.parse(input);
+      if (isPromiseLike(result)) {
+        throw new TypeError(
+          "Sync derived parser parse() returned a promise-like result. Use an async derived parser instead.",
+        );
+      }
+      return snapshotDefaultDependencyValues(result, [sourceValue]);
     },
 
     [parseWithDependency](
@@ -1882,9 +1896,7 @@ export function createDeferredParseState<T, S>(
     : undefined;
 
   // Get the default values if available
-  const defaultValuesFn = Object.hasOwn(parser, defaultValues)
-    ? parser[defaultValues]
-    : undefined;
+  const defaultValuesFn = getDefaultValuesFunction(parser);
 
   let defaultVals = getSnapshottedDefaultDependencyValues(preliminaryResult);
   if (defaultVals != null) {

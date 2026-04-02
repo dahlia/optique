@@ -939,6 +939,21 @@ describe("snapshotDefaultDependencyValues", () => {
       "us",
     ]);
   });
+
+  test("preserves the first snapshot on re-annotation", () => {
+    const result = Object.freeze({
+      success: true as const,
+      value: "ok",
+    });
+
+    const first = snapshotDefaultDependencyValues(result, ["dev", "us"]);
+    const second = snapshotDefaultDependencyValues(first, ["prod", "eu"]);
+
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(second), [
+      "dev",
+      "us",
+    ]);
+  });
 });
 
 describe("DependencyRegistry", () => {
@@ -4160,6 +4175,64 @@ describe("coverage-guided dependency parser tests", () => {
         message`Factory returned an async parser where a sync parser is required.`,
       );
     }
+  });
+
+  test("sync derived parsers should reject promise-like parse results", () => {
+    const modeParser = dependency(choice(["sync", "async"] as const));
+    const envParser = dependency(choice(["dev", "prod"] as const));
+    const multiDerived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [modeParser, envParser] as const,
+      factory: () => ({
+        $mode: "sync" as const,
+        metavar: "VALUE",
+        placeholder: "ok" as const,
+        parse(_input: string): ValueParserResult<"ok"> {
+          // @ts-expect-error: intentional sync Promise regression coverage.
+          return Promise.resolve({
+            success: true as const,
+            value: "ok" as const,
+          });
+        },
+        format(value: "ok"): string {
+          return value;
+        },
+      }),
+      defaultValues: () => ["sync", "dev"] as const,
+    });
+
+    assert.throws(() => multiDerived.parse("ok"), {
+      name: "TypeError",
+      message: /promise-like result/i,
+    });
+
+    const singleDerived = modeParser.derive({
+      metavar: "VALUE",
+      mode: "sync",
+      factory: () => {
+        return {
+          $mode: "sync" as const,
+          metavar: "VALUE",
+          placeholder: "ok" as const,
+          parse(_input: string): ValueParserResult<"ok"> {
+            // @ts-expect-error: intentional sync Promise regression coverage.
+            return Promise.resolve({
+              success: true as const,
+              value: "ok" as const,
+            });
+          },
+          format(value: "ok"): string {
+            return value;
+          },
+        };
+      },
+      defaultValue: () => "sync" as const,
+    });
+
+    assert.throws(() => singleDerived.parse("ok"), {
+      name: "TypeError",
+      message: /promise-like result/i,
+    });
   });
 
   test("suggestWithDependency should return empty when both factories fail", async () => {

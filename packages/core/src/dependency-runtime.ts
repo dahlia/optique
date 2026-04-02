@@ -313,8 +313,8 @@ class FailedAwareRegistry implements DependencyRegistryLike {
   }
 
   set<T>(id: symbol, value: T): void {
-    this.#failedSources.delete(id);
     this.#inner.set(id, value);
+    this.#failedSources.delete(id);
   }
 
   get<T>(id: symbol): T | undefined {
