@@ -1334,6 +1334,39 @@ describe("load() return value validation", () => {
     assert.deepStrictEqual(annotations, {});
   });
 
+  test("no-config load clears stale active registry from prior load", () => {
+    const context = createNameContext();
+    // First call loads real config, populating the active registry
+    context.getAnnotations(
+      {},
+      { load: () => ({ config: { name: "STALE" }, meta: undefined }) },
+    );
+    // Verify the registry is populated
+    assert.deepStrictEqual(getActiveConfig(context.id), { name: "STALE" });
+    // Second call returns no-config; registry must be cleared
+    context.getAnnotations(
+      {},
+      { load: () => undefined },
+    );
+    assert.equal(getActiveConfig(context.id), undefined);
+  });
+
+  test("no-config getConfigPath clears stale active registry", () => {
+    const context = createNameContext();
+    // Populate the active registry directly
+    context.getAnnotations(
+      {},
+      { load: () => ({ config: { name: "STALE" }, meta: undefined }) },
+    );
+    assert.deepStrictEqual(getActiveConfig(context.id), { name: "STALE" });
+    // getConfigPath returning undefined must also clear the registry
+    context.getAnnotations(
+      {},
+      { getConfigPath: () => undefined },
+    );
+    assert.equal(getActiveConfig(context.id), undefined);
+  });
+
   test("rejects array return value from load()", () => {
     const context = createNameContext();
     assert.throws(

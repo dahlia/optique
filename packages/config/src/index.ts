@@ -487,12 +487,18 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         : parsed;
       const parsedPlaceholder = parsedValue as ParserValuePlaceholder;
 
+      const emptyAnnotations = (): Annotations => {
+        clearActiveConfig(contextId);
+        clearActiveConfigMeta(contextId);
+        return {};
+      };
+
       const buildAnnotations = (
         configData: T | undefined,
         configMeta: TConfigMeta | undefined,
       ): Annotations => {
         if (configData === undefined || configData === null) {
-          return {};
+          return emptyAnnotations();
         }
 
         // Set active config in registry for nested parsers inside object()
@@ -535,7 +541,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
             (resolved) => {
               const validated = validateLoadResult<TConfigMeta>(resolved);
               if (validated === undefined || validated.config == null) {
-                return {};
+                return emptyAnnotations();
               }
               return validateAndBuildAnnotations(
                 validated.config,
@@ -553,7 +559,9 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
           );
         }
         const validated = validateLoadResult<TConfigMeta>(loaded);
-        if (validated === undefined || validated.config == null) return {};
+        if (validated === undefined || validated.config == null) {
+          return emptyAnnotations();
+        }
         return validateAndBuildAnnotations(validated.config, validated.meta);
       }
 
@@ -570,7 +578,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         }
 
         if (!configPath) {
-          return {};
+          return emptyAnnotations();
         }
 
         const absoluteConfigPath = resolvePath(configPath);
@@ -599,7 +607,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         } catch (error) {
           // Missing config file is optional in single-file mode.
           if (isErrnoException(error) && error.code === "ENOENT") {
-            return {};
+            return emptyAnnotations();
           }
           if (error instanceof SyntaxError) {
             throw new Error(
@@ -611,7 +619,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         }
       }
 
-      return {};
+      return emptyAnnotations();
     },
 
     [Symbol.dispose]() {
