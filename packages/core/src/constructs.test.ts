@@ -3488,6 +3488,9 @@ describe("object() - duplicate option detection", () => {
     if (!secondParsed.success) {
       return;
     }
+    assert.ok(
+      getAnnotations(secondParsed.next.state[0])?.[secondMarker] === true,
+    );
     const secondCompleted = secondParser.complete(secondParsed.next.state);
 
     assert.ok(secondCompleted.success);
@@ -3645,6 +3648,11 @@ describe("object() - duplicate option detection", () => {
 
     assert.ok(completeResult.success);
     assert.ok(completeState != null && typeof completeState === "object");
+    assert.notStrictEqual(
+      completeState,
+      parseState,
+      "completion should not reuse the parse-time child cache",
+    );
     assert.ok(getAnnotations(completeState)?.[marker] === true);
     if (completeResult.success) {
       assert.equal(completeResult.value.value, initialState);
@@ -10906,6 +10914,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       assert.ok(syncCompleted.success);
       if (syncCompleted.success) {
         assert.equal(syncCompleted.value[0], "fast");
+        assert.equal(syncCompleted.value[1], 2);
       }
     }
 
@@ -10936,6 +10945,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       assert.ok(asyncCompleted.success);
       if (asyncCompleted.success) {
         assert.equal(asyncCompleted.value[0], "fast");
+        assert.equal(asyncCompleted.value[1], 3);
       }
     }
   });
@@ -11001,8 +11011,11 @@ describe("branch coverage: constructs.ts edge cases", () => {
       ],
       [
         "concat",
-        concat(tuple([createCustomParser()])),
-        (value) => (value as readonly [string])[0],
+        concat(
+          tuple([createCustomParser()]),
+          tuple([constant("tail")]),
+        ),
+        (value) => (value as readonly [string, "tail"])[0],
       ],
     ];
 
@@ -11246,7 +11259,10 @@ describe("branch coverage: constructs.ts edge cases", () => {
 
       const parser: Parser<"sync", unknown, unknown> = name === "tuple"
         ? tuple([childParser])
-        : concat(tuple([childParser]));
+        : concat(
+          tuple([childParser]),
+          tuple([constant("tail")]),
+        );
       const result = parseSync(parser, [name], {
         annotations: { [marker]: true } satisfies Annotations,
       });
@@ -11260,6 +11276,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       if (!result.success) continue;
       const inner = (result.value as readonly [
         { readonly inner: { readonly value: string } },
+        ...readonly unknown[],
       ])[0].inner;
       assert.equal(
         inner,
@@ -11279,7 +11296,13 @@ describe("branch coverage: constructs.ts edge cases", () => {
     > = [
       ["object", object({ mode: option("--mode", modeSource) })],
       ["tuple", tuple([option("--mode", modeSource)])],
-      ["concat", concat(tuple([option("--mode", modeSource)]))],
+      [
+        "concat",
+        concat(
+          tuple([option("--mode", modeSource)]),
+          tuple([constant("tail")]),
+        ),
+      ],
       ["merge", merge(object({ mode: option("--mode", modeSource) }))],
     ];
 
@@ -11327,16 +11350,22 @@ describe("branch coverage: constructs.ts edge cases", () => {
       ],
       [
         "concat optional",
-        concat(tuple([optional(argument(choice(["alice", "bob"] as const)))])),
+        concat(
+          tuple([optional(argument(choice(["alice", "bob"] as const)))]),
+          tuple([constant("tail")]),
+        ),
       ],
       [
         "concat withDefault",
-        concat(tuple([
-          withDefault(
-            argument(choice(["alice", "bob"] as const)),
-            "alice",
-          ),
-        ])),
+        concat(
+          tuple([
+            withDefault(
+              argument(choice(["alice", "bob"] as const)),
+              "alice",
+            ),
+          ]),
+          tuple([constant("tail")]),
+        ),
       ],
     ];
 
