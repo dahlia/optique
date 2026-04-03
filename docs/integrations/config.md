@@ -584,6 +584,12 @@ This approach gives you full control over:
  -  Merging strategies (deep merge, shallow merge, array concatenation, etc.)
  -  File formats (JSON, TOML, YAML, etc.)
 
+If no config data is available, return `undefined` or `null` directly
+from `load()` (not wrapped in a `ConfigLoadResult`).  This signals
+“no config found” and `bindConfig()` falls back to its defaults, just
+like `getConfigPath` mode when the path is `undefined` or the file is
+missing.
+
 You'll need to provide your own merge utility (e.g., from
 [lodash] or
 [es-toolkit]).
@@ -832,8 +838,10 @@ options:
 `load`
 :   Function that receives parsed result and returns
     `ConfigLoadResult<TConfigMeta>` (or Promise of it).  `meta` may be
-    `undefined`.  Use this for
-    multi-file merging scenarios.  Optional when using `getConfigPath`.
+    `undefined`.  Return `undefined` or `null` directly (not wrapped in
+    a `ConfigLoadResult`) to signal that no config data is available.
+    Use this for multi-file merging scenarios.  Optional when using
+    `getConfigPath`.
 
 At least one of `getConfigPath` or `load` must be provided.
 

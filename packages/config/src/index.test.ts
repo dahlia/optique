@@ -1262,19 +1262,138 @@ describe("load() return value validation", () => {
     );
   });
 
-  test("rejects null return value from load()", () => {
+  test("returns empty annotations when load() returns null", () => {
+    const context = createNameContext();
+    const annotations = context.getAnnotations(
+      {},
+      { load: () => null },
+    );
+    assert.deepStrictEqual(annotations, {});
+  });
+
+  test("returns empty annotations when load() returns undefined", () => {
+    const context = createNameContext();
+    const annotations = context.getAnnotations(
+      {},
+      { load: () => undefined },
+    );
+    assert.deepStrictEqual(annotations, {});
+  });
+
+  test("validates { config: undefined } against schema", () => {
     const context = createNameContext();
     assert.throws(
       () =>
         context.getAnnotations(
           {},
-          { load: (() => null) as never },
+          { load: () => ({ config: undefined, meta: undefined }) },
         ),
-      {
-        name: "TypeError",
-        message: "Expected load() to return an object, but got: null.",
-      },
+      { message: /Config validation failed/ },
     );
+  });
+
+  test("validates { config: null } against schema", () => {
+    const context = createNameContext();
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          { load: () => ({ config: null, meta: undefined }) },
+        ),
+      { message: /Config validation failed/ },
+    );
+  });
+
+  test("permissive schema can transform { config: undefined }", () => {
+    const schema = z.undefined().transform(() => ({ name: "from-schema" }));
+    const context = createConfigContext({ schema });
+    const annotations = context.getAnnotations(
+      {},
+      { load: () => ({ config: undefined, meta: undefined }) },
+    );
+    const symbols = Object.getOwnPropertySymbols(annotations);
+    assert.equal(symbols.length, 1);
+    const value = (annotations as Record<symbol, unknown>)[symbols[0]] as {
+      data: { name: string };
+    };
+    assert.equal(value.data.name, "from-schema");
+  });
+
+  test("returns empty annotations when async load() resolves undefined", async () => {
+    const context = createNameContext();
+    const annotations = await context.getAnnotations(
+      {},
+      { load: () => Promise.resolve(undefined) },
+    );
+    assert.deepStrictEqual(annotations, {});
+  });
+
+  test("returns empty annotations when async load() resolves null", async () => {
+    const context = createNameContext();
+    const annotations = await context.getAnnotations(
+      {},
+      { load: () => Promise.resolve(null) },
+    );
+    assert.deepStrictEqual(annotations, {});
+  });
+
+  test("validates async { config: undefined } against schema", async () => {
+    const context = createNameContext();
+    await assert.rejects(
+      async () =>
+        await context.getAnnotations(
+          {},
+          {
+            load: () => Promise.resolve({ config: undefined, meta: undefined }),
+          },
+        ),
+      { message: /Config validation failed/ },
+    );
+  });
+
+  test("validates async { config: null } against schema", async () => {
+    const context = createNameContext();
+    await assert.rejects(
+      async () =>
+        await context.getAnnotations(
+          {},
+          { load: () => Promise.resolve({ config: null, meta: undefined }) },
+        ),
+      { message: /Config validation failed/ },
+    );
+  });
+
+  test("no-config load clears stale active registry from prior load", () => {
+    const context = createNameContext();
+    // First call loads real config, populating the active registry
+    context.getAnnotations(
+      {},
+      { load: () => ({ config: { name: "STALE" }, meta: undefined }) },
+    );
+    // Verify the registry is populated
+    assert.deepStrictEqual(getActiveConfig(context.id), { name: "STALE" });
+    // Second call returns no-config; registry must be cleared
+    context.getAnnotations(
+      {},
+      { load: () => undefined },
+    );
+    assert.equal(getActiveConfig(context.id), undefined);
+  });
+
+  test("no-config getConfigPath clears stale active registry", () => {
+    const context = createNameContext();
+    // Populate the active registry directly
+    context.getAnnotations(
+      {},
+      { load: () => ({ config: { name: "STALE" }, meta: undefined }) },
+    );
+    assert.deepStrictEqual(getActiveConfig(context.id), { name: "STALE" });
+    // getConfigPath returning undefined must also clear the registry
+    context.getAnnotations(
+      {},
+      { getConfigPath: () => undefined },
+    );
+    assert.equal(getActiveConfig(context.id), undefined);
   });
 
   test("rejects array return value from load()", () => {
@@ -1770,6 +1889,35 @@ describe("createConfigContext error paths", () => {
           ),
         (error: Error) => {
           assert.ok(error.message.includes("Failed to parse config file"));
+          return true;
+        },
+      );
+    } finally {
+      await fs.unlink(tmpFile).catch(() => {});
+    }
+  });
+
+  test("getConfigPath mode rejects null from fileParser", async () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({
+      schema,
+      fileParser: () => null,
+    });
+
+    const tmpDir = (await import("node:os")).tmpdir();
+    const tmpFile = `${tmpDir}/optique-test-null-${Date.now()}.json`;
+    const fs = await import("node:fs/promises");
+    await fs.writeFile(tmpFile, "{}");
+
+    try {
+      await assert.rejects(
+        async () =>
+          await context.getAnnotations(
+            { config: tmpFile },
+            { getConfigPath: () => tmpFile },
+          ),
+        (error: Error) => {
+          assert.ok(error.message.includes("Config validation failed"));
           return true;
         },
       );

@@ -164,7 +164,10 @@ export interface ConfigContextOptions<T> {
  */
 export interface ConfigLoadResult<TConfigMeta = ConfigMeta> {
   /**
-   * Raw config data to validate against the schema.
+   * Raw config data to validate against the schema.  The value is always
+   * passed to the schema validator, even when `undefined` or `null`.
+   * To signal "no config found" without validation, return `undefined`
+   * or `null` directly from `load()` instead of wrapping it in an object.
    */
   readonly config: unknown;
 
@@ -204,19 +207,24 @@ export interface ConfigContextRequiredOptions<TConfigMeta = ConfigMeta> {
    * returns the config data (or a Promise of it).  This allows full control
    * over file discovery, loading, merging, and error handling.
    *
-   * The returned data will be validated against the schema.
+   * The returned `ConfigLoadResult.config` is always validated against the
+   * schema.  Return `undefined` or `null` directly (not wrapped in a
+   * `ConfigLoadResult`) to signal that no config data was found;
+   * `bindConfig()` will fall back to its defaults.
    *
    * When `load` is provided, `getConfigPath` is ignored.
    *
    * @param parsed The result from the first parse pass.
-   * @returns Config data and metadata (config is validated by schema).
+   * @returns Config data and metadata, or `undefined`/`null` for no config.
    * @since 1.0.0
    */
   readonly load?: (
     parsed: ParserValuePlaceholder,
   ) =>
-    | Promise<ConfigLoadResult<TConfigMeta>>
-    | ConfigLoadResult<TConfigMeta>;
+    | Promise<ConfigLoadResult<TConfigMeta> | undefined | null>
+    | ConfigLoadResult<TConfigMeta>
+    | undefined
+    | null;
 }
 
 /**
@@ -274,8 +282,11 @@ function isPromise(value: unknown): boolean {
 
 function validateLoadResult<TConfigMeta>(
   loaded: unknown,
-): { config: unknown; meta: TConfigMeta | undefined } {
-  if (loaded == null || typeof loaded !== "object" || Array.isArray(loaded)) {
+): { config: unknown; meta: TConfigMeta | undefined } | undefined {
+  if (loaded == null) {
+    return undefined;
+  }
+  if (typeof loaded !== "object" || Array.isArray(loaded)) {
     throw new TypeError(
       `Expected load() to return an object, but got: ${getTypeName(loaded)}.`,
     );
@@ -476,12 +487,18 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         : parsed;
       const parsedPlaceholder = parsedValue as ParserValuePlaceholder;
 
+      const emptyAnnotations = (): Annotations => {
+        clearActiveConfig(contextId);
+        clearActiveConfigMeta(contextId);
+        return {};
+      };
+
       const buildAnnotations = (
         configData: T | undefined,
         configMeta: TConfigMeta | undefined,
       ): Annotations => {
         if (configData === undefined || configData === null) {
-          return {};
+          return emptyAnnotations();
         }
 
         // Set active config in registry for nested parsers inside object()
@@ -523,6 +540,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
           return Promise.resolve(loaded as Promise<unknown>).then(
             (resolved) => {
               const validated = validateLoadResult<TConfigMeta>(resolved);
+              if (validated === undefined) return emptyAnnotations();
               return validateAndBuildAnnotations(
                 validated.config,
                 validated.meta,
@@ -539,6 +557,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
           );
         }
         const validated = validateLoadResult<TConfigMeta>(loaded);
+        if (validated === undefined) return emptyAnnotations();
         return validateAndBuildAnnotations(validated.config, validated.meta);
       }
 
@@ -555,7 +574,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         }
 
         if (!configPath) {
-          return {};
+          return emptyAnnotations();
         }
 
         const absoluteConfigPath = resolvePath(configPath);
@@ -584,7 +603,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         } catch (error) {
           // Missing config file is optional in single-file mode.
           if (isErrnoException(error) && error.code === "ENOENT") {
-            return {};
+            return emptyAnnotations();
           }
           if (error instanceof SyntaxError) {
             throw new Error(
@@ -596,7 +615,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         }
       }
 
-      return {};
+      return emptyAnnotations();
     },
 
     [Symbol.dispose]() {

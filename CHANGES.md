@@ -1552,6 +1552,15 @@ To be released.
     `config`/`meta` fields) now throw `TypeError` instead of causing silent
     failures.  [[#411], [#655]]
 
+ -  Fixed custom `load()` mode being unable to represent “no config found”
+    without failing schema validation.  `load()` can now return `undefined`
+    or `null` directly to signal that no config data is available;
+    `bindConfig()` falls back to defaults, matching the behavior of
+    `getConfigPath` mode when the path is `undefined` or the file is
+    missing.  A `ConfigLoadResult` with `config: undefined` or
+    `config: null` is still validated against the schema as before.
+    [[#236], [#770]]
+
  -  Fixed `bindConfig()` not propagating dependency source values to derived
     parsers.  When a `dependency()` option was wrapped with `bindConfig()`,
     the config-resolved value was invisible to derived parsers, which fell
@@ -1565,6 +1574,7 @@ To be released.
 [#162]: https://github.com/dahlia/optique/pull/162
 [#164]: https://github.com/dahlia/optique/pull/164
 [#179]: https://github.com/dahlia/optique/issues/179
+[#236]: https://github.com/dahlia/optique/issues/236
 [#259]: https://github.com/dahlia/optique/issues/259
 [#391]: https://github.com/dahlia/optique/issues/391
 [#398]: https://github.com/dahlia/optique/issues/398
@@ -1578,6 +1588,7 @@ To be released.
 [#628]: https://github.com/dahlia/optique/pull/628
 [#655]: https://github.com/dahlia/optique/pull/655
 [#680]: https://github.com/dahlia/optique/pull/680
+[#770]: https://github.com/dahlia/optique/pull/770
 
 ### @optique/env
 
