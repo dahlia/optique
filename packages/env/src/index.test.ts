@@ -2611,7 +2611,162 @@ describe("bindEnv() with dependency sources across merge() boundaries", () => {
   });
 });
 
-// Note: bindEnv() with dependency sources does not currently work inside
-// tuple() or concat().  Env-backed dependency resolution only works inside
-// object() and merge().  This gap is tracked in
-// https://github.com/dahlia/optique/issues/750
+// https://github.com/dahlia/optique/issues/768
+describe("bindEnv() with dependency sources across tuple()/concat() boundaries", () => {
+  const mode = dependency(choice(["dev", "prod"] as const));
+  const level = mode.derive({
+    metavar: "LEVEL",
+    mode: "sync",
+    factory: (value: "dev" | "prod") =>
+      choice(
+        value === "dev"
+          ? (["debug", "verbose"] as const)
+          : (["silent", "strict"] as const),
+      ),
+    defaultValue: () => "dev" as const,
+  });
+
+  function createTupleParser() {
+    const context = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const parser = tuple([
+      bindEnv(option("--mode", mode), {
+        context,
+        key: "MODE",
+        parser: choice(["dev", "prod"] as const),
+      }),
+      option("--level", level),
+    ]);
+    return { parser, annotations };
+  }
+
+  function createConcatParser() {
+    const context = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const parser = concat(
+      tuple([
+        bindEnv(option("--mode", mode), {
+          context,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+      ]),
+      tuple([
+        option("--level", level),
+      ]),
+    );
+    return { parser, annotations };
+  }
+
+  it("tuple() parse uses env-backed dependency source", () => {
+    const { parser, annotations } = createTupleParser();
+    const result = parse(parser, ["--level", "silent"], { annotations });
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["prod", "silent"]);
+  });
+
+  it("tuple() suggest uses env-backed dependency source", () => {
+    const { parser, annotations } = createTupleParser();
+    const texts = suggestSync(
+      parser,
+      ["--level", "s"],
+      { annotations },
+    )
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+
+    assert.ok(
+      texts.includes("silent"),
+      `Expected "silent" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      texts.includes("strict"),
+      `Expected "strict" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("debug"),
+      `Did not expect "debug" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("verbose"),
+      `Did not expect "verbose" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+  });
+
+  it("tuple() suggest does not override invalid CLI source with env", () => {
+    const { parser, annotations } = createTupleParser();
+    const texts = suggestSync(
+      parser,
+      ["--mode", "invalid", "--level", "s"],
+      { annotations },
+    )
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+
+    assert.ok(!texts.includes("silent"));
+    assert.ok(!texts.includes("strict"));
+  });
+
+  it("concat() parse uses env-backed dependency source", () => {
+    const { parser, annotations } = createConcatParser();
+    const result = parse(parser, ["--level", "silent"], { annotations });
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["prod", "silent"]);
+  });
+
+  it("concat() suggest uses env-backed dependency source", () => {
+    const { parser, annotations } = createConcatParser();
+    const texts = suggestSync(
+      parser,
+      ["--level", "s"],
+      { annotations },
+    )
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+
+    assert.ok(
+      texts.includes("silent"),
+      `Expected "silent" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      texts.includes("strict"),
+      `Expected "strict" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("debug"),
+      `Did not expect "debug" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("verbose"),
+      `Did not expect "verbose" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+  });
+
+  it("concat() suggest does not override invalid CLI source with env", () => {
+    const { parser, annotations } = createConcatParser();
+    const texts = suggestSync(
+      parser,
+      ["--mode", "invalid", "--level", "s"],
+      { annotations },
+    )
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+
+    assert.ok(!texts.includes("silent"));
+    assert.ok(!texts.includes("strict"));
+  });
+});

@@ -31,6 +31,13 @@ import type {
   Parser,
   ParserResult,
 } from "@optique/core/parser";
+import {
+  annotationWrapperRequiresSourceBindingKey,
+  composeWrappedSourceMetadata,
+  defineInheritedAnnotationParser,
+  getDelegatingSuggestRuntimeNodes,
+  inheritParentAnnotationsKey,
+} from "@optique/core/parser";
 import { message } from "@optique/core/message";
 import type { ValueParserResult } from "@optique/core/valueparser";
 
@@ -130,10 +137,6 @@ function isExitPromptError(error: unknown): boolean {
     "name" in error &&
     error.name === "ExitPromptError";
 }
-
-const inheritParentAnnotationsKey = Symbol.for(
-  "@optique/core/inheritParentAnnotations",
-);
 
 function shouldDeferPrompt(
   parser: Parser<Mode, unknown, unknown>,
@@ -739,6 +742,41 @@ export function prompt<M extends Mode, TValue, TState>(
     return prototype !== Object.prototype && prototype !== null;
   }
 
+  function hasSourceBindingMarker(state: unknown): boolean {
+    return state != null &&
+      typeof state === "object" &&
+      "hasCliValue" in state &&
+      Object.getOwnPropertySymbols(state).length > 0;
+  }
+
+  function shouldCompleteFromSourceBinding(
+    cliState: unknown,
+    state: unknown,
+  ): boolean {
+    const cliStateIsInjectedAnnotationWrapper = cliState != null &&
+      typeof cliState === "object" &&
+      unwrapInjectedAnnotationWrapper(cliState) !== cliState;
+    const requiresSourceBindingForAnnotationWrapper =
+      Reflect.get(parser, annotationWrapperRequiresSourceBindingKey) === true;
+    const hasNestedSourceBinding = hasSourceBindingMarker(cliState) ||
+      (Array.isArray(cliState) &&
+        cliState.length === 1 &&
+        (hasSourceBindingMarker(cliState[0]) ||
+          (
+            cliState[0] != null &&
+            typeof cliState[0] === "object" &&
+            annotationKey in cliState[0]
+          )));
+    if (
+      cliStateIsInjectedAnnotationWrapper &&
+      requiresSourceBindingForAnnotationWrapper
+    ) {
+      return hasNestedSourceBinding;
+    }
+    return shouldAttemptInnerCompletion(cliState, state) ||
+      hasNestedSourceBinding;
+  }
+
   /**
    * Executes the configured prompt and normalizes its result.
    *
@@ -955,12 +993,14 @@ export function prompt<M extends Mode, TValue, TState>(
           ? parser.initialState
           : state.cliState as TState)
         : state;
-      const innerNodes = parser.getSuggestRuntimeNodes?.(innerState, path) ??
-        [];
-      if (promptedParser.dependencyMetadata?.source != null) {
-        return [{ path, parser: promptedParser, state }, ...innerNodes];
-      }
-      return innerNodes;
+      return getDelegatingSuggestRuntimeNodes(
+        parser,
+        promptedParser,
+        state,
+        path,
+        innerState,
+        "prepend",
+      );
     },
     // Use the sentinel as initialState so complete() can detect the
     // completability-check call and deduplicate prompt execution.
@@ -997,6 +1037,12 @@ export function prompt<M extends Mode, TValue, TState>(
         result: ParserResult<TState>,
       ): ParserResult<TState> => {
         if (result.success) {
+          const cliState = annotations != null &&
+              result.next.state != null &&
+              typeof result.next.state === "object" &&
+              getAnnotations(result.next.state) !== annotations
+            ? injectAnnotations(result.next.state, annotations)
+            : result.next.state;
           // Only mark hasCliValue when the inner parser actually consumed
           // input tokens.  Wrappers that return success with consumed: []
           // (e.g., withDefault, bindConfig) should NOT suppress the prompt.
@@ -1004,7 +1050,7 @@ export function prompt<M extends Mode, TValue, TState>(
           const nextState = {
             [promptBindStateKey]: true as const,
             hasCliValue: cliConsumed,
-            cliState: result.next.state,
+            cliState,
             ...(annotations != null ? { [annotationKey]: annotations } : {}),
           } as unknown as TState;
           return {
@@ -1172,26 +1218,10 @@ export function prompt<M extends Mode, TValue, TState>(
           // Symbol key plus a hasCliValue flag.  Check for both to avoid
           // false positives from unrelated objects that happen to have a
           // hasCliValue property.
-          const hasSourceBindingMarker = (
-            s: unknown,
-          ): boolean =>
-            s != null &&
-            typeof s === "object" &&
-            "hasCliValue" in s &&
-            Object.getOwnPropertySymbols(s).length > 0;
-          const cliStateIsPassthrough = cliState != null &&
-            typeof cliState === "object" &&
-            unwrapInjectedAnnotationWrapper(cliState) !== cliState;
-          const isSourceBinding =
-            (shouldAttemptInnerCompletion(cliState, state) &&
-              !cliStateIsPassthrough) ||
-            hasSourceBindingMarker(cliState) ||
-            (Array.isArray(cliState) &&
-              cliState.length === 1 &&
-              (hasSourceBindingMarker(cliState[0]) ||
-                (typeof cliState[0] === "object" &&
-                  cliState[0] != null &&
-                  annotationKey in cliState[0])));
+          const isSourceBinding = shouldCompleteFromSourceBinding(
+            cliState,
+            state,
+          );
           if (isSourceBinding) {
             // Source-binding wrapper detected — complete from the state
             // produced by parse() (not from initialState) so that any
@@ -1251,7 +1281,7 @@ export function prompt<M extends Mode, TValue, TState>(
         typeof cliState === "object" &&
         unwrapInjectedAnnotationWrapper(cliState) !== cliState;
 
-      if (shouldAttemptInnerCompletion(cliState, state)) {
+      if (shouldCompleteFromSourceBinding(cliState, state)) {
         const useCompleteResultOrPrompt = (
           result: ValueParserResult<TValue>,
         ): Promise<ValueParserResult<TValue>> => {
@@ -1318,6 +1348,7 @@ export function prompt<M extends Mode, TValue, TState>(
       return parser.getDocFragments(state, defaultValue as TValue);
     },
   };
+  defineInheritedAnnotationParser(promptedParser);
 
   // Lazily forward placeholder from inner parser so that outer wrappers
   // (withDefault, group, etc.) can see it without triggering eager
@@ -1344,36 +1375,36 @@ export function prompt<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
-  const dependencyMetadata = (
-    parser as Parser<M, TValue, TState> & {
-      readonly dependencyMetadata?: {
-        readonly source?: {
-          readonly extractSourceValue: (
-            state: unknown,
-          ) =>
-            | ValueParserResult<unknown>
-            | Promise<ValueParserResult<unknown> | undefined>
-            | undefined;
+  const dependencyMetadata = composeWrappedSourceMetadata(
+    (
+      parser as Parser<M, TValue, TState> & {
+        readonly dependencyMetadata?: {
+          readonly source?: {
+            readonly extractSourceValue: (
+              state: unknown,
+            ) =>
+              | ValueParserResult<unknown>
+              | Promise<ValueParserResult<unknown> | undefined>
+              | undefined;
+          };
         };
-      };
-    }
-  ).dependencyMetadata;
+      }
+    ).dependencyMetadata,
+    (source) => ({
+      ...source,
+      extractSourceValue: (state: unknown) => {
+        if (!isPromptBindState(state)) {
+          return source.extractSourceValue(state);
+        }
+        return source.extractSourceValue(
+          state.cliState ?? state,
+        );
+      },
+    }),
+  );
   if (dependencyMetadata != null) {
     Object.defineProperty(promptedParser, "dependencyMetadata", {
-      value: dependencyMetadata.source == null ? dependencyMetadata : {
-        ...dependencyMetadata,
-        source: {
-          ...dependencyMetadata.source,
-          extractSourceValue: (state: unknown) => {
-            if (!isPromptBindState(state)) {
-              return dependencyMetadata.source?.extractSourceValue(state);
-            }
-            return dependencyMetadata.source?.extractSourceValue(
-              state.cliState ?? state,
-            );
-          },
-        },
-      },
+      value: dependencyMetadata,
       configurable: true,
       enumerable: false,
     });

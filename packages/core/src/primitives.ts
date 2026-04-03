@@ -453,6 +453,7 @@ function* getSuggestionsWithDependency<T>(
   valueParser: ValueParser<"sync", T>,
   prefix: string,
   dependencyRegistry: DependencyRegistryLike | undefined,
+  exec?: ExecutionContext,
 ): Generator<Suggestion> {
   if (!valueParser.suggest) return;
 
@@ -464,6 +465,7 @@ function* getSuggestionsWithDependency<T>(
     const suggestWithDep = derived[suggestWithDependency];
 
     if (suggestWithDep && dependencyRegistry) {
+      const dependencyRuntime = exec?.dependencyRuntime;
       // Get dependency values from registry
       const depIds = getDependencyIds(derived);
       const defaultsFn = getDefaultValuesFunction(derived);
@@ -478,6 +480,8 @@ function* getSuggestionsWithDependency<T>(
         if (dependencyRegistry.has(depId)) {
           dependencyValues.push(dependencyRegistry.get(depId));
           hasAnyValue = true;
+        } else if (dependencyRuntime?.isSourceFailed(depId)) {
+          return;
         } else if (defaults && i < defaults.length) {
           dependencyValues.push(defaults[i]);
         } else {
@@ -531,6 +535,7 @@ function* suggestOptionSync<T>(
           valueParser,
           valuePart,
           context.dependencyRegistry,
+          context.exec,
         );
         // Prepend the option= part to each suggestion
         for (const suggestion of valueSuggestions) {
@@ -602,6 +607,7 @@ function* suggestOptionSync<T>(
           valueParser,
           prefix,
           context.dependencyRegistry,
+          context.exec,
         );
       }
     }
@@ -617,6 +623,7 @@ async function* getSuggestionsWithDependencyAsync<T>(
   valueParser: ValueParser<Mode, T>,
   prefix: string,
   dependencyRegistry: DependencyRegistryLike | undefined,
+  exec?: ExecutionContext,
 ): AsyncGenerator<Suggestion> {
   if (!valueParser.suggest) return;
 
@@ -628,6 +635,7 @@ async function* getSuggestionsWithDependencyAsync<T>(
     const suggestWithDep = derived[suggestWithDependency];
 
     if (suggestWithDep && dependencyRegistry) {
+      const dependencyRuntime = exec?.dependencyRuntime;
       // Get dependency values from registry
       const depIds = getDependencyIds(derived);
       const defaultsFn = getDefaultValuesFunction(derived);
@@ -642,6 +650,8 @@ async function* getSuggestionsWithDependencyAsync<T>(
         if (dependencyRegistry.has(depId)) {
           dependencyValues.push(dependencyRegistry.get(depId));
           hasAnyValue = true;
+        } else if (dependencyRuntime?.isSourceFailed(depId)) {
+          return;
         } else if (defaults && i < defaults.length) {
           dependencyValues.push(defaults[i]);
         } else {
@@ -706,6 +716,7 @@ async function* suggestOptionAsync<T>(
           valueParser,
           valuePart,
           context.dependencyRegistry,
+          context.exec,
         );
         // Prepend the option= part to each suggestion - handle both sync and async
         for await (const suggestion of valueSuggestions) {
@@ -777,6 +788,7 @@ async function* suggestOptionAsync<T>(
             valueParser,
             prefix,
             context.dependencyRegistry,
+            context.exec,
           )
         ) {
           yield suggestion;
@@ -795,6 +807,7 @@ function* suggestArgumentSync<T>(
   hidden: boolean,
   prefix: string,
   dependencyRegistry: DependencyRegistryLike | undefined,
+  exec?: ExecutionContext,
 ): Generator<Suggestion> {
   if (hidden) return;
 
@@ -804,6 +817,7 @@ function* suggestArgumentSync<T>(
       valueParser,
       prefix,
       dependencyRegistry,
+      exec,
     );
   }
 }
@@ -817,6 +831,7 @@ async function* suggestArgumentAsync<T>(
   hidden: boolean,
   prefix: string,
   dependencyRegistry: DependencyRegistryLike | undefined,
+  exec?: ExecutionContext,
 ): AsyncGenerator<Suggestion> {
   if (hidden) return;
 
@@ -826,6 +841,7 @@ async function* suggestArgumentAsync<T>(
       valueParser,
       prefix,
       dependencyRegistry,
+      exec,
     );
   }
 }
@@ -2047,6 +2063,7 @@ export function argument<M extends Mode, T>(
           isSuggestionHidden(options.hidden),
           prefix,
           context.dependencyRegistry,
+          context.exec,
         );
       }
       return suggestArgumentSync(
@@ -2054,6 +2071,7 @@ export function argument<M extends Mode, T>(
         isSuggestionHidden(options.hidden),
         prefix,
         context.dependencyRegistry,
+        context.exec,
       );
     },
     getDocFragments(

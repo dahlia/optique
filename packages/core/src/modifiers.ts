@@ -2,6 +2,7 @@ import { composeDependencyMetadata } from "./dependency-metadata.ts";
 import { formatMessage, type Message, message, text } from "./message.ts";
 import {
   annotateFreshArray,
+  annotationKey,
   getAnnotations,
   inheritAnnotations,
   isInjectedAnnotationWrapper,
@@ -12,6 +13,10 @@ import {
   dispatchIterableByMode,
   mapModeValue,
 } from "./mode-dispatch.ts";
+import {
+  defineInheritedAnnotationParser,
+  defineSourceBindingOnlyAnnotationCompletionParser,
+} from "./parser.ts";
 import type {
   DocState,
   ExecutionContext,
@@ -258,24 +263,44 @@ function processOptionalStyleResult<TState>(
  */
 function adaptShouldDeferCompletion<TState>(
   innerCheck: (state: TState, exec?: ExecutionContext) => boolean,
+  parser: Parser<Mode, unknown, TState>,
 ): (state: [TState] | undefined, exec?: ExecutionContext) => boolean {
   return (state: [TState] | undefined, exec?: ExecutionContext): boolean => {
-    if (Array.isArray(state)) {
+    if (Array.isArray(state) || (state != null && typeof state === "object")) {
       return innerCheck(
-        normalizeOptionalLikeInnerState(state, state[0]),
+        normalizeOptionalLikeInnerState(
+          state,
+          parser.initialState,
+          parser,
+        ),
         exec,
       );
-    }
-    if (state != null && typeof state === "object") {
-      return innerCheck(state, exec);
     }
     return false;
   };
 }
 
+function isAnnotationOnlyObjectState(
+  state: unknown,
+): state is Record<typeof annotationKey, unknown> {
+  if (
+    state == null ||
+    typeof state !== "object" ||
+    Array.isArray(state) ||
+    isInjectedAnnotationWrapper(state)
+  ) {
+    return false;
+  }
+  const keys = Reflect.ownKeys(state);
+  return getAnnotations(state) != null &&
+    keys.length === 1 &&
+    keys[0] === annotationKey;
+}
+
 function normalizeOptionalLikeInnerState<TState>(
   state: [TState] | TState | undefined,
   initialState: TState,
+  parser?: Parser<Mode, unknown, TState>,
 ): TState {
   if (Array.isArray(state)) {
     return getAnnotations(state) != null &&
@@ -283,6 +308,18 @@ function normalizeOptionalLikeInnerState<TState>(
         typeof state[0] === "object"
       ? inheritAnnotations(state, state[0]) as TState
       : state[0];
+  }
+  if (isAnnotationOnlyObjectState(state)) {
+    if (
+      parser != null &&
+      (
+        parser.dependencyMetadata?.source != null ||
+        typeof parser.shouldDeferCompletion === "function"
+      )
+    ) {
+      return inheritAnnotations(state, initialState);
+    }
+    return initialState;
   }
   if (state != null && typeof state === "object") {
     return state;
@@ -316,6 +353,7 @@ export function optional<M extends Mode, TValue, TState>(
     const innerState = normalizeOptionalLikeInnerState(
       context.state,
       syncParser.initialState,
+      parser,
     );
     yield* syncParser.suggest({ ...context, state: innerState }, prefix);
   }
@@ -328,6 +366,7 @@ export function optional<M extends Mode, TValue, TState>(
     const innerState = normalizeOptionalLikeInnerState(
       context.state,
       syncParser.initialState,
+      parser,
     );
     const suggestions = parser.suggest(
       { ...context, state: innerState },
@@ -357,6 +396,7 @@ export function optional<M extends Mode, TValue, TState>(
       ? {
         shouldDeferCompletion: adaptShouldDeferCompletion<TState>(
           parser.shouldDeferCompletion.bind(parser),
+          parser,
         ),
       }
       : {}),
@@ -370,6 +410,7 @@ export function optional<M extends Mode, TValue, TState>(
       const innerState = normalizeOptionalLikeInnerState(
         state,
         parser.initialState,
+        parser,
       );
       return parser.getSuggestRuntimeNodes?.(innerState, path) ??
         (parser.dependencyMetadata?.source != null
@@ -397,6 +438,7 @@ export function optional<M extends Mode, TValue, TState>(
             const innerState = normalizeOptionalLikeInnerState(
               state,
               parser.initialState,
+              parser,
             );
             const innerResult = dispatchByMode(
               parser.$mode,
@@ -431,6 +473,7 @@ export function optional<M extends Mode, TValue, TState>(
           const delegatedState = normalizeOptionalLikeInnerState(
             state,
             parser.initialState,
+            parser,
           );
           return dispatchByMode(
             parser.$mode,
@@ -452,6 +495,7 @@ export function optional<M extends Mode, TValue, TState>(
       const innerElement = normalizeOptionalLikeInnerState(
         state,
         parser.initialState,
+        parser,
       );
       return dispatchByMode(
         parser.$mode,
@@ -511,6 +555,8 @@ export function optional<M extends Mode, TValue, TState>(
         .dependencyMetadata = composed;
     }
   }
+  defineInheritedAnnotationParser(optionalParser);
+  defineSourceBindingOnlyAnnotationCompletionParser(optionalParser);
   return optionalParser;
 }
 
@@ -667,6 +713,7 @@ export function withDefault<
     const innerState = normalizeOptionalLikeInnerState(
       context.state,
       syncParser.initialState,
+      parser,
     );
     yield* syncParser.suggest({ ...context, state: innerState }, prefix);
   }
@@ -679,6 +726,7 @@ export function withDefault<
     const innerState = normalizeOptionalLikeInnerState(
       context.state,
       syncParser.initialState,
+      parser,
     );
     const suggestions = parser.suggest(
       { ...context, state: innerState },
@@ -707,6 +755,7 @@ export function withDefault<
       ? {
         shouldDeferCompletion: adaptShouldDeferCompletion<TState>(
           parser.shouldDeferCompletion.bind(parser),
+          parser,
         ),
       }
       : {}),
@@ -720,6 +769,7 @@ export function withDefault<
       const innerState = normalizeOptionalLikeInnerState(
         state,
         parser.initialState,
+        parser,
       );
       return parser.getSuggestRuntimeNodes?.(innerState, path) ??
         (parser.dependencyMetadata?.source != null
@@ -766,6 +816,7 @@ export function withDefault<
           const innerState = normalizeOptionalLikeInnerState(
             state,
             parser.initialState,
+            parser,
           );
           const innerResult = dispatchByMode(
             parser.$mode,
@@ -806,6 +857,7 @@ export function withDefault<
       const innerElement = normalizeOptionalLikeInnerState(
         state,
         parser.initialState,
+        parser,
       );
       return dispatchByMode(
         parser.$mode,
@@ -950,6 +1002,8 @@ export function withDefault<
         .dependencyMetadata = composed;
     }
   }
+  defineInheritedAnnotationParser(withDefaultParser);
+  defineSourceBindingOnlyAnnotationCompletionParser(withDefaultParser);
   return withDefaultParser;
 }
 

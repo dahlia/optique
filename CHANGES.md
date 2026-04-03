@@ -33,6 +33,16 @@ To be released.
     dependency-aware suggestions use the same registry model as
     construct-owned parsers.  [[#750], [#754], [#755], [#764], [#765]]
 
+ -  Fixed wrapped dependency sources in shared-buffer constructs.
+    `tuple()` and `concat()` now seed dependency-aware parse, completion, and
+    suggestion flows through the same wrapper contract used by `object()` and
+    `merge()`, so `bindConfig()`, `bindEnv()`, and `prompt()` compositions
+    expose fallback-resolved source values to derived parsers consistently.
+    `tuple().suggest()` also keeps explicit source matches and validation
+    failures sticky, so later derived suggestions no longer fall back to
+    defaults after an invalid source token.
+    [[#750], [#768], [#769]]
+
  -  Removed the last built-in uses of the old dependency-state bridge in
     `option()`, `argument()`, `optional()`, `withDefault()`, and `multiple()`.
     These parsers now keep plain parser-local state and rely on metadata,
@@ -1439,6 +1449,8 @@ To be released.
 [#763]: https://github.com/dahlia/optique/pull/763
 [#764]: https://github.com/dahlia/optique/pull/764
 [#765]: https://github.com/dahlia/optique/pull/765
+[#768]: https://github.com/dahlia/optique/issues/768
+[#769]: https://github.com/dahlia/optique/pull/769
 
 ### @optique/config
 
@@ -1686,6 +1698,12 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
  -  `prompt()` always returns an async parser (`$mode: "async"`) and integrates
     cleanly with `bindEnv()` and `bindConfig()` — the prompt is skipped
     whenever the CLI, environment variable, or config file supplies a value.
+
+ -  Fixed `prompt(bindEnv(...))` and `prompt(bindConfig(...))` inside
+    `tuple()` and `concat()`.  These shared-buffer compositions now skip the
+    prompt when env/config fallback resolves the dependency source, and
+    dependency-aware `suggest*()` calls now offer the correct derived values.
+    [[#750], [#768], [#769]]
 
  -  Fixed `prompt()` leaving `ExitPromptError` uncaught when a user cancels an
     Inquirer prompt with <kbd>^C</kbd>.  Prompt cancellation is now converted

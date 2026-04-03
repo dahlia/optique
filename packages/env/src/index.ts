@@ -16,6 +16,10 @@ import type {
   Result,
 } from "@optique/core/parser";
 import {
+  composeWrappedSourceMetadata,
+  defineInheritedAnnotationParser,
+  getDelegatingSuggestRuntimeNodes,
+  inheritParentAnnotationsKey,
   unmatchedNonCliDependencySourceStateMarker,
 } from "@optique/core/parser";
 import {
@@ -37,10 +41,6 @@ interface EnvSourceData {
   readonly prefix: string;
   readonly source: EnvSource;
 }
-
-const inheritParentAnnotationsKey = Symbol.for(
-  "@optique/core/inheritParentAnnotations",
-);
 
 /**
  * Context for environment-variable-based fallback values.
@@ -314,11 +314,13 @@ export function bindEnv<
           ? parser.initialState
           : state.cliState as TState)
         : state;
-      const innerNodes = parser.getSuggestRuntimeNodes?.(innerState, path) ??
-        [];
-      return boundParser.dependencyMetadata?.source != null
-        ? [...innerNodes, { path, parser: boundParser, state }]
-        : innerNodes;
+      return getDelegatingSuggestRuntimeNodes(
+        parser,
+        boundParser,
+        state,
+        path,
+        innerState,
+      );
     },
 
     parse: (context) => {
@@ -421,10 +423,7 @@ export function bindEnv<
       return parser.getDocFragments(state, defaultValue);
     },
   };
-  Object.defineProperty(boundParser, inheritParentAnnotationsKey, {
-    value: true,
-    configurable: true,
-  });
+  defineInheritedAnnotationParser(boundParser);
   // Lazily forward placeholder from inner parser to avoid eagerly
   // evaluating derived value parser factories at construction time.
   if ("placeholder" in parser) {
@@ -445,57 +444,56 @@ export function bindEnv<
       enumerable: false,
     });
   }
-  const dependencyMetadata = (
-    parser as Parser<M, TValue, TState> & {
-      readonly dependencyMetadata?: {
-        readonly source?: {
-          readonly extractSourceValue: (
-            state: unknown,
-          ) =>
-            | ValueParserResult<unknown>
-            | Promise<ValueParserResult<unknown> | undefined>
-            | undefined;
+  const dependencyMetadata = composeWrappedSourceMetadata(
+    (
+      parser as Parser<M, TValue, TState> & {
+        readonly dependencyMetadata?: {
+          readonly source?: {
+            readonly extractSourceValue: (
+              state: unknown,
+            ) =>
+              | ValueParserResult<unknown>
+              | Promise<ValueParserResult<unknown> | undefined>
+              | undefined;
+          };
         };
-      };
-    }
-  ).dependencyMetadata;
-  if (dependencyMetadata != null) {
-    const sourceMetadata = dependencyMetadata.source;
-    Object.defineProperty(boundParser, "dependencyMetadata", {
-      value: sourceMetadata == null ? dependencyMetadata : {
-        ...dependencyMetadata,
-        source: {
-          ...sourceMetadata,
-          extractSourceValue: (state: unknown) => {
-            if (!isEnvBindState(state)) {
-              if (sourceMetadata.preservesSourceValue) {
-                return getEnvSourceValue(
-                  state,
-                  options,
-                  state,
-                  sourceMetadata.extractSourceValue,
-                );
-              }
-              return sourceMetadata.extractSourceValue(state);
-            }
-            if (state.hasCliValue) {
-              return sourceMetadata.extractSourceValue(
-                state.cliState,
-              );
-            }
-            const innerState = state.cliState ?? state;
-            if (!sourceMetadata.preservesSourceValue) {
-              return sourceMetadata.extractSourceValue(innerState);
-            }
+      }
+    ).dependencyMetadata,
+    (sourceMetadata) => ({
+      ...sourceMetadata,
+      extractSourceValue: (state: unknown) => {
+        if (!isEnvBindState(state)) {
+          if (sourceMetadata.preservesSourceValue) {
             return getEnvSourceValue(
               state,
               options,
-              innerState,
+              state,
               sourceMetadata.extractSourceValue,
             );
-          },
-        },
+          }
+          return sourceMetadata.extractSourceValue(state);
+        }
+        if (state.hasCliValue) {
+          return sourceMetadata.extractSourceValue(
+            state.cliState,
+          );
+        }
+        const innerState = state.cliState ?? state;
+        if (!sourceMetadata.preservesSourceValue) {
+          return sourceMetadata.extractSourceValue(innerState);
+        }
+        return getEnvSourceValue(
+          state,
+          options,
+          innerState,
+          sourceMetadata.extractSourceValue,
+        );
       },
+    }),
+  );
+  if (dependencyMetadata != null) {
+    Object.defineProperty(boundParser, "dependencyMetadata", {
+      value: dependencyMetadata,
       configurable: true,
       enumerable: false,
     });

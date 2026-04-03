@@ -479,6 +479,33 @@ export const unmatchedNonCliDependencySourceStateMarker: unique symbol = Symbol
   );
 
 /**
+ * Internal marker for parsers that want parent-state annotations injected
+ * directly into rebuilt child states instead of relying on structural
+ * inheritance.
+ *
+ * Wrappers like `bindConfig()`, `bindEnv()`, and `prompt()` opt in because
+ * their fallback contracts depend on carrying annotations through wrapper
+ * state objects during parse, complete, and suggest.
+ *
+ * @internal
+ */
+export const inheritParentAnnotationsKey: unique symbol = Symbol.for(
+  "@optique/core/inheritParentAnnotations",
+);
+
+/**
+ * Internal marker for wrapper parsers that should only treat annotation-only
+ * primitive wrapper states as completable when a nested source-binding wrapper
+ * produced them.
+ *
+ * @internal
+ */
+export const annotationWrapperRequiresSourceBindingKey: unique symbol = Symbol
+  .for(
+    "@optique/core/annotationWrapperRequiresSourceBinding",
+  );
+
+/**
  * The context of the parser, which includes the input buffer and the state.
  *
  * `ParserContext` provides structured access to shared execution context
@@ -1095,6 +1122,92 @@ export function getParserSuggestRuntimeNodes<TState>(
     return [];
   }
   return [{ path, parser, state }];
+}
+
+/**
+ * Returns wrapper-aware suggest-time runtime nodes for parsers that delegate
+ * to an inner parser while also exposing their own source metadata.
+ *
+ * The inner parser's nodes are always preserved so nested wrappers and
+ * constructs can continue to seed the dependency runtime recursively. When
+ * the outer parser itself owns source metadata, its `(path, parser, state)`
+ * node is appended so outer precedence rules still apply.
+ *
+ * @internal
+ */
+export function getDelegatingSuggestRuntimeNodes<TInnerState>(
+  innerParser: Parser<Mode, unknown, TInnerState>,
+  outerParser: Parser<Mode, unknown, unknown>,
+  state: unknown,
+  path: readonly PropertyKey[],
+  innerState: TInnerState,
+  outerPosition: "append" | "prepend" = "append",
+): readonly RuntimeNode[] {
+  const innerNodes = getParserSuggestRuntimeNodes(
+    innerParser,
+    innerState,
+    path,
+  );
+  if (outerParser.dependencyMetadata?.source == null) {
+    return innerNodes;
+  }
+  const outerNode = { path, parser: outerParser, state };
+  return outerPosition === "prepend"
+    ? [outerNode, ...innerNodes]
+    : [...innerNodes, outerNode];
+}
+
+/**
+ * Composes source metadata for a wrapper parser while preserving any derived
+ * or transform capabilities from the inner parser unchanged.
+ *
+ * @internal
+ */
+export function composeWrappedSourceMetadata(
+  dependencyMetadata: ParserDependencyMetadata | undefined,
+  wrapSource: (
+    source: NonNullable<ParserDependencyMetadata["source"]>,
+  ) => NonNullable<ParserDependencyMetadata["source"]>,
+): ParserDependencyMetadata | undefined {
+  if (dependencyMetadata?.source == null) {
+    return dependencyMetadata;
+  }
+  return {
+    ...dependencyMetadata,
+    source: wrapSource(dependencyMetadata.source),
+  };
+}
+
+/**
+ * Marks a parser as inheriting parent-state annotations through wrapper-state
+ * reconstruction.
+ *
+ * @internal
+ */
+export function defineInheritedAnnotationParser(
+  parser: object,
+): void {
+  Object.defineProperty(parser, inheritParentAnnotationsKey, {
+    value: true,
+    configurable: true,
+    enumerable: false,
+  });
+}
+
+/**
+ * Marks a wrapper parser as requiring a real source-binding state before
+ * annotation-only primitive wrappers should trigger completion.
+ *
+ * @internal
+ */
+export function defineSourceBindingOnlyAnnotationCompletionParser(
+  parser: object,
+): void {
+  Object.defineProperty(parser, annotationWrapperRequiresSourceBindingKey, {
+    value: true,
+    configurable: true,
+    enumerable: false,
+  });
 }
 
 /**

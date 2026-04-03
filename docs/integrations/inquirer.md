@@ -427,7 +427,8 @@ Composing with other integrations
 
 `prompt()` composes naturally with `bindEnv()` and `bindConfig()`.  The
 innermost wrapper is evaluated first, so nesting order determines fallback
-priority.
+priority.  This works the same inside `object()`, `tuple()`, `merge()`, and
+`concat()`, including dependency-aware `suggest*()` flows.
 
 For example, to fall back to an environment variable before prompting:
 

@@ -34,6 +34,7 @@ import {
 } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
+  defineInheritedAnnotationParser,
   type ExecutionContext,
   getDocPage,
   type InferValue,
@@ -3214,6 +3215,453 @@ describe("object() - duplicate option detection", () => {
     );
   });
 
+  it("should expose annotations to plain custom child parse state", () => {
+    const marker = Symbol.for("@test/object-custom-parse-annotations");
+
+    const initialState = { value: "ok" };
+    let seenState: unknown;
+    const childParser: Parser<"sync", string, typeof initialState> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly (typeof initialState)[],
+      priority: 1,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState,
+      parse(context) {
+        seenState = context.state;
+        return getAnnotations(context.state)?.[marker] === true &&
+            context.buffer.length > 0
+          ? {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+            },
+            consumed: [context.buffer[0]],
+          }
+          : { success: false as const, consumed: 0, error: message`missing` };
+      },
+      complete(state) {
+        return {
+          success: true as const,
+          value: state.value,
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = object({ value: childParser });
+    const result = parseSync(parser, ["value"], {
+      annotations: { [marker]: true } satisfies Annotations,
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.value, "ok");
+    }
+    assert.ok(seenState != null && typeof seenState === "object");
+    assert.equal((seenState as { value: string }).value, "ok");
+    assert.ok(seenState !== childParser.initialState);
+    assert.ok(getAnnotations(seenState)?.[marker] === true);
+    assert.ok(
+      !Reflect.ownKeys(childParser.initialState).includes(annotationKey),
+    );
+  });
+
+  it("should preserve non-plain child parse state instances under annotations", () => {
+    const marker = Symbol.for("@test/object-non-plain-parse-state");
+
+    class PrivateState {
+      #value = "ok";
+
+      getValue(): string {
+        return this.#value;
+      }
+    }
+
+    let seenState: unknown;
+    const childParser: Parser<"sync", string, PrivateState> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly PrivateState[],
+      priority: 1,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: new PrivateState(),
+      parse(context) {
+        seenState = context.state;
+        return context.state.getValue() === "ok" && context.buffer.length > 0
+          ? {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+            },
+            consumed: [context.buffer[0]],
+          }
+          : { success: false as const, consumed: 0, error: message`missing` };
+      },
+      complete(state) {
+        return {
+          success: true as const,
+          value: state.getValue(),
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = object({ value: childParser });
+    const result = parseSync(parser, ["value"], {
+      annotations: { [marker]: true } satisfies Annotations,
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.value, "ok");
+    }
+    assert.equal(seenState, childParser.initialState);
+    assert.equal(getAnnotations(seenState), undefined);
+    assert.ok(
+      !Reflect.ownKeys(childParser.initialState).includes(annotationKey),
+    );
+  });
+
+  it("should not invoke accessors when scanning for annotation views", () => {
+    let getterCalls = 0;
+    const completedValue = Object.defineProperty({}, "danger", {
+      get() {
+        getterCalls++;
+        return "boom";
+      },
+      enumerable: true,
+      configurable: true,
+    });
+
+    const childParser: Parser<
+      "sync",
+      typeof completedValue,
+      { seen: boolean }
+    > = {
+      $mode: "sync",
+      $valueType: [] as readonly (typeof completedValue)[],
+      $stateType: [] as readonly { seen: boolean }[],
+      priority: 1,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { seen: false },
+      parse(context) {
+        return context.buffer.length > 0
+          ? {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: { seen: true },
+            },
+            consumed: [context.buffer[0]],
+          }
+          : { success: false as const, consumed: 0, error: message`missing` };
+      },
+      complete(state) {
+        assert.ok(state.seen);
+        return {
+          success: true as const,
+          value: completedValue,
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = object({ value: childParser });
+    const result = parseSync(parser, ["value"]);
+
+    assert.ok(result.success);
+    assert.equal(getterCalls, 0);
+    if (result.success) {
+      assert.equal(result.value.value, completedValue);
+    }
+  });
+
+  it("should unwrap stacked annotation views from nested completion results", () => {
+    const firstMarker = Symbol.for("@test/object-stacked-annotations/first");
+    const secondMarker = Symbol.for("@test/object-stacked-annotations/second");
+    const rawState = { value: "ok" };
+
+    const childParser: Parser<
+      "sync",
+      { readonly inner: unknown },
+      typeof rawState
+    > = {
+      $mode: "sync",
+      $valueType: [] as readonly { readonly inner: unknown }[],
+      $stateType: [] as readonly (typeof rawState)[],
+      priority: 1,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: rawState,
+      parse(context) {
+        return context.buffer.length > 0
+          ? {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+            },
+            consumed: [context.buffer[0]],
+          }
+          : { success: false as const, consumed: 0, error: message`missing` };
+      },
+      complete(state) {
+        return {
+          success: true as const,
+          value: { inner: state },
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const firstParser = tuple([childParser]);
+    const firstParsed = firstParser.parse({
+      buffer: ["first"],
+      state: injectAnnotations(
+        firstParser.initialState,
+        { [firstMarker]: true } satisfies Annotations,
+      ),
+      optionsTerminated: false,
+      usage: firstParser.usage,
+    });
+
+    assert.ok(firstParsed.success);
+    if (!firstParsed.success) {
+      return;
+    }
+    const firstView = firstParsed.next.state[0];
+    assert.ok(firstView != null && typeof firstView === "object");
+    assert.ok(getAnnotations(firstView)?.[firstMarker] === true);
+
+    const stackedChildParser: Parser<
+      "sync",
+      { readonly inner: unknown },
+      object
+    > = {
+      ...childParser,
+      $stateType: [] as readonly object[],
+      initialState: firstView as object,
+    };
+    const secondParser = tuple([stackedChildParser]);
+    const secondParsed = secondParser.parse({
+      buffer: ["second"],
+      state: injectAnnotations(
+        secondParser.initialState,
+        { [secondMarker]: true } satisfies Annotations,
+      ),
+      optionsTerminated: false,
+      usage: secondParser.usage,
+    });
+
+    assert.ok(secondParsed.success);
+    if (!secondParsed.success) {
+      return;
+    }
+    assert.ok(
+      getAnnotations(secondParsed.next.state[0])?.[secondMarker] === true,
+    );
+    const secondCompleted = secondParser.complete(secondParsed.next.state);
+
+    assert.ok(secondCompleted.success);
+    if (secondCompleted.success) {
+      assert.equal(secondCompleted.value[0].inner, rawState);
+      assert.equal(getAnnotations(secondCompleted.value[0].inner), undefined);
+      assert.ok(
+        !Reflect.ownKeys(secondCompleted.value[0].inner as object).includes(
+          annotationKey,
+        ),
+      );
+    }
+  });
+
+  it("should preserve shared arrays when unwrapping nested annotation views", () => {
+    const marker = Symbol.for("@test/object-shared-array-alias");
+    const shared = ["plain"];
+
+    const childParser: Parser<
+      "sync",
+      {
+        readonly first: readonly string[];
+        readonly second: readonly string[];
+        readonly wrapped: { readonly inner: unknown };
+      },
+      { readonly value: string }
+    > = {
+      $mode: "sync",
+      $valueType: [] as readonly {
+        readonly first: readonly string[];
+        readonly second: readonly string[];
+        readonly wrapped: { readonly inner: unknown };
+      }[],
+      $stateType: [] as readonly { readonly value: string }[],
+      priority: 1,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "ok" },
+      parse(context) {
+        return context.buffer.length > 0
+          ? {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+            },
+            consumed: [context.buffer[0]],
+          }
+          : { success: false as const, consumed: 0, error: message`missing` };
+      },
+      complete(state) {
+        return {
+          success: true as const,
+          value: {
+            first: shared,
+            second: shared,
+            wrapped: { inner: state },
+          },
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = tuple([childParser]);
+    const parsed = parser.parse({
+      buffer: ["value"],
+      state: injectAnnotations(
+        parser.initialState,
+        { [marker]: true } satisfies Annotations,
+      ),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(parsed.success);
+    if (!parsed.success) {
+      return;
+    }
+
+    const completed = parser.complete(parsed.next.state);
+
+    assert.ok(completed.success);
+    if (completed.success) {
+      assert.equal(completed.value[0].first, shared);
+      assert.equal(completed.value[0].second, shared);
+      assert.equal(completed.value[0].first, completed.value[0].second);
+    }
+  });
+
+  it("should not reuse parse-time child cache during completion", () => {
+    const marker = Symbol.for("@test/object-cache-annotations");
+    const initialState = { value: "ok" };
+    let parseState: unknown;
+    let completeState: unknown;
+
+    const childParser: Parser<
+      "sync",
+      typeof initialState,
+      typeof initialState
+    > = {
+      $mode: "sync",
+      $valueType: [] as readonly (typeof initialState)[],
+      $stateType: [] as readonly (typeof initialState)[],
+      priority: 1,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState,
+      parse(context) {
+        parseState = context.state;
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`missing`,
+        };
+      },
+      complete(state) {
+        completeState = state;
+        return getAnnotations(state)?.[marker] === true
+          ? { success: true as const, value: state }
+          : { success: false as const, error: message`missing` };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = object({ value: childParser });
+    const parentState = injectAnnotations(
+      { value: initialState },
+      { [marker]: true } satisfies Annotations,
+    );
+    const parseResult = parser.parse({
+      buffer: ["value"],
+      state: parentState as never,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(!parseResult.success);
+    assert.ok(parseState != null && typeof parseState === "object");
+    assert.ok(parseState !== initialState);
+    assert.ok(Reflect.ownKeys(parseState).includes(annotationKey));
+
+    const completeResult = parser.complete(parentState as never);
+
+    assert.ok(completeResult.success);
+    assert.ok(completeState != null && typeof completeState === "object");
+    assert.notStrictEqual(
+      completeState,
+      parseState,
+      "completion should not reuse the parse-time child cache",
+    );
+    assert.ok(getAnnotations(completeState)?.[marker] === true);
+    if (completeResult.success) {
+      assert.equal(completeResult.value.value, initialState);
+      assert.ok(
+        !Reflect.ownKeys(completeResult.value.value).includes(annotationKey),
+      );
+    }
+  });
+
   it("should not mutate parent field state when inheriting annotations", () => {
     const marker = Symbol.for("@test/object-parent-state");
 
@@ -3322,6 +3770,38 @@ describe("tuple", () => {
     assert.ok(parser.priority >= 10);
     assert.ok(Array.isArray(parser.initialState));
     assert.equal(parser.initialState.length, 2);
+  });
+
+  it("should preserve non-opt-in object child state identity with annotations", () => {
+    const marker = Symbol.for("@test/tuple-annotations");
+    const value = { source: "tuple" };
+    const parser = tuple([constant(value)]);
+
+    const result = parseSync(parser, [], {
+      annotations: { [marker]: true } satisfies Annotations,
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], value);
+      assert.ok(!Reflect.ownKeys(result.value[0]).includes(annotationKey));
+    }
+  });
+
+  it("should preserve nested object child values under annotations", () => {
+    const marker = Symbol.for("@test/tuple-nested-object-annotations");
+    const value = { source: "tuple-nested" };
+    const parser = tuple([object({ v: constant(value) })]);
+
+    const result = parseSync(parser, [], {
+      annotations: { [marker]: true } satisfies Annotations,
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0].v, value);
+      assert.ok(!Reflect.ownKeys(result.value[0].v).includes(annotationKey));
+    }
   });
 
   it("should parse parsers sequentially in array order", () => {
@@ -5780,6 +6260,28 @@ describe("concat", () => {
     );
   });
 
+  it("should preserve non-opt-in object child state identity with annotations", () => {
+    const marker = Symbol.for("@test/concat-annotations");
+    const left = { side: "left" };
+    const right = { side: "right" };
+    const parser = concat(
+      tuple([constant(left)]),
+      tuple([constant(right)]),
+    );
+
+    const result = parseSync(parser, [], {
+      annotations: { [marker]: true } satisfies Annotations,
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], left);
+      assert.equal(result.value[1], right);
+      assert.ok(!Reflect.ownKeys(result.value[0]).includes(annotationKey));
+      assert.ok(!Reflect.ownKeys(result.value[1]).includes(annotationKey));
+    }
+  });
+
   it("should preserve inferred tuple flattening up to fifteen parsers", () => {
     const parser = concat(
       tuple([constant("v1" as const)]),
@@ -6891,6 +7393,27 @@ describe("group() - duplicate option detection", () => {
 
 describe("conditional", () => {
   describe("basic parsing", () => {
+    it("should preserve non-opt-in branch state identity with annotations", () => {
+      const marker = Symbol.for("@test/conditional-annotations");
+      const branchValue = { source: "conditional" };
+      const parser = conditional(
+        option("--mode", choice(["fast"])),
+        {
+          fast: constant(branchValue),
+        },
+      );
+
+      const result = parseSync(parser, ["--mode", "fast"], {
+        annotations: { [marker]: true } satisfies Annotations,
+      });
+
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value[1], branchValue);
+        assert.ok(!Reflect.ownKeys(result.value[1]).includes(annotationKey));
+      }
+    });
+
     it("should select correct branch based on discriminator value", () => {
       const parser = conditional(
         option("--type", choice(["a", "b"])),
@@ -10341,7 +10864,46 @@ describe("branch coverage: constructs.ts edge cases", () => {
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
-    const asyncDefault = optional(option("--default", string()));
+    const asyncDefault: Parser<
+      "async",
+      string,
+      { readonly value: string }
+    > = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { readonly value: string }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "seed" },
+      parse(context) {
+        return Promise.resolve(
+          context.buffer[0] === "payload" && context.state.value === "replayed"
+            ? {
+              success: true as const,
+              next: {
+                ...context,
+                buffer: context.buffer.slice(1),
+                state: { value: "parsed" },
+              },
+              consumed: ["payload"],
+            }
+            : {
+              success: false as const,
+              consumed: 0,
+              error: message`missing replayed state`,
+            },
+        );
+      },
+      complete(state) {
+        return Promise.resolve({ success: true as const, value: state.value });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
     const asyncConditional = conditional(
       option("--mode", asyncValueParser),
       { fast: optional(option("--threads", integer())) },
@@ -10349,20 +10911,20 @@ describe("branch coverage: constructs.ts edge cases", () => {
     );
 
     const asyncFromUndefined = await asyncConditional.parse({
-      buffer: ["--default", "x"],
+      buffer: ["payload"],
       state: undefined as never,
       optionsTerminated: false,
       usage: asyncConditional.usage,
     });
-    assert.ok(asyncFromUndefined.success);
+    assert.ok(!asyncFromUndefined.success);
 
     const asyncFromSelectedDefault = await asyncConditional.parse({
-      buffer: ["--default", "y"],
+      buffer: ["payload"],
       state: {
         discriminatorState: asyncConditional.initialState.discriminatorState,
         discriminatorValue: undefined,
         selectedBranch: { kind: "default" },
-        branchState: asyncDefault.initialState,
+        branchState: { value: "replayed" },
       },
       optionsTerminated: false,
       usage: asyncConditional.usage,
@@ -10391,6 +10953,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       assert.ok(syncCompleted.success);
       if (syncCompleted.success) {
         assert.equal(syncCompleted.value[0], "fast");
+        assert.equal(syncCompleted.value[1], 2);
       }
     }
 
@@ -10421,7 +10984,442 @@ describe("branch coverage: constructs.ts edge cases", () => {
       assert.ok(asyncCompleted.success);
       if (asyncCompleted.success) {
         assert.equal(asyncCompleted.value[0], "fast");
+        assert.equal(asyncCompleted.value[1], 3);
       }
+    }
+  });
+
+  it("shared-buffer constructs preserve annotations for custom child parsers", () => {
+    const marker = Symbol.for("@test/shared-buffer-custom-annotations");
+    const createCustomParser = (): Parser<
+      "sync",
+      string,
+      { value: string }
+    > => ({
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { value: string }[],
+      priority: 1,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "ok" },
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete(state) {
+        return getAnnotations(state)?.[marker] === true
+          ? { success: true as const, value: state.value }
+          : { success: false as const, error: message`missing` };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    });
+    const parsers: ReadonlyArray<
+      readonly [
+        string,
+        Parser<"sync", unknown, unknown>,
+        (value: unknown) => unknown,
+      ]
+    > = [
+      [
+        "object",
+        object({ child: createCustomParser() }),
+        (value) => (value as { readonly child: string }).child,
+      ],
+      [
+        "tuple",
+        tuple([createCustomParser()]),
+        (value) => (value as readonly [string])[0],
+      ],
+      [
+        "merge",
+        merge(
+          object({ child: createCustomParser() }),
+          object({}),
+        ),
+        (value) => (value as { readonly child: string }).child,
+      ],
+      [
+        "concat",
+        concat(
+          tuple([createCustomParser()]),
+          tuple([constant("tail")]),
+        ),
+        (value) => (value as readonly [string, "tail"])[0],
+      ],
+    ];
+
+    for (const [name, parser, getValue] of parsers) {
+      const result = parseSync(parser, [], {
+        annotations: { [marker]: true } satisfies Annotations,
+      });
+      assert.ok(result.success, `${name} should preserve annotations.`);
+      if (result.success) {
+        assert.equal(getValue(result.value), "ok");
+      }
+    }
+  });
+
+  it("merge() replays annotations into nested object child parsers", () => {
+    const marker = Symbol.for("@test/merge-child-annotations");
+    const childParser: Parser<
+      "sync",
+      string,
+      { readonly value: string }
+    > = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { readonly value: string }[],
+      priority: 1,
+      usage: [],
+      leadingNames: new Set(["payload"]),
+      acceptingAnyToken: false,
+      initialState: { value: "seed" },
+      parse(context) {
+        return context.buffer[0] === "payload" &&
+            getAnnotations(context.state)?.[marker] === true
+          ? {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: { value: "parsed" },
+            },
+            consumed: ["payload"],
+          }
+          : { success: false as const, consumed: 0, error: message`missing` };
+      },
+      complete(state) {
+        return { success: true as const, value: state.value };
+      },
+      suggest(context, prefix) {
+        return getAnnotations(context.state)?.[marker] === true &&
+            "payload".startsWith(prefix)
+          ? [{ kind: "literal" as const, text: "payload" }]
+          : [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineInheritedAnnotationParser(childParser);
+    const parser = merge(
+      object({ child: childParser }),
+      object({}),
+    );
+
+    const parsed = parser.parse({
+      buffer: ["payload"],
+      state: injectAnnotations(
+        parser.initialState,
+        { [marker]: true } satisfies Annotations,
+      ),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const completed = parser.complete(parsed.next.state);
+    assert.deepEqual(completed, {
+      success: true,
+      value: { child: "parsed" },
+    });
+
+    const suggestionTexts = suggestSync(parser, ["p"], {
+      annotations: { [marker]: true } satisfies Annotations,
+    })
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+
+    assert.ok(suggestionTexts.includes("payload"));
+  });
+
+  it("or() and longestMatch() preserve annotations for opt-in branches", () => {
+    const marker = Symbol.for("@test/exclusive-child-annotations");
+
+    function createBranchParser(): Parser<
+      "sync",
+      string,
+      { readonly value: string }
+    > {
+      const branchParser: Parser<
+        "sync",
+        string,
+        { readonly value: string }
+      > = {
+        $mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly { readonly value: string }[],
+        priority: 1,
+        usage: [],
+        leadingNames: new Set(["payload"]),
+        acceptingAnyToken: false,
+        initialState: { value: "seed" },
+        parse(context) {
+          return context.buffer[0] === "payload" &&
+              getAnnotations(context.state)?.[marker] === true
+            ? {
+              success: true as const,
+              next: {
+                ...context,
+                buffer: context.buffer.slice(1),
+                state: { value: "parsed" },
+              },
+              consumed: ["payload"],
+            }
+            : { success: false as const, consumed: 0, error: message`missing` };
+        },
+        complete(state) {
+          return getAnnotations(state)?.[marker] === true
+            ? { success: true as const, value: state.value }
+            : { success: false as const, error: message`missing ann` };
+        },
+        suggest(context, prefix) {
+          return getAnnotations(context.state)?.[marker] === true &&
+              "payload".startsWith(prefix)
+            ? [{ kind: "literal" as const, text: "payload" }]
+            : [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      defineInheritedAnnotationParser(branchParser);
+      return branchParser;
+    }
+
+    const parsers = [
+      ["or", or(createBranchParser(), flag("--other"))],
+      ["longestMatch", longestMatch(createBranchParser(), flag("--other"))],
+    ] as const;
+
+    for (const [name, exclusiveParser] of parsers) {
+      const parser = object({ child: exclusiveParser });
+      const parsed = parser.parse({
+        buffer: ["payload"],
+        state: injectAnnotations(
+          parser.initialState,
+          { [marker]: true } satisfies Annotations,
+        ),
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+
+      assert.ok(
+        parsed.success,
+        `${name} should parse with inherited annotations.`,
+      );
+      if (!parsed.success) continue;
+
+      const completed = parser.complete(parsed.next.state);
+      assert.deepEqual(completed, {
+        success: true,
+        value: { child: "parsed" },
+      });
+
+      const suggestionTexts = suggestSync(parser, ["p"], {
+        annotations: { [marker]: true } satisfies Annotations,
+      })
+        .filter((suggestion) => suggestion.kind === "literal")
+        .map((suggestion) => suggestion.text);
+
+      assert.ok(
+        suggestionTexts.includes("payload"),
+        `${name} should surface branch suggestions.`,
+      );
+    }
+  });
+
+  it("tuple() and concat() preserve parse state identity for custom children", () => {
+    const marker = Symbol.for("@test/shared-buffer-custom-state-identity");
+    const parsers = ["tuple", "concat"] as const;
+
+    for (const name of parsers) {
+      const initialState = { value: name };
+      let seenState: unknown;
+      const childParser: Parser<
+        "sync",
+        { readonly inner: { readonly value: string } },
+        { readonly value: string }
+      > = {
+        $mode: "sync",
+        $valueType: [] as readonly {
+          readonly inner: { readonly value: string };
+        }[],
+        $stateType: [] as readonly { readonly value: string }[],
+        priority: 1,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState,
+        parse(context) {
+          seenState = context.state;
+          return context.buffer.length > 0
+            ? {
+              success: true as const,
+              next: {
+                ...context,
+                buffer: context.buffer.slice(1),
+              },
+              consumed: [context.buffer[0]],
+            }
+            : {
+              success: true as const,
+              next: context,
+              consumed: [],
+            };
+        },
+        complete(state) {
+          return getAnnotations(state)?.[marker] === true
+            ? {
+              success: true as const,
+              value: { inner: state },
+            }
+            : { success: false as const, error: message`missing` };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+
+      const parser: Parser<"sync", unknown, unknown> = name === "tuple"
+        ? tuple([childParser])
+        : concat(
+          tuple([childParser]),
+          tuple([constant("tail")]),
+        );
+      const result = parseSync(parser, [name], {
+        annotations: { [marker]: true } satisfies Annotations,
+      });
+
+      assert.ok(result.success, `${name} should parse successfully.`);
+      assert.equal(
+        seenState,
+        initialState,
+        `${name} parse should preserve the original child state identity.`,
+      );
+      if (!result.success) continue;
+      const inner = (result.value as readonly [
+        { readonly inner: { readonly value: string } },
+        ...readonly unknown[],
+      ])[0].inner;
+      assert.equal(
+        inner,
+        initialState,
+        `${name} should unwrap nested child state from the completed value.`,
+      );
+      assert.equal(getAnnotations(inner), undefined);
+      assert.ok(!Reflect.ownKeys(inner).includes(annotationKey));
+    }
+  });
+
+  it("shared-buffer constructs skip annotation injection for missing plain dependency sources", () => {
+    const modeSource = dependency(choice(["dev", "prod"] as const));
+    const annotations = { source: "annotation" };
+    const parsers: ReadonlyArray<
+      readonly [string, Parser<"sync", unknown, unknown>]
+    > = [
+      ["object", object({ mode: option("--mode", modeSource) })],
+      ["tuple", tuple([option("--mode", modeSource)])],
+      [
+        "concat",
+        concat(
+          tuple([option("--mode", modeSource)]),
+          tuple([constant("tail")]),
+        ),
+      ],
+      ["merge", merge(object({ mode: option("--mode", modeSource) }))],
+    ];
+
+    for (const [name, parser] of parsers) {
+      const parseResult = parseSync(parser, [], { annotations });
+      assert.ok(!parseResult.success, `${name} parse should fail.`);
+      if (!parseResult.success) {
+        assert.ok(
+          formatMessage(parseResult.error).length > 0,
+          `${name} parse should produce a normal parse error.`,
+        );
+      }
+
+      const suggestionTexts = suggestSync(parser, ["--mode", ""], {
+        annotations,
+      })
+        .filter((suggestion) => suggestion.kind === "literal")
+        .map((suggestion) => suggestion.text)
+        .sort();
+      assert.deepEqual(
+        suggestionTexts,
+        ["dev", "prod"],
+        `${name} suggest should preserve the source suggestions.`,
+      );
+    }
+  });
+
+  it("shared-buffer suggest preserves missing optional-like child states", () => {
+    const annotations = { source: "annotation" };
+    const parsers: ReadonlyArray<
+      readonly [string, Parser<"sync", unknown, unknown>]
+    > = [
+      [
+        "tuple optional",
+        tuple([optional(argument(choice(["alice", "bob"] as const)))]),
+      ],
+      [
+        "tuple withDefault",
+        tuple([
+          withDefault(
+            argument(choice(["alice", "bob"] as const)),
+            "alice",
+          ),
+        ]),
+      ],
+      [
+        "concat optional",
+        concat(
+          tuple([optional(argument(choice(["alice", "bob"] as const)))]),
+          tuple([constant("tail")]),
+        ),
+      ],
+      [
+        "concat withDefault",
+        concat(
+          tuple([
+            withDefault(
+              argument(choice(["alice", "bob"] as const)),
+              "alice",
+            ),
+          ]),
+          tuple([constant("tail")]),
+        ),
+      ],
+    ];
+
+    for (const [name, parser] of parsers) {
+      const suggestionTexts = suggestSync(parser, [""], {
+        annotations,
+      })
+        .filter((suggestion) => suggestion.kind === "literal")
+        .map((suggestion) => suggestion.text)
+        .sort();
+      assert.deepEqual(
+        suggestionTexts,
+        ["alice", "bob"],
+        `${name} should preserve positional suggestions.`,
+      );
     }
   });
 
@@ -10741,6 +11739,340 @@ describe("branch coverage: constructs.ts edge cases", () => {
       value: [undefined, "default"],
     });
     assert.equal(discriminatorCompleteCalls, 0);
+  });
+
+  it("conditional() complete preserves annotations for implicit default branch", () => {
+    const marker = Symbol.for("@test/conditional-default-complete-annotations");
+    const defaultBranch: Parser<
+      "sync",
+      string,
+      { readonly value: string }
+    > = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { readonly value: string }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "default" },
+      parse(context) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete(state) {
+        return getAnnotations(state)?.[marker] === true
+          ? { success: true as const, value: state.value }
+          : { success: false as const, error: message`missing ann` };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineInheritedAnnotationParser(defaultBranch);
+    const parser = conditional(
+      option("--mode", choice(["fast"] as const)),
+      { fast: constant("F") },
+      defaultBranch,
+    );
+
+    const completed = parser.complete(
+      injectAnnotations(
+        parser.initialState,
+        { [marker]: true } satisfies Annotations,
+      ),
+    );
+
+    assert.deepEqual(completed, {
+      success: true,
+      value: [undefined, "default"],
+    });
+  });
+
+  it("conditional() parse preserves discriminator annotations for branch selection", () => {
+    const marker = Symbol.for(
+      "@test/conditional-discriminator-parse-annotations",
+    );
+    const discriminator: Parser<
+      "sync",
+      "fast",
+      { readonly seen: boolean }
+    > = {
+      $mode: "sync",
+      $valueType: [] as readonly "fast"[],
+      $stateType: [] as readonly { readonly seen: boolean }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(["payload"]),
+      acceptingAnyToken: false,
+      initialState: { seen: false },
+      parse(context) {
+        return context.buffer[0] === "payload" &&
+            getAnnotations(context.state)?.[marker] === true
+          ? {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: { seen: true },
+            },
+            consumed: ["payload"],
+          }
+          : {
+            success: false as const,
+            consumed: 0,
+            error: message`missing ann`,
+          };
+      },
+      complete(state) {
+        return getAnnotations(state)?.[marker] === true && state.seen
+          ? { success: true as const, value: "fast" as const }
+          : { success: false as const, error: message`missing ann` };
+      },
+      suggest(context, prefix) {
+        return getAnnotations(context.state)?.[marker] === true &&
+            "payload".startsWith(prefix)
+          ? [{ kind: "literal" as const, text: "payload" }]
+          : [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineInheritedAnnotationParser(discriminator);
+    const parser = conditional(
+      discriminator,
+      { fast: constant("selected") },
+      constant("default"),
+    );
+
+    const parsed = parser.parse({
+      buffer: ["payload"],
+      state: injectAnnotations(
+        parser.initialState,
+        { [marker]: true } satisfies Annotations,
+      ),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const completed = parser.complete(parsed.next.state);
+    assert.deepEqual(completed, {
+      success: true,
+      value: ["fast", "selected"],
+    });
+
+    const suggestionTexts = suggestSync(parser, ["p"], {
+      annotations: { [marker]: true } satisfies Annotations,
+    })
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+
+    assert.ok(suggestionTexts.includes("payload"));
+  });
+
+  it("conditional() parse preserves selected branch annotations for completion", () => {
+    const marker = Symbol.for("@test/conditional-selected-parse-annotations");
+    const branchParser: Parser<
+      "sync",
+      string,
+      { readonly value: string }
+    > = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { readonly value: string }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(["payload"]),
+      acceptingAnyToken: false,
+      initialState: { value: "seed" },
+      parse(context) {
+        return context.buffer[0] === "payload" &&
+            getAnnotations(context.state)?.[marker] === true
+          ? {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: { value: "parsed" },
+            },
+            consumed: ["payload"],
+          }
+          : {
+            success: false as const,
+            consumed: 0,
+            error: message`missing ann`,
+          };
+      },
+      complete(state) {
+        return getAnnotations(state)?.[marker] === true
+          ? { success: true as const, value: state.value }
+          : { success: false as const, error: message`missing ann` };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineInheritedAnnotationParser(branchParser);
+    const parser = conditional(
+      option("--mode", choice(["fast"] as const)),
+      { fast: branchParser },
+    );
+
+    const parsed = parser.parse({
+      buffer: ["--mode", "fast", "payload"],
+      state: injectAnnotations(
+        parser.initialState,
+        { [marker]: true } satisfies Annotations,
+      ),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const completed = parser.complete(parsed.next.state);
+    assert.deepEqual(completed, {
+      success: true,
+      value: ["fast", "parsed"],
+    });
+  });
+
+  it("conditional() parse preserves default branch annotations for completion", () => {
+    const marker = Symbol.for("@test/conditional-default-parse-annotations");
+    const defaultBranch: Parser<
+      "sync",
+      string,
+      { readonly value: string }
+    > = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { readonly value: string }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(["payload"]),
+      acceptingAnyToken: false,
+      initialState: { value: "seed" },
+      parse(context) {
+        return context.buffer[0] === "payload" &&
+            getAnnotations(context.state)?.[marker] === true
+          ? {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: { value: "parsed" },
+            },
+            consumed: ["payload"],
+          }
+          : {
+            success: false as const,
+            consumed: 0,
+            error: message`missing ann`,
+          };
+      },
+      complete(state) {
+        return getAnnotations(state)?.[marker] === true
+          ? { success: true as const, value: state.value }
+          : { success: false as const, error: message`missing ann` };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineInheritedAnnotationParser(defaultBranch);
+    const parser = conditional(
+      option("--mode", choice(["fast"] as const)),
+      { fast: constant("F") },
+      defaultBranch,
+    );
+
+    const parsed = parser.parse({
+      buffer: ["payload"],
+      state: injectAnnotations(
+        parser.initialState,
+        { [marker]: true } satisfies Annotations,
+      ),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const completed = parser.complete(parsed.next.state);
+    assert.deepEqual(completed, {
+      success: true,
+      value: [undefined, "parsed"],
+    });
+  });
+
+  it("conditional() async complete preserves annotations for implicit default branch", async () => {
+    const marker = Symbol.for(
+      "@test/conditional-default-complete-annotations-async",
+    );
+    const defaultBranch: Parser<
+      "async",
+      string,
+      { readonly value: string }
+    > = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { readonly value: string }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "default" },
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete(state) {
+        return Promise.resolve(
+          getAnnotations(state)?.[marker] === true
+            ? { success: true as const, value: state.value }
+            : { success: false as const, error: message`missing ann` },
+        );
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineInheritedAnnotationParser(defaultBranch);
+    const parser = conditional(
+      option("--mode", choice(["fast"] as const)),
+      { fast: constant("F") },
+      defaultBranch,
+    );
+
+    const completed = await parser.complete(
+      injectAnnotations(
+        parser.initialState,
+        { [marker]: true } satisfies Annotations,
+      ),
+    );
+
+    assert.deepEqual(completed, {
+      success: true,
+      value: [undefined, "default"],
+    });
   });
 
   it("conditional() async complete uses default branch when none selected", async () => {

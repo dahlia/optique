@@ -1103,15 +1103,27 @@ function resolveDeferredInState(
   if (isDependencySourceState(state)) return state;
 
   if (Array.isArray(state)) {
-    return state.map((item) => resolveDeferredInState(item, runtime, visited));
+    const resolved = state.map((item) =>
+      resolveDeferredInState(item, runtime, visited)
+    );
+    return resolved.every((item, index) => item === state[index])
+      ? state
+      : resolved;
   }
 
   if (isPlainObject(state)) {
+    const keys = Reflect.ownKeys(state);
+    const resolvedEntries = keys.map((key) =>
+      [key, resolveDeferredInState(state[key], runtime, visited)] as const
+    );
+    if (resolvedEntries.every(([key, value]) => value === state[key])) {
+      return state;
+    }
     const resolved = Object.create(
       Object.getPrototypeOf(state),
     ) as Record<string | symbol, unknown>;
-    for (const key of Reflect.ownKeys(state)) {
-      resolved[key] = resolveDeferredInState(state[key], runtime, visited);
+    for (const [key, value] of resolvedEntries) {
+      resolved[key] = value;
     }
     return resolved;
   }
@@ -1178,25 +1190,37 @@ async function resolveDeferredInStateAsync(
   if (isDependencySourceState(state)) return state;
 
   if (Array.isArray(state)) {
-    return Promise.all(
+    const resolved = await Promise.all(
       state.map((item) => resolveDeferredInStateAsync(item, runtime, visited)),
     );
+    return resolved.every((item, index) => item === state[index])
+      ? state
+      : resolved;
   }
 
   if (isPlainObject(state)) {
+    const keys = Reflect.ownKeys(state);
+    const resolvedEntries = await Promise.all(
+      keys.map(async (key) => {
+        return [
+          key,
+          await resolveDeferredInStateAsync(
+            state[key],
+            runtime,
+            visited,
+          ),
+        ] as const;
+      }),
+    );
+    if (resolvedEntries.every(([key, value]) => value === state[key])) {
+      return state;
+    }
     const resolved = Object.create(
       Object.getPrototypeOf(state),
     ) as Record<string | symbol, unknown>;
-    const keys = Reflect.ownKeys(state);
-    await Promise.all(
-      keys.map(async (key) => {
-        resolved[key] = await resolveDeferredInStateAsync(
-          state[key],
-          runtime,
-          visited,
-        );
-      }),
-    );
+    for (const [key, value] of resolvedEntries) {
+      resolved[key] = value;
+    }
     return resolved;
   }
 

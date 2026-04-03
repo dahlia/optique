@@ -6,7 +6,7 @@ import {
   getAnnotations,
   injectAnnotations,
 } from "@optique/core/annotations";
-import { group, object } from "@optique/core/constructs";
+import { concat, group, object, tuple } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import type { SourceContext } from "@optique/core/context";
 import type { DocFragments } from "@optique/core/doc";
@@ -16,6 +16,7 @@ import {
   parseAsync,
   type Parser,
   type ParserContext,
+  suggestAsync,
   type Suggestion,
 } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
@@ -4855,4 +4856,345 @@ describe("prompt() with dependency sources", () => {
       assert.deepEqual(extracted, { success: true, value: "prod" });
     },
   );
+
+  describe("shared-buffer wrapper contracts", () => {
+    for (const kind of ["tuple", "concat"] as const) {
+      it(
+        `${kind}() skips prompt when bindEnv() resolves dependency source`,
+        async () => {
+          const envContext = createEnvContext({
+            prefix: "APP_",
+            source: (key) => ({ APP_MODE: "prod" })[key],
+          });
+          const annotations = envContext.getAnnotations();
+          if (annotations instanceof Promise) {
+            throw new TypeError("Expected synchronous annotations.");
+          }
+          const wrappedParser = bindEnv(option("--mode", mode), {
+            context: envContext,
+            key: "MODE",
+            parser: choice(["dev", "prod"] as const),
+          });
+          let promptCalls = 0;
+          const guardedParser = kind === "tuple"
+            ? tuple([
+              prompt(wrappedParser, {
+                type: "select",
+                message: "Select mode:",
+                choices: ["dev", "prod"],
+                prompter: () => {
+                  promptCalls += 1;
+                  return Promise.resolve("dev" as const);
+                },
+              }),
+              option("--level", level),
+            ])
+            : concat(
+              tuple([
+                prompt(wrappedParser, {
+                  type: "select",
+                  message: "Select mode:",
+                  choices: ["dev", "prod"],
+                  prompter: () => {
+                    promptCalls += 1;
+                    return Promise.resolve("dev" as const);
+                  },
+                }),
+              ]),
+              tuple([
+                option("--level", level),
+              ]),
+            );
+          const result = await parseAsync(
+            guardedParser,
+            ["--level", "silent"],
+            { annotations },
+          );
+
+          assert.ok(result.success);
+          assert.deepEqual(result.value, ["prod", "silent"]);
+          assert.equal(promptCalls, 0);
+
+          const suggestionTexts = (
+            await suggestAsync(
+              guardedParser,
+              ["--level", "s"],
+              { annotations },
+            )
+          )
+            .filter((suggestion) => suggestion.kind === "literal")
+            .map((suggestion) => suggestion.text);
+          assert.ok(suggestionTexts.includes("silent"));
+          assert.ok(suggestionTexts.includes("strict"));
+          assert.ok(!suggestionTexts.includes("debug"));
+          assert.ok(!suggestionTexts.includes("verbose"));
+          assert.equal(promptCalls, 0);
+        },
+      );
+
+      for (
+        const wrapperKind of ["optional", "withDefault"] as const
+      ) {
+        it(
+          `${kind}() skips prompt when ${wrapperKind}(bindEnv(...)) resolves dependency source`,
+          async () => {
+            const envContext = createEnvContext({
+              prefix: "APP_",
+              source: (key) => ({ APP_MODE: "prod" })[key],
+            });
+            const annotations = envContext.getAnnotations();
+            if (annotations instanceof Promise) {
+              throw new TypeError("Expected synchronous annotations.");
+            }
+            const boundParser = bindEnv(option("--mode", mode), {
+              context: envContext,
+              key: "MODE",
+              parser: choice(["dev", "prod"] as const),
+            });
+            const wrappedParser = wrapperKind === "optional"
+              ? optional(boundParser)
+              : withDefault(boundParser, "dev" as const);
+            let promptCalls = 0;
+            const parser = kind === "tuple"
+              ? tuple([
+                prompt(wrappedParser, {
+                  type: "select",
+                  message: "Select mode:",
+                  choices: ["dev", "prod"],
+                  prompter: () => {
+                    promptCalls += 1;
+                    return Promise.resolve("dev" as const);
+                  },
+                }),
+                option("--level", level),
+              ])
+              : concat(
+                tuple([
+                  prompt(wrappedParser, {
+                    type: "select",
+                    message: "Select mode:",
+                    choices: ["dev", "prod"],
+                    prompter: () => {
+                      promptCalls += 1;
+                      return Promise.resolve("dev" as const);
+                    },
+                  }),
+                ]),
+                tuple([
+                  option("--level", level),
+                ]),
+              );
+
+            const result = await parseAsync(
+              parser,
+              ["--level", "silent"],
+              { annotations },
+            );
+
+            assert.ok(result.success);
+            assert.deepEqual(result.value, ["prod", "silent"]);
+            assert.equal(promptCalls, 0);
+
+            const suggestionTexts = (
+              await suggestAsync(
+                parser,
+                ["--level", "s"],
+                { annotations },
+              )
+            )
+              .filter((suggestion) => suggestion.kind === "literal")
+              .map((suggestion) => suggestion.text);
+            assert.ok(suggestionTexts.includes("silent"));
+            assert.ok(suggestionTexts.includes("strict"));
+            assert.ok(!suggestionTexts.includes("debug"));
+            assert.ok(!suggestionTexts.includes("verbose"));
+            assert.equal(promptCalls, 0);
+          },
+        );
+      }
+
+      it(
+        `${kind}() skips prompt when bindConfig() resolves dependency source`,
+        async () => {
+          const configContext = createConfigContext<
+            { readonly mode?: "dev" | "prod" }
+          >({
+            schema: {
+              "~standard": {
+                version: 1,
+                vendor: "optique-test",
+                validate(input: unknown) {
+                  return {
+                    value: input as { readonly mode?: "dev" | "prod" },
+                  };
+                },
+              },
+            },
+          });
+          const annotations = await configContext.getAnnotations(
+            {},
+            {
+              load: () => ({
+                config: { mode: "prod" as const },
+                meta: undefined,
+              }),
+            },
+          );
+          let promptCalls = 0;
+          const wrappedParser = bindConfig(option("--mode", mode), {
+            context: configContext,
+            key: "mode",
+          });
+          const parser = kind === "tuple"
+            ? tuple([
+              prompt(wrappedParser, {
+                type: "select",
+                message: "Select mode:",
+                choices: ["dev", "prod"],
+                prompter: () => {
+                  promptCalls += 1;
+                  return Promise.resolve("dev" as const);
+                },
+              }),
+              option("--level", level),
+            ])
+            : concat(
+              tuple([
+                prompt(wrappedParser, {
+                  type: "select",
+                  message: "Select mode:",
+                  choices: ["dev", "prod"],
+                  prompter: () => {
+                    promptCalls += 1;
+                    return Promise.resolve("dev" as const);
+                  },
+                }),
+              ]),
+              tuple([
+                option("--level", level),
+              ]),
+            );
+          const result = await parseAsync(
+            parser,
+            ["--level", "silent"],
+            { annotations },
+          );
+
+          assert.ok(result.success);
+          assert.deepEqual(result.value, ["prod", "silent"]);
+          assert.equal(promptCalls, 0);
+
+          const suggestionTexts = (
+            await suggestAsync(
+              parser,
+              ["--level", "s"],
+              { annotations },
+            )
+          )
+            .filter((suggestion) => suggestion.kind === "literal")
+            .map((suggestion) => suggestion.text);
+          assert.ok(suggestionTexts.includes("silent"));
+          assert.ok(suggestionTexts.includes("strict"));
+          assert.ok(!suggestionTexts.includes("debug"));
+          assert.ok(!suggestionTexts.includes("verbose"));
+          assert.equal(promptCalls, 0);
+        },
+      );
+
+      for (
+        const wrapperKind of ["optional", "withDefault"] as const
+      ) {
+        it(
+          `${kind}() skips prompt when ${wrapperKind}(bindConfig(...)) resolves dependency source`,
+          async () => {
+            const configContext = createConfigContext<
+              { readonly mode?: "dev" | "prod" }
+            >({
+              schema: {
+                "~standard": {
+                  version: 1,
+                  vendor: "optique-test",
+                  validate(input: unknown) {
+                    return {
+                      value: input as { readonly mode?: "dev" | "prod" },
+                    };
+                  },
+                },
+              },
+            });
+            const annotations = await configContext.getAnnotations(
+              {},
+              {
+                load: () => ({
+                  config: { mode: "prod" as const },
+                  meta: undefined,
+                }),
+              },
+            );
+            let promptCalls = 0;
+            const boundParser = bindConfig(option("--mode", mode), {
+              context: configContext,
+              key: "mode",
+            });
+            const wrappedParser = wrapperKind === "optional"
+              ? optional(boundParser)
+              : withDefault(boundParser, "dev" as const);
+            const parser = kind === "tuple"
+              ? tuple([
+                prompt(wrappedParser, {
+                  type: "select",
+                  message: "Select mode:",
+                  choices: ["dev", "prod"],
+                  prompter: () => {
+                    promptCalls += 1;
+                    return Promise.resolve("dev" as const);
+                  },
+                }),
+                option("--level", level),
+              ])
+              : concat(
+                tuple([
+                  prompt(wrappedParser, {
+                    type: "select",
+                    message: "Select mode:",
+                    choices: ["dev", "prod"],
+                    prompter: () => {
+                      promptCalls += 1;
+                      return Promise.resolve("dev" as const);
+                    },
+                  }),
+                ]),
+                tuple([
+                  option("--level", level),
+                ]),
+              );
+            const result = await parseAsync(
+              parser,
+              ["--level", "silent"],
+              { annotations },
+            );
+
+            assert.ok(result.success);
+            assert.deepEqual(result.value, ["prod", "silent"]);
+            assert.equal(promptCalls, 0);
+
+            const suggestionTexts = (
+              await suggestAsync(
+                parser,
+                ["--level", "s"],
+                { annotations },
+              )
+            )
+              .filter((suggestion) => suggestion.kind === "literal")
+              .map((suggestion) => suggestion.text);
+            assert.ok(suggestionTexts.includes("silent"));
+            assert.ok(suggestionTexts.includes("strict"));
+            assert.ok(!suggestionTexts.includes("debug"));
+            assert.ok(!suggestionTexts.includes("verbose"));
+            assert.equal(promptCalls, 0);
+          },
+        );
+      }
+    }
+  });
 });
