@@ -483,10 +483,7 @@ describe("B. Suggest path: derive() × execution contexts", () => {
       "",
     ]);
     const texts = literalTexts(suggestions);
-    assert.ok(!texts.includes("debug"), `Unexpected "debug" in ${texts}`);
-    assert.ok(!texts.includes("trace"), `Unexpected "trace" in ${texts}`);
-    assert.ok(!texts.includes("info"), `Unexpected "info" in ${texts}`);
-    assert.ok(!texts.includes("warn"), `Unexpected "warn" in ${texts}`);
+    assert.deepEqual(texts, []);
   });
 
   test("B.3b tuple() — keeps unrelated nested source defaults after sibling source failure", () => {
