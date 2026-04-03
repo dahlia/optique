@@ -9739,15 +9739,21 @@ export function conditional(
         context,
         "_discriminator",
         state.discriminatorState,
+        syncDiscriminator,
       ),
     });
 
     if (
       discriminatorResult.success && discriminatorResult.consumed.length > 0
     ) {
+      const annotatedDiscriminatorState = getAnnotatedChildState(
+        state,
+        discriminatorResult.next.state,
+        syncDiscriminator,
+      );
       // Complete discriminator to get the value
       const completionResult = syncDiscriminator.complete(
-        discriminatorResult.next.state,
+        annotatedDiscriminatorState,
         withChildExecPath(context.exec, "_discriminator"),
       );
 
@@ -9791,7 +9797,7 @@ export function conditional(
               next: {
                 ...branchParseResult.next,
                 state: {
-                  discriminatorState: discriminatorResult.next.state,
+                  discriminatorState: annotatedDiscriminatorState,
                   discriminatorValue: value,
                   selectedBranch: { kind: "branch", key: value },
                   branchState: getAnnotatedChildState(
@@ -9820,7 +9826,7 @@ export function conditional(
             next: {
               ...discriminatorResult.next,
               state: {
-                discriminatorState: discriminatorResult.next.state,
+                discriminatorState: annotatedDiscriminatorState,
                 discriminatorValue: value,
                 selectedBranch: { kind: "branch", key: value },
                 branchState: getAnnotatedChildState(
@@ -9947,15 +9953,21 @@ export function conditional(
         context,
         "_discriminator",
         state.discriminatorState,
+        discriminator,
       ),
     });
 
     if (
       discriminatorResult.success && discriminatorResult.consumed.length > 0
     ) {
+      const annotatedDiscriminatorState = getAnnotatedChildState(
+        state,
+        discriminatorResult.next.state,
+        discriminator,
+      );
       // Complete discriminator to get the value
       const completionResult = await discriminator.complete(
-        discriminatorResult.next.state,
+        annotatedDiscriminatorState,
         withChildExecPath(context.exec, "_discriminator"),
       );
 
@@ -9999,7 +10011,7 @@ export function conditional(
               next: {
                 ...branchParseResult.next,
                 state: {
-                  discriminatorState: discriminatorResult.next.state,
+                  discriminatorState: annotatedDiscriminatorState,
                   discriminatorValue: value,
                   selectedBranch: { kind: "branch", key: value },
                   branchState: getAnnotatedChildState(
@@ -10028,7 +10040,7 @@ export function conditional(
             next: {
               ...discriminatorResult.next,
               state: {
-                discriminatorState: discriminatorResult.next.state,
+                discriminatorState: annotatedDiscriminatorState,
                 discriminatorValue: value,
                 selectedBranch: { kind: "branch", key: value },
                 branchState: getAnnotatedChildState(
@@ -10169,8 +10181,13 @@ export function conditional(
     const branchParser = state.selectedBranch.kind === "default"
       ? syncDefaultBranch!
       : syncBranches[state.selectedBranch.key];
+    const annotatedDiscriminatorState = getAnnotatedChildState(
+      state,
+      state.discriminatorState,
+      syncDiscriminator,
+    );
     const combinedState = {
-      _discriminator: state.discriminatorState,
+      _discriminator: annotatedDiscriminatorState,
       _branch: getAnnotatedChildState(
         state,
         state.branchState,
@@ -10210,7 +10227,7 @@ export function conditional(
     const discriminatorCompleteResult = state.selectedBranch.kind === "default"
       ? undefined
       : syncDiscriminator.complete(
-        state.discriminatorState,
+        annotatedDiscriminatorState,
         withChildExecPath(completionExec, "_discriminator"),
       );
 
@@ -10331,8 +10348,13 @@ export function conditional(
     const branchParser = state.selectedBranch.kind === "default"
       ? defaultBranch!
       : branches[state.selectedBranch.key];
+    const annotatedDiscriminatorState = getAnnotatedChildState(
+      state,
+      state.discriminatorState,
+      discriminator,
+    );
     const combinedState = {
-      _discriminator: state.discriminatorState,
+      _discriminator: annotatedDiscriminatorState,
       _branch: getAnnotatedChildState(
         state,
         state.branchState,
@@ -10372,7 +10394,7 @@ export function conditional(
     const discriminatorCompleteResult = state.selectedBranch.kind === "default"
       ? undefined
       : await discriminator.complete(
-        state.discriminatorState,
+        annotatedDiscriminatorState,
         withChildExecPath(completionExec, "_discriminator"),
       );
 
@@ -10455,8 +10477,13 @@ export function conditional(
       const runtime = createDependencyRuntimeContext(
         context.dependencyRegistry?.clone(),
       );
+      const annotatedDiscriminatorState = getAnnotatedChildState(
+        state,
+        state.discriminatorState,
+        syncDiscriminator,
+      );
       const defaultCombinedState = {
-        _discriminator: state.discriminatorState,
+        _discriminator: annotatedDiscriminatorState,
         _branch: syncDefaultBranch == null
           ? state.branchState
           : getAnnotatedChildState(
@@ -10498,6 +10525,7 @@ export function conditional(
           suggestContext,
           "_discriminator",
           state.discriminatorState,
+          syncDiscriminator,
         ),
         prefix,
       );
@@ -10522,8 +10550,13 @@ export function conditional(
       const runtime = createDependencyRuntimeContext(
         context.dependencyRegistry?.clone(),
       );
+      const annotatedDiscriminatorState = getAnnotatedChildState(
+        state,
+        state.discriminatorState,
+        syncDiscriminator,
+      );
       const combinedState = {
-        _discriminator: state.discriminatorState,
+        _discriminator: annotatedDiscriminatorState,
         _branch: getAnnotatedChildState(
           state,
           state.branchState,
@@ -10580,8 +10613,13 @@ export function conditional(
       const runtime = createDependencyRuntimeContext(
         context.dependencyRegistry?.clone(),
       );
+      const annotatedDiscriminatorState = getAnnotatedChildState(
+        state,
+        state.discriminatorState,
+        discriminator,
+      );
       const defaultCombinedState = {
-        _discriminator: state.discriminatorState,
+        _discriminator: annotatedDiscriminatorState,
         _branch: defaultBranch == null
           ? state.branchState
           : getAnnotatedChildState(
@@ -10623,6 +10661,7 @@ export function conditional(
           suggestContext,
           "_discriminator",
           state.discriminatorState,
+          discriminator,
         ),
         prefix,
       );
@@ -10647,8 +10686,13 @@ export function conditional(
       const runtime = createDependencyRuntimeContext(
         context.dependencyRegistry?.clone(),
       );
+      const annotatedDiscriminatorState = getAnnotatedChildState(
+        state,
+        state.discriminatorState,
+        discriminator,
+      );
       const combinedState = {
-        _discriminator: state.discriminatorState,
+        _discriminator: annotatedDiscriminatorState,
         _branch: getAnnotatedChildState(
           state,
           state.branchState,

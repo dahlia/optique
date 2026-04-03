@@ -10864,7 +10864,46 @@ describe("branch coverage: constructs.ts edge cases", () => {
       parse: (v) => Promise.resolve({ success: true, value: v }),
       format: (v) => v,
     };
-    const asyncDefault = optional(option("--default", string()));
+    const asyncDefault: Parser<
+      "async",
+      string,
+      { readonly value: string }
+    > = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { readonly value: string }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { value: "seed" },
+      parse(context) {
+        return Promise.resolve(
+          context.buffer[0] === "payload" && context.state.value === "replayed"
+            ? {
+              success: true as const,
+              next: {
+                ...context,
+                buffer: context.buffer.slice(1),
+                state: { value: "parsed" },
+              },
+              consumed: ["payload"],
+            }
+            : {
+              success: false as const,
+              consumed: 0,
+              error: message`missing replayed state`,
+            },
+        );
+      },
+      complete(state) {
+        return Promise.resolve({ success: true as const, value: state.value });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
     const asyncConditional = conditional(
       option("--mode", asyncValueParser),
       { fast: optional(option("--threads", integer())) },
@@ -10872,20 +10911,20 @@ describe("branch coverage: constructs.ts edge cases", () => {
     );
 
     const asyncFromUndefined = await asyncConditional.parse({
-      buffer: ["--default", "x"],
+      buffer: ["payload"],
       state: undefined as never,
       optionsTerminated: false,
       usage: asyncConditional.usage,
     });
-    assert.ok(asyncFromUndefined.success);
+    assert.ok(!asyncFromUndefined.success);
 
     const asyncFromSelectedDefault = await asyncConditional.parse({
-      buffer: ["--default", "y"],
+      buffer: ["payload"],
       state: {
         discriminatorState: asyncConditional.initialState.discriminatorState,
         discriminatorValue: undefined,
         selectedBranch: { kind: "default" },
-        branchState: asyncDefault.initialState,
+        branchState: { value: "replayed" },
       },
       optionsTerminated: false,
       usage: asyncConditional.usage,
@@ -11750,6 +11789,91 @@ describe("branch coverage: constructs.ts edge cases", () => {
       success: true,
       value: [undefined, "default"],
     });
+  });
+
+  it("conditional() parse preserves discriminator annotations for branch selection", () => {
+    const marker = Symbol.for(
+      "@test/conditional-discriminator-parse-annotations",
+    );
+    const discriminator: Parser<
+      "sync",
+      "fast",
+      { readonly seen: boolean }
+    > = {
+      $mode: "sync",
+      $valueType: [] as readonly "fast"[],
+      $stateType: [] as readonly { readonly seen: boolean }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(["payload"]),
+      acceptingAnyToken: false,
+      initialState: { seen: false },
+      parse(context) {
+        return context.buffer[0] === "payload" &&
+            getAnnotations(context.state)?.[marker] === true
+          ? {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: { seen: true },
+            },
+            consumed: ["payload"],
+          }
+          : {
+            success: false as const,
+            consumed: 0,
+            error: message`missing ann`,
+          };
+      },
+      complete(state) {
+        return getAnnotations(state)?.[marker] === true && state.seen
+          ? { success: true as const, value: "fast" as const }
+          : { success: false as const, error: message`missing ann` };
+      },
+      suggest(context, prefix) {
+        return getAnnotations(context.state)?.[marker] === true &&
+            "payload".startsWith(prefix)
+          ? [{ kind: "literal" as const, text: "payload" }]
+          : [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineInheritedAnnotationParser(discriminator);
+    const parser = conditional(
+      discriminator,
+      { fast: constant("selected") },
+      constant("default"),
+    );
+
+    const parsed = parser.parse({
+      buffer: ["payload"],
+      state: injectAnnotations(
+        parser.initialState,
+        { [marker]: true } satisfies Annotations,
+      ),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    const completed = parser.complete(parsed.next.state);
+    assert.deepEqual(completed, {
+      success: true,
+      value: ["fast", "selected"],
+    });
+
+    const suggestionTexts = suggestSync(parser, ["p"], {
+      annotations: { [marker]: true } satisfies Annotations,
+    })
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+
+    assert.ok(suggestionTexts.includes("payload"));
   });
 
   it("conditional() parse preserves selected branch annotations for completion", () => {
