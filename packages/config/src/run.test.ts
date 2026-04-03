@@ -505,7 +505,7 @@ describe("run with config context", { concurrency: false }, () => {
 
     const result = await runWith(parser, "test", [context], {
       contextOptions: {
-        load: (() => undefined) as never,
+        load: () => undefined,
       },
       args: [],
     });

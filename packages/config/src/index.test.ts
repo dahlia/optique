@@ -1266,7 +1266,7 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     const annotations = context.getAnnotations(
       {},
-      { load: (() => null) as never },
+      { load: () => null },
     );
     assert.deepStrictEqual(annotations, {});
   });
@@ -1275,7 +1275,7 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     const annotations = context.getAnnotations(
       {},
-      { load: (() => undefined) as never },
+      { load: () => undefined },
     );
     assert.deepStrictEqual(annotations, {});
   });
@@ -1323,7 +1323,7 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     const annotations = await context.getAnnotations(
       {},
-      { load: (() => Promise.resolve(undefined)) as never },
+      { load: () => Promise.resolve(undefined) },
     );
     assert.deepStrictEqual(annotations, {});
   });
@@ -1332,7 +1332,7 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     const annotations = await context.getAnnotations(
       {},
-      { load: (() => Promise.resolve(null)) as never },
+      { load: () => Promise.resolve(null) },
     );
     assert.deepStrictEqual(annotations, {});
   });
