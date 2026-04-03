@@ -1296,6 +1296,53 @@ describe("longestMatch()", () => {
     );
   });
 
+  it("should allow duplicate option names in different branches", () => {
+    const parser = longestMatch(
+      object({
+        kind: constant("verbose" as const),
+        enabled: option("-v", "--verbose"),
+      }),
+      object({
+        kind: constant("version" as const),
+        enabled: option("-v", "--version"),
+      }),
+    );
+
+    const result = parseSync(parser, ["-v"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.kind, "verbose");
+      assert.equal(result.value.enabled, true);
+    }
+  });
+
+  it("should prefer the branch consuming more tokens with shared options", () => {
+    const parser = longestMatch(
+      object({
+        kind: constant("basic" as const),
+        name: option("--name", string()),
+      }),
+      object({
+        kind: constant("extended" as const),
+        name: option("--name", string()),
+        format: option("--format", string()),
+      }),
+    );
+
+    const result = parseSync(parser, [
+      "--name",
+      "demo",
+      "--format",
+      "json",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.kind, "extended");
+      assert.equal(result.value.name, "demo");
+      assert.equal(result.value.format, "json");
+    }
+  });
+
   it("should preserve inferred unions with up to fifteen parsers", () => {
     const parser = longestMatch(
       command("c1", constant("v1" as const)),

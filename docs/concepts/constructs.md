@@ -1261,6 +1261,46 @@ if (result.success) {
 }
 ~~~~
 
+### Allowed duplicates in `longestMatch()`
+
+Like `or()`, `longestMatch()` allows duplicate option names across branches.
+This is intentional: the branches are still mutually exclusive, and only the
+selected branch contributes to the final result.
+
+When multiple branches share the same option names, `longestMatch()` selects
+the branch that consumes the most input tokens. If two branches consume the
+same number of tokens, the first matching branch wins.
+
+~~~~ typescript twoslash
+import { longestMatch, object } from "@optique/core/constructs";
+import { parse } from "@optique/core/parser";
+import { constant, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = longestMatch(
+  object({
+    mode: constant("basic" as const),
+    format: option("--format", string()),
+  }),
+  object({
+    mode: constant("advanced" as const),
+    format: option("--format", string()),
+    profile: option("--profile", string()),
+  }),
+);
+
+const result = parse(parser, [
+  "--format",
+  "json",
+  "--profile",
+  "prod",
+]);
+
+// Chooses the second branch because it consumes more tokens.
+// If both branches consumed the same number of tokens,
+// the first matching branch would win.
+~~~~
+
 ### Usage patterns and best practices
 
 Use `longestMatch()` when you need:
