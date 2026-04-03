@@ -1280,22 +1280,43 @@ describe("load() return value validation", () => {
     assert.deepStrictEqual(annotations, {});
   });
 
-  test("returns empty annotations when load() returns { config: undefined }", () => {
+  test("validates { config: undefined } against schema", () => {
     const context = createNameContext();
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          { load: () => ({ config: undefined, meta: undefined }) },
+        ),
+      { message: /Config validation failed/ },
+    );
+  });
+
+  test("validates { config: null } against schema", () => {
+    const context = createNameContext();
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          { load: () => ({ config: null, meta: undefined }) },
+        ),
+      { message: /Config validation failed/ },
+    );
+  });
+
+  test("permissive schema can transform { config: undefined }", () => {
+    const schema = z.undefined().transform(() => ({ name: "from-schema" }));
+    const context = createConfigContext({ schema });
     const annotations = context.getAnnotations(
       {},
       { load: () => ({ config: undefined, meta: undefined }) },
     );
-    assert.deepStrictEqual(annotations, {});
-  });
-
-  test("returns empty annotations when load() returns { config: null }", () => {
-    const context = createNameContext();
-    const annotations = context.getAnnotations(
-      {},
-      { load: () => ({ config: null, meta: undefined }) },
-    );
-    assert.deepStrictEqual(annotations, {});
+    const symbols = Object.getOwnPropertySymbols(annotations);
+    assert.equal(symbols.length, 1);
+    const value = (annotations as Record<symbol, unknown>)[symbols[0]] as {
+      data: { name: string };
+    };
+    assert.equal(value.data.name, "from-schema");
   });
 
   test("returns empty annotations when async load() resolves undefined", async () => {
@@ -1316,22 +1337,30 @@ describe("load() return value validation", () => {
     assert.deepStrictEqual(annotations, {});
   });
 
-  test("returns empty annotations when async load() resolves { config: undefined }", async () => {
+  test("validates async { config: undefined } against schema", async () => {
     const context = createNameContext();
-    const annotations = await context.getAnnotations(
-      {},
-      { load: () => Promise.resolve({ config: undefined, meta: undefined }) },
+    await assert.rejects(
+      async () =>
+        await context.getAnnotations(
+          {},
+          {
+            load: () => Promise.resolve({ config: undefined, meta: undefined }),
+          },
+        ),
+      { message: /Config validation failed/ },
     );
-    assert.deepStrictEqual(annotations, {});
   });
 
-  test("returns empty annotations when async load() resolves { config: null }", async () => {
+  test("validates async { config: null } against schema", async () => {
     const context = createNameContext();
-    const annotations = await context.getAnnotations(
-      {},
-      { load: () => Promise.resolve({ config: null, meta: undefined }) },
+    await assert.rejects(
+      async () =>
+        await context.getAnnotations(
+          {},
+          { load: () => Promise.resolve({ config: null, meta: undefined }) },
+        ),
+      { message: /Config validation failed/ },
     );
-    assert.deepStrictEqual(annotations, {});
   });
 
   test("no-config load clears stale active registry from prior load", () => {

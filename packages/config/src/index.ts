@@ -164,10 +164,10 @@ export interface ConfigContextOptions<T> {
  */
 export interface ConfigLoadResult<TConfigMeta = ConfigMeta> {
   /**
-   * Raw config data to validate against the schema.  Set to `undefined` or
-   * `null` to indicate that no config data was found; `bindConfig()` will
-   * fall back to its defaults, mirroring the behavior of `getConfigPath`
-   * mode when the path is `undefined` or the file is missing.
+   * Raw config data to validate against the schema.  The value is always
+   * passed to the schema validator, even when `undefined` or `null`.
+   * To signal "no config found" without validation, return `undefined`
+   * or `null` directly from `load()` instead of wrapping it in an object.
    */
   readonly config: unknown;
 
@@ -207,10 +207,10 @@ export interface ConfigContextRequiredOptions<TConfigMeta = ConfigMeta> {
    * returns the config data (or a Promise of it).  This allows full control
    * over file discovery, loading, merging, and error handling.
    *
-   * The returned data will be validated against the schema.  Return
-   * `undefined` or `null` (or a `ConfigLoadResult` with
-   * `config: undefined` / `config: null`) to signal that no config data
-   * was found; `bindConfig()` will fall back to its defaults.
+   * The returned `ConfigLoadResult.config` is always validated against the
+   * schema.  Return `undefined` or `null` directly (not wrapped in a
+   * `ConfigLoadResult`) to signal that no config data was found;
+   * `bindConfig()` will fall back to its defaults.
    *
    * When `load` is provided, `getConfigPath` is ignored.
    *
@@ -540,9 +540,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
           return Promise.resolve(loaded as Promise<unknown>).then(
             (resolved) => {
               const validated = validateLoadResult<TConfigMeta>(resolved);
-              if (validated === undefined || validated.config == null) {
-                return emptyAnnotations();
-              }
+              if (validated === undefined) return emptyAnnotations();
               return validateAndBuildAnnotations(
                 validated.config,
                 validated.meta,
@@ -559,9 +557,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
           );
         }
         const validated = validateLoadResult<TConfigMeta>(loaded);
-        if (validated === undefined || validated.config == null) {
-          return emptyAnnotations();
-        }
+        if (validated === undefined) return emptyAnnotations();
         return validateAndBuildAnnotations(validated.config, validated.meta);
       }
 

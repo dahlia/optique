@@ -1553,11 +1553,13 @@ To be released.
     failures.  [[#411], [#655]]
 
  -  Fixed custom `load()` mode being unable to represent “no config found”
-    without failing schema validation.  `load()` can now return `undefined`,
-    `null`, or `{ config: undefined }` / `{ config: null }` to signal that
-    no config data is available; `bindConfig()` falls back to defaults,
-    matching the behavior of `getConfigPath` mode when the path is
-    `undefined` or the file is missing.  [[#236], [#770]]
+    without failing schema validation.  `load()` can now return `undefined`
+    or `null` directly to signal that no config data is available;
+    `bindConfig()` falls back to defaults, matching the behavior of
+    `getConfigPath` mode when the path is `undefined` or the file is
+    missing.  A `ConfigLoadResult` with `config: undefined` or
+    `config: null` is still validated against the schema as before.
+    [[#236]]
 
  -  Fixed `bindConfig()` not propagating dependency source values to derived
     parsers.  When a `dependency()` option was wrapped with `bindConfig()`,
@@ -1586,7 +1588,6 @@ To be released.
 [#628]: https://github.com/dahlia/optique/pull/628
 [#655]: https://github.com/dahlia/optique/pull/655
 [#680]: https://github.com/dahlia/optique/pull/680
-[#770]: https://github.com/dahlia/optique/pull/770
 
 ### @optique/env
 

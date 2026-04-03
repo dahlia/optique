@@ -449,7 +449,7 @@ describe("run with config context", { concurrency: false }, () => {
     }
   });
 
-  test("uses defaults when load() returns { config: undefined }", async () => {
+  test("validates { config: undefined } against schema in load mode", async () => {
     const schema = z.object({
       host: z.string(),
       port: z.number(),
@@ -470,15 +470,16 @@ describe("run with config context", { concurrency: false }, () => {
       }),
     });
 
-    const result = await runWith(parser, "test", [context], {
-      contextOptions: {
-        load: () => ({ config: undefined, meta: undefined }),
-      },
-      args: [],
-    });
-
-    assert.equal(result.host, "localhost");
-    assert.equal(result.port, 3000);
+    await assert.rejects(
+      () =>
+        runWith(parser, "test", [context], {
+          contextOptions: {
+            load: () => ({ config: undefined, meta: undefined }),
+          },
+          args: [],
+        }),
+      { message: /Config validation failed/ },
+    );
   });
 
   test("uses defaults when load() returns undefined", async () => {
