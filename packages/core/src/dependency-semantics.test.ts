@@ -489,6 +489,35 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     assert.ok(!texts.includes("warn"), `Unexpected "warn" in ${texts}`);
   });
 
+  test("B.3b tuple() — keeps unrelated nested source defaults after sibling source failure", () => {
+    const env = createEnvSource();
+    const profile = dependency(choice(["light", "dark"] as const));
+    const theme = profile.deriveSync({
+      metavar: "THEME" as NonEmptyString,
+      factory: (value) =>
+        choice(
+          value === "light" ? (["day"] as const) : (["dusk"] as const),
+        ),
+      defaultValue: () => "light" as const,
+    });
+    const parser = tuple([
+      object({
+        env: option("--env", env),
+        profile: withDefault(option("--profile", profile), "dark" as const),
+      }),
+      option("--theme", theme),
+    ]);
+    const suggestions = suggestSync(parser, [
+      "--env",
+      "invalid",
+      "--theme",
+      "d",
+    ]);
+    const texts = literalTexts(suggestions);
+    assert.ok(texts.includes("dusk"), `Expected "dusk" in ${texts}`);
+    assert.ok(!texts.includes("day"), `Unexpected "day" in ${texts}`);
+  });
+
   test("B.4 concat() — suggests with cross-boundary source", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);

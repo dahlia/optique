@@ -3787,14 +3787,19 @@ function* suggestObjectSync<
     for (const [field, parser] of parserPairs) {
       if (isOptionRequiringValue(parser.usage, lastToken)) {
         // Only get suggestions from the parser that owns this option
-        const fieldState =
-          (context.state && typeof context.state === "object" &&
-              field in context.state)
-            ? (context.state as Record<string | symbol, unknown>)[field]
-            : parser.initialState;
+        const annotatedFieldState = getAnnotatedFieldState(
+          context.state,
+          field,
+          parser,
+        );
 
         yield* parser.suggest(
-          withChildContext(contextWithRegistry, field, fieldState),
+          withChildContext(
+            contextWithRegistry,
+            field,
+            annotatedFieldState,
+            parser,
+          ),
           prefix,
         );
         return;
@@ -3805,13 +3810,19 @@ function* suggestObjectSync<
   // Default behavior: try getting suggestions from each parser
   const suggestions: Suggestion[] = [];
   for (const [field, parser] of parserPairs) {
-    const fieldState = (context.state && typeof context.state === "object" &&
-        field in context.state)
-      ? (context.state as Record<string | symbol, unknown>)[field]
-      : parser.initialState;
+    const annotatedFieldState = getAnnotatedFieldState(
+      context.state,
+      field,
+      parser,
+    );
 
     const fieldSuggestions = parser.suggest(
-      withChildContext(contextWithRegistry, field, fieldState),
+      withChildContext(
+        contextWithRegistry,
+        field,
+        annotatedFieldState,
+        parser,
+      ),
       prefix,
     );
 
@@ -3892,14 +3903,19 @@ async function* suggestObjectAsync<
     for (const [field, parser] of parserPairs) {
       if (isOptionRequiringValue(parser.usage, lastToken)) {
         // Only get suggestions from the parser that owns this option
-        const fieldState =
-          (context.state && typeof context.state === "object" &&
-              field in context.state)
-            ? (context.state as Record<string | symbol, unknown>)[field]
-            : parser.initialState;
+        const annotatedFieldState = getAnnotatedFieldState(
+          context.state,
+          field,
+          parser,
+        );
 
         const suggestions = parser.suggest(
-          withChildContext(contextWithRegistry, field, fieldState),
+          withChildContext(
+            contextWithRegistry,
+            field,
+            annotatedFieldState,
+            parser,
+          ),
           prefix,
         ) as AsyncIterable<Suggestion>;
         for await (const s of suggestions) {
@@ -3913,13 +3929,19 @@ async function* suggestObjectAsync<
   // Default behavior: try getting suggestions from each parser
   const suggestions: Suggestion[] = [];
   for (const [field, parser] of parserPairs) {
-    const fieldState = (context.state && typeof context.state === "object" &&
-        field in context.state)
-      ? (context.state as Record<string | symbol, unknown>)[field]
-      : parser.initialState;
+    const annotatedFieldState = getAnnotatedFieldState(
+      context.state,
+      field,
+      parser,
+    );
 
     const fieldSuggestions = parser.suggest(
-      withChildContext(contextWithRegistry, field, fieldState),
+      withChildContext(
+        contextWithRegistry,
+        field,
+        annotatedFieldState,
+        parser,
+      ),
       prefix,
     );
 
@@ -5024,6 +5046,15 @@ export function object<
         () => parseAsync(context),
       );
     },
+    getSuggestRuntimeNodes(
+      state: { readonly [K in keyof T]: unknown },
+      path: readonly PropertyKey[],
+    ) {
+      const stateRecord = state != null && typeof state === "object"
+        ? state as Record<PropertyKey, unknown>
+        : objectParser.initialState as Record<PropertyKey, unknown>;
+      return buildSuggestRuntimeNodesFromPairs(parserPairs, stateRecord, path);
+    },
     complete(
       state: { readonly [K in keyof T]: unknown },
       exec?: ExecutionContext,
@@ -5551,7 +5582,7 @@ async function* suggestTupleAsync(
       advancedContext.exec,
     );
   }
-  markFailedTupleSuggestSources(
+  await markFailedTupleSuggestSourcesAsync(
     parsers,
     stateArray,
     advanced.failedParserIndexes,
@@ -5861,7 +5892,6 @@ function markFailedTupleSuggestSources(
 ): void {
   if (failedParserIndexes.length < 1) return;
   const prefix = parentPath ?? [];
-  const failedSourceIds = new Set<symbol>();
 
   for (const index of failedParserIndexes) {
     const parser = parsers[index];
@@ -5875,14 +5905,51 @@ function markFailedTupleSuggestSources(
       getAnnotatedChildState(stateArray, parserState, parser),
       [...prefix, index],
     );
+    if (nodes.length < 1) continue;
+
+    const failedRuntime = createDependencyRuntimeContext();
+    collectExplicitSourceValues(nodes, failedRuntime);
     for (const node of nodes) {
       const sourceId = node.parser.dependencyMetadata?.source?.sourceId;
-      if (sourceId != null) failedSourceIds.add(sourceId);
+      if (sourceId != null && failedRuntime.isSourceFailed(sourceId)) {
+        runtime.markSourceFailed(sourceId);
+      }
     }
   }
+}
 
-  for (const sourceId of failedSourceIds) {
-    runtime.markSourceFailed(sourceId);
+async function markFailedTupleSuggestSourcesAsync(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+  stateArray: readonly unknown[] | undefined,
+  failedParserIndexes: readonly number[],
+  runtime: ReturnType<typeof createDependencyRuntimeContext>,
+  parentPath?: readonly PropertyKey[],
+): Promise<void> {
+  if (failedParserIndexes.length < 1) return;
+  const prefix = parentPath ?? [];
+
+  for (const index of failedParserIndexes) {
+    const parser = parsers[index];
+    if (parser == null) continue;
+
+    const parserState = stateArray && Array.isArray(stateArray)
+      ? stateArray[index]
+      : parser.initialState;
+    const nodes = getParserSuggestRuntimeNodes(
+      parser,
+      getAnnotatedChildState(stateArray, parserState, parser),
+      [...prefix, index],
+    );
+    if (nodes.length < 1) continue;
+
+    const failedRuntime = createDependencyRuntimeContext();
+    await collectExplicitSourceValuesAsync(nodes, failedRuntime);
+    for (const node of nodes) {
+      const sourceId = node.parser.dependencyMetadata?.source?.sourceId;
+      if (sourceId != null && failedRuntime.isSourceFailed(sourceId)) {
+        runtime.markSourceFailed(sourceId);
+      }
+    }
   }
 }
 
