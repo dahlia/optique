@@ -516,9 +516,6 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         rawData: unknown,
         configMeta: TConfigMeta | undefined,
       ): Promise<Annotations> | Annotations => {
-        if (rawData == null) {
-          return {};
-        }
         const validated = validateWithSchema(rawSchema, rawData);
         if (validated instanceof Promise) {
           return validated.then((configData) =>
@@ -537,7 +534,9 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
           return Promise.resolve(loaded as Promise<unknown>).then(
             (resolved) => {
               const validated = validateLoadResult<TConfigMeta>(resolved);
-              if (validated === undefined) return {};
+              if (validated === undefined || validated.config == null) {
+                return {};
+              }
               return validateAndBuildAnnotations(
                 validated.config,
                 validated.meta,
@@ -554,7 +553,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
           );
         }
         const validated = validateLoadResult<TConfigMeta>(loaded);
-        if (validated === undefined) return {};
+        if (validated === undefined || validated.config == null) return {};
         return validateAndBuildAnnotations(validated.config, validated.meta);
       }
 

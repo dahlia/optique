@@ -1835,6 +1835,35 @@ describe("createConfigContext error paths", () => {
     }
   });
 
+  test("getConfigPath mode rejects null from fileParser", async () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({
+      schema,
+      fileParser: () => null,
+    });
+
+    const tmpDir = (await import("node:os")).tmpdir();
+    const tmpFile = `${tmpDir}/optique-test-null-${Date.now()}.json`;
+    const fs = await import("node:fs/promises");
+    await fs.writeFile(tmpFile, "{}");
+
+    try {
+      await assert.rejects(
+        async () =>
+          await context.getAnnotations(
+            { config: tmpFile },
+            { getConfigPath: () => tmpFile },
+          ),
+        (error: Error) => {
+          assert.ok(error.message.includes("Config validation failed"));
+          return true;
+        },
+      );
+    } finally {
+      await fs.unlink(tmpFile).catch(() => {});
+    }
+  });
+
   test("key accessor function that throws propagates the error", () => {
     const schema = z.object({
       nested: z.object({
