@@ -4875,29 +4875,6 @@ describe("prompt() with dependency sources", () => {
             key: "MODE",
             parser: choice(["dev", "prod"] as const),
           });
-          const parser = kind === "tuple"
-            ? tuple([
-              prompt(wrappedParser, {
-                type: "select",
-                message: "Select mode:",
-                choices: ["dev", "prod"],
-                prompter: () => Promise.resolve("dev" as const),
-              }),
-              option("--level", level),
-            ])
-            : concat(
-              tuple([
-                prompt(wrappedParser, {
-                  type: "select",
-                  message: "Select mode:",
-                  choices: ["dev", "prod"],
-                  prompter: () => Promise.resolve("dev" as const),
-                }),
-              ]),
-              tuple([
-                option("--level", level),
-              ]),
-            );
           let promptCalls = 0;
           const guardedParser = kind === "tuple"
             ? tuple([
@@ -4940,7 +4917,7 @@ describe("prompt() with dependency sources", () => {
 
           const suggestionTexts = (
             await suggestAsync(
-              parser,
+              guardedParser,
               ["--level", "s"],
               { annotations },
             )
@@ -4951,6 +4928,7 @@ describe("prompt() with dependency sources", () => {
           assert.ok(suggestionTexts.includes("strict"));
           assert.ok(!suggestionTexts.includes("debug"));
           assert.ok(!suggestionTexts.includes("verbose"));
+          assert.equal(promptCalls, 0);
         },
       );
 
@@ -5119,6 +5097,7 @@ describe("prompt() with dependency sources", () => {
           assert.ok(suggestionTexts.includes("strict"));
           assert.ok(!suggestionTexts.includes("debug"));
           assert.ok(!suggestionTexts.includes("verbose"));
+          assert.equal(promptCalls, 0);
         },
       );
     }

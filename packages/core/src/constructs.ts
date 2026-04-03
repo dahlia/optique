@@ -342,7 +342,11 @@ function unwrapNestedAnnotationViews<T>(
         changed = true;
       }
     }
-    return (changed ? clone : source) as T;
+    if (!changed) {
+      seen.set(source, source);
+      return source as T;
+    }
+    return clone as T;
   }
   const proto = Object.getPrototypeOf(source);
   if (proto !== Object.prototype && proto !== null) {
@@ -6958,6 +6962,7 @@ export function merge(
           currentContext,
           i,
           parserState as Parameters<typeof parser.parse>[0]["state"],
+          parser,
         ),
       );
 
@@ -7041,6 +7046,7 @@ export function merge(
           currentContext,
           i,
           parserState as Parameters<typeof parser.parse>[0]["state"],
+          parser,
         ),
       );
       const result = await resultOrPromise;
@@ -7580,6 +7586,7 @@ export function merge(
               contextWithRegistry,
               i,
               parserState as Parameters<typeof parser.suggest>[0]["state"],
+              parser,
             );
             const excludedSourceFields = perChildExcludedSourceFields[i];
             const contextForChild = excludedSourceFields == null
@@ -7680,6 +7687,7 @@ export function merge(
             contextWithRegistry,
             i,
             parserState as Parameters<typeof parser.suggest>[0]["state"],
+            parser,
           );
           const excludedSourceFields = perChildExcludedSourceFields[i];
           const contextForChild = excludedSourceFields == null
@@ -9537,7 +9545,11 @@ export function conditional(
             ...branchResult.next,
             state: {
               ...state,
-              branchState: branchResult.next.state,
+              branchState: getAnnotatedChildState(
+                state,
+                branchResult.next.state,
+                branchParser,
+              ),
             },
             ...(mergedExec != null
               ? {
@@ -9613,7 +9625,11 @@ export function conditional(
                   discriminatorState: discriminatorResult.next.state,
                   discriminatorValue: value,
                   selectedBranch: { kind: "branch", key: value },
-                  branchState: branchParseResult.next.state,
+                  branchState: getAnnotatedChildState(
+                    state,
+                    branchParseResult.next.state,
+                    branchParser,
+                  ),
                 },
                 ...(mergedExec != null
                   ? {
@@ -9638,7 +9654,11 @@ export function conditional(
                 discriminatorState: discriminatorResult.next.state,
                 discriminatorValue: value,
                 selectedBranch: { kind: "branch", key: value },
-                branchState: branchParser.initialState,
+                branchState: getAnnotatedChildState(
+                  state,
+                  branchParser.initialState,
+                  branchParser,
+                ),
               },
               ...(discriminatorExec != null
                 ? {
@@ -9677,7 +9697,11 @@ export function conditional(
             state: {
               ...state,
               selectedBranch: { kind: "default" },
-              branchState: defaultResult.next.state,
+              branchState: getAnnotatedChildState(
+                state,
+                defaultResult.next.state,
+                syncDefaultBranch,
+              ),
             },
             ...(mergedExec != null
               ? {
@@ -9729,7 +9753,11 @@ export function conditional(
             ...branchResult.next,
             state: {
               ...state,
-              branchState: branchResult.next.state,
+              branchState: getAnnotatedChildState(
+                state,
+                branchResult.next.state,
+                branchParser,
+              ),
             },
             ...(mergedExec != null
               ? {
@@ -9805,7 +9833,11 @@ export function conditional(
                   discriminatorState: discriminatorResult.next.state,
                   discriminatorValue: value,
                   selectedBranch: { kind: "branch", key: value },
-                  branchState: branchParseResult.next.state,
+                  branchState: getAnnotatedChildState(
+                    state,
+                    branchParseResult.next.state,
+                    branchParser,
+                  ),
                 },
                 ...(mergedExec != null
                   ? {
@@ -9830,7 +9862,11 @@ export function conditional(
                 discriminatorState: discriminatorResult.next.state,
                 discriminatorValue: value,
                 selectedBranch: { kind: "branch", key: value },
-                branchState: branchParser.initialState,
+                branchState: getAnnotatedChildState(
+                  state,
+                  branchParser.initialState,
+                  branchParser,
+                ),
               },
               ...(discriminatorExec != null
                 ? {
@@ -9869,7 +9905,11 @@ export function conditional(
             state: {
               ...state,
               selectedBranch: { kind: "default" },
-              branchState: defaultResult.next.state,
+              branchState: getAnnotatedChildState(
+                state,
+                defaultResult.next.state,
+                defaultBranch,
+              ),
             },
             ...(mergedExec != null
               ? {
@@ -9913,7 +9953,11 @@ export function conditional(
     if (state.selectedBranch === undefined) {
       // If we have default branch, use it
       if (syncDefaultBranch !== undefined) {
-        const branchState = state.branchState ?? syncDefaultBranch.initialState;
+        const branchState = getAnnotatedChildState(
+          state,
+          state.branchState ?? syncDefaultBranch.initialState,
+          syncDefaultBranch,
+        );
         const defaultResult = unwrapCompleteResult(
           syncDefaultBranch.complete(
             branchState,
@@ -9958,7 +10002,11 @@ export function conditional(
       : syncBranches[state.selectedBranch.key];
     const combinedState = {
       _discriminator: state.discriminatorState,
-      _branch: state.branchState,
+      _branch: getAnnotatedChildState(
+        state,
+        state.branchState,
+        branchParser,
+      ),
     };
     const runtime = createDependencyRuntimeContext(
       exec?.dependencyRegistry?.clone(),
@@ -9975,9 +10023,10 @@ export function conditional(
       runtime,
     );
     collectSourcesFromState(combinedState, runtime);
-    const resolvedBranchState = resolveStateWithRuntime(
-      state.branchState,
-      runtime,
+    const resolvedBranchState = getAnnotatedChildState(
+      state,
+      resolveStateWithRuntime(state.branchState, runtime),
+      branchParser,
     );
     const completionExec: ExecutionContext = {
       ...(exec ?? {
@@ -10066,7 +10115,11 @@ export function conditional(
     if (state.selectedBranch === undefined) {
       // If we have default branch, use it
       if (defaultBranch !== undefined) {
-        const branchState = state.branchState ?? defaultBranch.initialState;
+        const branchState = getAnnotatedChildState(
+          state,
+          state.branchState ?? defaultBranch.initialState,
+          defaultBranch,
+        );
         const defaultResult = unwrapCompleteResult(
           await defaultBranch.complete(
             branchState,
@@ -10111,7 +10164,11 @@ export function conditional(
       : branches[state.selectedBranch.key];
     const combinedState = {
       _discriminator: state.discriminatorState,
-      _branch: state.branchState,
+      _branch: getAnnotatedChildState(
+        state,
+        state.branchState,
+        branchParser,
+      ),
     };
     const runtime = createDependencyRuntimeContext(
       exec?.dependencyRegistry?.clone(),
@@ -10128,9 +10185,10 @@ export function conditional(
       runtime,
     );
     collectSourcesFromState(combinedState, runtime);
-    const resolvedBranchState = await resolveStateWithRuntimeAsync(
-      state.branchState,
-      runtime,
+    const resolvedBranchState = getAnnotatedChildState(
+      state,
+      await resolveStateWithRuntimeAsync(state.branchState, runtime),
+      branchParser,
     );
     const completionExec: ExecutionContext = {
       ...(exec ?? {
@@ -10228,6 +10286,16 @@ export function conditional(
       const runtime = createDependencyRuntimeContext(
         context.dependencyRegistry?.clone(),
       );
+      const defaultCombinedState = {
+        _discriminator: state.discriminatorState,
+        _branch: syncDefaultBranch == null
+          ? state.branchState
+          : getAnnotatedChildState(
+            state,
+            state.branchState,
+            syncDefaultBranch,
+          ),
+      };
       collectExplicitSourceValues(
         buildRuntimeNodesFromPairs(
           syncDefaultBranch == null
@@ -10236,21 +10304,12 @@ export function conditional(
               ["\u005fdiscriminator", discriminator],
               ["\u005fbranch", syncDefaultBranch],
             ] as const,
-          {
-            _discriminator: state.discriminatorState,
-            _branch: state.branchState,
-          },
+          defaultCombinedState,
           context.exec?.path,
         ),
         runtime,
       );
-      collectSourcesFromState(
-        {
-          _discriminator: state.discriminatorState,
-          _branch: state.branchState,
-        },
-        runtime,
-      );
+      collectSourcesFromState(defaultCombinedState, runtime);
       const suggestContext = {
         ...context,
         dependencyRegistry: runtime.registry,
@@ -10281,6 +10340,7 @@ export function conditional(
             suggestContext,
             "_branch",
             state.branchState ?? syncDefaultBranch.initialState,
+            syncDefaultBranch,
           ),
           prefix,
         );
@@ -10295,7 +10355,11 @@ export function conditional(
       );
       const combinedState = {
         _discriminator: state.discriminatorState,
-        _branch: state.branchState,
+        _branch: getAnnotatedChildState(
+          state,
+          state.branchState,
+          branchParser,
+        ),
       };
       collectExplicitSourceValues(
         buildRuntimeNodesFromPairs(
@@ -10328,6 +10392,7 @@ export function conditional(
           suggestContext,
           "_branch",
           state.branchState,
+          branchParser,
         ),
         prefix,
       );
@@ -10346,6 +10411,16 @@ export function conditional(
       const runtime = createDependencyRuntimeContext(
         context.dependencyRegistry?.clone(),
       );
+      const defaultCombinedState = {
+        _discriminator: state.discriminatorState,
+        _branch: defaultBranch == null
+          ? state.branchState
+          : getAnnotatedChildState(
+            state,
+            state.branchState,
+            defaultBranch,
+          ),
+      };
       await collectExplicitSourceValuesAsync(
         buildRuntimeNodesFromPairs(
           defaultBranch == null
@@ -10354,21 +10429,12 @@ export function conditional(
               ["\u005fdiscriminator", discriminator],
               ["\u005fbranch", defaultBranch],
             ] as const,
-          {
-            _discriminator: state.discriminatorState,
-            _branch: state.branchState,
-          },
+          defaultCombinedState,
           context.exec?.path,
         ),
         runtime,
       );
-      collectSourcesFromState(
-        {
-          _discriminator: state.discriminatorState,
-          _branch: state.branchState,
-        },
-        runtime,
-      );
+      collectSourcesFromState(defaultCombinedState, runtime);
       const suggestContext = {
         ...context,
         dependencyRegistry: runtime.registry,
@@ -10399,6 +10465,7 @@ export function conditional(
             suggestContext,
             "_branch",
             state.branchState ?? defaultBranch.initialState,
+            defaultBranch,
           ),
           prefix,
         );
@@ -10413,7 +10480,11 @@ export function conditional(
       );
       const combinedState = {
         _discriminator: state.discriminatorState,
-        _branch: state.branchState,
+        _branch: getAnnotatedChildState(
+          state,
+          state.branchState,
+          branchParser,
+        ),
       };
       await collectExplicitSourceValuesAsync(
         buildRuntimeNodesFromPairs(
@@ -10446,6 +10517,7 @@ export function conditional(
           suggestContext,
           "_branch",
           state.branchState,
+          branchParser,
         ),
         prefix,
       );
