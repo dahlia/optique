@@ -164,7 +164,10 @@ export interface ConfigContextOptions<T> {
  */
 export interface ConfigLoadResult<TConfigMeta = ConfigMeta> {
   /**
-   * Raw config data to validate against the schema.
+   * Raw config data to validate against the schema.  Set to `undefined` or
+   * `null` to indicate that no config data was found; `bindConfig()` will
+   * fall back to its defaults, mirroring the behavior of `getConfigPath`
+   * mode when the path is `undefined` or the file is missing.
    */
   readonly config: unknown;
 
@@ -204,19 +207,24 @@ export interface ConfigContextRequiredOptions<TConfigMeta = ConfigMeta> {
    * returns the config data (or a Promise of it).  This allows full control
    * over file discovery, loading, merging, and error handling.
    *
-   * The returned data will be validated against the schema.
+   * The returned data will be validated against the schema.  Return
+   * `undefined` or `null` (or a `ConfigLoadResult` with
+   * `config: undefined` / `config: null`) to signal that no config data
+   * was found; `bindConfig()` will fall back to its defaults.
    *
    * When `load` is provided, `getConfigPath` is ignored.
    *
    * @param parsed The result from the first parse pass.
-   * @returns Config data and metadata (config is validated by schema).
+   * @returns Config data and metadata, or `undefined`/`null` for no config.
    * @since 1.0.0
    */
   readonly load?: (
     parsed: ParserValuePlaceholder,
   ) =>
-    | Promise<ConfigLoadResult<TConfigMeta>>
-    | ConfigLoadResult<TConfigMeta>;
+    | Promise<ConfigLoadResult<TConfigMeta> | undefined | null>
+    | ConfigLoadResult<TConfigMeta>
+    | undefined
+    | null;
 }
 
 /**
@@ -274,8 +282,11 @@ function isPromise(value: unknown): boolean {
 
 function validateLoadResult<TConfigMeta>(
   loaded: unknown,
-): { config: unknown; meta: TConfigMeta | undefined } {
-  if (loaded == null || typeof loaded !== "object" || Array.isArray(loaded)) {
+): { config: unknown; meta: TConfigMeta | undefined } | undefined {
+  if (loaded == null) {
+    return undefined;
+  }
+  if (typeof loaded !== "object" || Array.isArray(loaded)) {
     throw new TypeError(
       `Expected load() to return an object, but got: ${getTypeName(loaded)}.`,
     );
@@ -505,6 +516,9 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         rawData: unknown,
         configMeta: TConfigMeta | undefined,
       ): Promise<Annotations> | Annotations => {
+        if (rawData == null) {
+          return {};
+        }
         const validated = validateWithSchema(rawSchema, rawData);
         if (validated instanceof Promise) {
           return validated.then((configData) =>
@@ -523,6 +537,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
           return Promise.resolve(loaded as Promise<unknown>).then(
             (resolved) => {
               const validated = validateLoadResult<TConfigMeta>(resolved);
+              if (validated === undefined) return {};
               return validateAndBuildAnnotations(
                 validated.config,
                 validated.meta,
@@ -539,6 +554,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
           );
         }
         const validated = validateLoadResult<TConfigMeta>(loaded);
+        if (validated === undefined) return {};
         return validateAndBuildAnnotations(validated.config, validated.meta);
       }
 

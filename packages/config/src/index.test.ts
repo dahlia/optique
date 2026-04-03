@@ -1262,19 +1262,76 @@ describe("load() return value validation", () => {
     );
   });
 
-  test("rejects null return value from load()", () => {
+  test("returns empty annotations when load() returns null", () => {
     const context = createNameContext();
-    assert.throws(
-      () =>
-        context.getAnnotations(
-          {},
-          { load: (() => null) as never },
-        ),
-      {
-        name: "TypeError",
-        message: "Expected load() to return an object, but got: null.",
-      },
+    const annotations = context.getAnnotations(
+      {},
+      { load: (() => null) as never },
     );
+    assert.deepStrictEqual(annotations, {});
+  });
+
+  test("returns empty annotations when load() returns undefined", () => {
+    const context = createNameContext();
+    const annotations = context.getAnnotations(
+      {},
+      { load: (() => undefined) as never },
+    );
+    assert.deepStrictEqual(annotations, {});
+  });
+
+  test("returns empty annotations when load() returns { config: undefined }", () => {
+    const context = createNameContext();
+    const annotations = context.getAnnotations(
+      {},
+      { load: () => ({ config: undefined, meta: undefined }) },
+    );
+    assert.deepStrictEqual(annotations, {});
+  });
+
+  test("returns empty annotations when load() returns { config: null }", () => {
+    const context = createNameContext();
+    const annotations = context.getAnnotations(
+      {},
+      { load: () => ({ config: null, meta: undefined }) },
+    );
+    assert.deepStrictEqual(annotations, {});
+  });
+
+  test("returns empty annotations when async load() resolves undefined", async () => {
+    const context = createNameContext();
+    const annotations = await context.getAnnotations(
+      {},
+      { load: (() => Promise.resolve(undefined)) as never },
+    );
+    assert.deepStrictEqual(annotations, {});
+  });
+
+  test("returns empty annotations when async load() resolves null", async () => {
+    const context = createNameContext();
+    const annotations = await context.getAnnotations(
+      {},
+      { load: (() => Promise.resolve(null)) as never },
+    );
+    assert.deepStrictEqual(annotations, {});
+  });
+
+  test("returns empty annotations when async load() resolves { config: undefined }", async () => {
+    const context = createNameContext();
+    const annotations = await context.getAnnotations(
+      {},
+      { load: () => Promise.resolve({ config: undefined, meta: undefined }) },
+    );
+    assert.deepStrictEqual(annotations, {});
+  });
+
+  test("returns empty annotations when async load() resolves { config: null }", async () => {
+    const context = createNameContext();
+    const annotations = await context.getAnnotations(
+      {},
+      { load: () => Promise.resolve({ config: null, meta: undefined }) },
+    );
+    assert.deepStrictEqual(annotations, {});
   });
 
   test("rejects array return value from load()", () => {

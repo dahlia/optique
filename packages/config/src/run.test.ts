@@ -449,6 +449,70 @@ describe("run with config context", { concurrency: false }, () => {
     }
   });
 
+  test("uses defaults when load() returns { config: undefined }", async () => {
+    const schema = z.object({
+      host: z.string(),
+      port: z.number(),
+    });
+
+    const context = createConfigContext({ schema });
+
+    const parser = object({
+      host: bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+        default: "localhost",
+      }),
+      port: bindConfig(option("--port", integer()), {
+        context,
+        key: "port",
+        default: 3000,
+      }),
+    });
+
+    const result = await runWith(parser, "test", [context], {
+      contextOptions: {
+        load: () => ({ config: undefined, meta: undefined }),
+      },
+      args: [],
+    });
+
+    assert.equal(result.host, "localhost");
+    assert.equal(result.port, 3000);
+  });
+
+  test("uses defaults when load() returns undefined", async () => {
+    const schema = z.object({
+      host: z.string(),
+      port: z.number(),
+    });
+
+    const context = createConfigContext({ schema });
+
+    const parser = object({
+      host: bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+        default: "localhost",
+      }),
+      port: bindConfig(option("--port", integer()), {
+        context,
+        key: "port",
+        default: 3000,
+      }),
+    });
+
+    const result = await runWith(parser, "test", [context], {
+      contextOptions: {
+        load: (() => undefined) as never,
+      },
+      args: [],
+    });
+
+    assert.equal(result.host, "localhost");
+    assert.equal(result.port, 3000);
+  });
+
   test("preserves falsy config values from custom loader", async () => {
     const schema = z.number();
     const context = createConfigContext({ schema });
