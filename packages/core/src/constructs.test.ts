@@ -11093,6 +11093,102 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.ok(suggestionTexts.includes("payload"));
   });
 
+  it("or() and longestMatch() preserve annotations for opt-in branches", () => {
+    const marker = Symbol.for("@test/exclusive-child-annotations");
+
+    function createBranchParser(): Parser<
+      "sync",
+      string,
+      { readonly value: string }
+    > {
+      const branchParser: Parser<
+        "sync",
+        string,
+        { readonly value: string }
+      > = {
+        $mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly { readonly value: string }[],
+        priority: 1,
+        usage: [],
+        leadingNames: new Set(["payload"]),
+        acceptingAnyToken: false,
+        initialState: { value: "seed" },
+        parse(context) {
+          return context.buffer[0] === "payload" &&
+              getAnnotations(context.state)?.[marker] === true
+            ? {
+              success: true as const,
+              next: {
+                ...context,
+                buffer: context.buffer.slice(1),
+                state: { value: "parsed" },
+              },
+              consumed: ["payload"],
+            }
+            : { success: false as const, consumed: 0, error: message`missing` };
+        },
+        complete(state) {
+          return getAnnotations(state)?.[marker] === true
+            ? { success: true as const, value: state.value }
+            : { success: false as const, error: message`missing ann` };
+        },
+        suggest(context, prefix) {
+          return getAnnotations(context.state)?.[marker] === true &&
+              "payload".startsWith(prefix)
+            ? [{ kind: "literal" as const, text: "payload" }]
+            : [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      defineInheritedAnnotationParser(branchParser);
+      return branchParser;
+    }
+
+    const parsers = [
+      ["or", or(createBranchParser(), flag("--other"))],
+      ["longestMatch", longestMatch(createBranchParser(), flag("--other"))],
+    ] as const;
+
+    for (const [name, exclusiveParser] of parsers) {
+      const parser = object({ child: exclusiveParser });
+      const parsed = parser.parse({
+        buffer: ["payload"],
+        state: injectAnnotations(
+          parser.initialState,
+          { [marker]: true } satisfies Annotations,
+        ),
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+
+      assert.ok(
+        parsed.success,
+        `${name} should parse with inherited annotations.`,
+      );
+      if (!parsed.success) continue;
+
+      const completed = parser.complete(parsed.next.state);
+      assert.deepEqual(completed, {
+        success: true,
+        value: { child: "parsed" },
+      });
+
+      const suggestionTexts = suggestSync(parser, ["p"], {
+        annotations: { [marker]: true } satisfies Annotations,
+      })
+        .filter((suggestion) => suggestion.kind === "literal")
+        .map((suggestion) => suggestion.text);
+
+      assert.ok(
+        suggestionTexts.includes("payload"),
+        `${name} should surface branch suggestions.`,
+      );
+    }
+  });
+
   it("tuple() and concat() preserve parse state identity for custom children", () => {
     const marker = Symbol.for("@test/shared-buffer-custom-state-identity");
     const parsers = ["tuple", "concat"] as const;

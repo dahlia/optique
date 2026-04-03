@@ -1027,6 +1027,56 @@ interface ExclusiveErrorOptions {
   suggestions?: (suggestions: readonly string[]) => Message;
 }
 
+function normalizeExclusiveState(state: unknown): ExclusiveState {
+  if (
+    !Array.isArray(state) ||
+    state.length !== 2 ||
+    typeof state[0] !== "number"
+  ) {
+    return undefined;
+  }
+  return state as ExclusiveState;
+}
+
+function annotateExclusiveParserResult(
+  parentState: unknown,
+  parser: Parser<Mode, unknown, unknown>,
+  result: ParserResult<unknown>,
+): ParserResult<unknown> {
+  if (!result.success) {
+    return result;
+  }
+  const annotatedState = getAnnotatedChildState(
+    parentState,
+    result.next.state,
+    parser,
+  );
+  if (annotatedState === result.next.state) {
+    return result;
+  }
+  return {
+    ...result,
+    next: { ...result.next, state: annotatedState },
+  };
+}
+
+function createExclusiveState(
+  parentState: unknown,
+  index: number,
+  parser: Parser<Mode, unknown, unknown>,
+  result: ParserResult<unknown>,
+): ExclusiveState {
+  const annotatedResult = annotateExclusiveParserResult(
+    parentState,
+    parser,
+    result,
+  );
+  return annotateFreshArray(
+    parentState,
+    [index, annotatedResult],
+  ) as ExclusiveState;
+}
+
 /**
  * Creates a complete() method shared by or() and longestMatch().
  * @internal
@@ -1043,13 +1093,14 @@ function createExclusiveComplete(
   // Cast to sync parsers for sync operations
   const syncParsers = parsers as Parser<"sync", unknown, unknown>[];
   return (state, exec?) => {
-    if (state == null) {
+    const activeState = normalizeExclusiveState(state);
+    if (activeState == null) {
       return {
         success: false,
         error: getNoMatchError(options, noMatchContext),
       };
     }
-    const [i, result] = state;
+    const [i, result] = activeState;
     if (!result.success) {
       return { success: false, error: result.error };
     }
@@ -1091,23 +1142,30 @@ function createExclusiveSuggest(
       mode,
       function* () {
         const suggestions: Suggestion[] = [];
+        const activeState = normalizeExclusiveState(context.state);
 
-        if (context.state == null) {
+        if (activeState == null) {
           // No parser has been selected yet, get suggestions from all parsers
           for (let i = 0; i < syncParsers.length; i++) {
             const parser = syncParsers[i];
             const parserSuggestions = parser.suggest(
-              withChildContext(context, i, parser.initialState),
+              withChildContext(context, i, parser.initialState, parser),
               prefix,
             );
             suggestions.push(...parserSuggestions);
           }
         } else {
           // A parser has been selected, delegate to that parser
-          const [index, parserResult] = context.state;
+          const [index, parserResult] = activeState;
           if (parserResult.success) {
-            const parserSuggestions = syncParsers[index].suggest(
-              withChildContext(context, index, parserResult.next.state),
+            const parser = syncParsers[index];
+            const parserSuggestions = parser.suggest(
+              withChildContext(
+                context,
+                index,
+                parserResult.next.state,
+                parser,
+              ),
               prefix,
             );
             suggestions.push(...parserSuggestions);
@@ -1118,13 +1176,14 @@ function createExclusiveSuggest(
       },
       async function* () {
         const suggestions: Suggestion[] = [];
+        const activeState = normalizeExclusiveState(context.state);
 
-        if (context.state == null) {
+        if (activeState == null) {
           // No parser has been selected yet, get suggestions from all parsers
           for (let i = 0; i < parsers.length; i++) {
             const parser = parsers[i];
             const parserSuggestions = parser.suggest(
-              withChildContext(context, i, parser.initialState),
+              withChildContext(context, i, parser.initialState, parser),
               prefix,
             );
             if (parser.$mode === "async") {
@@ -1139,11 +1198,16 @@ function createExclusiveSuggest(
           }
         } else {
           // A parser has been selected, delegate to that parser
-          const [index, parserResult] = context.state;
+          const [index, parserResult] = activeState;
           if (parserResult.success) {
             const parser = parsers[index];
             const parserSuggestions = parser.suggest(
-              withChildContext(context, index, parserResult.next.state),
+              withChildContext(
+                context,
+                index,
+                parserResult.next.state,
+                parser,
+              ),
               prefix,
             );
             if (parser.$mode === "async") {
@@ -1169,14 +1233,11 @@ function getExclusiveSuggestRuntimeNodes(
   state: ExclusiveState,
   path: readonly PropertyKey[],
 ): readonly RuntimeNode[] {
-  if (
-    !Array.isArray(state) ||
-    state.length !== 2 ||
-    typeof state[0] !== "number"
-  ) {
+  const activeState = normalizeExclusiveState(state);
+  if (activeState == null) {
     return [];
   }
-  const [index, parserResult] = state;
+  const [index, parserResult] = activeState;
   if (
     !parserResult?.success ||
     index < 0 ||
@@ -2780,30 +2841,32 @@ export function or(
     context: ParserContext<OrState>,
   ): ParseResult => {
     let error = getInitialError(context);
+    const activeState = normalizeExclusiveState(context.state);
     const orderedParsers = syncParsers.map((p, i) =>
       [p, i] as [Parser<"sync", unknown, unknown>, number]
     );
     orderedParsers.sort(([_, a], [__, b]) =>
-      context.state?.[0] === a ? -1 : context.state?.[0] === b ? 1 : a - b
+      activeState?.[0] === a ? -1 : activeState?.[0] === b ? 1 : a - b
     );
     for (const [parser, i] of orderedParsers) {
       const result = parser.parse(
         withChildContext(
           context,
           i,
-          context.state == null || context.state[0] !== i ||
-            !context.state[1].success
+          activeState == null || activeState[0] !== i ||
+            !activeState[1].success
             ? parser.initialState
-            : context.state[1].next.state,
+            : activeState[1].next.state,
+          parser,
         ),
       );
       if (result.success && result.consumed.length > 0) {
-        if (context.state?.[0] !== i && context.state?.[1].success) {
+        if (activeState?.[0] !== i && activeState?.[1].success) {
           // Different branch succeeded. Check if the new branch can also
           // consume the previously consumed input (shared options case).
-          const previouslyConsumed = context.state[1].consumed;
+          const previouslyConsumed = activeState[1].consumed;
           const checkResult = parser.parse({
-            ...withChildContext(context, i, parser.initialState),
+            ...withChildContext(context, i, parser.initialState, parser),
             buffer: previouslyConsumed,
           });
           // If the new branch can consume exactly the same input,
@@ -2817,7 +2880,7 @@ export function or(
             return {
               success: false,
               consumed: context.buffer.length - result.next.buffer.length,
-              error: message`${values(context.state[1].consumed)} and ${
+              error: message`${values(activeState[1].consumed)} and ${
                 values(result.consumed)
               } cannot be used together.`,
             };
@@ -2828,8 +2891,8 @@ export function or(
             context.exec,
             checkResult.next.exec,
           );
-          const replayedResult = parser.parse({
-            ...withChildContext(
+          const replayedResult = parser.parse(
+            withChildContext(
               {
                 ...context,
                 ...(replayExec != null
@@ -2841,9 +2904,9 @@ export function or(
               },
               i,
               checkResult.next.state,
+              parser,
             ),
-            state: checkResult.next.state,
-          });
+          );
           if (!replayedResult.success) {
             return replayedResult;
           }
@@ -2857,10 +2920,18 @@ export function or(
               ...context,
               buffer: replayedResult.next.buffer,
               optionsTerminated: replayedResult.next.optionsTerminated,
-              state: [i, {
-                ...replayedResult,
-                consumed: [...previouslyConsumed, ...replayedResult.consumed],
-              }],
+              state: createExclusiveState(
+                context.state,
+                i,
+                parser,
+                {
+                  ...replayedResult,
+                  consumed: [
+                    ...previouslyConsumed,
+                    ...replayedResult.consumed,
+                  ],
+                },
+              ),
               ...(mergedExec != null
                 ? {
                   exec: mergedExec,
@@ -2878,7 +2949,7 @@ export function or(
             ...context,
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
-            state: [i, result],
+            state: createExclusiveState(context.state, i, parser, result),
             ...(mergedExec != null
               ? {
                 exec: mergedExec,
@@ -2900,31 +2971,33 @@ export function or(
     context: ParserContext<OrState>,
   ): Promise<ParseResult> => {
     let error = getInitialError(context);
+    const activeState = normalizeExclusiveState(context.state);
     const orderedParsers = parsers.map((p, i) =>
       [p, i] as [Parser<Mode, unknown, unknown>, number]
     );
     orderedParsers.sort(([_, a], [__, b]) =>
-      context.state?.[0] === a ? -1 : context.state?.[0] === b ? 1 : a - b
+      activeState?.[0] === a ? -1 : activeState?.[0] === b ? 1 : a - b
     );
     for (const [parser, i] of orderedParsers) {
       const resultOrPromise = parser.parse(
         withChildContext(
           context,
           i,
-          context.state == null || context.state[0] !== i ||
-            !context.state[1].success
+          activeState == null || activeState[0] !== i ||
+            !activeState[1].success
             ? parser.initialState
-            : context.state[1].next.state,
+            : activeState[1].next.state,
+          parser,
         ),
       );
       const result = await resultOrPromise;
       if (result.success && result.consumed.length > 0) {
-        if (context.state?.[0] !== i && context.state?.[1].success) {
+        if (activeState?.[0] !== i && activeState?.[1].success) {
           // Different branch succeeded. Check if the new branch can also
           // consume the previously consumed input (shared options case).
-          const previouslyConsumed = context.state[1].consumed;
+          const previouslyConsumed = activeState[1].consumed;
           const checkResultOrPromise = parser.parse({
-            ...withChildContext(context, i, parser.initialState),
+            ...withChildContext(context, i, parser.initialState, parser),
             buffer: previouslyConsumed,
           });
           const checkResult = await checkResultOrPromise;
@@ -2939,7 +3012,7 @@ export function or(
             return {
               success: false,
               consumed: context.buffer.length - result.next.buffer.length,
-              error: message`${values(context.state[1].consumed)} and ${
+              error: message`${values(activeState[1].consumed)} and ${
                 values(result.consumed)
               } cannot be used together.`,
             };
@@ -2950,8 +3023,8 @@ export function or(
             context.exec,
             checkResult.next.exec,
           );
-          const replayedResultOrPromise = parser.parse({
-            ...withChildContext(
+          const replayedResultOrPromise = parser.parse(
+            withChildContext(
               {
                 ...context,
                 ...(replayExec != null
@@ -2963,8 +3036,9 @@ export function or(
               },
               i,
               checkResult.next.state,
+              parser,
             ),
-          });
+          );
           const replayedResult = await replayedResultOrPromise;
           if (!replayedResult.success) {
             return replayedResult;
@@ -2979,10 +3053,18 @@ export function or(
               ...context,
               buffer: replayedResult.next.buffer,
               optionsTerminated: replayedResult.next.optionsTerminated,
-              state: [i, {
-                ...replayedResult,
-                consumed: [...previouslyConsumed, ...replayedResult.consumed],
-              }],
+              state: createExclusiveState(
+                context.state,
+                i,
+                parser,
+                {
+                  ...replayedResult,
+                  consumed: [
+                    ...previouslyConsumed,
+                    ...replayedResult.consumed,
+                  ],
+                },
+              ),
               ...(mergedExec != null
                 ? {
                   exec: mergedExec,
@@ -3000,7 +3082,7 @@ export function or(
             ...context,
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
-            state: [i, result],
+            state: createExclusiveState(context.state, i, parser, result),
             ...(mergedExec != null
               ? {
                 exec: mergedExec,
@@ -3096,6 +3178,7 @@ export function or(
     (singleResult as Record<string, unknown>).dependencyMetadata =
       singleDependencyMetadata;
   }
+  defineInheritedAnnotationParser(singleResult);
 
   // or() does NOT forward normalizeValue because the active branch is
   // unknown at default time — normalizing through the wrong branch would
@@ -3428,10 +3511,12 @@ export function longestMatch(
   ): ParseResult => {
     let bestMatch: {
       index: number;
+      parser: Parser<"sync", unknown, unknown>;
       result: ParserResult<unknown>;
       consumed: number;
     } | null = null;
     let error = getInitialError(context);
+    const activeState = normalizeExclusiveState(context.state);
 
     // Try all parsers and find the one with longest match
     for (let i = 0; i < syncParsers.length; i++) {
@@ -3440,17 +3525,18 @@ export function longestMatch(
         withChildContext(
           context,
           i,
-          context.state == null || context.state[0] !== i ||
-            !context.state[1].success
+          activeState == null || activeState[0] !== i ||
+            !activeState[1].success
             ? parser.initialState
-            : context.state[1].next.state,
+            : activeState[1].next.state,
+          parser,
         ),
       );
 
       if (result.success) {
         const consumed = context.buffer.length - result.next.buffer.length;
         if (bestMatch === null || consumed > bestMatch.consumed) {
-          bestMatch = { index: i, result, consumed };
+          bestMatch = { index: i, parser, result, consumed };
         }
       } else if (error.consumed < result.consumed) {
         error = result;
@@ -3468,7 +3554,12 @@ export function longestMatch(
           ...context,
           buffer: bestMatch.result.next.buffer,
           optionsTerminated: bestMatch.result.next.optionsTerminated,
-          state: [bestMatch.index, bestMatch.result],
+          state: createExclusiveState(
+            context.state,
+            bestMatch.index,
+            bestMatch.parser,
+            bestMatch.result,
+          ),
           ...(mergedExec != null
             ? {
               exec: mergedExec,
@@ -3489,10 +3580,12 @@ export function longestMatch(
   ): Promise<ParseResult> => {
     let bestMatch: {
       index: number;
+      parser: Parser<Mode, unknown, unknown>;
       result: ParserResult<unknown>;
       consumed: number;
     } | null = null;
     let error = getInitialError(context);
+    const activeState = normalizeExclusiveState(context.state);
 
     // Try all parsers and find the one with longest match
     for (let i = 0; i < parsers.length; i++) {
@@ -3501,10 +3594,11 @@ export function longestMatch(
         withChildContext(
           context,
           i,
-          context.state == null || context.state[0] !== i ||
-            !context.state[1].success
+          activeState == null || activeState[0] !== i ||
+            !activeState[1].success
             ? parser.initialState
-            : context.state[1].next.state,
+            : activeState[1].next.state,
+          parser,
         ),
       );
       const result = await resultOrPromise;
@@ -3512,7 +3606,7 @@ export function longestMatch(
       if (result.success) {
         const consumed = context.buffer.length - result.next.buffer.length;
         if (bestMatch === null || consumed > bestMatch.consumed) {
-          bestMatch = { index: i, result, consumed };
+          bestMatch = { index: i, parser, result, consumed };
         }
       } else if (error.consumed < result.consumed) {
         error = result;
@@ -3530,7 +3624,12 @@ export function longestMatch(
           ...context,
           buffer: bestMatch.result.next.buffer,
           optionsTerminated: bestMatch.result.next.optionsTerminated,
-          state: [bestMatch.index, bestMatch.result],
+          state: createExclusiveState(
+            context.state,
+            bestMatch.index,
+            bestMatch.parser,
+            bestMatch.result,
+          ),
           ...(mergedExec != null
             ? {
               exec: mergedExec,
@@ -3624,6 +3723,7 @@ export function longestMatch(
     (multiResult as Record<string, unknown>).dependencyMetadata =
       multiDependencyMetadata;
   }
+  defineInheritedAnnotationParser(multiResult);
 
   // longestMatch() does NOT forward normalizeValue because the winning
   // branch is unknown at default time — normalizing through the wrong
@@ -4839,6 +4939,7 @@ export function object<
             currentContext,
             field,
             getFieldState(field, parser),
+            parser,
           ),
         );
 
@@ -4938,6 +5039,7 @@ export function object<
             currentContext,
             field,
             getFieldState(field, parser),
+            parser,
           ),
         );
         const result = await resultOrPromise;
