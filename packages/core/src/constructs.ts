@@ -1100,6 +1100,11 @@ function createExclusiveComplete(
       // (e.g., constant(), optional(constant())) without committing
       // exclusive state during parse, keeping all branches visible
       // in suggestions and doc generation.
+      //
+      // Only accept the fallback when exactly one candidate succeeds
+      // (matching the parse-time ambiguity check).  When the unique
+      // candidate's complete() fails, preserve its error instead of
+      // falling back to a generic no-match message.
       return dispatchByMode(
         mode,
         () => {
@@ -1108,16 +1113,27 @@ function createExclusiveComplete(
             optionsTerminated: false,
             usage: [] as never[],
           };
+          let candidate: ValueParserResult<unknown> | null = null;
+          let candidateCount = 0;
           for (let i = 0; i < syncParsers.length; i++) {
             const p = syncParsers[i];
             if (p.leadingNames.size > 0 || p.acceptingAnyToken) continue;
-            const parseResult = p.parse({ ...emptyCtx, state: p.initialState });
-            if (!parseResult.success) continue;
-            const r = p.complete(
+            const parseResult = p.parse({
+              ...emptyCtx,
+              state: p.initialState,
+            });
+            if (!parseResult.success || parseResult.provisional) continue;
+            candidateCount++;
+            if (candidateCount > 1) break;
+            candidate = p.complete(
               parseResult.next.state,
               withChildExecPath(exec, i),
             );
-            if (r.success) return r;
+          }
+          if (candidateCount === 1 && candidate != null) {
+            if (candidate.success) return candidate;
+            // Preserve the unique candidate's completion error.
+            return candidate;
           }
           return {
             success: false as const,
@@ -1130,6 +1146,8 @@ function createExclusiveComplete(
             optionsTerminated: false,
             usage: [] as never[],
           };
+          let candidate: ValueParserResult<unknown> | null = null;
+          let candidateCount = 0;
           for (let i = 0; i < parsers.length; i++) {
             const p = parsers[i];
             if (p.leadingNames.size > 0 || p.acceptingAnyToken) continue;
@@ -1138,11 +1156,15 @@ function createExclusiveComplete(
               state: p.initialState,
             });
             if (!parseResult.success) continue;
-            const r = await p.complete(
+            candidateCount++;
+            if (candidateCount > 1) break;
+            candidate = await p.complete(
               parseResult.next.state,
               withChildExecPath(exec, i),
             );
-            if (r.success) return r;
+          }
+          if (candidateCount === 1 && candidate != null) {
+            return candidate;
           }
           return {
             success: false as const,
@@ -10331,6 +10353,40 @@ export function conditional(
     });
 
     if (discriminatorResult.success) {
+      // For zero-consuming discriminators in async mode, defer
+      // completion to the complete phase to avoid triggering
+      // interactive side effects (e.g., prompt()) during parse.
+      // The sync path completes during parse (safe for sync parsers).
+      if (discriminatorResult.consumed.length === 0) {
+        const annotatedDiscriminatorState = getAnnotatedChildState(
+          state,
+          discriminatorResult.next.state,
+          discriminator,
+        );
+        const mergedExec = mergeChildExec(
+          context.exec,
+          discriminatorResult.next.exec,
+        );
+        return {
+          success: true,
+          provisional: true,
+          next: {
+            ...context,
+            state: {
+              ...state,
+              discriminatorState: annotatedDiscriminatorState,
+            },
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
+          },
+          consumed: [],
+        };
+      }
+
       const annotatedDiscriminatorState = getAnnotatedChildState(
         state,
         discriminatorResult.next.state,
