@@ -3068,24 +3068,6 @@ describe("object", () => {
       assert.equal(result.value.val, "x");
     }
   });
-
-  it("should resolve nested or() field via zero-consumption pass", () => {
-    // or(constant("default"), option("--mode")) has non-empty leadingNames
-    // but now resolves to constant("default") during the zero-consumption
-    // pass, so the field should produce "default" inside object().
-    const result = parseSync(
-      object({
-        mode: or(constant("default"), option("--mode", string())),
-        verbose: option("-v"),
-      }),
-      ["-v"],
-    );
-    assert.ok(result.success);
-    if (result.success) {
-      assert.equal(result.value.mode, "default");
-      assert.equal(result.value.verbose, true);
-    }
-  });
 });
 
 describe("object() error customization", () => {

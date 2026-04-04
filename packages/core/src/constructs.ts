@@ -5138,20 +5138,14 @@ export function object<
       }
     }
 
-    // Zero-consumption pass: let non-consuming parsers update their
-    // state.  Parsers like multiple(constant(...)) and nested
-    // or(constant(...), ...) modify state in parse() even when they
-    // return consumed: [].  The greedy loop above skips these state
-    // changes, so we give each non-consumed field one parse() call here.
-    // Only state changes are captured (result.next.state !== fieldState);
-    // parsers that return the same state (like standalone constant()) are
-    // naturally skipped.
-    //
-    // Skip optional-style wrappers (optional(), withDefault(), prompt()):
-    // their parse() wraps state via parseOptionalStyleSync which changes
-    // how complete() interprets the state (e.g., suppressing defaults or
-    // duplicating prompts).  These wrappers are identified by having a
-    // single "optional" usage term.
+    // Zero-consumption pass: let purely non-interactive parsers update
+    // their state.  Parsers like multiple(constant(...)) modify state in
+    // parse() even when they return consumed: [].  The greedy loop above
+    // skips these state changes, so we give each non-consumed field one
+    // parse() call here.  Only parsers with no leading names qualify:
+    // interactive parsers (or() with options, withDefault, etc.) must
+    // not have their state committed here as it would hide still-valid
+    // branches from suggestions and docs.
     {
       const getFieldState = createFieldStateGetter(
         currentContext.state,
@@ -5161,8 +5155,10 @@ export function object<
         if (consumedFields.has(field as string | symbol)) continue;
         const typedParser = parser as Parser<"sync", unknown, unknown>;
         if (
-          parser.usage.length === 1 &&
-          (parser.usage[0] as { type?: string }).type === "optional"
+          parser.leadingNames.size > 0 ||
+          typedParser.acceptingAnyToken ||
+          (parser.usage.length === 1 &&
+            (parser.usage[0] as { type?: string }).type === "optional")
         ) {
           continue;
         }
@@ -5320,10 +5316,12 @@ export function object<
       for (const [field, parser] of parserPairs) {
         if (consumedFields.has(field as string | symbol)) continue;
         if (
-          // Skip optional-style wrappers (see sync counterpart).
-          // This also catches prompt() which always has "optional" usage.
-          parser.usage.length === 1 &&
-          (parser.usage[0] as { type?: string }).type === "optional"
+          // Skip interactive and optional-style parsers
+          // (see sync counterpart for rationale).
+          parser.leadingNames.size > 0 ||
+          parser.acceptingAnyToken ||
+          (parser.usage.length === 1 &&
+            (parser.usage[0] as { type?: string }).type === "optional")
         ) {
           continue;
         }
@@ -10033,25 +10031,7 @@ export function conditional(
       ),
     });
 
-    if (
-      discriminatorResult.success &&
-      // Do not force completion of zero-consuming discriminators that
-      // actively defer completion (e.g., prompt()).  Forcing complete()
-      // during parse would trigger premature interactive prompts or fall
-      // through to the default branch incorrectly.  Check the hook's
-      // return value, not just its existence: a hook returning false
-      // means the parser is ready to complete now.
-      (discriminatorResult.consumed.length > 0 ||
-        typeof (syncDiscriminator as {
-            shouldDeferCompletion?: (s: unknown, e?: unknown) => boolean;
-          }).shouldDeferCompletion !== "function" ||
-        !(syncDiscriminator as {
-          shouldDeferCompletion: (s: unknown, e?: unknown) => boolean;
-        }).shouldDeferCompletion(
-          discriminatorResult.next.state,
-          context.exec,
-        ))
-    ) {
+    if (discriminatorResult.success) {
       const annotatedDiscriminatorState = getAnnotatedChildState(
         state,
         discriminatorResult.next.state,
@@ -10318,19 +10298,7 @@ export function conditional(
     });
 
     if (
-      discriminatorResult.success &&
-      // Do not force completion of zero-consuming discriminators that
-      // actively defer (see sync counterpart for rationale).
-      (discriminatorResult.consumed.length > 0 ||
-        typeof (discriminator as {
-            shouldDeferCompletion?: (s: unknown, e?: unknown) => boolean;
-          }).shouldDeferCompletion !== "function" ||
-        !(discriminator as {
-          shouldDeferCompletion: (s: unknown, e?: unknown) => boolean;
-        }).shouldDeferCompletion(
-          discriminatorResult.next.state,
-          context.exec,
-        ))
+      discriminatorResult.success && discriminatorResult.consumed.length > 0
     ) {
       const annotatedDiscriminatorState = getAnnotatedChildState(
         state,
@@ -10465,6 +10433,41 @@ export function conditional(
       }
     }
 
+    // Zero-consuming discriminator: store state but defer value
+    // resolution to complete (see sync counterpart for rationale).
+    if (
+      discriminatorResult.success &&
+      discriminatorResult.consumed.length === 0 &&
+      context.buffer.length === 0
+    ) {
+      const annotatedDiscriminatorState = getAnnotatedChildState(
+        state,
+        discriminatorResult.next.state,
+        discriminator,
+      );
+      const mergedExec = mergeChildExec(
+        context.exec,
+        discriminatorResult.next.exec,
+      );
+      return {
+        success: true,
+        next: {
+          ...context,
+          state: {
+            ...state,
+            discriminatorState: annotatedDiscriminatorState,
+          },
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        },
+        consumed: [],
+      };
+    }
+
     // Discriminator didn't match or didn't consume input, try default branch
     // (see sync counterpart for rationale on the consumption/buffer guard).
     const discriminatorConsumed = discriminatorResult.success
@@ -10545,8 +10548,68 @@ export function conditional(
       Parser<"sync", unknown, unknown>
     >;
 
-    // No branch selected yet
+    // No branch selected yet — try completing the discriminator to
+    // resolve a deferred zero-consuming discriminator (e.g., constant(),
+    // prompt(option(...)), bindEnv(option(...))).  Parse deferred
+    // completion to avoid interactive prompts during parse phase.
     if (state.selectedBranch === undefined) {
+      const annotatedDiscriminatorStateForDeferred = getAnnotatedChildState(
+        state,
+        state.discriminatorState,
+        syncDiscriminator,
+      );
+      const deferredDiscriminatorResult = unwrapCompleteResult(
+        syncDiscriminator.complete(
+          annotatedDiscriminatorStateForDeferred,
+          withChildExecPath(exec, "_discriminator"),
+        ),
+      );
+      if (deferredDiscriminatorResult.success) {
+        const deferredValue = deferredDiscriminatorResult.value as string;
+        const deferredBranch = syncBranches[deferredValue];
+        if (deferredBranch) {
+          const branchState = getAnnotatedChildState(
+            state,
+            state.branchState ?? deferredBranch.initialState,
+            deferredBranch,
+          );
+          const branchResult = unwrapCompleteResult(
+            deferredBranch.complete(
+              branchState,
+              withChildExecPath(exec, "_branch"),
+            ),
+          );
+          if (branchResult.success) {
+            return {
+              success: true,
+              value: [deferredValue, branchResult.value] as const,
+              ...(branchResult.deferred
+                ? {
+                  deferred: true as const,
+                  ...(branchResult.deferredKeys
+                    ? {
+                      deferredKeys: new Map([[
+                        1,
+                        branchResult.deferredKeys,
+                      ]]) as DeferredMap,
+                    }
+                    : branchResult.value == null ||
+                        typeof branchResult.value !== "object"
+                    ? {
+                      deferredKeys: new Map([[
+                        1,
+                        null,
+                      ]]) as DeferredMap,
+                    }
+                    : {}),
+                }
+                : {}),
+            };
+          }
+          return branchResult;
+        }
+      }
+
       // If we have default branch, use it
       if (syncDefaultBranch !== undefined) {
         const branchState = getAnnotatedChildState(
@@ -10724,6 +10787,65 @@ export function conditional(
   ): Promise<CompleteResult> => {
     // No branch selected yet
     if (state.selectedBranch === undefined) {
+      // Try completing the deferred discriminator to select a branch
+      // (see sync counterpart for rationale).
+      const annotatedDiscriminatorStateForDeferred = getAnnotatedChildState(
+        state,
+        state.discriminatorState,
+        discriminator,
+      );
+      const deferredDiscriminatorResult = unwrapCompleteResult(
+        await discriminator.complete(
+          annotatedDiscriminatorStateForDeferred,
+          withChildExecPath(exec, "_discriminator"),
+        ),
+      );
+      if (deferredDiscriminatorResult.success) {
+        const deferredValue = deferredDiscriminatorResult.value as string;
+        const deferredBranch = branches[deferredValue];
+        if (deferredBranch) {
+          const branchState = getAnnotatedChildState(
+            state,
+            state.branchState ?? deferredBranch.initialState,
+            deferredBranch,
+          );
+          const branchResult = unwrapCompleteResult(
+            await deferredBranch.complete(
+              branchState,
+              withChildExecPath(exec, "_branch"),
+            ),
+          );
+          if (branchResult.success) {
+            return {
+              success: true,
+              value: [deferredValue, branchResult.value] as const,
+              ...(branchResult.deferred
+                ? {
+                  deferred: true as const,
+                  ...(branchResult.deferredKeys
+                    ? {
+                      deferredKeys: new Map([[
+                        1,
+                        branchResult.deferredKeys,
+                      ]]) as DeferredMap,
+                    }
+                    : branchResult.value == null ||
+                        typeof branchResult.value !== "object"
+                    ? {
+                      deferredKeys: new Map([[
+                        1,
+                        null,
+                      ]]) as DeferredMap,
+                    }
+                    : {}),
+                }
+                : {}),
+            };
+          }
+          return branchResult;
+        }
+      }
+
       // If we have default branch, use it
       if (defaultBranch !== undefined) {
         const branchState = getAnnotatedChildState(
