@@ -66,12 +66,18 @@ import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
 
 export type { ParserValuePlaceholder, SourceContext };
 
+type SuppressedErrorConstructor = new (
+  error: unknown,
+  suppressed: unknown,
+  message?: string,
+) => Error & { readonly error: unknown; readonly suppressed: unknown };
+
 // Polyfill for runtimes that lack SuppressedError (Node < 24):
-const SuppressedErrorCtor: typeof SuppressedError =
+const SuppressedErrorCtor: SuppressedErrorConstructor =
   typeof SuppressedError === "function" ? SuppressedError : (() => {
     class SuppressedErrorPolyfill extends Error {
-      error: unknown;
-      suppressed: unknown;
+      readonly error: unknown;
+      readonly suppressed: unknown;
       constructor(error: unknown, suppressed: unknown, message?: string) {
         super(message);
         this.name = "SuppressedError";
@@ -79,7 +85,7 @@ const SuppressedErrorCtor: typeof SuppressedError =
         this.suppressed = suppressed;
       }
     }
-    return SuppressedErrorPolyfill as unknown as typeof SuppressedError;
+    return SuppressedErrorPolyfill;
   })();
 
 function finalizeParsedForContext(
@@ -3447,6 +3453,9 @@ export function runWithSync<
  * @returns Promise that resolves to the parsed result.
  * @throws {TypeError} If two or more contexts share the same
  * {@link SourceContext.id}.
+ * @throws {SuppressedError} If parsing fails and a context's disposal also
+ * throws.  The original parse error is available via `.suppressed` and the
+ * disposal error via `.error`.
  * @since 0.10.0
  */
 export function runWithAsync<
