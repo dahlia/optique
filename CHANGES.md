@@ -361,7 +361,7 @@ To be released.
  -  Fixed `runWith()` and `runWithSync()` discarding the original parse error
     when a source context's disposal also throws.  The disposal error now
     wraps both failures in a `SuppressedError` (following TC39 conventions)
-    instead of silently replacing the parse error.  [[#246]]
+    instead of silently replacing the parse error.  [[#246], [#771]]
 
  -  Fixed `optional()` and `withDefault()` crashing when the parser's state
     is an annotation-injected object instead of `undefined`.  The state
@@ -1457,6 +1457,7 @@ To be released.
 [#765]: https://github.com/dahlia/optique/pull/765
 [#768]: https://github.com/dahlia/optique/issues/768
 [#769]: https://github.com/dahlia/optique/pull/769
+[#771]: https://github.com/dahlia/optique/pull/771
 
 ### @optique/config
 
