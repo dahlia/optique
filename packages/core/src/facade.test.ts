@@ -6324,17 +6324,19 @@ describe("runWith", () => {
         });
         assert.fail("Expected an error to be thrown");
       } catch (error) {
-        assert.ok(error instanceof SuppressedError);
+        assert.ok(error instanceof Error);
+        assert.equal(error.name, "SuppressedError");
+        const se = error as Error & { suppressed: unknown; error: unknown };
         assert.ok(
-          error.suppressed instanceof Error,
+          se.suppressed instanceof Error,
           "suppressed should be the parse error",
         );
         assert.ok(
-          error.error instanceof Error,
+          se.error instanceof Error,
           "error should be the disposal error",
         );
         assert.equal(
-          (error.error as Error).message,
+          (se.error as Error).message,
           "dispose failed.",
         );
       }
@@ -6377,16 +6379,18 @@ describe("runWith", () => {
         });
         assert.fail("Expected an error to be thrown");
       } catch (error) {
-        assert.ok(error instanceof SuppressedError);
+        assert.ok(error instanceof Error);
+        assert.equal(error.name, "SuppressedError");
+        const se = error as Error & { suppressed: unknown; error: unknown };
         assert.ok(
-          error.suppressed instanceof Error,
+          se.suppressed instanceof Error,
           "suppressed should be the parse error",
         );
         assert.ok(
-          error.error instanceof AggregateError,
+          se.error instanceof AggregateError,
           "error should be AggregateError from multiple disposal failures",
         );
-        assert.equal((error.error as AggregateError).errors.length, 2);
+        assert.equal((se.error as AggregateError).errors.length, 2);
       }
 
       assert.deepEqual(disposed, ["context1", "context2"]);
@@ -6418,7 +6422,7 @@ describe("runWith", () => {
       }
 
       assert.ok(disposed);
-      assert.ok(!(errorCaught instanceof SuppressedError));
+      assert.notEqual((errorCaught as Error).name, "SuppressedError");
       assert.ok(errorCaught instanceof Error);
     });
   });
@@ -7142,17 +7146,19 @@ describe("runWithSync", () => {
         });
         assert.fail("Expected an error to be thrown");
       } catch (error) {
-        assert.ok(error instanceof SuppressedError);
+        assert.ok(error instanceof Error);
+        assert.equal(error.name, "SuppressedError");
+        const se = error as Error & { suppressed: unknown; error: unknown };
         assert.ok(
-          error.suppressed instanceof Error,
+          se.suppressed instanceof Error,
           "suppressed should be the parse error",
         );
         assert.ok(
-          error.error instanceof Error,
+          se.error instanceof Error,
           "error should be the disposal error",
         );
         assert.equal(
-          (error.error as Error).message,
+          (se.error as Error).message,
           "sync dispose failed.",
         );
       }
@@ -7195,16 +7201,18 @@ describe("runWithSync", () => {
         });
         assert.fail("Expected an error to be thrown");
       } catch (error) {
-        assert.ok(error instanceof SuppressedError);
+        assert.ok(error instanceof Error);
+        assert.equal(error.name, "SuppressedError");
+        const se = error as Error & { suppressed: unknown; error: unknown };
         assert.ok(
-          error.suppressed instanceof Error,
+          se.suppressed instanceof Error,
           "suppressed should be the parse error",
         );
         assert.ok(
-          error.error instanceof AggregateError,
+          se.error instanceof AggregateError,
           "error should be AggregateError from multiple disposal failures",
         );
-        assert.equal((error.error as AggregateError).errors.length, 2);
+        assert.equal((se.error as AggregateError).errors.length, 2);
       }
 
       assert.deepEqual(disposed, ["context1", "context2"]);
@@ -7236,7 +7244,7 @@ describe("runWithSync", () => {
       }
 
       assert.ok(disposed);
-      assert.ok(!(errorCaught instanceof SuppressedError));
+      assert.notEqual((errorCaught as Error).name, "SuppressedError");
       assert.ok(errorCaught instanceof Error);
     });
   });
