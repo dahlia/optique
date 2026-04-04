@@ -3070,9 +3070,7 @@ async function runWithBody<
   }
 
   // Phase 1: Collect initial annotations
-  const ctxOptions = (options as Record<string, unknown>)?.contextOptions as
-    | Record<symbol, unknown>
-    | undefined;
+  const ctxOptions = options.contextOptions;
   const {
     annotations: phase1Annotations,
     annotationsList: phase1AnnotationsList,
@@ -3279,9 +3277,7 @@ function runWithSyncBody<
   }
 
   // Phase 1: Collect initial annotations
-  const ctxOptions = (options as Record<string, unknown>)?.contextOptions as
-    | Record<symbol, unknown>
-    | undefined;
+  const ctxOptions = options.contextOptions;
   const {
     annotations: phase1Annotations,
     annotationsList: phase1AnnotationsList,
