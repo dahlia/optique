@@ -2972,17 +2972,8 @@ export function or(
         };
       } else if (
         result.success && result.consumed.length === 0 &&
-        !parser.acceptingAnyToken &&
-        // Skip optional-style wrappers around interactive parsers
-        // (e.g., optional(option(...))), which always succeed with
-        // consumed=[] when input is absent.  Optional wrappers around
-        // non-interactive parsers (e.g., optional(constant("x"))) are
-        // valid fallbacks since they can never consume tokens anyway.
-        !(
-          parser.usage.length === 1 &&
-          (parser.usage[0] as { type?: string }).type === "optional" &&
-          parser.leadingNames.size > 0
-        )
+        // Only branches that can never match input tokens qualify.
+        parser.leadingNames.size === 0 && !parser.acceptingAnyToken
       ) {
         if (zeroConsumedBranch === null) {
           zeroConsumedBranch = { index: i, parser, result };
@@ -3163,14 +3154,8 @@ export function or(
         };
       } else if (
         result.success && result.consumed.length === 0 &&
-        !parser.acceptingAnyToken &&
-        // Skip optional-style wrappers around interactive parsers
-        // (see sync counterpart for rationale).
-        !(
-          parser.usage.length === 1 &&
-          (parser.usage[0] as { type?: string }).type === "optional" &&
-          parser.leadingNames.size > 0
-        )
+        // Only branches with no leading names qualify (see sync).
+        parser.leadingNames.size === 0 && !parser.acceptingAnyToken
       ) {
         if (zeroConsumedBranch === null) {
           zeroConsumedBranch = { index: i, parser, result };
@@ -10559,10 +10544,20 @@ export function conditional(
       return branchResult;
     }
 
-    // Get the discriminator value: either from DependencySourceState or regular completion
+    // Use the discriminator value stored during parse when it matches
+    // the selected branch key, avoiding re-completion of non-idempotent
+    // discriminators (e.g., lazy defaults that return different values).
+    // When they differ (e.g., DependencySourceState discriminators whose
+    // value is only resolved during the complete phase), use the fresh
+    // completion result.
     let discriminatorValue: string | undefined;
     if (state.selectedBranch.kind === "default") {
       discriminatorValue = undefined;
+    } else if (
+      state.discriminatorValue != null &&
+      state.discriminatorValue === state.selectedBranch.key
+    ) {
+      discriminatorValue = state.discriminatorValue;
     } else {
       const completedDiscriminator = unwrapCompleteResult(
         discriminatorCompleteResult,
@@ -10726,10 +10721,20 @@ export function conditional(
       return branchResult;
     }
 
-    // Get the discriminator value: either from DependencySourceState or regular completion
+    // Use the discriminator value stored during parse when it matches
+    // the selected branch key, avoiding re-completion of non-idempotent
+    // discriminators (e.g., lazy defaults that return different values).
+    // When they differ (e.g., DependencySourceState discriminators whose
+    // value is only resolved during the complete phase), use the fresh
+    // completion result.
     let discriminatorValue: string | undefined;
     if (state.selectedBranch.kind === "default") {
       discriminatorValue = undefined;
+    } else if (
+      state.discriminatorValue != null &&
+      state.discriminatorValue === state.selectedBranch.key
+    ) {
+      discriminatorValue = state.discriminatorValue;
     } else {
       const completedDiscriminator = unwrapCompleteResult(
         discriminatorCompleteResult,

@@ -1007,30 +1007,27 @@ describe("or", () => {
     }
   });
 
-  it("should compose across nested or() constructs", () => {
-    // The inner or() now resolves to constant("default") with consumed=[].
-    // The outer or() should accept that zero-consumed result.
-    const result = parseSync(
+  it("should not treat interactive branches as fallback", () => {
+    // Branches with leadingNames (interactive parsers) should not be
+    // accepted as zero-consumed fallbacks even if they succeed.
+    const result1 = parseSync(
       or(
-        or(constant("default"), option("--mode", string())),
-        option("--other", string()),
+        object({
+          x: optional(option("--x", string())),
+          y: optional(option("--y", string())),
+        }),
+        option("--z", string()),
       ),
       [],
     );
-    assert.ok(result.success);
-    if (result.success) {
-      assert.equal(result.value, "default");
-    }
-  });
+    assert.ok(!result1.success);
 
-  it("should not treat optional-style wrappers as fallback branches", () => {
-    // optional(option(...)) always succeeds with consumed=[] when input
-    // is absent, but it should not make the whole or() silently optional.
-    const result = parseSync(
+    // optional(option(...)) wraps an interactive parser → also rejected.
+    const result2 = parseSync(
       or(optional(option("-o", string())), option("-p", string())),
       [],
     );
-    assert.ok(!result.success);
+    assert.ok(!result2.success);
   });
 });
 
