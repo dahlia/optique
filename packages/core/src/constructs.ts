@@ -9941,6 +9941,19 @@ export function conditional<
  * // defaultResult.value = [undefined, {}]
  * ```
  *
+ * ### Async discriminator limitation
+ *
+ * When the discriminator is an async parser that succeeds without consuming
+ * input (e.g., `prompt(option(...))` with no CLI input), branch selection
+ * is deferred to the complete phase.  If the selected branch needs to
+ * consume remaining tokens, those tokens cannot be consumed because the
+ * branch is not known during parse.  In practice, this means
+ * `conditional(prompt(option(...)), { key: option(...) })` cannot parse
+ * branch-specific tokens when the discriminator requires interactive
+ * resolution.  Provide a default branch or ensure the discriminator
+ * can resolve synchronously (e.g., via `bindEnv()` or `withDefault()`)
+ * to avoid this limitation.
+ *
  * @since 0.8.0
  */
 export function conditional(
