@@ -10154,10 +10154,38 @@ export function conditional(
               consumed: discriminatorResult.consumed,
             };
           }
-          // Zero-consumed discriminator: the branch selection IS committed
-          // (the discriminator matched a valid key), so propagate the
-          // branch's error instead of falling through to the default.
-          return branchParseResult;
+          // Zero-consumed discriminator: commit the branch selection so
+          // enclosing combinators see an active branch on subsequent
+          // parse calls, even though the branch hasn't consumed yet.
+          // When the branch consumed tokens before failing, propagate
+          // the specific error; otherwise commit as success so the
+          // branch can consume on the next call.
+          if (!branchParseResult.success && branchParseResult.consumed > 0) {
+            return branchParseResult;
+          }
+          return {
+            success: true,
+            next: {
+              ...context,
+              state: {
+                discriminatorState: annotatedDiscriminatorState,
+                discriminatorValue: value,
+                selectedBranch: { kind: "branch", key: value },
+                branchState: getAnnotatedChildState(
+                  state,
+                  branchParser.initialState,
+                  branchParser,
+                ),
+              },
+              ...(discriminatorExec != null
+                ? {
+                  exec: discriminatorExec,
+                  dependencyRegistry: discriminatorExec.dependencyRegistry,
+                }
+                : {}),
+            },
+            consumed: [],
+          };
         }
       }
     }
@@ -10405,7 +10433,34 @@ export function conditional(
               consumed: discriminatorResult.consumed,
             };
           }
-          return branchParseResult;
+          // Zero-consumed discriminator: commit the branch selection
+          // (see sync counterpart for rationale).
+          if (!branchParseResult.success && branchParseResult.consumed > 0) {
+            return branchParseResult;
+          }
+          return {
+            success: true,
+            next: {
+              ...context,
+              state: {
+                discriminatorState: annotatedDiscriminatorState,
+                discriminatorValue: value,
+                selectedBranch: { kind: "branch", key: value },
+                branchState: getAnnotatedChildState(
+                  state,
+                  branchParser.initialState,
+                  branchParser,
+                ),
+              },
+              ...(discriminatorExec != null
+                ? {
+                  exec: discriminatorExec,
+                  dependencyRegistry: discriminatorExec.dependencyRegistry,
+                }
+                : {}),
+            },
+            consumed: [],
+          };
         }
       }
     }
