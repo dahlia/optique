@@ -10188,44 +10188,11 @@ export function conditional(
               consumed: discriminatorResult.consumed,
             };
           }
-          // Zero-consumed discriminator: commit the branch selection so
-          // enclosing combinators see an active branch on subsequent
-          // parse calls, even though the branch hasn't consumed yet.
-          // When the branch failed and tokens remain, propagate the
-          // specific error to preserve the scoped error instead of
-          // stalling the top-level loop.  Only commit provisionally
-          // when buffer is empty, deferring branch completion to the
-          // complete phase.
-          if (
-            !branchParseResult.success &&
-            (branchParseResult.consumed > 0 || context.buffer.length > 0)
-          ) {
-            return branchParseResult;
-          }
-          return {
-            success: true,
-            provisional: true,
-            next: {
-              ...context,
-              state: {
-                discriminatorState: annotatedDiscriminatorState,
-                discriminatorValue: value,
-                selectedBranch: { kind: "branch", key: value },
-                branchState: getAnnotatedChildState(
-                  state,
-                  branchParser.initialState,
-                  branchParser,
-                ),
-              },
-              ...(discriminatorExec != null
-                ? {
-                  exec: discriminatorExec,
-                  dependencyRegistry: discriminatorExec.dependencyRegistry,
-                }
-                : {}),
-            },
-            consumed: [],
-          };
+          // Zero-consumed discriminator + branch failure: propagate
+          // the failure so optional()/withDefault() treat conditional
+          // as unmatched.  The deferred discriminator path in complete()
+          // handles resolution when needed.
+          return branchParseResult;
         }
       }
     }
