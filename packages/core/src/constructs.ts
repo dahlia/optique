@@ -9992,12 +9992,21 @@ export function conditional(
     if (
       discriminatorResult.success &&
       // Do not force completion of zero-consuming discriminators that
-      // defer completion (e.g., prompt()).  Forcing complete() during
-      // parse would trigger premature interactive prompts or fall through
-      // to the default branch incorrectly.
+      // actively defer completion (e.g., prompt()).  Forcing complete()
+      // during parse would trigger premature interactive prompts or fall
+      // through to the default branch incorrectly.  Check the hook's
+      // return value, not just its existence: a hook returning false
+      // means the parser is ready to complete now.
       (discriminatorResult.consumed.length > 0 ||
-        typeof (syncDiscriminator as { shouldDeferCompletion?: unknown })
-            .shouldDeferCompletion !== "function")
+        typeof (syncDiscriminator as {
+            shouldDeferCompletion?: (s: unknown, e?: unknown) => boolean;
+          }).shouldDeferCompletion !== "function" ||
+        !(syncDiscriminator as {
+          shouldDeferCompletion: (s: unknown, e?: unknown) => boolean;
+        }).shouldDeferCompletion(
+          discriminatorResult.next.state,
+          context.exec,
+        ))
     ) {
       const annotatedDiscriminatorState = getAnnotatedChildState(
         state,
@@ -10230,10 +10239,17 @@ export function conditional(
     if (
       discriminatorResult.success &&
       // Do not force completion of zero-consuming discriminators that
-      // defer completion (see sync counterpart for rationale).
+      // actively defer (see sync counterpart for rationale).
       (discriminatorResult.consumed.length > 0 ||
-        typeof (discriminator as { shouldDeferCompletion?: unknown })
-            .shouldDeferCompletion !== "function")
+        typeof (discriminator as {
+            shouldDeferCompletion?: (s: unknown, e?: unknown) => boolean;
+          }).shouldDeferCompletion !== "function" ||
+        !(discriminator as {
+          shouldDeferCompletion: (s: unknown, e?: unknown) => boolean;
+        }).shouldDeferCompletion(
+          discriminatorResult.next.state,
+          context.exec,
+        ))
     ) {
       const annotatedDiscriminatorState = getAnnotatedChildState(
         state,
