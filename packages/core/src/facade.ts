@@ -66,6 +66,22 @@ import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
 
 export type { ParserValuePlaceholder, SourceContext };
 
+// Polyfill for runtimes that lack SuppressedError (Node < 24):
+const SuppressedErrorCtor: typeof SuppressedError =
+  typeof SuppressedError === "function" ? SuppressedError : (() => {
+    class SuppressedErrorPolyfill extends Error {
+      error: unknown;
+      suppressed: unknown;
+      constructor(error: unknown, suppressed: unknown, message?: string) {
+        super(message);
+        this.name = "SuppressedError";
+        this.error = error;
+        this.suppressed = suppressed;
+      }
+    }
+    return SuppressedErrorPolyfill as unknown as typeof SuppressedError;
+  })();
+
 function finalizeParsedForContext(
   context: SourceContext<unknown>,
   parsed: unknown,
@@ -3225,7 +3241,7 @@ export async function runWith<
     await disposeContexts(contexts);
   } catch (disposeError) {
     if (hasPrimaryError) {
-      throw new SuppressedError(
+      throw new SuppressedErrorCtor(
         disposeError,
         primaryError,
         "An error was suppressed during context disposal.",
@@ -3394,7 +3410,7 @@ export function runWithSync<
     disposeContextsSync(contexts);
   } catch (disposeError) {
     if (hasPrimaryError) {
-      throw new SuppressedError(
+      throw new SuppressedErrorCtor(
         disposeError,
         primaryError,
         "An error was suppressed during context disposal.",
