@@ -3097,14 +3097,32 @@ export function or(
       zeroConsumedBranch !== null && zeroConsumedCount === 1 &&
       error.consumed === 0 && context.buffer.length === 0
     ) {
-      // Return success WITHOUT persisting exclusive state.  The
-      // branch selection is deferred to complete(), which tries
-      // each non-interactive branch's complete() and picks the first
-      // success.  Not committing state here keeps all branches
-      // visible in suggestions and doc generation.
+      // Persist the branch state so wrappers like multiple() can
+      // see the state change.  Mark as provisional so or() does not
+      // treat this as a definitive match when nested, and so
+      // suggestion/doc systems can detect it.
+      const mergedExec = mergeChildExec(
+        context.exec,
+        zeroConsumedBranch.result.next.exec,
+      );
       return {
         success: true,
-        next: context,
+        provisional: true,
+        next: {
+          ...context,
+          state: createExclusiveState(
+            context.state,
+            zeroConsumedBranch.index,
+            zeroConsumedBranch.parser,
+            zeroConsumedBranch.result,
+          ),
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        },
         consumed: [],
       };
     }
@@ -3292,14 +3310,29 @@ export function or(
       zeroConsumedBranch !== null && zeroConsumedCount === 1 &&
       error.consumed === 0 && context.buffer.length === 0
     ) {
-      // Return success WITHOUT persisting exclusive state.  The
-      // branch selection is deferred to complete(), which tries
-      // each non-interactive branch's complete() and picks the first
-      // success.  Not committing state here keeps all branches
-      // visible in suggestions and doc generation.
+      // Persist branch state + mark provisional (see sync counterpart).
+      const mergedExec = mergeChildExec(
+        context.exec,
+        zeroConsumedBranch.result.next.exec,
+      );
       return {
         success: true,
-        next: context,
+        provisional: true,
+        next: {
+          ...context,
+          state: createExclusiveState(
+            context.state,
+            zeroConsumedBranch.index,
+            zeroConsumedBranch.parser,
+            zeroConsumedBranch.result,
+          ),
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        },
         consumed: [],
       };
     }
