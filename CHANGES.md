@@ -10,6 +10,14 @@ To be released.
 
 ### @optique/core
 
+ -  Added `provisional` field to the success variant of `ParserResult`.
+    When `true`, it indicates that the parse succeeded tentatively: the
+    parser matched something (e.g., a zero-consuming discriminator resolved
+    to a branch key) but the selected sub-parser has not consumed any input
+    yet.  Outer combinators like `or()` use this to avoid treating
+    provisional successes as definitive zero-consumed fallback candidates.
+    [[#232]]
+
  -  Added `ParseFrame`, `ExecutionContext`, and `ExecutionPhase` types to
     support the separation of parser-local state from shared execution
     context.  `ParserContext` now includes an optional `exec` field for

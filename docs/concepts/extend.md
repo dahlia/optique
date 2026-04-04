@@ -221,6 +221,29 @@ composition semantics:
     for positional (non-option) tokens.
     Most custom parsers should set this to `false`.
 
+### Provisional results
+
+When a custom parser succeeds in `parse()` without consuming any input
+(returning `consumed: []`), but is not yet fully resolved (e.g., it
+resolved a discriminator to select a branch, but the branch itself
+still needs input), set `provisional: true` on the parse result.  This
+signals to outer combinators like `or()` that the success is tentative
+and should not be treated as a definitive zero-consumed fallback:
+
+~~~~ typescript
+return {
+  success: true,
+  provisional: true,
+  next: context,
+  consumed: [],
+};
+~~~~
+
+Most custom parsers do *not* need this flag.  It is primarily relevant
+for construct-level parsers that compose multiple sub-parsers and need
+to distinguish between “matched without input” (like `constant()`) and
+“partially resolved, pending more input.”
+
 
 Use cases
 ---------

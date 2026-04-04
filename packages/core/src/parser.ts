@@ -671,6 +671,17 @@ export type ParserResult<TState> =
      * The input elements consumed by the parser during this operation.
      */
     readonly consumed: readonly string[];
+
+    /**
+     * When `true`, indicates that this success is tentative: the parser
+     * matched something (e.g., a zero-consuming discriminator resolved to
+     * a branch key) but the selected sub-parser has not consumed any input
+     * yet.  Outer combinators like {@link or} should not treat provisional
+     * successes as definitive zero-consumed fallback candidates.
+     *
+     * @since 1.0.0
+     */
+    readonly provisional?: true;
   }
   | {
     /**

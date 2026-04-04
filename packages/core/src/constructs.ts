@@ -3003,6 +3003,7 @@ export function or(
         };
       } else if (
         result.success && result.consumed.length === 0 &&
+        !result.provisional &&
         // Only branches that can never match input tokens qualify.
         parser.leadingNames.size === 0 && !parser.acceptingAnyToken
       ) {
@@ -3214,6 +3215,7 @@ export function or(
         };
       } else if (
         result.success && result.consumed.length === 0 &&
+        !result.provisional &&
         // Only branches with no leading names qualify (see sync).
         parser.leadingNames.size === 0 && !parser.acceptingAnyToken
       ) {
@@ -10139,12 +10141,14 @@ export function conditional(
           // parse calls, even though the branch hasn't consumed yet.
           // When the branch consumed tokens before failing, propagate
           // the specific error; otherwise commit as success so the
-          // branch can consume on the next call.
+          // branch can consume on the next call.  Mark as provisional
+          // so or() does not treat this as a zero-consumed fallback.
           if (!branchParseResult.success && branchParseResult.consumed > 0) {
             return branchParseResult;
           }
           return {
             success: true,
+            provisional: true,
             next: {
               ...context,
               state: {
@@ -10406,6 +10410,7 @@ export function conditional(
           }
           return {
             success: true,
+            provisional: true,
             next: {
               ...context,
               state: {

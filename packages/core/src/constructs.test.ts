@@ -1029,6 +1029,26 @@ describe("or", () => {
     );
     assert.ok(!result2.success);
   });
+
+  it("should not count provisional results as zero-consumed fallbacks", () => {
+    // conditional(constant("key"), { key: option("-o") }) returns
+    // provisional success with consumed=[].  or() should skip it and
+    // accept constant("F") as the only definitive fallback.
+    const result = parseSync(
+      or(
+        conditional(
+          constant("key") as Parser<"sync", string>,
+          { key: option("-o", string()) },
+        ),
+        constant("F"),
+      ),
+      [],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "F");
+    }
+  });
 });
 
 describe("or() - duplicate option handling", () => {
