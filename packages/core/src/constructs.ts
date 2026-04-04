@@ -2848,16 +2848,17 @@ export function or(
     orderedParsers.sort(([_, a], [__, b]) =>
       activeState?.[0] === a ? -1 : activeState?.[0] === b ? 1 : a - b
     );
-    // Track the first non-consuming successful branch as a fallback.
-    // Only parsers with no leading names and no catch-all acceptance
-    // qualify (e.g., constant(), multiple(constant()), optional(constant())).
-    // This prevents object() or option() parsers that happen to succeed
-    // with empty input from being mistakenly selected as fallback branches.
+    // Track zero-consuming successful branches as a fallback.
+    // Only non-catch-all branches qualify (acceptingAnyToken excludes
+    // tuple([argument(...)]) whose parse "success" on empty input is
+    // incidental).  Accept the fallback only when exactly one qualifying
+    // branch succeeded (unambiguous).
     let zeroConsumedBranch: {
       index: number;
       parser: Parser<"sync", unknown, unknown>;
       result: ParserResult<unknown> & { success: true };
     } | null = null;
+    let zeroConsumedCount = 0;
     for (const [parser, i] of orderedParsers) {
       const result = parser.parse(
         withChildContext(
@@ -2971,19 +2972,22 @@ export function or(
         };
       } else if (
         result.success && result.consumed.length === 0 &&
-        zeroConsumedBranch === null &&
-        parser.leadingNames.size === 0 && !parser.acceptingAnyToken
+        !parser.acceptingAnyToken
       ) {
-        zeroConsumedBranch = { index: i, parser, result };
+        if (zeroConsumedBranch === null) {
+          zeroConsumedBranch = { index: i, parser, result };
+        }
+        zeroConsumedCount++;
       } else if (!result.success && error.consumed < result.consumed) {
         error = result;
       }
     }
-    // Accept non-consuming branch as fallback only when no branch consumed
-    // any tokens before failing.  If a branch did consume (error.consumed > 0),
-    // its specific error (e.g., "requires a value") is more informative than
-    // a silent fallback to a non-consuming branch.
-    if (zeroConsumedBranch !== null && error.consumed === 0) {
+    // Accept non-consuming branch when unambiguous and no branch consumed
+    // tokens before failing.
+    if (
+      zeroConsumedBranch !== null && zeroConsumedCount === 1 &&
+      error.consumed === 0
+    ) {
       const mergedExec = mergeChildExec(
         context.exec,
         zeroConsumedBranch.result.next.exec,
@@ -3023,13 +3027,13 @@ export function or(
     orderedParsers.sort(([_, a], [__, b]) =>
       activeState?.[0] === a ? -1 : activeState?.[0] === b ? 1 : a - b
     );
-    // Track the first non-consuming successful branch as a fallback.
-    // Only parsers with no leading names and no catch-all acceptance qualify.
+    // Track zero-consuming successful branches (see sync counterpart).
     let zeroConsumedBranch: {
       index: number;
       parser: Parser<Mode, unknown, unknown>;
       result: ParserResult<unknown> & { success: true };
     } | null = null;
+    let zeroConsumedCount = 0;
     for (const [parser, i] of orderedParsers) {
       const resultOrPromise = parser.parse(
         withChildContext(
@@ -3146,17 +3150,21 @@ export function or(
         };
       } else if (
         result.success && result.consumed.length === 0 &&
-        zeroConsumedBranch === null &&
-        parser.leadingNames.size === 0 && !parser.acceptingAnyToken
+        !parser.acceptingAnyToken
       ) {
-        zeroConsumedBranch = { index: i, parser, result };
+        if (zeroConsumedBranch === null) {
+          zeroConsumedBranch = { index: i, parser, result };
+        }
+        zeroConsumedCount++;
       } else if (!result.success && error.consumed < result.consumed) {
         error = result;
       }
     }
-    // Accept non-consuming branch as fallback only when no branch consumed
-    // any tokens before failing (see sync counterpart for rationale).
-    if (zeroConsumedBranch !== null && error.consumed === 0) {
+    // Accept non-consuming branch when unambiguous (see sync counterpart).
+    if (
+      zeroConsumedBranch !== null && zeroConsumedCount === 1 &&
+      error.consumed === 0
+    ) {
       const mergedExec = mergeChildExec(
         context.exec,
         zeroConsumedBranch.result.next.exec,
@@ -5065,15 +5073,20 @@ export function object<
       }
     }
 
-    // Zero-consumption pass: let purely non-interactive parsers update
-    // their state.  Parsers like multiple(constant(...)) modify state in
-    // parse() even when they return consumed: [].  The greedy loop above
-    // skips these state changes, so we give each such field one parse()
-    // call here.  Only parsers with no leading names and no catch-all
-    // acceptance qualify — they can never match input tokens.  Parsers
-    // that CAN match tokens but happened not to (e.g., optional options)
-    // must be skipped: calling parse() on them changes state wrapping in
-    // ways that alter complete() semantics.
+    // Zero-consumption pass: let non-consuming parsers update their
+    // state.  Parsers like multiple(constant(...)) and nested
+    // or(constant(...), ...) modify state in parse() even when they
+    // return consumed: [].  The greedy loop above skips these state
+    // changes, so we give each non-consumed field one parse() call here.
+    // Only state changes are captured (result.next.state !== fieldState);
+    // parsers that return the same state (like standalone constant()) are
+    // naturally skipped.
+    //
+    // Skip optional-style wrappers (optional(), withDefault(), prompt()):
+    // their parse() wraps state via parseOptionalStyleSync which changes
+    // how complete() interprets the state (e.g., suppressing defaults or
+    // duplicating prompts).  These wrappers are identified by having a
+    // single "optional" usage term.
     {
       const getFieldState = createFieldStateGetter(
         currentContext.state,
@@ -5083,8 +5096,8 @@ export function object<
         if (consumedFields.has(field as string | symbol)) continue;
         const typedParser = parser as Parser<"sync", unknown, unknown>;
         if (
-          parser.leadingNames.size > 0 ||
-          typedParser.acceptingAnyToken
+          parser.usage.length === 1 &&
+          (parser.usage[0] as { type?: string }).type === "optional"
         ) {
           continue;
         }
@@ -5242,12 +5255,13 @@ export function object<
       for (const [field, parser] of parserPairs) {
         if (consumedFields.has(field as string | symbol)) continue;
         if (
-          parser.leadingNames.size > 0 ||
-          parser.acceptingAnyToken ||
+          // Skip optional-style wrappers (see sync counterpart).
+          (parser.usage.length === 1 &&
+            (parser.usage[0] as { type?: string }).type === "optional") ||
           // Skip async parsers: wrappers like prompt() are always async
           // and their parse() wraps state in ways that alter complete()
-          // semantics.  The cases we need (constant, multiple(constant))
-          // are always sync.
+          // semantics.  The cases we need (constant, multiple(constant),
+          // nested or/conditional) are always sync.
           parser.$mode === "async"
         ) {
           continue;

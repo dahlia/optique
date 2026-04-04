@@ -1006,6 +1006,22 @@ describe("or", () => {
       assert.equal(result2.value, "x");
     }
   });
+
+  it("should compose across nested or() constructs", () => {
+    // The inner or() now resolves to constant("default") with consumed=[].
+    // The outer or() should accept that zero-consumed result.
+    const result = parseSync(
+      or(
+        or(constant("default"), option("--mode", string())),
+        option("--other", string()),
+      ),
+      [],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "default");
+    }
+  });
 });
 
 describe("or() - duplicate option handling", () => {
@@ -3043,6 +3059,24 @@ describe("object", () => {
     if (result.success) {
       assert.equal(result.value.opt, "hi");
       assert.equal(result.value.val, "x");
+    }
+  });
+
+  it("should resolve nested or() field via zero-consumption pass", () => {
+    // or(constant("default"), option("--mode")) has non-empty leadingNames
+    // but now resolves to constant("default") during the zero-consumption
+    // pass, so the field should produce "default" inside object().
+    const result = parseSync(
+      object({
+        mode: or(constant("default"), option("--mode", string())),
+        verbose: option("-v"),
+      }),
+      ["-v"],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "default");
+      assert.equal(result.value.verbose, true);
     }
   });
 });
