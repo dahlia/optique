@@ -2873,6 +2873,37 @@ export function or(
       );
       if (result.success && result.consumed.length > 0) {
         if (activeState?.[0] !== i && activeState?.[1].success) {
+          // If the active branch consumed nothing (zero-consumed
+          // fallback), allow the switch freely: no shared-options
+          // conflict is possible and the empty consumed array would
+          // crash values() in the error path.
+          if (activeState[1].consumed.length === 0) {
+            const mergedExec = mergeChildExec(
+              context.exec,
+              result.next.exec,
+            );
+            return {
+              success: true,
+              next: {
+                ...context,
+                buffer: result.next.buffer,
+                optionsTerminated: result.next.optionsTerminated,
+                state: createExclusiveState(
+                  context.state,
+                  i,
+                  parser,
+                  result,
+                ),
+                ...(mergedExec != null
+                  ? {
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              consumed: result.consumed,
+            };
+          }
           // Different branch succeeded. Check if the new branch can also
           // consume the previously consumed input (shared options case).
           const previouslyConsumed = activeState[1].consumed;
@@ -3053,6 +3084,35 @@ export function or(
       const result = await resultOrPromise;
       if (result.success && result.consumed.length > 0) {
         if (activeState?.[0] !== i && activeState?.[1].success) {
+          // If the active branch consumed nothing (zero-consumed
+          // fallback), allow the switch freely (see sync counterpart).
+          if (activeState[1].consumed.length === 0) {
+            const mergedExec = mergeChildExec(
+              context.exec,
+              result.next.exec,
+            );
+            return {
+              success: true,
+              next: {
+                ...context,
+                buffer: result.next.buffer,
+                optionsTerminated: result.next.optionsTerminated,
+                state: createExclusiveState(
+                  context.state,
+                  i,
+                  parser,
+                  result,
+                ),
+                ...(mergedExec != null
+                  ? {
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              consumed: result.consumed,
+            };
+          }
           // Different branch succeeded. Check if the new branch can also
           // consume the previously consumed input (shared options case).
           const previouslyConsumed = activeState[1].consumed;
@@ -10130,13 +10190,20 @@ export function conditional(
           context.exec,
           defaultResult.next.exec,
         );
+        // When the default consumed nothing, don't persist
+        // selectedBranch so incremental parsing can still try the
+        // discriminator on the next call.  complete() already handles
+        // selectedBranch === undefined by using the default.
+        const commitDefault = defaultResult.consumed.length > 0;
         return {
           success: true,
           next: {
             ...defaultResult.next,
             state: {
               ...state,
-              selectedBranch: { kind: "default" },
+              ...(commitDefault
+                ? { selectedBranch: { kind: "default" as const } }
+                : {}),
               branchState: getAnnotatedChildState(
                 state,
                 defaultResult.next.state,
@@ -10368,13 +10435,17 @@ export function conditional(
           context.exec,
           defaultResult.next.exec,
         );
+        // See sync counterpart for rationale on commitDefault.
+        const commitDefault = defaultResult.consumed.length > 0;
         return {
           success: true,
           next: {
             ...defaultResult.next,
             state: {
               ...state,
-              selectedBranch: { kind: "default" },
+              ...(commitDefault
+                ? { selectedBranch: { kind: "default" as const } }
+                : {}),
               branchState: getAnnotatedChildState(
                 state,
                 defaultResult.next.state,
