@@ -2972,7 +2972,17 @@ export function or(
         };
       } else if (
         result.success && result.consumed.length === 0 &&
-        !parser.acceptingAnyToken
+        !parser.acceptingAnyToken &&
+        // Skip optional-style wrappers around interactive parsers
+        // (e.g., optional(option(...))), which always succeed with
+        // consumed=[] when input is absent.  Optional wrappers around
+        // non-interactive parsers (e.g., optional(constant("x"))) are
+        // valid fallbacks since they can never consume tokens anyway.
+        !(
+          parser.usage.length === 1 &&
+          (parser.usage[0] as { type?: string }).type === "optional" &&
+          parser.leadingNames.size > 0
+        )
       ) {
         if (zeroConsumedBranch === null) {
           zeroConsumedBranch = { index: i, parser, result };
@@ -3150,7 +3160,14 @@ export function or(
         };
       } else if (
         result.success && result.consumed.length === 0 &&
-        !parser.acceptingAnyToken
+        !parser.acceptingAnyToken &&
+        // Skip optional-style wrappers around interactive parsers
+        // (see sync counterpart for rationale).
+        !(
+          parser.usage.length === 1 &&
+          (parser.usage[0] as { type?: string }).type === "optional" &&
+          parser.leadingNames.size > 0
+        )
       ) {
         if (zeroConsumedBranch === null) {
           zeroConsumedBranch = { index: i, parser, result };
@@ -9973,7 +9990,14 @@ export function conditional(
     });
 
     if (
-      discriminatorResult.success
+      discriminatorResult.success &&
+      // Do not force completion of zero-consuming discriminators that
+      // defer completion (e.g., prompt()).  Forcing complete() during
+      // parse would trigger premature interactive prompts or fall through
+      // to the default branch incorrectly.
+      (discriminatorResult.consumed.length > 0 ||
+        typeof (syncDiscriminator as { shouldDeferCompletion?: unknown })
+            .shouldDeferCompletion !== "function")
     ) {
       const annotatedDiscriminatorState = getAnnotatedChildState(
         state,
@@ -10204,7 +10228,12 @@ export function conditional(
     });
 
     if (
-      discriminatorResult.success
+      discriminatorResult.success &&
+      // Do not force completion of zero-consuming discriminators that
+      // defer completion (see sync counterpart for rationale).
+      (discriminatorResult.consumed.length > 0 ||
+        typeof (discriminator as { shouldDeferCompletion?: unknown })
+            .shouldDeferCompletion !== "function")
     ) {
       const annotatedDiscriminatorState = getAnnotatedChildState(
         state,

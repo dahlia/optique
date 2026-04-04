@@ -1022,6 +1022,16 @@ describe("or", () => {
       assert.equal(result.value, "default");
     }
   });
+
+  it("should not treat optional-style wrappers as fallback branches", () => {
+    // optional(option(...)) always succeeds with consumed=[] when input
+    // is absent, but it should not make the whole or() silently optional.
+    const result = parseSync(
+      or(optional(option("-o", string())), option("-p", string())),
+      [],
+    );
+    assert.ok(!result.success);
+  });
 });
 
 describe("or() - duplicate option handling", () => {
