@@ -2992,11 +2992,14 @@ export function or(
         error = result;
       }
     }
-    // Accept non-consuming branch when unambiguous and no branch consumed
-    // tokens before failing.
+    // Accept non-consuming branch when unambiguous, no branch consumed
+    // tokens before failing, and the buffer is empty.  When tokens remain,
+    // accepting a zero-consumed fallback would leave them unconsumed,
+    // causing the top-level parse loop to stall and emit a generic
+    // "Unexpected option" error instead of the construct's own error.
     if (
       zeroConsumedBranch !== null && zeroConsumedCount === 1 &&
-      error.consumed === 0
+      error.consumed === 0 && context.buffer.length === 0
     ) {
       const mergedExec = mergeChildExec(
         context.exec,
@@ -3180,7 +3183,7 @@ export function or(
     // Accept non-consuming branch when unambiguous (see sync counterpart).
     if (
       zeroConsumedBranch !== null && zeroConsumedCount === 1 &&
-      error.consumed === 0
+      error.consumed === 0 && context.buffer.length === 0
     ) {
       const mergedExec = mergeChildExec(
         context.exec,
@@ -10120,8 +10123,9 @@ export function conditional(
 
     // Discriminator didn't match or didn't consume input, try default branch.
     // Only accept a zero-consuming default when the discriminator also
-    // consumed nothing; otherwise, the discriminator's partial-match error
-    // is more informative and should be preserved.
+    // consumed nothing AND the buffer is empty; otherwise, the
+    // discriminator's partial-match error or the construct's no-match
+    // error is more informative and should be preserved.
     const discriminatorConsumed = discriminatorResult.success
       ? discriminatorResult.consumed.length
       : discriminatorResult.consumed;
@@ -10138,7 +10142,8 @@ export function conditional(
 
       if (
         defaultResult.success &&
-        (defaultResult.consumed.length > 0 || discriminatorConsumed === 0)
+        (defaultResult.consumed.length > 0 ||
+          (discriminatorConsumed === 0 && context.buffer.length === 0))
       ) {
         const mergedExec = mergeChildExec(
           context.exec,
@@ -10358,7 +10363,7 @@ export function conditional(
     }
 
     // Discriminator didn't match or didn't consume input, try default branch
-    // (see sync counterpart for rationale on the consumption guard).
+    // (see sync counterpart for rationale on the consumption/buffer guard).
     const discriminatorConsumed = discriminatorResult.success
       ? discriminatorResult.consumed.length
       : discriminatorResult.consumed;
@@ -10375,7 +10380,8 @@ export function conditional(
 
       if (
         defaultResult.success &&
-        (defaultResult.consumed.length > 0 || discriminatorConsumed === 0)
+        (defaultResult.consumed.length > 0 ||
+          (discriminatorConsumed === 0 && context.buffer.length === 0))
       ) {
         const mergedExec = mergeChildExec(
           context.exec,
