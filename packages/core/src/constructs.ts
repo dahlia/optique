@@ -1155,7 +1155,7 @@ function createExclusiveComplete(
               ...emptyCtx,
               state: p.initialState,
             });
-            if (!parseResult.success) continue;
+            if (!parseResult.success || parseResult.provisional) continue;
             candidateCount++;
             if (candidateCount > 1) break;
             candidate = await p.complete(
@@ -10129,6 +10129,11 @@ export function conditional(
             );
             return {
               success: true,
+              // Propagate provisional from the branch so nested
+              // unresolved conditionals are visible to enclosing or().
+              ...(branchParseResult.provisional
+                ? { provisional: true as const }
+                : {}),
               next: {
                 ...branchParseResult.next,
                 state: {
@@ -10353,11 +10358,14 @@ export function conditional(
     });
 
     if (discriminatorResult.success) {
-      // For zero-consuming discriminators in async mode, defer
-      // completion to the complete phase to avoid triggering
-      // interactive side effects (e.g., prompt()) during parse.
-      // The sync path completes during parse (safe for sync parsers).
-      if (discriminatorResult.consumed.length === 0) {
+      // For zero-consuming async discriminators, defer completion to
+      // the complete phase to avoid triggering interactive side effects
+      // (e.g., prompt()) during parse.  Sync discriminators are safe
+      // to complete during parse even in the async path.
+      if (
+        discriminatorResult.consumed.length === 0 &&
+        discriminator.$mode === "async"
+      ) {
         const annotatedDiscriminatorState = getAnnotatedChildState(
           state,
           discriminatorResult.next.state,
@@ -10435,6 +10443,10 @@ export function conditional(
             );
             return {
               success: true,
+              // Propagate provisional from branch (see sync).
+              ...(branchParseResult.provisional
+                ? { provisional: true as const }
+                : {}),
               next: {
                 ...branchParseResult.next,
                 state: {
@@ -10624,9 +10636,6 @@ export function conditional(
         const deferredValue = deferredDiscriminatorResult.value as string;
         const deferredBranch = syncBranches[deferredValue];
         if (deferredBranch) {
-          // Always use the branch's own initialState — state.branchState
-          // may hold the default branch's state from a zero-consumed
-          // default fallback during parse.
           const branchState = getAnnotatedChildState(
             state,
             deferredBranch.initialState,
@@ -10667,6 +10676,13 @@ export function conditional(
           }
           return branchResult;
         }
+      } else if (
+        state.discriminatorState !== syncDiscriminator.initialState
+      ) {
+        // Discriminator was parsed (state differs from initial) but
+        // failed to complete — surface the error instead of silently
+        // falling through to the default branch.
+        return deferredDiscriminatorResult;
       }
 
       // If we have default branch, use it
@@ -10904,6 +10920,11 @@ export function conditional(
           }
           return branchResult;
         }
+      } else if (
+        state.discriminatorState !== discriminator.initialState
+      ) {
+        // Surface the discriminator completion failure (see sync).
+        return deferredDiscriminatorResult;
       }
 
       // If we have default branch, use it
