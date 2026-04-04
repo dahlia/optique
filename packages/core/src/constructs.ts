@@ -1095,10 +1095,61 @@ function createExclusiveComplete(
   return (state, exec?) => {
     const activeState = normalizeExclusiveState(state);
     if (activeState == null) {
-      return {
-        success: false,
-        error: getNoMatchError(options, noMatchContext),
-      };
+      // Deferred fallback: parse then complete each non-interactive
+      // branch on empty input.  This resolves zero-consumed branches
+      // (e.g., constant(), optional(constant())) without committing
+      // exclusive state during parse, keeping all branches visible
+      // in suggestions and doc generation.
+      return dispatchByMode(
+        mode,
+        () => {
+          const emptyCtx = {
+            buffer: [] as string[],
+            optionsTerminated: false,
+            usage: [] as never[],
+          };
+          for (let i = 0; i < syncParsers.length; i++) {
+            const p = syncParsers[i];
+            if (p.leadingNames.size > 0 || p.acceptingAnyToken) continue;
+            const parseResult = p.parse({ ...emptyCtx, state: p.initialState });
+            if (!parseResult.success) continue;
+            const r = p.complete(
+              parseResult.next.state,
+              withChildExecPath(exec, i),
+            );
+            if (r.success) return r;
+          }
+          return {
+            success: false as const,
+            error: getNoMatchError(options, noMatchContext),
+          };
+        },
+        async () => {
+          const emptyCtx = {
+            buffer: [] as string[],
+            optionsTerminated: false,
+            usage: [] as never[],
+          };
+          for (let i = 0; i < parsers.length; i++) {
+            const p = parsers[i];
+            if (p.leadingNames.size > 0 || p.acceptingAnyToken) continue;
+            const parseResult = await p.parse({
+              ...emptyCtx,
+              state: p.initialState,
+            });
+            if (!parseResult.success) continue;
+            const r = await p.complete(
+              parseResult.next.state,
+              withChildExecPath(exec, i),
+            );
+            if (r.success) return r;
+          }
+          return {
+            success: false as const,
+            error: getNoMatchError(options, noMatchContext),
+          };
+        },
+      );
     }
     const [i, result] = activeState;
     if (!result.success) {
@@ -3024,27 +3075,14 @@ export function or(
       zeroConsumedBranch !== null && zeroConsumedCount === 1 &&
       error.consumed === 0 && context.buffer.length === 0
     ) {
-      const mergedExec = mergeChildExec(
-        context.exec,
-        zeroConsumedBranch.result.next.exec,
-      );
+      // Return success WITHOUT persisting exclusive state.  The
+      // branch selection is deferred to complete(), which tries
+      // each non-interactive branch's complete() and picks the first
+      // success.  Not committing state here keeps all branches
+      // visible in suggestions and doc generation.
       return {
         success: true,
-        next: {
-          ...context,
-          state: createExclusiveState(
-            context.state,
-            zeroConsumedBranch.index,
-            zeroConsumedBranch.parser,
-            zeroConsumedBranch.result,
-          ),
-          ...(mergedExec != null
-            ? {
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
-            : {}),
-        },
+        next: context,
         consumed: [],
       };
     }
@@ -3232,27 +3270,14 @@ export function or(
       zeroConsumedBranch !== null && zeroConsumedCount === 1 &&
       error.consumed === 0 && context.buffer.length === 0
     ) {
-      const mergedExec = mergeChildExec(
-        context.exec,
-        zeroConsumedBranch.result.next.exec,
-      );
+      // Return success WITHOUT persisting exclusive state.  The
+      // branch selection is deferred to complete(), which tries
+      // each non-interactive branch's complete() and picks the first
+      // success.  Not committing state here keeps all branches
+      // visible in suggestions and doc generation.
       return {
         success: true,
-        next: {
-          ...context,
-          state: createExclusiveState(
-            context.state,
-            zeroConsumedBranch.index,
-            zeroConsumedBranch.parser,
-            zeroConsumedBranch.result,
-          ),
-          ...(mergedExec != null
-            ? {
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
-            : {}),
-        },
+        next: context,
         consumed: [],
       };
     }
@@ -10139,11 +10164,15 @@ export function conditional(
           // Zero-consumed discriminator: commit the branch selection so
           // enclosing combinators see an active branch on subsequent
           // parse calls, even though the branch hasn't consumed yet.
-          // When the branch consumed tokens before failing, propagate
-          // the specific error; otherwise commit as success so the
-          // branch can consume on the next call.  Mark as provisional
-          // so or() does not treat this as a zero-consumed fallback.
-          if (!branchParseResult.success && branchParseResult.consumed > 0) {
+          // When the branch failed and tokens remain, propagate the
+          // specific error to preserve the scoped error instead of
+          // stalling the top-level loop.  Only commit provisionally
+          // when buffer is empty, deferring branch completion to the
+          // complete phase.
+          if (
+            !branchParseResult.success &&
+            (branchParseResult.consumed > 0 || context.buffer.length > 0)
+          ) {
             return branchParseResult;
           }
           return {
@@ -10405,7 +10434,10 @@ export function conditional(
           }
           // Zero-consumed discriminator: commit the branch selection
           // (see sync counterpart for rationale).
-          if (!branchParseResult.success && branchParseResult.consumed > 0) {
+          if (
+            !branchParseResult.success &&
+            (branchParseResult.consumed > 0 || context.buffer.length > 0)
+          ) {
             return branchParseResult;
           }
           return {
