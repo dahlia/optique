@@ -3185,8 +3185,8 @@ async function runWithBody<
  * @returns Promise that resolves to the parsed result.
  * @throws {TypeError} If two or more contexts share the same
  * {@link SourceContext.id}.
- * @throws {SuppressedError} If parsing fails and a context's disposal also
- * throws.  The original parse error is available via `.suppressed` and the
+ * @throws {SuppressedError} If the runner throws and a context's disposal
+ * also throws.  The original error is available via `.suppressed` and the
  * disposal error via `.error`.
  * @since 0.10.0
  *
@@ -3375,8 +3375,8 @@ function runWithSyncBody<
  * {@link SourceContext.id}.
  * @throws {Error} If any context returns a Promise or if a context's
  * `[Symbol.asyncDispose]` returns a Promise.
- * @throws {SuppressedError} If parsing fails and a context's disposal also
- * throws.  The original parse error is available via `.suppressed` and the
+ * @throws {SuppressedError} If the runner throws and a context's disposal
+ * also throws.  The original error is available via `.suppressed` and the
  * disposal error via `.error`.
  * @since 0.10.0
  */
@@ -3453,8 +3453,8 @@ export function runWithSync<
  * @returns Promise that resolves to the parsed result.
  * @throws {TypeError} If two or more contexts share the same
  * {@link SourceContext.id}.
- * @throws {SuppressedError} If parsing fails and a context's disposal also
- * throws.  The original parse error is available via `.suppressed` and the
+ * @throws {SuppressedError} If the runner throws and a context's disposal
+ * also throws.  The original error is available via `.suppressed` and the
  * disposal error via `.error`.
  * @since 0.10.0
  */
