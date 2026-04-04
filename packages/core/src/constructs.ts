@@ -5276,13 +5276,9 @@ export function object<
         if (consumedFields.has(field as string | symbol)) continue;
         if (
           // Skip optional-style wrappers (see sync counterpart).
-          (parser.usage.length === 1 &&
-            (parser.usage[0] as { type?: string }).type === "optional") ||
-          // Skip async parsers: wrappers like prompt() are always async
-          // and their parse() wraps state in ways that alter complete()
-          // semantics.  The cases we need (constant, multiple(constant),
-          // nested or/conditional) are always sync.
-          parser.$mode === "async"
+          // This also catches prompt() which always has "optional" usage.
+          parser.usage.length === 1 &&
+          (parser.usage[0] as { type?: string }).type === "optional"
         ) {
           continue;
         }

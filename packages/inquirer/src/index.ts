@@ -1339,6 +1339,15 @@ export function prompt<M extends Mode, TValue, TState>(
       })() as AsyncIterable<never>;
     },
 
+    shouldDeferCompletion(state: TState, _exec?: ExecutionContext): boolean {
+      // Defer when CLI input was not consumed: the prompt should run
+      // during the complete phase, not during parse (e.g., conditional()
+      // calls complete() on zero-consuming discriminators to select a
+      // branch, which would trigger the prompt prematurely).
+      if (isPromptBindState(state) && state.hasCliValue) return false;
+      return true;
+    },
+
     getDocFragments(state, upperDefaultValue?) {
       const configDefault = "default" in cfg
         ? (cfg as { default?: unknown }).default
