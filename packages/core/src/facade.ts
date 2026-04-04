@@ -2995,54 +2995,8 @@ export type ContextOptionsParam<
   : { readonly contextOptions: ExtractRequiredOptions<TContexts, TValue> };
 
 /**
- * Runs a parser with multiple source contexts.
- *
- * This function automatically handles static and dynamic contexts with proper
- * priority. Earlier contexts in the array override later ones.
- *
- * The function uses a smart two-phase approach:
- *
- * 1. *Phase 1*: Collect annotations from all contexts (static contexts return
- *    their data, dynamic contexts may return empty).
- * 2. *First parse*: Parse with Phase 1 annotations.
- * 3. *Phase 2*: Call `getAnnotations(parsed)` on all contexts with the first
- *    parse result.
- * 4. *Second parse*: Parse again with merged annotations from both phases.
- *
- * If all contexts are static (no dynamic contexts), the second parse is skipped
- * for optimization.
- *
- * @template TParser The parser type.
- * @template THelp Return type when help is shown.
- * @template TError Return type when an error occurs.
- * @param parser The parser to execute.
- * @param programName Name of the program for help/error output.
- * @param contexts Source contexts to use (priority: earlier overrides later).
- * @param options Run options including args, help, version, etc.
- * @returns Promise that resolves to the parsed result.
- * @throws {TypeError} If two or more contexts share the same
- * {@link SourceContext.id}.
- * @since 0.10.0
- *
- * @example
- * ```typescript
- * import { runWith } from "@optique/core/facade";
- * import type { SourceContext } from "@optique/core/context";
- *
- * const envContext: SourceContext = {
- *   id: Symbol.for("@myapp/env"),
- *   getAnnotations() {
- *     return { [Symbol.for("@myapp/env")]: process.env };
- *   }
- * };
- *
- * const result = await runWith(
- *   parser,
- *   "myapp",
- *   [envContext],
- *   { args: process.argv.slice(2) }
- * );
- * ```
+ * Body of {@link runWith}, extracted so that the caller can handle
+ * disposal outside a `finally` block (avoiding `no-unsafe-finally` lint).
  */
 async function runWithBody<
   TParser extends Parser<Mode, unknown, unknown>,
@@ -3197,6 +3151,59 @@ async function runWithBody<
   );
 }
 
+/**
+ * Runs a parser with multiple source contexts.
+ *
+ * This function automatically handles static and dynamic contexts with proper
+ * priority. Earlier contexts in the array override later ones.
+ *
+ * The function uses a smart two-phase approach:
+ *
+ * 1. *Phase 1*: Collect annotations from all contexts (static contexts return
+ *    their data, dynamic contexts may return empty).
+ * 2. *First parse*: Parse with Phase 1 annotations.
+ * 3. *Phase 2*: Call `getAnnotations(parsed)` on all contexts with the first
+ *    parse result.
+ * 4. *Second parse*: Parse again with merged annotations from both phases.
+ *
+ * If all contexts are static (no dynamic contexts), the second parse is skipped
+ * for optimization.
+ *
+ * @template TParser The parser type.
+ * @template THelp Return type when help is shown.
+ * @template TError Return type when an error occurs.
+ * @param parser The parser to execute.
+ * @param programName Name of the program for help/error output.
+ * @param contexts Source contexts to use (priority: earlier overrides later).
+ * @param options Run options including args, help, version, etc.
+ * @returns Promise that resolves to the parsed result.
+ * @throws {TypeError} If two or more contexts share the same
+ * {@link SourceContext.id}.
+ * @throws {SuppressedError} If parsing fails and a context's disposal also
+ * throws.  The original parse error is available via `.suppressed` and the
+ * disposal error via `.error`.
+ * @since 0.10.0
+ *
+ * @example
+ * ```typescript
+ * import { runWith } from "@optique/core/facade";
+ * import type { SourceContext } from "@optique/core/context";
+ *
+ * const envContext: SourceContext = {
+ *   id: Symbol.for("@myapp/env"),
+ *   getAnnotations() {
+ *     return { [Symbol.for("@myapp/env")]: process.env };
+ *   }
+ * };
+ *
+ * const result = await runWith(
+ *   parser,
+ *   "myapp",
+ *   [envContext],
+ *   { args: process.argv.slice(2) }
+ * );
+ * ```
+ */
 export async function runWith<
   TParser extends Parser<Mode, unknown, unknown>,
   TContexts extends readonly SourceContext<unknown>[],
@@ -3362,6 +3369,9 @@ function runWithSyncBody<
  * {@link SourceContext.id}.
  * @throws {Error} If any context returns a Promise or if a context's
  * `[Symbol.asyncDispose]` returns a Promise.
+ * @throws {SuppressedError} If parsing fails and a context's disposal also
+ * throws.  The original parse error is available via `.suppressed` and the
+ * disposal error via `.error`.
  * @since 0.10.0
  */
 export function runWithSync<
