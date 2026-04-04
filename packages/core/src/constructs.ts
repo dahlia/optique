@@ -2979,8 +2979,11 @@ export function or(
         error = result;
       }
     }
-    // Accept non-consuming branch as fallback when no branch consumed input.
-    if (zeroConsumedBranch !== null) {
+    // Accept non-consuming branch as fallback only when no branch consumed
+    // any tokens before failing.  If a branch did consume (error.consumed > 0),
+    // its specific error (e.g., "requires a value") is more informative than
+    // a silent fallback to a non-consuming branch.
+    if (zeroConsumedBranch !== null && error.consumed === 0) {
       const mergedExec = mergeChildExec(
         context.exec,
         zeroConsumedBranch.result.next.exec,
@@ -3151,8 +3154,9 @@ export function or(
         error = result;
       }
     }
-    // Accept non-consuming branch as fallback when no branch consumed input.
-    if (zeroConsumedBranch !== null) {
+    // Accept non-consuming branch as fallback only when no branch consumed
+    // any tokens before failing (see sync counterpart for rationale).
+    if (zeroConsumedBranch !== null && error.consumed === 0) {
       const mergedExec = mergeChildExec(
         context.exec,
         zeroConsumedBranch.result.next.exec,
@@ -10044,35 +10048,47 @@ export function conditional(
             };
           }
 
-          // Branch parse failed but discriminator succeeded
-          return {
-            success: true,
-            next: {
-              ...discriminatorResult.next,
-              state: {
-                discriminatorState: annotatedDiscriminatorState,
-                discriminatorValue: value,
-                selectedBranch: { kind: "branch", key: value },
-                branchState: getAnnotatedChildState(
-                  state,
-                  branchParser.initialState,
-                  branchParser,
-                ),
+          // Branch parse failed but discriminator succeeded.
+          // Only commit when the discriminator actually consumed input.
+          // A zero-consumed discriminator (e.g., constant()) should fall
+          // through to the default branch or error path instead of
+          // returning an empty success that stalls the parse loop.
+          if (discriminatorResult.consumed.length > 0) {
+            return {
+              success: true,
+              next: {
+                ...discriminatorResult.next,
+                state: {
+                  discriminatorState: annotatedDiscriminatorState,
+                  discriminatorValue: value,
+                  selectedBranch: { kind: "branch", key: value },
+                  branchState: getAnnotatedChildState(
+                    state,
+                    branchParser.initialState,
+                    branchParser,
+                  ),
+                },
+                ...(discriminatorExec != null
+                  ? {
+                    exec: discriminatorExec,
+                    dependencyRegistry: discriminatorExec.dependencyRegistry,
+                  }
+                  : {}),
               },
-              ...(discriminatorExec != null
-                ? {
-                  exec: discriminatorExec,
-                  dependencyRegistry: discriminatorExec.dependencyRegistry,
-                }
-                : {}),
-            },
-            consumed: discriminatorResult.consumed,
-          };
+              consumed: discriminatorResult.consumed,
+            };
+          }
         }
       }
     }
 
-    // Discriminator didn't match, try default branch
+    // Discriminator didn't match or didn't consume input, try default branch.
+    // Only accept a zero-consuming default when the discriminator also
+    // consumed nothing; otherwise, the discriminator's partial-match error
+    // is more informative and should be preserved.
+    const discriminatorConsumed = discriminatorResult.success
+      ? discriminatorResult.consumed.length
+      : discriminatorResult.consumed;
     if (syncDefaultBranch !== undefined) {
       const defaultResult = syncDefaultBranch.parse(
         withChildContext(
@@ -10084,7 +10100,10 @@ export function conditional(
         ),
       );
 
-      if (defaultResult.success) {
+      if (
+        defaultResult.success &&
+        (defaultResult.consumed.length > 0 || discriminatorConsumed === 0)
+      ) {
         const mergedExec = mergeChildExec(
           context.exec,
           defaultResult.next.exec,
@@ -10258,35 +10277,43 @@ export function conditional(
             };
           }
 
-          // Branch parse failed but discriminator succeeded
-          return {
-            success: true,
-            next: {
-              ...discriminatorResult.next,
-              state: {
-                discriminatorState: annotatedDiscriminatorState,
-                discriminatorValue: value,
-                selectedBranch: { kind: "branch", key: value },
-                branchState: getAnnotatedChildState(
-                  state,
-                  branchParser.initialState,
-                  branchParser,
-                ),
+          // Branch parse failed but discriminator succeeded.
+          // Only commit when the discriminator actually consumed input
+          // (see sync counterpart for rationale).
+          if (discriminatorResult.consumed.length > 0) {
+            return {
+              success: true,
+              next: {
+                ...discriminatorResult.next,
+                state: {
+                  discriminatorState: annotatedDiscriminatorState,
+                  discriminatorValue: value,
+                  selectedBranch: { kind: "branch", key: value },
+                  branchState: getAnnotatedChildState(
+                    state,
+                    branchParser.initialState,
+                    branchParser,
+                  ),
+                },
+                ...(discriminatorExec != null
+                  ? {
+                    exec: discriminatorExec,
+                    dependencyRegistry: discriminatorExec.dependencyRegistry,
+                  }
+                  : {}),
               },
-              ...(discriminatorExec != null
-                ? {
-                  exec: discriminatorExec,
-                  dependencyRegistry: discriminatorExec.dependencyRegistry,
-                }
-                : {}),
-            },
-            consumed: discriminatorResult.consumed,
-          };
+              consumed: discriminatorResult.consumed,
+            };
+          }
         }
       }
     }
 
-    // Discriminator didn't match, try default branch
+    // Discriminator didn't match or didn't consume input, try default branch
+    // (see sync counterpart for rationale on the consumption guard).
+    const discriminatorConsumed = discriminatorResult.success
+      ? discriminatorResult.consumed.length
+      : discriminatorResult.consumed;
     if (defaultBranch !== undefined) {
       const defaultResult = await defaultBranch.parse(
         withChildContext(
@@ -10298,7 +10325,10 @@ export function conditional(
         ),
       );
 
-      if (defaultResult.success) {
+      if (
+        defaultResult.success &&
+        (defaultResult.consumed.length > 0 || discriminatorConsumed === 0)
+      ) {
         const mergedExec = mergeChildExec(
           context.exec,
           defaultResult.next.exec,

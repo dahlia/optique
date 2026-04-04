@@ -972,6 +972,17 @@ describe("or", () => {
       assert.equal(result.value, "hi");
     }
   });
+
+  it("should preserve consuming branch error over non-consuming fallback", () => {
+    // When a branch consumed tokens before failing (e.g., -o without a
+    // value), the specific error should be preserved instead of silently
+    // falling back to the non-consuming branch.
+    const result = parseSync(
+      or(constant("fallback"), option("-o", string())),
+      ["-o"],
+    );
+    assert.ok(!result.success);
+  });
 });
 
 describe("or() - duplicate option handling", () => {
@@ -7776,6 +7787,30 @@ describe("conditional", () => {
     if (result.success) {
       assert.deepEqual(result.value, ["key", "branch-value"]);
     }
+  });
+
+  it("should not commit to zero-consumed discriminator when branch fails", () => {
+    // When the discriminator succeeds with consumed=[] but the branch
+    // fails, conditional() should fall through instead of returning an
+    // empty success that stalls the parse loop.
+    const parser = conditional(
+      constant("key") as Parser<"sync", string>,
+      { key: option("-o", string()) },
+    );
+    const result = parseSync(parser, ["-o"]);
+    assert.ok(!result.success);
+  });
+
+  it("should preserve discriminator error over zero-consuming default", () => {
+    // When the discriminator consumed tokens before failing, the
+    // zero-consuming default branch should not override that error.
+    const parser = conditional(
+      option("--type", choice(["a"])) as Parser<"sync", string>,
+      { a: constant("A") },
+      constant("D"),
+    );
+    const result = parseSync(parser, ["--type"]);
+    assert.ok(!result.success);
   });
 });
 
