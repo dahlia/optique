@@ -10297,9 +10297,7 @@ export function conditional(
       ),
     });
 
-    if (
-      discriminatorResult.success && discriminatorResult.consumed.length > 0
-    ) {
+    if (discriminatorResult.success) {
       const annotatedDiscriminatorState = getAnnotatedChildState(
         state,
         discriminatorResult.next.state,
@@ -10433,41 +10431,6 @@ export function conditional(
       }
     }
 
-    // Zero-consuming discriminator: store state but defer value
-    // resolution to complete (see sync counterpart for rationale).
-    if (
-      discriminatorResult.success &&
-      discriminatorResult.consumed.length === 0 &&
-      context.buffer.length === 0
-    ) {
-      const annotatedDiscriminatorState = getAnnotatedChildState(
-        state,
-        discriminatorResult.next.state,
-        discriminator,
-      );
-      const mergedExec = mergeChildExec(
-        context.exec,
-        discriminatorResult.next.exec,
-      );
-      return {
-        success: true,
-        next: {
-          ...context,
-          state: {
-            ...state,
-            discriminatorState: annotatedDiscriminatorState,
-          },
-          ...(mergedExec != null
-            ? {
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
-            : {}),
-        },
-        consumed: [],
-      };
-    }
-
     // Discriminator didn't match or didn't consume input, try default branch
     // (see sync counterpart for rationale on the consumption/buffer guard).
     const discriminatorConsumed = discriminatorResult.success
@@ -10568,9 +10531,12 @@ export function conditional(
         const deferredValue = deferredDiscriminatorResult.value as string;
         const deferredBranch = syncBranches[deferredValue];
         if (deferredBranch) {
+          // Always use the branch's own initialState — state.branchState
+          // may hold the default branch's state from a zero-consumed
+          // default fallback during parse.
           const branchState = getAnnotatedChildState(
             state,
-            state.branchState ?? deferredBranch.initialState,
+            deferredBranch.initialState,
             deferredBranch,
           );
           const branchResult = unwrapCompleteResult(
@@ -10804,9 +10770,10 @@ export function conditional(
         const deferredValue = deferredDiscriminatorResult.value as string;
         const deferredBranch = branches[deferredValue];
         if (deferredBranch) {
+          // Always use the branch's own initialState (see sync).
           const branchState = getAnnotatedChildState(
             state,
-            state.branchState ?? deferredBranch.initialState,
+            deferredBranch.initialState,
             deferredBranch,
           );
           const branchResult = unwrapCompleteResult(
