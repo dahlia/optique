@@ -2849,10 +2849,10 @@ export function or(
       activeState?.[0] === a ? -1 : activeState?.[0] === b ? 1 : a - b
     );
     // Track the first non-consuming successful branch as a fallback.
-    // Only pure non-interactive parsers (e.g., constant()) qualify: they
-    // have no usage terms and cannot accept any token.  This prevents
-    // object() or option() parsers that happen to succeed with empty input
-    // from being mistakenly selected as fallback branches.
+    // Only parsers with no leading names and no catch-all acceptance
+    // qualify (e.g., constant(), multiple(constant()), optional(constant())).
+    // This prevents object() or option() parsers that happen to succeed
+    // with empty input from being mistakenly selected as fallback branches.
     let zeroConsumedBranch: {
       index: number;
       parser: Parser<"sync", unknown, unknown>;
@@ -2972,7 +2972,7 @@ export function or(
       } else if (
         result.success && result.consumed.length === 0 &&
         zeroConsumedBranch === null &&
-        parser.usage.length === 0 && !parser.acceptingAnyToken
+        parser.leadingNames.size === 0 && !parser.acceptingAnyToken
       ) {
         zeroConsumedBranch = { index: i, parser, result };
       } else if (!result.success && error.consumed < result.consumed) {
@@ -3024,7 +3024,7 @@ export function or(
       activeState?.[0] === a ? -1 : activeState?.[0] === b ? 1 : a - b
     );
     // Track the first non-consuming successful branch as a fallback.
-    // Only pure non-interactive parsers (e.g., constant()) qualify.
+    // Only parsers with no leading names and no catch-all acceptance qualify.
     let zeroConsumedBranch: {
       index: number;
       parser: Parser<Mode, unknown, unknown>;
@@ -3147,7 +3147,7 @@ export function or(
       } else if (
         result.success && result.consumed.length === 0 &&
         zeroConsumedBranch === null &&
-        parser.usage.length === 0 && !parser.acceptingAnyToken
+        parser.leadingNames.size === 0 && !parser.acceptingAnyToken
       ) {
         zeroConsumedBranch = { index: i, parser, result };
       } else if (!result.success && error.consumed < result.consumed) {
@@ -10078,6 +10078,12 @@ export function conditional(
               consumed: discriminatorResult.consumed,
             };
           }
+          // When the branch consumed tokens before failing, propagate
+          // the branch's specific error (e.g., "requires a value")
+          // instead of falling through to a generic no-match error.
+          if (!branchParseResult.success && branchParseResult.consumed > 0) {
+            return branchParseResult;
+          }
         }
       }
     }
@@ -10304,6 +10310,11 @@ export function conditional(
               },
               consumed: discriminatorResult.consumed,
             };
+          }
+          // When the branch consumed tokens before failing, propagate
+          // the branch's specific error (see sync counterpart).
+          if (!branchParseResult.success && branchParseResult.consumed > 0) {
+            return branchParseResult;
           }
         }
       }

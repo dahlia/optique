@@ -983,6 +983,28 @@ describe("or", () => {
     );
     assert.ok(!result.success);
   });
+
+  it("should accept wrapped non-interactive branches as fallback", () => {
+    // multiple(constant(...)) and optional(constant(...)) have non-empty
+    // usage but empty leadingNames, so they qualify as non-interactive.
+    const result1 = parseSync(
+      or(multiple(constant("fixed")), option("-o", string())),
+      [],
+    );
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.deepEqual(result1.value, ["fixed"]);
+    }
+
+    const result2 = parseSync(
+      or(optional(constant("x")), option("-o", string())),
+      [],
+    );
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value, "x");
+    }
+  });
 });
 
 describe("or() - duplicate option handling", () => {
@@ -7791,14 +7813,23 @@ describe("conditional", () => {
 
   it("should not commit to zero-consumed discriminator when branch fails", () => {
     // When the discriminator succeeds with consumed=[] but the branch
-    // fails, conditional() should fall through instead of returning an
-    // empty success that stalls the parse loop.
+    // consumes tokens before failing, conditional() should propagate the
+    // branch's specific error instead of a generic no-match message.
     const parser = conditional(
       constant("key") as Parser<"sync", string>,
       { key: option("-o", string()) },
     );
     const result = parseSync(parser, ["-o"]);
     assert.ok(!result.success);
+    if (!result.success) {
+      // The branch error ("requires a value") should be preserved,
+      // not replaced by a generic "no match" error.
+      const msg = formatMessage(result.error);
+      assert.ok(
+        msg.includes("value") || msg.includes("requires"),
+        `Expected a specific error but got: ${msg}`,
+      );
+    }
   });
 
   it("should preserve discriminator error over zero-consuming default", () => {
