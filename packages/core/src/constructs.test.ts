@@ -51,6 +51,7 @@ import {
   argument,
   command,
   constant,
+  fail,
   flag,
   option,
   passThrough,
@@ -7828,6 +7829,25 @@ describe("conditional", () => {
       assert.ok(
         msg.includes("value") || msg.includes("requires"),
         `Expected a specific error but got: ${msg}`,
+      );
+    }
+  });
+
+  it("should not fall through to default after matched zero-consumed discriminator", () => {
+    // When a zero-consumed discriminator selects a branch that fails,
+    // the branch error should be returned — not the default branch.
+    const parser = conditional(
+      constant("key") as Parser<"sync", string>,
+      { key: fail<string>() },
+      constant("D"),
+    );
+    const result = parseSync(parser, []);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const msg = formatMessage(result.error);
+      assert.ok(
+        msg.includes("No value provided"),
+        `Expected branch error but got: ${msg}`,
       );
     }
   });

@@ -5081,14 +5081,15 @@ export function object<
       );
       for (const [field, parser] of parserPairs) {
         if (consumedFields.has(field as string | symbol)) continue;
+        const typedParser = parser as Parser<"sync", unknown, unknown>;
         if (
           parser.leadingNames.size > 0 ||
-          (parser as Parser<"sync", unknown, unknown>).acceptingAnyToken
+          typedParser.acceptingAnyToken
         ) {
           continue;
         }
         const fieldState = getFieldState(field, parser);
-        const result = (parser as Parser<"sync", unknown, unknown>).parse(
+        const result = typedParser.parse(
           withChildContext(
             currentContext,
             field,
@@ -5098,18 +5099,7 @@ export function object<
         );
         if (
           result.success && result.consumed.length === 0 &&
-          result.next.state !== fieldState &&
-          // Skip bound CLI wrapper states (bindEnv, bindConfig, prompt):
-          // their parse() wraps state in a way that alters complete()
-          // semantics (e.g., suppressing defaults or duplicating prompts).
-          !(
-            result.next.state != null &&
-            typeof result.next.state === "object" &&
-            Object.hasOwn(
-              result.next.state as Record<PropertyKey, unknown>,
-              "hasCliValue",
-            )
-          )
+          result.next.state !== fieldState
         ) {
           const mergedExec = mergeChildExec(
             currentContext.exec,
@@ -5253,7 +5243,12 @@ export function object<
         if (consumedFields.has(field as string | symbol)) continue;
         if (
           parser.leadingNames.size > 0 ||
-          parser.acceptingAnyToken
+          parser.acceptingAnyToken ||
+          // Skip async parsers: wrappers like prompt() are always async
+          // and their parse() wraps state in ways that alter complete()
+          // semantics.  The cases we need (constant, multiple(constant))
+          // are always sync.
+          parser.$mode === "async"
         ) {
           continue;
         }
@@ -5269,15 +5264,7 @@ export function object<
         const result = await resultOrPromise;
         if (
           result.success && result.consumed.length === 0 &&
-          result.next.state !== fieldState &&
-          !(
-            result.next.state != null &&
-            typeof result.next.state === "object" &&
-            Object.hasOwn(
-              result.next.state as Record<PropertyKey, unknown>,
-              "hasCliValue",
-            )
-          )
+          result.next.state !== fieldState
         ) {
           const mergedExec = mergeChildExec(
             currentContext.exec,
@@ -10049,11 +10036,9 @@ export function conditional(
           }
 
           // Branch parse failed but discriminator succeeded.
-          // Only commit when the discriminator actually consumed input.
-          // A zero-consumed discriminator (e.g., constant()) should fall
-          // through to the default branch or error path instead of
-          // returning an empty success that stalls the parse loop.
           if (discriminatorResult.consumed.length > 0) {
+            // Discriminator consumed input — commit to the branch even
+            // though it hasn't consumed yet (it may on the next call).
             return {
               success: true,
               next: {
@@ -10078,12 +10063,10 @@ export function conditional(
               consumed: discriminatorResult.consumed,
             };
           }
-          // When the branch consumed tokens before failing, propagate
-          // the branch's specific error (e.g., "requires a value")
-          // instead of falling through to a generic no-match error.
-          if (!branchParseResult.success && branchParseResult.consumed > 0) {
-            return branchParseResult;
-          }
+          // Zero-consumed discriminator: the branch selection IS committed
+          // (the discriminator matched a valid key), so propagate the
+          // branch's error instead of falling through to the default.
+          return branchParseResult;
         }
       }
     }
@@ -10283,8 +10266,7 @@ export function conditional(
             };
           }
 
-          // Branch parse failed but discriminator succeeded.
-          // Only commit when the discriminator actually consumed input
+          // Branch parse failed but discriminator succeeded
           // (see sync counterpart for rationale).
           if (discriminatorResult.consumed.length > 0) {
             return {
@@ -10311,11 +10293,7 @@ export function conditional(
               consumed: discriminatorResult.consumed,
             };
           }
-          // When the branch consumed tokens before failing, propagate
-          // the branch's specific error (see sync counterpart).
-          if (!branchParseResult.success && branchParseResult.consumed > 0) {
-            return branchParseResult;
-          }
+          return branchParseResult;
         }
       }
     }
