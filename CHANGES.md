@@ -363,6 +363,14 @@ To be released.
     wraps both failures in a `SuppressedError` (following TC39 conventions)
     instead of silently replacing the parse error.  [[#246], [#771]]
 
+ -  Fixed constructs dropping values from parsers that only produce results
+    in `complete()`.  `object()` now runs a zero-consumption pass after its
+    greedy loop so that purely non-interactive child parsers (e.g.,
+    `multiple(constant(...))`) can update their state even when they return
+    `consumed: []`.  `or()` now accepts non-consuming branches as a fallback
+    when no branch consumed input.  `conditional()` no longer requires the
+    discriminator or default branch to consume input.  [[#232]]
+
  -  Fixed `optional()` and `withDefault()` crashing when the parser's state
     is an annotation-injected object instead of `undefined`.  The state
     discrimination in `modifiers.ts` now uses `Array.isArray(state)` to
@@ -1181,6 +1189,7 @@ To be released.
 [#227]: https://github.com/dahlia/optique/issues/227
 [#228]: https://github.com/dahlia/optique/issues/228
 [#229]: https://github.com/dahlia/optique/issues/229
+[#232]: https://github.com/dahlia/optique/issues/232
 [#235]: https://github.com/dahlia/optique/issues/235
 [#238]: https://github.com/dahlia/optique/issues/238
 [#240]: https://github.com/dahlia/optique/issues/240

@@ -2848,6 +2848,16 @@ export function or(
     orderedParsers.sort(([_, a], [__, b]) =>
       activeState?.[0] === a ? -1 : activeState?.[0] === b ? 1 : a - b
     );
+    // Track the first non-consuming successful branch as a fallback.
+    // Only pure non-interactive parsers (e.g., constant()) qualify: they
+    // have no usage terms and cannot accept any token.  This prevents
+    // object() or option() parsers that happen to succeed with empty input
+    // from being mistakenly selected as fallback branches.
+    let zeroConsumedBranch: {
+      index: number;
+      parser: Parser<"sync", unknown, unknown>;
+      result: ParserResult<unknown> & { success: true };
+    } | null = null;
     for (const [parser, i] of orderedParsers) {
       const result = parser.parse(
         withChildContext(
@@ -2959,9 +2969,41 @@ export function or(
           },
           consumed: result.consumed,
         };
+      } else if (
+        result.success && result.consumed.length === 0 &&
+        zeroConsumedBranch === null &&
+        parser.usage.length === 0 && !parser.acceptingAnyToken
+      ) {
+        zeroConsumedBranch = { index: i, parser, result };
       } else if (!result.success && error.consumed < result.consumed) {
         error = result;
       }
+    }
+    // Accept non-consuming branch as fallback when no branch consumed input.
+    if (zeroConsumedBranch !== null) {
+      const mergedExec = mergeChildExec(
+        context.exec,
+        zeroConsumedBranch.result.next.exec,
+      );
+      return {
+        success: true,
+        next: {
+          ...context,
+          state: createExclusiveState(
+            context.state,
+            zeroConsumedBranch.index,
+            zeroConsumedBranch.parser,
+            zeroConsumedBranch.result,
+          ),
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        },
+        consumed: [],
+      };
     }
     return { ...error, success: false };
   };
@@ -2978,6 +3020,13 @@ export function or(
     orderedParsers.sort(([_, a], [__, b]) =>
       activeState?.[0] === a ? -1 : activeState?.[0] === b ? 1 : a - b
     );
+    // Track the first non-consuming successful branch as a fallback.
+    // Only pure non-interactive parsers (e.g., constant()) qualify.
+    let zeroConsumedBranch: {
+      index: number;
+      parser: Parser<Mode, unknown, unknown>;
+      result: ParserResult<unknown> & { success: true };
+    } | null = null;
     for (const [parser, i] of orderedParsers) {
       const resultOrPromise = parser.parse(
         withChildContext(
@@ -3092,9 +3141,41 @@ export function or(
           },
           consumed: result.consumed,
         };
+      } else if (
+        result.success && result.consumed.length === 0 &&
+        zeroConsumedBranch === null &&
+        parser.usage.length === 0 && !parser.acceptingAnyToken
+      ) {
+        zeroConsumedBranch = { index: i, parser, result };
       } else if (!result.success && error.consumed < result.consumed) {
         error = result;
       }
+    }
+    // Accept non-consuming branch as fallback when no branch consumed input.
+    if (zeroConsumedBranch !== null) {
+      const mergedExec = mergeChildExec(
+        context.exec,
+        zeroConsumedBranch.result.next.exec,
+      );
+      return {
+        success: true,
+        next: {
+          ...context,
+          state: createExclusiveState(
+            context.state,
+            zeroConsumedBranch.index,
+            zeroConsumedBranch.parser,
+            zeroConsumedBranch.result,
+          ),
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        },
+        consumed: [],
+      };
     }
     return { ...error, success: false };
   };
@@ -4923,6 +5004,7 @@ export function object<
     let currentContext = context;
     let anySuccess = false;
     const allConsumed: string[] = [];
+    const consumedFields = new Set<string | symbol>();
 
     // Keep trying to parse fields until no more can be matched
     let madeProgress = true;
@@ -4971,9 +5053,82 @@ export function object<
           allConsumed.push(...result.consumed);
           anySuccess = true;
           madeProgress = true;
+          consumedFields.add(field as string | symbol);
           break; // Restart the field loop with updated context
         } else if (!result.success && error.consumed < result.consumed) {
           error = result;
+        }
+      }
+    }
+
+    // Zero-consumption pass: let purely non-interactive parsers update
+    // their state.  Parsers like multiple(constant(...)) modify state in
+    // parse() even when they return consumed: [].  The greedy loop above
+    // skips these state changes, so we give each such field one parse()
+    // call here.  Only parsers with no leading names and no catch-all
+    // acceptance qualify — they can never match input tokens.  Parsers
+    // that CAN match tokens but happened not to (e.g., optional options)
+    // must be skipped: calling parse() on them changes state wrapping in
+    // ways that alter complete() semantics.
+    {
+      const getFieldState = createFieldStateGetter(
+        currentContext.state,
+        getObjectParseChildState,
+      );
+      for (const [field, parser] of parserPairs) {
+        if (consumedFields.has(field as string | symbol)) continue;
+        if (
+          parser.leadingNames.size > 0 ||
+          (parser as Parser<"sync", unknown, unknown>).acceptingAnyToken
+        ) {
+          continue;
+        }
+        const fieldState = getFieldState(field, parser);
+        const result = (parser as Parser<"sync", unknown, unknown>).parse(
+          withChildContext(
+            currentContext,
+            field,
+            fieldState,
+            parser,
+          ),
+        );
+        if (
+          result.success && result.consumed.length === 0 &&
+          result.next.state !== fieldState &&
+          // Skip bound CLI wrapper states (bindEnv, bindConfig, prompt):
+          // their parse() wraps state in a way that alters complete()
+          // semantics (e.g., suppressing defaults or duplicating prompts).
+          !(
+            result.next.state != null &&
+            typeof result.next.state === "object" &&
+            Object.hasOwn(
+              result.next.state as Record<PropertyKey, unknown>,
+              "hasCliValue",
+            )
+          )
+        ) {
+          const mergedExec = mergeChildExec(
+            currentContext.exec,
+            result.next.exec,
+          );
+          currentContext = {
+            ...currentContext,
+            state: {
+              ...(currentContext.state as Record<string | symbol, unknown>),
+              [field as string | symbol]: getAnnotatedChildState(
+                currentContext.state,
+                result.next.state,
+                parser,
+              ),
+            } as { readonly [K in keyof T]: unknown },
+            ...(mergedExec != null
+              ? {
+                trace: mergedExec.trace,
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
+          };
         }
       }
     }
@@ -4987,14 +5142,16 @@ export function object<
       };
     }
 
-    // If buffer is empty and no parser consumed input, check if all parsers can complete
-    if (context.buffer.length === 0) {
+    // If buffer is empty and no parser consumed input, check if all parsers
+    // can complete.  Use currentContext (not the original context) so that
+    // state changes from the zero-consumption pass are visible.
+    if (currentContext.buffer.length === 0) {
       let allCanComplete = true;
-      const getFieldState = createFieldStateGetter(context.state);
+      const getFieldState = createFieldStateGetter(currentContext.state);
       for (const [field, parser] of parserPairs) {
         const fieldState = getFieldState(field, parser);
         const completeResult = (parser as Parser<"sync", unknown, unknown>)
-          .complete(fieldState, withChildExecPath(context.exec, field));
+          .complete(fieldState, withChildExecPath(currentContext.exec, field));
         if (!completeResult.success) {
           allCanComplete = false;
           break;
@@ -5004,7 +5161,7 @@ export function object<
       if (allCanComplete) {
         return {
           success: true,
-          next: context,
+          next: currentContext,
           consumed: [],
         };
       }
@@ -5023,6 +5180,7 @@ export function object<
     let currentContext = context;
     let anySuccess = false;
     const allConsumed: string[] = [];
+    const consumedFields = new Set<string | symbol>();
 
     // Keep trying to parse fields until no more can be matched
     let madeProgress = true;
@@ -5072,9 +5230,73 @@ export function object<
           allConsumed.push(...result.consumed);
           anySuccess = true;
           madeProgress = true;
+          consumedFields.add(field as string | symbol);
           break; // Restart the field loop with updated context
         } else if (!result.success && error.consumed < result.consumed) {
           error = result;
+        }
+      }
+    }
+
+    // Zero-consumption pass: let purely non-interactive parsers update
+    // their state (see sync counterpart for rationale).
+    {
+      const getFieldState = createFieldStateGetter(
+        currentContext.state,
+        getObjectParseChildState,
+      );
+      for (const [field, parser] of parserPairs) {
+        if (consumedFields.has(field as string | symbol)) continue;
+        if (
+          parser.leadingNames.size > 0 ||
+          parser.acceptingAnyToken
+        ) {
+          continue;
+        }
+        const fieldState = getFieldState(field, parser);
+        const resultOrPromise = parser.parse(
+          withChildContext(
+            currentContext,
+            field,
+            fieldState,
+            parser,
+          ),
+        );
+        const result = await resultOrPromise;
+        if (
+          result.success && result.consumed.length === 0 &&
+          result.next.state !== fieldState &&
+          !(
+            result.next.state != null &&
+            typeof result.next.state === "object" &&
+            Object.hasOwn(
+              result.next.state as Record<PropertyKey, unknown>,
+              "hasCliValue",
+            )
+          )
+        ) {
+          const mergedExec = mergeChildExec(
+            currentContext.exec,
+            result.next.exec,
+          );
+          currentContext = {
+            ...currentContext,
+            state: {
+              ...(currentContext.state as Record<string | symbol, unknown>),
+              [field as string | symbol]: getAnnotatedChildState(
+                currentContext.state,
+                result.next.state,
+                parser,
+              ),
+            } as { readonly [K in keyof T]: unknown },
+            ...(mergedExec != null
+              ? {
+                trace: mergedExec.trace,
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
+          };
         }
       }
     }
@@ -5088,15 +5310,17 @@ export function object<
       };
     }
 
-    // If buffer is empty and no parser consumed input, check if all parsers can complete
-    if (context.buffer.length === 0) {
+    // If buffer is empty and no parser consumed input, check if all parsers
+    // can complete.  Use currentContext (not the original context) so that
+    // state changes from the zero-consumption pass are visible.
+    if (currentContext.buffer.length === 0) {
       let allCanComplete = true;
-      const getFieldState = createFieldStateGetter(context.state);
+      const getFieldState = createFieldStateGetter(currentContext.state);
       for (const [field, parser] of parserPairs) {
         const fieldState = getFieldState(field, parser);
         const completeResult = await parser.complete(
           fieldState,
-          withChildExecPath(context.exec, field),
+          withChildExecPath(currentContext.exec, field),
         );
         if (!completeResult.success) {
           allCanComplete = false;
@@ -5107,7 +5331,7 @@ export function object<
       if (allCanComplete) {
         return {
           success: true,
-          next: context,
+          next: currentContext,
           consumed: [],
         };
       }
@@ -9744,7 +9968,7 @@ export function conditional(
     });
 
     if (
-      discriminatorResult.success && discriminatorResult.consumed.length > 0
+      discriminatorResult.success
     ) {
       const annotatedDiscriminatorState = getAnnotatedChildState(
         state,
@@ -9860,7 +10084,7 @@ export function conditional(
         ),
       );
 
-      if (defaultResult.success && defaultResult.consumed.length > 0) {
+      if (defaultResult.success) {
         const mergedExec = mergeChildExec(
           context.exec,
           defaultResult.next.exec,
@@ -9958,7 +10182,7 @@ export function conditional(
     });
 
     if (
-      discriminatorResult.success && discriminatorResult.consumed.length > 0
+      discriminatorResult.success
     ) {
       const annotatedDiscriminatorState = getAnnotatedChildState(
         state,
@@ -10074,7 +10298,7 @@ export function conditional(
         ),
       );
 
-      if (defaultResult.success && defaultResult.consumed.length > 0) {
+      if (defaultResult.success) {
         const mergedExec = mergeChildExec(
           context.exec,
           defaultResult.next.exec,

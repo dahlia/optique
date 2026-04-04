@@ -5128,19 +5128,19 @@ describe("state management edge cases", () => {
     // any more input. This is expected behavior - constant() is typically
     // used for discriminated unions, not for default values in object().
     // Use withDefault() instead for default values.
-    it("should return undefined in object() context (documents current behavior)", () => {
+    it("should return constant value in object() context", () => {
       const parser = object({
         mode: optional(constant("default-mode" as const)),
         verbose: optional(option("-v")),
       });
 
-      // Empty input - optional returns undefined because constant() is never
-      // tried (it can't consume anything)
+      // Empty input - optional(constant()) produces the constant value
+      // because object() runs a zero-consumption pass that lets
+      // non-consuming parsers update their state.
       const result1 = parse(parser, []);
       assert.ok(result1.success);
       if (result1.success) {
-        // This documents current behavior - mode is undefined, not "default-mode"
-        assert.equal(result1.value.mode, undefined);
+        assert.equal(result1.value.mode, "default-mode");
         assert.equal(result1.value.verbose, undefined);
       }
 
@@ -5148,7 +5148,7 @@ describe("state management edge cases", () => {
       const result2 = parse(parser, ["-v"]);
       assert.ok(result2.success);
       if (result2.success) {
-        assert.equal(result2.value.mode, undefined);
+        assert.equal(result2.value.mode, "default-mode");
         assert.equal(result2.value.verbose, true);
       }
     });

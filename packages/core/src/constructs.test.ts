@@ -951,6 +951,27 @@ describe("or", () => {
       );
     });
   });
+  it("should accept non-consuming branch as fallback", () => {
+    const result = parseSync(
+      or(constant("fallback"), option("-o", string())),
+      [],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "fallback");
+    }
+  });
+
+  it("should prefer consuming branch over non-consuming", () => {
+    const result = parseSync(
+      or(constant("fallback"), option("-o", string())),
+      ["-o", "hi"],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "hi");
+    }
+  });
 });
 
 describe("or() - duplicate option handling", () => {
@@ -2926,6 +2947,69 @@ describe("object", () => {
         assert.equal(result.value[sym], 15);
       }
     });
+  });
+
+  it("should preserve complete-time values from non-consuming parsers", () => {
+    const custom: Parser<"sync", string, null> = {
+      $mode: "sync",
+      $valueType: [] as string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse(context: ParserContext<null>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete(_state: null) {
+        return { success: true as const, value: "ok" };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = parseSync(object({ value: custom }), []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.value, "ok");
+    }
+  });
+
+  it("should preserve constant values inside object", () => {
+    const result = parseSync(object({ val: constant("x") }), []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.val, "x");
+    }
+  });
+
+  it("should preserve multiple(constant(...)) values inside object", () => {
+    const result = parseSync(
+      object({ values: multiple(constant("fixed")) }),
+      [],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value.values, ["fixed"]);
+    }
+  });
+
+  it("should preserve non-consuming field alongside consuming field", () => {
+    const result = parseSync(
+      object({
+        opt: option("-o", string()),
+        val: constant("x"),
+      }),
+      ["-o", "hi"],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.opt, "hi");
+      assert.equal(result.value.val, "x");
+    }
   });
 });
 
@@ -7681,6 +7765,17 @@ describe("conditional", () => {
         suggestions.some((s) => s.kind === "literal" && s.text === "--type"),
       );
     });
+  });
+
+  it("should accept non-consuming discriminator", () => {
+    const parser = conditional(constant("key") as Parser<"sync", string>, {
+      key: constant("branch-value"),
+    });
+    const result = parseSync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["key", "branch-value"]);
+    }
   });
 });
 
