@@ -6300,6 +6300,131 @@ describe("runWith", () => {
       });
       assert.equal(disposed, 1);
     });
+
+    it("should throw SuppressedError when parse fails and disposal also fails", async () => {
+      let disposed = false;
+      const context: SourceContext = {
+        id: Symbol.for("@test/dispose-shadow"),
+        getAnnotations() {
+          return {};
+        },
+        [Symbol.dispose]() {
+          disposed = true;
+          throw new Error("dispose failed.");
+        },
+      };
+
+      const parser = object({
+        port: argument(integer()),
+      });
+
+      try {
+        await runWith(parser, "test", [context], {
+          args: ["not-a-number"],
+        });
+        assert.fail("Expected an error to be thrown");
+      } catch (error) {
+        assert.ok(error instanceof Error);
+        assert.equal(error.name, "SuppressedError");
+        const se = error as Error & { suppressed: unknown; error: unknown };
+        assert.ok(
+          se.suppressed instanceof Error,
+          "suppressed should be the parse error",
+        );
+        assert.ok(
+          se.error instanceof Error,
+          "error should be the disposal error",
+        );
+        assert.equal(
+          (se.error as Error).message,
+          "dispose failed.",
+        );
+      }
+
+      assert.ok(disposed);
+    });
+
+    it("should throw SuppressedError with AggregateError when parse fails and multiple disposals fail", async () => {
+      const disposed: string[] = [];
+
+      const context1: SourceContext = {
+        id: Symbol.for("@test/dispose-shadow-multi-1"),
+        getAnnotations() {
+          return {};
+        },
+        [Symbol.asyncDispose]() {
+          disposed.push("context1");
+          throw new Error("dispose 1 failed.");
+        },
+      };
+
+      const context2: SourceContext = {
+        id: Symbol.for("@test/dispose-shadow-multi-2"),
+        getAnnotations() {
+          return {};
+        },
+        [Symbol.dispose]() {
+          disposed.push("context2");
+          throw new Error("dispose 2 failed.");
+        },
+      };
+
+      const parser = object({
+        port: argument(integer()),
+      });
+
+      try {
+        await runWith(parser, "test", [context1, context2], {
+          args: ["not-a-number"],
+        });
+        assert.fail("Expected an error to be thrown");
+      } catch (error) {
+        assert.ok(error instanceof Error);
+        assert.equal(error.name, "SuppressedError");
+        const se = error as Error & { suppressed: unknown; error: unknown };
+        assert.ok(
+          se.suppressed instanceof Error,
+          "suppressed should be the parse error",
+        );
+        assert.ok(
+          se.error instanceof AggregateError,
+          "error should be AggregateError from multiple disposal failures",
+        );
+        assert.equal((se.error as AggregateError).errors.length, 2);
+      }
+
+      assert.deepEqual(disposed, ["context1", "context2"]);
+    });
+
+    it("should preserve parse error when disposal succeeds", async () => {
+      let disposed = false;
+      const context: SourceContext = {
+        id: Symbol.for("@test/dispose-no-shadow"),
+        getAnnotations() {
+          return {};
+        },
+        [Symbol.dispose]() {
+          disposed = true;
+        },
+      };
+
+      const parser = object({
+        port: argument(integer()),
+      });
+
+      let errorCaught: unknown;
+      try {
+        await runWith(parser, "test", [context], {
+          args: ["not-a-number"],
+        });
+      } catch (error) {
+        errorCaught = error;
+      }
+
+      assert.ok(disposed);
+      assert.notEqual((errorCaught as Error).name, "SuppressedError");
+      assert.ok(errorCaught instanceof Error);
+    });
   });
 
   describe("options passthrough", () => {
@@ -6996,6 +7121,131 @@ describe("runWithSync", () => {
         stdout: () => {},
       });
       assert.equal(disposed, 1);
+    });
+
+    it("should throw SuppressedError when sync parse fails and disposal also fails", () => {
+      let disposed = false;
+      const context: SourceContext = {
+        id: Symbol.for("@test/sync-dispose-shadow"),
+        getAnnotations() {
+          return {};
+        },
+        [Symbol.dispose]() {
+          disposed = true;
+          throw new Error("sync dispose failed.");
+        },
+      };
+
+      const parser = object({
+        port: argument(integer()),
+      });
+
+      try {
+        runWithSync(parser, "test", [context], {
+          args: ["not-a-number"],
+        });
+        assert.fail("Expected an error to be thrown");
+      } catch (error) {
+        assert.ok(error instanceof Error);
+        assert.equal(error.name, "SuppressedError");
+        const se = error as Error & { suppressed: unknown; error: unknown };
+        assert.ok(
+          se.suppressed instanceof Error,
+          "suppressed should be the parse error",
+        );
+        assert.ok(
+          se.error instanceof Error,
+          "error should be the disposal error",
+        );
+        assert.equal(
+          (se.error as Error).message,
+          "sync dispose failed.",
+        );
+      }
+
+      assert.ok(disposed);
+    });
+
+    it("should throw SuppressedError with AggregateError when sync parse fails and multiple disposals fail", () => {
+      const disposed: string[] = [];
+
+      const context1: SourceContext = {
+        id: Symbol.for("@test/sync-dispose-shadow-multi-1"),
+        getAnnotations() {
+          return {};
+        },
+        [Symbol.dispose]() {
+          disposed.push("context1");
+          throw new Error("sync dispose 1 failed.");
+        },
+      };
+
+      const context2: SourceContext = {
+        id: Symbol.for("@test/sync-dispose-shadow-multi-2"),
+        getAnnotations() {
+          return {};
+        },
+        [Symbol.dispose]() {
+          disposed.push("context2");
+          throw new Error("sync dispose 2 failed.");
+        },
+      };
+
+      const parser = object({
+        port: argument(integer()),
+      });
+
+      try {
+        runWithSync(parser, "test", [context1, context2], {
+          args: ["not-a-number"],
+        });
+        assert.fail("Expected an error to be thrown");
+      } catch (error) {
+        assert.ok(error instanceof Error);
+        assert.equal(error.name, "SuppressedError");
+        const se = error as Error & { suppressed: unknown; error: unknown };
+        assert.ok(
+          se.suppressed instanceof Error,
+          "suppressed should be the parse error",
+        );
+        assert.ok(
+          se.error instanceof AggregateError,
+          "error should be AggregateError from multiple disposal failures",
+        );
+        assert.equal((se.error as AggregateError).errors.length, 2);
+      }
+
+      assert.deepEqual(disposed, ["context1", "context2"]);
+    });
+
+    it("should preserve sync parse error when disposal succeeds", () => {
+      let disposed = false;
+      const context: SourceContext = {
+        id: Symbol.for("@test/sync-dispose-no-shadow"),
+        getAnnotations() {
+          return {};
+        },
+        [Symbol.dispose]() {
+          disposed = true;
+        },
+      };
+
+      const parser = object({
+        port: argument(integer()),
+      });
+
+      let errorCaught: unknown;
+      try {
+        runWithSync(parser, "test", [context], {
+          args: ["not-a-number"],
+        });
+      } catch (error) {
+        errorCaught = error;
+      }
+
+      assert.ok(disposed);
+      assert.notEqual((errorCaught as Error).name, "SuppressedError");
+      assert.ok(errorCaught instanceof Error);
     });
   });
 

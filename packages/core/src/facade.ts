@@ -66,6 +66,28 @@ import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
 
 export type { ParserValuePlaceholder, SourceContext };
 
+type SuppressedErrorConstructor = new (
+  error: unknown,
+  suppressed: unknown,
+  message?: string,
+) => Error & { readonly error: unknown; readonly suppressed: unknown };
+
+// Polyfill for runtimes that lack SuppressedError (Node < 24):
+const SuppressedErrorCtor: SuppressedErrorConstructor =
+  typeof SuppressedError === "function" ? SuppressedError : (() => {
+    class SuppressedErrorPolyfill extends Error {
+      readonly error: unknown;
+      readonly suppressed: unknown;
+      constructor(error: unknown, suppressed: unknown, message?: string) {
+        super(message);
+        this.name = "SuppressedError";
+        this.error = error;
+        this.suppressed = suppressed;
+      }
+    }
+    return SuppressedErrorPolyfill;
+  })();
+
 function finalizeParsedForContext(
   context: SourceContext<unknown>,
   parsed: unknown,
@@ -2979,6 +3001,163 @@ export type ContextOptionsParam<
   : { readonly contextOptions: ExtractRequiredOptions<TContexts, TValue> };
 
 /**
+ * Body of {@link runWith}, extracted so that the caller can handle
+ * disposal outside a `finally` block (avoiding `no-unsafe-finally` lint).
+ */
+async function runWithBody<
+  TParser extends Parser<Mode, unknown, unknown>,
+  THelp = void,
+  TError = never,
+>(
+  parser: TParser,
+  programName: string,
+  contexts: readonly SourceContext<unknown>[],
+  args: readonly string[],
+  options: RunWithOptions<THelp, TError>,
+): Promise<InferValue<TParser>> {
+  validateContextIds(contexts);
+
+  // Early exit: skip context processing for help/version/completion
+  if (needsEarlyExit(args, options)) {
+    if (parser.$mode === "async") {
+      return runParser(parser, programName, args, options) as Promise<
+        InferValue<TParser>
+      >;
+    }
+    return Promise.resolve(
+      runParser(parser, programName, args, options) as InferValue<TParser>,
+    );
+  }
+
+  // Phase 1: Collect initial annotations
+  const ctxOptions = options.contextOptions;
+  const {
+    annotations: phase1Annotations,
+    annotationsList: phase1AnnotationsList,
+    hasDynamic: needsTwoPhase,
+  } = await collectPhase1Annotations(contexts, ctxOptions);
+
+  if (!needsTwoPhase) {
+    // All static contexts - single pass is sufficient
+    // Inject annotations into the parser's initial state
+    const augmentedParser = injectAnnotationsIntoParser(
+      parser,
+      phase1Annotations,
+    );
+
+    if (parser.$mode === "async") {
+      return runParser(
+        augmentedParser,
+        programName,
+        args,
+        options,
+      ) as Promise<InferValue<TParser>>;
+    }
+    return Promise.resolve(
+      runParser(augmentedParser, programName, args, options) as InferValue<
+        TParser
+      >,
+    );
+  }
+
+  // Two-phase parsing for dynamic contexts
+  // First pass: parse with Phase 1 annotations to get initial result
+  const augmentedParser1 = injectAnnotationsIntoParser(
+    parser,
+    phase1Annotations,
+  );
+
+  let firstPassResult: unknown;
+  let firstPassDeferred: true | undefined;
+  let firstPassDeferredKeys: DeferredMap | undefined;
+  let firstPassFailed = false;
+  try {
+    if (parser.$mode === "async") {
+      firstPassResult = await parseAsync(augmentedParser1, args);
+    } else {
+      firstPassResult = parseSync(
+        augmentedParser1 as Parser<"sync", unknown, unknown>,
+        args,
+      );
+    }
+
+    // Extract value and deferred metadata from result
+    if (
+      typeof firstPassResult === "object" && firstPassResult !== null &&
+      "success" in firstPassResult
+    ) {
+      const result = firstPassResult as
+        & Result<unknown>
+        & { deferred?: true; deferredKeys?: DeferredMap };
+      if (result.success) {
+        firstPassResult = result.value;
+        firstPassDeferred = result.deferred;
+        firstPassDeferredKeys = result.deferredKeys;
+      } else {
+        firstPassFailed = true;
+      }
+    }
+  } catch {
+    firstPassFailed = true;
+  }
+
+  // First pass failed - run through runParser for proper error handling.
+  // This is done outside the try-catch to prevent the catch block from
+  // re-invoking runParser when it throws (which caused double error output).
+  if (firstPassFailed) {
+    const augmentedParser = injectAnnotationsIntoParser(
+      parser,
+      phase1Annotations,
+    );
+    if (parser.$mode === "async") {
+      return runParser(
+        augmentedParser,
+        programName,
+        args,
+        options,
+      ) as Promise<
+        InferValue<TParser>
+      >;
+    }
+    return Promise.resolve(
+      runParser(augmentedParser, programName, args, options) as InferValue<
+        TParser
+      >,
+    );
+  }
+
+  // Phase 2: Collect annotations with parsed result
+  const { annotationsList: phase2AnnotationsList } = await collectAnnotations(
+    contexts,
+    firstPassResult,
+    ctxOptions,
+    firstPassDeferred,
+    firstPassDeferredKeys,
+  );
+
+  // Final parse with merged annotations
+  const finalAnnotations = mergeTwoPhaseAnnotations(
+    phase1AnnotationsList,
+    phase2AnnotationsList,
+  );
+  const augmentedParser2 = injectAnnotationsIntoParser(
+    parser,
+    finalAnnotations,
+  );
+
+  if (parser.$mode === "async") {
+    return runParser(augmentedParser2, programName, args, options) as Promise<
+      InferValue<TParser>
+    >;
+  }
+  return Promise.resolve(
+    runParser(augmentedParser2, programName, args, options) as InferValue<
+      TParser
+    >,
+  );
+}
+
+/**
  * Runs a parser with multiple source contexts.
  *
  * This function automatically handles static and dynamic contexts with proper
@@ -3006,6 +3185,9 @@ export type ContextOptionsParam<
  * @returns Promise that resolves to the parsed result.
  * @throws {TypeError} If two or more contexts share the same
  * {@link SourceContext.id}.
+ * @throws {SuppressedError} If the runner throws and a context's disposal
+ * also throws.  The original error is available via `.suppressed` and the
+ * disposal error via `.error`.
  * @since 0.10.0
  *
  * @example
@@ -3055,150 +3237,122 @@ export async function runWith<
     );
   }
 
+  let result!: InferValue<TParser>;
+  let primaryError: unknown;
+  let hasPrimaryError = false;
   try {
-    validateContextIds(contexts);
+    result = await runWithBody(parser, programName, contexts, args, options);
+  } catch (error) {
+    hasPrimaryError = true;
+    primaryError = error;
+  }
 
-    // Early exit: skip context processing for help/version/completion
-    if (needsEarlyExit(args, options)) {
-      if (parser.$mode === "async") {
-        return runParser(parser, programName, args, options) as Promise<
-          InferValue<TParser>
-        >;
-      }
-      return Promise.resolve(
-        runParser(parser, programName, args, options) as InferValue<TParser>,
+  // Disposal runs unconditionally (success and error paths both reach here)
+  try {
+    await disposeContexts(contexts);
+  } catch (disposeError) {
+    if (hasPrimaryError) {
+      throw new SuppressedErrorCtor(
+        disposeError,
+        primaryError,
+        "An error was suppressed during context disposal.",
       );
     }
+    throw disposeError;
+  }
 
-    // Phase 1: Collect initial annotations
-    const ctxOptions = options?.contextOptions;
-    const {
-      annotations: phase1Annotations,
-      annotationsList: phase1AnnotationsList,
-      hasDynamic: needsTwoPhase,
-    } = await collectPhase1Annotations(contexts, ctxOptions);
+  if (hasPrimaryError) {
+    throw primaryError;
+  }
+  return result;
+}
 
-    if (!needsTwoPhase) {
-      // All static contexts - single pass is sufficient
-      // Inject annotations into the parser's initial state
-      const augmentedParser = injectAnnotationsIntoParser(
-        parser,
-        phase1Annotations,
-      );
+/**
+ * Body of {@link runWithSync}, extracted so that the caller can handle
+ * disposal outside a `finally` block (avoiding `no-unsafe-finally` lint).
+ */
+function runWithSyncBody<
+  TParser extends Parser<"sync", unknown, unknown>,
+  THelp = void,
+  TError = never,
+>(
+  parser: TParser,
+  programName: string,
+  contexts: readonly SourceContext<unknown>[],
+  args: readonly string[],
+  options: RunWithOptions<THelp, TError>,
+): InferValue<TParser> {
+  validateContextIds(contexts);
 
-      if (parser.$mode === "async") {
-        return runParser(
-          augmentedParser,
-          programName,
-          args,
-          options,
-        ) as Promise<InferValue<TParser>>;
-      }
-      return Promise.resolve(
-        runParser(augmentedParser, programName, args, options) as InferValue<
-          TParser
-        >,
-      );
-    }
+  // Early exit: skip context processing for help/version/completion
+  if (needsEarlyExit(args, options)) {
+    return runParser(parser, programName, args, options);
+  }
 
-    // Two-phase parsing for dynamic contexts
-    // First pass: parse with Phase 1 annotations to get initial result
-    const augmentedParser1 = injectAnnotationsIntoParser(
+  // Phase 1: Collect initial annotations
+  const ctxOptions = options.contextOptions;
+  const {
+    annotations: phase1Annotations,
+    annotationsList: phase1AnnotationsList,
+    hasDynamic: needsTwoPhase,
+  } = collectPhase1AnnotationsSync(contexts, ctxOptions);
+
+  if (!needsTwoPhase) {
+    // All static contexts - single pass is sufficient
+    const augmentedParser = injectAnnotationsIntoParser(
       parser,
       phase1Annotations,
     );
-
-    let firstPassResult: unknown;
-    let firstPassDeferred: true | undefined;
-    let firstPassDeferredKeys: DeferredMap | undefined;
-    let firstPassFailed = false;
-    try {
-      if (parser.$mode === "async") {
-        firstPassResult = await parseAsync(augmentedParser1, args);
-      } else {
-        firstPassResult = parseSync(
-          augmentedParser1 as Parser<"sync", unknown, unknown>,
-          args,
-        );
-      }
-
-      // Extract value and deferred metadata from result
-      if (
-        typeof firstPassResult === "object" && firstPassResult !== null &&
-        "success" in firstPassResult
-      ) {
-        const result = firstPassResult as
-          & Result<unknown>
-          & { deferred?: true; deferredKeys?: DeferredMap };
-        if (result.success) {
-          firstPassResult = result.value;
-          firstPassDeferred = result.deferred;
-          firstPassDeferredKeys = result.deferredKeys;
-        } else {
-          firstPassFailed = true;
-        }
-      }
-    } catch {
-      firstPassFailed = true;
-    }
-
-    // First pass failed - run through runParser for proper error handling.
-    // This is done outside the try-catch to prevent the catch block from
-    // re-invoking runParser when it throws (which caused double error output).
-    if (firstPassFailed) {
-      const augmentedParser = injectAnnotationsIntoParser(
-        parser,
-        phase1Annotations,
-      );
-      if (parser.$mode === "async") {
-        return runParser(
-          augmentedParser,
-          programName,
-          args,
-          options,
-        ) as Promise<
-          InferValue<TParser>
-        >;
-      }
-      return Promise.resolve(
-        runParser(augmentedParser, programName, args, options) as InferValue<
-          TParser
-        >,
-      );
-    }
-
-    // Phase 2: Collect annotations with parsed result
-    const { annotationsList: phase2AnnotationsList } = await collectAnnotations(
-      contexts,
-      firstPassResult,
-      ctxOptions,
-      firstPassDeferred,
-      firstPassDeferredKeys,
-    );
-
-    // Final parse with merged annotations
-    const finalAnnotations = mergeTwoPhaseAnnotations(
-      phase1AnnotationsList,
-      phase2AnnotationsList,
-    );
-    const augmentedParser2 = injectAnnotationsIntoParser(
-      parser,
-      finalAnnotations,
-    );
-
-    if (parser.$mode === "async") {
-      return runParser(augmentedParser2, programName, args, options) as Promise<
-        InferValue<TParser>
-      >;
-    }
-    return Promise.resolve(
-      runParser(augmentedParser2, programName, args, options) as InferValue<
-        TParser
-      >,
-    );
-  } finally {
-    await disposeContexts(contexts);
+    return runParser(augmentedParser, programName, args, options);
   }
+
+  // Two-phase parsing for dynamic contexts
+  // First pass: parse with Phase 1 annotations
+  const augmentedParser1 = injectAnnotationsIntoParser(
+    parser,
+    phase1Annotations,
+  );
+
+  let firstPassResult: unknown;
+  let firstPassDeferred: true | undefined;
+  let firstPassDeferredKeys: DeferredMap | undefined;
+  try {
+    const result = parseSync(augmentedParser1, args) as
+      & { success: boolean; value?: unknown; error?: unknown }
+      & { deferred?: true; deferredKeys?: DeferredMap };
+    if (result.success) {
+      firstPassResult = result.value;
+      firstPassDeferred = result.deferred;
+      firstPassDeferredKeys = result.deferredKeys;
+    } else {
+      // First pass failed - run through runParser for proper error handling
+      return runParser(augmentedParser1, programName, args, options);
+    }
+  } catch {
+    // First pass threw - run through runParser for proper error handling
+    return runParser(augmentedParser1, programName, args, options);
+  }
+
+  // Phase 2: Collect annotations with parsed result
+  const { annotationsList: phase2AnnotationsList } = collectAnnotationsSync(
+    contexts,
+    firstPassResult,
+    ctxOptions,
+    firstPassDeferred,
+    firstPassDeferredKeys,
+  );
+
+  // Final parse with merged annotations
+  const finalAnnotations = mergeTwoPhaseAnnotations(
+    phase1AnnotationsList,
+    phase2AnnotationsList,
+  );
+  const augmentedParser2 = injectAnnotationsIntoParser(
+    parser,
+    finalAnnotations,
+  );
+
+  return runParser(augmentedParser2, programName, args, options);
 }
 
 /**
@@ -3221,6 +3375,9 @@ export async function runWith<
  * {@link SourceContext.id}.
  * @throws {Error} If any context returns a Promise or if a context's
  * `[Symbol.asyncDispose]` returns a Promise.
+ * @throws {SuppressedError} If the runner throws and a context's disposal
+ * also throws.  The original error is available via `.suppressed` and the
+ * disposal error via `.error`.
  * @since 0.10.0
  */
 export function runWithSync<
@@ -3250,81 +3407,34 @@ export function runWithSync<
     return runParser(parser, programName, args, options);
   }
 
+  let result!: InferValue<TParser>;
+  let primaryError: unknown;
+  let hasPrimaryError = false;
   try {
-    validateContextIds(contexts);
-
-    // Early exit: skip context processing for help/version/completion
-    if (needsEarlyExit(args, options)) {
-      return runParser(parser, programName, args, options);
-    }
-
-    // Phase 1: Collect initial annotations
-    const ctxOptions = options?.contextOptions;
-    const {
-      annotations: phase1Annotations,
-      annotationsList: phase1AnnotationsList,
-      hasDynamic: needsTwoPhase,
-    } = collectPhase1AnnotationsSync(contexts, ctxOptions);
-
-    if (!needsTwoPhase) {
-      // All static contexts - single pass is sufficient
-      const augmentedParser = injectAnnotationsIntoParser(
-        parser,
-        phase1Annotations,
-      );
-      return runParser(augmentedParser, programName, args, options);
-    }
-
-    // Two-phase parsing for dynamic contexts
-    // First pass: parse with Phase 1 annotations
-    const augmentedParser1 = injectAnnotationsIntoParser(
-      parser,
-      phase1Annotations,
-    );
-
-    let firstPassResult: unknown;
-    let firstPassDeferred: true | undefined;
-    let firstPassDeferredKeys: DeferredMap | undefined;
-    try {
-      const result = parseSync(augmentedParser1, args) as
-        & { success: boolean; value?: unknown; error?: unknown }
-        & { deferred?: true; deferredKeys?: DeferredMap };
-      if (result.success) {
-        firstPassResult = result.value;
-        firstPassDeferred = result.deferred;
-        firstPassDeferredKeys = result.deferredKeys;
-      } else {
-        // First pass failed - run through runParser for proper error handling
-        return runParser(augmentedParser1, programName, args, options);
-      }
-    } catch {
-      // First pass threw - run through runParser for proper error handling
-      return runParser(augmentedParser1, programName, args, options);
-    }
-
-    // Phase 2: Collect annotations with parsed result
-    const { annotationsList: phase2AnnotationsList } = collectAnnotationsSync(
-      contexts,
-      firstPassResult,
-      ctxOptions,
-      firstPassDeferred,
-      firstPassDeferredKeys,
-    );
-
-    // Final parse with merged annotations
-    const finalAnnotations = mergeTwoPhaseAnnotations(
-      phase1AnnotationsList,
-      phase2AnnotationsList,
-    );
-    const augmentedParser2 = injectAnnotationsIntoParser(
-      parser,
-      finalAnnotations,
-    );
-
-    return runParser(augmentedParser2, programName, args, options);
-  } finally {
-    disposeContextsSync(contexts);
+    result = runWithSyncBody(parser, programName, contexts, args, options);
+  } catch (error) {
+    hasPrimaryError = true;
+    primaryError = error;
   }
+
+  // Disposal runs unconditionally (success and error paths both reach here)
+  try {
+    disposeContextsSync(contexts);
+  } catch (disposeError) {
+    if (hasPrimaryError) {
+      throw new SuppressedErrorCtor(
+        disposeError,
+        primaryError,
+        "An error was suppressed during context disposal.",
+      );
+    }
+    throw disposeError;
+  }
+
+  if (hasPrimaryError) {
+    throw primaryError;
+  }
+  return result;
 }
 
 /**
@@ -3343,6 +3453,9 @@ export function runWithSync<
  * @returns Promise that resolves to the parsed result.
  * @throws {TypeError} If two or more contexts share the same
  * {@link SourceContext.id}.
+ * @throws {SuppressedError} If the runner throws and a context's disposal
+ * also throws.  The original error is available via `.suppressed` and the
+ * disposal error via `.error`.
  * @since 0.10.0
  */
 export function runWithAsync<
