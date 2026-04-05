@@ -526,6 +526,34 @@ generic “No matching option or command found.”
 The default messages automatically adapt to your parser structure, but you can
 override them for custom formatting or localization needs.
 
+### Zero-consumed fallback branches
+
+When all input has been consumed and no branch matched, `or()` can fall
+back to a branch that succeeds without consuming any input, such as
+`constant()`.  Only branches with no `leadingNames` (i.e., branches
+that can *never* match an input token) qualify as fallback candidates.
+This means annotation-backed parsers like `bindEnv(option(...))` or
+`bindConfig(option(...))` are *not* eligible as fallback branches,
+because they inherit `leadingNames` from the inner option.
+
+To provide a fallback value for an env/config-backed option, use
+the parser's own default mechanism instead of wrapping it in `or()`:
+
+~~~~ typescript twoslash
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+declare function bindEnv(p: any, o: any): any;
+declare const envContext: any;
+// ---cut-before---
+// Instead of or(bindEnv(option(...)), constant("fallback")):
+bindEnv(option("--mode", string()), {
+  context: envContext,
+  key: "APP_MODE",
+  parser: string(),
+  default: "fallback",  // built-in fallback
+})
+~~~~
+
 
 `merge()` parser
 ----------------
