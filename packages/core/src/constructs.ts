@@ -10411,10 +10411,57 @@ export function conditional(
       // the complete phase to avoid triggering interactive side effects
       // (e.g., prompt()) during parse.  Sync discriminators are safe
       // to complete during parse even in the async path.
+      //
+      // Before deferring, try the default branch — it might be able
+      // to consume remaining tokens that the deferred discriminator
+      // path would otherwise leave orphaned.
       if (
         discriminatorResult.consumed.length === 0 &&
         discriminator.$mode === "async"
       ) {
+        if (defaultBranch !== undefined) {
+          const defaultResult = await defaultBranch.parse(
+            withChildContext(
+              context,
+              "_branch",
+              state.branchState ?? defaultBranch.initialState,
+              defaultBranch,
+              defaultBranch.usage,
+            ),
+          );
+          if (
+            defaultResult.success &&
+            defaultResult.consumed.length > 0
+          ) {
+            const defaultExec = mergeChildExec(
+              context.exec,
+              defaultResult.next.exec,
+            );
+            return {
+              success: true,
+              next: {
+                ...defaultResult.next,
+                state: {
+                  ...state,
+                  selectedBranch: { kind: "default" },
+                  branchState: getAnnotatedChildState(
+                    state,
+                    defaultResult.next.state,
+                    defaultBranch,
+                  ),
+                },
+                ...(defaultExec != null
+                  ? {
+                    exec: defaultExec,
+                    dependencyRegistry: defaultExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              consumed: defaultResult.consumed,
+            };
+          }
+        }
+
         const annotatedDiscriminatorState = getAnnotatedChildState(
           state,
           discriminatorResult.next.state,
@@ -10727,11 +10774,12 @@ export function conditional(
           return branchResult;
         }
       } else if (
-        state.discriminatorState !== syncDiscriminator.initialState
+        state.discriminatorState !== syncDiscriminator.initialState &&
+        syncDefaultBranch === undefined
       ) {
         // Discriminator was parsed (state differs from initial) but
-        // failed to complete — surface the error instead of silently
-        // falling through to the default branch.
+        // failed to complete.  Surface the error only when there is
+        // no default branch to fall back to.
         return deferredDiscriminatorResult;
       }
 
@@ -10971,9 +11019,11 @@ export function conditional(
           return branchResult;
         }
       } else if (
-        state.discriminatorState !== discriminator.initialState
+        state.discriminatorState !== discriminator.initialState &&
+        defaultBranch === undefined
       ) {
-        // Surface the discriminator completion failure (see sync).
+        // Surface the discriminator completion failure when there is
+        // no default branch to fall back to.
         return deferredDiscriminatorResult;
       }
 
