@@ -1125,7 +1125,9 @@ function createExclusiveComplete(
             optionsTerminated: false,
             usage: [] as never[],
           };
-          let candidate: ValueParserResult<unknown> | null = null;
+          // First pass: count parse-successful candidates without
+          // calling complete() to avoid side effects on ambiguous input.
+          let candidateIndex = -1;
           let candidateCount = 0;
           for (let i = 0; i < syncParsers.length; i++) {
             const p = syncParsers[i];
@@ -1136,14 +1138,22 @@ function createExclusiveComplete(
             });
             if (!parseResult.success || parseResult.provisional) continue;
             candidateCount++;
+            if (candidateIndex < 0) candidateIndex = i;
             if (candidateCount > 1) break;
-            candidate = p.complete(
-              parseResult.next.state,
-              withChildExecPath(exec, i),
-            );
           }
-          if (candidateCount === 1 && candidate != null) {
-            return candidate;
+          // Second pass: complete only the unique candidate.
+          if (candidateCount === 1 && candidateIndex >= 0) {
+            const p = syncParsers[candidateIndex];
+            const parseResult = p.parse({
+              ...emptyCtx,
+              state: annotateInitial(p.initialState),
+            });
+            if (parseResult.success) {
+              return p.complete(
+                parseResult.next.state,
+                withChildExecPath(exec, candidateIndex),
+              );
+            }
           }
           return {
             success: false as const,
@@ -1156,7 +1166,8 @@ function createExclusiveComplete(
             optionsTerminated: false,
             usage: [] as never[],
           };
-          let candidate: ValueParserResult<unknown> | null = null;
+          // First pass: count candidates (see sync counterpart).
+          let candidateIndex = -1;
           let candidateCount = 0;
           for (let i = 0; i < parsers.length; i++) {
             const p = parsers[i];
@@ -1167,14 +1178,22 @@ function createExclusiveComplete(
             });
             if (!parseResult.success || parseResult.provisional) continue;
             candidateCount++;
+            if (candidateIndex < 0) candidateIndex = i;
             if (candidateCount > 1) break;
-            candidate = await p.complete(
-              parseResult.next.state,
-              withChildExecPath(exec, i),
-            );
           }
-          if (candidateCount === 1 && candidate != null) {
-            return candidate;
+          // Second pass: complete only the unique candidate.
+          if (candidateCount === 1 && candidateIndex >= 0) {
+            const p = parsers[candidateIndex];
+            const parseResult = await p.parse({
+              ...emptyCtx,
+              state: annotateInitial(p.initialState),
+            });
+            if (parseResult.success) {
+              return await p.complete(
+                parseResult.next.state,
+                withChildExecPath(exec, candidateIndex),
+              );
+            }
           }
           return {
             success: false as const,
@@ -10294,6 +10313,7 @@ export function conditional(
         const commitDefault = defaultResult.consumed.length > 0;
         return {
           success: true,
+          ...(defaultResult.provisional ? { provisional: true as const } : {}),
           next: {
             ...defaultResult.next,
             state: {
@@ -10594,6 +10614,7 @@ export function conditional(
         const commitDefault = defaultResult.consumed.length > 0;
         return {
           success: true,
+          ...(defaultResult.provisional ? { provisional: true as const } : {}),
           next: {
             ...defaultResult.next,
             state: {
