@@ -1113,8 +1113,6 @@ function createExclusiveComplete(
         annotations != null && initial != null &&
           typeof initial === "object"
           ? injectAnnotations(initial, annotations)
-          : annotations != null && initial == null
-          ? injectAnnotations({}, annotations)
           : initial;
 
       return dispatchByMode(
