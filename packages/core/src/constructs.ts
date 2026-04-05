@@ -10217,13 +10217,18 @@ export function conditional(
               discriminatorExec,
               branchParseResult.next.exec,
             );
+            // Mark as provisional when the result is tentative:
+            // either the branch itself is provisional, or the
+            // discriminator consumed nothing and the branch has
+            // leadingNames (meaning it can match tokens but didn't,
+            // e.g., bindEnv(option(...)) that resolves in complete).
+            const isProvisional = branchParseResult.provisional ||
+              (discriminatorResult.consumed.length === 0 &&
+                branchParseResult.consumed.length === 0 &&
+                branchParser.leadingNames.size > 0);
             return {
               success: true,
-              // Propagate provisional from the branch so nested
-              // unresolved conditionals are visible to enclosing or().
-              ...(branchParseResult.provisional
-                ? { provisional: true as const }
-                : {}),
+              ...(isProvisional ? { provisional: true as const } : {}),
               next: {
                 ...branchParseResult.next,
                 state: {
@@ -10548,8 +10553,11 @@ export function conditional(
             );
             return {
               success: true,
-              // Propagate provisional from branch (see sync).
-              ...(branchParseResult.provisional
+              // See sync counterpart for isProvisional rationale.
+              ...((branchParseResult.provisional ||
+                  (discriminatorResult.consumed.length === 0 &&
+                    branchParseResult.consumed.length === 0 &&
+                    branchParser.leadingNames.size > 0))
                 ? { provisional: true as const }
                 : {}),
               next: {
