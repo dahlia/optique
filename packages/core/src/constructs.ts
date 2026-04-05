@@ -10733,11 +10733,26 @@ export function conditional(
         const deferredValue = deferredDiscriminatorResult.value as string;
         const deferredBranch = syncBranches[deferredValue];
         if (deferredBranch) {
-          const branchState = getAnnotatedChildState(
+          // Replay the branch's parse() on empty input so that
+          // zero-consuming branches like multiple(constant(...)) can
+          // update their state before complete() is called.
+          const emptyCtx = {
+            buffer: [] as string[],
+            optionsTerminated: false,
+            usage: [] as never[],
+          };
+          const annotatedInitial = getAnnotatedChildState(
             state,
             deferredBranch.initialState,
             deferredBranch,
           );
+          const replayResult = deferredBranch.parse({
+            ...emptyCtx,
+            state: annotatedInitial,
+          });
+          const branchState = replayResult.success
+            ? replayResult.next.state
+            : annotatedInitial;
           const branchResult = unwrapCompleteResult(
             deferredBranch.complete(
               branchState,
@@ -10769,6 +10784,16 @@ export function conditional(
                     : {}),
                 }
                 : {}),
+            };
+          }
+          // Wrap branch failure with branchError if configured.
+          if (options?.errors?.branchError) {
+            return {
+              success: false,
+              error: options.errors.branchError(
+                deferredValue,
+                branchResult.error,
+              ),
             };
           }
           return branchResult;
@@ -10977,12 +11002,24 @@ export function conditional(
         const deferredValue = deferredDiscriminatorResult.value as string;
         const deferredBranch = branches[deferredValue];
         if (deferredBranch) {
-          // Always use the branch's own initialState (see sync).
-          const branchState = getAnnotatedChildState(
+          // Replay parse on empty input (see sync counterpart).
+          const emptyCtx = {
+            buffer: [] as string[],
+            optionsTerminated: false,
+            usage: [] as never[],
+          };
+          const annotatedInitial = getAnnotatedChildState(
             state,
             deferredBranch.initialState,
             deferredBranch,
           );
+          const replayResult = await deferredBranch.parse({
+            ...emptyCtx,
+            state: annotatedInitial,
+          });
+          const branchState = replayResult.success
+            ? replayResult.next.state
+            : annotatedInitial;
           const branchResult = unwrapCompleteResult(
             await deferredBranch.complete(
               branchState,
@@ -11014,6 +11051,16 @@ export function conditional(
                     : {}),
                 }
                 : {}),
+            };
+          }
+          // Wrap branch failure with branchError if configured.
+          if (options?.errors?.branchError) {
+            return {
+              success: false,
+              error: options.errors.branchError(
+                deferredValue,
+                branchResult.error,
+              ),
             };
           }
           return branchResult;
