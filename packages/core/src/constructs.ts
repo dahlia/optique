@@ -1246,8 +1246,14 @@ function createExclusiveSuggest(
         const suggestions: Suggestion[] = [];
         const activeState = normalizeExclusiveState(context.state);
 
-        if (activeState == null) {
-          // No parser has been selected yet, get suggestions from all parsers
+        // When the active branch consumed nothing (zero-consumed
+        // fallback), treat it as provisional and show suggestions from
+        // all branches so that consuming alternatives remain visible.
+        if (
+          activeState == null ||
+          (activeState[1].success && activeState[1].consumed.length === 0)
+        ) {
+          // No parser has been selected yet (or selection is provisional)
           for (let i = 0; i < syncParsers.length; i++) {
             const parser = syncParsers[i];
             const parserSuggestions = parser.suggest(
@@ -1280,8 +1286,11 @@ function createExclusiveSuggest(
         const suggestions: Suggestion[] = [];
         const activeState = normalizeExclusiveState(context.state);
 
-        if (activeState == null) {
-          // No parser has been selected yet, get suggestions from all parsers
+        // See sync counterpart for rationale.
+        if (
+          activeState == null ||
+          (activeState[1].success && activeState[1].consumed.length === 0)
+        ) {
           for (let i = 0; i < parsers.length; i++) {
             const parser = parsers[i];
             const parserSuggestions = parser.suggest(

@@ -218,6 +218,10 @@ function processOptionalStyleResult<TState>(
     ) {
       return {
         success: true,
+        // Propagate provisional from the inner result so that
+        // or() can detect tentative zero-consumed matches through
+        // optional/withDefault/multiple wrappers.
+        ...(result.provisional ? { provisional: true as const } : {}),
         next: {
           ...result.next,
           state: [result.next.state],
@@ -230,6 +234,7 @@ function processOptionalStyleResult<TState>(
     // effects (optionsTerminated, buffer)
     return {
       success: true,
+      ...(result.provisional ? { provisional: true as const } : {}),
       next: {
         ...result.next,
         state: context.state,
@@ -1477,6 +1482,7 @@ export function multiple<M extends Mode, TValue, TState>(
     ) {
       return {
         success: true,
+        ...(result.provisional ? { provisional: true as const } : {}),
         next: {
           ...result.next,
           state: context.state,
@@ -1497,6 +1503,7 @@ export function multiple<M extends Mode, TValue, TState>(
     );
     return {
       success: true,
+      ...(result.provisional ? { provisional: true as const } : {}),
       next: {
         ...result.next,
         state: annotateFreshArray(context.state, [
@@ -1599,6 +1606,7 @@ export function multiple<M extends Mode, TValue, TState>(
     ) {
       return {
         success: true,
+        ...(result.provisional ? { provisional: true as const } : {}),
         next: {
           ...result.next,
           state: context.state,
@@ -1619,6 +1627,7 @@ export function multiple<M extends Mode, TValue, TState>(
     );
     return {
       success: true,
+      ...(result.provisional ? { provisional: true as const } : {}),
       next: {
         ...result.next,
         state: annotateFreshArray(context.state, [
