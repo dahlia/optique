@@ -10724,9 +10724,14 @@ export function conditional(
 
     // No branch selected yet — try completing the discriminator to
     // resolve a deferred zero-consuming discriminator (e.g., constant(),
-    // prompt(option(...)), bindEnv(option(...))).  Parse deferred
-    // completion to avoid interactive prompts during parse phase.
-    if (state.selectedBranch === undefined) {
+    // prompt(option(...)), bindEnv(option(...))).  Only run during the
+    // actual complete phase, not during parse-time completability probes
+    // (e.g., object()'s empty-buffer check) or suggest, to avoid
+    // triggering side effects in branches that may be discarded.
+    if (
+      state.selectedBranch === undefined &&
+      exec?.phase !== "parse" && exec?.phase !== "suggest"
+    ) {
       const annotatedDiscriminatorStateForDeferred = getAnnotatedChildState(
         state,
         state.discriminatorState,
@@ -10863,6 +10868,12 @@ export function conditional(
     }
 
     // Complete selected branch
+    if (state.selectedBranch === undefined) {
+      return {
+        success: false,
+        error: message`Missing required discriminator option.`,
+      };
+    }
     const branchParser = state.selectedBranch.kind === "default"
       ? syncDefaultBranch!
       : syncBranches[state.selectedBranch.key];
@@ -10992,10 +11003,12 @@ export function conditional(
     state: ConditionalState<string>,
     exec?: ExecutionContext,
   ): Promise<CompleteResult> => {
-    // No branch selected yet
-    if (state.selectedBranch === undefined) {
-      // Try completing the deferred discriminator to select a branch
-      // (see sync counterpart for rationale).
+    // No branch selected yet — resolve the deferred discriminator only
+    // during the actual complete phase (see sync counterpart for rationale).
+    if (
+      state.selectedBranch === undefined &&
+      exec?.phase !== "parse" && exec?.phase !== "suggest"
+    ) {
       const annotatedDiscriminatorStateForDeferred = getAnnotatedChildState(
         state,
         state.discriminatorState,
@@ -11129,6 +11142,12 @@ export function conditional(
     }
 
     // Complete selected branch
+    if (state.selectedBranch === undefined) {
+      return {
+        success: false,
+        error: message`Missing required discriminator option.`,
+      };
+    }
     const branchParser = state.selectedBranch.kind === "default"
       ? defaultBranch!
       : branches[state.selectedBranch.key];
