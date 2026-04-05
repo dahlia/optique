@@ -5299,6 +5299,9 @@ export function object<
           continue;
         }
         const fieldState = getFieldState(field, parser);
+        // Skip fields already processed by a previous invocation's
+        // zero-consumption pass to avoid reapplying state changes.
+        if (fieldState !== typedParser.initialState) continue;
         const result = typedParser.parse(
           withChildContext(
             currentContext,
@@ -5462,6 +5465,8 @@ export function object<
           continue;
         }
         const fieldState = getFieldState(field, parser);
+        // Skip already-processed fields (see sync counterpart).
+        if (fieldState !== parser.initialState) continue;
         const resultOrPromise = parser.parse(
           withChildContext(
             currentContext,
@@ -10456,7 +10461,8 @@ export function conditional(
           );
           if (
             defaultResult.success &&
-            defaultResult.consumed.length > 0
+            (defaultResult.consumed.length > 0 ||
+              context.buffer.length === 0)
           ) {
             const defaultExec = mergeChildExec(
               context.exec,
