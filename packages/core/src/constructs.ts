@@ -10320,11 +10320,12 @@ export function conditional(
           context.exec,
           defaultResult.next.exec,
         );
-        // When the default consumed nothing, don't persist
-        // selectedBranch so incremental parsing can still try the
-        // discriminator on the next call.  complete() already handles
-        // selectedBranch === undefined by using the default.
-        const commitDefault = defaultResult.consumed.length > 0;
+        // Commit the default when it consumed tokens OR when the
+        // buffer is empty (no more input to parse, so committing is
+        // safe and prevents complete() from re-evaluating lazy/
+        // stateful discriminators that could pick a different branch).
+        const commitDefault = defaultResult.consumed.length > 0 ||
+          context.buffer.length === 0;
         return {
           success: true,
           ...(defaultResult.provisional ? { provisional: true as const } : {}),
@@ -10613,38 +10614,9 @@ export function conditional(
               consumed: discriminatorResult.consumed,
             };
           }
-          // Zero-consumed discriminator: commit the branch selection
-          // (see sync counterpart for rationale).
-          if (
-            !branchParseResult.success &&
-            (branchParseResult.consumed > 0 || context.buffer.length > 0)
-          ) {
-            return branchParseResult;
-          }
-          return {
-            success: true,
-            provisional: true,
-            next: {
-              ...context,
-              state: {
-                discriminatorState: annotatedDiscriminatorState,
-                discriminatorValue: value,
-                selectedBranch: { kind: "branch", key: value },
-                branchState: getAnnotatedChildState(
-                  state,
-                  branchParser.initialState,
-                  branchParser,
-                ),
-              },
-              ...(discriminatorExec != null
-                ? {
-                  exec: discriminatorExec,
-                  dependencyRegistry: discriminatorExec.dependencyRegistry,
-                }
-                : {}),
-            },
-            consumed: [],
-          };
+          // Zero-consumed discriminator + branch failure: propagate
+          // the failure (see sync counterpart for rationale).
+          return branchParseResult;
         }
       }
     }
@@ -10675,7 +10647,8 @@ export function conditional(
           defaultResult.next.exec,
         );
         // See sync counterpart for rationale on commitDefault.
-        const commitDefault = defaultResult.consumed.length > 0;
+        const commitDefault = defaultResult.consumed.length > 0 ||
+          context.buffer.length === 0;
         return {
           success: true,
           ...(defaultResult.provisional ? { provisional: true as const } : {}),
