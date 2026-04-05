@@ -10722,107 +10722,102 @@ export function conditional(
       Parser<"sync", unknown, unknown>
     >;
 
-    // No branch selected yet — try completing the discriminator to
-    // resolve a deferred zero-consuming discriminator (e.g., constant(),
-    // prompt(option(...)), bindEnv(option(...))).  Only run during the
-    // actual complete phase, not during parse-time completability probes
-    // (e.g., object()'s empty-buffer check) or suggest, to avoid
-    // triggering side effects in branches that may be discarded.
-    if (
-      state.selectedBranch === undefined &&
-      exec?.phase !== "parse" && exec?.phase !== "suggest"
-    ) {
-      const annotatedDiscriminatorStateForDeferred = getAnnotatedChildState(
-        state,
-        state.discriminatorState,
-        syncDiscriminator,
-      );
-      const deferredDiscriminatorResult = unwrapCompleteResult(
-        syncDiscriminator.complete(
-          annotatedDiscriminatorStateForDeferred,
-          withChildExecPath(exec, "_discriminator"),
-        ),
-      );
-      if (deferredDiscriminatorResult.success) {
-        const deferredValue = deferredDiscriminatorResult.value as string;
-        const deferredBranch = syncBranches[deferredValue];
-        if (deferredBranch) {
-          // Replay the branch's parse() on empty input so that
-          // zero-consuming branches like multiple(constant(...)) can
-          // update their state before complete() is called.
-          const emptyCtx = {
-            buffer: [] as string[],
-            optionsTerminated: false,
-            usage: [] as never[],
-          };
-          const annotatedInitial = getAnnotatedChildState(
-            state,
-            deferredBranch.initialState,
-            deferredBranch,
-          );
-          const replayResult = deferredBranch.parse({
-            ...emptyCtx,
-            state: annotatedInitial,
-          });
-          const branchState = replayResult.success
-            ? replayResult.next.state
-            : annotatedInitial;
-          const branchResult = unwrapCompleteResult(
-            deferredBranch.complete(
-              branchState,
-              withChildExecPath(exec, "_branch"),
-            ),
-          );
-          if (branchResult.success) {
-            return {
-              success: true,
-              value: [deferredValue, branchResult.value] as const,
-              ...(branchResult.deferred
-                ? {
-                  deferred: true as const,
-                  ...(branchResult.deferredKeys
-                    ? {
-                      deferredKeys: new Map([[
-                        1,
-                        branchResult.deferredKeys,
-                      ]]) as DeferredMap,
-                    }
-                    : branchResult.value == null ||
-                        typeof branchResult.value !== "object"
-                    ? {
-                      deferredKeys: new Map([[
-                        1,
-                        null,
-                      ]]) as DeferredMap,
-                    }
-                    : {}),
-                }
-                : {}),
+    // No branch selected yet — try completing the deferred discriminator
+    // (only during the actual complete phase to avoid side effects in
+    // parse-time probes), then fall through to the default branch.
+    if (state.selectedBranch === undefined) {
+      if (exec?.phase !== "parse" && exec?.phase !== "suggest") {
+        const annotatedDiscriminatorStateForDeferred = getAnnotatedChildState(
+          state,
+          state.discriminatorState,
+          syncDiscriminator,
+        );
+        const deferredDiscriminatorResult = unwrapCompleteResult(
+          syncDiscriminator.complete(
+            annotatedDiscriminatorStateForDeferred,
+            withChildExecPath(exec, "_discriminator"),
+          ),
+        );
+        if (deferredDiscriminatorResult.success) {
+          const deferredValue = deferredDiscriminatorResult.value as string;
+          const deferredBranch = syncBranches[deferredValue];
+          if (deferredBranch) {
+            const emptyCtx = {
+              buffer: [] as string[],
+              optionsTerminated: false,
+              usage: [] as never[],
             };
+            const annotatedInitial = getAnnotatedChildState(
+              state,
+              deferredBranch.initialState,
+              deferredBranch,
+            );
+            const replayResult = deferredBranch.parse({
+              ...emptyCtx,
+              state: annotatedInitial,
+            });
+            const branchState = replayResult.success
+              ? replayResult.next.state
+              : annotatedInitial;
+            const branchResult = unwrapCompleteResult(
+              deferredBranch.complete(
+                branchState,
+                withChildExecPath(exec, "_branch"),
+              ),
+            );
+            if (branchResult.success) {
+              return {
+                success: true,
+                value: [deferredValue, branchResult.value] as const,
+                ...(branchResult.deferred
+                  ? {
+                    deferred: true as const,
+                    ...(branchResult.deferredKeys
+                      ? {
+                        deferredKeys: new Map([[
+                          1,
+                          branchResult.deferredKeys,
+                        ]]) as DeferredMap,
+                      }
+                      : branchResult.value == null ||
+                          typeof branchResult.value !== "object"
+                      ? {
+                        deferredKeys: new Map([[
+                          1,
+                          null,
+                        ]]) as DeferredMap,
+                      }
+                      : {}),
+                  }
+                  : {}),
+              };
+            }
+            if (options?.errors?.branchError) {
+              return {
+                success: false,
+                error: options.errors.branchError(
+                  deferredValue,
+                  branchResult.error,
+                ),
+              };
+            }
+            return branchResult;
           }
-          // Wrap branch failure with branchError if configured.
-          if (options?.errors?.branchError) {
+          // Discriminator resolved but branch not found — use noMatch.
+          if (syncDefaultBranch === undefined) {
             return {
               success: false,
-              error: options.errors.branchError(
-                deferredValue,
-                branchResult.error,
-              ),
+              error: getNoMatchError(),
             };
           }
-          return branchResult;
+        } else if (syncDefaultBranch === undefined) {
+          // Discriminator failed and no default — surface the error.
+          return deferredDiscriminatorResult;
         }
-      } else if (
-        state.discriminatorState !== syncDiscriminator.initialState &&
-        syncDefaultBranch === undefined
-      ) {
-        // Discriminator was parsed (state differs from initial) but
-        // failed to complete.  Surface the error only when there is
-        // no default branch to fall back to.
-        return deferredDiscriminatorResult;
       }
 
-      // If we have default branch, use it
+      // Fall through to the default branch (accessible during all
+      // phases, including parse-time probes).
       if (syncDefaultBranch !== undefined) {
         const branchState = getAnnotatedChildState(
           state,
@@ -10860,15 +10855,6 @@ export function conditional(
         };
       }
 
-      // No default branch, discriminator is required
-      return {
-        success: false,
-        error: message`Missing required discriminator option.`,
-      };
-    }
-
-    // Complete selected branch
-    if (state.selectedBranch === undefined) {
       return {
         success: false,
         error: message`Missing required discriminator option.`,
@@ -11003,100 +10989,97 @@ export function conditional(
     state: ConditionalState<string>,
     exec?: ExecutionContext,
   ): Promise<CompleteResult> => {
-    // No branch selected yet — resolve the deferred discriminator only
-    // during the actual complete phase (see sync counterpart for rationale).
-    if (
-      state.selectedBranch === undefined &&
-      exec?.phase !== "parse" && exec?.phase !== "suggest"
-    ) {
-      const annotatedDiscriminatorStateForDeferred = getAnnotatedChildState(
-        state,
-        state.discriminatorState,
-        discriminator,
-      );
-      const deferredDiscriminatorResult = unwrapCompleteResult(
-        await discriminator.complete(
-          annotatedDiscriminatorStateForDeferred,
-          withChildExecPath(exec, "_discriminator"),
-        ),
-      );
-      if (deferredDiscriminatorResult.success) {
-        const deferredValue = deferredDiscriminatorResult.value as string;
-        const deferredBranch = branches[deferredValue];
-        if (deferredBranch) {
-          // Replay parse on empty input (see sync counterpart).
-          const emptyCtx = {
-            buffer: [] as string[],
-            optionsTerminated: false,
-            usage: [] as never[],
-          };
-          const annotatedInitial = getAnnotatedChildState(
-            state,
-            deferredBranch.initialState,
-            deferredBranch,
-          );
-          const replayResult = await deferredBranch.parse({
-            ...emptyCtx,
-            state: annotatedInitial,
-          });
-          const branchState = replayResult.success
-            ? replayResult.next.state
-            : annotatedInitial;
-          const branchResult = unwrapCompleteResult(
-            await deferredBranch.complete(
-              branchState,
-              withChildExecPath(exec, "_branch"),
-            ),
-          );
-          if (branchResult.success) {
-            return {
-              success: true,
-              value: [deferredValue, branchResult.value] as const,
-              ...(branchResult.deferred
-                ? {
-                  deferred: true as const,
-                  ...(branchResult.deferredKeys
-                    ? {
-                      deferredKeys: new Map([[
-                        1,
-                        branchResult.deferredKeys,
-                      ]]) as DeferredMap,
-                    }
-                    : branchResult.value == null ||
-                        typeof branchResult.value !== "object"
-                    ? {
-                      deferredKeys: new Map([[
-                        1,
-                        null,
-                      ]]) as DeferredMap,
-                    }
-                    : {}),
-                }
-                : {}),
+    // No branch selected yet (see sync counterpart for rationale).
+    if (state.selectedBranch === undefined) {
+      if (exec?.phase !== "parse" && exec?.phase !== "suggest") {
+        const annotatedDiscriminatorStateForDeferred = getAnnotatedChildState(
+          state,
+          state.discriminatorState,
+          discriminator,
+        );
+        const deferredDiscriminatorResult = unwrapCompleteResult(
+          await discriminator.complete(
+            annotatedDiscriminatorStateForDeferred,
+            withChildExecPath(exec, "_discriminator"),
+          ),
+        );
+        if (deferredDiscriminatorResult.success) {
+          const deferredValue = deferredDiscriminatorResult.value as string;
+          const deferredBranch = branches[deferredValue];
+          if (deferredBranch) {
+            const emptyCtx = {
+              buffer: [] as string[],
+              optionsTerminated: false,
+              usage: [] as never[],
             };
+            const annotatedInitial = getAnnotatedChildState(
+              state,
+              deferredBranch.initialState,
+              deferredBranch,
+            );
+            const replayResult = await deferredBranch.parse({
+              ...emptyCtx,
+              state: annotatedInitial,
+            });
+            const branchState = replayResult.success
+              ? replayResult.next.state
+              : annotatedInitial;
+            const branchResult = unwrapCompleteResult(
+              await deferredBranch.complete(
+                branchState,
+                withChildExecPath(exec, "_branch"),
+              ),
+            );
+            if (branchResult.success) {
+              return {
+                success: true,
+                value: [deferredValue, branchResult.value] as const,
+                ...(branchResult.deferred
+                  ? {
+                    deferred: true as const,
+                    ...(branchResult.deferredKeys
+                      ? {
+                        deferredKeys: new Map([[
+                          1,
+                          branchResult.deferredKeys,
+                        ]]) as DeferredMap,
+                      }
+                      : branchResult.value == null ||
+                          typeof branchResult.value !== "object"
+                      ? {
+                        deferredKeys: new Map([[
+                          1,
+                          null,
+                        ]]) as DeferredMap,
+                      }
+                      : {}),
+                  }
+                  : {}),
+              };
+            }
+            if (options?.errors?.branchError) {
+              return {
+                success: false,
+                error: options.errors.branchError(
+                  deferredValue,
+                  branchResult.error,
+                ),
+              };
+            }
+            return branchResult;
           }
-          // Wrap branch failure with branchError if configured.
-          if (options?.errors?.branchError) {
+          if (defaultBranch === undefined) {
             return {
               success: false,
-              error: options.errors.branchError(
-                deferredValue,
-                branchResult.error,
-              ),
+              error: getNoMatchError(),
             };
           }
-          return branchResult;
+        } else if (defaultBranch === undefined) {
+          return deferredDiscriminatorResult;
         }
-      } else if (
-        state.discriminatorState !== discriminator.initialState &&
-        defaultBranch === undefined
-      ) {
-        // Surface the discriminator completion failure when there is
-        // no default branch to fall back to.
-        return deferredDiscriminatorResult;
       }
 
-      // If we have default branch, use it
+      // Default branch (accessible during all phases).
       if (defaultBranch !== undefined) {
         const branchState = getAnnotatedChildState(
           state,
@@ -11134,15 +11117,6 @@ export function conditional(
         };
       }
 
-      // No default branch, discriminator is required
-      return {
-        success: false,
-        error: message`Missing required discriminator option.`,
-      };
-    }
-
-    // Complete selected branch
-    if (state.selectedBranch === undefined) {
       return {
         success: false,
         error: message`Missing required discriminator option.`,

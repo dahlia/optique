@@ -12366,9 +12366,12 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const completed = await parser.complete(parser.initialState);
     assert.ok(!completed.success);
     if (!completed.success) {
-      assert.equal(
-        formatMessage(completed.error),
-        "Missing required discriminator option.",
+      // The deferred discriminator completion surfaces the
+      // discriminator's own error when there is no default branch.
+      const msg = formatMessage(completed.error);
+      assert.ok(
+        msg.includes("--mode"),
+        `Expected discriminator error but got: ${msg}`,
       );
     }
   });
