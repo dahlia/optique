@@ -10730,11 +10730,13 @@ export function conditional(
       Parser<"sync", unknown, unknown>
     >;
 
-    // No branch selected yet — try completing the deferred discriminator
-    // (only during the actual complete phase to avoid side effects in
-    // parse-time probes), then fall through to the default branch.
+    // No branch selected yet — try completing the deferred discriminator,
+    // then fall through to the default branch.  The sync path runs during
+    // all phases (including parse-time probes from object/tuple/merge)
+    // because sync discriminators are side-effect-free.  The async path
+    // guards against parse/suggest phases to avoid triggering prompts.
     if (state.selectedBranch === undefined) {
-      if (exec?.phase !== "parse" && exec?.phase !== "suggest") {
+      {
         const annotatedDiscriminatorStateForDeferred = getAnnotatedChildState(
           state,
           state.discriminatorState,
