@@ -1105,6 +1105,18 @@ function createExclusiveComplete(
       // (matching the parse-time ambiguity check).  When the unique
       // candidate's complete() fails, preserve its error instead of
       // falling back to a generic no-match message.
+      // Preserve annotations from the caller's state so that
+      // annotation-dependent branches (e.g., bindConfig, bindEnv)
+      // can resolve during completion.
+      const annotations = getAnnotations(state);
+      const annotateInitial = (initial: unknown): unknown =>
+        annotations != null && initial != null &&
+          typeof initial === "object"
+          ? injectAnnotations(initial, annotations)
+          : annotations != null && initial == null
+          ? injectAnnotations({}, annotations)
+          : initial;
+
       return dispatchByMode(
         mode,
         () => {
@@ -1120,7 +1132,7 @@ function createExclusiveComplete(
             if (p.leadingNames.size > 0 || p.acceptingAnyToken) continue;
             const parseResult = p.parse({
               ...emptyCtx,
-              state: p.initialState,
+              state: annotateInitial(p.initialState),
             });
             if (!parseResult.success || parseResult.provisional) continue;
             candidateCount++;
@@ -1131,8 +1143,6 @@ function createExclusiveComplete(
             );
           }
           if (candidateCount === 1 && candidate != null) {
-            if (candidate.success) return candidate;
-            // Preserve the unique candidate's completion error.
             return candidate;
           }
           return {
@@ -1153,7 +1163,7 @@ function createExclusiveComplete(
             if (p.leadingNames.size > 0 || p.acceptingAnyToken) continue;
             const parseResult = await p.parse({
               ...emptyCtx,
-              state: p.initialState,
+              state: annotateInitial(p.initialState),
             });
             if (!parseResult.success || parseResult.provisional) continue;
             candidateCount++;
@@ -3098,16 +3108,20 @@ export function or(
       error.consumed === 0 && context.buffer.length === 0
     ) {
       // Persist the branch state so wrappers like multiple() can
-      // see the state change.  Mark as provisional so or() does not
-      // treat this as a definitive match when nested, and so
-      // suggestion/doc systems can detect it.
+      // see the state change.  Only propagate provisional from the
+      // selected branch — a definitively resolved branch (e.g.,
+      // constant()) should not be marked provisional, so that
+      // or(or(constant("inner")), constant("outer")) correctly
+      // returns "inner".
       const mergedExec = mergeChildExec(
         context.exec,
         zeroConsumedBranch.result.next.exec,
       );
       return {
         success: true,
-        provisional: true,
+        ...(zeroConsumedBranch.result.provisional
+          ? { provisional: true as const }
+          : {}),
         next: {
           ...context,
           state: createExclusiveState(
@@ -3310,14 +3324,16 @@ export function or(
       zeroConsumedBranch !== null && zeroConsumedCount === 1 &&
       error.consumed === 0 && context.buffer.length === 0
     ) {
-      // Persist branch state + mark provisional (see sync counterpart).
+      // Persist branch state (see sync counterpart for rationale).
       const mergedExec = mergeChildExec(
         context.exec,
         zeroConsumedBranch.result.next.exec,
       );
       return {
         success: true,
-        provisional: true,
+        ...(zeroConsumedBranch.result.provisional
+          ? { provisional: true as const }
+          : {}),
         next: {
           ...context,
           state: createExclusiveState(
