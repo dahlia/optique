@@ -1147,8 +1147,15 @@ function createExclusiveComplete(
               state: annotateInitial(p.initialState),
             });
             if (parseResult.success) {
-              return p.complete(
+              // Re-inject parent annotations into the parse result
+              // state so annotation-dependent branches can resolve.
+              const annotatedState = getAnnotatedChildState(
+                state,
                 parseResult.next.state,
+                p,
+              );
+              return p.complete(
+                annotatedState,
                 withChildExecPath(exec, candidateIndex),
               );
             }
@@ -1187,8 +1194,13 @@ function createExclusiveComplete(
               state: annotateInitial(p.initialState),
             });
             if (parseResult.success) {
-              return await p.complete(
+              const annotatedState = getAnnotatedChildState(
+                state,
                 parseResult.next.state,
+                p,
+              );
+              return await p.complete(
+                annotatedState,
                 withChildExecPath(exec, candidateIndex),
               );
             }

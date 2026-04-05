@@ -1055,6 +1055,7 @@ export function prompt<M extends Mode, TValue, TState>(
           } as unknown as TState;
           return {
             success: true,
+            ...(result.provisional ? { provisional: true as const } : {}),
             next: { ...result.next, state: nextState },
             consumed: result.consumed,
           };

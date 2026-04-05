@@ -808,6 +808,7 @@ export function bindConfig<
           } as unknown as TState;
           return {
             success: true,
+            ...(result.provisional ? { provisional: true as const } : {}),
             next: { ...result.next, state: newState },
             consumed: result.consumed,
           };
