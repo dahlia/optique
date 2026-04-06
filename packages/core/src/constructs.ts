@@ -3203,7 +3203,15 @@ export function or(
     // Fall back to a provisional consuming result when no definitive
     // branch consumed tokens.  This lets speculative results from
     // conditional() take effect only when no better alternative exists.
-    if (provisionalConsuming !== null) {
+    // Skip the fallback when another branch already consumed in a
+    // previous parse call — committing both would combine mutually
+    // exclusive branches.
+    if (
+      provisionalConsuming !== null &&
+      !(activeState != null && activeState[1].success &&
+        activeState[1].consumed.length > 0 &&
+        activeState[0] !== provisionalConsuming.index)
+    ) {
       const mergedExec = mergeChildExec(
         context.exec,
         provisionalConsuming.result.next.exec,
@@ -3457,7 +3465,12 @@ export function or(
       };
     }
     // Fall back to provisional consuming result (see sync counterpart).
-    if (provisionalConsuming !== null) {
+    if (
+      provisionalConsuming !== null &&
+      !(activeState != null && activeState[1].success &&
+        activeState[1].consumed.length > 0 &&
+        activeState[0] !== provisionalConsuming.index)
+    ) {
       const mergedExec = mergeChildExec(
         context.exec,
         provisionalConsuming.result.next.exec,
