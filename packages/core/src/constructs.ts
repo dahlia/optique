@@ -10709,23 +10709,12 @@ export function conditional(
             speculativeError = branchResult;
           }
         }
-        // When both a definitive and a provisional hit exist, compare
-        // consumed lengths.  At equal length they are genuinely
-        // ambiguous.  When the provisional consumed strictly more
-        // tokens it is more specific and should win.
+        // When both a definitive and a provisional hit exist, the
+        // correct choice depends on the unknown discriminator value.
+        // Mark as ambiguous to avoid speculative commitment that may
+        // lose valid parses.
         if (speculativeHit != null && provisionalHit != null) {
-          const specLen = speculativeHit.result.success
-            ? speculativeHit.result.consumed.length
-            : 0;
-          const provLen = provisionalHit.result.success
-            ? provisionalHit.result.consumed.length
-            : 0;
-          if (specLen === provLen) {
-            ambiguous = true;
-          } else if (provLen > specLen) {
-            speculativeHit = provisionalHit;
-          }
-          // When specLen > provLen, the definitive hit already wins.
+          ambiguous = true;
         }
         // Fall back to a provisional hit (e.g., from a nested
         // speculative conditional) when no definitive hit was found
