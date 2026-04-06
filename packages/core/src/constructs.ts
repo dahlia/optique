@@ -10765,8 +10765,9 @@ export function conditional(
 
         // A branch that consumed tokens before failing has a more
         // specific error than the generic stall the top-level loop
-        // would produce.  Return it when no branch succeeded.
-        if (speculativeError != null) {
+        // would produce.  Return it when no branch succeeded and
+        // speculation was not skipped due to ambiguity.
+        if (speculativeError != null && !ambiguous) {
           return speculativeError;
         }
 
@@ -11291,49 +11292,18 @@ export function conditional(
   ): Promise<CompleteResult> => {
     // When a branch was selected speculatively (async discriminator
     // deferred, but a named branch consumed tokens during parse),
-    // verify the speculative selection against the resolved
-    // discriminator before proceeding with normal branch completion.
+    // let the normal selected-branch path handle discriminator
+    // completion so that it runs with the dependency runtime.  We
+    // only record a flag here and perform the mismatch check after
+    // the discriminator has been properly completed below.
+    let wasSpeculative = false;
     if (state.speculative && state.selectedBranch?.kind === "branch") {
       if (exec?.phase !== "parse" && exec?.phase !== "suggest") {
-        const discState = getAnnotatedChildState(
-          state,
-          state.discriminatorState,
-          discriminator,
-        );
-        const discResult = unwrapCompleteResult(
-          await discriminator.complete(
-            discState,
-            withChildExecPath(exec, "_discriminator"),
-          ),
-        );
-        if (discResult.success) {
-          const actualKey = discResult.value as string;
-          if (actualKey === state.selectedBranch.key) {
-            // Speculative selection confirmed — continue with normal
-            // selected-branch completion below.
-            state = {
-              ...state,
-              discriminatorValue: actualKey,
-              speculative: undefined,
-            };
-          } else {
-            // Mismatch: discriminator resolved to a different branch
-            // than the one that speculatively consumed tokens.  This
-            // is contradictory input — reject it rather than silently
-            // completing the actual branch with defaults.
-            return {
-              success: false,
-              error: getNoMatchError(),
-            };
-          }
-        } else {
-          // Discriminator failed — fall back to speculative key.
-          state = {
-            ...state,
-            discriminatorValue: state.selectedBranch.key,
-            speculative: undefined,
-          };
-        }
+        // Clear speculative; leave discriminatorValue undefined so
+        // the normal path completes the discriminator with the
+        // dependency runtime.
+        wasSpeculative = true;
+        state = { ...state, speculative: undefined };
       } else {
         // During parse/suggest probe: use speculative key without
         // triggering discriminator completion (avoids side effects).
@@ -11585,6 +11555,21 @@ export function conditional(
       discriminatorValue = completedDiscriminator.success
         ? completedDiscriminator.value as string
         : state.selectedBranch.key;
+    }
+
+    // When the branch was selected speculatively, verify that the
+    // resolved discriminator value matches.  A mismatch means
+    // contradictory input (e.g., --threads provided but discriminator
+    // resolved to "slow").
+    if (
+      wasSpeculative &&
+      state.selectedBranch.kind === "branch" &&
+      discriminatorValue !== state.selectedBranch.key
+    ) {
+      return {
+        success: false,
+        error: getNoMatchError(),
+      };
     }
 
     return {
