@@ -10651,6 +10651,7 @@ export function conditional(
           result: ParserResult<unknown>;
         } | undefined;
         let provisionalHit: typeof speculativeHit;
+        let provisionalAmbiguous = false;
         let speculativeError:
           | (ParserResult<unknown> & {
             success: false;
@@ -10679,14 +10680,15 @@ export function conditional(
             // Provisional results (e.g., from a nested speculative
             // conditional) don't count toward the definitive ambiguity
             // check but are tracked separately.  If multiple
-            // provisional results exist, mark as ambiguous to keep
-            // branch selection order-independent.
+            // provisional results exist, they are discarded to keep
+            // branch selection order-independent.  Don't break — later
+            // definitive branches must still be examined.
             if (branchResult.provisional) {
-              if (provisionalHit == null) {
+              if (provisionalHit == null && !provisionalAmbiguous) {
                 provisionalHit = { key, bp, result: branchResult };
               } else {
-                ambiguous = true;
-                break;
+                provisionalHit = undefined;
+                provisionalAmbiguous = true;
               }
               continue;
             }
@@ -10726,8 +10728,12 @@ export function conditional(
           // When specLen > provLen, the definitive hit already wins.
         }
         // Fall back to a provisional hit (e.g., from a nested
-        // speculative conditional) when no definitive hit was found.
-        if (speculativeHit == null && !ambiguous && provisionalHit != null) {
+        // speculative conditional) when no definitive hit was found
+        // and provisional results were unambiguous.
+        if (
+          speculativeHit == null && !ambiguous && !provisionalAmbiguous &&
+          provisionalHit != null
+        ) {
           speculativeHit = provisionalHit;
         }
         if (speculativeHit != null && !ambiguous) {
