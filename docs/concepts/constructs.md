@@ -1637,8 +1637,9 @@ selected and verified against the resolved discriminator during the
 complete phase.
 
 If the discriminator resolves to a different branch than the one that
-consumed tokens (contradictory input), the actual branch is completed
-with an empty buffer, which typically results in a missing-option error.
+consumed tokens (contradictory input), the parse fails.  When multiple
+branches can consume the same tokens (ambiguous), speculation is skipped
+entirely to keep branch selection order-independent.
 
 
 `group()` parser

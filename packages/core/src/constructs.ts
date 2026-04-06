@@ -10032,8 +10032,9 @@ export function conditional<
  * during the complete phase.
  *
  * If the discriminator resolves to a different branch than the one that
- * consumed tokens (contradictory input), the actual branch is completed
- * with an empty buffer, which typically results in a missing-option error.
+ * consumed tokens (contradictory input), the parse fails.  When multiple
+ * branches can consume the same tokens (ambiguous), speculation is skipped
+ * entirely to keep branch selection order-independent.
  *
  * @since 0.8.0
  */
@@ -10561,11 +10562,19 @@ export function conditional(
         // deferred, we don't know which branch to use, but if exactly one
         // branch can consume tokens from the buffer, commit to it
         // tentatively.  The complete phase will verify the choice against
-        // the resolved discriminator value.
+        // the resolved discriminator value.  When multiple branches can
+        // consume tokens (ambiguous), skip speculation entirely so that
+        // branch selection stays order-independent.
         const discriminatorExec = mergeChildExec(
           context.exec,
           discriminatorResult.next.exec,
         );
+        let speculativeHit: {
+          key: string;
+          bp: Parser<Mode, unknown, unknown>;
+          result: ParserResult<unknown>;
+        } | undefined;
+        let ambiguous = false;
         for (const [key, bp] of branchParsers) {
           const branchResult = await bp.parse(
             withChildContext(
@@ -10585,6 +10594,16 @@ export function conditional(
             ),
           );
           if (branchResult.success && branchResult.consumed.length > 0) {
+            if (speculativeHit != null) {
+              ambiguous = true;
+              break;
+            }
+            speculativeHit = { key, bp, result: branchResult };
+          }
+        }
+        if (speculativeHit != null && !ambiguous) {
+          const { key, bp, result: branchResult } = speculativeHit;
+          if (branchResult.success) {
             const annotatedDiscriminatorState = getAnnotatedChildState(
               state,
               discriminatorResult.next.state,
@@ -11168,91 +11187,13 @@ export function conditional(
               speculative: undefined,
             };
           } else {
-            // Mismatch: discriminator resolved to a different branch.
-            // Complete the actual branch with empty-buffer replay.
-            const actualBranch = branches[actualKey];
-            if (actualBranch) {
-              const branchExec = withChildExecPath(exec, "_branch");
-              const emptyCtx = {
-                buffer: [] as string[],
-                optionsTerminated: false,
-                usage: [] as never[],
-                exec: branchExec,
-                dependencyRegistry: exec?.dependencyRegistry,
-              };
-              const annotatedInitial = getAnnotatedChildState(
-                state,
-                actualBranch.initialState,
-                actualBranch,
-              );
-              const replayResult = await actualBranch.parse({
-                ...emptyCtx,
-                state: annotatedInitial,
-              });
-              const branchState = replayResult.success
-                ? replayResult.next.state
-                : annotatedInitial;
-              const annotatedBranchState = getAnnotatedChildState(
-                state,
-                branchState,
-                actualBranch,
-              );
-              const branchResult = unwrapCompleteResult(
-                await actualBranch.complete(
-                  annotatedBranchState,
-                  branchExec,
-                ),
-              );
-              if (branchResult.success) {
-                return {
-                  success: true,
-                  value: [actualKey, branchResult.value] as const,
-                  ...(branchResult.deferred
-                    ? {
-                      deferred: true as const,
-                      ...(branchResult.deferredKeys
-                        ? {
-                          deferredKeys: new Map([[
-                            1,
-                            branchResult.deferredKeys,
-                          ]]) as DeferredMap,
-                        }
-                        : branchResult.value == null ||
-                            typeof branchResult.value !== "object"
-                        ? {
-                          deferredKeys: new Map([[
-                            1,
-                            null,
-                          ]]) as DeferredMap,
-                        }
-                        : {}),
-                    }
-                    : {}),
-                };
-              }
-              if (options?.errors?.branchError) {
-                return {
-                  success: false,
-                  error: options.errors.branchError(
-                    actualKey,
-                    branchResult.error,
-                  ),
-                };
-              }
-              return branchResult;
-            }
-            if (defaultBranch === undefined) {
-              return {
-                success: false,
-                error: getNoMatchError(),
-              };
-            }
-            // Discriminator value doesn't match any branch; fall through
-            // to the default branch below.
-            state = {
-              ...state,
-              selectedBranch: undefined,
-              speculative: undefined,
+            // Mismatch: discriminator resolved to a different branch
+            // than the one that speculatively consumed tokens.  This
+            // is contradictory input — reject it rather than silently
+            // completing the actual branch with defaults.
+            return {
+              success: false,
+              error: getNoMatchError(),
             };
           }
         } else {

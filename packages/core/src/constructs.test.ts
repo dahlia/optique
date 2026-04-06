@@ -8323,6 +8323,83 @@ describe("conditional", () => {
       assert.equal(result.value[1], 4);
     }
   });
+
+  it("should skip speculation when multiple branches consume tokens", async () => {
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "fast" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    // Both branches accept --threads → ambiguous speculation
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: option("--threads", integer()),
+        slow: option("--threads", integer()),
+      },
+    );
+
+    // Ambiguous: multiple branches consume → speculation skipped → stall
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(
+      !result.success,
+      "expected failure when speculation is ambiguous",
+    );
+  });
+
+  it("should reject contradictory input on speculative mismatch with defaults", async () => {
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      // Discriminator resolves to "slow"
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "slow" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: option("--threads", integer()),
+        // slow branch has a default, so it would succeed with empty input
+        slow: withDefault(option("--timeout", integer()), 30),
+      },
+    );
+
+    // --threads consumed by "fast" speculatively, discriminator says "slow"
+    // Must fail even though "slow" branch can succeed with its default
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(!result.success, "expected failure for contradictory input");
+  });
 });
 
 describe("complex combinator interactions", () => {
