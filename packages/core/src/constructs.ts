@@ -10707,12 +10707,23 @@ export function conditional(
             speculativeError = branchResult;
           }
         }
-        // When both a definitive and a provisional hit exist, mark as
-        // ambiguous — committing the definitive branch would reject
-        // valid input when the discriminator resolves to the
-        // provisional branch.
+        // When both a definitive and a provisional hit exist, compare
+        // consumed lengths.  At equal length they are genuinely
+        // ambiguous.  When the provisional consumed strictly more
+        // tokens it is more specific and should win.
         if (speculativeHit != null && provisionalHit != null) {
-          ambiguous = true;
+          const specLen = speculativeHit.result.success
+            ? speculativeHit.result.consumed.length
+            : 0;
+          const provLen = provisionalHit.result.success
+            ? provisionalHit.result.consumed.length
+            : 0;
+          if (specLen === provLen) {
+            ambiguous = true;
+          } else if (provLen > specLen) {
+            speculativeHit = provisionalHit;
+          }
+          // When specLen > provLen, the definitive hit already wins.
         }
         // Fall back to a provisional hit (e.g., from a nested
         // speculative conditional) when no definitive hit was found.
