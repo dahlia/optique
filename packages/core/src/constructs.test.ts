@@ -8183,9 +8183,16 @@ describe("conditional", () => {
     );
 
     // --threads consumed for "fast", but discriminator says "slow"
-    // "slow" branch has no tokens → should fail
+    // "slow" branch has no tokens → should fail with a mismatch error
     const result = await parseAsync(parser, ["--threads", "4"]);
     assert.ok(!result.success, "expected failure due to branch mismatch");
+    if (!result.success) {
+      const msg = formatMessage(result.error).toLowerCase();
+      assert.ok(
+        msg.includes("mismatch"),
+        `expected a mismatch error, got: ${msg}`,
+      );
+    }
   });
 
   it("should work inside object() when async discriminator is deferred", async () => {
@@ -8312,9 +8319,16 @@ describe("conditional", () => {
     );
 
     // --threads consumed speculatively for "fast"
-    // Discriminator fails → propagate the failure
+    // Discriminator fails → propagate the failure (NOT a mismatch error)
     const result = await parseAsync(parser, ["--threads", "4"]);
     assert.ok(!result.success, "expected failure when discriminator fails");
+    if (!result.success) {
+      const msg = formatMessage(result.error).toLowerCase();
+      assert.ok(
+        !msg.includes("mismatch"),
+        `expected discriminator failure to propagate, not a mismatch error; got: ${msg}`,
+      );
+    }
   });
 
   it("should skip speculation when multiple branches consume tokens", async () => {
@@ -8349,11 +8363,20 @@ describe("conditional", () => {
     );
 
     // Ambiguous: multiple branches consume → speculation skipped → stall
+    // The top-level parse loop will surface its own "Unexpected option"
+    // error rather than committing to either branch.
     const result = await parseAsync(parser, ["--threads", "4"]);
     assert.ok(
       !result.success,
       "expected failure when speculation is ambiguous",
     );
+    if (!result.success) {
+      const msg = formatMessage(result.error).toLowerCase();
+      assert.ok(
+        !msg.includes("mismatch"),
+        `ambiguous speculation should not raise mismatch; got: ${msg}`,
+      );
+    }
   });
 
   it("should reject contradictory input on speculative mismatch with defaults", async () => {
@@ -8392,6 +8415,13 @@ describe("conditional", () => {
     // Must fail even though "slow" branch can succeed with its default
     const result = await parseAsync(parser, ["--threads", "4"]);
     assert.ok(!result.success, "expected failure for contradictory input");
+    if (!result.success) {
+      const msg = formatMessage(result.error).toLowerCase();
+      assert.ok(
+        msg.includes("mismatch"),
+        `expected a mismatch error for contradictory input; got: ${msg}`,
+      );
+    }
   });
 
   it("should detect mismatch before branch completion errors", async () => {
@@ -8438,6 +8468,10 @@ describe("conditional", () => {
       assert.ok(
         !msg.includes("--extra"),
         `expected mismatch error, not branch-specific: ${msg}`,
+      );
+      assert.ok(
+        msg.toLowerCase().includes("mismatch"),
+        `expected a mismatch error; got: ${msg}`,
       );
     }
   });
