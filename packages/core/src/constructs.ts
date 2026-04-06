@@ -3009,9 +3009,13 @@ export function or(
       if (result.success && result.consumed.length > 0) {
         // Provisional consuming results are deferred: continue trying
         // other branches so a definitive result can take priority.
+        // When multiple provisional branches match, discard all to
+        // stay order-independent.
         if (result.provisional) {
           if (provisionalConsuming == null) {
             provisionalConsuming = { index: i, parser, result };
+          } else {
+            provisionalConsuming = null;
           }
           continue;
         }
@@ -3285,6 +3289,8 @@ export function or(
         if (result.provisional) {
           if (provisionalConsuming == null) {
             provisionalConsuming = { index: i, parser, result };
+          } else {
+            provisionalConsuming = null;
           }
           continue;
         }
@@ -3937,7 +3943,16 @@ export function longestMatch(
 
       if (result.success) {
         const consumed = context.buffer.length - result.next.buffer.length;
-        if (bestMatch === null || consumed > bestMatch.consumed) {
+        // Prefer non-provisional results over provisional ones at the
+        // same consumed length, so speculative conditional() branches
+        // don't shadow definitive matches at equal length.
+        const bestIsProvisional = bestMatch != null &&
+          bestMatch.result.success && !!bestMatch.result.provisional;
+        if (
+          bestMatch === null || consumed > bestMatch.consumed ||
+          (consumed === bestMatch.consumed &&
+            bestIsProvisional && !result.provisional)
+        ) {
           bestMatch = { index: i, parser, result, consumed };
         }
       } else if (error.consumed < result.consumed) {
@@ -4007,7 +4022,16 @@ export function longestMatch(
 
       if (result.success) {
         const consumed = context.buffer.length - result.next.buffer.length;
-        if (bestMatch === null || consumed > bestMatch.consumed) {
+        // Prefer non-provisional results over provisional ones at the
+        // same consumed length, so speculative conditional() branches
+        // don't shadow definitive matches at equal length.
+        const bestIsProvisional = bestMatch != null &&
+          bestMatch.result.success && !!bestMatch.result.provisional;
+        if (
+          bestMatch === null || consumed > bestMatch.consumed ||
+          (consumed === bestMatch.consumed &&
+            bestIsProvisional && !result.provisional)
+        ) {
           bestMatch = { index: i, parser, result, consumed };
         }
       } else if (error.consumed < result.consumed) {
