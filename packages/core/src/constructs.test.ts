@@ -8401,6 +8401,54 @@ describe("conditional", () => {
     assert.ok(!result.success, "expected failure for contradictory input");
   });
 
+  it("should detect mismatch before branch completion errors", async () => {
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      // Discriminator resolves to "slow"
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "slow" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    // "fast" branch requires both --threads and --extra
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: object({
+          threads: option("--threads", integer()),
+          extra: option("--extra", string()),
+        }),
+        slow: option("--timeout", integer()),
+      },
+    );
+
+    // --threads consumed speculatively for "fast", discriminator says "slow"
+    // Should get a mismatch error, NOT "Missing option --extra"
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const msg = formatMessage(result.error);
+      assert.ok(
+        !msg.includes("--extra"),
+        `expected mismatch error, not branch-specific: ${msg}`,
+      );
+    }
+  });
+
   it("should not block or() alternatives with speculative commit", async () => {
     const asyncDiscriminator: Parser<"async", string> = {
       $mode: "async",

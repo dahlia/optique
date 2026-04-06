@@ -11517,29 +11517,9 @@ export function conditional(
       )
       : undefined;
 
-    const branchResult = unwrapCompleteResult(
-      await branchParser.complete(
-        resolvedBranchState,
-        withChildExecPath(completionExec, "_branch"),
-      ),
-    );
-
-    if (!branchResult.success) {
-      if (
-        state.discriminatorValue !== undefined &&
-        options?.errors?.branchError
-      ) {
-        return {
-          success: false,
-          error: options.errors.branchError(
-            state.discriminatorValue,
-            branchResult.error,
-          ),
-        };
-      }
-      return branchResult;
-    }
-
+    // Determine the discriminator value before completing the branch
+    // so speculative mismatch is caught early, preventing errors from
+    // the wrong branch (e.g., "missing --extra") from leaking out.
     let discriminatorValue: string | undefined;
     if (state.selectedBranch.kind === "default") {
       discriminatorValue = undefined;
@@ -11570,6 +11550,29 @@ export function conditional(
         success: false,
         error: getNoMatchError(),
       };
+    }
+
+    const branchResult = unwrapCompleteResult(
+      await branchParser.complete(
+        resolvedBranchState,
+        withChildExecPath(completionExec, "_branch"),
+      ),
+    );
+
+    if (!branchResult.success) {
+      if (
+        discriminatorValue !== undefined &&
+        options?.errors?.branchError
+      ) {
+        return {
+          success: false,
+          error: options.errors.branchError(
+            discriminatorValue,
+            branchResult.error,
+          ),
+        };
+      }
+      return branchResult;
     }
 
     return {
