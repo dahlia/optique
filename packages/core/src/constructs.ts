@@ -10717,7 +10717,10 @@ export function conditional(
         // correct choice depends on the unknown discriminator value.
         // Mark as ambiguous to avoid speculative commitment that may
         // lose valid parses.
-        if (speculativeHit != null && provisionalHit != null) {
+        if (
+          speculativeHit != null &&
+          (provisionalHit != null || provisionalAmbiguous)
+        ) {
           ambiguous = true;
         }
         // Fall back to a provisional hit (e.g., from a nested
