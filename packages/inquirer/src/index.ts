@@ -978,6 +978,9 @@ export function prompt<M extends Mode, TValue, TState>(
     $stateType: parser.$stateType,
     priority: parser.priority,
     [inheritParentAnnotationsKey]: true,
+    // Mark as optional-style wrapper so object()'s zero-consumption pass
+    // skips this parser (prompt should fire during complete, not parse).
+    [Symbol.for("@optique/core/optionalStyleWrapper")]: true as const,
     // prompt() makes the CLI argument optional because missing values are
     // handled interactively.  If the inner parser is already optional
     // (e.g., wrapped in optional() or withDefault()), reuse its usage

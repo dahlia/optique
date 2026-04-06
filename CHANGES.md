@@ -375,9 +375,11 @@ To be released.
     in `complete()`.  `object()` now runs a zero-consumption pass after its
     greedy loop so that purely non-interactive child parsers (e.g.,
     `multiple(constant(...))`) can update their state even when they return
-    `consumed: []`.  `or()` now accepts non-consuming branches as a fallback
-    when no branch consumed input.  `conditional()` no longer requires the
-    discriminator or default branch to consume input.  [[#232]]
+    `consumed: []`.  `or()` now accepts a unique non-consuming,
+    non-interactive branch as a fallback when no branch consumed input and
+    the buffer is empty.  `conditional()` defers zero-consuming
+    discriminators to `complete()` in async mode, and resolves them during
+    `parse()` in sync mode.  [[#232]]
 
  -  Fixed `optional()` and `withDefault()` crashing when the parser's state
     is an annotation-injected object instead of `undefined`.  The state

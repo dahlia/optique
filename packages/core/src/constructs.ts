@@ -28,6 +28,7 @@ import {
   injectAnnotations,
 } from "./annotations.ts";
 import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
+import { optionalStyleWrapperKey } from "./modifiers.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import {
   deduplicateDocFragments,
@@ -5298,8 +5299,7 @@ export function object<
         if (
           parser.leadingNames.size > 0 ||
           typedParser.acceptingAnyToken ||
-          (parser.usage.length === 1 &&
-            (parser.usage[0] as { type?: string }).type === "optional")
+          Reflect.get(parser, optionalStyleWrapperKey) === true
         ) {
           continue;
         }
@@ -5461,8 +5461,7 @@ export function object<
           // (see sync counterpart for rationale).
           parser.leadingNames.size > 0 ||
           parser.acceptingAnyToken ||
-          (parser.usage.length === 1 &&
-            (parser.usage[0] as { type?: string }).type === "optional")
+          Reflect.get(parser, optionalStyleWrapperKey) === true
         ) {
           continue;
         }

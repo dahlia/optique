@@ -530,9 +530,18 @@ override them for custom formatting or localization needs.
 
 When all input has been consumed and no branch matched, `or()` can fall
 back to a branch that succeeds without consuming any input, such as
-`constant()`.  Only branches with no `leadingNames` *and* that do not
-accept arbitrary tokens (i.e., branches that can *never* match an
-input token) qualify as fallback candidates.  This means:
+`constant()`.  A branch qualifies as a fallback candidate only when
+*all* of the following hold:
+
+ -  The result is not `provisional` (tentative zero-consumed matches
+    from nested constructs like `conditional()` are excluded).
+ -  The branch has no `leadingNames` and does not accept arbitrary
+    tokens — i.e., it can *never* match an input token.
+ -  Exactly one branch qualifies (ambiguous fallbacks are rejected).
+ -  No other branch consumed tokens before failing.
+ -  The input buffer is empty.
+
+In practice, this means:
 
  -  Annotation-backed parsers like `bindEnv(option(...))` or
     `bindConfig(option(...))` are *not* eligible, because they inherit

@@ -5135,8 +5135,9 @@ describe("state management edge cases", () => {
       });
 
       // Empty input - optional(constant()) returns undefined because
-      // the optional-style wrapper is skipped by the zero-consumption
-      // pass to preserve withDefault/optional completion semantics.
+      // optional-style wrappers (marked with optionalStyleWrapperKey)
+      // are skipped by the zero-consumption pass to preserve their
+      // completion semantics.
       const result1 = parse(parser, []);
       assert.ok(result1.success);
       if (result1.success) {

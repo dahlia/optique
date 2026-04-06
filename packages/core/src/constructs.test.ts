@@ -1049,6 +1049,28 @@ describe("or", () => {
       assert.equal(result.value, "F");
     }
   });
+
+  it("async: should accept non-consuming branch as fallback", async () => {
+    const result = await parseAsync(
+      or(constant("fallback"), option("-o", string())),
+      [],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "fallback");
+    }
+  });
+
+  it("async: should prefer consuming branch over non-consuming", async () => {
+    const result = await parseAsync(
+      or(constant("fallback"), option("-o", string())),
+      ["-o", "hi"],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "hi");
+    }
+  });
 });
 
 describe("or() - duplicate option handling", () => {
@@ -3076,6 +3098,29 @@ describe("object", () => {
 
   it("should preserve non-consuming field alongside consuming field", () => {
     const result = parseSync(
+      object({
+        opt: option("-o", string()),
+        val: constant("x"),
+      }),
+      ["-o", "hi"],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.opt, "hi");
+      assert.equal(result.value.val, "x");
+    }
+  });
+
+  it("async: should preserve constant values inside object", async () => {
+    const result = await parseAsync(object({ val: constant("x") }), []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.val, "x");
+    }
+  });
+
+  it("async: should preserve non-consuming field alongside consuming", async () => {
+    const result = await parseAsync(
       object({
         opt: option("-o", string()),
         val: constant("x"),

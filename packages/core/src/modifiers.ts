@@ -1,4 +1,16 @@
 import { composeDependencyMetadata } from "./dependency-metadata.ts";
+
+/**
+ * Internal marker for optional-style wrappers (`optional()`, `withDefault()`).
+ * Used by `object()`'s zero-consumption pass to skip these parsers, since they
+ * should return `undefined`/default when the user provides no input rather than
+ * running the inner parser.
+ *
+ * @internal
+ */
+export const optionalStyleWrapperKey: unique symbol = Symbol.for(
+  "@optique/core/optionalStyleWrapper",
+);
 import { formatMessage, type Message, message, text } from "./message.ts";
 import {
   annotateFreshArray,
@@ -387,6 +399,7 @@ export function optional<M extends Mode, TValue, TState>(
     $mode: parser.$mode,
     $valueType: [],
     $stateType: [],
+    [optionalStyleWrapperKey]: true as const,
     placeholder: undefined as TValue | undefined,
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
@@ -747,6 +760,7 @@ export function withDefault<
     $mode: parser.$mode,
     $valueType: [],
     $stateType: [],
+    [optionalStyleWrapperKey]: true as const,
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
     leadingNames: parser.leadingNames,
