@@ -2337,6 +2337,17 @@ describe("longestMatch()", () => {
       ["test"],
     );
   });
+
+  it("should accept non-consuming branch as fallback", () => {
+    const result = parseSync(
+      longestMatch(constant("fallback"), option("-o", string())),
+      [],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "fallback");
+    }
+  });
 });
 
 describe("longestMatch() error customization", () => {
@@ -7938,6 +7949,51 @@ describe("conditional", () => {
         `Expected branch error but got: ${msg}`,
       );
     }
+  });
+
+  it("should not re-complete discriminator when cached value matches", () => {
+    let completeCalls = 0;
+    const countingDiscriminator: Parser<"sync", string, null> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [{ type: "option", names: ["--type"], metavar: "TYPE" }],
+      leadingNames: new Set(["--type"]),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse(context) {
+        if (context.buffer[0] === "--type" && context.buffer[1]) {
+          return {
+            success: true as const,
+            next: { ...context, buffer: context.buffer.slice(2) },
+            consumed: ["--type", context.buffer[1]],
+          };
+        }
+        return { success: false as const, consumed: 0, error: [] };
+      },
+      complete() {
+        completeCalls++;
+        return { success: true as const, value: "a" };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = conditional(countingDiscriminator, {
+      a: option("-o", string()),
+    });
+    const result = parseSync(parser, ["--type", "a", "-o", "x"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["a", "x"]);
+    }
+    // Discriminator.complete() should be called exactly once (during
+    // parse) — not twice.  The complete() phase skips re-completion
+    // because the cached discriminatorValue matches the selected branch.
+    assert.equal(completeCalls, 1);
   });
 
   it("should preserve discriminator error over zero-consuming default", () => {

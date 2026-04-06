@@ -10915,12 +10915,19 @@ export function conditional(
       dependencyRuntime: runtime,
       dependencyRegistry: runtime.registry,
     };
-    const discriminatorCompleteResult = state.selectedBranch.kind === "default"
-      ? undefined
-      : syncDiscriminator.complete(
+    // Only complete the discriminator when needed — skip re-completion
+    // when the cached discriminatorValue already matches the selected
+    // branch key, avoiding side effects from non-idempotent discriminators.
+    const needsDiscriminatorCompletion = state.selectedBranch.kind !==
+        "default" &&
+      !(state.discriminatorValue != null &&
+        state.discriminatorValue === state.selectedBranch.key);
+    const discriminatorCompleteResult = needsDiscriminatorCompletion
+      ? syncDiscriminator.complete(
         annotatedDiscriminatorState,
         withChildExecPath(completionExec, "_discriminator"),
-      );
+      )
+      : undefined;
 
     const branchResult = unwrapCompleteResult(
       branchParser.complete(
@@ -10930,7 +10937,6 @@ export function conditional(
     );
 
     if (!branchResult.success) {
-      // Add context to error message
       if (
         state.discriminatorValue !== undefined &&
         options?.errors?.branchError
@@ -10946,12 +10952,6 @@ export function conditional(
       return branchResult;
     }
 
-    // Use the discriminator value stored during parse when it matches
-    // the selected branch key, avoiding re-completion of non-idempotent
-    // discriminators (e.g., lazy defaults that return different values).
-    // When they differ (e.g., DependencySourceState discriminators whose
-    // value is only resolved during the complete phase), use the fresh
-    // completion result.
     let discriminatorValue: string | undefined;
     if (state.selectedBranch.kind === "default") {
       discriminatorValue = undefined;
@@ -11184,12 +11184,18 @@ export function conditional(
       dependencyRuntime: runtime,
       dependencyRegistry: runtime.registry,
     };
-    const discriminatorCompleteResult = state.selectedBranch.kind === "default"
-      ? undefined
-      : await discriminator.complete(
+    // Only complete the discriminator when needed
+    // (see sync counterpart for rationale).
+    const needsDiscriminatorCompletion = state.selectedBranch.kind !==
+        "default" &&
+      !(state.discriminatorValue != null &&
+        state.discriminatorValue === state.selectedBranch.key);
+    const discriminatorCompleteResult = needsDiscriminatorCompletion
+      ? await discriminator.complete(
         annotatedDiscriminatorState,
         withChildExecPath(completionExec, "_discriminator"),
-      );
+      )
+      : undefined;
 
     const branchResult = unwrapCompleteResult(
       await branchParser.complete(
@@ -11199,7 +11205,6 @@ export function conditional(
     );
 
     if (!branchResult.success) {
-      // Add context to error message
       if (
         state.discriminatorValue !== undefined &&
         options?.errors?.branchError
@@ -11215,12 +11220,6 @@ export function conditional(
       return branchResult;
     }
 
-    // Use the discriminator value stored during parse when it matches
-    // the selected branch key, avoiding re-completion of non-idempotent
-    // discriminators (e.g., lazy defaults that return different values).
-    // When they differ (e.g., DependencySourceState discriminators whose
-    // value is only resolved during the complete phase), use the fresh
-    // completion result.
     let discriminatorValue: string | undefined;
     if (state.selectedBranch.kind === "default") {
       discriminatorValue = undefined;
