@@ -30,10 +30,10 @@ import type {
 import type { DeferredMap, ValueParserResult } from "./valueparser.ts";
 
 /**
- * Internal marker for optional-style wrappers (`optional()`, `withDefault()`).
- * Used by `object()`'s zero-consumption pass to skip these parsers, since they
- * should return `undefined`/default when the user provides no input rather than
- * running the inner parser.
+ * Internal marker for wrappers that should be skipped by `object()`'s
+ * zero-consumption pass.  Set on `optional()`, `withDefault()`, and
+ * `prompt()`, since these wrappers have their own completion semantics
+ * that should not be short-circuited during parse.
  *
  * @internal
  */

@@ -1106,16 +1106,6 @@ function createExclusiveComplete(
       // (matching the parse-time ambiguity check).  When the unique
       // candidate's complete() fails, preserve its error instead of
       // falling back to a generic no-match message.
-      // Preserve annotations from the caller's state so that
-      // annotation-dependent branches (e.g., bindConfig, bindEnv)
-      // can resolve during completion.
-      const annotations = getAnnotations(state);
-      const annotateInitial = (initial: unknown): unknown =>
-        annotations != null && initial != null &&
-          typeof initial === "object"
-          ? injectAnnotations(initial, annotations)
-          : initial;
-
       return dispatchByMode(
         mode,
         () => {
@@ -1133,7 +1123,7 @@ function createExclusiveComplete(
             if (p.leadingNames.size > 0 || p.acceptingAnyToken) continue;
             const parseResult = p.parse({
               ...emptyCtx,
-              state: annotateInitial(p.initialState),
+              state: getAnnotatedChildState(state, p.initialState, p),
             });
             if (!parseResult.success || parseResult.provisional) continue;
             candidateCount++;
@@ -1145,7 +1135,7 @@ function createExclusiveComplete(
             const p = syncParsers[candidateIndex];
             const parseResult = p.parse({
               ...emptyCtx,
-              state: annotateInitial(p.initialState),
+              state: getAnnotatedChildState(state, p.initialState, p),
             });
             if (parseResult.success) {
               // Re-inject parent annotations into the parse result
@@ -1180,7 +1170,7 @@ function createExclusiveComplete(
             if (p.leadingNames.size > 0 || p.acceptingAnyToken) continue;
             const parseResult = await p.parse({
               ...emptyCtx,
-              state: annotateInitial(p.initialState),
+              state: getAnnotatedChildState(state, p.initialState, p),
             });
             if (!parseResult.success || parseResult.provisional) continue;
             candidateCount++;
@@ -1201,7 +1191,7 @@ function createExclusiveComplete(
             const p = parsers[candidateIndex];
             const parseResult = await p.parse({
               ...emptyCtx,
-              state: annotateInitial(p.initialState),
+              state: getAnnotatedChildState(state, p.initialState, p),
             });
             if (parseResult.success) {
               const annotatedState = getAnnotatedChildState(
