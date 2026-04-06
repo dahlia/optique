@@ -7906,6 +7906,89 @@ describe("conditional", () => {
     const result = parseSync(parser, ["--type"]);
     assert.ok(!result.success);
   });
+
+  it("should not trigger side effects for async discriminator during suggest", async () => {
+    // Async discriminators (e.g., prompt()) may have side effects.
+    // suggest() must not call complete() on async discriminators.
+    let completeCalled = false;
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () => {
+        completeCalled = true;
+        return Promise.resolve({ success: true as const, value: "key" });
+      },
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      { key: option("-o", string()) },
+      constant("D"),
+    );
+
+    const suggestions = await suggestAsync(parser, [""]);
+    // Verify suggest completed without calling async discriminator.complete()
+    assert.ok(!completeCalled);
+    assert.ok(Array.isArray(suggestions));
+  });
+
+  it("should preserve annotations in deferred branch completion", () => {
+    // When a zero-consuming discriminator defers to complete(), the
+    // branch parser should still see inherited annotations.
+    const marker = Symbol.for("deferred-branch-ann-test");
+    const branchParser: Parser<"sync", string> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) => ({
+        success: true as const,
+        next: context,
+        consumed: [],
+      }),
+      complete: (state, _exec) => {
+        const annotations = getAnnotations(state);
+        if (annotations?.[marker] === true) {
+          return { success: true as const, value: "ann-ok" };
+        }
+        return { success: false as const, error: [] };
+      },
+      suggest: () => [],
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    defineInheritedAnnotationParser(branchParser);
+
+    const parser = conditional(
+      constant("key") as Parser<"sync", string>,
+      { key: branchParser },
+    );
+
+    const result = parseSync(parser, [], {
+      annotations: { [marker]: true } satisfies Annotations,
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["key", "ann-ok"]);
+    }
+  });
 });
 
 describe("complex combinator interactions", () => {

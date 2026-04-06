@@ -10761,9 +10761,17 @@ export function conditional(
             const branchState = replayResult.success
               ? replayResult.next.state
               : annotatedInitial;
+            // Re-inject parent annotations for the complete phase
+            // so that inherited-annotation parsers (e.g., bindConfig)
+            // see annotations after the replay parse.
+            const annotatedBranchState = getAnnotatedChildState(
+              state,
+              branchState,
+              deferredBranch,
+            );
             const branchResult = unwrapCompleteResult(
               deferredBranch.complete(
-                branchState,
+                annotatedBranchState,
                 withChildExecPath(exec, "_branch"),
               ),
             );
@@ -11026,9 +11034,16 @@ export function conditional(
             const branchState = replayResult.success
               ? replayResult.next.state
               : annotatedInitial;
+            // Re-inject parent annotations for the complete phase
+            // (see sync counterpart for rationale).
+            const annotatedBranchState = getAnnotatedChildState(
+              state,
+              branchState,
+              deferredBranch,
+            );
             const branchResult = unwrapCompleteResult(
               await deferredBranch.complete(
-                branchState,
+                annotatedBranchState,
                 withChildExecPath(exec, "_branch"),
               ),
             );
@@ -11486,45 +11501,54 @@ export function conditional(
       );
 
       // Try resolving the discriminator for branch suggestions
-      // (see sync counterpart for rationale).
-      const annotatedDiscState = getAnnotatedChildState(
-        state,
-        state.discriminatorState,
-        discriminator,
-      );
-      const discComplete = await discriminator.complete(
-        annotatedDiscState,
-        withChildExecPath(
-          suggestContext.exec
-            ? { ...suggestContext.exec, phase: "suggest" }
-            : undefined,
-          "_discriminator",
-        ),
-      );
-      if (
-        discComplete.success &&
-        branches[discComplete.value] !== undefined
-      ) {
-        const resolvedBranch = branches[discComplete.value];
-        yield* resolvedBranch.suggest(
-          withChildContext(
-            suggestContext,
-            "_branch",
-            state.branchState ?? resolvedBranch.initialState,
-            resolvedBranch,
-          ),
-          prefix,
+      // (see sync counterpart for rationale).  Only attempt completion
+      // for sync discriminators — async ones (e.g., prompt()) may
+      // trigger side effects that are unsafe during suggest.
+      let discResolved = false;
+      if (discriminator.$mode === "sync") {
+        const annotatedDiscState = getAnnotatedChildState(
+          state,
+          state.discriminatorState,
+          discriminator,
         );
-      } else if (defaultBranch !== undefined) {
-        yield* defaultBranch.suggest(
-          withChildContext(
-            suggestContext,
-            "_branch",
-            state.branchState ?? defaultBranch.initialState,
-            defaultBranch,
+        const discComplete = discriminator.complete(
+          annotatedDiscState,
+          withChildExecPath(
+            suggestContext.exec
+              ? { ...suggestContext.exec, phase: "suggest" }
+              : undefined,
+            "_discriminator",
           ),
-          prefix,
-        );
+        ) as ValueParserResult<string>;
+        if (
+          discComplete.success &&
+          branches[discComplete.value] !== undefined
+        ) {
+          const resolvedBranch = branches[discComplete.value];
+          yield* resolvedBranch.suggest(
+            withChildContext(
+              suggestContext,
+              "_branch",
+              state.branchState ?? resolvedBranch.initialState,
+              resolvedBranch,
+            ),
+            prefix,
+          );
+          discResolved = true;
+        }
+      }
+      if (!discResolved) {
+        if (defaultBranch !== undefined) {
+          yield* defaultBranch.suggest(
+            withChildContext(
+              suggestContext,
+              "_branch",
+              state.branchState ?? defaultBranch.initialState,
+              defaultBranch,
+            ),
+            prefix,
+          );
+        }
       }
     } else {
       // Delegate to selected branch
