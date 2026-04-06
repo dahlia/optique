@@ -5361,10 +5361,20 @@ export function object<
     if (currentContext.buffer.length === 0) {
       let allCanComplete = true;
       const getFieldState = createFieldStateGetter(currentContext.state);
+      // Stamp the probe exec as parse-phase so that async fallback
+      // guards in or()/conditional() correctly suppress side effects.
+      const probeExec = currentContext.exec
+        ? { ...currentContext.exec, phase: "parse" as const }
+        : {
+          usage: [] as never[],
+          path: [] as PropertyKey[],
+          trace: undefined,
+          phase: "parse" as const,
+        };
       for (const [field, parser] of parserPairs) {
         const fieldState = getFieldState(field, parser);
         const completeResult = (parser as Parser<"sync", unknown, unknown>)
-          .complete(fieldState, withChildExecPath(currentContext.exec, field));
+          .complete(fieldState, withChildExecPath(probeExec, field));
         if (!completeResult.success) {
           allCanComplete = false;
           break;
@@ -5524,11 +5534,22 @@ export function object<
     if (currentContext.buffer.length === 0) {
       let allCanComplete = true;
       const getFieldState = createFieldStateGetter(currentContext.state);
+      // Stamp the probe exec as parse-phase so that async fallback
+      // guards in or()/conditional() correctly suppress side effects
+      // (see sync counterpart for rationale).
+      const probeExec = currentContext.exec
+        ? { ...currentContext.exec, phase: "parse" as const }
+        : {
+          usage: [] as never[],
+          path: [] as PropertyKey[],
+          trace: undefined,
+          phase: "parse" as const,
+        };
       for (const [field, parser] of parserPairs) {
         const fieldState = getFieldState(field, parser);
         const completeResult = await parser.complete(
           fieldState,
-          withChildExecPath(currentContext.exec, field),
+          withChildExecPath(probeExec, field),
         );
         if (!completeResult.success) {
           allCanComplete = false;
