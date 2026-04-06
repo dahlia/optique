@@ -10201,7 +10201,7 @@ export interface ConditionalErrorOptions {
    * Custom error message when branch parser fails.
    * Receives the discriminator value for context.
    */
-  branchError?: (
+  readonly branchError?: (
     discriminatorValue: string | undefined,
     error: Message,
   ) => Message;
@@ -10209,7 +10209,7 @@ export interface ConditionalErrorOptions {
   /**
    * Custom error message for no matching input.
    */
-  noMatch?: Message | ((context: NoMatchContext) => Message);
+  readonly noMatch?: Message | ((context: NoMatchContext) => Message);
 
   /**
    * Custom error message when speculative branch parsing committed
@@ -10224,7 +10224,7 @@ export interface ConditionalErrorOptions {
    * branch tokens were committed to (`speculativeKey`).
    * @since 0.10.1
    */
-  branchMismatch?: (
+  readonly branchMismatch?: (
     discriminatorValue: string,
     speculativeKey: string,
   ) => Message;
@@ -10238,7 +10238,7 @@ export interface ConditionalOptions {
   /**
    * Custom error messages.
    */
-  errors?: ConditionalErrorOptions;
+  readonly errors?: ConditionalErrorOptions;
 }
 
 /**
