@@ -10452,6 +10452,9 @@ export function conditional(
         discriminatorResult.consumed.length === 0 &&
         discriminator.$mode === "async"
       ) {
+        // Track default branch parse state so the deferred path can
+        // preserve it even when consumed === 0.
+        let deferredBranchState: unknown = state.branchState;
         if (defaultBranch !== undefined) {
           const defaultResult = await defaultBranch.parse(
             withChildContext(
@@ -10466,10 +10469,7 @@ export function conditional(
             defaultResult.success &&
             defaultResult.consumed.length > 0
           ) {
-            // Only commit the default when it consumed tokens.
-            // When buffer is empty and default consumed nothing,
-            // let the deferred discriminator path in complete()
-            // resolve the async discriminator first.
+            // Commit the default when it consumed tokens.
             const defaultExec = mergeChildExec(
               context.exec,
               defaultResult.next.exec,
@@ -10497,6 +10497,27 @@ export function conditional(
               consumed: defaultResult.consumed,
             };
           }
+          if (!defaultResult.success && defaultResult.consumed > 0) {
+            // Default branch consumed tokens before failing (e.g.,
+            // option missing its value).  Propagate the specific error
+            // instead of masking it behind a generic no-match.
+            return defaultResult;
+          }
+          if (
+            defaultResult.success &&
+            defaultResult.consumed.length === 0 &&
+            context.buffer.length === 0
+          ) {
+            // Default succeeded with consumed=[] on empty buffer.
+            // Persist its state so complete() has the right state
+            // for defaults that build values through parse state
+            // (e.g., multiple(constant(...))).
+            deferredBranchState = getAnnotatedChildState(
+              state,
+              defaultResult.next.state,
+              defaultBranch,
+            );
+          }
         }
 
         const annotatedDiscriminatorState = getAnnotatedChildState(
@@ -10516,6 +10537,7 @@ export function conditional(
             state: {
               ...state,
               discriminatorState: annotatedDiscriminatorState,
+              branchState: deferredBranchState,
             },
             ...(mergedExec != null
               ? {
