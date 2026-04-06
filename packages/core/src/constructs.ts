@@ -1113,11 +1113,15 @@ function createExclusiveComplete(
             buffer: [] as string[],
             optionsTerminated: false,
             usage: [] as never[],
+            exec,
+            dependencyRegistry: exec?.dependencyRegistry,
           };
-          // First pass: count parse-successful candidates without
-          // calling complete() to avoid side effects on ambiguous input.
+          // Single pass: count candidates and cache the first result.
           let candidateIndex = -1;
           let candidateCount = 0;
+          let candidateParseResult:
+            | (ParserResult<unknown> & { success: true })
+            | undefined;
           for (let i = 0; i < syncParsers.length; i++) {
             const p = syncParsers[i];
             if (p.leadingNames.size > 0 || p.acceptingAnyToken) continue;
@@ -1127,29 +1131,27 @@ function createExclusiveComplete(
             });
             if (!parseResult.success || parseResult.provisional) continue;
             candidateCount++;
-            if (candidateIndex < 0) candidateIndex = i;
+            if (candidateIndex < 0) {
+              candidateIndex = i;
+              candidateParseResult = parseResult;
+            }
             if (candidateCount > 1) break;
           }
-          // Second pass: complete only the unique candidate.
-          if (candidateCount === 1 && candidateIndex >= 0) {
+          // Complete only the unique candidate.
+          if (
+            candidateCount === 1 && candidateIndex >= 0 &&
+            candidateParseResult
+          ) {
             const p = syncParsers[candidateIndex];
-            const parseResult = p.parse({
-              ...emptyCtx,
-              state: getAnnotatedChildState(state, p.initialState, p),
-            });
-            if (parseResult.success) {
-              // Re-inject parent annotations into the parse result
-              // state so annotation-dependent branches can resolve.
-              const annotatedState = getAnnotatedChildState(
-                state,
-                parseResult.next.state,
-                p,
-              );
-              return p.complete(
-                annotatedState,
-                withChildExecPath(exec, candidateIndex),
-              );
-            }
+            const annotatedState = getAnnotatedChildState(
+              state,
+              candidateParseResult.next.state,
+              p,
+            );
+            return p.complete(
+              annotatedState,
+              withChildExecPath(exec, candidateIndex),
+            );
           }
           return {
             success: false as const,
@@ -1161,10 +1163,16 @@ function createExclusiveComplete(
             buffer: [] as string[],
             optionsTerminated: false,
             usage: [] as never[],
+            exec,
+            dependencyRegistry: exec?.dependencyRegistry,
           };
-          // First pass: count candidates (see sync counterpart).
+          // Single pass: count candidates and cache the first result
+          // (see sync counterpart).
           let candidateIndex = -1;
           let candidateCount = 0;
+          let candidateParseResult:
+            | (ParserResult<unknown> & { success: true })
+            | undefined;
           for (let i = 0; i < parsers.length; i++) {
             const p = parsers[i];
             if (p.leadingNames.size > 0 || p.acceptingAnyToken) continue;
@@ -1174,10 +1182,13 @@ function createExclusiveComplete(
             });
             if (!parseResult.success || parseResult.provisional) continue;
             candidateCount++;
-            if (candidateIndex < 0) candidateIndex = i;
+            if (candidateIndex < 0) {
+              candidateIndex = i;
+              candidateParseResult = parseResult;
+            }
             if (candidateCount > 1) break;
           }
-          // Second pass: complete only the unique candidate.
+          // Complete only the unique candidate.
           // Skip async candidates during parse/suggest probes to
           // avoid triggering side effects (e.g., prompt()) before
           // the real completion phase.  Sync candidates are safe
@@ -1185,25 +1196,20 @@ function createExclusiveComplete(
           // completability check on empty input).
           if (
             candidateCount === 1 && candidateIndex >= 0 &&
+            candidateParseResult &&
             (parsers[candidateIndex].$mode === "sync" ||
               (exec?.phase !== "parse" && exec?.phase !== "suggest"))
           ) {
             const p = parsers[candidateIndex];
-            const parseResult = await p.parse({
-              ...emptyCtx,
-              state: getAnnotatedChildState(state, p.initialState, p),
-            });
-            if (parseResult.success) {
-              const annotatedState = getAnnotatedChildState(
-                state,
-                parseResult.next.state,
-                p,
-              );
-              return await p.complete(
-                annotatedState,
-                withChildExecPath(exec, candidateIndex),
-              );
-            }
+            const annotatedState = getAnnotatedChildState(
+              state,
+              candidateParseResult.next.state,
+              p,
+            );
+            return await p.complete(
+              annotatedState,
+              withChildExecPath(exec, candidateIndex),
+            );
           }
           return {
             success: false as const,
@@ -10248,13 +10254,14 @@ export function conditional(
             );
             // Mark as provisional when the result is tentative:
             // either the branch itself is provisional, or the
-            // discriminator consumed nothing and the branch has
-            // leadingNames (meaning it can match tokens but didn't,
-            // e.g., bindEnv(option(...)) that resolves in complete).
+            // discriminator consumed nothing and the branch is
+            // interactive (has leadingNames or accepts any token),
+            // meaning it can match tokens but didn't.
             const isProvisional = branchParseResult.provisional ||
               (discriminatorResult.consumed.length === 0 &&
                 branchParseResult.consumed.length === 0 &&
-                branchParser.leadingNames.size > 0);
+                (branchParser.leadingNames.size > 0 ||
+                  branchParser.acceptingAnyToken));
             return {
               success: true,
               ...(isProvisional ? { provisional: true as const } : {}),
@@ -10630,7 +10637,8 @@ export function conditional(
               ...((branchParseResult.provisional ||
                   (discriminatorResult.consumed.length === 0 &&
                     branchParseResult.consumed.length === 0 &&
-                    branchParser.leadingNames.size > 0))
+                    (branchParser.leadingNames.size > 0 ||
+                      branchParser.acceptingAnyToken)))
                 ? { provisional: true as const }
                 : {}),
               next: {
