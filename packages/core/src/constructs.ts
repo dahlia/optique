@@ -10667,6 +10667,13 @@ export function conditional(
             speculativeError = branchResult;
           }
         }
+        // When both a definitive and a provisional hit exist, mark as
+        // ambiguous — committing the definitive branch would reject
+        // valid input when the discriminator resolves to the
+        // provisional branch.
+        if (speculativeHit != null && provisionalHit != null) {
+          ambiguous = true;
+        }
         // Fall back to a provisional hit (e.g., from a nested
         // speculative conditional) when no definitive hit was found.
         if (speculativeHit == null && !ambiguous && provisionalHit != null) {
