@@ -10649,6 +10649,21 @@ export function conditional(
           context.exec,
           discriminatorResult.next.exec,
         );
+        // Derive the speculation context from `discriminatorResult.next`
+        // rather than the original `context`, so that any buffer or
+        // optionsTerminated changes the discriminator made (without
+        // consuming tokens) propagate to the branch probes.
+        const speculationContext = {
+          ...context,
+          buffer: discriminatorResult.next.buffer,
+          optionsTerminated: discriminatorResult.next.optionsTerminated,
+          ...(discriminatorExec != null
+            ? {
+              exec: discriminatorExec,
+              dependencyRegistry: discriminatorExec.dependencyRegistry,
+            }
+            : {}),
+        };
         let speculativeHit: {
           key: string;
           bp: Parser<Mode, unknown, unknown>;
@@ -10665,15 +10680,7 @@ export function conditional(
         for (const [key, bp] of branchParsers) {
           const branchResult = await bp.parse(
             withChildContext(
-              {
-                ...context,
-                ...(discriminatorExec != null
-                  ? {
-                    exec: discriminatorExec,
-                    dependencyRegistry: discriminatorExec.dependencyRegistry,
-                  }
-                  : {}),
-              },
+              speculationContext,
               "_branch",
               bp.initialState,
               bp,
@@ -10773,11 +10780,13 @@ export function conditional(
         }
 
         // No named branch consumed — fall back to the default branch.
+        // Use speculationContext so the default branch sees any buffer
+        // or optionsTerminated changes from the discriminator parse.
         let deferredBranchState: unknown = state.branchState;
         if (defaultBranch !== undefined) {
           const defaultResult = await defaultBranch.parse(
             withChildContext(
-              context,
+              speculationContext,
               "_branch",
               state.branchState ?? defaultBranch.initialState,
               defaultBranch,
@@ -10790,7 +10799,7 @@ export function conditional(
           ) {
             // Commit the default when it consumed tokens.
             const defaultExec = mergeChildExec(
-              context.exec,
+              discriminatorExec ?? context.exec,
               defaultResult.next.exec,
             );
             return {
@@ -10825,7 +10834,7 @@ export function conditional(
           if (
             defaultResult.success &&
             defaultResult.consumed.length === 0 &&
-            context.buffer.length === 0
+            speculationContext.buffer.length === 0
           ) {
             deferredBranchState = getAnnotatedChildState(
               state,
