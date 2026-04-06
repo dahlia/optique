@@ -1187,7 +1187,12 @@ function createExclusiveComplete(
             if (candidateCount > 1) break;
           }
           // Second pass: complete only the unique candidate.
-          if (candidateCount === 1 && candidateIndex >= 0) {
+          // Skip during parse/suggest probes to avoid triggering
+          // async side effects before the real completion phase.
+          if (
+            candidateCount === 1 && candidateIndex >= 0 &&
+            exec?.phase !== "parse" && exec?.phase !== "suggest"
+          ) {
             const p = parsers[candidateIndex];
             const parseResult = await p.parse({
               ...emptyCtx,
@@ -5462,8 +5467,6 @@ export function object<
           continue;
         }
         const fieldState = getFieldState(field, parser);
-        // Skip already-processed fields (see sync counterpart).
-        if (fieldState !== parser.initialState) continue;
         const resultOrPromise = parser.parse(
           withChildContext(
             currentContext,
@@ -10458,9 +10461,12 @@ export function conditional(
           );
           if (
             defaultResult.success &&
-            (defaultResult.consumed.length > 0 ||
-              context.buffer.length === 0)
+            defaultResult.consumed.length > 0
           ) {
+            // Only commit the default when it consumed tokens.
+            // When buffer is empty and default consumed nothing,
+            // let the deferred discriminator path in complete()
+            // resolve the async discriminator first.
             const defaultExec = mergeChildExec(
               context.exec,
               defaultResult.next.exec,
@@ -11479,8 +11485,37 @@ export function conditional(
         prefix,
       );
 
-      // Default branch suggestions if available
-      if (defaultBranch !== undefined) {
+      // Try resolving the discriminator for branch suggestions
+      // (see sync counterpart for rationale).
+      const annotatedDiscState = getAnnotatedChildState(
+        state,
+        state.discriminatorState,
+        discriminator,
+      );
+      const discComplete = await discriminator.complete(
+        annotatedDiscState,
+        withChildExecPath(
+          suggestContext.exec
+            ? { ...suggestContext.exec, phase: "suggest" }
+            : undefined,
+          "_discriminator",
+        ),
+      );
+      if (
+        discComplete.success &&
+        branches[discComplete.value] !== undefined
+      ) {
+        const resolvedBranch = branches[discComplete.value];
+        yield* resolvedBranch.suggest(
+          withChildContext(
+            suggestContext,
+            "_branch",
+            state.branchState ?? resolvedBranch.initialState,
+            resolvedBranch,
+          ),
+          prefix,
+        );
+      } else if (defaultBranch !== undefined) {
         yield* defaultBranch.suggest(
           withChildContext(
             suggestContext,
