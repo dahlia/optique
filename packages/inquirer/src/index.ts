@@ -39,6 +39,7 @@ import {
   inheritParentAnnotationsKey,
 } from "@optique/core/parser";
 import { message } from "@optique/core/message";
+import { optionalStyleWrapperKey } from "@optique/core/modifiers";
 import type { ValueParserResult } from "@optique/core/valueparser";
 
 // Re-export Separator for use in choice lists.
@@ -972,6 +973,7 @@ export function prompt<M extends Mode, TValue, TState>(
 
   const promptedParser: Parser<"async", TValue, TState> & {
     readonly [inheritParentAnnotationsKey]: true;
+    readonly [optionalStyleWrapperKey]: true;
   } = {
     $mode: "async",
     $valueType: parser.$valueType,
@@ -980,7 +982,7 @@ export function prompt<M extends Mode, TValue, TState>(
     [inheritParentAnnotationsKey]: true,
     // Mark as optional-style wrapper so object()'s zero-consumption pass
     // skips this parser (prompt should fire during complete, not parse).
-    [Symbol.for("@optique/core/optionalStyleWrapper")]: true as const,
+    [optionalStyleWrapperKey]: true as const,
     // prompt() makes the CLI argument optional because missing values are
     // handled interactively.  If the inner parser is already optional
     // (e.g., wrapped in optional() or withDefault()), reuse its usage
