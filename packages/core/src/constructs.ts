@@ -10991,8 +10991,16 @@ export function conditional(
         // No named branch consumed — fall back to the default branch.
         // Use speculationContext so the default branch sees any buffer
         // or optionsTerminated changes from the discriminator parse.
+        //
+        // Skip the default branch when speculation found multiple
+        // candidates (definitive or provisional) but couldn't pick
+        // one.  Committing to the default in that case would silently
+        // discard the discriminator's eventual disambiguation among
+        // the named branches.
         let deferredBranchState: unknown = state.branchState;
-        if (defaultBranch !== undefined) {
+        if (
+          defaultBranch !== undefined && !ambiguous && !provisionalAmbiguous
+        ) {
           const defaultResult = await defaultBranch.parse(
             withChildContext(
               speculationContext,

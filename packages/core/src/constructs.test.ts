@@ -8379,6 +8379,53 @@ describe("conditional", () => {
     }
   });
 
+  it("should not silently commit to default branch when named-branch speculation is ambiguous", async () => {
+    // When multiple named branches can consume the same tokens, the
+    // current parser cannot disambiguate without speculatively
+    // committing to one (which would be order-dependent).  If a
+    // default branch also matches those tokens, an unguarded fallback
+    // would commit to the default and silently produce [undefined, ...]
+    // even though the discriminator would have resolved to a named
+    // branch.  Skip the default and let the parse fail loudly so that
+    // the ambiguity surfaces instead of being papered over.
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "fast" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    // Both named branches AND the default branch can consume --threads.
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: option("--threads", integer()),
+        slow: option("--threads", integer()),
+      },
+      option("--threads", integer()),
+    );
+
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(
+      !result.success,
+      "ambiguous speculation must not silently commit to the default branch",
+    );
+  });
+
   it("should reject contradictory input on speculative mismatch with defaults", async () => {
     const asyncDiscriminator: Parser<"async", string> = {
       $mode: "async",
