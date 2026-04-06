@@ -10789,10 +10789,13 @@ export function conditional(
           const deferredValue = deferredDiscriminatorResult.value as string;
           const deferredBranch = syncBranches[deferredValue];
           if (deferredBranch) {
+            const branchExec = withChildExecPath(exec, "_branch");
             const emptyCtx = {
               buffer: [] as string[],
               optionsTerminated: false,
               usage: [] as never[],
+              exec: branchExec,
+              dependencyRegistry: exec?.dependencyRegistry,
             };
             const annotatedInitial = getAnnotatedChildState(
               state,
@@ -10817,7 +10820,7 @@ export function conditional(
             const branchResult = unwrapCompleteResult(
               deferredBranch.complete(
                 annotatedBranchState,
-                withChildExecPath(exec, "_branch"),
+                branchExec,
               ),
             );
             if (branchResult.success) {
@@ -11062,10 +11065,13 @@ export function conditional(
           const deferredValue = deferredDiscriminatorResult.value as string;
           const deferredBranch = branches[deferredValue];
           if (deferredBranch) {
+            const branchExec = withChildExecPath(exec, "_branch");
             const emptyCtx = {
               buffer: [] as string[],
               optionsTerminated: false,
               usage: [] as never[],
+              exec: branchExec,
+              dependencyRegistry: exec?.dependencyRegistry,
             };
             const annotatedInitial = getAnnotatedChildState(
               state,
@@ -11089,7 +11095,7 @@ export function conditional(
             const branchResult = unwrapCompleteResult(
               await deferredBranch.complete(
                 annotatedBranchState,
-                withChildExecPath(exec, "_branch"),
+                branchExec,
               ),
             );
             if (branchResult.success) {
