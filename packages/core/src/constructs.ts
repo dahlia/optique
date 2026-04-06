@@ -11863,7 +11863,17 @@ export function conditional(
       discriminatorValue !== state.selectedBranch.key
     ) {
       const speculativeKey = state.selectedBranch.key;
-      const resolvedKey = discriminatorValue ?? "";
+      // `discriminatorValue` is statically `string | undefined`.  In
+      // this branch it should always be a string (the only path that
+      // sets `undefined` is the default-branch case, which is excluded
+      // by the `kind === "branch"` guard above).  Defensively coerce
+      // anyway: a buggy discriminator that violates its return-type
+      // contract by yielding a non-string would otherwise produce a
+      // confusing "resolved to ." message in both the default error
+      // and the `branchMismatch` hook.
+      const resolvedKey = typeof discriminatorValue === "string"
+        ? discriminatorValue
+        : "<unknown>";
       return {
         success: false,
         error: options?.errors?.branchMismatch
