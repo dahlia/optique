@@ -10719,6 +10719,9 @@ export function conditional(
             ),
           );
           if (branchResult.success && branchResult.consumed.length > 0) {
+            // Ignore provisional results (e.g., from a nested
+            // speculative conditional) to avoid false ambiguity.
+            if (branchResult.provisional) continue;
             if (speculativeHit != null) {
               ambiguous = true;
               break;
@@ -11545,9 +11548,16 @@ export function conditional(
       const completedDiscriminator = unwrapCompleteResult(
         discriminatorCompleteResult,
       );
-      discriminatorValue = completedDiscriminator.success
-        ? completedDiscriminator.value as string
-        : state.selectedBranch.key;
+      if (completedDiscriminator.success) {
+        discriminatorValue = completedDiscriminator.value as string;
+      } else if (wasSpeculative) {
+        // The discriminator never confirmed the speculative branch —
+        // propagate the failure instead of silently falling back to
+        // the guessed key.
+        return completedDiscriminator;
+      } else {
+        discriminatorValue = state.selectedBranch.key;
+      }
     }
 
     // When the branch was selected speculatively, verify that the

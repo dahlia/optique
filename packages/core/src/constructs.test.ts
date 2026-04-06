@@ -8277,7 +8277,7 @@ describe("conditional", () => {
     assert.ok(completeCalled);
   });
 
-  it("should use speculative key as fallback when discriminator fails", async () => {
+  it("should propagate discriminator failure for speculative branches", async () => {
     const asyncDiscriminator: Parser<"async", string> = {
       $mode: "async",
       $valueType: [] as readonly string[],
@@ -8312,16 +8312,9 @@ describe("conditional", () => {
     );
 
     // --threads consumed speculatively for "fast"
-    // Discriminator fails → fall back to speculative key "fast"
+    // Discriminator fails → propagate the failure
     const result = await parseAsync(parser, ["--threads", "4"]);
-    assert.ok(
-      result.success,
-      "expected success with fallback to speculative key",
-    );
-    if (result.success) {
-      assert.equal(result.value[0], "fast");
-      assert.equal(result.value[1], 4);
-    }
+    assert.ok(!result.success, "expected failure when discriminator fails");
   });
 
   it("should skip speculation when multiple branches consume tokens", async () => {
