@@ -10391,6 +10391,11 @@ export function conditional(
           consumed: defaultResult.consumed,
         };
       }
+      // Default branch consumed tokens before failing; propagate the
+      // specific error instead of masking it behind a generic no-match.
+      if (!defaultResult.success && defaultResult.consumed > 0) {
+        return defaultResult;
+      }
     }
 
     // Nothing matched
@@ -10739,6 +10744,10 @@ export function conditional(
           },
           consumed: defaultResult.consumed,
         };
+      }
+      // See sync counterpart for rationale.
+      if (!defaultResult.success && defaultResult.consumed > 0) {
+        return defaultResult;
       }
     }
 
