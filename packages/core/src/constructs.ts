@@ -10788,6 +10788,9 @@ export function conditional(
             );
             return {
               success: true,
+              ...(defaultResult.provisional
+                ? { provisional: true as const }
+                : {}),
               next: {
                 ...defaultResult.next,
                 state: {
