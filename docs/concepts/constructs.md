@@ -1626,23 +1626,19 @@ Use `conditional()` when you have an explicit discriminator option that
 determines which set of options is valid. Use `or()` for more general
 mutually exclusive alternatives.
 
-### Async discriminator limitation
+### Speculative branch parsing
 
 When the discriminator is an async parser that succeeds without consuming
 input (e.g., `prompt(option(...))` with no CLI input), branch selection is
-deferred to the complete phase.  If the selected branch needs to consume
-remaining tokens, those tokens cannot be consumed because the branch is
-not known during parse.
+normally deferred to the complete phase.  To allow branch-specific tokens
+to be consumed, `conditional()` speculatively tries all named branches
+during parse.  If exactly one branch can consume tokens, it is tentatively
+selected and verified against the resolved discriminator during the
+complete phase.
 
-To avoid this, ensure the discriminator can resolve synchronously when
-branch-specific tokens are present:
-
- -  Wrap the discriminator with `bindEnv()` or `bindConfig()` so it
-    resolves from environment/config without interactive prompting.
- -  Wrap the discriminator with `withDefault()` to provide a fallback
-    value when CLI input is absent.
- -  Provide a default branch to handle the case when the discriminator
-    is not resolved during parse.
+If the discriminator resolves to a different branch than the one that
+consumed tokens (contradictory input), the actual branch is completed
+with an empty buffer, which typically results in a missing-option error.
 
 
 `group()` parser

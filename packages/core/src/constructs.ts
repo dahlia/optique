@@ -9867,6 +9867,7 @@ interface ConditionalState<TDiscriminator extends string> {
   readonly discriminatorValue: TDiscriminator | undefined;
   readonly selectedBranch: SelectedBranch<TDiscriminator> | undefined;
   readonly branchState: unknown;
+  readonly speculative?: true;
 }
 
 /**
@@ -10020,18 +10021,19 @@ export function conditional<
  * // defaultResult.value = [undefined, {}]
  * ```
  *
- * ### Async discriminator limitation
+ * ### Speculative branch parsing
  *
  * When the discriminator is an async parser that succeeds without consuming
  * input (e.g., `prompt(option(...))` with no CLI input), branch selection
- * is deferred to the complete phase.  If the selected branch needs to
- * consume remaining tokens, those tokens cannot be consumed because the
- * branch is not known during parse.  In practice, this means
- * `conditional(prompt(option(...)), { key: option(...) })` cannot parse
- * branch-specific tokens when the discriminator requires interactive
- * resolution.  Provide a default branch or ensure the discriminator
- * can resolve synchronously (e.g., via `bindEnv()` or `withDefault()`)
- * to avoid this limitation.
+ * is normally deferred to the complete phase.  To allow branch-specific
+ * tokens to be consumed, `conditional()` speculatively tries all named
+ * branches during parse.  If exactly one branch can consume tokens, it is
+ * tentatively selected and verified against the resolved discriminator
+ * during the complete phase.
+ *
+ * If the discriminator resolves to a different branch than the one that
+ * consumed tokens (contradictory input), the actual branch is completed
+ * with an empty buffer, which typically results in a missing-option error.
  *
  * @since 0.8.0
  */
@@ -10555,14 +10557,74 @@ export function conditional(
           }
         }
 
+        // Try named branches speculatively: when the discriminator is
+        // deferred, we don't know which branch to use, but if exactly one
+        // branch can consume tokens from the buffer, commit to it
+        // tentatively.  The complete phase will verify the choice against
+        // the resolved discriminator value.
+        const discriminatorExec = mergeChildExec(
+          context.exec,
+          discriminatorResult.next.exec,
+        );
+        for (const [key, bp] of branchParsers) {
+          const branchResult = await bp.parse(
+            withChildContext(
+              {
+                ...context,
+                ...(discriminatorExec != null
+                  ? {
+                    exec: discriminatorExec,
+                    dependencyRegistry: discriminatorExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              "_branch",
+              bp.initialState,
+              bp,
+              bp.usage,
+            ),
+          );
+          if (branchResult.success && branchResult.consumed.length > 0) {
+            const annotatedDiscriminatorState = getAnnotatedChildState(
+              state,
+              discriminatorResult.next.state,
+              discriminator,
+            );
+            const mergedExec = mergeChildExec(
+              discriminatorExec,
+              branchResult.next.exec,
+            );
+            return {
+              success: true,
+              next: {
+                ...branchResult.next,
+                state: {
+                  ...state,
+                  discriminatorState: annotatedDiscriminatorState,
+                  selectedBranch: { kind: "branch", key },
+                  branchState: getAnnotatedChildState(
+                    state,
+                    branchResult.next.state,
+                    bp,
+                  ),
+                  speculative: true,
+                },
+                ...(mergedExec != null
+                  ? {
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              consumed: branchResult.consumed,
+            };
+          }
+        }
+
         const annotatedDiscriminatorState = getAnnotatedChildState(
           state,
           discriminatorResult.next.state,
           discriminator,
-        );
-        const mergedExec = mergeChildExec(
-          context.exec,
-          discriminatorResult.next.exec,
         );
         return {
           success: true,
@@ -10574,10 +10636,10 @@ export function conditional(
               discriminatorState: annotatedDiscriminatorState,
               branchState: deferredBranchState,
             },
-            ...(mergedExec != null
+            ...(discriminatorExec != null
               ? {
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
+                exec: discriminatorExec,
+                dependencyRegistry: discriminatorExec.dependencyRegistry,
               }
               : {}),
           },
@@ -11078,6 +11140,140 @@ export function conditional(
     state: ConditionalState<string>,
     exec?: ExecutionContext,
   ): Promise<CompleteResult> => {
+    // When a branch was selected speculatively (async discriminator
+    // deferred, but a named branch consumed tokens during parse),
+    // verify the speculative selection against the resolved
+    // discriminator before proceeding with normal branch completion.
+    if (state.speculative && state.selectedBranch?.kind === "branch") {
+      if (exec?.phase !== "parse" && exec?.phase !== "suggest") {
+        const discState = getAnnotatedChildState(
+          state,
+          state.discriminatorState,
+          discriminator,
+        );
+        const discResult = unwrapCompleteResult(
+          await discriminator.complete(
+            discState,
+            withChildExecPath(exec, "_discriminator"),
+          ),
+        );
+        if (discResult.success) {
+          const actualKey = discResult.value as string;
+          if (actualKey === state.selectedBranch.key) {
+            // Speculative selection confirmed — continue with normal
+            // selected-branch completion below.
+            state = {
+              ...state,
+              discriminatorValue: actualKey,
+              speculative: undefined,
+            };
+          } else {
+            // Mismatch: discriminator resolved to a different branch.
+            // Complete the actual branch with empty-buffer replay.
+            const actualBranch = branches[actualKey];
+            if (actualBranch) {
+              const branchExec = withChildExecPath(exec, "_branch");
+              const emptyCtx = {
+                buffer: [] as string[],
+                optionsTerminated: false,
+                usage: [] as never[],
+                exec: branchExec,
+                dependencyRegistry: exec?.dependencyRegistry,
+              };
+              const annotatedInitial = getAnnotatedChildState(
+                state,
+                actualBranch.initialState,
+                actualBranch,
+              );
+              const replayResult = await actualBranch.parse({
+                ...emptyCtx,
+                state: annotatedInitial,
+              });
+              const branchState = replayResult.success
+                ? replayResult.next.state
+                : annotatedInitial;
+              const annotatedBranchState = getAnnotatedChildState(
+                state,
+                branchState,
+                actualBranch,
+              );
+              const branchResult = unwrapCompleteResult(
+                await actualBranch.complete(
+                  annotatedBranchState,
+                  branchExec,
+                ),
+              );
+              if (branchResult.success) {
+                return {
+                  success: true,
+                  value: [actualKey, branchResult.value] as const,
+                  ...(branchResult.deferred
+                    ? {
+                      deferred: true as const,
+                      ...(branchResult.deferredKeys
+                        ? {
+                          deferredKeys: new Map([[
+                            1,
+                            branchResult.deferredKeys,
+                          ]]) as DeferredMap,
+                        }
+                        : branchResult.value == null ||
+                            typeof branchResult.value !== "object"
+                        ? {
+                          deferredKeys: new Map([[
+                            1,
+                            null,
+                          ]]) as DeferredMap,
+                        }
+                        : {}),
+                    }
+                    : {}),
+                };
+              }
+              if (options?.errors?.branchError) {
+                return {
+                  success: false,
+                  error: options.errors.branchError(
+                    actualKey,
+                    branchResult.error,
+                  ),
+                };
+              }
+              return branchResult;
+            }
+            if (defaultBranch === undefined) {
+              return {
+                success: false,
+                error: getNoMatchError(),
+              };
+            }
+            // Discriminator value doesn't match any branch; fall through
+            // to the default branch below.
+            state = {
+              ...state,
+              selectedBranch: undefined,
+              speculative: undefined,
+            };
+          }
+        } else {
+          // Discriminator failed — fall back to speculative key.
+          state = {
+            ...state,
+            discriminatorValue: state.selectedBranch.key,
+            speculative: undefined,
+          };
+        }
+      } else {
+        // During parse/suggest probe: use speculative key without
+        // triggering discriminator completion (avoids side effects).
+        state = {
+          ...state,
+          discriminatorValue: state.selectedBranch.key,
+          speculative: undefined,
+        };
+      }
+    }
+
     // No branch selected yet (see sync counterpart for rationale).
     if (state.selectedBranch === undefined) {
       if (exec?.phase !== "parse" && exec?.phase !== "suggest") {
