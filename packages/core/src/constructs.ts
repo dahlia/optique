@@ -10319,6 +10319,18 @@ export function conditional(
           return branchParseResult;
         }
       }
+      // Discriminator consumed tokens but completion failed (e.g.,
+      // invalid choice value).  Propagate the error instead of
+      // masking it behind the default branch or a generic no-match.
+      if (discriminatorResult.consumed.length > 0) {
+        return {
+          success: false,
+          consumed: discriminatorResult.consumed.length,
+          error: completionResult.success
+            ? getNoMatchError()
+            : completionResult.error,
+        };
+      }
     }
 
     // Discriminator didn't match or didn't consume input, try default branch.
@@ -10678,6 +10690,17 @@ export function conditional(
           // the failure (see sync counterpart for rationale).
           return branchParseResult;
         }
+      }
+      // Discriminator consumed tokens but completion failed
+      // (see sync counterpart for rationale).
+      if (discriminatorResult.consumed.length > 0) {
+        return {
+          success: false,
+          consumed: discriminatorResult.consumed.length,
+          error: completionResult.success
+            ? getNoMatchError()
+            : completionResult.error,
+        };
       }
     }
 
