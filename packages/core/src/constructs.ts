@@ -3937,15 +3937,18 @@ export function longestMatch(
 
       if (result.success) {
         const consumed = context.buffer.length - result.next.buffer.length;
-        // Prefer non-provisional results over provisional ones at the
-        // same consumed length, so speculative conditional() branches
-        // don't shadow definitive matches.
+        // Prefer non-provisional (definitive) results over provisional
+        // ones, so speculative conditional() branches don't shadow
+        // definitive matches.  A definitive result always wins,
+        // regardless of consumed length.
         const bestIsProvisional = bestMatch != null &&
-          bestMatch.result.success && bestMatch.result.provisional;
+          bestMatch.result.success && !!bestMatch.result.provisional;
+        const resultIsProvisional = !!result.provisional;
         if (
-          bestMatch === null || consumed > bestMatch.consumed ||
-          (consumed === bestMatch.consumed &&
-            bestIsProvisional && !result.provisional)
+          bestMatch === null ||
+          (!resultIsProvisional && bestIsProvisional) ||
+          (resultIsProvisional === bestIsProvisional &&
+            consumed > bestMatch.consumed)
         ) {
           bestMatch = { index: i, parser, result, consumed };
         }
@@ -4016,15 +4019,18 @@ export function longestMatch(
 
       if (result.success) {
         const consumed = context.buffer.length - result.next.buffer.length;
-        // Prefer non-provisional results over provisional ones at the
-        // same consumed length, so speculative conditional() branches
-        // don't shadow definitive matches.
+        // Prefer non-provisional (definitive) results over provisional
+        // ones, so speculative conditional() branches don't shadow
+        // definitive matches.  A definitive result always wins,
+        // regardless of consumed length.
         const bestIsProvisional = bestMatch != null &&
-          bestMatch.result.success && bestMatch.result.provisional;
+          bestMatch.result.success && !!bestMatch.result.provisional;
+        const resultIsProvisional = !!result.provisional;
         if (
-          bestMatch === null || consumed > bestMatch.consumed ||
-          (consumed === bestMatch.consumed &&
-            bestIsProvisional && !result.provisional)
+          bestMatch === null ||
+          (!resultIsProvisional && bestIsProvisional) ||
+          (resultIsProvisional === bestIsProvisional &&
+            consumed > bestMatch.consumed)
         ) {
           bestMatch = { index: i, parser, result, consumed };
         }
@@ -10603,81 +10609,15 @@ export function conditional(
       // (e.g., prompt()) during parse.  Sync discriminators are safe
       // to complete during parse even in the async path.
       //
-      // Before deferring, try the default branch — it might be able
-      // to consume remaining tokens that the deferred discriminator
-      // path would otherwise leave orphaned.
+      // Before deferring, try named branches speculatively, then fall
+      // back to the default branch.  Named branches are tried first so
+      // that a matching named branch is preferred over the default —
+      // the discriminator can verify the speculative choice during
+      // complete(), yielding a more specific result.
       if (
         discriminatorResult.consumed.length === 0 &&
         discriminator.$mode === "async"
       ) {
-        // Track default branch parse state so the deferred path can
-        // preserve it even when consumed === 0.
-        let deferredBranchState: unknown = state.branchState;
-        if (defaultBranch !== undefined) {
-          const defaultResult = await defaultBranch.parse(
-            withChildContext(
-              context,
-              "_branch",
-              state.branchState ?? defaultBranch.initialState,
-              defaultBranch,
-              defaultBranch.usage,
-            ),
-          );
-          if (
-            defaultResult.success &&
-            defaultResult.consumed.length > 0
-          ) {
-            // Commit the default when it consumed tokens.
-            const defaultExec = mergeChildExec(
-              context.exec,
-              defaultResult.next.exec,
-            );
-            return {
-              success: true,
-              next: {
-                ...defaultResult.next,
-                state: {
-                  ...state,
-                  selectedBranch: { kind: "default" },
-                  branchState: getAnnotatedChildState(
-                    state,
-                    defaultResult.next.state,
-                    defaultBranch,
-                  ),
-                },
-                ...(defaultExec != null
-                  ? {
-                    exec: defaultExec,
-                    dependencyRegistry: defaultExec.dependencyRegistry,
-                  }
-                  : {}),
-              },
-              consumed: defaultResult.consumed,
-            };
-          }
-          if (!defaultResult.success && defaultResult.consumed > 0) {
-            // Default branch consumed tokens before failing (e.g.,
-            // option missing its value).  Propagate the specific error
-            // instead of masking it behind a generic no-match.
-            return defaultResult;
-          }
-          if (
-            defaultResult.success &&
-            defaultResult.consumed.length === 0 &&
-            context.buffer.length === 0
-          ) {
-            // Default succeeded with consumed=[] on empty buffer.
-            // Persist its state so complete() has the right state
-            // for defaults that build values through parse state
-            // (e.g., multiple(constant(...))).
-            deferredBranchState = getAnnotatedChildState(
-              state,
-              defaultResult.next.state,
-              defaultBranch,
-            );
-          }
-        }
-
         // Try named branches speculatively: when the discriminator is
         // deferred, we don't know which branch to use, but if exactly one
         // branch can consume tokens from the buffer, commit to it
@@ -10797,6 +10737,66 @@ export function conditional(
         // speculation was not skipped due to ambiguity.
         if (speculativeError != null && !ambiguous) {
           return speculativeError;
+        }
+
+        // No named branch consumed — fall back to the default branch.
+        let deferredBranchState: unknown = state.branchState;
+        if (defaultBranch !== undefined) {
+          const defaultResult = await defaultBranch.parse(
+            withChildContext(
+              context,
+              "_branch",
+              state.branchState ?? defaultBranch.initialState,
+              defaultBranch,
+              defaultBranch.usage,
+            ),
+          );
+          if (
+            defaultResult.success &&
+            defaultResult.consumed.length > 0
+          ) {
+            // Commit the default when it consumed tokens.
+            const defaultExec = mergeChildExec(
+              context.exec,
+              defaultResult.next.exec,
+            );
+            return {
+              success: true,
+              next: {
+                ...defaultResult.next,
+                state: {
+                  ...state,
+                  selectedBranch: { kind: "default" },
+                  branchState: getAnnotatedChildState(
+                    state,
+                    defaultResult.next.state,
+                    defaultBranch,
+                  ),
+                },
+                ...(defaultExec != null
+                  ? {
+                    exec: defaultExec,
+                    dependencyRegistry: defaultExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              consumed: defaultResult.consumed,
+            };
+          }
+          if (!defaultResult.success && defaultResult.consumed > 0) {
+            return defaultResult;
+          }
+          if (
+            defaultResult.success &&
+            defaultResult.consumed.length === 0 &&
+            context.buffer.length === 0
+          ) {
+            deferredBranchState = getAnnotatedChildState(
+              state,
+              defaultResult.next.state,
+              defaultBranch,
+            );
+          }
         }
 
         const annotatedDiscriminatorState = getAnnotatedChildState(
