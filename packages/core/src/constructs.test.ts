@@ -8670,6 +8670,9 @@ describe("conditional", () => {
       result.success,
       "expected or() to switch via shared-option replay",
     );
+    if (result.success) {
+      assert.deepEqual(result.value, ["k", { shared: "s", bar: "b" }]);
+    }
   });
 
   it("should propagate branch-specific parse errors from speculation", async () => {
