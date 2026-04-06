@@ -3924,7 +3924,16 @@ export function longestMatch(
 
       if (result.success) {
         const consumed = context.buffer.length - result.next.buffer.length;
-        if (bestMatch === null || consumed > bestMatch.consumed) {
+        // Prefer non-provisional results over provisional ones at the
+        // same consumed length, so speculative conditional() branches
+        // don't shadow definitive matches.
+        const bestIsProvisional = bestMatch != null &&
+          bestMatch.result.success && bestMatch.result.provisional;
+        if (
+          bestMatch === null || consumed > bestMatch.consumed ||
+          (consumed === bestMatch.consumed &&
+            bestIsProvisional && !result.provisional)
+        ) {
           bestMatch = { index: i, parser, result, consumed };
         }
       } else if (error.consumed < result.consumed) {
@@ -3994,7 +4003,16 @@ export function longestMatch(
 
       if (result.success) {
         const consumed = context.buffer.length - result.next.buffer.length;
-        if (bestMatch === null || consumed > bestMatch.consumed) {
+        // Prefer non-provisional results over provisional ones at the
+        // same consumed length, so speculative conditional() branches
+        // don't shadow definitive matches.
+        const bestIsProvisional = bestMatch != null &&
+          bestMatch.result.success && bestMatch.result.provisional;
+        if (
+          bestMatch === null || consumed > bestMatch.consumed ||
+          (consumed === bestMatch.consumed &&
+            bestIsProvisional && !result.provisional)
+        ) {
           bestMatch = { index: i, parser, result, consumed };
         }
       } else if (error.consumed < result.consumed) {
@@ -10663,6 +10681,11 @@ export function conditional(
           bp: Parser<Mode, unknown, unknown>;
           result: ParserResult<unknown>;
         } | undefined;
+        let speculativeError:
+          | (ParserResult<unknown> & {
+            success: false;
+          })
+          | undefined;
         let ambiguous = false;
         for (const [key, bp] of branchParsers) {
           const branchResult = await bp.parse(
@@ -10689,11 +10712,15 @@ export function conditional(
             }
             speculativeHit = { key, bp, result: branchResult };
           }
-          // A branch that consumed tokens before failing has a more
-          // specific error (e.g., "option requires a value") than the
-          // generic stall error the top-level loop would produce.
-          if (!branchResult.success && branchResult.consumed > 0) {
-            return branchResult;
+          // Track consuming failures for better error messages, but
+          // keep trying other branches — a later branch may succeed
+          // (e.g., flag("--x") vs option("--x", string())).
+          if (
+            !branchResult.success && branchResult.consumed > 0 &&
+            (speculativeError == null ||
+              speculativeError.consumed < branchResult.consumed)
+          ) {
+            speculativeError = branchResult;
           }
         }
         if (speculativeHit != null && !ambiguous) {
@@ -10734,6 +10761,13 @@ export function conditional(
               consumed: branchResult.consumed,
             };
           }
+        }
+
+        // A branch that consumed tokens before failing has a more
+        // specific error than the generic stall the top-level loop
+        // would produce.  Return it when no branch succeeded.
+        if (speculativeError != null) {
+          return speculativeError;
         }
 
         const annotatedDiscriminatorState = getAnnotatedChildState(
