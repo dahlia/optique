@@ -10672,25 +10672,6 @@ export function conditional(
         if (speculativeHit == null && !ambiguous && provisionalHit != null) {
           speculativeHit = provisionalHit;
         }
-        // When a named branch consumed tokens, check whether the
-        // default branch can also consume the same input.  If so,
-        // treat it as ambiguous — speculative commitment would preempt
-        // the default branch, which the discriminator may ultimately
-        // select.
-        if (speculativeHit != null && !ambiguous && defaultBranch != null) {
-          const defaultCheck = await defaultBranch.parse(
-            withChildContext(
-              context,
-              "_branch",
-              state.branchState ?? defaultBranch.initialState,
-              defaultBranch,
-              defaultBranch.usage,
-            ),
-          );
-          if (defaultCheck.success && defaultCheck.consumed.length > 0) {
-            ambiguous = true;
-          }
-        }
         if (speculativeHit != null && !ambiguous) {
           const { key, bp, result: branchResult } = speculativeHit;
           if (branchResult.success) {
@@ -11582,6 +11563,73 @@ export function conditional(
       state.selectedBranch.kind === "branch" &&
       discriminatorValue !== state.selectedBranch.key
     ) {
+      // If the discriminator value matches a different named branch,
+      // it's contradictory input.  If it matches no named branch and
+      // a default branch exists, try completing the default.
+      if (
+        discriminatorValue != null &&
+        !(discriminatorValue in branches) &&
+        defaultBranch !== undefined
+      ) {
+        const branchExec = withChildExecPath(exec, "_branch");
+        const emptyCtx = {
+          buffer: [] as string[],
+          optionsTerminated: false,
+          usage: [] as never[],
+          exec: branchExec,
+          dependencyRegistry: exec?.dependencyRegistry,
+        };
+        const annotatedInitial = getAnnotatedChildState(
+          state,
+          defaultBranch.initialState,
+          defaultBranch,
+        );
+        const replayResult = await defaultBranch.parse({
+          ...emptyCtx,
+          state: annotatedInitial,
+        });
+        const defaultState = replayResult.success
+          ? replayResult.next.state
+          : annotatedInitial;
+        const annotatedDefaultState = getAnnotatedChildState(
+          state,
+          defaultState,
+          defaultBranch,
+        );
+        const defaultResult = unwrapCompleteResult(
+          await defaultBranch.complete(
+            annotatedDefaultState,
+            branchExec,
+          ),
+        );
+        if (defaultResult.success) {
+          return {
+            success: true,
+            value: [discriminatorValue, defaultResult.value] as const,
+            ...(defaultResult.deferred
+              ? {
+                deferred: true as const,
+                ...(defaultResult.deferredKeys
+                  ? {
+                    deferredKeys: new Map([[
+                      1,
+                      defaultResult.deferredKeys,
+                    ]]) as DeferredMap,
+                  }
+                  : defaultResult.value == null ||
+                      typeof defaultResult.value !== "object"
+                  ? {
+                    deferredKeys: new Map([[
+                      1,
+                      null,
+                    ]]) as DeferredMap,
+                  }
+                  : {}),
+              }
+              : {}),
+          };
+        }
+      }
       return {
         success: false,
         error: getNoMatchError(),
