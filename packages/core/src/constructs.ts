@@ -10210,6 +10210,24 @@ export interface ConditionalErrorOptions {
    * Custom error message for no matching input.
    */
   noMatch?: Message | ((context: NoMatchContext) => Message);
+
+  /**
+   * Custom error message when speculative branch parsing committed
+   * to one branch but the resolved discriminator value names a
+   * different branch.  This is the contradictory-input case: tokens
+   * specific to one branch were consumed during the parse phase,
+   * but the discriminator (e.g., from `prompt()` or a deferred
+   * config source) ultimately resolved to a different key.
+   *
+   * Receives both the discriminator value the parser actually
+   * resolved to (`discriminatorValue`) and the speculative key the
+   * branch tokens were committed to (`speculativeKey`).
+   * @since 0.10.1
+   */
+  branchMismatch?: (
+    discriminatorValue: string,
+    speculativeKey: string,
+  ) => Message;
 }
 
 /**
@@ -11836,9 +11854,13 @@ export function conditional(
       state.selectedBranch.kind === "branch" &&
       discriminatorValue !== state.selectedBranch.key
     ) {
+      const speculativeKey = state.selectedBranch.key;
+      const resolvedKey = discriminatorValue ?? "";
       return {
         success: false,
-        error: getNoMatchError(),
+        error: options?.errors?.branchMismatch
+          ? options.errors.branchMismatch(resolvedKey, speculativeKey)
+          : message`Branch mismatch: tokens for ${speculativeKey} were consumed, but the discriminator resolved to ${resolvedKey}.`,
       };
     }
 

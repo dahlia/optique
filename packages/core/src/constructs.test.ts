@@ -8484,6 +8484,61 @@ describe("conditional", () => {
     }
   });
 
+  it("should use the branchMismatch error hook when speculative selection contradicts the discriminator", async () => {
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "slow" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    let receivedDiscriminator: string | undefined;
+    let receivedSpeculativeKey: string | undefined;
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: option("--threads", integer()),
+        slow: option("--timeout", integer()),
+      },
+      constant("default"),
+      {
+        errors: {
+          branchMismatch: (discriminatorValue, speculativeKey) => {
+            receivedDiscriminator = discriminatorValue;
+            receivedSpeculativeKey = speculativeKey;
+            return [{
+              type: "text",
+              text: `custom: ${speculativeKey} vs ${discriminatorValue}`,
+            }];
+          },
+        },
+      },
+    );
+
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(!result.success, "expected failure due to mismatch");
+    if (!result.success) {
+      const msg = formatMessage(result.error);
+      assert.equal(msg, "custom: fast vs slow");
+    }
+    assert.equal(receivedSpeculativeKey, "fast");
+    assert.equal(receivedDiscriminator, "slow");
+  });
+
   it("should allow shared-option replay when or() falls back to a provisional branch", async () => {
     // Setup: or() where the first branch consumes a shared option,
     // and the second branch is a speculative conditional that should
