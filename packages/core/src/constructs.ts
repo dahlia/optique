@@ -10672,6 +10672,25 @@ export function conditional(
         if (speculativeHit == null && !ambiguous && provisionalHit != null) {
           speculativeHit = provisionalHit;
         }
+        // When a named branch consumed tokens, check whether the
+        // default branch can also consume the same input.  If so,
+        // treat it as ambiguous — speculative commitment would preempt
+        // the default branch, which the discriminator may ultimately
+        // select.
+        if (speculativeHit != null && !ambiguous && defaultBranch != null) {
+          const defaultCheck = await defaultBranch.parse(
+            withChildContext(
+              context,
+              "_branch",
+              state.branchState ?? defaultBranch.initialState,
+              defaultBranch,
+              defaultBranch.usage,
+            ),
+          );
+          if (defaultCheck.success && defaultCheck.consumed.length > 0) {
+            ambiguous = true;
+          }
+        }
         if (speculativeHit != null && !ambiguous) {
           const { key, bp, result: branchResult } = speculativeHit;
           if (branchResult.success) {
