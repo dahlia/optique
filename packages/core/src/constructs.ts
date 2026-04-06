@@ -1188,11 +1188,15 @@ function createExclusiveComplete(
             if (candidateCount > 1) break;
           }
           // Second pass: complete only the unique candidate.
-          // Skip during parse/suggest probes to avoid triggering
-          // async side effects before the real completion phase.
+          // Skip async candidates during parse/suggest probes to
+          // avoid triggering side effects (e.g., prompt()) before
+          // the real completion phase.  Sync candidates are safe
+          // to complete during probes (needed for object()'s
+          // completability check on empty input).
           if (
             candidateCount === 1 && candidateIndex >= 0 &&
-            exec?.phase !== "parse" && exec?.phase !== "suggest"
+            (parsers[candidateIndex].$mode === "sync" ||
+              (exec?.phase !== "parse" && exec?.phase !== "suggest"))
           ) {
             const p = parsers[candidateIndex];
             const parseResult = await p.parse({

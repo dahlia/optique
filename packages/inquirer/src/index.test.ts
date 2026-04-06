@@ -5234,4 +5234,27 @@ describe("or(prompt(...), constant(...))", () => {
     assert.ok(result.success);
     assert.equal(result.value, "fallback");
   });
+
+  it("falls back to constant inside object() on empty input", async () => {
+    // or(prompt(option(...)), constant(...)) inside object() must
+    // resolve through the deferred fallback during object()'s
+    // completability check (parse-phase probe).
+    const parser = object({
+      v: or(
+        prompt(option("--name", string()), {
+          type: "input",
+          message: "Enter name:",
+          prompter: () =>
+            Promise.reject(new Error("Prompt should not be called")),
+        }),
+        constant("fallback"),
+      ),
+    });
+
+    const result = await parseAsync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.v, "fallback");
+    }
+  });
 });
