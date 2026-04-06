@@ -2986,6 +2986,14 @@ export function or(
       result: ParserResult<unknown> & { success: true };
     } | null = null;
     let zeroConsumedCount = 0;
+    // Track provisional consuming results (e.g., from speculative branch
+    // parsing in conditional()).  These are deferred so that a definitive
+    // consuming branch can take priority.
+    let provisionalConsuming: {
+      index: number;
+      parser: Parser<"sync", unknown, unknown>;
+      result: ParserResult<unknown> & { success: true };
+    } | null = null;
     for (const [parser, i] of orderedParsers) {
       const result = parser.parse(
         withChildContext(
@@ -2999,6 +3007,14 @@ export function or(
         ),
       );
       if (result.success && result.consumed.length > 0) {
+        // Provisional consuming results are deferred: continue trying
+        // other branches so a definitive result can take priority.
+        if (result.provisional) {
+          if (provisionalConsuming == null) {
+            provisionalConsuming = { index: i, parser, result };
+          }
+          continue;
+        }
         if (activeState?.[0] !== i && activeState?.[1].success) {
           // If the active branch consumed nothing (zero-consumed
           // fallback), allow the switch freely: no shared-options
@@ -3184,6 +3200,37 @@ export function or(
         consumed: [],
       };
     }
+    // Fall back to a provisional consuming result when no definitive
+    // branch consumed tokens.  This lets speculative results from
+    // conditional() take effect only when no better alternative exists.
+    if (provisionalConsuming !== null) {
+      const mergedExec = mergeChildExec(
+        context.exec,
+        provisionalConsuming.result.next.exec,
+      );
+      return {
+        success: true,
+        provisional: true,
+        next: {
+          ...context,
+          buffer: provisionalConsuming.result.next.buffer,
+          optionsTerminated: provisionalConsuming.result.next.optionsTerminated,
+          state: createExclusiveState(
+            context.state,
+            provisionalConsuming.index,
+            provisionalConsuming.parser,
+            provisionalConsuming.result,
+          ),
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        },
+        consumed: provisionalConsuming.result.consumed,
+      };
+    }
     return { ...error, success: false };
   };
 
@@ -3206,6 +3253,12 @@ export function or(
       result: ParserResult<unknown> & { success: true };
     } | null = null;
     let zeroConsumedCount = 0;
+    // Track provisional consuming results (see sync counterpart).
+    let provisionalConsuming: {
+      index: number;
+      parser: Parser<Mode, unknown, unknown>;
+      result: ParserResult<unknown> & { success: true };
+    } | null = null;
     for (const [parser, i] of orderedParsers) {
       const resultOrPromise = parser.parse(
         withChildContext(
@@ -3220,6 +3273,13 @@ export function or(
       );
       const result = await resultOrPromise;
       if (result.success && result.consumed.length > 0) {
+        // Provisional consuming results are deferred (see sync counterpart).
+        if (result.provisional) {
+          if (provisionalConsuming == null) {
+            provisionalConsuming = { index: i, parser, result };
+          }
+          continue;
+        }
         if (activeState?.[0] !== i && activeState?.[1].success) {
           // If the active branch consumed nothing (zero-consumed
           // fallback), allow the switch freely (see sync counterpart).
@@ -3394,6 +3454,35 @@ export function or(
             : {}),
         },
         consumed: [],
+      };
+    }
+    // Fall back to provisional consuming result (see sync counterpart).
+    if (provisionalConsuming !== null) {
+      const mergedExec = mergeChildExec(
+        context.exec,
+        provisionalConsuming.result.next.exec,
+      );
+      return {
+        success: true,
+        provisional: true,
+        next: {
+          ...context,
+          buffer: provisionalConsuming.result.next.buffer,
+          optionsTerminated: provisionalConsuming.result.next.optionsTerminated,
+          state: createExclusiveState(
+            context.state,
+            provisionalConsuming.index,
+            provisionalConsuming.parser,
+            provisionalConsuming.result,
+          ),
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        },
+        consumed: provisionalConsuming.result.consumed,
       };
     }
     return { ...error, success: false };
@@ -10600,6 +10689,12 @@ export function conditional(
             }
             speculativeHit = { key, bp, result: branchResult };
           }
+          // A branch that consumed tokens before failing has a more
+          // specific error (e.g., "option requires a value") than the
+          // generic stall error the top-level loop would produce.
+          if (!branchResult.success && branchResult.consumed > 0) {
+            return branchResult;
+          }
         }
         if (speculativeHit != null && !ambiguous) {
           const { key, bp, result: branchResult } = speculativeHit;
@@ -10615,6 +10710,7 @@ export function conditional(
             );
             return {
               success: true,
+              provisional: true,
               next: {
                 ...branchResult.next,
                 state: {

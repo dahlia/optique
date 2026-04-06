@@ -8400,6 +8400,90 @@ describe("conditional", () => {
     const result = await parseAsync(parser, ["--threads", "4"]);
     assert.ok(!result.success, "expected failure for contradictory input");
   });
+
+  it("should not block or() alternatives with speculative commit", async () => {
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "slow" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    // or() should fall through to the second branch when conditional's
+    // speculative branch doesn't match the discriminator.
+    const parser = or(
+      conditional(
+        asyncDiscriminator,
+        {
+          fast: option("--threads", integer()),
+          slow: constant("S"),
+        },
+      ),
+      option("--threads", integer()),
+    );
+
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(result.success, "expected or() to fall through to second branch");
+    if (result.success) {
+      assert.equal(result.value, 4);
+    }
+  });
+
+  it("should propagate branch-specific parse errors from speculation", async () => {
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "fast" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: option("--threads", integer()),
+        slow: option("--timeout", integer()),
+      },
+    );
+
+    // --threads without a value → branch should produce a specific error
+    const result = await parseAsync(parser, ["--threads"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const msg = formatMessage(result.error);
+      assert.ok(
+        msg.includes("--threads"),
+        `expected error about --threads, got: ${msg}`,
+      );
+    }
+  });
 });
 
 describe("complex combinator interactions", () => {
