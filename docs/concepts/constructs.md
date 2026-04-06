@@ -1641,6 +1641,14 @@ consumed tokens (contradictory input), the parse fails.  When multiple
 branches can consume the same tokens (ambiguous), speculation is skipped
 entirely to keep branch selection order-independent.
 
+Speculation works best when named branches have distinct leading options
+(e.g., `--threads` vs `--timeout`).  When a default branch accepts the
+same tokens as a named branch, or when the parser is nested inside
+`longestMatch()`, the speculative choice may conflict with the
+discriminator.  To avoid this, ensure named branch options are distinct
+from the default branch, or wrap the discriminator with `withDefault()`
+or `bindEnv()` so it can resolve synchronously.
+
 
 `group()` parser
 ----------------

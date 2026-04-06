@@ -10167,6 +10167,17 @@ export function conditional<
  * branches can consume the same tokens (ambiguous), speculation is skipped
  * entirely to keep branch selection order-independent.
  *
+ * #### Known limitations
+ *
+ * - When a default branch accepts the same tokens as a named branch,
+ *   speculation prefers the named branch.  If the discriminator later
+ *   resolves to a value not in the named branches, the parse fails
+ *   instead of falling back to the default branch.  To avoid this,
+ *   ensure named branch options are distinct from the default branch.
+ * - Within `longestMatch()`, a longer speculative match can beat a
+ *   shorter definitive one.  If the speculative match fails during
+ *   completion, the tokens consumed by it are not recoverable.
+ *
  * @since 0.8.0
  */
 export function conditional(
