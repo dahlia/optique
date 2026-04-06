@@ -11557,79 +11557,14 @@ export function conditional(
     // When the branch was selected speculatively, verify that the
     // resolved discriminator value matches.  A mismatch means
     // contradictory input (e.g., --threads provided but discriminator
-    // resolved to "slow").
+    // resolved to "slow").  The speculative branch already consumed
+    // tokens during parse, so recovery is not possible — the tokens
+    // are committed to the wrong branch.
     if (
       wasSpeculative &&
       state.selectedBranch.kind === "branch" &&
       discriminatorValue !== state.selectedBranch.key
     ) {
-      // If the discriminator value matches a different named branch,
-      // it's contradictory input.  If it matches no named branch and
-      // a default branch exists, try completing the default.
-      if (
-        discriminatorValue != null &&
-        !(discriminatorValue in branches) &&
-        defaultBranch !== undefined
-      ) {
-        const branchExec = withChildExecPath(exec, "_branch");
-        const emptyCtx = {
-          buffer: [] as string[],
-          optionsTerminated: false,
-          usage: [] as never[],
-          exec: branchExec,
-          dependencyRegistry: exec?.dependencyRegistry,
-        };
-        const annotatedInitial = getAnnotatedChildState(
-          state,
-          defaultBranch.initialState,
-          defaultBranch,
-        );
-        const replayResult = await defaultBranch.parse({
-          ...emptyCtx,
-          state: annotatedInitial,
-        });
-        const defaultState = replayResult.success
-          ? replayResult.next.state
-          : annotatedInitial;
-        const annotatedDefaultState = getAnnotatedChildState(
-          state,
-          defaultState,
-          defaultBranch,
-        );
-        const defaultResult = unwrapCompleteResult(
-          await defaultBranch.complete(
-            annotatedDefaultState,
-            branchExec,
-          ),
-        );
-        if (defaultResult.success) {
-          return {
-            success: true,
-            value: [discriminatorValue, defaultResult.value] as const,
-            ...(defaultResult.deferred
-              ? {
-                deferred: true as const,
-                ...(defaultResult.deferredKeys
-                  ? {
-                    deferredKeys: new Map([[
-                      1,
-                      defaultResult.deferredKeys,
-                    ]]) as DeferredMap,
-                  }
-                  : defaultResult.value == null ||
-                      typeof defaultResult.value !== "object"
-                  ? {
-                    deferredKeys: new Map([[
-                      1,
-                      null,
-                    ]]) as DeferredMap,
-                  }
-                  : {}),
-              }
-              : {}),
-          };
-        }
-      }
       return {
         success: false,
         error: getNoMatchError(),
