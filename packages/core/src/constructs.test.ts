@@ -2339,6 +2339,10 @@ describe("longestMatch()", () => {
   });
 
   it("should accept non-consuming branch as fallback", () => {
+    // Unlike or(), longestMatch() selects the first zero-consumed
+    // success during parse without applying provisional/interactive
+    // filters.  This test verifies the simple case where constant()
+    // succeeds while option() fails.
     const result = parseSync(
       longestMatch(constant("fallback"), option("-o", string())),
       [],
