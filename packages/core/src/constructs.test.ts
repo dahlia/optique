@@ -983,6 +983,13 @@ describe("or", () => {
       ["-o"],
     );
     assert.ok(!result.success);
+    if (!result.success) {
+      const msg = formatMessage(result.error);
+      assert.ok(
+        msg.includes("value") || msg.includes("requires"),
+        `Expected option-value error but got: ${msg}`,
+      );
+    }
   });
 
   it("should accept wrapped non-interactive branches as fallback", () => {
@@ -8010,6 +8017,15 @@ describe("conditional", () => {
     );
     const result = parseSync(parser, ["--type"]);
     assert.ok(!result.success);
+    if (!result.success) {
+      // The discriminator consumed "--type" before failing (missing value),
+      // so the error should NOT silently fall back to the default branch.
+      const msg = formatMessage(result.error);
+      assert.ok(
+        msg.includes("option") || msg.includes("matching"),
+        `Expected a parse error but got: ${msg}`,
+      );
+    }
   });
 
   it("should not trigger side effects for async discriminator during suggest", async () => {
