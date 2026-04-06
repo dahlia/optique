@@ -10694,6 +10694,7 @@ export function conditional(
           bp: Parser<Mode, unknown, unknown>;
           result: ParserResult<unknown>;
         } | undefined;
+        let provisionalHit: typeof speculativeHit;
         let speculativeError:
           | (ParserResult<unknown> & {
             success: false;
@@ -10719,9 +10720,15 @@ export function conditional(
             ),
           );
           if (branchResult.success && branchResult.consumed.length > 0) {
-            // Ignore provisional results (e.g., from a nested
-            // speculative conditional) to avoid false ambiguity.
-            if (branchResult.provisional) continue;
+            // Provisional results (e.g., from a nested speculative
+            // conditional) don't count toward the ambiguity check but
+            // are kept as a fallback when no definitive hit exists.
+            if (branchResult.provisional) {
+              if (provisionalHit == null) {
+                provisionalHit = { key, bp, result: branchResult };
+              }
+              continue;
+            }
             if (speculativeHit != null) {
               ambiguous = true;
               break;
@@ -10738,6 +10745,11 @@ export function conditional(
           ) {
             speculativeError = branchResult;
           }
+        }
+        // Fall back to a provisional hit (e.g., from a nested
+        // speculative conditional) when no definitive hit was found.
+        if (speculativeHit == null && !ambiguous && provisionalHit != null) {
+          speculativeHit = provisionalHit;
         }
         if (speculativeHit != null && !ambiguous) {
           const { key, bp, result: branchResult } = speculativeHit;
