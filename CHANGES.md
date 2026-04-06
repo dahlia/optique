@@ -16,7 +16,7 @@ To be released.
     to a branch key) but the selected sub-parser has not consumed any input
     yet.  Outer combinators like `or()` use this to avoid treating
     provisional successes as definitive zero-consumed fallback candidates.
-    [[#232]]
+    [[#232], [#773]]
 
  -  Added `ParseFrame`, `ExecutionContext`, and `ExecutionPhase` types to
     support the separation of parser-local state from shared execution
@@ -379,7 +379,7 @@ To be released.
     non-interactive branch as a fallback when no branch consumed input
     and the buffer is empty.  `conditional()` defers
     zero-consuming discriminators to `complete()` in async mode, and
-    resolves them during `parse()` in sync mode.  [[#232]]
+    resolves them during `parse()` in sync mode.  [[#232], [#773]]
 
  -  Fixed `optional()` and `withDefault()` crashing when the parser's state
     is an annotation-injected object instead of `undefined`.  The state
@@ -1477,6 +1477,7 @@ To be released.
 [#768]: https://github.com/dahlia/optique/issues/768
 [#769]: https://github.com/dahlia/optique/pull/769
 [#771]: https://github.com/dahlia/optique/pull/771
+[#773]: https://github.com/dahlia/optique/pull/773
 
 ### @optique/config
 
