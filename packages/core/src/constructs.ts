@@ -5299,9 +5299,6 @@ export function object<
           continue;
         }
         const fieldState = getFieldState(field, parser);
-        // Skip fields already processed by a previous invocation's
-        // zero-consumption pass to avoid reapplying state changes.
-        if (fieldState !== typedParser.initialState) continue;
         const result = typedParser.parse(
           withChildContext(
             currentContext,
@@ -11316,8 +11313,38 @@ export function conditional(
         prefix,
       );
 
-      // Default branch suggestions if available
-      if (syncDefaultBranch !== undefined) {
+      // Try resolving the discriminator to show branch suggestions
+      // for zero-consuming discriminators (e.g., constant("key")).
+      const annotatedDiscState = getAnnotatedChildState(
+        state,
+        state.discriminatorState,
+        syncDiscriminator,
+      );
+      const discComplete = syncDiscriminator.complete(
+        annotatedDiscState,
+        withChildExecPath(
+          suggestContext.exec
+            ? { ...suggestContext.exec, phase: "suggest" }
+            : undefined,
+          "_discriminator",
+        ),
+      );
+      if (
+        discComplete.success &&
+        syncBranches[discComplete.value] !== undefined
+      ) {
+        const resolvedBranch = syncBranches[discComplete.value];
+        yield* resolvedBranch.suggest(
+          withChildContext(
+            suggestContext,
+            "_branch",
+            state.branchState ?? resolvedBranch.initialState,
+            resolvedBranch,
+          ),
+          prefix,
+        );
+      } else if (syncDefaultBranch !== undefined) {
+        // Default branch suggestions if available
         yield* syncDefaultBranch.suggest(
           withChildContext(
             suggestContext,
