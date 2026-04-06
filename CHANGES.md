@@ -10,6 +10,14 @@ To be released.
 
 ### @optique/core
 
+ -  Added `provisional` field to the success variant of `ParserResult`.
+    When `true`, it indicates that the parse succeeded tentatively: the
+    parser matched something (e.g., a zero-consuming discriminator resolved
+    to a branch key) but the selected sub-parser has not consumed any input
+    yet.  Outer combinators like `or()` use this to avoid treating
+    provisional successes as definitive zero-consumed fallback candidates.
+    [[#232], [#773]]
+
  -  Added `ParseFrame`, `ExecutionContext`, and `ExecutionPhase` types to
     support the separation of parser-local state from shared execution
     context.  `ParserContext` now includes an optional `exec` field for
@@ -362,6 +370,16 @@ To be released.
     when a source context's disposal also throws.  The disposal error now
     wraps both failures in a `SuppressedError` (following TC39 conventions)
     instead of silently replacing the parse error.  [[#246], [#771]]
+
+ -  Fixed constructs dropping values from parsers that only produce results
+    in `complete()`.  `object()` now runs a zero-consumption pass after its
+    greedy loop so that purely non-interactive child parsers (e.g.,
+    `multiple(constant(...))`) can update their state even when they return
+    `consumed: []`.  `or()` now accepts a unique non-consuming,
+    non-interactive branch as a fallback when no branch consumed input
+    and the buffer is empty.  `conditional()` defers
+    zero-consuming discriminators to `complete()` in async mode, and
+    resolves them during `parse()` in sync mode.  [[#232], [#773]]
 
  -  Fixed `optional()` and `withDefault()` crashing when the parser's state
     is an annotation-injected object instead of `undefined`.  The state
@@ -1181,6 +1199,7 @@ To be released.
 [#227]: https://github.com/dahlia/optique/issues/227
 [#228]: https://github.com/dahlia/optique/issues/228
 [#229]: https://github.com/dahlia/optique/issues/229
+[#232]: https://github.com/dahlia/optique/issues/232
 [#235]: https://github.com/dahlia/optique/issues/235
 [#238]: https://github.com/dahlia/optique/issues/238
 [#240]: https://github.com/dahlia/optique/issues/240
@@ -1458,6 +1477,7 @@ To be released.
 [#768]: https://github.com/dahlia/optique/issues/768
 [#769]: https://github.com/dahlia/optique/pull/769
 [#771]: https://github.com/dahlia/optique/pull/771
+[#773]: https://github.com/dahlia/optique/pull/773
 
 ### @optique/config
 

@@ -51,6 +51,7 @@ import {
   argument,
   command,
   constant,
+  fail,
   flag,
   option,
   passThrough,
@@ -950,6 +951,132 @@ describe("or", () => {
         "entries in same-titled sections should remain deduplicated after buildDocPage",
       );
     });
+  });
+  it("should accept non-consuming branch as fallback", () => {
+    const result = parseSync(
+      or(constant("fallback"), option("-o", string())),
+      [],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "fallback");
+    }
+  });
+
+  it("should prefer consuming branch over non-consuming", () => {
+    const result = parseSync(
+      or(constant("fallback"), option("-o", string())),
+      ["-o", "hi"],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "hi");
+    }
+  });
+
+  it("should preserve consuming branch error over non-consuming fallback", () => {
+    // When a branch consumed tokens before failing (e.g., -o without a
+    // value), the specific error should be preserved instead of silently
+    // falling back to the non-consuming branch.
+    const result = parseSync(
+      or(constant("fallback"), option("-o", string())),
+      ["-o"],
+    );
+    assert.ok(!result.success);
+    if (!result.success) {
+      const msg = formatMessage(result.error);
+      assert.ok(
+        msg.includes("value") || msg.includes("requires"),
+        `Expected option-value error but got: ${msg}`,
+      );
+    }
+  });
+
+  it("should accept wrapped non-interactive branches as fallback", () => {
+    // multiple(constant(...)) and optional(constant(...)) have non-empty
+    // usage but empty leadingNames, so they qualify as non-interactive.
+    const result1 = parseSync(
+      or(multiple(constant("fixed")), option("-o", string())),
+      [],
+    );
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.deepEqual(result1.value, ["fixed"]);
+    }
+
+    const result2 = parseSync(
+      or(optional(constant("x")), option("-o", string())),
+      [],
+    );
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value, "x");
+    }
+  });
+
+  it("should not treat interactive branches as fallback", () => {
+    // Branches with leadingNames (interactive parsers) should not be
+    // accepted as zero-consumed fallbacks even if they succeed.
+    const result1 = parseSync(
+      or(
+        object({
+          x: optional(option("--x", string())),
+          y: optional(option("--y", string())),
+        }),
+        option("--z", string()),
+      ),
+      [],
+    );
+    assert.ok(!result1.success);
+
+    // optional(option(...)) wraps an interactive parser → also rejected.
+    const result2 = parseSync(
+      or(optional(option("-o", string())), option("-p", string())),
+      [],
+    );
+    assert.ok(!result2.success);
+  });
+
+  it("should not count provisional results as zero-consumed fallbacks", () => {
+    // conditional(constant("key"), { key: option("-o") }) returns
+    // provisional success with consumed=[].  or() should skip it and
+    // accept constant("F") as the only definitive fallback.
+    const result = parseSync(
+      or(
+        conditional(
+          constant("key") as Parser<"sync", string>,
+          { key: option("-o", string()) },
+        ),
+        constant("F"),
+      ),
+      [],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "F");
+    }
+  });
+
+  it("async: should accept non-consuming branch as fallback", async () => {
+    const result = await parseAsync(
+      or(constant("fallback"), option("-o", string())),
+      [],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "fallback");
+    }
+  });
+
+  it("async: should prefer consuming branch over non-consuming", async () => {
+    const result = await parseAsync(
+      or(constant("fallback"), option("-o", string())),
+      ["-o", "hi"],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "hi");
+    }
   });
 });
 
@@ -2217,6 +2344,21 @@ describe("longestMatch()", () => {
       ["test"],
     );
   });
+
+  it("should accept non-consuming branch as fallback", () => {
+    // Unlike or(), longestMatch() selects the first zero-consumed
+    // success during parse without applying provisional/interactive
+    // filters.  This test verifies the simple case where constant()
+    // succeeds while option() fails.
+    const result = parseSync(
+      longestMatch(constant("fallback"), option("-o", string())),
+      [],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "fallback");
+    }
+  });
 });
 
 describe("longestMatch() error customization", () => {
@@ -2926,6 +3068,92 @@ describe("object", () => {
         assert.equal(result.value[sym], 15);
       }
     });
+  });
+
+  it("should preserve complete-time values from non-consuming parsers", () => {
+    const custom: Parser<"sync", string, null> = {
+      $mode: "sync",
+      $valueType: [] as string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse(context: ParserContext<null>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete(_state: null) {
+        return { success: true as const, value: "ok" };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = parseSync(object({ value: custom }), []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.value, "ok");
+    }
+  });
+
+  it("should preserve constant values inside object", () => {
+    const result = parseSync(object({ val: constant("x") }), []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.val, "x");
+    }
+  });
+
+  it("should preserve multiple(constant(...)) values inside object", () => {
+    const result = parseSync(
+      object({ values: multiple(constant("fixed")) }),
+      [],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value.values, ["fixed"]);
+    }
+  });
+
+  it("should preserve non-consuming field alongside consuming field", () => {
+    const result = parseSync(
+      object({
+        opt: option("-o", string()),
+        val: constant("x"),
+      }),
+      ["-o", "hi"],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.opt, "hi");
+      assert.equal(result.value.val, "x");
+    }
+  });
+
+  it("async: should preserve constant values inside object", async () => {
+    const result = await parseAsync(object({ val: constant("x") }), []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.val, "x");
+    }
+  });
+
+  it("async: should preserve non-consuming field alongside consuming", async () => {
+    const result = await parseAsync(
+      object({
+        opt: option("-o", string()),
+        val: constant("x"),
+      }),
+      ["-o", "hi"],
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.opt, "hi");
+      assert.equal(result.value.val, "x");
+    }
   });
 });
 
@@ -7682,6 +7910,206 @@ describe("conditional", () => {
       );
     });
   });
+
+  it("should accept non-consuming discriminator", () => {
+    const parser = conditional(constant("key") as Parser<"sync", string>, {
+      key: constant("branch-value"),
+    });
+    const result = parseSync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["key", "branch-value"]);
+    }
+  });
+
+  it("should not commit to zero-consumed discriminator when branch fails", () => {
+    // When the discriminator succeeds with consumed=[] but the branch
+    // consumes tokens before failing, conditional() should propagate the
+    // branch's specific error instead of a generic no-match message.
+    const parser = conditional(
+      constant("key") as Parser<"sync", string>,
+      { key: option("-o", string()) },
+    );
+    const result = parseSync(parser, ["-o"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      // The branch error ("requires a value") should be preserved,
+      // not replaced by a generic "no match" error.
+      const msg = formatMessage(result.error);
+      assert.ok(
+        msg.includes("value") || msg.includes("requires"),
+        `Expected a specific error but got: ${msg}`,
+      );
+    }
+  });
+
+  it("should not fall through to default after matched zero-consumed discriminator", () => {
+    // When a zero-consumed discriminator selects a branch that fails,
+    // the branch error should be returned — not the default branch.
+    const parser = conditional(
+      constant("key") as Parser<"sync", string>,
+      { key: fail<string>() },
+      constant("D"),
+    );
+    const result = parseSync(parser, []);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const msg = formatMessage(result.error);
+      assert.ok(
+        msg.includes("No value provided"),
+        `Expected branch error but got: ${msg}`,
+      );
+    }
+  });
+
+  it("should not re-complete discriminator when cached value matches", () => {
+    let completeCalls = 0;
+    const countingDiscriminator: Parser<"sync", string, null> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [{ type: "option", names: ["--type"], metavar: "TYPE" }],
+      leadingNames: new Set(["--type"]),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse(context) {
+        if (context.buffer[0] === "--type" && context.buffer[1]) {
+          return {
+            success: true as const,
+            next: { ...context, buffer: context.buffer.slice(2) },
+            consumed: ["--type", context.buffer[1]],
+          };
+        }
+        return { success: false as const, consumed: 0, error: [] };
+      },
+      complete() {
+        completeCalls++;
+        return { success: true as const, value: "a" };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = conditional(countingDiscriminator, {
+      a: option("-o", string()),
+    });
+    const result = parseSync(parser, ["--type", "a", "-o", "x"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["a", "x"]);
+    }
+    // Discriminator.complete() should be called exactly once (during
+    // parse) — not twice.  The complete() phase skips re-completion
+    // because the cached discriminatorValue matches the selected branch.
+    assert.equal(completeCalls, 1);
+  });
+
+  it("should preserve discriminator error over zero-consuming default", () => {
+    // When the discriminator consumed tokens before failing, the
+    // zero-consuming default branch should not override that error.
+    const parser = conditional(
+      option("--type", choice(["a"])) as Parser<"sync", string>,
+      { a: constant("A") },
+      constant("D"),
+    );
+    const result = parseSync(parser, ["--type"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      // The discriminator consumed "--type" before failing (missing value),
+      // so the error should NOT silently fall back to the default branch.
+      const msg = formatMessage(result.error);
+      assert.ok(
+        msg.includes("option") || msg.includes("matching"),
+        `Expected a parse error but got: ${msg}`,
+      );
+    }
+  });
+
+  it("should not trigger side effects for async discriminator during suggest", async () => {
+    // Async discriminators (e.g., prompt()) may have side effects.
+    // suggest() must not call complete() on async discriminators.
+    let completeCalled = false;
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () => {
+        completeCalled = true;
+        return Promise.resolve({ success: true as const, value: "key" });
+      },
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      { key: option("-o", string()) },
+      constant("D"),
+    );
+
+    const suggestions = await suggestAsync(parser, [""]);
+    // Verify suggest completed without calling async discriminator.complete()
+    assert.ok(!completeCalled);
+    assert.ok(Array.isArray(suggestions));
+  });
+
+  it("should preserve annotations in deferred branch completion", () => {
+    // When a zero-consuming discriminator defers to complete(), the
+    // branch parser should still see inherited annotations.
+    const marker = Symbol.for("deferred-branch-ann-test");
+    const branchParser: Parser<"sync", string> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) => ({
+        success: true as const,
+        next: context,
+        consumed: [],
+      }),
+      complete: (state, _exec) => {
+        const annotations = getAnnotations(state);
+        if (annotations?.[marker] === true) {
+          return { success: true as const, value: "ann-ok" };
+        }
+        return { success: false as const, error: [] };
+      },
+      suggest: () => [],
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    defineInheritedAnnotationParser(branchParser);
+
+    const parser = conditional(
+      constant("key") as Parser<"sync", string>,
+      { key: branchParser },
+    );
+
+    const result = parseSync(parser, [], {
+      annotations: { [marker]: true } satisfies Annotations,
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["key", "ann-ok"]);
+    }
+  });
 });
 
 describe("complex combinator interactions", () => {
@@ -12142,9 +12570,12 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const completed = await parser.complete(parser.initialState);
     assert.ok(!completed.success);
     if (!completed.success) {
-      assert.equal(
-        formatMessage(completed.error),
-        "Missing required discriminator option.",
+      // The deferred discriminator completion surfaces the
+      // discriminator's own error when there is no default branch.
+      const msg = formatMessage(completed.error);
+      assert.ok(
+        msg.includes("--mode"),
+        `Expected discriminator error but got: ${msg}`,
       );
     }
   });

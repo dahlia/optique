@@ -526,6 +526,48 @@ generic “No matching option or command found.”
 The default messages automatically adapt to your parser structure, but you can
 override them for custom formatting or localization needs.
 
+### Zero-consumed fallback branches
+
+When all input has been consumed and no branch matched, `or()` can fall
+back to a branch that succeeds without consuming any input, such as
+`constant()`.  A branch qualifies as a fallback candidate only when
+*all* of the following hold:
+
+ -  The result is not `provisional` (tentative zero-consumed matches
+    from nested constructs like `conditional()` are excluded).
+ -  The branch has no `leadingNames` and does not accept arbitrary
+    tokens — i.e., it can *never* match an input token.
+ -  Exactly one branch qualifies (ambiguous fallbacks are rejected).
+ -  No other branch consumed tokens before failing.
+ -  The input buffer is empty.
+
+In practice, this means:
+
+ -  Annotation-backed parsers like `bindEnv(option(...))` or
+    `bindConfig(option(...))` are *not* eligible, because they inherit
+    `leadingNames` from the inner option.
+ -  Positional parsers like `argument(...)` are *not* eligible either,
+    because they accept arbitrary tokens even though they have no
+    `leadingNames`.
+
+To provide a fallback value for an env/config-backed option, use
+the parser's own default mechanism instead of wrapping it in `or()`:
+
+~~~~ typescript twoslash
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+declare function bindEnv(p: any, o: any): any;
+declare const envContext: any;
+// ---cut-before---
+// Instead of or(bindEnv(option(...)), constant("fallback")):
+bindEnv(option("--mode", string()), {
+  context: envContext,
+  key: "APP_MODE",
+  parser: string(),
+  default: "fallback",  // built-in fallback
+})
+~~~~
+
 
 `merge()` parser
 ----------------
@@ -1583,6 +1625,24 @@ for discriminated union patterns:
 Use `conditional()` when you have an explicit discriminator option that
 determines which set of options is valid. Use `or()` for more general
 mutually exclusive alternatives.
+
+### Async discriminator limitation
+
+When the discriminator is an async parser that succeeds without consuming
+input (e.g., `prompt(option(...))` with no CLI input), branch selection is
+deferred to the complete phase.  If the selected branch needs to consume
+remaining tokens, those tokens cannot be consumed because the branch is
+not known during parse.
+
+To avoid this, ensure the discriminator can resolve synchronously when
+branch-specific tokens are present:
+
+ -  Wrap the discriminator with `bindEnv()` or `bindConfig()` so it
+    resolves from environment/config without interactive prompting.
+ -  Wrap the discriminator with `withDefault()` to provide a fallback
+    value when CLI input is absent.
+ -  Provide a default branch to handle the case when the discriminator
+    is not resolved during parse.
 
 
 `group()` parser

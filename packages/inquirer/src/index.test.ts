@@ -6,7 +6,7 @@ import {
   getAnnotations,
   injectAnnotations,
 } from "@optique/core/annotations";
-import { concat, group, object, tuple } from "@optique/core/constructs";
+import { concat, group, object, or, tuple } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import type { SourceContext } from "@optique/core/context";
 import type { DocFragments } from "@optique/core/doc";
@@ -19,7 +19,7 @@ import {
   suggestAsync,
   type Suggestion,
 } from "@optique/core/parser";
-import { fail, flag, option } from "@optique/core/primitives";
+import { constant, fail, flag, option } from "@optique/core/primitives";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
@@ -5195,6 +5195,66 @@ describe("prompt() with dependency sources", () => {
           },
         );
       }
+    }
+  });
+});
+
+describe("or(prompt(...), constant(...))", () => {
+  it("propagates provisional so or() prefers prompt branch on CLI input", async () => {
+    const parser = or(
+      prompt(option("--name", string()), {
+        type: "input",
+        message: "Enter name:",
+        prompter: () =>
+          Promise.reject(new Error("Prompt should not be called")),
+      }),
+      constant("fallback"),
+    );
+
+    const result = await parseAsync(parser, ["--name", "alice"]);
+    assert.ok(result.success);
+    assert.equal(result.value, "alice");
+  });
+
+  it("falls back to constant when prompt would be the only source", async () => {
+    const parser = or(
+      prompt(option("--name", string()), {
+        type: "input",
+        message: "Enter name:",
+        prompter: () =>
+          Promise.reject(new Error("Prompt should not be called")),
+      }),
+      constant("fallback"),
+    );
+
+    // constant() should win because prompt() has leadingNames (--name),
+    // making it ineligible as a zero-consumed fallback.  The or() complete()
+    // deferred path picks constant() since it is non-interactive.
+    const result = await parseAsync(parser, []);
+    assert.ok(result.success);
+    assert.equal(result.value, "fallback");
+  });
+
+  it("falls back to constant inside object() on empty input", async () => {
+    // or(prompt(option(...)), constant(...)) inside object() must
+    // resolve through the deferred fallback during object()'s
+    // completability check (parse-phase probe).
+    const parser = object({
+      v: or(
+        prompt(option("--name", string()), {
+          type: "input",
+          message: "Enter name:",
+          prompter: () =>
+            Promise.reject(new Error("Prompt should not be called")),
+        }),
+        constant("fallback"),
+      ),
+    });
+
+    const result = await parseAsync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.v, "fallback");
     }
   });
 });

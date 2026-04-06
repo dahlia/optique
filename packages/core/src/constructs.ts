@@ -28,6 +28,7 @@ import {
   injectAnnotations,
 } from "./annotations.ts";
 import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
+import { optionalStyleWrapperKey } from "./modifiers.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import {
   deduplicateDocFragments,
@@ -1095,10 +1096,127 @@ function createExclusiveComplete(
   return (state, exec?) => {
     const activeState = normalizeExclusiveState(state);
     if (activeState == null) {
-      return {
-        success: false,
-        error: getNoMatchError(options, noMatchContext),
-      };
+      // Deferred fallback: parse then complete each non-interactive
+      // branch on empty input.  This resolves zero-consumed branches
+      // (e.g., constant(), optional(constant())) without committing
+      // exclusive state during parse, keeping all branches visible
+      // in suggestions and doc generation.
+      //
+      // Only accept the fallback when exactly one candidate succeeds
+      // (matching the parse-time ambiguity check).  When the unique
+      // candidate's complete() fails, preserve its error instead of
+      // falling back to a generic no-match message.
+      return dispatchByMode(
+        mode,
+        () => {
+          const emptyCtx = {
+            buffer: [] as string[],
+            optionsTerminated: false,
+            usage: [] as never[],
+            exec,
+            dependencyRegistry: exec?.dependencyRegistry,
+          };
+          // Single pass: count candidates and cache the first result.
+          let candidateIndex = -1;
+          let candidateCount = 0;
+          let candidateParseResult:
+            | (ParserResult<unknown> & { success: true })
+            | undefined;
+          for (let i = 0; i < syncParsers.length; i++) {
+            const p = syncParsers[i];
+            if (p.leadingNames.size > 0 || p.acceptingAnyToken) continue;
+            const parseResult = p.parse({
+              ...emptyCtx,
+              state: getAnnotatedChildState(state, p.initialState, p),
+            });
+            if (!parseResult.success || parseResult.provisional) continue;
+            candidateCount++;
+            if (candidateIndex < 0) {
+              candidateIndex = i;
+              candidateParseResult = parseResult;
+            }
+            if (candidateCount > 1) break;
+          }
+          // Complete only the unique candidate.
+          if (
+            candidateCount === 1 && candidateIndex >= 0 &&
+            candidateParseResult
+          ) {
+            const p = syncParsers[candidateIndex];
+            const annotatedState = getAnnotatedChildState(
+              state,
+              candidateParseResult.next.state,
+              p,
+            );
+            return p.complete(
+              annotatedState,
+              withChildExecPath(exec, candidateIndex),
+            );
+          }
+          return {
+            success: false as const,
+            error: getNoMatchError(options, noMatchContext),
+          };
+        },
+        async () => {
+          const emptyCtx = {
+            buffer: [] as string[],
+            optionsTerminated: false,
+            usage: [] as never[],
+            exec,
+            dependencyRegistry: exec?.dependencyRegistry,
+          };
+          // Single pass: count candidates and cache the first result
+          // (see sync counterpart).
+          let candidateIndex = -1;
+          let candidateCount = 0;
+          let candidateParseResult:
+            | (ParserResult<unknown> & { success: true })
+            | undefined;
+          for (let i = 0; i < parsers.length; i++) {
+            const p = parsers[i];
+            if (p.leadingNames.size > 0 || p.acceptingAnyToken) continue;
+            const parseResult = await p.parse({
+              ...emptyCtx,
+              state: getAnnotatedChildState(state, p.initialState, p),
+            });
+            if (!parseResult.success || parseResult.provisional) continue;
+            candidateCount++;
+            if (candidateIndex < 0) {
+              candidateIndex = i;
+              candidateParseResult = parseResult;
+            }
+            if (candidateCount > 1) break;
+          }
+          // Complete only the unique candidate.
+          // Skip async candidates during parse/suggest probes to
+          // avoid triggering side effects (e.g., prompt()) before
+          // the real completion phase.  Sync candidates are safe
+          // to complete during probes (needed for object()'s
+          // completability check on empty input).
+          if (
+            candidateCount === 1 && candidateIndex >= 0 &&
+            candidateParseResult &&
+            (parsers[candidateIndex].$mode === "sync" ||
+              (exec?.phase !== "parse" && exec?.phase !== "suggest"))
+          ) {
+            const p = parsers[candidateIndex];
+            const annotatedState = getAnnotatedChildState(
+              state,
+              candidateParseResult.next.state,
+              p,
+            );
+            return await p.complete(
+              annotatedState,
+              withChildExecPath(exec, candidateIndex),
+            );
+          }
+          return {
+            success: false as const,
+            error: getNoMatchError(options, noMatchContext),
+          };
+        },
+      );
     }
     const [i, result] = activeState;
     if (!result.success) {
@@ -1144,8 +1262,14 @@ function createExclusiveSuggest(
         const suggestions: Suggestion[] = [];
         const activeState = normalizeExclusiveState(context.state);
 
-        if (activeState == null) {
-          // No parser has been selected yet, get suggestions from all parsers
+        // When the active branch consumed nothing (zero-consumed
+        // fallback), treat it as provisional and show suggestions from
+        // all branches so that consuming alternatives remain visible.
+        if (
+          activeState == null ||
+          (activeState[1].success && activeState[1].consumed.length === 0)
+        ) {
+          // No parser has been selected yet (or selection is provisional)
           for (let i = 0; i < syncParsers.length; i++) {
             const parser = syncParsers[i];
             const parserSuggestions = parser.suggest(
@@ -1178,8 +1302,11 @@ function createExclusiveSuggest(
         const suggestions: Suggestion[] = [];
         const activeState = normalizeExclusiveState(context.state);
 
-        if (activeState == null) {
-          // No parser has been selected yet, get suggestions from all parsers
+        // See sync counterpart for rationale.
+        if (
+          activeState == null ||
+          (activeState[1].success && activeState[1].consumed.length === 0)
+        ) {
           for (let i = 0; i < parsers.length; i++) {
             const parser = parsers[i];
             const parserSuggestions = parser.suggest(
@@ -2848,6 +2975,17 @@ export function or(
     orderedParsers.sort(([_, a], [__, b]) =>
       activeState?.[0] === a ? -1 : activeState?.[0] === b ? 1 : a - b
     );
+    // Track zero-consuming successful branches as a fallback.
+    // Only non-catch-all branches qualify (acceptingAnyToken excludes
+    // tuple([argument(...)]) whose parse "success" on empty input is
+    // incidental).  Accept the fallback only when exactly one qualifying
+    // branch succeeded (unambiguous).
+    let zeroConsumedBranch: {
+      index: number;
+      parser: Parser<"sync", unknown, unknown>;
+      result: ParserResult<unknown> & { success: true };
+    } | null = null;
+    let zeroConsumedCount = 0;
     for (const [parser, i] of orderedParsers) {
       const result = parser.parse(
         withChildContext(
@@ -2862,6 +3000,37 @@ export function or(
       );
       if (result.success && result.consumed.length > 0) {
         if (activeState?.[0] !== i && activeState?.[1].success) {
+          // If the active branch consumed nothing (zero-consumed
+          // fallback), allow the switch freely: no shared-options
+          // conflict is possible and the empty consumed array would
+          // crash values() in the error path.
+          if (activeState[1].consumed.length === 0) {
+            const mergedExec = mergeChildExec(
+              context.exec,
+              result.next.exec,
+            );
+            return {
+              success: true,
+              next: {
+                ...context,
+                buffer: result.next.buffer,
+                optionsTerminated: result.next.optionsTerminated,
+                state: createExclusiveState(
+                  context.state,
+                  i,
+                  parser,
+                  result,
+                ),
+                ...(mergedExec != null
+                  ? {
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              consumed: result.consumed,
+            };
+          }
           // Different branch succeeded. Check if the new branch can also
           // consume the previously consumed input (shared options case).
           const previouslyConsumed = activeState[1].consumed;
@@ -2959,9 +3128,61 @@ export function or(
           },
           consumed: result.consumed,
         };
+      } else if (
+        result.success && result.consumed.length === 0 &&
+        !result.provisional &&
+        // Only branches that can never match input tokens qualify.
+        parser.leadingNames.size === 0 && !parser.acceptingAnyToken
+      ) {
+        if (zeroConsumedBranch === null) {
+          zeroConsumedBranch = { index: i, parser, result };
+        }
+        zeroConsumedCount++;
       } else if (!result.success && error.consumed < result.consumed) {
         error = result;
       }
+    }
+    // Accept non-consuming branch when unambiguous, no branch consumed
+    // tokens before failing, and the buffer is empty.  When tokens remain,
+    // accepting a zero-consumed fallback would leave them unconsumed,
+    // causing the top-level parse loop to stall and emit a generic
+    // "Unexpected option" error instead of the construct's own error.
+    if (
+      zeroConsumedBranch !== null && zeroConsumedCount === 1 &&
+      error.consumed === 0 && context.buffer.length === 0
+    ) {
+      // Persist the branch state so wrappers like multiple() can
+      // see the state change.  Only propagate provisional from the
+      // selected branch — a definitively resolved branch (e.g.,
+      // constant()) should not be marked provisional, so that
+      // or(or(constant("inner")), constant("outer")) correctly
+      // returns "inner".
+      const mergedExec = mergeChildExec(
+        context.exec,
+        zeroConsumedBranch.result.next.exec,
+      );
+      return {
+        success: true,
+        ...(zeroConsumedBranch.result.provisional
+          ? { provisional: true as const }
+          : {}),
+        next: {
+          ...context,
+          state: createExclusiveState(
+            context.state,
+            zeroConsumedBranch.index,
+            zeroConsumedBranch.parser,
+            zeroConsumedBranch.result,
+          ),
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        },
+        consumed: [],
+      };
     }
     return { ...error, success: false };
   };
@@ -2978,6 +3199,13 @@ export function or(
     orderedParsers.sort(([_, a], [__, b]) =>
       activeState?.[0] === a ? -1 : activeState?.[0] === b ? 1 : a - b
     );
+    // Track zero-consuming successful branches (see sync counterpart).
+    let zeroConsumedBranch: {
+      index: number;
+      parser: Parser<Mode, unknown, unknown>;
+      result: ParserResult<unknown> & { success: true };
+    } | null = null;
+    let zeroConsumedCount = 0;
     for (const [parser, i] of orderedParsers) {
       const resultOrPromise = parser.parse(
         withChildContext(
@@ -2993,6 +3221,35 @@ export function or(
       const result = await resultOrPromise;
       if (result.success && result.consumed.length > 0) {
         if (activeState?.[0] !== i && activeState?.[1].success) {
+          // If the active branch consumed nothing (zero-consumed
+          // fallback), allow the switch freely (see sync counterpart).
+          if (activeState[1].consumed.length === 0) {
+            const mergedExec = mergeChildExec(
+              context.exec,
+              result.next.exec,
+            );
+            return {
+              success: true,
+              next: {
+                ...context,
+                buffer: result.next.buffer,
+                optionsTerminated: result.next.optionsTerminated,
+                state: createExclusiveState(
+                  context.state,
+                  i,
+                  parser,
+                  result,
+                ),
+                ...(mergedExec != null
+                  ? {
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              consumed: result.consumed,
+            };
+          }
           // Different branch succeeded. Check if the new branch can also
           // consume the previously consumed input (shared options case).
           const previouslyConsumed = activeState[1].consumed;
@@ -3092,9 +3349,52 @@ export function or(
           },
           consumed: result.consumed,
         };
+      } else if (
+        result.success && result.consumed.length === 0 &&
+        !result.provisional &&
+        // Only branches with no leading names qualify (see sync).
+        parser.leadingNames.size === 0 && !parser.acceptingAnyToken
+      ) {
+        if (zeroConsumedBranch === null) {
+          zeroConsumedBranch = { index: i, parser, result };
+        }
+        zeroConsumedCount++;
       } else if (!result.success && error.consumed < result.consumed) {
         error = result;
       }
+    }
+    // Accept non-consuming branch when unambiguous (see sync counterpart).
+    if (
+      zeroConsumedBranch !== null && zeroConsumedCount === 1 &&
+      error.consumed === 0 && context.buffer.length === 0
+    ) {
+      // Persist branch state (see sync counterpart for rationale).
+      const mergedExec = mergeChildExec(
+        context.exec,
+        zeroConsumedBranch.result.next.exec,
+      );
+      return {
+        success: true,
+        ...(zeroConsumedBranch.result.provisional
+          ? { provisional: true as const }
+          : {}),
+        next: {
+          ...context,
+          state: createExclusiveState(
+            context.state,
+            zeroConsumedBranch.index,
+            zeroConsumedBranch.parser,
+            zeroConsumedBranch.result,
+          ),
+          ...(mergedExec != null
+            ? {
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        },
+        consumed: [],
+      };
     }
     return { ...error, success: false };
   };
@@ -4923,6 +5223,7 @@ export function object<
     let currentContext = context;
     let anySuccess = false;
     const allConsumed: string[] = [];
+    const consumedFields = new Set<string | symbol>();
 
     // Keep trying to parse fields until no more can be matched
     let madeProgress = true;
@@ -4971,9 +5272,72 @@ export function object<
           allConsumed.push(...result.consumed);
           anySuccess = true;
           madeProgress = true;
+          consumedFields.add(field as string | symbol);
           break; // Restart the field loop with updated context
         } else if (!result.success && error.consumed < result.consumed) {
           error = result;
+        }
+      }
+    }
+
+    // Zero-consumption pass: let purely non-interactive parsers update
+    // their state.  Parsers like multiple(constant(...)) modify state in
+    // parse() even when they return consumed: [].  The greedy loop above
+    // skips these state changes, so we give each non-consumed field one
+    // parse() call here.  Only parsers with no leading names qualify:
+    // interactive parsers (or() with options, withDefault, etc.) must
+    // not have their state committed here as it would hide still-valid
+    // branches from suggestions and docs.
+    {
+      const getFieldState = createFieldStateGetter(
+        currentContext.state,
+        getObjectParseChildState,
+      );
+      for (const [field, parser] of parserPairs) {
+        if (consumedFields.has(field as string | symbol)) continue;
+        const typedParser = parser as Parser<"sync", unknown, unknown>;
+        if (
+          parser.leadingNames.size > 0 ||
+          typedParser.acceptingAnyToken ||
+          Reflect.get(parser, optionalStyleWrapperKey) === true
+        ) {
+          continue;
+        }
+        const fieldState = getFieldState(field, parser);
+        const result = typedParser.parse(
+          withChildContext(
+            currentContext,
+            field,
+            fieldState,
+            parser,
+          ),
+        );
+        if (
+          result.success && result.consumed.length === 0 &&
+          result.next.state !== fieldState
+        ) {
+          const mergedExec = mergeChildExec(
+            currentContext.exec,
+            result.next.exec,
+          );
+          currentContext = {
+            ...currentContext,
+            state: {
+              ...(currentContext.state as Record<string | symbol, unknown>),
+              [field as string | symbol]: getAnnotatedChildState(
+                currentContext.state,
+                result.next.state,
+                parser,
+              ),
+            } as { readonly [K in keyof T]: unknown },
+            ...(mergedExec != null
+              ? {
+                trace: mergedExec.trace,
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
+          };
         }
       }
     }
@@ -4987,14 +5351,26 @@ export function object<
       };
     }
 
-    // If buffer is empty and no parser consumed input, check if all parsers can complete
-    if (context.buffer.length === 0) {
+    // If buffer is empty and no parser consumed input, check if all parsers
+    // can complete.  Use currentContext (not the original context) so that
+    // state changes from the zero-consumption pass are visible.
+    if (currentContext.buffer.length === 0) {
       let allCanComplete = true;
-      const getFieldState = createFieldStateGetter(context.state);
+      const getFieldState = createFieldStateGetter(currentContext.state);
+      // Stamp the probe exec as parse-phase so that async fallback
+      // guards in or()/conditional() correctly suppress side effects.
+      const probeExec = currentContext.exec
+        ? { ...currentContext.exec, phase: "parse" as const }
+        : {
+          usage: [] as never[],
+          path: [] as PropertyKey[],
+          trace: undefined,
+          phase: "parse" as const,
+        };
       for (const [field, parser] of parserPairs) {
         const fieldState = getFieldState(field, parser);
         const completeResult = (parser as Parser<"sync", unknown, unknown>)
-          .complete(fieldState, withChildExecPath(context.exec, field));
+          .complete(fieldState, withChildExecPath(probeExec, field));
         if (!completeResult.success) {
           allCanComplete = false;
           break;
@@ -5004,7 +5380,7 @@ export function object<
       if (allCanComplete) {
         return {
           success: true,
-          next: context,
+          next: currentContext,
           consumed: [],
         };
       }
@@ -5023,6 +5399,7 @@ export function object<
     let currentContext = context;
     let anySuccess = false;
     const allConsumed: string[] = [];
+    const consumedFields = new Set<string | symbol>();
 
     // Keep trying to parse fields until no more can be matched
     let madeProgress = true;
@@ -5072,9 +5449,68 @@ export function object<
           allConsumed.push(...result.consumed);
           anySuccess = true;
           madeProgress = true;
+          consumedFields.add(field as string | symbol);
           break; // Restart the field loop with updated context
         } else if (!result.success && error.consumed < result.consumed) {
           error = result;
+        }
+      }
+    }
+
+    // Zero-consumption pass: let purely non-interactive parsers update
+    // their state (see sync counterpart for rationale).
+    {
+      const getFieldState = createFieldStateGetter(
+        currentContext.state,
+        getObjectParseChildState,
+      );
+      for (const [field, parser] of parserPairs) {
+        if (consumedFields.has(field as string | symbol)) continue;
+        if (
+          // Skip interactive and optional-style parsers
+          // (see sync counterpart for rationale).
+          parser.leadingNames.size > 0 ||
+          parser.acceptingAnyToken ||
+          Reflect.get(parser, optionalStyleWrapperKey) === true
+        ) {
+          continue;
+        }
+        const fieldState = getFieldState(field, parser);
+        const resultOrPromise = parser.parse(
+          withChildContext(
+            currentContext,
+            field,
+            fieldState,
+            parser,
+          ),
+        );
+        const result = await resultOrPromise;
+        if (
+          result.success && result.consumed.length === 0 &&
+          result.next.state !== fieldState
+        ) {
+          const mergedExec = mergeChildExec(
+            currentContext.exec,
+            result.next.exec,
+          );
+          currentContext = {
+            ...currentContext,
+            state: {
+              ...(currentContext.state as Record<string | symbol, unknown>),
+              [field as string | symbol]: getAnnotatedChildState(
+                currentContext.state,
+                result.next.state,
+                parser,
+              ),
+            } as { readonly [K in keyof T]: unknown },
+            ...(mergedExec != null
+              ? {
+                trace: mergedExec.trace,
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
+          };
         }
       }
     }
@@ -5088,15 +5524,28 @@ export function object<
       };
     }
 
-    // If buffer is empty and no parser consumed input, check if all parsers can complete
-    if (context.buffer.length === 0) {
+    // If buffer is empty and no parser consumed input, check if all parsers
+    // can complete.  Use currentContext (not the original context) so that
+    // state changes from the zero-consumption pass are visible.
+    if (currentContext.buffer.length === 0) {
       let allCanComplete = true;
-      const getFieldState = createFieldStateGetter(context.state);
+      const getFieldState = createFieldStateGetter(currentContext.state);
+      // Stamp the probe exec as parse-phase so that async fallback
+      // guards in or()/conditional() correctly suppress side effects
+      // (see sync counterpart for rationale).
+      const probeExec = currentContext.exec
+        ? { ...currentContext.exec, phase: "parse" as const }
+        : {
+          usage: [] as never[],
+          path: [] as PropertyKey[],
+          trace: undefined,
+          phase: "parse" as const,
+        };
       for (const [field, parser] of parserPairs) {
         const fieldState = getFieldState(field, parser);
         const completeResult = await parser.complete(
           fieldState,
-          withChildExecPath(context.exec, field),
+          withChildExecPath(probeExec, field),
         );
         if (!completeResult.success) {
           allCanComplete = false;
@@ -5107,7 +5556,7 @@ export function object<
       if (allCanComplete) {
         return {
           success: true,
-          next: context,
+          next: currentContext,
           consumed: [],
         };
       }
@@ -9571,6 +10020,19 @@ export function conditional<
  * // defaultResult.value = [undefined, {}]
  * ```
  *
+ * ### Async discriminator limitation
+ *
+ * When the discriminator is an async parser that succeeds without consuming
+ * input (e.g., `prompt(option(...))` with no CLI input), branch selection
+ * is deferred to the complete phase.  If the selected branch needs to
+ * consume remaining tokens, those tokens cannot be consumed because the
+ * branch is not known during parse.  In practice, this means
+ * `conditional(prompt(option(...)), { key: option(...) })` cannot parse
+ * branch-specific tokens when the discriminator requires interactive
+ * resolution.  Provide a default branch or ensure the discriminator
+ * can resolve synchronously (e.g., via `bindEnv()` or `withDefault()`)
+ * to avoid this limitation.
+ *
  * @since 0.8.0
  */
 export function conditional(
@@ -9743,9 +10205,7 @@ export function conditional(
       ),
     });
 
-    if (
-      discriminatorResult.success && discriminatorResult.consumed.length > 0
-    ) {
+    if (discriminatorResult.success) {
       const annotatedDiscriminatorState = getAnnotatedChildState(
         state,
         discriminatorResult.next.state,
@@ -9792,8 +10252,19 @@ export function conditional(
               discriminatorExec,
               branchParseResult.next.exec,
             );
+            // Mark as provisional when the result is tentative:
+            // either the branch itself is provisional, or the
+            // discriminator consumed nothing and the branch is
+            // interactive (has leadingNames or accepts any token),
+            // meaning it can match tokens but didn't.
+            const isProvisional = branchParseResult.provisional ||
+              (discriminatorResult.consumed.length === 0 &&
+                branchParseResult.consumed.length === 0 &&
+                (branchParser.leadingNames.size > 0 ||
+                  branchParser.acceptingAnyToken));
             return {
               success: true,
+              ...(isProvisional ? { provisional: true as const } : {}),
               next: {
                 ...branchParseResult.next,
                 state: {
@@ -9820,35 +10291,63 @@ export function conditional(
             };
           }
 
-          // Branch parse failed but discriminator succeeded
-          return {
-            success: true,
-            next: {
-              ...discriminatorResult.next,
-              state: {
-                discriminatorState: annotatedDiscriminatorState,
-                discriminatorValue: value,
-                selectedBranch: { kind: "branch", key: value },
-                branchState: getAnnotatedChildState(
-                  state,
-                  branchParser.initialState,
-                  branchParser,
-                ),
+          // Branch parse failed but discriminator succeeded.
+          if (discriminatorResult.consumed.length > 0) {
+            // Discriminator consumed input — commit to the branch even
+            // though it hasn't consumed yet (it may on the next call).
+            return {
+              success: true,
+              next: {
+                ...discriminatorResult.next,
+                state: {
+                  discriminatorState: annotatedDiscriminatorState,
+                  discriminatorValue: value,
+                  selectedBranch: { kind: "branch", key: value },
+                  branchState: getAnnotatedChildState(
+                    state,
+                    branchParser.initialState,
+                    branchParser,
+                  ),
+                },
+                ...(discriminatorExec != null
+                  ? {
+                    exec: discriminatorExec,
+                    dependencyRegistry: discriminatorExec.dependencyRegistry,
+                  }
+                  : {}),
               },
-              ...(discriminatorExec != null
-                ? {
-                  exec: discriminatorExec,
-                  dependencyRegistry: discriminatorExec.dependencyRegistry,
-                }
-                : {}),
-            },
-            consumed: discriminatorResult.consumed,
-          };
+              consumed: discriminatorResult.consumed,
+            };
+          }
+          // Zero-consumed discriminator + branch failure: propagate
+          // the failure so optional()/withDefault() treat conditional
+          // as unmatched.  The deferred discriminator path in complete()
+          // handles resolution when needed.
+          return branchParseResult;
         }
+      }
+      // Discriminator consumed tokens but completion failed (e.g.,
+      // invalid choice value).  Propagate the error instead of
+      // masking it behind the default branch or a generic no-match.
+      if (discriminatorResult.consumed.length > 0) {
+        return {
+          success: false,
+          consumed: discriminatorResult.consumed.length,
+          error: completionResult.success
+            ? getNoMatchError()
+            : completionResult.error,
+        };
       }
     }
 
-    // Discriminator didn't match, try default branch
+    // Discriminator didn't match or didn't consume input, try default branch.
+    // Only accept a zero-consuming default when the discriminator also
+    // consumed nothing AND the buffer is empty; otherwise, the
+    // discriminator's partial-match error or the construct's no-match
+    // error is more informative and should be preserved.
+    const discriminatorConsumed = discriminatorResult.success
+      ? discriminatorResult.consumed.length
+      : discriminatorResult.consumed;
     if (syncDefaultBranch !== undefined) {
       const defaultResult = syncDefaultBranch.parse(
         withChildContext(
@@ -9860,18 +10359,31 @@ export function conditional(
         ),
       );
 
-      if (defaultResult.success && defaultResult.consumed.length > 0) {
+      if (
+        defaultResult.success &&
+        (defaultResult.consumed.length > 0 ||
+          (discriminatorConsumed === 0 && context.buffer.length === 0))
+      ) {
         const mergedExec = mergeChildExec(
           context.exec,
           defaultResult.next.exec,
         );
+        // Commit the default when it consumed tokens OR when the
+        // buffer is empty (no more input to parse, so committing is
+        // safe and prevents complete() from re-evaluating lazy/
+        // stateful discriminators that could pick a different branch).
+        const commitDefault = defaultResult.consumed.length > 0 ||
+          context.buffer.length === 0;
         return {
           success: true,
+          ...(defaultResult.provisional ? { provisional: true as const } : {}),
           next: {
             ...defaultResult.next,
             state: {
               ...state,
-              selectedBranch: { kind: "default" },
+              ...(commitDefault
+                ? { selectedBranch: { kind: "default" as const } }
+                : {}),
               branchState: getAnnotatedChildState(
                 state,
                 defaultResult.next.state,
@@ -9887,6 +10399,11 @@ export function conditional(
           },
           consumed: defaultResult.consumed,
         };
+      }
+      // Default branch consumed tokens before failing; propagate the
+      // specific error instead of masking it behind a generic no-match.
+      if (!defaultResult.success && defaultResult.consumed > 0) {
+        return defaultResult;
       }
     }
 
@@ -9957,9 +10474,117 @@ export function conditional(
       ),
     });
 
-    if (
-      discriminatorResult.success && discriminatorResult.consumed.length > 0
-    ) {
+    if (discriminatorResult.success) {
+      // For zero-consuming async discriminators, defer completion to
+      // the complete phase to avoid triggering interactive side effects
+      // (e.g., prompt()) during parse.  Sync discriminators are safe
+      // to complete during parse even in the async path.
+      //
+      // Before deferring, try the default branch — it might be able
+      // to consume remaining tokens that the deferred discriminator
+      // path would otherwise leave orphaned.
+      if (
+        discriminatorResult.consumed.length === 0 &&
+        discriminator.$mode === "async"
+      ) {
+        // Track default branch parse state so the deferred path can
+        // preserve it even when consumed === 0.
+        let deferredBranchState: unknown = state.branchState;
+        if (defaultBranch !== undefined) {
+          const defaultResult = await defaultBranch.parse(
+            withChildContext(
+              context,
+              "_branch",
+              state.branchState ?? defaultBranch.initialState,
+              defaultBranch,
+              defaultBranch.usage,
+            ),
+          );
+          if (
+            defaultResult.success &&
+            defaultResult.consumed.length > 0
+          ) {
+            // Commit the default when it consumed tokens.
+            const defaultExec = mergeChildExec(
+              context.exec,
+              defaultResult.next.exec,
+            );
+            return {
+              success: true,
+              next: {
+                ...defaultResult.next,
+                state: {
+                  ...state,
+                  selectedBranch: { kind: "default" },
+                  branchState: getAnnotatedChildState(
+                    state,
+                    defaultResult.next.state,
+                    defaultBranch,
+                  ),
+                },
+                ...(defaultExec != null
+                  ? {
+                    exec: defaultExec,
+                    dependencyRegistry: defaultExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              consumed: defaultResult.consumed,
+            };
+          }
+          if (!defaultResult.success && defaultResult.consumed > 0) {
+            // Default branch consumed tokens before failing (e.g.,
+            // option missing its value).  Propagate the specific error
+            // instead of masking it behind a generic no-match.
+            return defaultResult;
+          }
+          if (
+            defaultResult.success &&
+            defaultResult.consumed.length === 0 &&
+            context.buffer.length === 0
+          ) {
+            // Default succeeded with consumed=[] on empty buffer.
+            // Persist its state so complete() has the right state
+            // for defaults that build values through parse state
+            // (e.g., multiple(constant(...))).
+            deferredBranchState = getAnnotatedChildState(
+              state,
+              defaultResult.next.state,
+              defaultBranch,
+            );
+          }
+        }
+
+        const annotatedDiscriminatorState = getAnnotatedChildState(
+          state,
+          discriminatorResult.next.state,
+          discriminator,
+        );
+        const mergedExec = mergeChildExec(
+          context.exec,
+          discriminatorResult.next.exec,
+        );
+        return {
+          success: true,
+          provisional: true,
+          next: {
+            ...context,
+            state: {
+              ...state,
+              discriminatorState: annotatedDiscriminatorState,
+              branchState: deferredBranchState,
+            },
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
+          },
+          consumed: [],
+        };
+      }
+
       const annotatedDiscriminatorState = getAnnotatedChildState(
         state,
         discriminatorResult.next.state,
@@ -10008,6 +10633,14 @@ export function conditional(
             );
             return {
               success: true,
+              // See sync counterpart for isProvisional rationale.
+              ...((branchParseResult.provisional ||
+                  (discriminatorResult.consumed.length === 0 &&
+                    branchParseResult.consumed.length === 0 &&
+                    (branchParser.leadingNames.size > 0 ||
+                      branchParser.acceptingAnyToken)))
+                ? { provisional: true as const }
+                : {}),
               next: {
                 ...branchParseResult.next,
                 state: {
@@ -10035,34 +10668,55 @@ export function conditional(
           }
 
           // Branch parse failed but discriminator succeeded
-          return {
-            success: true,
-            next: {
-              ...discriminatorResult.next,
-              state: {
-                discriminatorState: annotatedDiscriminatorState,
-                discriminatorValue: value,
-                selectedBranch: { kind: "branch", key: value },
-                branchState: getAnnotatedChildState(
-                  state,
-                  branchParser.initialState,
-                  branchParser,
-                ),
+          // (see sync counterpart for rationale).
+          if (discriminatorResult.consumed.length > 0) {
+            return {
+              success: true,
+              next: {
+                ...discriminatorResult.next,
+                state: {
+                  discriminatorState: annotatedDiscriminatorState,
+                  discriminatorValue: value,
+                  selectedBranch: { kind: "branch", key: value },
+                  branchState: getAnnotatedChildState(
+                    state,
+                    branchParser.initialState,
+                    branchParser,
+                  ),
+                },
+                ...(discriminatorExec != null
+                  ? {
+                    exec: discriminatorExec,
+                    dependencyRegistry: discriminatorExec.dependencyRegistry,
+                  }
+                  : {}),
               },
-              ...(discriminatorExec != null
-                ? {
-                  exec: discriminatorExec,
-                  dependencyRegistry: discriminatorExec.dependencyRegistry,
-                }
-                : {}),
-            },
-            consumed: discriminatorResult.consumed,
-          };
+              consumed: discriminatorResult.consumed,
+            };
+          }
+          // Zero-consumed discriminator + branch failure: propagate
+          // the failure (see sync counterpart for rationale).
+          return branchParseResult;
         }
+      }
+      // Discriminator consumed tokens but completion failed
+      // (see sync counterpart for rationale).
+      if (discriminatorResult.consumed.length > 0) {
+        return {
+          success: false,
+          consumed: discriminatorResult.consumed.length,
+          error: completionResult.success
+            ? getNoMatchError()
+            : completionResult.error,
+        };
       }
     }
 
-    // Discriminator didn't match, try default branch
+    // Discriminator didn't match or didn't consume input, try default branch
+    // (see sync counterpart for rationale on the consumption/buffer guard).
+    const discriminatorConsumed = discriminatorResult.success
+      ? discriminatorResult.consumed.length
+      : discriminatorResult.consumed;
     if (defaultBranch !== undefined) {
       const defaultResult = await defaultBranch.parse(
         withChildContext(
@@ -10074,18 +10728,28 @@ export function conditional(
         ),
       );
 
-      if (defaultResult.success && defaultResult.consumed.length > 0) {
+      if (
+        defaultResult.success &&
+        (defaultResult.consumed.length > 0 ||
+          (discriminatorConsumed === 0 && context.buffer.length === 0))
+      ) {
         const mergedExec = mergeChildExec(
           context.exec,
           defaultResult.next.exec,
         );
+        // See sync counterpart for rationale on commitDefault.
+        const commitDefault = defaultResult.consumed.length > 0 ||
+          context.buffer.length === 0;
         return {
           success: true,
+          ...(defaultResult.provisional ? { provisional: true as const } : {}),
           next: {
             ...defaultResult.next,
             state: {
               ...state,
-              selectedBranch: { kind: "default" },
+              ...(commitDefault
+                ? { selectedBranch: { kind: "default" as const } }
+                : {}),
               branchState: getAnnotatedChildState(
                 state,
                 defaultResult.next.state,
@@ -10101,6 +10765,10 @@ export function conditional(
           },
           consumed: defaultResult.consumed,
         };
+      }
+      // See sync counterpart for rationale.
+      if (!defaultResult.success && defaultResult.consumed > 0) {
+        return defaultResult;
       }
     }
 
@@ -10130,9 +10798,115 @@ export function conditional(
       Parser<"sync", unknown, unknown>
     >;
 
-    // No branch selected yet
+    // No branch selected yet — try completing the deferred discriminator,
+    // then fall through to the default branch.  The sync path runs during
+    // all phases (including parse-time probes from object/tuple/merge)
+    // because sync discriminators are side-effect-free.  The async path
+    // guards against parse/suggest phases to avoid triggering prompts.
     if (state.selectedBranch === undefined) {
-      // If we have default branch, use it
+      {
+        const annotatedDiscriminatorStateForDeferred = getAnnotatedChildState(
+          state,
+          state.discriminatorState,
+          syncDiscriminator,
+        );
+        const deferredDiscriminatorResult = unwrapCompleteResult(
+          syncDiscriminator.complete(
+            annotatedDiscriminatorStateForDeferred,
+            withChildExecPath(exec, "_discriminator"),
+          ),
+        );
+        if (deferredDiscriminatorResult.success) {
+          const deferredValue = deferredDiscriminatorResult.value as string;
+          const deferredBranch = syncBranches[deferredValue];
+          if (deferredBranch) {
+            const branchExec = withChildExecPath(exec, "_branch");
+            const emptyCtx = {
+              buffer: [] as string[],
+              optionsTerminated: false,
+              usage: [] as never[],
+              exec: branchExec,
+              dependencyRegistry: exec?.dependencyRegistry,
+            };
+            const annotatedInitial = getAnnotatedChildState(
+              state,
+              deferredBranch.initialState,
+              deferredBranch,
+            );
+            const replayResult = deferredBranch.parse({
+              ...emptyCtx,
+              state: annotatedInitial,
+            });
+            const branchState = replayResult.success
+              ? replayResult.next.state
+              : annotatedInitial;
+            // Re-inject parent annotations for the complete phase
+            // so that inherited-annotation parsers (e.g., bindConfig)
+            // see annotations after the replay parse.
+            const annotatedBranchState = getAnnotatedChildState(
+              state,
+              branchState,
+              deferredBranch,
+            );
+            const branchResult = unwrapCompleteResult(
+              deferredBranch.complete(
+                annotatedBranchState,
+                branchExec,
+              ),
+            );
+            if (branchResult.success) {
+              return {
+                success: true,
+                value: [deferredValue, branchResult.value] as const,
+                ...(branchResult.deferred
+                  ? {
+                    deferred: true as const,
+                    ...(branchResult.deferredKeys
+                      ? {
+                        deferredKeys: new Map([[
+                          1,
+                          branchResult.deferredKeys,
+                        ]]) as DeferredMap,
+                      }
+                      : branchResult.value == null ||
+                          typeof branchResult.value !== "object"
+                      ? {
+                        deferredKeys: new Map([[
+                          1,
+                          null,
+                        ]]) as DeferredMap,
+                      }
+                      : {}),
+                  }
+                  : {}),
+              };
+            }
+            if (options?.errors?.branchError) {
+              return {
+                success: false,
+                error: options.errors.branchError(
+                  deferredValue,
+                  branchResult.error,
+                ),
+              };
+            }
+            return branchResult;
+          }
+          // Discriminator resolved but branch not found — use noMatch.
+          if (syncDefaultBranch === undefined) {
+            return {
+              success: false,
+              error: getNoMatchError(),
+            };
+          }
+        } else if (syncDefaultBranch === undefined) {
+          // Discriminator failed and no default — surface the error.
+          return deferredDiscriminatorResult;
+        }
+      }
+
+      // Fall through to the default branch (accessible during all
+      // phases, including parse-time probes).
       if (syncDefaultBranch !== undefined) {
         const branchState = getAnnotatedChildState(
           state,
@@ -10170,14 +10944,11 @@ export function conditional(
         };
       }
 
-      // No default branch, discriminator is required
       return {
         success: false,
         error: message`Missing required discriminator option.`,
       };
     }
-
-    // Complete selected branch
     const branchParser = state.selectedBranch.kind === "default"
       ? syncDefaultBranch!
       : syncBranches[state.selectedBranch.key];
@@ -10224,12 +10995,19 @@ export function conditional(
       dependencyRuntime: runtime,
       dependencyRegistry: runtime.registry,
     };
-    const discriminatorCompleteResult = state.selectedBranch.kind === "default"
-      ? undefined
-      : syncDiscriminator.complete(
+    // Only complete the discriminator when needed — skip re-completion
+    // when the cached discriminatorValue already matches the selected
+    // branch key, avoiding side effects from non-idempotent discriminators.
+    const needsDiscriminatorCompletion = state.selectedBranch.kind !==
+        "default" &&
+      !(state.discriminatorValue != null &&
+        state.discriminatorValue === state.selectedBranch.key);
+    const discriminatorCompleteResult = needsDiscriminatorCompletion
+      ? syncDiscriminator.complete(
         annotatedDiscriminatorState,
         withChildExecPath(completionExec, "_discriminator"),
-      );
+      )
+      : undefined;
 
     const branchResult = unwrapCompleteResult(
       branchParser.complete(
@@ -10239,7 +11017,6 @@ export function conditional(
     );
 
     if (!branchResult.success) {
-      // Add context to error message
       if (
         state.discriminatorValue !== undefined &&
         options?.errors?.branchError
@@ -10255,10 +11032,14 @@ export function conditional(
       return branchResult;
     }
 
-    // Get the discriminator value: either from DependencySourceState or regular completion
     let discriminatorValue: string | undefined;
     if (state.selectedBranch.kind === "default") {
       discriminatorValue = undefined;
+    } else if (
+      state.discriminatorValue != null &&
+      state.discriminatorValue === state.selectedBranch.key
+    ) {
+      discriminatorValue = state.discriminatorValue;
     } else {
       const completedDiscriminator = unwrapCompleteResult(
         discriminatorCompleteResult,
@@ -10297,9 +11078,107 @@ export function conditional(
     state: ConditionalState<string>,
     exec?: ExecutionContext,
   ): Promise<CompleteResult> => {
-    // No branch selected yet
+    // No branch selected yet (see sync counterpart for rationale).
     if (state.selectedBranch === undefined) {
-      // If we have default branch, use it
+      if (exec?.phase !== "parse" && exec?.phase !== "suggest") {
+        const annotatedDiscriminatorStateForDeferred = getAnnotatedChildState(
+          state,
+          state.discriminatorState,
+          discriminator,
+        );
+        const deferredDiscriminatorResult = unwrapCompleteResult(
+          await discriminator.complete(
+            annotatedDiscriminatorStateForDeferred,
+            withChildExecPath(exec, "_discriminator"),
+          ),
+        );
+        if (deferredDiscriminatorResult.success) {
+          const deferredValue = deferredDiscriminatorResult.value as string;
+          const deferredBranch = branches[deferredValue];
+          if (deferredBranch) {
+            const branchExec = withChildExecPath(exec, "_branch");
+            const emptyCtx = {
+              buffer: [] as string[],
+              optionsTerminated: false,
+              usage: [] as never[],
+              exec: branchExec,
+              dependencyRegistry: exec?.dependencyRegistry,
+            };
+            const annotatedInitial = getAnnotatedChildState(
+              state,
+              deferredBranch.initialState,
+              deferredBranch,
+            );
+            const replayResult = await deferredBranch.parse({
+              ...emptyCtx,
+              state: annotatedInitial,
+            });
+            const branchState = replayResult.success
+              ? replayResult.next.state
+              : annotatedInitial;
+            // Re-inject parent annotations for the complete phase
+            // (see sync counterpart for rationale).
+            const annotatedBranchState = getAnnotatedChildState(
+              state,
+              branchState,
+              deferredBranch,
+            );
+            const branchResult = unwrapCompleteResult(
+              await deferredBranch.complete(
+                annotatedBranchState,
+                branchExec,
+              ),
+            );
+            if (branchResult.success) {
+              return {
+                success: true,
+                value: [deferredValue, branchResult.value] as const,
+                ...(branchResult.deferred
+                  ? {
+                    deferred: true as const,
+                    ...(branchResult.deferredKeys
+                      ? {
+                        deferredKeys: new Map([[
+                          1,
+                          branchResult.deferredKeys,
+                        ]]) as DeferredMap,
+                      }
+                      : branchResult.value == null ||
+                          typeof branchResult.value !== "object"
+                      ? {
+                        deferredKeys: new Map([[
+                          1,
+                          null,
+                        ]]) as DeferredMap,
+                      }
+                      : {}),
+                  }
+                  : {}),
+              };
+            }
+            if (options?.errors?.branchError) {
+              return {
+                success: false,
+                error: options.errors.branchError(
+                  deferredValue,
+                  branchResult.error,
+                ),
+              };
+            }
+            return branchResult;
+          }
+          if (defaultBranch === undefined) {
+            return {
+              success: false,
+              error: getNoMatchError(),
+            };
+          }
+        } else if (defaultBranch === undefined) {
+          return deferredDiscriminatorResult;
+        }
+      }
+
+      // Default branch (accessible during all phases).
       if (defaultBranch !== undefined) {
         const branchState = getAnnotatedChildState(
           state,
@@ -10337,14 +11216,11 @@ export function conditional(
         };
       }
 
-      // No default branch, discriminator is required
       return {
         success: false,
         error: message`Missing required discriminator option.`,
       };
     }
-
-    // Complete selected branch
     const branchParser = state.selectedBranch.kind === "default"
       ? defaultBranch!
       : branches[state.selectedBranch.key];
@@ -10391,12 +11267,18 @@ export function conditional(
       dependencyRuntime: runtime,
       dependencyRegistry: runtime.registry,
     };
-    const discriminatorCompleteResult = state.selectedBranch.kind === "default"
-      ? undefined
-      : await discriminator.complete(
+    // Only complete the discriminator when needed
+    // (see sync counterpart for rationale).
+    const needsDiscriminatorCompletion = state.selectedBranch.kind !==
+        "default" &&
+      !(state.discriminatorValue != null &&
+        state.discriminatorValue === state.selectedBranch.key);
+    const discriminatorCompleteResult = needsDiscriminatorCompletion
+      ? await discriminator.complete(
         annotatedDiscriminatorState,
         withChildExecPath(completionExec, "_discriminator"),
-      );
+      )
+      : undefined;
 
     const branchResult = unwrapCompleteResult(
       await branchParser.complete(
@@ -10406,7 +11288,6 @@ export function conditional(
     );
 
     if (!branchResult.success) {
-      // Add context to error message
       if (
         state.discriminatorValue !== undefined &&
         options?.errors?.branchError
@@ -10422,10 +11303,14 @@ export function conditional(
       return branchResult;
     }
 
-    // Get the discriminator value: either from DependencySourceState or regular completion
     let discriminatorValue: string | undefined;
     if (state.selectedBranch.kind === "default") {
       discriminatorValue = undefined;
+    } else if (
+      state.discriminatorValue != null &&
+      state.discriminatorValue === state.selectedBranch.key
+    ) {
+      discriminatorValue = state.discriminatorValue;
     } else {
       const completedDiscriminator = unwrapCompleteResult(
         discriminatorCompleteResult,
@@ -10530,8 +11415,38 @@ export function conditional(
         prefix,
       );
 
-      // Default branch suggestions if available
-      if (syncDefaultBranch !== undefined) {
+      // Try resolving the discriminator to show branch suggestions
+      // for zero-consuming discriminators (e.g., constant("key")).
+      const annotatedDiscState = getAnnotatedChildState(
+        state,
+        state.discriminatorState,
+        syncDiscriminator,
+      );
+      const discComplete = syncDiscriminator.complete(
+        annotatedDiscState,
+        withChildExecPath(
+          suggestContext.exec
+            ? { ...suggestContext.exec, phase: "suggest" }
+            : undefined,
+          "_discriminator",
+        ),
+      );
+      if (
+        discComplete.success &&
+        syncBranches[discComplete.value] !== undefined
+      ) {
+        const resolvedBranch = syncBranches[discComplete.value];
+        yield* resolvedBranch.suggest(
+          withChildContext(
+            suggestContext,
+            "_branch",
+            state.branchState ?? resolvedBranch.initialState,
+            resolvedBranch,
+          ),
+          prefix,
+        );
+      } else if (syncDefaultBranch !== undefined) {
+        // Default branch suggestions if available
         yield* syncDefaultBranch.suggest(
           withChildContext(
             suggestContext,
@@ -10666,17 +11581,55 @@ export function conditional(
         prefix,
       );
 
-      // Default branch suggestions if available
-      if (defaultBranch !== undefined) {
-        yield* defaultBranch.suggest(
-          withChildContext(
-            suggestContext,
-            "_branch",
-            state.branchState ?? defaultBranch.initialState,
-            defaultBranch,
-          ),
-          prefix,
+      // Try resolving the discriminator for branch suggestions
+      // (see sync counterpart for rationale).  Only attempt completion
+      // for sync discriminators — async ones (e.g., prompt()) may
+      // trigger side effects that are unsafe during suggest.
+      let discResolved = false;
+      if (discriminator.$mode === "sync") {
+        const annotatedDiscState = getAnnotatedChildState(
+          state,
+          state.discriminatorState,
+          discriminator,
         );
+        const discComplete = discriminator.complete(
+          annotatedDiscState,
+          withChildExecPath(
+            suggestContext.exec
+              ? { ...suggestContext.exec, phase: "suggest" }
+              : undefined,
+            "_discriminator",
+          ),
+        ) as ValueParserResult<string>;
+        if (
+          discComplete.success &&
+          branches[discComplete.value] !== undefined
+        ) {
+          const resolvedBranch = branches[discComplete.value];
+          yield* resolvedBranch.suggest(
+            withChildContext(
+              suggestContext,
+              "_branch",
+              state.branchState ?? resolvedBranch.initialState,
+              resolvedBranch,
+            ),
+            prefix,
+          );
+          discResolved = true;
+        }
+      }
+      if (!discResolved) {
+        if (defaultBranch !== undefined) {
+          yield* defaultBranch.suggest(
+            withChildContext(
+              suggestContext,
+              "_branch",
+              state.branchState ?? defaultBranch.initialState,
+              defaultBranch,
+            ),
+            prefix,
+          );
+        }
       }
     } else {
       // Delegate to selected branch

@@ -29,6 +29,18 @@ import type {
 } from "./parser.ts";
 import type { DeferredMap, ValueParserResult } from "./valueparser.ts";
 
+/**
+ * Internal marker for wrappers that should be skipped by `object()`'s
+ * zero-consumption pass.  Set on `optional()`, `withDefault()`, and
+ * `prompt()`, since these wrappers have their own completion semantics
+ * that should not be short-circuited during parse.
+ *
+ * @internal
+ */
+export const optionalStyleWrapperKey: unique symbol = Symbol.for(
+  "@optique/core/optionalStyleWrapper",
+);
+
 function withChildExecPath(
   exec: ExecutionContext | undefined,
   segment: PropertyKey,
@@ -218,6 +230,10 @@ function processOptionalStyleResult<TState>(
     ) {
       return {
         success: true,
+        // Propagate provisional from the inner result so that
+        // or() can detect tentative zero-consumed matches through
+        // optional/withDefault/multiple wrappers.
+        ...(result.provisional ? { provisional: true as const } : {}),
         next: {
           ...result.next,
           state: [result.next.state],
@@ -230,6 +246,7 @@ function processOptionalStyleResult<TState>(
     // effects (optionsTerminated, buffer)
     return {
       success: true,
+      ...(result.provisional ? { provisional: true as const } : {}),
       next: {
         ...result.next,
         state: context.state,
@@ -382,6 +399,7 @@ export function optional<M extends Mode, TValue, TState>(
     $mode: parser.$mode,
     $valueType: [],
     $stateType: [],
+    [optionalStyleWrapperKey]: true as const,
     placeholder: undefined as TValue | undefined,
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
@@ -742,6 +760,7 @@ export function withDefault<
     $mode: parser.$mode,
     $valueType: [],
     $stateType: [],
+    [optionalStyleWrapperKey]: true as const,
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
     leadingNames: parser.leadingNames,
@@ -1477,6 +1496,7 @@ export function multiple<M extends Mode, TValue, TState>(
     ) {
       return {
         success: true,
+        ...(result.provisional ? { provisional: true as const } : {}),
         next: {
           ...result.next,
           state: context.state,
@@ -1497,6 +1517,7 @@ export function multiple<M extends Mode, TValue, TState>(
     );
     return {
       success: true,
+      ...(result.provisional ? { provisional: true as const } : {}),
       next: {
         ...result.next,
         state: annotateFreshArray(context.state, [
@@ -1599,6 +1620,7 @@ export function multiple<M extends Mode, TValue, TState>(
     ) {
       return {
         success: true,
+        ...(result.provisional ? { provisional: true as const } : {}),
         next: {
           ...result.next,
           state: context.state,
@@ -1619,6 +1641,7 @@ export function multiple<M extends Mode, TValue, TState>(
     );
     return {
       success: true,
+      ...(result.provisional ? { provisional: true as const } : {}),
       next: {
         ...result.next,
         state: annotateFreshArray(context.state, [
