@@ -3014,6 +3014,28 @@ export function or(
         // When multiple provisional branches match, discard all to
         // stay order-independent.
         if (result.provisional) {
+          const activeBranchLocked = activeState != null &&
+            activeState[1].success &&
+            activeState[1].consumed.length > 0;
+          // When the active branch yields a provisional result, it
+          // takes precedence over competing provisionals: subsequent
+          // hits from other branches should not displace it.  In
+          // nested object()/merge() flows that revisit the same or()
+          // state, this preserves the active selection across calls.
+          if (activeBranchLocked && activeState[0] === i) {
+            provisionalConsuming = { index: i, parser, result };
+            continue;
+          }
+          // Once an active-branch provisional has been recorded, do
+          // not let cross-branch provisionals overwrite it or trip
+          // ambiguity tracking.
+          if (
+            activeBranchLocked &&
+            provisionalConsuming != null &&
+            provisionalConsuming.index === activeState[0]
+          ) {
+            continue;
+          }
           if (provisionalConsuming == null && !provisionalAmbiguous) {
             provisionalConsuming = { index: i, parser, result };
           } else {
@@ -3210,41 +3232,116 @@ export function or(
     // Fall back to a provisional consuming result when no definitive
     // branch consumed tokens.  This lets speculative results from
     // conditional() take effect only when no better alternative exists.
-    // Skip the fallback when another branch already consumed in a
-    // previous parse call — committing both would combine mutually
-    // exclusive branches.
-    if (
-      provisionalConsuming !== null &&
-      !(activeState != null && activeState[1].success &&
+    if (provisionalConsuming !== null) {
+      const activeIsLockedDifferent = activeState != null &&
+        activeState[1].success &&
         activeState[1].consumed.length > 0 &&
-        activeState[0] !== provisionalConsuming.index)
-    ) {
-      const mergedExec = mergeChildExec(
-        context.exec,
-        provisionalConsuming.result.next.exec,
-      );
-      return {
-        success: true,
-        provisional: true,
-        next: {
-          ...context,
-          buffer: provisionalConsuming.result.next.buffer,
-          optionsTerminated: provisionalConsuming.result.next.optionsTerminated,
-          state: createExclusiveState(
-            context.state,
+        activeState[0] !== provisionalConsuming.index;
+      if (!activeIsLockedDifferent) {
+        const mergedExec = mergeChildExec(
+          context.exec,
+          provisionalConsuming.result.next.exec,
+        );
+        return {
+          success: true,
+          provisional: true,
+          next: {
+            ...context,
+            buffer: provisionalConsuming.result.next.buffer,
+            optionsTerminated:
+              provisionalConsuming.result.next.optionsTerminated,
+            state: createExclusiveState(
+              context.state,
+              provisionalConsuming.index,
+              provisionalConsuming.parser,
+              provisionalConsuming.result,
+            ),
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
+          },
+          consumed: provisionalConsuming.result.consumed,
+        };
+      }
+      // The provisional comes from a different branch than the
+      // active one.  Mirror the definitive branch-switch path:
+      // attempt a shared-option replay and, if the provisional
+      // branch can also consume the previously consumed tokens,
+      // commit to it after replaying.
+      if (activeState != null && activeState[1].success) {
+        const previouslyConsumed = activeState[1].consumed;
+        const checkResult = provisionalConsuming.parser.parse({
+          ...withChildContext(
+            context,
             provisionalConsuming.index,
+            provisionalConsuming.parser.initialState,
             provisionalConsuming.parser,
-            provisionalConsuming.result,
           ),
-          ...(mergedExec != null
-            ? {
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
-            : {}),
-        },
-        consumed: provisionalConsuming.result.consumed,
-      };
+          buffer: previouslyConsumed,
+        });
+        const canConsumeShared = checkResult.success &&
+          checkResult.consumed.length === previouslyConsumed.length &&
+          checkResult.consumed.every((c, idx) => c === previouslyConsumed[idx]);
+        if (canConsumeShared && checkResult.success) {
+          const replayExec = mergeChildExec(
+            context.exec,
+            checkResult.next.exec,
+          );
+          const replayedResult = provisionalConsuming.parser.parse(
+            withChildContext(
+              {
+                ...context,
+                ...(replayExec != null
+                  ? {
+                    exec: replayExec,
+                    dependencyRegistry: replayExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              provisionalConsuming.index,
+              checkResult.next.state,
+              provisionalConsuming.parser,
+            ),
+          );
+          if (replayedResult.success) {
+            const mergedExec = mergeChildExec(
+              replayExec,
+              replayedResult.next.exec,
+            );
+            return {
+              success: true,
+              provisional: true,
+              next: {
+                ...context,
+                buffer: replayedResult.next.buffer,
+                optionsTerminated: replayedResult.next.optionsTerminated,
+                state: createExclusiveState(
+                  context.state,
+                  provisionalConsuming.index,
+                  provisionalConsuming.parser,
+                  {
+                    ...replayedResult,
+                    consumed: [
+                      ...previouslyConsumed,
+                      ...replayedResult.consumed,
+                    ],
+                  },
+                ),
+                ...(mergedExec != null
+                  ? {
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              consumed: replayedResult.consumed,
+            };
+          }
+        }
+      }
     }
     return { ...error, success: false };
   };
@@ -3291,6 +3388,22 @@ export function or(
       if (result.success && result.consumed.length > 0) {
         // Provisional consuming results are deferred (see sync counterpart).
         if (result.provisional) {
+          const activeBranchLocked = activeState != null &&
+            activeState[1].success &&
+            activeState[1].consumed.length > 0;
+          // Active-branch provisionals win over competing provisionals
+          // (see sync counterpart).
+          if (activeBranchLocked && activeState[0] === i) {
+            provisionalConsuming = { index: i, parser, result };
+            continue;
+          }
+          if (
+            activeBranchLocked &&
+            provisionalConsuming != null &&
+            provisionalConsuming.index === activeState[0]
+          ) {
+            continue;
+          }
           if (provisionalConsuming == null && !provisionalAmbiguous) {
             provisionalConsuming = { index: i, parser, result };
           } else {
@@ -3476,38 +3589,116 @@ export function or(
       };
     }
     // Fall back to provisional consuming result (see sync counterpart).
-    if (
-      provisionalConsuming !== null &&
-      !(activeState != null && activeState[1].success &&
+    if (provisionalConsuming !== null) {
+      const activeIsLockedDifferent = activeState != null &&
+        activeState[1].success &&
         activeState[1].consumed.length > 0 &&
-        activeState[0] !== provisionalConsuming.index)
-    ) {
-      const mergedExec = mergeChildExec(
-        context.exec,
-        provisionalConsuming.result.next.exec,
-      );
-      return {
-        success: true,
-        provisional: true,
-        next: {
-          ...context,
-          buffer: provisionalConsuming.result.next.buffer,
-          optionsTerminated: provisionalConsuming.result.next.optionsTerminated,
-          state: createExclusiveState(
-            context.state,
+        activeState[0] !== provisionalConsuming.index;
+      if (!activeIsLockedDifferent) {
+        const mergedExec = mergeChildExec(
+          context.exec,
+          provisionalConsuming.result.next.exec,
+        );
+        return {
+          success: true,
+          provisional: true,
+          next: {
+            ...context,
+            buffer: provisionalConsuming.result.next.buffer,
+            optionsTerminated:
+              provisionalConsuming.result.next.optionsTerminated,
+            state: createExclusiveState(
+              context.state,
+              provisionalConsuming.index,
+              provisionalConsuming.parser,
+              provisionalConsuming.result,
+            ),
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
+          },
+          consumed: provisionalConsuming.result.consumed,
+        };
+      }
+      // Cross-branch provisional vs active locked branch: try a
+      // shared-option replay (mirrors the definitive branch path).
+      // The activeIsLockedDifferent check above already ensures
+      // activeState[1].success, but TypeScript can't carry that
+      // narrowing here, so re-test inline.
+      if (activeState != null && activeState[1].success) {
+        const previouslyConsumed = activeState[1].consumed;
+        const checkResult = await provisionalConsuming.parser.parse({
+          ...withChildContext(
+            context,
             provisionalConsuming.index,
+            provisionalConsuming.parser.initialState,
             provisionalConsuming.parser,
-            provisionalConsuming.result,
           ),
-          ...(mergedExec != null
-            ? {
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
-            : {}),
-        },
-        consumed: provisionalConsuming.result.consumed,
-      };
+          buffer: previouslyConsumed,
+        });
+        const canConsumeShared = checkResult.success &&
+          checkResult.consumed.length === previouslyConsumed.length &&
+          checkResult.consumed.every((c, idx) => c === previouslyConsumed[idx]);
+        if (canConsumeShared && checkResult.success) {
+          const replayExec = mergeChildExec(
+            context.exec,
+            checkResult.next.exec,
+          );
+          const replayedResult = await provisionalConsuming.parser.parse(
+            withChildContext(
+              {
+                ...context,
+                ...(replayExec != null
+                  ? {
+                    exec: replayExec,
+                    dependencyRegistry: replayExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              provisionalConsuming.index,
+              checkResult.next.state,
+              provisionalConsuming.parser,
+            ),
+          );
+          if (replayedResult.success) {
+            const mergedExec = mergeChildExec(
+              replayExec,
+              replayedResult.next.exec,
+            );
+            return {
+              success: true,
+              provisional: true,
+              next: {
+                ...context,
+                buffer: replayedResult.next.buffer,
+                optionsTerminated: replayedResult.next.optionsTerminated,
+                state: createExclusiveState(
+                  context.state,
+                  provisionalConsuming.index,
+                  provisionalConsuming.parser,
+                  {
+                    ...replayedResult,
+                    consumed: [
+                      ...previouslyConsumed,
+                      ...replayedResult.consumed,
+                    ],
+                  },
+                ),
+                ...(mergedExec != null
+                  ? {
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              consumed: replayedResult.consumed,
+            };
+          }
+        }
+      }
     }
     return { ...error, success: false };
   };

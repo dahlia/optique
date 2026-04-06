@@ -8484,6 +8484,58 @@ describe("conditional", () => {
     }
   });
 
+  it("should allow shared-option replay when or() falls back to a provisional branch", async () => {
+    // Setup: or() where the first branch consumes a shared option,
+    // and the second branch is a speculative conditional that should
+    // take over once branch-specific tokens appear later.  Without
+    // shared-option replay, the second parse call would reject the
+    // provisional fallback because the active branch already consumed
+    // tokens.
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () => Promise.resolve({ success: true as const, value: "k" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = or(
+      object({ shared: option("--shared", string()) }),
+      conditional(
+        asyncDiscriminator,
+        {
+          k: object({
+            shared: optional(option("--shared", string())),
+            bar: option("--bar", string()),
+          }),
+        },
+      ),
+    );
+
+    const result = await parseAsync(parser, [
+      "--shared",
+      "s",
+      "--bar",
+      "b",
+    ]);
+    assert.ok(
+      result.success,
+      "expected or() to switch via shared-option replay",
+    );
+  });
+
   it("should propagate branch-specific parse errors from speculation", async () => {
     const asyncDiscriminator: Parser<"async", string> = {
       $mode: "async",
