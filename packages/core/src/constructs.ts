@@ -2988,12 +2988,14 @@ export function or(
     let zeroConsumedCount = 0;
     // Track provisional consuming results (e.g., from speculative branch
     // parsing in conditional()).  These are deferred so that a definitive
-    // consuming branch can take priority.
+    // consuming branch can take priority.  When multiple provisional
+    // branches match, discard all to stay order-independent.
     let provisionalConsuming: {
       index: number;
       parser: Parser<"sync", unknown, unknown>;
       result: ParserResult<unknown> & { success: true };
     } | null = null;
+    let provisionalAmbiguous = false;
     for (const [parser, i] of orderedParsers) {
       const result = parser.parse(
         withChildContext(
@@ -3012,10 +3014,11 @@ export function or(
         // When multiple provisional branches match, discard all to
         // stay order-independent.
         if (result.provisional) {
-          if (provisionalConsuming == null) {
+          if (provisionalConsuming == null && !provisionalAmbiguous) {
             provisionalConsuming = { index: i, parser, result };
           } else {
             provisionalConsuming = null;
+            provisionalAmbiguous = true;
           }
           continue;
         }
@@ -3271,6 +3274,7 @@ export function or(
       parser: Parser<Mode, unknown, unknown>;
       result: ParserResult<unknown> & { success: true };
     } | null = null;
+    let provisionalAmbiguous = false;
     for (const [parser, i] of orderedParsers) {
       const resultOrPromise = parser.parse(
         withChildContext(
@@ -3287,10 +3291,11 @@ export function or(
       if (result.success && result.consumed.length > 0) {
         // Provisional consuming results are deferred (see sync counterpart).
         if (result.provisional) {
-          if (provisionalConsuming == null) {
+          if (provisionalConsuming == null && !provisionalAmbiguous) {
             provisionalConsuming = { index: i, parser, result };
           } else {
             provisionalConsuming = null;
+            provisionalAmbiguous = true;
           }
           continue;
         }
