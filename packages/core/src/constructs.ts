@@ -10177,6 +10177,10 @@ export function conditional<
  * - Within `longestMatch()`, a longer speculative match can beat a
  *   shorter definitive one.  If the speculative match fails during
  *   completion, the tokens consumed by it are not recoverable.
+ * - The dependency runtime seeds both discriminator and branch sources
+ *   before verifying the speculative selection.  A discriminator that
+ *   depends on branch-local dependency sources could be circularly
+ *   confirmed by the speculative branch.
  *
  * @since 0.8.0
  */
@@ -11532,6 +11536,14 @@ export function conditional(
       state.discriminatorState,
       discriminator,
     );
+    // NOTE: the dependency runtime is seeded with both discriminator
+    // and branch sources before the discriminator is completed.  In
+    // the speculative path (wasSpeculative), this means the guessed
+    // branch's dependency sources are visible to the discriminator.
+    // A discriminator that depends on branch-local sources could be
+    // circularly confirmed by the speculative branch.  Splitting the
+    // runtime setup (discriminator-only → verify → branch) would fix
+    // this but requires restructuring the shared completion flow.
     const combinedState = {
       _discriminator: annotatedDiscriminatorState,
       _branch: getAnnotatedChildState(
