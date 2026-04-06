@@ -3937,19 +3937,7 @@ export function longestMatch(
 
       if (result.success) {
         const consumed = context.buffer.length - result.next.buffer.length;
-        // Prefer non-provisional (definitive) results over provisional
-        // ones, so speculative conditional() branches don't shadow
-        // definitive matches.  A definitive result always wins,
-        // regardless of consumed length.
-        const bestIsProvisional = bestMatch != null &&
-          bestMatch.result.success && !!bestMatch.result.provisional;
-        const resultIsProvisional = !!result.provisional;
-        if (
-          bestMatch === null ||
-          (!resultIsProvisional && bestIsProvisional) ||
-          (resultIsProvisional === bestIsProvisional &&
-            consumed > bestMatch.consumed)
-        ) {
+        if (bestMatch === null || consumed > bestMatch.consumed) {
           bestMatch = { index: i, parser, result, consumed };
         }
       } else if (error.consumed < result.consumed) {
@@ -4019,19 +4007,7 @@ export function longestMatch(
 
       if (result.success) {
         const consumed = context.buffer.length - result.next.buffer.length;
-        // Prefer non-provisional (definitive) results over provisional
-        // ones, so speculative conditional() branches don't shadow
-        // definitive matches.  A definitive result always wins,
-        // regardless of consumed length.
-        const bestIsProvisional = bestMatch != null &&
-          bestMatch.result.success && !!bestMatch.result.provisional;
-        const resultIsProvisional = !!result.provisional;
-        if (
-          bestMatch === null ||
-          (!resultIsProvisional && bestIsProvisional) ||
-          (resultIsProvisional === bestIsProvisional &&
-            consumed > bestMatch.consumed)
-        ) {
+        if (bestMatch === null || consumed > bestMatch.consumed) {
           bestMatch = { index: i, parser, result, consumed };
         }
       } else if (error.consumed < result.consumed) {
@@ -10661,11 +10637,16 @@ export function conditional(
           );
           if (branchResult.success && branchResult.consumed.length > 0) {
             // Provisional results (e.g., from a nested speculative
-            // conditional) don't count toward the ambiguity check but
-            // are kept as a fallback when no definitive hit exists.
+            // conditional) don't count toward the definitive ambiguity
+            // check but are tracked separately.  If multiple
+            // provisional results exist, mark as ambiguous to keep
+            // branch selection order-independent.
             if (branchResult.provisional) {
               if (provisionalHit == null) {
                 provisionalHit = { key, bp, result: branchResult };
+              } else {
+                ambiguous = true;
+                break;
               }
               continue;
             }
