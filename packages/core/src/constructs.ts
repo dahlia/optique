@@ -10731,14 +10731,6 @@ export function conditional(
           }
         }
 
-        // A branch that consumed tokens before failing has a more
-        // specific error than the generic stall the top-level loop
-        // would produce.  Return it when no branch succeeded and
-        // speculation was not skipped due to ambiguity.
-        if (speculativeError != null && !ambiguous) {
-          return speculativeError;
-        }
-
         // No named branch consumed — fall back to the default branch.
         let deferredBranchState: unknown = state.branchState;
         if (defaultBranch !== undefined) {
@@ -10797,6 +10789,15 @@ export function conditional(
               defaultBranch,
             );
           }
+        }
+
+        // A branch that consumed tokens before failing has a more
+        // specific error than the generic stall the top-level loop
+        // would produce.  Return it after the default branch has been
+        // tried, and only when speculation was not skipped due to
+        // ambiguity.
+        if (speculativeError != null && !ambiguous) {
+          return speculativeError;
         }
 
         const annotatedDiscriminatorState = getAnnotatedChildState(
