@@ -3,7 +3,14 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { injectAnnotations } from "@optique/core/annotations";
-import { concat, group, merge, object, tuple } from "@optique/core/constructs";
+import {
+  concat,
+  group,
+  merge,
+  object,
+  or,
+  tuple,
+} from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
@@ -11,7 +18,7 @@ import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Parser } from "@optique/core/parser";
 import { parse, suggestAsync, suggestSync } from "@optique/core/parser";
 import { map, multiple, optional } from "@optique/core/modifiers";
-import { fail, flag, option } from "@optique/core/primitives";
+import { constant, fail, flag, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { bindConfig, createConfigContext } from "../../config/src/index.ts";
 import {
@@ -2768,5 +2775,51 @@ describe("bindEnv() with dependency sources across tuple()/concat() boundaries",
 
     assert.ok(!texts.includes("silent"));
     assert.ok(!texts.includes("strict"));
+  });
+});
+
+describe("or(bindEnv(...), constant(...))", () => {
+  it("selects bindEnv branch when CLI input is provided", () => {
+    const context = createEnvContext({
+      source: () => undefined,
+      prefix: "APP_",
+    });
+    const parser = or(
+      bindEnv(option("--mode", string()), {
+        context,
+        key: "MODE",
+        parser: string(),
+      }),
+      constant("fallback"),
+    );
+
+    const result = parse(parser, ["--mode", "cli-value"]);
+    assert.ok(result.success);
+    assert.equal(result.value, "cli-value");
+  });
+
+  it("falls back to constant when CLI is absent (env branch has leadingNames)", () => {
+    const context = createEnvContext({
+      source: (key) => ({ APP_MODE: "prod" })[key],
+      prefix: "APP_",
+    });
+    const parser = or(
+      bindEnv(option("--mode", string()), {
+        context,
+        key: "MODE",
+        parser: string(),
+      }),
+      constant("fallback"),
+    );
+
+    // bindEnv(option("--mode")) has leadingNames from the inner option,
+    // so it is not eligible as a zero-consumed fallback even with env set.
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value, "fallback");
   });
 });

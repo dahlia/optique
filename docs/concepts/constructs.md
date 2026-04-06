@@ -530,11 +530,16 @@ override them for custom formatting or localization needs.
 
 When all input has been consumed and no branch matched, `or()` can fall
 back to a branch that succeeds without consuming any input, such as
-`constant()`.  Only branches with no `leadingNames` (i.e., branches
-that can *never* match an input token) qualify as fallback candidates.
-This means annotation-backed parsers like `bindEnv(option(...))` or
-`bindConfig(option(...))` are *not* eligible as fallback branches,
-because they inherit `leadingNames` from the inner option.
+`constant()`.  Only branches with no `leadingNames` *and* that do not
+accept arbitrary tokens (i.e., branches that can *never* match an
+input token) qualify as fallback candidates.  This means:
+
+ -  Annotation-backed parsers like `bindEnv(option(...))` or
+    `bindConfig(option(...))` are *not* eligible, because they inherit
+    `leadingNames` from the inner option.
+ -  Positional parsers like `argument(...)` are *not* eligible either,
+    because they accept arbitrary tokens even though they have no
+    `leadingNames`.
 
 To provide a fallback value for an env/config-backed option, use
 the parser's own default mechanism instead of wrapping it in `or()`:

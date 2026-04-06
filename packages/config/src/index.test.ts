@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 import { getDocPage, parse, suggestSync } from "@optique/core/parser";
 import type { Parser } from "@optique/core/parser";
-import { concat, merge, object, tuple } from "@optique/core/constructs";
+import { concat, merge, object, or, tuple } from "@optique/core/constructs";
 import { getAnnotations, injectAnnotations } from "@optique/core/annotations";
 import { dependency } from "@optique/core/dependency";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
-import { fail, flag, option } from "@optique/core/primitives";
+import { constant, fail, flag, option } from "@optique/core/primitives";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
@@ -2947,5 +2947,44 @@ describe("bindConfig() with dependency sources across tuple()/concat() boundarie
       !texts.includes("strict"),
       `Did not expect "strict" in suggestions, got: ${JSON.stringify(texts)}`,
     );
+  });
+});
+
+describe("or(bindConfig(...), constant(...))", () => {
+  test("selects bindConfig branch when CLI input is provided", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    const parser = or(
+      bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+      }),
+      constant("fallback"),
+    );
+
+    const result = parse(parser, ["--host", "cli-value"]);
+    assert.ok(result.success);
+    assert.equal(result.value, "cli-value");
+  });
+
+  test("falls back to constant when CLI is absent (config branch has leadingNames)", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    const parser = or(
+      bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+      }),
+      constant("fallback"),
+    );
+
+    // bindConfig(option("--host")) has leadingNames from the inner option,
+    // so it is not eligible as a zero-consumed fallback even with config set.
+    const annotations: Annotations = {
+      [context.id]: { data: { host: "config.example.com" } },
+    };
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value, "fallback");
   });
 });
