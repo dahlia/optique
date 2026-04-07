@@ -11742,15 +11742,18 @@ export function conditional(
       }
 
       // Parse/suggest probe with no branch selected: do NOT call
-      // defaultBranch.complete() — the default branch may contain
-      // side-effecting completers (e.g., prompt(), bindEnv) that
-      // should only fire during the real complete pass.  The probe
-      // consumer (object()'s allCanComplete check, etc.) only inspects
-      // `success`, so return success with a placeholder value.
-      if (
-        defaultBranch !== undefined &&
-        (exec?.phase === "parse" || exec?.phase === "suggest")
-      ) {
+      // defaultBranch.complete() OR discriminator.complete() — both
+      // may contain side-effecting completers (e.g., prompt(), bindEnv)
+      // that should only fire during the real complete pass.  This
+      // applies whether or not a default branch is configured: when
+      // there is no default and the discriminator is deferred (e.g.,
+      // an async prompt()), the probe must still succeed so the
+      // parent combinator (object()'s allCanComplete check, etc.)
+      // doesn't bail out before the real complete phase has a chance
+      // to resolve the discriminator interactively.  The probe
+      // consumer only inspects `success`, so return success with a
+      // placeholder value.
+      if (exec?.phase === "parse" || exec?.phase === "suggest") {
         return {
           success: true,
           value: [undefined, undefined] as const,
