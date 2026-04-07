@@ -1119,17 +1119,31 @@ export function prompt<M extends Mode, TValue, TState>(
       const annotations = getAnnotations(state);
 
       // Build the effective inner state to feed parse()/complete() with.
-      // We propagate annotations regardless of the inner parser's
-      // `initialState` shape so that boolean flag options (whose
-      // `initialState` is an object like `{ success: true, value: false }`)
-      // and other object-shaped initial states also see the annotations
-      // their source-binding wrappers need.  `inheritAnnotations` handles
-      // every shape: primitives/null/undefined get wrapped, plain
-      // objects and arrays get shallow-cloned with the annotation slot,
-      // and non-plain class instances (which may carry private fields)
-      // are returned unchanged so cloning does not strip their state.
+      // We propagate annotations into object-shaped and nullish inner
+      // initial states so that boolean flag options (whose
+      // `initialState` is an object like `{ success: true, value: false }`),
+      // source-binding wrappers (`bindEnv()` / `bindConfig()` with a
+      // nullish initial state that they rebuild during `parse()`), and
+      // class-instance initial states all see the annotations they
+      // need.  `inheritAnnotations()` handles the object cases (plain
+      // objects and arrays get shallow-cloned with the annotation
+      // slot; non-plain class instances are returned unchanged so the
+      // proxy-view fallback in `withAnnotatedInnerState()` below takes
+      // over), and wraps nullish states with the annotation slot.
+      //
+      // Non-nullish primitive initial states (e.g. `constant("v")`
+      // whose `initialState` IS `"v"`) are returned unchanged.  Routing
+      // them through `inheritAnnotations()` would fall back to
+      // `injectAnnotations()`, which wraps the primitive into an opaque
+      // object; echo-semantics parsers like `constant()` would then
+      // return that wrapper from `complete()`, leaking it into the
+      // final value under `object({ x: prompt(constant(...)) })` with
+      // `parse({ annotations })`.  Mirrors the same guard in
+      // `deriveOptionalInnerParseState()` in @optique/core.
       const innerInitialState = parser.initialState;
-      const effectiveInitialState = annotations != null
+      const shouldInheritInitialStateAnnotations = annotations != null &&
+        (innerInitialState == null || typeof innerInitialState === "object");
+      const effectiveInitialState = shouldInheritInitialStateAnnotations
         ? inheritAnnotations(state, innerInitialState)
         : innerInitialState;
 

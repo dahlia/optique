@@ -4345,6 +4345,65 @@ describe("prompt()", () => {
       assert.equal(promptCalls, 0);
     });
 
+    // Regression tests for the `effectiveInitialState` primitive
+    // wrapping bug.  Mirror the `deriveOptionalInnerParseState()` fix
+    // on the `@optique/core` side: when the inner parser's
+    // `initialState` is a non-nullish primitive (e.g. `constant("v")`
+    // whose state IS `"v"`), `inheritAnnotations()` previously wrapped
+    // it into an opaque `injectAnnotations` wrapper object, and the
+    // wrapper leaked all the way through the prompt-bind flow as the
+    // field value under `object({ x: prompt(constant(...)) })` with
+    // `parse({ annotations })`.  The inner primitive must be
+    // preserved so echo-semantics parsers continue to work, and the
+    // prompt() wrapper must still decide to fire the prompter for
+    // non-source-binding inner parsers (mirroring the existing
+    // `prompt(alwaysCompletes)` contract).
+    it("prompt(constant) inside object() with annotations prompts without leaking wrapper", async () => {
+      const marker = Symbol.for("@test/prompt-primitive-constant-object");
+      let promptCalls = 0;
+      const parser = object({
+        mode: prompt(constant("fallback" as const), {
+          type: "input",
+          message: "Enter mode:",
+          prompter: () => {
+            promptCalls += 1;
+            return Promise.resolve("entered");
+          },
+        }),
+      });
+      const result = await parseAsync(parser, [], {
+        annotations: { [marker]: "present" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        // Value must be the prompter's result, never the opaque
+        // `injectAnnotations` wrapper (which would serialize as `{}`).
+        assert.equal(result.value.mode, "entered");
+      }
+      assert.equal(promptCalls, 1);
+    });
+
+    it("prompt(constant) standalone with annotations prompts without leaking wrapper", async () => {
+      const marker = Symbol.for("@test/prompt-primitive-constant-standalone");
+      let promptCalls = 0;
+      const parser = prompt(constant("fallback" as const), {
+        type: "input",
+        message: "Enter value:",
+        prompter: () => {
+          promptCalls += 1;
+          return Promise.resolve("entered");
+        },
+      });
+      const result = await parseAsync(parser, [], {
+        annotations: { [marker]: "present" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "entered");
+      }
+      assert.equal(promptCalls, 1);
+    });
+
     it("does not duplicate prompts under concurrent object() parses", async () => {
       let promptCount = 0;
       let release!: () => void;
