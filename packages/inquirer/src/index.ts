@@ -1246,55 +1246,53 @@ export function prompt<M extends Mode, TValue, TState>(
         return handleCompleteResult(innerR as ValueParserResult<TValue>);
       };
 
-      return hasDeferHook
-        ? (() => {
-          // With a defer hook, we skip the simulate-parse step and try
-          // inner complete() directly.  The hook itself signals deferral
-          // when appropriate.
-          const innerR = withAnnotatedInnerState(
-            state,
-            effectiveInitialState,
-            (annotatedInnerState) => parser.complete(annotatedInnerState, exec),
-          );
-          const handleDeferHookResult = (
-            res: ValueParserResult<TValue>,
-          ): Promise<ValueParserResult<TValue>> => {
-            if (res.success && res.value === undefined) {
-              return finalizePrompt();
-            }
-            if (!res.success) {
-              return finalizePrompt();
-            }
-            return Promise.resolve(res);
-          };
-          if (innerR instanceof Promise) {
-            return (innerR as Promise<ValueParserResult<TValue>>).then(
-              handleDeferHookResult,
-            );
+      if (hasDeferHook) {
+        // With a defer hook, we skip the simulate-parse step and try
+        // inner complete() directly.  The hook itself signals deferral
+        // when appropriate.
+        const innerR = withAnnotatedInnerState(
+          state,
+          effectiveInitialState,
+          (annotatedInnerState) => parser.complete(annotatedInnerState, exec),
+        );
+        const handleDeferHookResult = (
+          res: ValueParserResult<TValue>,
+        ): Promise<ValueParserResult<TValue>> => {
+          if (res.success && res.value === undefined) {
+            return finalizePrompt();
           }
-          return handleDeferHookResult(innerR as ValueParserResult<TValue>);
-        })()
-        : (() => {
-          // Simulate a parse with an empty buffer and inspect the
-          // resulting state for source-binding markers.
-          const simParseR = withAnnotatedInnerState(
-            state,
-            effectiveInitialState,
-            (annotatedState) =>
-              parser.parse({
-                buffer: [],
-                state: annotatedState,
-                optionsTerminated: false,
-                usage: parser.usage,
-              }),
-          );
-          if (simParseR instanceof Promise) {
-            return (simParseR as Promise<ParserResult<TState>>).then(
-              decideFromParse,
-            );
+          if (!res.success) {
+            return finalizePrompt();
           }
-          return decideFromParse(simParseR as ParserResult<TState>);
-        })();
+          return Promise.resolve(res);
+        };
+        if (innerR instanceof Promise) {
+          return (innerR as Promise<ValueParserResult<TValue>>).then(
+            handleDeferHookResult,
+          );
+        }
+        return handleDeferHookResult(innerR as ValueParserResult<TValue>);
+      }
+
+      // Simulate a parse with an empty buffer and inspect the
+      // resulting state for source-binding markers.
+      const simParseR = withAnnotatedInnerState(
+        state,
+        effectiveInitialState,
+        (annotatedState) =>
+          parser.parse({
+            buffer: [],
+            state: annotatedState,
+            optionsTerminated: false,
+            usage: parser.usage,
+          }),
+      );
+      if (simParseR instanceof Promise) {
+        return (simParseR as Promise<ParserResult<TState>>).then(
+          decideFromParse,
+        );
+      }
+      return decideFromParse(simParseR as ParserResult<TState>);
     },
 
     suggest: (context, prefix) => {
