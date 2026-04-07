@@ -8844,6 +8844,136 @@ describe("conditional", () => {
       assert.equal(result.value[1], 4);
     }
   });
+
+  it("should suppress speculativeError under provisional ambiguity", async () => {
+    // When multiple named branches return provisional consuming hits
+    // (provisionalAmbiguous = true), speculation is supposed to be
+    // skipped to keep branch selection order-independent.  A separate
+    // branch that fails with consumed > 0 should NOT have its error
+    // surfaced in this case — otherwise the outcome depends on
+    // incidental branch composition and contradicts the ambiguity
+    // skip.
+    const asyncDiscriminator: Parser<"async", string, null> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () => Promise.resolve({ success: true as const, value: "p1" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    // A custom parser that consumes "--a <value>" and returns a
+    // provisional success (mimicking what a nested speculative
+    // conditional() would produce).
+    const makeProvisionalConsumer = (): Parser<"async", string, null> => ({
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(["--a"]),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) => {
+        if (
+          context.buffer[0] === "--a" && context.buffer[1] !== undefined
+        ) {
+          return Promise.resolve({
+            success: true as const,
+            provisional: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(2),
+              state: null,
+            },
+            consumed: [context.buffer[0], context.buffer[1]],
+          });
+        }
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: [{ type: "text" as const, text: "no match" }],
+        });
+      },
+      complete: () => Promise.resolve({ success: true as const, value: "ok" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    });
+
+    // A custom branch that consumes "--a" and then fails at parse
+    // time (sets speculativeError because !success && consumed > 0).
+    const failingConsumer: Parser<"async", string, null> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(["--a"]),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) => {
+        if (context.buffer[0] === "--a") {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 1,
+            error: [{
+              type: "text" as const,
+              text: "fail-specific-marker",
+            }],
+          });
+        }
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: [{ type: "text" as const, text: "no match" }],
+        });
+      },
+      complete: () =>
+        Promise.resolve({
+          success: false as const,
+          error: [{ type: "text" as const, text: "never reached" }],
+        }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        // Two provisional consumers → provisionalAmbiguous = true
+        p1: makeProvisionalConsumer(),
+        p2: makeProvisionalConsumer(),
+        // Failing consumer with consumed > 0 → speculativeError set
+        fail: failingConsumer,
+      },
+    );
+
+    const result = await parseAsync(parser, ["--a", "v"]);
+    // Without the fix, conditional() would return the failing
+    // branch's error containing "fail-specific-marker".  With the
+    // fix, provisionalAmbiguous suppresses speculativeError and the
+    // parse falls through, producing a generic error from the
+    // top-level loop instead.
+    assert.ok(!result.success);
+    if (!result.success) {
+      const msg = formatMessage(result.error);
+      assert.ok(
+        !msg.includes("fail-specific-marker"),
+        `provisional ambiguity should not leak the failing branch's error; got: ${msg}`,
+      );
+    }
+  });
 });
 
 describe("complex combinator interactions", () => {

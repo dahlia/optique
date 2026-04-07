@@ -11065,8 +11065,12 @@ export function conditional(
         // specific error than the generic stall the top-level loop
         // would produce.  Return it after the default branch has been
         // tried, and only when speculation was not skipped due to
-        // ambiguity.
-        if (speculativeError != null && !ambiguous) {
+        // either definitive or provisional ambiguity — otherwise the
+        // returned error would be order-dependent and contradict the
+        // ambiguity-skip intent.
+        if (
+          speculativeError != null && !ambiguous && !provisionalAmbiguous
+        ) {
           return speculativeError;
         }
 
