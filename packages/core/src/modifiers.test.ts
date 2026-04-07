@@ -4796,6 +4796,17 @@ describe("multiple", () => {
       if (result.success) assert.deepEqual(result.value.v, []);
     });
 
+    it("still fails inside object() when inner multiple has min > 0", () => {
+      // Regression guard: `object()` must continue to surface
+      // `multiple(p, { min: N > 0 })` failures on empty input through
+      // its own error reporting path after the #408 fix.
+      const result = parse(
+        object({ v: multiple(flag("-v"), { min: 1 }) }),
+        [],
+      );
+      assert.ok(!result.success);
+    });
+
     it("returns [] asynchronously for multiple(option) with empty input", async () => {
       const parser = multiple(
         option("--tag", asyncChoice(["a", "b"] as const)),
