@@ -10386,10 +10386,6 @@ export function conditional<
  * - Within `longestMatch()`, a longer speculative match can beat a
  *   shorter definitive one.  If the speculative match fails during
  *   completion, the tokens consumed by it are not recoverable.
- * - The dependency runtime seeds both discriminator and branch sources
- *   before verifying the speculative selection.  A discriminator that
- *   depends on branch-local dependency sources could be circularly
- *   confirmed by the speculative branch.
  *
  * @since 0.8.0
  */
