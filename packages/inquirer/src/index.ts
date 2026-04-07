@@ -694,18 +694,14 @@ export function prompt<M extends Mode, TValue, TState>(
   // stamps as `"parse"` during its zero-consumption probe and `"complete"`
   // during the real completion pass.
   //
-  // A WeakMap cache keyed by the PromptBindState *instance* still lives
-  // here, but only to deduplicate within the real-completion phase — i.e.,
-  // to ensure that if `prompt.complete()` is called twice with the same
-  // state object during `object.complete()` (e.g., through nested
-  // composition), the prompter fires at most once.  The cache is never
-  // populated by a probe call, so crossing from probe to real always
-  // re-runs the decision logic, which in turn either re-uses a
-  // source-binding value or fires the prompt.
-  const promptCache = new WeakMap<
-    object,
-    Promise<ValueParserResult<TValue>>
-  >();
+  // Note: we intentionally do *not* cache prompt results.  Within a single
+  // parse invocation `prompt.complete()` is called at most once per
+  // (field, phase) pair — probe returns a placeholder without firing the
+  // prompter, and real phase runs exactly once.  Caching across parse
+  // invocations would be a bug: because `parser.initialState` is a shared
+  // object, a WeakMap keyed by state identity would incorrectly reuse a
+  // previous invocation's prompted value on subsequent `parse*()` calls
+  // of the same parser.
 
   function shouldAttemptInnerCompletion(
     cliState: unknown,
@@ -1112,17 +1108,6 @@ export function prompt<M extends Mode, TValue, TState>(
       // the probe is satisfied, and the real completion pass re-runs
       // this method to actually prompt.
       const isProbe = exec?.phase === "parse";
-      const cacheKey: object | null = state != null && typeof state === "object"
-        ? (state as object)
-        : null;
-      // The cache only stores real-phase results (either an inner
-      // source-binding value or a fired-prompt value).  Probe calls
-      // bypass the cache entirely, so probe → real transitions always
-      // re-decide and cache at most once per state instance.
-      if (!isProbe && cacheKey != null && promptCache.has(cacheKey)) {
-        return promptCache.get(cacheKey)!;
-      }
-
       const annotations = getAnnotations(state);
 
       // Build the effective inner state to feed parse()/complete() with.
@@ -1229,7 +1214,7 @@ export function prompt<M extends Mode, TValue, TState>(
         return handleCompleteResult(innerR as ValueParserResult<TValue>);
       };
 
-      const resultPromise: Promise<ValueParserResult<TValue>> = hasDeferHook
+      return hasDeferHook
         ? (() => {
           // With a defer hook, we skip the simulate-parse step and try
           // inner complete() directly.  The hook itself signals deferral
@@ -1278,13 +1263,6 @@ export function prompt<M extends Mode, TValue, TState>(
           }
           return decideFromParse(simParseR as ParserResult<TState>);
         })();
-
-      // Only cache real-phase results.  Probe placeholders must not
-      // leak into the real phase.
-      if (!isProbe && cacheKey != null) {
-        promptCache.set(cacheKey, resultPromise);
-      }
-      return resultPromise;
     },
 
     suggest: (context, prefix) => {

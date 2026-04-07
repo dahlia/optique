@@ -180,14 +180,19 @@ function deriveOptionalInnerParseState<TState>(
     return outerState[0];
   }
   const initial = parser.initialState;
-  // Only inject annotations into primitive / null initial states.
-  // Object initial states (e.g., EnvBindState-shaped wrappers) already
-  // have their own annotation slots populated by the inner parser's own
-  // parse() flow, and overwriting them here could mask nested markers.
+  // Propagate any annotations carried by the outer wrapper state into
+  // the inner parser's initial state so that source-binding wrappers
+  // like `bindEnv()` / `bindConfig()` placed under
+  // `optional()` / `withDefault()` can resolve from annotations at top
+  // level.  `injectAnnotations` handles both primitive and object
+  // initial states: for primitives it produces a wrapper object that
+  // carries the original value plus the annotation slot; for plain
+  // objects it clones and adds `[annotationKey]`.  A freshly-built
+  // `initialState` never carries annotations of its own, so injection
+  // is safe and never masks existing nested markers.
   if (
     outerState != null &&
-    typeof outerState === "object" &&
-    (initial == null || typeof initial !== "object")
+    typeof outerState === "object"
   ) {
     const annotations = getAnnotations(outerState);
     if (annotations != null) {
