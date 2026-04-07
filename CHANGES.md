@@ -83,6 +83,31 @@ To be released.
     the remaining tokens instead of having them absorbed into an overfull
     `multiple()` state.  [[#755], [#765]]
 
+ -  Fixed `multiple()` failing to honor its documented zero-or-more default
+    when used as a top-level parser.  Previously,
+    `parse(multiple(flag("-v")), [])` reported *“Expected an option, but got
+    end of input.”* instead of succeeding with `[]`, even though `multiple()`
+    is documented as *“zero or more”*.  The empty-array semantics only
+    worked when `multiple()` was wrapped in `object()`, `optional()`, or
+    `withDefault()`, which absorbed the inner parser's failure on their own.
+    `multiple(p, { min: 0 }).parse()` (the default `min`) now absorbs
+    zero-consumption inner failures and defers to `complete()`, which
+    returns `[]` — mirroring how `optional()` already handles the same
+    case.  `multiple()` with `min > 0` still propagates zero-consumption
+    inner failures so that outer wrappers like `optional()` and
+    `withDefault()` continue to absorb them, so for example
+    `parse(optional(multiple(p, { min: 1 })), [])` still resolves to
+    `undefined` and
+    `parse(withDefault(multiple(p, { min: 1 }), fallback), [])` still
+    resolves to `fallback`.  `withDefault(multiple(p), nonEmptyDefault)`
+    (with the default `min: 0`), however, no longer falls back to its
+    configured default on empty input because the wrapped `multiple()`
+    never reports a parse failure: such compositions now return `[]` from
+    `multiple()` directly.  Users who want the previous “use default when
+    there are no matches” behavior can either set `min: 1` on the inner
+    `multiple()` or wrap the result with `map()`, e.g.
+    `map(multiple(p), xs => xs.length > 0 ? xs : fallback)`.  [[#408], [#776]]
+
  -  `Parser.complete()` and `Parser.shouldDeferCompletion()` now accept an
     optional `ExecutionContext` parameter.  All built-in parser
     implementations (`option()`, `argument()`, `optional()`, `withDefault()`,
@@ -1317,6 +1342,7 @@ To be released.
 [#404]: https://github.com/dahlia/optique/issues/404
 [#406]: https://github.com/dahlia/optique/issues/406
 [#407]: https://github.com/dahlia/optique/issues/407
+[#408]: https://github.com/dahlia/optique/issues/408
 [#425]: https://github.com/dahlia/optique/issues/425
 [#428]: https://github.com/dahlia/optique/issues/428
 [#429]: https://github.com/dahlia/optique/issues/429
@@ -1512,6 +1538,7 @@ To be released.
 [#773]: https://github.com/dahlia/optique/pull/773
 [#774]: https://github.com/dahlia/optique/pull/774
 [#775]: https://github.com/dahlia/optique/pull/775
+[#776]: https://github.com/dahlia/optique/pull/776
 
 ### @optique/config
 
