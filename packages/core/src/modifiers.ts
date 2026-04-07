@@ -1600,32 +1600,39 @@ export function multiple<M extends Mode, TValue, TState>(
           withChildContext(context, itemIndex, nextInitialState),
         );
         if (!result.success) {
-          // Fresh-item attempt also failed.  When `min === 0` we can
-          // absorb the zero-consumption failure so that complete()
-          // applies the documented zero-or-more semantics (returning
-          // an empty array).  See
-          // https://github.com/dahlia/optique/issues/408.  For
-          // `min > 0` we propagate the failure unchanged so that
-          // outer wrappers like optional() and withDefault() can
-          // still absorb it via their own processOptionalStyleResult
-          // fallback.
-          if (min === 0 && result.consumed === 0) {
+          // Fresh-item attempt also failed.  When `min === 0` and the
+          // buffer is empty we can absorb the zero-consumption failure
+          // so complete() applies the documented zero-or-more
+          // semantics (returning an empty array).  See
+          // https://github.com/dahlia/optique/issues/408.  The
+          // absorption is intentionally scoped to true end-of-input:
+          // for non-empty buffers the inner parser's specific error
+          // (e.g. "No matched option for `-x`" with suggestions) is
+          // more informative than the outer stall fallback, and for
+          // `min > 0` we propagate the failure so outer wrappers like
+          // optional() and withDefault() can still absorb it via
+          // their own processOptionalStyleResult fallback.
+          if (
+            min === 0 && context.buffer.length === 0 &&
+            result.consumed === 0
+          ) {
             return { success: true, next: context, consumed: [] };
           }
           return result;
         }
         added = true;
-      } else if (min === 0) {
+      } else if (min === 0 && context.buffer.length === 0) {
         // No fresh-item retry possible (either we already opened a
-        // fresh item or we've hit max) and we have no `min` to
-        // enforce.  Absorb the zero-consumption failure so complete()
-        // can return an empty array.  See
+        // fresh item or we've hit max), the buffer is empty, and we
+        // have no `min` to enforce.  Absorb the end-of-input failure
+        // so complete() can return an empty array.  See
         // https://github.com/dahlia/optique/issues/408.
         return { success: true, next: context, consumed: [] };
       } else {
-        // With `min > 0`, propagate the zero-consumption failure so
-        // that outer wrappers (optional(), withDefault()) can absorb
-        // it and supply their fallback values.  See
+        // Either `min > 0` (so outer wrappers must get a chance to
+        // absorb) or the buffer still has tokens (so the inner
+        // parser's specific error message is more useful than the
+        // outer stall fallback).  Propagate unchanged.  See
         // https://github.com/dahlia/optique/issues/408.
         return result;
       }
@@ -1756,32 +1763,39 @@ export function multiple<M extends Mode, TValue, TState>(
           withChildContext(context, itemIndex, nextInitialState),
         );
         if (!result.success) {
-          // Fresh-item attempt also failed.  When `min === 0` we can
-          // absorb the zero-consumption failure so that complete()
-          // applies the documented zero-or-more semantics (returning
-          // an empty array).  See
-          // https://github.com/dahlia/optique/issues/408.  For
-          // `min > 0` we propagate the failure unchanged so that
-          // outer wrappers like optional() and withDefault() can
-          // still absorb it via their own processOptionalStyleResult
-          // fallback.
-          if (min === 0 && result.consumed === 0) {
+          // Fresh-item attempt also failed.  When `min === 0` and the
+          // buffer is empty we can absorb the zero-consumption failure
+          // so complete() applies the documented zero-or-more
+          // semantics (returning an empty array).  See
+          // https://github.com/dahlia/optique/issues/408.  The
+          // absorption is intentionally scoped to true end-of-input:
+          // for non-empty buffers the inner parser's specific error
+          // (e.g. "No matched option for `-x`" with suggestions) is
+          // more informative than the outer stall fallback, and for
+          // `min > 0` we propagate the failure so outer wrappers like
+          // optional() and withDefault() can still absorb it via
+          // their own processOptionalStyleResult fallback.
+          if (
+            min === 0 && context.buffer.length === 0 &&
+            result.consumed === 0
+          ) {
             return { success: true, next: context, consumed: [] };
           }
           return result;
         }
         added = true;
-      } else if (min === 0) {
+      } else if (min === 0 && context.buffer.length === 0) {
         // No fresh-item retry possible (either we already opened a
-        // fresh item or we've hit max) and we have no `min` to
-        // enforce.  Absorb the zero-consumption failure so complete()
-        // can return an empty array.  See
+        // fresh item or we've hit max), the buffer is empty, and we
+        // have no `min` to enforce.  Absorb the end-of-input failure
+        // so complete() can return an empty array.  See
         // https://github.com/dahlia/optique/issues/408.
         return { success: true, next: context, consumed: [] };
       } else {
-        // With `min > 0`, propagate the zero-consumption failure so
-        // that outer wrappers (optional(), withDefault()) can absorb
-        // it and supply their fallback values.  See
+        // Either `min > 0` (so outer wrappers must get a chance to
+        // absorb) or the buffer still has tokens (so the inner
+        // parser's specific error message is more useful than the
+        // outer stall fallback).  Propagate unchanged.  See
         // https://github.com/dahlia/optique/issues/408.
         return result;
       }

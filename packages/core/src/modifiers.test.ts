@@ -4774,14 +4774,29 @@ describe("multiple", () => {
       if (result.success) assert.deepEqual(result.value, [true, true]);
     });
 
-    it("reports unexpected token after absorbing failure", () => {
-      // After absorbing the inner zero-consumption failure, the
-      // top-level parse loop's `isBufferUnchanged` guard should catch
-      // the stalled buffer and emit the standard stall error.
+    it("surfaces inner parser error for an unknown trailing token", () => {
+      // Absorption is scoped to truly empty input; when the buffer
+      // still holds unconsumed tokens the inner parser's specific
+      // mismatch error must be surfaced so users see informative
+      // messages like "No matched option for `-x`" with suggestions,
+      // instead of the generic top-level stall fallback.
       const result = parse(multiple(flag("-v")), ["-v", "-x"]);
       assert.ok(!result.success);
       if (!result.success) {
-        assertErrorIncludes(result.error, "Unexpected option or argument");
+        assertErrorIncludes(result.error, "No matched option for");
+      }
+    });
+
+    it("surfaces inner parser error for a leading unknown token", () => {
+      // Regression guard for the scoping fix: a standalone
+      // multiple() with an unknown leading token must keep
+      // reporting the inner parser's specific mismatch error
+      // (with suggestions), not the generic stall fallback.  See
+      // https://github.com/dahlia/optique/pull/776#discussion_r3046559404.
+      const result = parse(multiple(flag("-v")), ["-x"]);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assertErrorIncludes(result.error, "No matched option for");
       }
     });
 
