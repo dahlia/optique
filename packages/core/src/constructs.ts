@@ -11083,18 +11083,12 @@ export function conditional(
           success: true,
           provisional: true,
           next: {
-            ...context,
+            ...speculationContext,
             state: {
               ...state,
               discriminatorState: annotatedDiscriminatorState,
               branchState: deferredBranchState,
             },
-            ...(discriminatorExec != null
-              ? {
-                exec: discriminatorExec,
-                dependencyRegistry: discriminatorExec.dependencyRegistry,
-              }
-              : {}),
           },
           consumed: [],
         };
