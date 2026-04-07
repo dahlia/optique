@@ -2149,12 +2149,19 @@ describe("withDefault", () => {
     }
   });
 
-  it("still forwards multiple() normalizer on parsed values", () => {
-    // The normalizer is still applied to actual parsed values.
+  it("still forwards multiple() normalizer through withDefault", () => {
     // Regression guard for https://github.com/dahlia/optique/issues/408
-    // — the #408 fix must not regress normalization of parsed multiple()
-    // results.
-    const parser = multiple(option("--domain", domain({ lowercase: true })));
+    // — `withDefault` must keep forwarding `multiple()`'s
+    // `normalizeValue` through the full wrapper chain even though the
+    // configured default is no longer reached at parse time for
+    // `min: 0`.  Exercising the composition directly (rather than
+    // just `multiple(...).normalizeValue`) ensures that an accidental
+    // regression in `withDefault`'s `normalizeValue` forwarding would
+    // still be caught by this test.
+    const parser = withDefault(
+      multiple(option("--domain", domain({ lowercase: true }))),
+      ["fallback.example"],
+    );
     assert.equal(typeof parser.normalizeValue, "function");
     if (typeof parser.normalizeValue === "function") {
       assert.deepEqual(
