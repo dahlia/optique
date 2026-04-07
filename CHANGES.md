@@ -83,6 +83,27 @@ To be released.
     the remaining tokens instead of having them absorbed into an overfull
     `multiple()` state.  [[#755], [#765]]
 
+ -  Fixed `multiple()` failing to honour its documented zero-or-more default
+    when used as a top-level parser.  Previously,
+    `parse(multiple(flag("-v")), [])` reported *“Expected an option, but got
+    end of input.”* instead of succeeding with `[]`, even though `multiple()`
+    is documented as *“zero or more”*.  The empty-array semantics only
+    worked when `multiple()` was wrapped in `object()`, `optional()`, or
+    `withDefault()`, which absorbed the inner parser's failure on their own.
+    `multiple().parse()` now absorbs zero-consumption inner failures and
+    defers the zero-or-more decision to `complete()`, mirroring how
+    `optional()` already handles the same case.  The effective `min`
+    constraint is still enforced at `complete()` time, so for example
+    `parse(multiple(flag("-v"), { min: 2 }), [])` now fails with *“Expected
+    at least 2 values, but got only 0.”* (previously the inner
+    end-of-input error was surfaced).  As a consequence,
+    `withDefault(multiple(p), nonEmptyDefault)` no longer falls back to its
+    configured default on empty input because the wrapped `multiple()`
+    never reports a parse failure: such compositions now return `[]` from
+    `multiple()` directly.  Users who want the previous “use default when
+    there are no matches” behaviour can wrap the result with `map()`, e.g.
+    `map(multiple(p), xs => xs.length > 0 ? xs : fallback)`.  [[#408]]
+
  -  `Parser.complete()` and `Parser.shouldDeferCompletion()` now accept an
     optional `ExecutionContext` parameter.  All built-in parser
     implementations (`option()`, `argument()`, `optional()`, `withDefault()`,
@@ -1317,6 +1338,7 @@ To be released.
 [#404]: https://github.com/dahlia/optique/issues/404
 [#406]: https://github.com/dahlia/optique/issues/406
 [#407]: https://github.com/dahlia/optique/issues/407
+[#408]: https://github.com/dahlia/optique/issues/408
 [#425]: https://github.com/dahlia/optique/issues/425
 [#428]: https://github.com/dahlia/optique/issues/428
 [#429]: https://github.com/dahlia/optique/issues/429

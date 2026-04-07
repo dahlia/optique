@@ -1583,7 +1583,14 @@ export function multiple<M extends Mode, TValue, TState>(
       ),
     );
     if (!result.success) {
-      if (!added && canOpenFreshItem && result.consumed === 0) {
+      // Failures that consumed input must propagate so callers see the
+      // real error depth (e.g., a mid-item validation failure).
+      if (result.consumed !== 0) {
+        return result;
+      }
+      if (!added && canOpenFreshItem) {
+        // We were extending the current item and it failed without
+        // consuming; retry by opening a fresh item instead.
         const nextInitialState = inheritAnnotations(
           context.state,
           syncParser.initialState,
@@ -1592,10 +1599,25 @@ export function multiple<M extends Mode, TValue, TState>(
         result = parseSyncWithUnwrappedFallback(
           withChildContext(context, itemIndex, nextInitialState),
         );
-        if (!result.success) return result;
+        if (!result.success) {
+          // Fresh-item attempt also failed.  Absorb zero-consumption
+          // failures so complete() can apply the zero-or-more
+          // semantics (mirrors optional()'s
+          // processOptionalStyleResult).  See
+          // https://github.com/dahlia/optique/issues/408.
+          if (result.consumed === 0) {
+            return { success: true, next: context, consumed: [] };
+          }
+          return result;
+        }
         added = true;
       } else {
-        return result;
+        // No fresh-item retry possible (either we already opened a
+        // fresh item or we've hit max).  Absorb the zero-consumption
+        // failure so complete() can enforce min/max and return an
+        // empty array when appropriate.  See
+        // https://github.com/dahlia/optique/issues/408.
+        return { success: true, next: context, consumed: [] };
       }
     }
     const mergedExec = mergeChildExec(context.exec, result.next.exec);
@@ -1707,7 +1729,14 @@ export function multiple<M extends Mode, TValue, TState>(
       ),
     );
     if (!result.success) {
-      if (!added && canOpenFreshItem && result.consumed === 0) {
+      // Failures that consumed input must propagate so callers see the
+      // real error depth (e.g., a mid-item validation failure).
+      if (result.consumed !== 0) {
+        return result;
+      }
+      if (!added && canOpenFreshItem) {
+        // We were extending the current item and it failed without
+        // consuming; retry by opening a fresh item instead.
         const nextInitialState = inheritAnnotations(
           context.state,
           parser.initialState,
@@ -1716,10 +1745,25 @@ export function multiple<M extends Mode, TValue, TState>(
         result = await parseAsyncWithUnwrappedFallback(
           withChildContext(context, itemIndex, nextInitialState),
         );
-        if (!result.success) return result;
+        if (!result.success) {
+          // Fresh-item attempt also failed.  Absorb zero-consumption
+          // failures so complete() can apply the zero-or-more
+          // semantics (mirrors optional()'s
+          // processOptionalStyleResult).  See
+          // https://github.com/dahlia/optique/issues/408.
+          if (result.consumed === 0) {
+            return { success: true, next: context, consumed: [] };
+          }
+          return result;
+        }
         added = true;
       } else {
-        return result;
+        // No fresh-item retry possible (either we already opened a
+        // fresh item or we've hit max).  Absorb the zero-consumption
+        // failure so complete() can enforce min/max and return an
+        // empty array when appropriate.  See
+        // https://github.com/dahlia/optique/issues/408.
+        return { success: true, next: context, consumed: [] };
       }
     }
     const mergedExec = mergeChildExec(context.exec, result.next.exec);
