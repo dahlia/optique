@@ -1103,21 +1103,29 @@ export function prompt<M extends Mode, TValue, TState>(
       //
       // In both shapes, `ExecutionContext.phase` distinguishes
       // `object()`'s `allCanComplete` probe (`"parse"`) from the real
-      // completion pass (`"complete"`).  During the probe we must not
-      // fire the prompter — instead we return a success placeholder so
-      // the probe is satisfied, and the real completion pass re-runs
-      // this method to actually prompt.
-      const isProbe = exec?.phase === "parse";
+      // completion pass (`"complete"`).  We only treat `"complete"` as
+      // the real pass and every other phase (`"parse"`, `"precomplete"`,
+      // `"resolve"`, `"suggest"`, or any future phase) as speculative,
+      // so firing the prompter is strictly limited to the single pass
+      // whose purpose is to produce the final user-facing value.  If
+      // no execution context is provided at all (legacy callers), we
+      // fall back to the real-completion behaviour.
+      const isProbe = exec != null && exec.phase !== "complete";
       const annotations = getAnnotations(state);
 
       // Build the effective inner state to feed parse()/complete() with.
-      // When `parser.initialState` is null/undefined, we must inject the
-      // annotations directly so that downstream source-binding wrappers
-      // (bindEnv / bindConfig) can read them.
+      // We propagate annotations regardless of the inner parser's
+      // `initialState` shape so that boolean flag options (whose
+      // `initialState` is an object like `{ success: true, value: false }`)
+      // and other object-shaped initial states also see the annotations
+      // their source-binding wrappers need.  `inheritAnnotations` handles
+      // every shape: primitives/null/undefined get wrapped, plain
+      // objects and arrays get shallow-cloned with the annotation slot,
+      // and non-plain class instances (which may carry private fields)
+      // are returned unchanged so cloning does not strip their state.
       const innerInitialState = parser.initialState;
-      const effectiveInitialState = annotations != null &&
-          innerInitialState == null
-        ? injectAnnotations(innerInitialState, annotations)
+      const effectiveInitialState = annotations != null
+        ? inheritAnnotations(state, innerInitialState)
         : innerInitialState;
 
       const finalizePrompt = (): Promise<ValueParserResult<TValue>> => {
