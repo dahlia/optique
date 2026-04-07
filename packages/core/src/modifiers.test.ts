@@ -4828,12 +4828,20 @@ describe("multiple", () => {
     it("still fails inside object() when inner multiple has min > 0", () => {
       // Regression guard: `object()` must continue to surface
       // `multiple(p, { min: N > 0 })` failures on empty input through
-      // its own error reporting path after the #408 fix.
+      // its own error reporting path after the #408 fix.  Asserting a
+      // stable fragment from the object() end-of-input path ties the
+      // failure specifically to the `multiple(min > 0)` probe, since
+      // `min: 0` would let every child complete and the parse would
+      // succeed with `{ v: [] }` instead of reaching this branch.  See
+      // https://github.com/dahlia/optique/pull/776#discussion_r3047719147.
       const result = parse(
         object({ v: multiple(flag("-v"), { min: 1 }) }),
         [],
       );
       assert.ok(!result.success);
+      if (!result.success) {
+        assertErrorIncludes(result.error, "No matching option found");
+      }
     });
 
     it("returns [] asynchronously for multiple(option) with empty input", async () => {
