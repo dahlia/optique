@@ -4800,14 +4800,21 @@ describe("multiple", () => {
       }
     });
 
-    it("still propagates inner failures that consumed tokens", () => {
-      // The fix only absorbs `consumed === 0` failures; mid-item
-      // validation failures with `consumed > 0` must still propagate.
+    it("still propagates inner parse failures that consumed tokens", () => {
+      // The fix only absorbs `consumed === 0` failures; parse-time
+      // failures with `consumed > 0` must still propagate.  A missing
+      // option value triggers that exact branch in `option().parse()`
+      // (as opposed to a value-parser validation error, which goes
+      // through the `ValueParserResult` / `complete()` path and would
+      // not exercise the propagation branch under test here).
       const result = parse(
         multiple(option("-p", integer({ min: 1, max: 100 }))),
-        ["-p", "5", "-p", "999"],
+        ["-p", "5", "-p"],
       );
       assert.ok(!result.success);
+      if (!result.success) {
+        assertErrorIncludes(result.error, "requires a value");
+      }
     });
 
     it("still works inside object() with empty args", () => {
