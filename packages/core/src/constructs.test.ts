@@ -8240,6 +8240,157 @@ describe("conditional", () => {
     }
   });
 
+  it("should not run speculative branch complete during a probe", async () => {
+    // Regression for #774 (round 6): when conditional() commits a
+    // speculative branch and then complete() is called with phase
+    // `"parse"` or `"suggest"` (e.g., from object()'s probe path),
+    // the branch parser's complete() must NOT run.  Otherwise a
+    // speculative branch containing prompt() or any deferred completer
+    // would fire during parse-time probes, defeating the whole point of
+    // the parse/suggest phase guard.
+    let branchCompleteCount = 0;
+    let branchCompletePhase: string | undefined;
+    let discriminatorCompleteCount = 0;
+    const branchParser: Parser<"async", number> = {
+      $mode: "async",
+      $valueType: [] as readonly number[],
+      $stateType: [0] as [number],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(["--threads"]),
+      acceptingAnyToken: false,
+      initialState: 0,
+      parse: (context) => {
+        if (
+          context.buffer[0] === "--threads" && context.buffer.length >= 2
+        ) {
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              state: Number(context.buffer[1]),
+              buffer: context.buffer.slice(2),
+            },
+            consumed: ["--threads", context.buffer[1]],
+          });
+        }
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: [] as Message,
+        });
+      },
+      complete: (state, exec) => {
+        branchCompleteCount++;
+        branchCompletePhase = exec?.phase;
+        return Promise.resolve({
+          success: true as const,
+          value: state as number,
+        });
+      },
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () => {
+        discriminatorCompleteCount++;
+        return Promise.resolve({ success: true as const, value: "fast" });
+      },
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: branchParser,
+        slow: option("--timeout", integer()),
+      },
+    );
+
+    // Step 1: drive the parser into the speculative state.
+    const parseResult = await parser.parse({
+      buffer: ["--threads", "4"],
+      optionsTerminated: false,
+      state: parser.initialState,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success, "expected parse to succeed");
+    if (!parseResult.success) return;
+    // The speculative branch parser only ran .parse(), not .complete().
+    assert.equal(branchCompleteCount, 0);
+    assert.equal(discriminatorCompleteCount, 0);
+
+    // Step 2: simulate object()'s probe by calling complete() with
+    // phase="parse".  Neither the branch nor the discriminator may run.
+    const probeResult = await parser.complete(parseResult.next.state, {
+      usage: parser.usage,
+      path: [],
+      phase: "parse",
+      trace: undefined,
+    });
+    assert.ok(probeResult.success, "expected probe to succeed");
+    assert.equal(
+      branchCompleteCount,
+      0,
+      "branch complete fired during a parse-phase probe " +
+        `(phase=${branchCompletePhase})`,
+    );
+    assert.equal(
+      discriminatorCompleteCount,
+      0,
+      "discriminator complete fired during a parse-phase probe",
+    );
+
+    // Step 3: simulate suggest-time runtime seeding with phase="suggest".
+    const suggestProbe = await parser.complete(parseResult.next.state, {
+      usage: parser.usage,
+      path: [],
+      phase: "suggest",
+      trace: undefined,
+    });
+    assert.ok(suggestProbe.success, "expected suggest probe to succeed");
+    assert.equal(
+      branchCompleteCount,
+      0,
+      "branch complete fired during a suggest-phase probe " +
+        `(phase=${branchCompletePhase})`,
+    );
+    assert.equal(
+      discriminatorCompleteCount,
+      0,
+      "discriminator complete fired during a suggest-phase probe",
+    );
+
+    // Step 4: the real complete pass MUST run the branch and resolve
+    // the value normally.
+    const realResult = await parser.complete(parseResult.next.state, {
+      usage: parser.usage,
+      path: [],
+      phase: "complete",
+      trace: undefined,
+    });
+    assert.ok(realResult.success, "expected real complete to succeed");
+    if (realResult.success) {
+      assert.deepEqual(realResult.value, ["fast", 4]);
+    }
+    assert.equal(branchCompleteCount, 1);
+  });
+
   it("should fall back to deferred when no branch consumes tokens", async () => {
     let completeCalled = false;
     const asyncDiscriminator: Parser<"async", string> = {

@@ -11596,18 +11596,22 @@ export function conditional(
     let wasSpeculative = false;
     if (state.speculative && state.selectedBranch?.kind === "branch") {
       if (exec?.phase !== "parse" && exec?.phase !== "suggest") {
-        // Clear speculative; leave discriminatorValue undefined so
-        // the normal path completes the discriminator with the
-        // dependency runtime.
+        // Real complete: clear speculative; leave discriminatorValue
+        // undefined so the normal path completes the discriminator
+        // with the dependency runtime.
         wasSpeculative = true;
         state = { ...state, speculative: undefined };
       } else {
-        // During parse/suggest probe: use speculative key without
-        // triggering discriminator completion (avoids side effects).
-        state = {
-          ...state,
-          discriminatorValue: state.selectedBranch.key,
-          speculative: undefined,
+        // Parse/suggest probe (e.g., object()'s allCanComplete check):
+        // do NOT call discriminator.complete() OR branchParser.complete().
+        // Both may have deferred side effects (e.g., prompt(), bindEnv).
+        // The probe consumer only inspects `success`, so return success
+        // with a placeholder value built from the speculative key.  The
+        // real complete pass (phase="complete") will run the branch and
+        // verify the discriminator.
+        return {
+          success: true,
+          value: [state.selectedBranch.key, undefined] as const,
         };
       }
     }
