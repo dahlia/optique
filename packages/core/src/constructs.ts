@@ -5620,13 +5620,16 @@ export function object<
     }
 
     // Zero-consumption pass: let purely non-interactive parsers update
-    // their state.  Parsers like multiple(constant(...)) modify state in
-    // parse() even when they return consumed: [].  The greedy loop above
-    // skips these state changes, so we give each non-consumed field one
-    // parse() call here.  Only parsers with no leading names qualify:
-    // interactive parsers (or() with options, withDefault, etc.) must
-    // not have their state committed here as it would hide still-valid
-    // branches from suggestions and docs.
+    // their state.  Parsers like multiple(constant(...)),
+    // optional(constant(...)), and withDefault(constant(...)) modify
+    // state in parse() even when they return consumed: [].  The greedy
+    // loop above skips these state changes, so we give each
+    // non-consumed field one parse() call here.  Only parsers with no
+    // leading names and no catch-all token acceptance qualify: parsers
+    // that could still match a later token (e.g., option(), argument(),
+    // or the leading-name branches of or()) must not have their state
+    // committed here, because doing so would hide still-valid branches
+    // from suggestions and docs.
     {
       const getFieldState = createFieldStateGetter(
         currentContext.state,

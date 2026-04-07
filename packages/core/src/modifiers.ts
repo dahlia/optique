@@ -545,14 +545,17 @@ export function optional<M extends Mode, TValue, TState>(
         }
         // When the inner parser is a non-CLI source binding (bindEnv,
         // bindConfig), give it a chance to satisfy the value from its
-        // source (annotations or active source registry) even though
-        // object()'s zero-consumption pass skipped calling our parse()
-        // (because the inner has leadingNames from its own inner
-        // option()).  The inner parser's `complete()` knows how to read
-        // annotations out of the state, so we pass through the outer
-        // state — possibly an annotation wrapper, possibly undefined —
-        // unchanged.  If the inner fails or returns undefined, we fall
-        // back to optional's undefined result as before.
+        // source even though object()'s zero-consumption pass skipped
+        // calling our parse() (because the inner has leadingNames
+        // from its own inner option()).  The guard here rejects a
+        // bare `undefined` state because all supported entry points
+        // that populate the active source registry (runWithSync /
+        // runWithAsync) also inject annotations onto the outer state,
+        // so by the time optional.complete() sees a non-array state
+        // with source-resolvable data, that state is an annotation
+        // wrapper (a non-null object).  If the inner parser fails or
+        // returns undefined, we fall back to optional's undefined
+        // result as before.
         if (
           parser[unmatchedNonCliDependencySourceStateMarker] === true &&
           state != null &&
@@ -927,6 +930,11 @@ export function withDefault<
         // before falling back to the configured default, so that
         // `withDefault(bindEnv(...), fallback)` prefers the env value
         // over `fallback`.  This mirrors the branch in `optional()`.
+        // The guard here rejects a bare `undefined` state for the
+        // same reason the `optional()` branch does: runWithSync /
+        // runWithAsync always inject annotations onto the outer
+        // state, so a reachable source-resolvable state is always an
+        // annotation wrapper (a non-null object).
         if (
           parser[unmatchedNonCliDependencySourceStateMarker] === true &&
           state != null &&
