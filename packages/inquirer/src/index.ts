@@ -1150,7 +1150,20 @@ export function prompt<M extends Mode, TValue, TState>(
       };
 
       const finalizePrompt = (): Promise<ValueParserResult<TValue>> => {
-        if (shouldDeferPrompt(parser, state, exec)) {
+        // `shouldDeferCompletion` is part of the inner `Parser<TState>`
+        // contract, so it must be called with the inner parser's own
+        // state shape — not the prompt wrapper's `state` (which is a
+        // `PromptBindState` or annotated view of one).  Route through
+        // `withAnnotatedInnerState` so the inner state carries the
+        // outer annotations exactly the way `parser.complete` /
+        // `parser.parse` see them on the lines below.
+        const shouldDefer = withAnnotatedInnerState(
+          state,
+          effectiveInitialState,
+          (annotatedInnerState) =>
+            shouldDeferPrompt(parser, annotatedInnerState, exec),
+        );
+        if (shouldDefer) {
           return Promise.resolve(
             deferredPromptResult(readPlaceholder() as TValue),
           );
