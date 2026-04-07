@@ -8716,6 +8716,134 @@ describe("conditional", () => {
       );
     }
   });
+
+  it("should isolate speculative discriminator from branch dependency sources", async () => {
+    // Regression for circular self-confirmation: in the speculative
+    // verification path, the discriminator should NOT see dependency
+    // sources contributed by the speculatively chosen branch.
+    // Otherwise a branch that exposes the same source key as the
+    // discriminator could circularly confirm itself.
+    const branchSourceId = Symbol("test-branch-source");
+
+    // Discriminator inspects the runtime: when isolated from the
+    // branch, it returns "fast" (matching the speculative pick); when
+    // contaminated by the branch's source, it returns "slow" (which
+    // would mismatch).
+    const isolationProbe: Parser<"async", string, null> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: (_state, exec) => {
+        const leaked = exec?.dependencyRuntime?.hasSource(branchSourceId) ??
+          false;
+        return Promise.resolve({
+          success: true as const,
+          value: leaked ? "slow" : "fast",
+        });
+      },
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    // A branch parser that consumes --threads <n> AND exposes a
+    // dependency source so its value is registered in any combined
+    // runtime.
+    const branchWithSource: Parser<
+      "async",
+      number,
+      { readonly value: number } | null
+    > = {
+      $mode: "async",
+      $valueType: [] as readonly number[],
+      $stateType: [null] as [{ readonly value: number } | null],
+      priority: 10,
+      usage: [],
+      leadingNames: new Set<string>(["--threads"]),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) => {
+        if (
+          context.buffer[0] === "--threads" &&
+          context.buffer[1] !== undefined
+        ) {
+          const value = Number.parseInt(context.buffer[1], 10);
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(2),
+              state: { value },
+            },
+            consumed: [context.buffer[0], context.buffer[1]],
+          });
+        }
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: [{ type: "text" as const, text: "expected --threads" }],
+        });
+      },
+      complete: (state) =>
+        Promise.resolve(
+          state != null ? { success: true as const, value: state.value } : {
+            success: false as const,
+            error: [{ type: "text" as const, text: "missing --threads" }],
+          },
+        ),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId: branchSourceId,
+          preservesSourceValue: true,
+          extractSourceValue: (state: unknown) =>
+            Promise.resolve(
+              state != null && typeof state === "object" && "value" in state
+                ? {
+                  success: true as const,
+                  value: (state as { readonly value: number }).value,
+                }
+                : undefined,
+            ),
+        },
+      },
+    };
+
+    const parser = conditional(
+      isolationProbe,
+      {
+        fast: branchWithSource,
+        slow: option("--alt", integer()),
+      },
+    );
+
+    // Speculation picks "fast" (only branch that consumes --threads).
+    // Without runtime isolation, isolationProbe would see
+    // branchSourceId in its runtime and return "slow", causing a
+    // mismatch failure.  With isolation, it returns "fast" and the
+    // parse succeeds.
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(
+      result.success,
+      "expected discriminator to resolve independently of branch source",
+    );
+    if (result.success) {
+      assert.equal(result.value[0], "fast");
+      assert.equal(result.value[1], 4);
+    }
+  });
 });
 
 describe("complex combinator interactions", () => {

@@ -11765,14 +11765,6 @@ export function conditional(
       state.discriminatorState,
       discriminator,
     );
-    // NOTE: the dependency runtime is seeded with both discriminator
-    // and branch sources before the discriminator is completed.  In
-    // the speculative path (wasSpeculative), this means the guessed
-    // branch's dependency sources are visible to the discriminator.
-    // A discriminator that depends on branch-local sources could be
-    // circularly confirmed by the speculative branch.  Splitting the
-    // runtime setup (discriminator-only → verify → branch) would fix
-    // this but requires restructuring the shared completion flow.
     const combinedState = {
       _discriminator: annotatedDiscriminatorState,
       _branch: getAnnotatedChildState(
@@ -11817,10 +11809,41 @@ export function conditional(
         "default" &&
       !(state.discriminatorValue != null &&
         state.discriminatorValue === state.selectedBranch.key);
+    // For speculative verification, complete the discriminator with
+    // a runtime that ONLY contains discriminator-side sources.  In
+    // the non-speculative path, the branch was selected by the
+    // discriminator at parse time and the combined runtime is fine.
+    // In the speculative path (`wasSpeculative`), the chosen branch
+    // is just a guess: if `discriminator.complete()` could see the
+    // speculative branch's dependency sources, a branch that exposes
+    // the same source key as the discriminator could circularly
+    // confirm itself.  Build a discriminator-only runtime so that
+    // the verification is independent of branch-local sources.
+    let discriminatorCompletionExec = completionExec;
+    if (wasSpeculative && needsDiscriminatorCompletion) {
+      const discOnlyState = { _discriminator: annotatedDiscriminatorState };
+      const discOnlyRuntime = createDependencyRuntimeContext(
+        exec?.dependencyRegistry?.clone(),
+      );
+      await collectExplicitSourceValuesAsync(
+        buildRuntimeNodesFromPairs(
+          [["_discriminator", discriminator]] as const,
+          discOnlyState,
+          exec?.path,
+        ),
+        discOnlyRuntime,
+      );
+      collectSourcesFromState(discOnlyState, discOnlyRuntime);
+      discriminatorCompletionExec = {
+        ...completionExec,
+        dependencyRuntime: discOnlyRuntime,
+        dependencyRegistry: discOnlyRuntime.registry,
+      };
+    }
     const discriminatorCompleteResult = needsDiscriminatorCompletion
       ? await discriminator.complete(
         annotatedDiscriminatorState,
-        withChildExecPath(completionExec, "_discriminator"),
+        withChildExecPath(discriminatorCompletionExec, "_discriminator"),
       )
       : undefined;
 
