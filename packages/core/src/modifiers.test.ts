@@ -4867,6 +4867,45 @@ describe("multiple", () => {
         );
       }
     });
+
+    // The async branch of `multiple().parse()` was changed symmetrically
+    // with the sync branch, so mirror the wrapper regression guards on
+    // the async path as well.  See
+    // https://github.com/dahlia/optique/pull/776#discussion_r3047719139.
+    it("returns [] asynchronously from withDefault(multiple(min=0)) on empty input", async () => {
+      const parser = withDefault(
+        multiple(option("--tag", asyncChoice(["a", "b"] as const))),
+        ["a"] as readonly ("a" | "b")[],
+      );
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      if (result.success) assert.deepEqual(result.value, []);
+    });
+
+    it("preserves async optional(multiple(min>0)) fallback on empty input", async () => {
+      const parser = optional(
+        multiple(
+          option("--tag", asyncChoice(["a", "b"] as const)),
+          { min: 1 },
+        ),
+      );
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, undefined);
+    });
+
+    it("preserves async withDefault(multiple(min>0), default) fallback", async () => {
+      const parser = withDefault(
+        multiple(
+          option("--tag", asyncChoice(["a", "b"] as const)),
+          { min: 1 },
+        ),
+        ["a"] as readonly ("a" | "b")[],
+      );
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      if (result.success) assert.deepEqual(result.value, ["a"]);
+    });
   });
 
   describe("getDocFragments", () => {
