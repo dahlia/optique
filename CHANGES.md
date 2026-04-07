@@ -10,6 +10,17 @@ To be released.
 
 ### @optique/core
 
+ -  Added the optional `Parser.validateValue()` method, which lets a
+    parser check whether an arbitrary value satisfies its underlying
+    `ValueParser`'s constraints (e.g., regex patterns, numeric bounds,
+    `choice()` values).  Built-in primitives (`option()`, `argument()`)
+    implement it via a `format()`+`parse()` round-trip; combinator
+    wrappers (`optional()`, `withDefault()`) forward it from inner
+    parsers.  `map()`, `or()`, `longestMatch()`, `merge()`, and
+    `concat()` intentionally do not forward this method.  Used by
+    `bindEnv()` and `bindConfig()` to enforce parser constraints on
+    fallback values.  [[#414]]
+
  -  Added `provisional` field to the success variant of `ParserResult`.
     When `true`, it indicates that the parse succeeded tentatively: the
     parser matched something (e.g., a zero-consuming discriminator resolved
@@ -1343,6 +1354,7 @@ To be released.
 [#406]: https://github.com/dahlia/optique/issues/406
 [#407]: https://github.com/dahlia/optique/issues/407
 [#408]: https://github.com/dahlia/optique/issues/408
+[#414]: https://github.com/dahlia/optique/issues/414
 [#425]: https://github.com/dahlia/optique/issues/425
 [#428]: https://github.com/dahlia/optique/issues/428
 [#429]: https://github.com/dahlia/optique/issues/429
@@ -1542,6 +1554,20 @@ To be released.
 
 ### @optique/config
 
+ -  Fixed `bindConfig()` not re-validating fallback values (values loaded
+    from the config file and configured defaults) against the inner CLI
+    parser's constraints.  Previously, constraints like
+    `integer({ min: 1024 })` or `string({ pattern })` could be silently
+    bypassed through config-sourced values and defaults.  Both config
+    values and defaults are now routed through the inner parser's
+    `validateValue()` method when available; values that fail the inner
+    parser's constraints are now rejected with the same error that a
+    CLI-sourced value would produce.  Fallback values that flow through
+    `map()` are exempt because the mapped output type no longer matches
+    the inner parser's constraints.  This is a behavior change for any
+    code that relied on constraint-violating config values or defaults
+    being accepted.  [[#414]]
+
  -  Removed `configKey` symbol.  Each `ConfigContext` instance now stores
     its data under its own unique `id` symbol (i.e., `context.id`) so that
     multiple config contexts can coexist without overwriting each other in
@@ -1682,6 +1708,19 @@ To be released.
 
 The *@optique/env* package was introduced in this release, providing
 environment variable integration via source contexts.  [[#86], [#135]]
+
+ -  Fixed `bindEnv()` not re-validating fallback values (environment
+    variable values parsed by a looser env-level `parser` and configured
+    defaults) against the inner CLI parser's constraints.  Previously,
+    constraints like `integer({ min: 1024 })` or `string({ pattern })`
+    could be silently bypassed through an environment variable or
+    default.  Both environment variable values and defaults are now
+    routed through the inner parser's `validateValue()` method when
+    available.  Fallback values that flow through `map()` are exempt
+    because the mapped output type no longer matches the inner parser's
+    constraints.  This is a behavior change for any code that relied on
+    constraint-violating environment values or defaults being accepted.
+    [[#414]]
 
  -  Added `createEnvContext()` for creating static environment contexts with
     optional key prefixes and custom source functions.

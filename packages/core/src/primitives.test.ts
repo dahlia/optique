@@ -7112,3 +7112,76 @@ describe("acceptingAnyToken", () => {
     assert.ok(!passThrough().acceptingAnyToken);
   });
 });
+
+describe("validateValue on primitives (#414)", () => {
+  describe("option()", () => {
+    it("accepts values passing the inner ValueParser constraints", () => {
+      const parser = option("-x", string({ pattern: /^[A-Z]+$/ }));
+      assert.ok(typeof parser.validateValue === "function");
+      const result = parser.validateValue!("APPLE");
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, "APPLE");
+    });
+
+    it("rejects values failing the inner ValueParser pattern", () => {
+      const parser = option("-x", string({ pattern: /^[A-Z]+$/ }));
+      const result = parser.validateValue!("hello");
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("rejects values failing integer bounds", () => {
+      const parser = option("-x", integer({ min: 1, max: 10 }));
+      const result = parser.validateValue!(99);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("returns success for boolean-flag option form (no value parser)", () => {
+      const parser = option("-f");
+      // Flag-form options have no value parser; validateValue is
+      // optional on this path because there's nothing to validate —
+      // the only valid value is `true`.  If implemented, it must
+      // return success.
+      if (typeof parser.validateValue === "function") {
+        const result = parser.validateValue(true);
+        assert.ok(result && typeof result === "object" && "success" in result);
+        assert.ok(result.success);
+      }
+    });
+  });
+
+  describe("argument()", () => {
+    it("accepts values passing the inner pattern", () => {
+      const parser = argument(string({ pattern: /^[A-Z]+$/ }));
+      assert.ok(typeof parser.validateValue === "function");
+      const result = parser.validateValue!("APPLE");
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+    });
+
+    it("rejects values failing the inner pattern", () => {
+      const parser = argument(string({ pattern: /^[A-Z]+$/ }));
+      const result = parser.validateValue!("hello");
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("choice()", () => {
+    it("rejects values outside the choice set", () => {
+      const parser = option("-x", choice(["red", "green", "blue"]));
+      const result = parser.validateValue!("purple" as "red");
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("accepts values inside the choice set", () => {
+      const parser = option("-x", choice(["red", "green", "blue"]));
+      const result = parser.validateValue!("red");
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+    });
+  });
+});

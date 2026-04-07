@@ -6,7 +6,11 @@ import {
 } from "@optique/core/annotations";
 import type { Annotations, SourceContext } from "@optique/core/context";
 import { envVar, type Message, message, valueSet } from "@optique/core/message";
-import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
+import {
+  dispatchByMode,
+  mapModeValue,
+  wrapForMode,
+} from "@optique/core/mode-dispatch";
 import type {
   ExecutionContext,
   Mode,
@@ -445,6 +449,17 @@ export function bindEnv<
       enumerable: false,
     });
   }
+  // Forward value validation from inner parser (see issue #414) so
+  // that outer bind wrappers (e.g., bindEnv(bindConfig(...))) can
+  // revalidate fallback values through the primitive parser's
+  // constraints.
+  if (typeof parser.validateValue === "function") {
+    Object.defineProperty(boundParser, "validateValue", {
+      value: parser.validateValue.bind(parser),
+      configurable: true,
+      enumerable: false,
+    });
+  }
   const dependencyMetadata = composeWrappedSourceMetadata(
     (
       parser as Parser<M, TValue, TState> & {
@@ -522,6 +537,40 @@ function getEnvOrDefault<M extends Mode, TValue>(
     sourceData?.prefix ?? options.context.prefix
   }${options.key}`;
   const rawValue = sourceData?.source(fullKey);
+
+  // Helper that runs a (successful) fallback value through the inner
+  // parser's validateValue() hook (#414).  The env parser
+  // (`options.parser`) can be looser than the inner CLI parser, and
+  // configured defaults bypass any validation entirely, so we pipe
+  // every fallback value through the inner parser's constraints when
+  // it exposes a validator.  If the inner parser does not implement
+  // validateValue (e.g., it sits behind map()), we return the value
+  // unchanged to preserve existing behavior.
+  const validateSync = (
+    parsed: ValueParserResult<TValue>,
+  ): ValueParserResult<TValue> => {
+    if (!parsed.success) return parsed;
+    if (
+      innerParser == null || typeof innerParser.validateValue !== "function"
+    ) {
+      return parsed;
+    }
+    return innerParser.validateValue(
+      parsed.value,
+    ) as ValueParserResult<TValue>;
+  };
+  const validateAsync = async (
+    parsed: ValueParserResult<TValue>,
+  ): Promise<ValueParserResult<TValue>> => {
+    if (!parsed.success) return parsed;
+    if (
+      innerParser == null || typeof innerParser.validateValue !== "function"
+    ) {
+      return parsed;
+    }
+    return await innerParser.validateValue(parsed.value);
+  };
+
   if (rawValue !== undefined) {
     if (typeof rawValue !== "string") {
       const type = rawValue === null
@@ -536,15 +585,31 @@ function getEnvOrDefault<M extends Mode, TValue>(
         } must be a string, but got: ${type}.`,
       });
     }
-    const parsed = options.parser.parse(rawValue);
-    return wrapForMode(mode, parsed);
+    // Parse through the env value parser first (its own constraints),
+    // then pipe the result through the inner CLI parser's validator so
+    // that the inner parser's constraints are enforced even when
+    // `options.parser` is a looser value parser than the one the
+    // inner parser was constructed with (#414).
+    return dispatchByMode(
+      mode,
+      () => {
+        const parsed = (options.parser as ValueParser<"sync", TValue>)
+          .parse(rawValue);
+        return validateSync(parsed);
+      },
+      async () => {
+        const parsed = await options.parser.parse(rawValue);
+        return await validateAsync(parsed);
+      },
+    );
   }
 
   if (options.default !== undefined) {
-    return wrapForMode(mode, {
-      success: true as const,
-      value: options.default,
-    });
+    return dispatchByMode(
+      mode,
+      () => validateSync({ success: true as const, value: options.default! }),
+      () => validateAsync({ success: true as const, value: options.default! }),
+    );
   }
 
   // When the env variable is absent and no default is provided, fall back

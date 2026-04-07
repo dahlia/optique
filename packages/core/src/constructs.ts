@@ -3803,7 +3803,10 @@ export function or(
 
   // or() does NOT forward normalizeValue because the active branch is
   // unknown at default time — normalizing through the wrong branch would
-  // produce values that differ from what parse() returns.
+  // produce values that differ from what parse() returns.  The same
+  // reasoning applies to validateValue (#414): a fallback value may
+  // belong to any branch, so revalidating through a single arbitrary
+  // branch would reject values that another branch would accept.
   return singleResult as Parser<
     Mode,
     unknown,
@@ -4367,6 +4370,7 @@ export function longestMatch(
   // longestMatch() does NOT forward normalizeValue because the winning
   // branch is unknown at default time — normalizing through the wrong
   // branch would produce values that differ from what parse() returns.
+  // The same reasoning applies to validateValue (#414).
   return multiResult as Parser<
     Mode,
     unknown,
@@ -8771,6 +8775,8 @@ export function merge(
   // merge() does NOT forward normalizeValue because children may have
   // overlapping keys with last-write-wins semantics.  Normalizing through
   // an earlier child's normalizer would change keys owned by a later child.
+  // The same reasoning applies to validateValue (#414): composite-key
+  // ownership cannot be resolved from the value alone.
   defineInheritedAnnotationParser(mergeParser);
   return mergeParser;
 }

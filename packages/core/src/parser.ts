@@ -316,6 +316,53 @@ export interface Parser<
   normalizeValue?(value: TValue): TValue;
 
   /**
+   * Optionally re-validates a value as if it had been parsed from CLI
+   * input, surfacing any constraint violations from the underlying value
+   * parser (e.g., regex patterns, numeric bounds, `choice()` values).
+   *
+   * Wrappers like `bindEnv()` and `bindConfig()` call this on fallback
+   * values — environment variables parsed by a looser env parser,
+   * configured defaults, and values loaded from config files — so that
+   * those values obey the same validation semantics as CLI input.
+   * Without it, parser constraints can be silently bypassed through
+   * fallback paths.
+   *
+   * Built-in primitive parsers ({@link option}, {@link argument})
+   * implement this method by round-tripping the value through the inner
+   * {@link ValueParser.format} and {@link ValueParser.parse} calls: the
+   * value is serialized back to a string and re-parsed, which re-runs
+   * every constraint check.  Combinator wrappers ({@link optional},
+   * {@link withDefault}) forward this method from their inner parser.
+   * {@link map} intentionally does *not* forward it because the mapping
+   * function is one-way: the mapped output type no longer corresponds
+   * to the inner parser's constraints.  Exclusive combinators
+   * ({@link or}, `longestMatch()`) and multi-source combinators
+   * (`merge()`, `concat()`) intentionally do not implement this method
+   * because the active branch or key ownership is unknown at validation
+   * time.
+   *
+   * Implementations must wrap any *exception* thrown by `format()` in
+   * `try`/`catch` and return the original value as a successful
+   * {@link ValueParserResult}.  This specifically protects
+   * dependency-derived parsers whose factory cannot run without the
+   * current dependency value, and custom value parsers whose `format()`
+   * intentionally throws for unsupported inputs.  Values that
+   * `format()` successfully serializes to a string are always re-parsed,
+   * and any resulting parse failure is propagated — they represent the
+   * bug class this method exists to surface.
+   *
+   * @param value The candidate value to validate.
+   * @returns A {@link ValueParserResult} indicating success (with the
+   *          possibly-canonicalized value) or failure (with an error
+   *          message).  In async mode, returns a `Promise` resolving to
+   *          the result.
+   * @since 1.0.0
+   */
+  validateValue?(
+    value: TValue,
+  ): ModeValue<M, ValueParserResult<TValue>>;
+
+  /**
    * Internal dependency metadata describing this parser's dependency
    * capabilities.  Used by the dependency runtime to resolve dependencies
    * without relying on state-shape protocols.

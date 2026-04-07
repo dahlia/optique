@@ -356,6 +356,33 @@ Invalid Boolean value: "maybe". Expected one of "true", "1", "yes", "on",
 "false", "0", "no", or "off"
 ~~~~
 
+### Fallback validation
+
+Since Optique 1.0.0, fallback values produced by `bindEnv()` are
+re-validated against the inner CLI parser's constraints (regex patterns,
+numeric bounds, `choice()` values, etc.).  This applies to both
+environment variable values — which may have been parsed by a looser
+env-level `parser` option — and to the configured `default`.
+
+For example, the following parser rejects the default `"abc"` because
+it does not match the inner CLI pattern `/^[A-Z]+$/`:
+
+~~~~ typescript
+bindEnv(option("--name", string({ pattern: /^[A-Z]+$/ })), {
+  context: envContext,
+  key: "NAME",
+  parser: string(),    // looser than the inner parser
+  default: "abc",      // rejected: must match /^[A-Z]+$/
+});
+~~~~
+
+Validation is forwarded through standard combinators (`optional()`,
+`withDefault()`) and through wrapping `bindEnv()` / `bindConfig()`
+layers.  It is intentionally *not* forwarded through `map()` because the
+mapping function is one-way: the mapped output type no longer corresponds
+to the inner parser's constraints.  Wrapping an inner parser in `map()`
+will therefore silently bypass fallback validation.
+
 ### Help, version, and completion
 
 Like config contexts, environment contexts work seamlessly with help,
@@ -410,6 +437,12 @@ Returns
 
 Binds a parser to environment variables with fallback priority
 (CLI > environment > default > error).
+
+Fallback values — environment variable values and the configured
+`default` — are re-validated against the inner CLI parser's constraints,
+so constraints like `integer({ min })`, `string({ pattern })`, and
+`choice([...])` cannot be bypassed through an environment variable or
+default.  See *Fallback validation* under “Error handling” for details.
 
 Parameters
 :    -  `parser`: The inner parser to wrap.

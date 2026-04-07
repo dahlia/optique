@@ -12,6 +12,7 @@ import {
   dispatchByMode,
   dispatchIterableByMode,
   mapModeValue,
+  wrapForMode,
 } from "./mode-dispatch.ts";
 import {
   defineInheritedAnnotationParser,
@@ -642,6 +643,29 @@ export function optional<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
+  // Forward value validation (see issue #414).  `undefined` always
+  // passes; everything else delegates to the inner validator.
+  if (typeof parser.validateValue === "function") {
+    const innerValidate = parser.validateValue.bind(parser);
+    Object.defineProperty(optionalParser, "validateValue", {
+      value(
+        v: TValue | undefined,
+      ): ModeValue<M, ValueParserResult<TValue | undefined>> {
+        if (v === undefined) {
+          return wrapForMode(parser.$mode, {
+            success: true as const,
+            value: v,
+          }) as ModeValue<M, ValueParserResult<TValue | undefined>>;
+        }
+        return innerValidate(v) as ModeValue<
+          M,
+          ValueParserResult<TValue | undefined>
+        >;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
   // Compose dependency metadata for the optional wrapper.
   if (parser.dependencyMetadata != null) {
     const composed = composeDependencyMetadata(
@@ -1118,6 +1142,33 @@ export function withDefault<
       enumerable: false,
     });
   }
+  // Forward value validation as non-enumerable (see issue #414).  Wrap
+  // the delegation in try/catch because TDefault may be a sentinel type
+  // whose format() fails or throws in the inner parser's validator; in
+  // that case the value is accepted unchanged to preserve existing
+  // sentinel-default users.
+  if (typeof parser.validateValue === "function") {
+    const innerValidate = parser.validateValue.bind(parser);
+    Object.defineProperty(withDefaultParser, "validateValue", {
+      value(
+        v: TValue | TDefault,
+      ): ModeValue<M, ValueParserResult<TValue | TDefault>> {
+        try {
+          return innerValidate(v as TValue) as ModeValue<
+            M,
+            ValueParserResult<TValue | TDefault>
+          >;
+        } catch {
+          return wrapForMode(parser.$mode, {
+            success: true as const,
+            value: v,
+          }) as ModeValue<M, ValueParserResult<TValue | TDefault>>;
+        }
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
   // Compose dependency metadata: add getMissingSourceValue if the inner
   // parser preserves a dependency source.
   if (parser.dependencyMetadata != null) {
@@ -1313,6 +1364,11 @@ export function map<M extends Mode, T, U, TState>(
   // spread.  The inner normalizer operates on type T, not the mapped type U,
   // so keeping it would corrupt mapped defaults.
   delete mappedParser.normalizeValue;
+  // Strip validateValue for the same reason (see issue #414): the
+  // inner validator operates on type T, not the mapped type U, so
+  // retaining it would attempt to format mapped outputs through the
+  // inner ValueParser and produce wrong results or crashes.
+  delete (mappedParser as { validateValue?: unknown }).validateValue;
   // Lazily compute the mapped placeholder.  Non-enumerable so that
   // further ...parser spreads in downstream wrappers do not eagerly
   // evaluate the getter and trigger inner factory side effects.

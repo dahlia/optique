@@ -343,6 +343,158 @@ describe("bindConfig", () => {
     assert.equal(result.value, "localhost");
   });
 
+  // Regression tests for issue #414: bindConfig() must revalidate fallback
+  // values (config-sourced values and configured defaults) against the
+  // inner CLI parser's constraints.
+  describe("fallback validation (#414)", () => {
+    test("rejects a default that fails the inner string pattern", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string().optional() }),
+      });
+      const parser = bindConfig(
+        option("--name", string({ pattern: /^[A-Z]+$/ })),
+        {
+          context,
+          key: "name",
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    test("rejects a default that fails the inner integer bounds", () => {
+      const context = createConfigContext({
+        schema: z.object({ port: z.number().optional() }),
+      });
+      const parser = bindConfig(
+        option("--port", integer({ min: 1024, max: 65535 })),
+        {
+          context,
+          key: "port",
+          default: 80 as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    test("revalidates config values through the inner CLI parser", () => {
+      const context = createConfigContext({
+        schema: z.object({ port: z.number() }),
+      });
+      const parser = bindConfig(
+        option("--port", integer({ min: 1024 })),
+        {
+          context,
+          key: "port",
+          default: 8080,
+        },
+      );
+      const annotations: Annotations = {
+        [context.id]: { data: { port: 80 } },
+      };
+      const result = parse(parser, [], { annotations });
+      assert.ok(!result.success);
+    });
+
+    test("accepts valid defaults without breaking existing usage", () => {
+      const context = createConfigContext({
+        schema: z.object({ port: z.number().optional() }),
+      });
+      const parser = bindConfig(
+        option("--port", integer({ min: 1, max: 65535 })),
+        {
+          context,
+          key: "port",
+          default: 3000,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, 3000);
+    });
+
+    test("validates defaults through optional() wrapping", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string().optional() }),
+      });
+      const parser = bindConfig(
+        optional(option("--name", string({ pattern: /^[A-Z]+$/ }))),
+        {
+          context,
+          key: "name",
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    test("validates defaults through withDefault() wrapping", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string().optional() }),
+      });
+      const parser = bindConfig(
+        withDefault(
+          option("--name", string({ pattern: /^[A-Z]+$/ })),
+          "FALLBACK",
+        ),
+        {
+          context,
+          key: "name",
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    test("falls through map() without validation", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string().optional() }),
+      });
+      const parser = bindConfig(
+        map(option("--name", string()), (n) => n.toUpperCase()),
+        {
+          context,
+          key: "name",
+          default: "already-upper" as never,
+        },
+      );
+      // map() strips validateValue; fallback is returned unvalidated.
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, "already-upper");
+    });
+
+    test("propagates validation into bindEnv(bindConfig(...)) composition", () => {
+      const configContext = createConfigContext({
+        schema: z.object({ name: z.string().optional() }),
+      });
+      const envContext = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        bindConfig(
+          option("--name", string({ pattern: /^[A-Z]+$/ })),
+          {
+            context: configContext,
+            key: "name",
+          },
+        ),
+        {
+          context: envContext,
+          key: "NAME",
+          parser: string(),
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+  });
+
   test("marks usage as optional when default is provided", () => {
     const schema = z.object({
       host: z.string().optional(),

@@ -16,7 +16,12 @@ import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Parser } from "@optique/core/parser";
-import { parse, suggestAsync, suggestSync } from "@optique/core/parser";
+import {
+  parse,
+  parseAsync,
+  suggestAsync,
+  suggestSync,
+} from "@optique/core/parser";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { constant, fail, flag, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
@@ -570,6 +575,194 @@ describe("bindEnv()", () => {
     }
     const result = parse(parser, [], { annotations });
     assert.ok(!result.success);
+  });
+
+  // Regression tests for issue #414: bindEnv() must revalidate fallback
+  // values (env-sourced values parsed by a looser env parser, and
+  // configured defaults) against the inner CLI parser's constraints.
+  describe("fallback validation (#414)", () => {
+    it("rejects a default that fails the inner string pattern", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        option("--name", string({ pattern: /^[A-Z]+$/ })),
+        {
+          context,
+          key: "NAME",
+          parser: string(),
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    it("rejects a default that fails the inner integer bounds", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        option("--port", integer({ min: 1024, max: 65535 })),
+        {
+          context,
+          key: "PORT",
+          parser: integer(),
+          default: 80 as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    it("revalidates env values through the inner CLI parser", () => {
+      const context = createEnvContext({
+        source: (key) => ({ PORT: "80" })[key],
+      });
+      const parser = bindEnv(
+        option("--port", integer({ min: 1024 })),
+        {
+          context,
+          key: "PORT",
+          parser: integer(),
+          default: 8080,
+        },
+      );
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const result = parse(parser, [], { annotations });
+      assert.ok(!result.success);
+    });
+
+    it("accepts valid defaults without breaking existing usage", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        option("--port", integer({ min: 1, max: 65535 })),
+        {
+          context,
+          key: "PORT",
+          parser: integer(),
+          default: 3000,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, 3000);
+    });
+
+    it("validates defaults through optional() wrapping", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        optional(option("--name", string({ pattern: /^[A-Z]+$/ }))),
+        {
+          context,
+          key: "NAME",
+          parser: string(),
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    it("accepts undefined through optional() wrapping", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        optional(option("--name", string({ pattern: /^[A-Z]+$/ }))),
+        {
+          context,
+          key: "NAME",
+          parser: string(),
+          default: undefined as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(result.success);
+    });
+
+    it("validates defaults through withDefault() wrapping", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        withDefault(
+          option("--name", string({ pattern: /^[A-Z]+$/ })),
+          "FALLBACK",
+        ),
+        {
+          context,
+          key: "NAME",
+          parser: string(),
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    it("falls through map() without validation", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        map(option("--name", string()), (n) => n.toUpperCase()),
+        {
+          context,
+          key: "NAME",
+          parser: string(),
+          default: "already-upper" as never,
+        },
+      );
+      // map() strips validateValue; fallback returned unvalidated.
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, "already-upper");
+    });
+
+    it("validates defaults in async mode", async () => {
+      const asyncStringWithPattern: ValueParser<"async", string> = {
+        $mode: "async",
+        metavar: "NAME",
+        placeholder: "",
+        parse(input: string) {
+          if (!/^[A-Z]+$/.test(input)) {
+            return Promise.resolve({
+              success: false as const,
+              error: message`Expected uppercase, got: ${input}.`,
+            });
+          }
+          return Promise.resolve({
+            success: true as const,
+            value: input,
+          });
+        },
+        format(value: string) {
+          return value;
+        },
+      };
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        option("--name", asyncStringWithPattern),
+        {
+          context,
+          key: "NAME",
+          parser: asyncStringWithPattern,
+          default: "abc" as never,
+        },
+      );
+      const result = await parseAsync(parser, []);
+      assert.ok(!result.success);
+    });
   });
 
   it("supports env-only values via fail() parser", () => {

@@ -13,7 +13,11 @@ import {
   replayDerivedParserAsync,
 } from "./dependency-runtime.ts";
 import type { DocFragment } from "./doc.ts";
-import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
+import {
+  dispatchByMode,
+  dispatchIterableByMode,
+  wrapForMode,
+} from "./mode-dispatch.ts";
 import type { TraceEntry } from "./input-trace.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import { validateCommandNames, validateOptionNames } from "./validate.ts";
@@ -1403,6 +1407,62 @@ export function option<M extends Mode, T>(
       enumerable: false,
     });
   }
+  // Define validateValue as non-enumerable so that ...parser spread in
+  // map() does not propagate it to the mapped type (see issue #414).
+  // Re-validates a value as if it had been parsed from CLI input by
+  // round-tripping through ValueParser.format() + ValueParser.parse().
+  // Used by bindEnv() and bindConfig() to enforce parser constraints
+  // on fallback values.
+  if (valueParser != null) {
+    const vp = valueParser;
+    Object.defineProperty(result, "validateValue", {
+      value(
+        v: T | boolean,
+      ): ModeValue<M, ValueParserResult<T | boolean>> {
+        // Boolean stand-ins are used for the no-value form of option();
+        // they have no ValueParser constraints to check.
+        if (typeof v === "boolean") {
+          return wrapForMode(mode, {
+            success: true as const,
+            value: v,
+          });
+        }
+        let stringified: string;
+        try {
+          stringified = vp.format(v as T);
+        } catch {
+          // format() may throw for sentinel defaults (e.g., custom
+          // union-typed defaults) or for dependency-derived value
+          // parsers whose factory cannot run without the current
+          // dependency value.  Skip validation in those cases and
+          // return success unchanged.
+          return wrapForMode(mode, {
+            success: true as const,
+            value: v,
+          });
+        }
+        if (typeof stringified !== "string") {
+          // A non-string serialization is unsupported for the round-
+          // trip; skip validation rather than crashing.
+          return wrapForMode(mode, {
+            success: true as const,
+            value: v,
+          });
+        }
+        return dispatchByMode(
+          mode,
+          () =>
+            (vp as ValueParser<"sync", T>).parse(
+              stringified,
+            ) as ValueParserResult<T | boolean>,
+          async () =>
+            (await vp.parse(stringified)) as ValueParserResult<T | boolean>,
+        );
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
   // Define placeholder lazily to avoid triggering derived value parser
   // factory functions during parser construction.  Non-enumerable so that
   // ...parser spread in map() does not eagerly evaluate the getter.
@@ -2114,6 +2174,44 @@ export function argument<M extends Mode, T>(
         } catch {
           return v;
         }
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  // Define validateValue as non-enumerable so that ...parser spread in
+  // map() does not propagate it to the mapped type (see issue #414).
+  // Re-validates a value as if it had been parsed from CLI input by
+  // round-tripping through ValueParser.format() + ValueParser.parse().
+  {
+    const vp = valueParser;
+    const vpMode = valueParser.$mode;
+    Object.defineProperty(result, "validateValue", {
+      value(v: T): ModeValue<M, ValueParserResult<T>> {
+        let stringified: string;
+        try {
+          stringified = vp.format(v);
+        } catch {
+          // format() may throw for sentinel defaults or for
+          // dependency-derived value parsers whose factory cannot run
+          // without the current dependency value.  Skip validation and
+          // return success unchanged in those cases.
+          return wrapForMode(vpMode, {
+            success: true as const,
+            value: v,
+          }) as ModeValue<M, ValueParserResult<T>>;
+        }
+        if (typeof stringified !== "string") {
+          return wrapForMode(vpMode, {
+            success: true as const,
+            value: v,
+          }) as ModeValue<M, ValueParserResult<T>>;
+        }
+        return dispatchByMode(
+          vpMode,
+          () => syncValueParser.parse(stringified),
+          async () => (await vp.parse(stringified)) as ValueParserResult<T>,
+        ) as ModeValue<M, ValueParserResult<T>>;
       },
       configurable: true,
       enumerable: false,

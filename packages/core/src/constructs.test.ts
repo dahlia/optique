@@ -99,8 +99,19 @@ function asyncStringValue(): ValueParser<"async", string> {
 function toAsyncParser<TValue, TState>(
   parser: Parser<"sync", TValue, TState>,
 ): Parser<"async", TValue, TState> {
-  return {
-    ...parser,
+  // `validateValue` uses `ModeValue<M, ValueParserResult<TValue>>`, so
+  // the sync variant's return type is incompatible with the async
+  // variant's expected `Promise<...>`.  Drop the field from the spread
+  // and re-attach an awaited wrapper when the sync parser provides it.
+  const { validateValue, ...rest } = parser as
+    & typeof parser
+    & {
+      readonly validateValue?: (
+        value: TValue,
+      ) => import("./valueparser.ts").ValueParserResult<TValue>;
+    };
+  const asyncParser: Parser<"async", TValue, TState> = {
+    ...rest,
     $mode: "async",
     // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
     async parse(context: ParserContext<TState>) {
@@ -116,6 +127,15 @@ function toAsyncParser<TValue, TState>(
       }
     },
   };
+  if (typeof validateValue === "function") {
+    Object.defineProperty(asyncParser, "validateValue", {
+      // deno-lint-ignore require-await -- async wraps sync result
+      value: async (v: TValue) => validateValue(v),
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  return asyncParser;
 }
 
 function describeDuplicateSourceState(

@@ -788,6 +788,31 @@ try {
 }
 ~~~~
 
+### Fallback validation
+
+Since Optique 1.0.0, fallback values produced by `bindConfig()` are
+re-validated against the inner CLI parser's constraints (regex patterns,
+numeric bounds, `choice()` values, etc.).  This applies to both values
+loaded from the config file and to the configured `default`.
+
+For example, the following parser rejects the default `80` because it
+is below the inner CLI parser's `min: 1024` bound:
+
+~~~~ typescript
+bindConfig(option("--port", integer({ min: 1024 })), {
+  context: configContext,
+  key: "port",
+  default: 80,    // rejected: must be >= 1024
+});
+~~~~
+
+Validation is forwarded through standard combinators (`optional()`,
+`withDefault()`) and through wrapping `bindEnv()` / `bindConfig()`
+layers.  It is intentionally *not* forwarded through `map()` because the
+mapping function is one-way: the mapped output type no longer corresponds
+to the inner parser's constraints.  Wrapping an inner parser in `map()`
+will therefore silently bypass fallback validation.
+
 
 API reference
 -------------
@@ -807,6 +832,12 @@ Returns
 ### `bindConfig(parser, options)`
 
 Binds a parser to configuration values with fallback priority.
+
+Fallback values — values loaded from the config file and the configured
+`default` — are re-validated against the inner CLI parser's constraints,
+so constraints like `integer({ min })`, `string({ pattern })`, and
+`choice([...])` cannot be bypassed through a config file or default.
+See *Fallback validation* under “Error handling” for details.
 
 Parameters
 :    -  `parser`: The parser to bind

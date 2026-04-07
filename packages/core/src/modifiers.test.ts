@@ -7918,3 +7918,65 @@ describe("multiple() dependency source extraction", () => {
     assert.deepEqual(visited, [latest, earlier]);
   });
 });
+
+describe("validateValue forwarding through modifiers (#414)", () => {
+  describe("optional()", () => {
+    it("forwards validation to the inner parser for defined values", () => {
+      const parser = optional(option("-x", integer({ min: 1, max: 10 })));
+      assert.ok(typeof parser.validateValue === "function");
+      const result = parser.validateValue!(99);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("returns success for undefined values", () => {
+      const parser = optional(option("-x", integer({ min: 1, max: 10 })));
+      const result = parser.validateValue!(undefined);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, undefined);
+    });
+
+    it("returns success for valid defined values", () => {
+      const parser = optional(option("-x", integer({ min: 1, max: 10 })));
+      const result = parser.validateValue!(5);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, 5);
+    });
+  });
+
+  describe("withDefault()", () => {
+    it("forwards validation to the inner parser", () => {
+      const parser = withDefault(
+        option("-x", integer({ min: 1, max: 10 })),
+        5,
+      );
+      assert.ok(typeof parser.validateValue === "function");
+      const result = parser.validateValue!(99);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("accepts valid values from the inner parser's type", () => {
+      const parser = withDefault(
+        option("-x", integer({ min: 1, max: 10 })),
+        5,
+      );
+      const result = parser.validateValue!(7);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, 7);
+    });
+  });
+
+  describe("map()", () => {
+    it("strips validateValue because the mapping is one-way", () => {
+      const parser = map(
+        option("-x", integer({ min: 1, max: 10 })),
+        (n) => n * 2,
+      );
+      assert.equal(parser.validateValue, undefined);
+    });
+  });
+});
