@@ -106,7 +106,7 @@ To be released.
     `multiple()` directly.  Users who want the previous “use default when
     there are no matches” behaviour can either set `min: 1` on the inner
     `multiple()` or wrap the result with `map()`, e.g.
-    `map(multiple(p), xs => xs.length > 0 ? xs : fallback)`.  [[#408]]
+    `map(multiple(p), xs => xs.length > 0 ? xs : fallback)`.  [[#408], [#776]]
 
  -  `Parser.complete()` and `Parser.shouldDeferCompletion()` now accept an
     optional `ExecutionContext` parameter.  All built-in parser
@@ -1538,6 +1538,7 @@ To be released.
 [#773]: https://github.com/dahlia/optique/pull/773
 [#774]: https://github.com/dahlia/optique/pull/774
 [#775]: https://github.com/dahlia/optique/pull/775
+[#776]: https://github.com/dahlia/optique/pull/776
 
 ### @optique/config
 
