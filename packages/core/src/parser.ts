@@ -685,11 +685,14 @@ export type ParserResult<TState> =
      *   marker stays set across subsequent parse calls until
      *   `complete()` verifies the speculative selection.
      *
-     * Outer combinators like {@link or} and {@link longestMatch} should
-     * not treat provisional successes as definitive — a definitive
-     * branch must be allowed to take priority, and a definitive
+     * Outer combinators should not treat provisional successes as
+     * definitive.  For example, {@link or} should still allow a
+     * definitive branch to take priority, and a definitive
      * zero-consuming fallback must not be displaced by a provisional
-     * consuming hit.
+     * consuming hit.  {@link longestMatch} may still prefer a longer
+     * provisional match over a shorter definitive one; when match
+     * lengths are equal, definitive results take priority over
+     * provisional ones.
      *
      * @since 1.0.0
      */
