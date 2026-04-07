@@ -10818,7 +10818,9 @@ export function conditional(
           // Keep parse results provisional across subsequent calls so
           // outer combinators (or() / longestMatch()) don't treat the
           // unverified speculative selection as definitive.  The flag
-          // is cleared by completeAsync() once it verifies the choice.
+          // is consulted (and locally cleared) during completion
+          // verification — completeAsync() does not write the cleared
+          // state back into parse-time state.
           ...((state.speculative || branchResult.provisional)
             ? { provisional: true as const }
             : {}),
