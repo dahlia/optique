@@ -377,11 +377,15 @@ bindEnv(option("--name", string({ pattern: /^[A-Z]+$/ })), {
 ~~~~
 
 Validation is forwarded through standard combinators (`optional()`,
-`withDefault()`) and through wrapping `bindEnv()` / `bindConfig()`
-layers.  It is intentionally *not* forwarded through `map()` because the
-mapping function is one-way: the mapped output type no longer corresponds
-to the inner parser's constraints.  Wrapping an inner parser in `map()`
-will therefore silently bypass fallback validation.
+`withDefault()`, `group()`, `command()`) and through wrapping `bindEnv()`
+/ `bindConfig()` layers.  It is intentionally *not* forwarded through
+`map()` because the mapping function is one-way: the mapped output type
+no longer corresponds to the inner parser's constraints.  Dependency-
+derived value parsers (`derive` / `deriveFrom`) are likewise exempt
+because their `format()` rebuilds from *default* dependency values
+rather than the live-resolved ones, so a round-trip would validate
+against the wrong branch.  Wrapping an inner parser in `map()` or
+`derive()` will therefore silently bypass fallback validation.
 
 ### Help, version, and completion
 
