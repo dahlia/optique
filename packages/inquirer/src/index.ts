@@ -971,11 +971,11 @@ export function prompt<M extends Mode, TValue, TState>(
         "prepend",
       );
     },
-    // Plain PromptBindState with hasCliValue: false.  See the comment on
-    // promptCache above for why we no longer use a class-based sentinel:
-    // phase detection is carried by {@link ExecutionContext.phase} instead
-    // of state identity, so object()'s zero-consumption pass can now run
-    // prompt.parse() without breaking the probe-vs-real distinction.
+    // Plain PromptBindState with hasCliValue: false.  We no longer use a
+    // class-based sentinel: phase detection is carried by
+    // {@link ExecutionContext.phase} instead of state identity, so
+    // object()'s zero-consumption pass can now run prompt.parse() without
+    // breaking the probe-vs-real distinction.
     initialState: {
       [promptBindStateKey]: true as const,
       hasCliValue: false as const,
