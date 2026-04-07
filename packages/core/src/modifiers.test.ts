@@ -5260,8 +5260,8 @@ describe("state management edge cases", () => {
     // returns a value.
     function completeOnly<T>(value: T): Parser<"sync", T, undefined> {
       return {
-        $valueType: [] as T[],
-        $stateType: [] as undefined[],
+        $valueType: [] as readonly T[],
+        $stateType: [] as readonly undefined[],
         $mode: "sync",
         priority: 0,
         usage: [],
