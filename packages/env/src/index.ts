@@ -485,6 +485,7 @@ export function bindEnv<
               options,
               state,
               sourceMetadata.extractSourceValue,
+              parser,
             );
           }
           return sourceMetadata.extractSourceValue(state);
@@ -503,6 +504,7 @@ export function bindEnv<
           options,
           innerState,
           sourceMetadata.extractSourceValue,
+          parser,
         );
       },
     }),
@@ -642,10 +644,17 @@ function getEnvOrDefault<M extends Mode, TValue>(
  * `options.default` and finally delegates to the wrapped parser's source
  * extractor.
  *
+ * When `innerParser` exposes a `validateValue` hook, env-sourced values
+ * and the configured default are re-validated against the inner parser's
+ * CLI constraints (see issue #414).  This is only called from the
+ * `preservesSourceValue: true` branch in {@link bindEnv}, so the source
+ * value type is guaranteed to equal `TValue`.
+ *
  * @param state The wrapper state, which may carry env annotations.
  * @param options The binding options with lookup and default settings.
  * @param innerState The unwrapped inner state for delegated extraction.
  * @param extractInnerSourceValue The wrapped parser's source extractor.
+ * @param innerParser The wrapped parser, used to revalidate fallback values.
  * @returns The resolved source value, an async source value, or `undefined`.
  * @throws {Error} Propagates errors thrown by the env source callback
  *                 (`sourceData.source(fullKey)`).
@@ -661,6 +670,7 @@ function getEnvSourceValue<M extends Mode, TValue>(
     | ValueParserResult<unknown>
     | Promise<ValueParserResult<unknown> | undefined>
     | undefined,
+  innerParser?: Parser<M, TValue, unknown>,
 ):
   | ValueParserResult<unknown>
   | Promise<ValueParserResult<unknown> | undefined>
@@ -674,6 +684,27 @@ function getEnvSourceValue<M extends Mode, TValue>(
     sourceData?.prefix ?? options.context.prefix
   }${options.key}`;
   const rawValue = sourceData?.source(fullKey);
+
+  // Runs a successful fallback result through the inner parser's
+  // validateValue() when available.  Since getEnvSourceValue is only
+  // invoked from the preservesSourceValue: true branch, the source
+  // value type matches TValue so validation is type-safe (#414).
+  const validateFallback = (
+    parsed: ValueParserResult<TValue>,
+  ):
+    | ValueParserResult<unknown>
+    | Promise<ValueParserResult<unknown>> => {
+    if (!parsed.success) return parsed;
+    if (
+      innerParser == null || typeof innerParser.validateValue !== "function"
+    ) {
+      return parsed;
+    }
+    return innerParser.validateValue(parsed.value) as
+      | ValueParserResult<unknown>
+      | Promise<ValueParserResult<unknown>>;
+  };
+
   if (rawValue !== undefined) {
     if (typeof rawValue !== "string") {
       const type = rawValue === null
@@ -689,14 +720,19 @@ function getEnvSourceValue<M extends Mode, TValue>(
       };
     }
     const parsed = options.parser.parse(rawValue);
-    return parsed;
+    if (parsed instanceof Promise) {
+      return parsed.then((p) =>
+        validateFallback(p as ValueParserResult<TValue>)
+      );
+    }
+    return validateFallback(parsed);
   }
 
   if (options.default !== undefined) {
-    return {
+    return validateFallback({
       success: true as const,
       value: options.default,
-    };
+    });
   }
 
   return extractInnerSourceValue(innerState);

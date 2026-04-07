@@ -763,6 +763,118 @@ describe("bindEnv()", () => {
       const result = await parseAsync(parser, []);
       assert.ok(!result.success);
     });
+
+    it("forwards validateValue through group() wrapping", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        group(
+          "Server",
+          option("--name", string({ pattern: /^[A-Z]+$/ })),
+        ),
+        {
+          context,
+          key: "NAME",
+          parser: string(),
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    it("validates dependency-source env values through inner parser", () => {
+      const context = createEnvContext({
+        source: (key) => ({ PORT: "80" })[key],
+      });
+      const source = dependency(integer({ min: 1024 }));
+      const portParser = bindEnv(option("--port", source), {
+        context,
+        key: "PORT",
+        parser: integer(),
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parseResult = portParser.parse({
+        buffer: [],
+        state: injectAnnotations(portParser.initialState, annotations),
+        optionsTerminated: false,
+        usage: portParser.usage,
+      });
+      assert.ok(parseResult.success);
+      const extracted = portParser.dependencyMetadata?.source
+        ?.extractSourceValue(parseResult.next.state);
+      assert.ok(extracted != null && !(extracted instanceof Promise));
+      assert.ok(!extracted.success);
+    });
+
+    it("validates dependency-source defaults through inner parser", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const source = dependency(integer({ min: 1024 }));
+      const portParser = bindEnv(option("--port", source), {
+        context,
+        key: "PORT",
+        parser: integer(),
+        default: 80 as never,
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parseResult = portParser.parse({
+        buffer: [],
+        state: injectAnnotations(portParser.initialState, annotations),
+        optionsTerminated: false,
+        usage: portParser.usage,
+      });
+      assert.ok(parseResult.success);
+      const extracted = portParser.dependencyMetadata?.source
+        ?.extractSourceValue(parseResult.next.state);
+      assert.ok(extracted != null && !(extracted instanceof Promise));
+      assert.ok(!extracted.success);
+    });
+
+    it("does not attach validateValue to derived value parsers", () => {
+      // Derived value parsers (deriveFrom / derive) rebuild from default
+      // dependency values, so their format() does not correspond to a
+      // live-validated round-trip.  bindEnv must skip validation in that
+      // case and return the configured default unchanged.
+      const source = dependency(string());
+      const derived = source.deriveSync({
+        metavar: "TAG",
+        defaultValue: () => "default-dep",
+        factory: (dep: string): ValueParser<"sync", string> => ({
+          $mode: "sync",
+          metavar: "TAG",
+          placeholder: "",
+          parse: (input: string) => ({
+            success: true as const,
+            value: `${dep}:${input}`,
+          }),
+          format: (value: string) => value,
+        }),
+      });
+      const derivedOption = option("--tag", derived);
+      // Sanity check: derived value parsers have no validateValue.
+      assert.equal(derivedOption.validateValue, undefined);
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(derivedOption, {
+        context,
+        key: "TAG",
+        parser: string(),
+        default: "fallback" as never,
+      });
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, "fallback");
+    });
   });
 
   it("supports env-only values via fail() parser", () => {

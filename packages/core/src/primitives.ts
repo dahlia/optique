@@ -1413,29 +1413,42 @@ export function option<M extends Mode, T>(
   // round-tripping through ValueParser.format() + ValueParser.parse().
   // Used by bindEnv() and bindConfig() to enforce parser constraints
   // on fallback values.
-  if (valueParser != null) {
+  //
+  // Derived value parsers (`deriveFrom`) are exempt: their `format()`
+  // rebuilds the parser from *default* dependency values rather than
+  // the live ones resolved at parse time, so a format+parse round-trip
+  // would validate against the wrong branch.  For those parsers we
+  // return the value unchanged instead of mis-validating.
+  if (valueParser == null) {
+    // Flag-form option (no value parser): the only runtime value is
+    // the literal `true`, and there are no constraints to enforce.
+    // Attach a trivial validator so that bindEnv(flag-form) /
+    // bindConfig(flag-form) can forward validateValue through
+    // downstream wrappers without losing the hook.
+    Object.defineProperty(result, "validateValue", {
+      value(v: boolean): ModeValue<"sync", ValueParserResult<boolean>> {
+        return { success: true as const, value: v } as ModeValue<
+          "sync",
+          ValueParserResult<boolean>
+        >;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  } else if (!isDerivedValueParser(valueParser)) {
     const vp = valueParser;
     Object.defineProperty(result, "validateValue", {
       value(
         v: T | boolean,
       ): ModeValue<M, ValueParserResult<T | boolean>> {
-        // Boolean stand-ins are used for the no-value form of option();
-        // they have no ValueParser constraints to check.
-        if (typeof v === "boolean") {
-          return wrapForMode(mode, {
-            success: true as const,
-            value: v,
-          });
-        }
         let stringified: string;
         try {
           stringified = vp.format(v as T);
         } catch {
-          // format() may throw for sentinel defaults (e.g., custom
-          // union-typed defaults) or for dependency-derived value
-          // parsers whose factory cannot run without the current
-          // dependency value.  Skip validation in those cases and
-          // return success unchanged.
+          // format() may throw for sentinel defaults whose type cannot
+          // be serialized by this value parser.  Skip validation and
+          // return success unchanged so sentinel-default users are
+          // not broken.
           return wrapForMode(mode, {
             success: true as const,
             value: v,
@@ -2183,7 +2196,13 @@ export function argument<M extends Mode, T>(
   // map() does not propagate it to the mapped type (see issue #414).
   // Re-validates a value as if it had been parsed from CLI input by
   // round-tripping through ValueParser.format() + ValueParser.parse().
-  {
+  //
+  // Derived value parsers (`deriveFrom`) are exempt: their `format()`
+  // rebuilds the parser from *default* dependency values rather than
+  // the live ones resolved at parse time, so a format+parse round-trip
+  // would validate against the wrong branch.  For those parsers we
+  // skip attaching validateValue entirely.
+  if (!isDerivedValueParser(valueParser)) {
     const vp = valueParser;
     const vpMode = valueParser.$mode;
     Object.defineProperty(result, "validateValue", {
@@ -2192,10 +2211,10 @@ export function argument<M extends Mode, T>(
         try {
           stringified = vp.format(v);
         } catch {
-          // format() may throw for sentinel defaults or for
-          // dependency-derived value parsers whose factory cannot run
-          // without the current dependency value.  Skip validation and
-          // return success unchanged in those cases.
+          // format() may throw for sentinel defaults whose type cannot
+          // be serialized by this value parser.  Skip validation and
+          // return success unchanged so sentinel-default users are
+          // not broken.
           return wrapForMode(vpMode, {
             success: true as const,
             value: v,
@@ -2744,6 +2763,16 @@ export function command<M extends Mode, T, TState>(
   if (typeof parser.normalizeValue === "function") {
     Object.defineProperty(result, "normalizeValue", {
       value: parser.normalizeValue.bind(parser),
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  // Forward fallback validation as non-enumerable (see issue #414).
+  // command() is a transparent wrapper over its inner parser, so when
+  // a command's result has a validateValue hook it is delegated as-is.
+  if (typeof parser.validateValue === "function") {
+    Object.defineProperty(result, "validateValue", {
+      value: parser.validateValue.bind(parser),
       configurable: true,
       enumerable: false,
     });

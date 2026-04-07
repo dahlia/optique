@@ -15,8 +15,11 @@ To be released.
     `ValueParser`'s constraints (e.g., regex patterns, numeric bounds,
     `choice()` values).  Built-in primitives (`option()`, `argument()`)
     implement it via a `format()`+`parse()` round-trip; combinator
-    wrappers (`optional()`, `withDefault()`) forward it from inner
-    parsers.  `map()`, `or()`, `longestMatch()`, `merge()`, and
+    wrappers (`optional()`, `withDefault()`, `group()`, `command()`)
+    forward it from inner parsers.  Dependency-derived value parsers
+    (`deriveFrom` / `derive`) are exempt because their `format()`
+    rebuilds from default dependency values rather than the live
+    resolved values.  `map()`, `or()`, `longestMatch()`, `merge()`, and
     `concat()` intentionally do not forward this method.  Used by
     `bindEnv()` and `bindConfig()` to enforce parser constraints on
     fallback values.  [[#414]]
@@ -1560,13 +1563,16 @@ To be released.
     `integer({ min: 1024 })` or `string({ pattern })` could be silently
     bypassed through config-sourced values and defaults.  Both config
     values and defaults are now routed through the inner parser's
-    `validateValue()` method when available; values that fail the inner
-    parser's constraints are now rejected with the same error that a
-    CLI-sourced value would produce.  Fallback values that flow through
-    `map()` are exempt because the mapped output type no longer matches
-    the inner parser's constraints.  This is a behavior change for any
-    code that relied on constraint-violating config values or defaults
-    being accepted.  [[#414]]
+    `validateValue()` method when available, including when the bound
+    parser serves as a dependency source for a derived parser.  Values
+    that fail the inner parser's constraints are rejected with the same
+    error that a CLI-sourced value would produce.  Fallback values that
+    flow through `map()` are exempt because the mapped output type no
+    longer matches the inner parser's constraints; dependency-derived
+    value parsers (`derive` / `deriveFrom`) are also exempt because
+    their `format()` rebuilds from default dependency values.  This is
+    a behavior change for any code that relied on constraint-violating
+    config values or defaults being accepted.  [[#414]]
 
  -  Removed `configKey` symbol.  Each `ConfigContext` instance now stores
     its data under its own unique `id` symbol (i.e., `context.id`) so that
@@ -1716,11 +1722,14 @@ environment variable integration via source contexts.  [[#86], [#135]]
     could be silently bypassed through an environment variable or
     default.  Both environment variable values and defaults are now
     routed through the inner parser's `validateValue()` method when
-    available.  Fallback values that flow through `map()` are exempt
-    because the mapped output type no longer matches the inner parser's
-    constraints.  This is a behavior change for any code that relied on
-    constraint-violating environment values or defaults being accepted.
-    [[#414]]
+    available, including when the bound parser serves as a dependency
+    source for a derived parser.  Fallback values that flow through
+    `map()` are exempt because the mapped output type no longer matches
+    the inner parser's constraints; dependency-derived value parsers
+    (`derive` / `deriveFrom`) are also exempt because their `format()`
+    rebuilds from default dependency values.  This is a behavior change
+    for any code that relied on constraint-violating environment values
+    or defaults being accepted.  [[#414]]
 
  -  Added `createEnvContext()` for creating static environment contexts with
     optional key prefixes and custom source functions.

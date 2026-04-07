@@ -10190,6 +10190,16 @@ export function group<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
+  // Forward fallback validation as non-enumerable (see issue #414).
+  // group() is a thin wrapper around its inner parser, so validateValue
+  // delegates transparently.
+  if (typeof parser.validateValue === "function") {
+    Object.defineProperty(groupParser, "validateValue", {
+      value: parser.validateValue.bind(parser),
+      configurable: true,
+      enumerable: false,
+    });
+  }
   return groupParser;
 }
 

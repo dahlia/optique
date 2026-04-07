@@ -907,7 +907,17 @@ export function bindConfig<
       ...sourceMetadata,
       getMissingSourceValue: sourceMetadata.preservesSourceValue !== false &&
           options.default !== undefined
-        ? () => ({ success: true as const, value: options.default })
+        ? () => {
+          // Route the default through the inner parser's validateValue
+          // so that CLI constraints (regex, numeric bounds, choices)
+          // cannot be bypassed via bindConfig defaults (#414).
+          if (typeof parser.validateValue === "function") {
+            return parser.validateValue(options.default!) as
+              | ValueParserResult<unknown>
+              | Promise<ValueParserResult<unknown>>;
+          }
+          return { success: true as const, value: options.default };
+        }
         : undefined,
       extractSourceValue: (state: unknown) => {
         if (!isConfigBindState(state)) {
@@ -917,6 +927,7 @@ export function bindConfig<
               options,
               state,
               sourceMetadata.extractSourceValue,
+              parser,
             );
           }
           return sourceMetadata.extractSourceValue(state);
@@ -937,6 +948,7 @@ export function bindConfig<
           options,
           fallbackState,
           sourceMetadata.extractSourceValue,
+          parser,
         );
       },
     }),
@@ -1066,15 +1078,28 @@ function validateFallbackValue<M extends "sync" | "async", TValue>(
  * back to `options.default` and finally delegates to the wrapped parser's
  * source extractor.
  *
+ * When `innerParser` exposes `validateValue`, the returned fallback is
+ * routed through it so that the inner CLI parser's constraints are
+ * enforced on config-sourced source values and configured defaults
+ * (see issue #414).  This helper is only invoked from the
+ * `preservesSourceValue: true` branch in {@link bindConfig}, so the
+ * source value type is guaranteed to equal `TValue`.
+ *
  * @param state The wrapper state, which may carry config annotations.
  * @param options The binding options with lookup and default settings.
  * @param innerState The unwrapped inner state for delegated extraction.
  * @param extractInnerSourceValue The wrapped parser's source extractor.
+ * @param innerParser The wrapped parser, used to revalidate fallback values.
  * @returns The resolved source value, an async source value, or `undefined`.
  * @throws {TypeError} If {@link getConfigOrDefault} rejects a thenable-returning
  *                     key callback.
  */
-function getConfigSourceValue<T, TValue, TConfigMeta>(
+function getConfigSourceValue<
+  M extends "sync" | "async",
+  T,
+  TValue,
+  TConfigMeta,
+>(
   state: unknown,
   options: BindConfigOptions<T, TValue, TConfigMeta>,
   innerState: unknown,
@@ -1084,6 +1109,7 @@ function getConfigSourceValue<T, TValue, TConfigMeta>(
     | ValueParserResult<unknown>
     | Promise<ValueParserResult<unknown> | undefined>
     | undefined,
+  innerParser?: Parser<M, TValue, unknown>,
 ):
   | ValueParserResult<unknown>
   | Promise<ValueParserResult<unknown> | undefined>
@@ -1095,24 +1121,43 @@ function getConfigSourceValue<T, TValue, TConfigMeta>(
     | undefined;
   const configData = annotationValue?.data ?? getActiveConfig<T>(contextId);
 
+  // Runs a successful fallback value through the inner parser's
+  // validateValue() hook when available.  May return a Promise if the
+  // inner parser is async (#414).
+  const validateFallback = (
+    parsed: ValueParserResult<TValue>,
+  ):
+    | ValueParserResult<unknown>
+    | Promise<ValueParserResult<unknown>> => {
+    if (!parsed.success) return parsed;
+    if (
+      innerParser == null || typeof innerParser.validateValue !== "function"
+    ) {
+      return parsed;
+    }
+    return innerParser.validateValue(parsed.value) as
+      | ValueParserResult<unknown>
+      | Promise<ValueParserResult<unknown>>;
+  };
+
   if (configData !== undefined && configData !== null) {
-    // The dependency-source extraction path is intentionally sync-only:
-    // dependency sources are resolved during the synchronous phase of
-    // parsing, and the inner parser is not threaded in here, so we pass
-    // `"sync"` and `undefined` for the new parameters on
-    // getConfigOrDefault.  Fallback validation for dependency-source
-    // paths is tracked as a follow-up to issue #414 and is not in
-    // scope for the initial fix.
+    // Resolve the config value through getConfigOrDefault in sync mode
+    // without threading the inner parser (we re-validate below so the
+    // async-capable validator is applied consistently with the default
+    // branch).
     const resolved = getConfigOrDefault(
       state,
       options,
       "sync",
       undefined,
     ) as Result<TValue>;
-    if (resolved.success) return resolved;
+    if (resolved.success) return validateFallback(resolved);
   }
   if (options.default !== undefined) {
-    return { success: true as const, value: options.default };
+    return validateFallback({
+      success: true as const,
+      value: options.default,
+    });
   }
   return extractInnerSourceValue(innerState);
 }

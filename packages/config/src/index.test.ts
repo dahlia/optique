@@ -3,7 +3,14 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 import { getDocPage, parse, suggestSync } from "@optique/core/parser";
 import type { Parser } from "@optique/core/parser";
-import { concat, merge, object, or, tuple } from "@optique/core/constructs";
+import {
+  concat,
+  group,
+  merge,
+  object,
+  or,
+  tuple,
+} from "@optique/core/constructs";
 import { getAnnotations, injectAnnotations } from "@optique/core/annotations";
 import { dependency } from "@optique/core/dependency";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
@@ -487,6 +494,107 @@ describe("bindConfig", () => {
           context: envContext,
           key: "NAME",
           parser: string(),
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    test("validates dependency-source config values through inner parser", () => {
+      const context = createConfigContext({
+        schema: z.object({ port: z.number() }),
+      });
+      const source = dependency(integer({ min: 1024 }));
+      const portParser = bindConfig(option("--port", source), {
+        context,
+        key: "port",
+      });
+      const annotations: Annotations = {
+        [context.id]: { data: { port: 80 } },
+      };
+      const parseResult = portParser.parse({
+        buffer: [],
+        state: injectAnnotations(portParser.initialState, annotations),
+        optionsTerminated: false,
+        usage: portParser.usage,
+      });
+      assert.ok(parseResult.success);
+      const extracted = portParser.dependencyMetadata?.source
+        ?.extractSourceValue(parseResult.next.state);
+      assert.ok(extracted != null && !(extracted instanceof Promise));
+      assert.ok(!extracted.success);
+    });
+
+    test("validates dependency-source defaults through inner parser", () => {
+      const context = createConfigContext({
+        schema: z.object({ port: z.number().optional() }),
+      });
+      const source = dependency(integer({ min: 1024 }));
+      const portParser = bindConfig(option("--port", source), {
+        context,
+        key: "port",
+        default: 80 as never,
+      });
+      const parseResult = portParser.parse({
+        buffer: [],
+        state: portParser.initialState,
+        optionsTerminated: false,
+        usage: portParser.usage,
+      });
+      assert.ok(parseResult.success);
+      // getMissingSourceValue routes through inner parser's validator.
+      const getMissing = portParser.dependencyMetadata?.source
+        ?.getMissingSourceValue;
+      assert.ok(typeof getMissing === "function");
+      const missing = getMissing!();
+      assert.ok(missing != null && !(missing instanceof Promise));
+      assert.ok(!missing.success);
+    });
+
+    test("does not attach validateValue to derived value parsers", () => {
+      const source = dependency(string());
+      const derived = source.deriveSync({
+        metavar: "TAG",
+        defaultValue: () => "default-dep",
+        factory: (dep: string): ValueParser<"sync", string> => ({
+          $mode: "sync",
+          metavar: "TAG",
+          placeholder: "",
+          parse: (input: string) => ({
+            success: true as const,
+            value: `${dep}:${input}`,
+          }),
+          format: (value: string) => value,
+        }),
+      });
+      const derivedOption = option("--tag", derived);
+      assert.equal(derivedOption.validateValue, undefined);
+      const context = createConfigContext({
+        schema: z.object({ tag: z.string().optional() }),
+      });
+      const parser = bindConfig(derivedOption, {
+        context,
+        key: "tag",
+        default: "fallback" as never,
+      });
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, "fallback");
+    });
+
+    test("forwards validateValue through group() wrapping", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string().optional() }),
+      });
+      const parser = bindConfig(
+        group(
+          "Server",
+          option("--name", string({ pattern: /^[A-Z]+$/ })),
+        ),
+        {
+          context,
+          key: "name",
           default: "abc" as never,
         },
       );
