@@ -5,7 +5,6 @@ import {
   annotationKey,
   getAnnotations,
   inheritAnnotations,
-  injectAnnotations,
   isInjectedAnnotationWrapper,
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
@@ -179,27 +178,18 @@ function deriveOptionalInnerParseState<TState>(
   if (Array.isArray(outerState)) {
     return outerState[0];
   }
-  const initial = parser.initialState;
   // Propagate any annotations carried by the outer wrapper state into
   // the inner parser's initial state so that source-binding wrappers
   // like `bindEnv()` / `bindConfig()` placed under
   // `optional()` / `withDefault()` can resolve from annotations at top
-  // level.  `injectAnnotations` handles both primitive and object
-  // initial states: for primitives it produces a wrapper object that
-  // carries the original value plus the annotation slot; for plain
-  // objects it clones and adds `[annotationKey]`.  A freshly-built
-  // `initialState` never carries annotations of its own, so injection
-  // is safe and never masks existing nested markers.
-  if (
-    outerState != null &&
-    typeof outerState === "object"
-  ) {
-    const annotations = getAnnotations(outerState);
-    if (annotations != null) {
-      return injectAnnotations(initial, annotations) as TState;
-    }
-  }
-  return initial;
+  // level.  `inheritAnnotations` handles every shape: primitives, null,
+  // and undefined get wrapped with the annotation slot; plain objects
+  // and arrays are shallow-cloned with the annotation key added; and
+  // non-plain class instances (which may carry private fields that
+  // `Object.create` + `Object.getOwnPropertyDescriptors` cannot
+  // preserve) are returned unchanged, so cloning never strips their
+  // private state.
+  return inheritAnnotations(outerState, parser.initialState) as TState;
 }
 
 /**
