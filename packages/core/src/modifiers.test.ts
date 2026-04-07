@@ -5671,6 +5671,60 @@ describe("state management edge cases", () => {
     });
 
     // Regression test for the review feedback that
+    // `deriveOptionalInnerParseState()` was wrapping primitive inner
+    // initial states (e.g. `constant("v")` whose `initialState` IS
+    // `"v"`) into an `injectAnnotations` wrapper object whenever the
+    // outer context carried annotations.  Because echo-semantics
+    // parsers like `constant()` return their state verbatim from
+    // `complete()`, the wrapper leaked into the final value inside
+    // `object({ ... })`, so a field declared as
+    // `optional(constant("v"))` produced `{}` instead of `"v"`.  The
+    // fix is to return the primitive initial state unchanged from
+    // `deriveOptionalInnerParseState()` (nullish initial states still
+    // go through `inheritAnnotations()` so source-binding wrappers
+    // like `bindEnv()` / `bindConfig()` can still resolve from
+    // annotations at parse-time).
+    it("object({ x: optional(constant(...)) }) with annotations returns the primitive", () => {
+      const marker = Symbol.for("@test/issue-233-primitive-constant");
+      const parser = object({ mode: optional(constant("v" as const)) });
+      const result = parse(parser, [], {
+        annotations: { [marker]: "present" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.mode, "v");
+      }
+    });
+
+    it("object({ x: withDefault(constant(...), fb) }) with annotations returns the inner primitive", () => {
+      const marker = Symbol.for(
+        "@test/issue-233-primitive-constant-withDefault",
+      );
+      const parser = object({
+        mode: withDefault(constant("inner" as const), "fallback" as const),
+      });
+      const result = parse(parser, [], {
+        annotations: { [marker]: "present" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.mode, "inner");
+      }
+    });
+
+    it("optional(constant(...)) standalone with annotations returns the primitive", () => {
+      const marker = Symbol.for("@test/issue-233-primitive-standalone");
+      const parser = optional(constant("v" as const));
+      const result = parse(parser, [], {
+        annotations: { [marker]: "present" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "v");
+      }
+    });
+
+    // Regression test for the review feedback that
     // `deriveOptionalInnerParseState()` was dropping outer-array
     // annotations on parse-time re-entry.  When `object()` commits a
     // child optional() state via `getAnnotatedChildState()`, the

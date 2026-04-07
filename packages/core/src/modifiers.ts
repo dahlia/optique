@@ -199,14 +199,22 @@ function deriveOptionalInnerParseState<TState>(
   // the inner parser's initial state so that source-binding wrappers
   // like `bindEnv()` / `bindConfig()` placed under
   // `optional()` / `withDefault()` can resolve from annotations at top
-  // level.  `inheritAnnotations` handles every shape: primitives, null,
-  // and undefined get wrapped with the annotation slot; plain objects
-  // and arrays are shallow-cloned with the annotation key added; and
-  // non-plain class instances (which may carry private fields that
-  // `Object.create` + `Object.getOwnPropertyDescriptors` cannot
-  // preserve) are returned unchanged, so cloning never strips their
-  // private state.
-  return inheritAnnotations(outerState, parser.initialState) as TState;
+  // level.  Non-nullish primitive initial states (e.g. `constant("v")`
+  // whose `initialState` IS `"v"`) are returned verbatim: otherwise
+  // `inheritAnnotations()` would wrap the primitive into an opaque
+  // `injectAnnotations` wrapper object, and echo-semantics parsers
+  // like `constant()` would return that wrapper from `complete()`
+  // instead of the original primitive, leaking through `object()`
+  // fields as an empty-looking object.  Nullish initial states
+  // (`undefined` / `null`, the "no state yet" signal used by
+  // `option()` / `argument()` / `bindEnv()` / `bindConfig()`) still go
+  // through `inheritAnnotations()` so source-binding wrappers can read
+  // the propagated annotations from their `parse()` context.
+  const initial = parser.initialState;
+  if (initial != null && typeof initial !== "object") {
+    return initial;
+  }
+  return inheritAnnotations(outerState, initial) as TState;
 }
 
 /**
