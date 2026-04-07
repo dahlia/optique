@@ -8236,7 +8236,7 @@ describe("conditional", () => {
     assert.ok(result.success, "expected success but got failure");
     if (result.success) {
       assert.deepEqual(result.value.mode, ["fast", 4]);
-      assert.equal(result.value.verbose, true);
+      assert.ok(result.value.verbose);
     }
   });
 
