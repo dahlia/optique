@@ -83,7 +83,7 @@ To be released.
     the remaining tokens instead of having them absorbed into an overfull
     `multiple()` state.  [[#755], [#765]]
 
- -  Fixed `multiple()` failing to honour its documented zero-or-more default
+ -  Fixed `multiple()` failing to honor its documented zero-or-more default
     when used as a top-level parser.  Previously,
     `parse(multiple(flag("-v")), [])` reported *“Expected an option, but got
     end of input.”* instead of succeeding with `[]`, even though `multiple()`
@@ -104,7 +104,7 @@ To be released.
     configured default on empty input because the wrapped `multiple()`
     never reports a parse failure: such compositions now return `[]` from
     `multiple()` directly.  Users who want the previous “use default when
-    there are no matches” behaviour can either set `min: 1` on the inner
+    there are no matches” behavior can either set `min: 1` on the inner
     `multiple()` or wrap the result with `map()`, e.g.
     `map(multiple(p), xs => xs.length > 0 ? xs : fallback)`.  [[#408], [#776]]
 
