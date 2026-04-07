@@ -11739,7 +11739,23 @@ export function conditional(
         }
       }
 
-      // Default branch (accessible during all phases).
+      // Parse/suggest probe with no branch selected: do NOT call
+      // defaultBranch.complete() — the default branch may contain
+      // side-effecting completers (e.g., prompt(), bindEnv) that
+      // should only fire during the real complete pass.  The probe
+      // consumer (object()'s allCanComplete check, etc.) only inspects
+      // `success`, so return success with a placeholder value.
+      if (
+        defaultBranch !== undefined &&
+        (exec?.phase === "parse" || exec?.phase === "suggest")
+      ) {
+        return {
+          success: true,
+          value: [undefined, undefined] as const,
+        };
+      }
+
+      // Default branch (real complete only).
       if (defaultBranch !== undefined) {
         const branchState = getAnnotatedChildState(
           state,

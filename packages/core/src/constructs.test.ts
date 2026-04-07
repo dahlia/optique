@@ -8391,6 +8391,151 @@ describe("conditional", () => {
     assert.equal(branchCompleteCount, 1);
   });
 
+  it("should not run deferred default branch complete during a probe", async () => {
+    // Regression for #774: when no named branch consumed tokens (so
+    // conditional() falls back to the deferred path with
+    // selectedBranch=undefined), a subsequent complete() call from a
+    // parse/suggest probe must NOT invoke defaultBranch.complete().
+    // Otherwise a default branch containing prompt() or any deferred
+    // completer would fire during object()'s allCanComplete probe.
+    let defaultCompleteCount = 0;
+    let defaultCompletePhase: string | undefined;
+    let discriminatorCompleteCount = 0;
+    const defaultBranchParser: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: (_state, exec) => {
+        defaultCompleteCount++;
+        defaultCompletePhase = exec?.phase;
+        return Promise.resolve({
+          success: true as const,
+          value: "default-value",
+        });
+      },
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    // Discriminator resolves to a key NOT in branches so the real
+    // complete path falls through to the default branch.
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () => {
+        discriminatorCompleteCount++;
+        return Promise.resolve({
+          success: true as const,
+          value: "missing-key",
+        });
+      },
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: option("--threads", integer()),
+      },
+      defaultBranchParser,
+    );
+
+    // Step 1: parse with empty input — no named branch consumes, so
+    // conditional() falls back to the deferred path with
+    // selectedBranch=undefined.
+    const parseResult = await parser.parse({
+      buffer: [],
+      optionsTerminated: false,
+      state: parser.initialState,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success, "expected parse to succeed");
+    if (!parseResult.success) return;
+    assert.equal(defaultCompleteCount, 0);
+    assert.equal(discriminatorCompleteCount, 0);
+
+    // Step 2: simulate object()'s probe with phase="parse".  The
+    // default branch's complete() must NOT fire — it may have side
+    // effects (e.g., prompt(), bindEnv).
+    const probeResult = await parser.complete(parseResult.next.state, {
+      usage: parser.usage,
+      path: [],
+      phase: "parse",
+      trace: undefined,
+    });
+    assert.ok(probeResult.success, "expected probe to succeed");
+    assert.equal(
+      defaultCompleteCount,
+      0,
+      "default branch complete fired during a parse-phase probe " +
+        `(phase=${defaultCompletePhase})`,
+    );
+    assert.equal(
+      discriminatorCompleteCount,
+      0,
+      "discriminator complete fired during a parse-phase probe",
+    );
+
+    // Step 3: simulate suggest-time runtime seeding with phase="suggest".
+    const suggestProbe = await parser.complete(parseResult.next.state, {
+      usage: parser.usage,
+      path: [],
+      phase: "suggest",
+      trace: undefined,
+    });
+    assert.ok(suggestProbe.success, "expected suggest probe to succeed");
+    assert.equal(
+      defaultCompleteCount,
+      0,
+      "default branch complete fired during a suggest-phase probe " +
+        `(phase=${defaultCompletePhase})`,
+    );
+    assert.equal(
+      discriminatorCompleteCount,
+      0,
+      "discriminator complete fired during a suggest-phase probe",
+    );
+
+    // Step 4: the real complete pass MUST run the default branch and
+    // resolve to its value.  The discriminator resolves to a key not
+    // in branches, so the deferred path falls through to the default
+    // branch's complete().
+    const realResult = await parser.complete(parseResult.next.state, {
+      usage: parser.usage,
+      path: [],
+      phase: "complete",
+      trace: undefined,
+    });
+    assert.ok(realResult.success, "expected real complete to succeed");
+    if (realResult.success) {
+      assert.deepEqual(realResult.value, [undefined, "default-value"]);
+    }
+    assert.equal(defaultCompleteCount, 1);
+  });
+
   it("should fall back to deferred when no branch consumes tokens", async () => {
     let completeCalled = false;
     const asyncDiscriminator: Parser<"async", string> = {
