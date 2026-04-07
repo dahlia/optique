@@ -1600,24 +1600,34 @@ export function multiple<M extends Mode, TValue, TState>(
           withChildContext(context, itemIndex, nextInitialState),
         );
         if (!result.success) {
-          // Fresh-item attempt also failed.  Absorb zero-consumption
-          // failures so complete() can apply the zero-or-more
-          // semantics (mirrors optional()'s
-          // processOptionalStyleResult).  See
-          // https://github.com/dahlia/optique/issues/408.
-          if (result.consumed === 0) {
+          // Fresh-item attempt also failed.  When `min === 0` we can
+          // absorb the zero-consumption failure so that complete()
+          // applies the documented zero-or-more semantics (returning
+          // an empty array).  See
+          // https://github.com/dahlia/optique/issues/408.  For
+          // `min > 0` we propagate the failure unchanged so that
+          // outer wrappers like optional() and withDefault() can
+          // still absorb it via their own processOptionalStyleResult
+          // fallback.
+          if (min === 0 && result.consumed === 0) {
             return { success: true, next: context, consumed: [] };
           }
           return result;
         }
         added = true;
-      } else {
+      } else if (min === 0) {
         // No fresh-item retry possible (either we already opened a
-        // fresh item or we've hit max).  Absorb the zero-consumption
-        // failure so complete() can enforce min/max and return an
-        // empty array when appropriate.  See
+        // fresh item or we've hit max) and we have no `min` to
+        // enforce.  Absorb the zero-consumption failure so complete()
+        // can return an empty array.  See
         // https://github.com/dahlia/optique/issues/408.
         return { success: true, next: context, consumed: [] };
+      } else {
+        // With `min > 0`, propagate the zero-consumption failure so
+        // that outer wrappers (optional(), withDefault()) can absorb
+        // it and supply their fallback values.  See
+        // https://github.com/dahlia/optique/issues/408.
+        return result;
       }
     }
     const mergedExec = mergeChildExec(context.exec, result.next.exec);
@@ -1746,24 +1756,34 @@ export function multiple<M extends Mode, TValue, TState>(
           withChildContext(context, itemIndex, nextInitialState),
         );
         if (!result.success) {
-          // Fresh-item attempt also failed.  Absorb zero-consumption
-          // failures so complete() can apply the zero-or-more
-          // semantics (mirrors optional()'s
-          // processOptionalStyleResult).  See
-          // https://github.com/dahlia/optique/issues/408.
-          if (result.consumed === 0) {
+          // Fresh-item attempt also failed.  When `min === 0` we can
+          // absorb the zero-consumption failure so that complete()
+          // applies the documented zero-or-more semantics (returning
+          // an empty array).  See
+          // https://github.com/dahlia/optique/issues/408.  For
+          // `min > 0` we propagate the failure unchanged so that
+          // outer wrappers like optional() and withDefault() can
+          // still absorb it via their own processOptionalStyleResult
+          // fallback.
+          if (min === 0 && result.consumed === 0) {
             return { success: true, next: context, consumed: [] };
           }
           return result;
         }
         added = true;
-      } else {
+      } else if (min === 0) {
         // No fresh-item retry possible (either we already opened a
-        // fresh item or we've hit max).  Absorb the zero-consumption
-        // failure so complete() can enforce min/max and return an
-        // empty array when appropriate.  See
+        // fresh item or we've hit max) and we have no `min` to
+        // enforce.  Absorb the zero-consumption failure so complete()
+        // can return an empty array.  See
         // https://github.com/dahlia/optique/issues/408.
         return { success: true, next: context, consumed: [] };
+      } else {
+        // With `min > 0`, propagate the zero-consumption failure so
+        // that outer wrappers (optional(), withDefault()) can absorb
+        // it and supply their fallback values.  See
+        // https://github.com/dahlia/optique/issues/408.
+        return result;
       }
     }
     const mergedExec = mergeChildExec(context.exec, result.next.exec);

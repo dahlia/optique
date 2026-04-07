@@ -3889,12 +3889,9 @@ describe("multiple", () => {
     const resultTooFew = parse(multipleParser, []);
     assert.ok(!resultTooFew.success);
     if (!resultTooFew.success) {
-      // Since https://github.com/dahlia/optique/issues/408, the min
-      // check is enforced at complete() time after multiple().parse()
-      // absorbs the inner end-of-input failure.
       assertErrorIncludes(
         resultTooFew.error,
-        "Expected at least 1 values, but got only 0",
+        "Expected an argument, but got end of input",
       );
     }
 
@@ -4730,15 +4727,38 @@ describe("multiple", () => {
       if (result.success) assert.deepEqual(result.value, []);
     });
 
-    it("enforces min at complete() time for top-level parse", () => {
+    it("propagates inner end-of-input failure when min > 0 and empty", () => {
+      // With `min > 0`, `multiple().parse()` must propagate
+      // zero-consumption inner failures so outer wrappers like
+      // optional()/withDefault() can still absorb them; the top-level
+      // parse surface therefore sees the inner end-of-input error
+      // rather than a `validateMultipleResult` min error.
       const result = parse(multiple(flag("-v"), { min: 2 }), []);
       assert.ok(!result.success);
       if (!result.success) {
         assertErrorIncludes(
           result.error,
-          "Expected at least 2 values, but got only 0",
+          "Expected an option, but got end of input",
         );
       }
+    });
+
+    it("preserves optional(multiple(min>0)) fallback on empty input", () => {
+      // Regression guard: optional() / withDefault() must continue to
+      // absorb multiple(min>0) parse failures on empty input after
+      // #408, so that the fallback values can be applied.
+      const result = parse(optional(multiple(flag("-v"), { min: 1 })), []);
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, undefined);
+    });
+
+    it("preserves withDefault(multiple(min>0), default) fallback", () => {
+      const result = parse(
+        withDefault(multiple(flag("-v"), { min: 1 }), [true as const]),
+        [],
+      );
+      assert.ok(result.success);
+      if (result.success) assert.deepEqual(result.value, [true]);
     });
 
     it("still succeeds with matches present at top level", () => {
@@ -4785,7 +4805,7 @@ describe("multiple", () => {
       if (result.success) assert.deepEqual(result.value, []);
     });
 
-    it("enforces min asynchronously at complete() time", async () => {
+    it("propagates inner end-of-input asynchronously when min > 0", async () => {
       const parser = multiple(
         option("--tag", asyncChoice(["a", "b"] as const)),
         { min: 1 },
@@ -4795,7 +4815,7 @@ describe("multiple", () => {
       if (!result.success) {
         assertErrorIncludes(
           result.error,
-          "Expected at least 1 values, but got only 0",
+          "Expected an option, but got end of input",
         );
       }
     });

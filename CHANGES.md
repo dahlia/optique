@@ -90,18 +90,22 @@ To be released.
     is documented as *“zero or more”*.  The empty-array semantics only
     worked when `multiple()` was wrapped in `object()`, `optional()`, or
     `withDefault()`, which absorbed the inner parser's failure on their own.
-    `multiple().parse()` now absorbs zero-consumption inner failures and
-    defers the zero-or-more decision to `complete()`, mirroring how
-    `optional()` already handles the same case.  The effective `min`
-    constraint is still enforced at `complete()` time, so for example
-    `parse(multiple(flag("-v"), { min: 2 }), [])` now fails with *“Expected
-    at least 2 values, but got only 0.”* (previously the inner
-    end-of-input error was surfaced).  As a consequence,
-    `withDefault(multiple(p), nonEmptyDefault)` no longer falls back to its
+    `multiple(p, { min: 0 }).parse()` (the default `min`) now absorbs
+    zero-consumption inner failures and defers to `complete()`, which
+    returns `[]` — mirroring how `optional()` already handles the same
+    case.  `multiple()` with `min > 0` still propagates zero-consumption
+    inner failures so that outer wrappers like `optional()` and
+    `withDefault()` continue to absorb them, so for example
+    `parse(optional(multiple(p, { min: 1 })), [])` still resolves to
+    `undefined` and
+    `parse(withDefault(multiple(p, { min: 1 }), fallback), [])` still
+    resolves to `fallback`.  `withDefault(multiple(p), nonEmptyDefault)`
+    (with the default `min: 0`), however, no longer falls back to its
     configured default on empty input because the wrapped `multiple()`
     never reports a parse failure: such compositions now return `[]` from
     `multiple()` directly.  Users who want the previous “use default when
-    there are no matches” behaviour can wrap the result with `map()`, e.g.
+    there are no matches” behaviour can either set `min: 1` on the inner
+    `multiple()` or wrap the result with `map()`, e.g.
     `map(multiple(p), xs => xs.length > 0 ? xs : fallback)`.  [[#408]]
 
  -  `Parser.complete()` and `Parser.shouldDeferCompletion()` now accept an
