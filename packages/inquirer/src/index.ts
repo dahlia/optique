@@ -1128,29 +1128,35 @@ export function prompt<M extends Mode, TValue, TState>(
         ? inheritAnnotations(state, innerInitialState)
         : innerInitialState;
 
+      // Read the inner parser's lazy `placeholder` if it exposes one,
+      // swallowing any throw from a misbehaving getter.  This is used
+      // in two places below (probe phase and `shouldDeferCompletion`
+      // deferral), so it is factored out to avoid duplicating the
+      // try/catch and the `"placeholder" in parser` check.
+      const readPlaceholder = (): TValue | undefined => {
+        try {
+          return "placeholder" in parser
+            ? parser.placeholder as TValue
+            : undefined;
+        } catch {
+          // Lazy getter may throw; treat as "no placeholder".
+          return undefined;
+        }
+      };
+
       const finalizePrompt = (): Promise<ValueParserResult<TValue>> => {
         if (shouldDeferPrompt(parser, state, exec)) {
-          let ph: TValue | undefined;
-          try {
-            ph = "placeholder" in parser
-              ? parser.placeholder as TValue
-              : undefined;
-          } catch { /* lazy getter may throw */ }
-          return Promise.resolve(deferredPromptResult(ph as TValue));
+          return Promise.resolve(
+            deferredPromptResult(readPlaceholder() as TValue),
+          );
         }
         if (isProbe) {
           // Probe phase: do not fire the prompter.  Return a placeholder
           // so that `object()`'s allCanComplete check passes.  The real
           // completion pass will re-run this path and actually prompt.
-          let ph: TValue | undefined;
-          try {
-            ph = "placeholder" in parser
-              ? parser.placeholder as TValue
-              : undefined;
-          } catch { /* lazy getter may throw */ }
           return Promise.resolve({
             success: true as const,
-            value: ph as TValue,
+            value: readPlaceholder() as TValue,
           });
         }
         return executePrompt();
