@@ -11831,11 +11831,13 @@ export function conditional(
       runtime,
     );
     collectSourcesFromState(combinedState, runtime);
-    const resolvedBranchState = getAnnotatedChildState(
-      state,
-      await resolveStateWithRuntimeAsync(state.branchState, runtime),
-      branchParser,
-    );
+    // The branch state may carry deferred dependency parsing
+    // (DeferredParseState).  Resolving it before the speculative
+    // mismatch check would replay parseWithDependency for the *wrong*
+    // branch in mismatch cases, potentially throwing or running side
+    // effects that should have been pre-empted by the mismatch error.
+    // The resolve step is therefore deferred until after the mismatch
+    // check below — see `resolvedBranchState` further down.
     const completionExec: ExecutionContext = {
       ...(exec ?? {
         usage: branchParser.usage,
@@ -11947,6 +11949,16 @@ export function conditional(
           : message`Branch mismatch: tokens for ${speculativeKey} were consumed, but the discriminator resolved to ${resolvedKey}.`,
       };
     }
+
+    // Now that the speculative branch (if any) is verified, it is
+    // safe to replay deferred dependency parsing for the chosen
+    // branch state.  Doing this before the mismatch check above
+    // would have run parseWithDependency for the wrong branch.
+    const resolvedBranchState = getAnnotatedChildState(
+      state,
+      await resolveStateWithRuntimeAsync(state.branchState, runtime),
+      branchParser,
+    );
 
     const branchResult = unwrapCompleteResult(
       await branchParser.complete(
