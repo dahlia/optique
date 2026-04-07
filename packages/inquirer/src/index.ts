@@ -1094,12 +1094,17 @@ export function prompt<M extends Mode, TValue, TState>(
       //      parse to probe the inner's state shape before deciding.
       //
       //  2.  Inside `object()`'s zero-consumption pass when the inner
-      //      parser has no leadingNames: `state.cliState` is populated
-      //      from that pre-commit parse call, and we can skip the
-      //      simulate-parse step.  (This path is only reachable for
-      //      inner parsers like `constant()` that have no leadingNames;
-      //      for the common `prompt(option(...))` shape `object()` still
-      //      skips the zero-consumption pass because of leadingNames.)
+      //      parser has no leadingNames: `state` is a `PromptBindState`
+      //      whose `cliState` field may already have been populated by
+      //      that pre-commit parse call, but `hasCliValue` is still
+      //      `false` (nothing was consumed).  The current implementation
+      //      does not special-case this: it still runs the simulate-parse
+      //      step below and ignores `state.cliState`, which is harmless
+      //      because the simulate-parse reproduces the same empty-buffer
+      //      result.  (This path is only reachable for inner parsers
+      //      like `constant()` that have no leadingNames; for the common
+      //      `prompt(option(...))` shape `object()` still skips the
+      //      zero-consumption pass because of leadingNames.)
       //
       // In both shapes, `ExecutionContext.phase` distinguishes
       // `object()`'s `allCanComplete` probe (`"parse"`) from the real
