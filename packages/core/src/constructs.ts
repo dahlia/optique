@@ -2986,6 +2986,16 @@ export function or(
       result: ParserResult<unknown> & { success: true };
     } | null = null;
     let zeroConsumedCount = 0;
+    // Track provisional consuming results (e.g., from speculative branch
+    // parsing in conditional()).  These are deferred so that a definitive
+    // consuming branch can take priority.  When multiple provisional
+    // branches match, discard all to stay order-independent.
+    let provisionalConsuming: {
+      index: number;
+      parser: Parser<"sync", unknown, unknown>;
+      result: ParserResult<unknown> & { success: true };
+    } | null = null;
+    let provisionalAmbiguous = false;
     for (const [parser, i] of orderedParsers) {
       const result = parser.parse(
         withChildContext(
@@ -2999,6 +3009,41 @@ export function or(
         ),
       );
       if (result.success && result.consumed.length > 0) {
+        // Provisional consuming results are deferred: continue trying
+        // other branches so a definitive result can take priority.
+        // When multiple provisional branches match, discard all to
+        // stay order-independent.
+        if (result.provisional) {
+          const activeBranchLocked = activeState != null &&
+            activeState[1].success &&
+            activeState[1].consumed.length > 0;
+          // When the active branch yields a provisional result, it
+          // takes precedence over competing provisionals: subsequent
+          // hits from other branches should not displace it.  In
+          // nested object()/merge() flows that revisit the same or()
+          // state, this preserves the active selection across calls.
+          if (activeBranchLocked && activeState[0] === i) {
+            provisionalConsuming = { index: i, parser, result };
+            continue;
+          }
+          // Once an active-branch provisional has been recorded, do
+          // not let cross-branch provisionals overwrite it or trip
+          // ambiguity tracking.
+          if (
+            activeBranchLocked &&
+            provisionalConsuming != null &&
+            provisionalConsuming.index === activeState[0]
+          ) {
+            continue;
+          }
+          if (provisionalConsuming == null && !provisionalAmbiguous) {
+            provisionalConsuming = { index: i, parser, result };
+          } else {
+            provisionalConsuming = null;
+            provisionalAmbiguous = true;
+          }
+          continue;
+        }
         if (activeState?.[0] !== i && activeState?.[1].success) {
           // If the active branch consumed nothing (zero-consumed
           // fallback), allow the switch freely: no shared-options
@@ -3184,6 +3229,134 @@ export function or(
         consumed: [],
       };
     }
+    // Fall back to a provisional consuming result when no definitive
+    // branch consumed tokens.  This lets speculative results from
+    // conditional() take effect only when no better alternative exists.
+    if (provisionalConsuming !== null) {
+      const activeIsLockedDifferent = activeState != null &&
+        activeState[1].success &&
+        activeState[1].consumed.length > 0 &&
+        activeState[0] !== provisionalConsuming.index;
+      if (!activeIsLockedDifferent) {
+        const mergedExec = mergeChildExec(
+          context.exec,
+          provisionalConsuming.result.next.exec,
+        );
+        return {
+          success: true,
+          provisional: true,
+          next: {
+            ...context,
+            buffer: provisionalConsuming.result.next.buffer,
+            optionsTerminated:
+              provisionalConsuming.result.next.optionsTerminated,
+            state: createExclusiveState(
+              context.state,
+              provisionalConsuming.index,
+              provisionalConsuming.parser,
+              provisionalConsuming.result,
+            ),
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
+          },
+          consumed: provisionalConsuming.result.consumed,
+        };
+      }
+      // The provisional comes from a different branch than the
+      // active one.  Mirror the definitive branch-switch path:
+      // attempt a shared-option replay and, if the provisional
+      // branch can also consume the previously consumed tokens,
+      // commit to it after replaying.
+      if (activeState != null && activeState[1].success) {
+        const previouslyConsumed = activeState[1].consumed;
+        const checkResult = provisionalConsuming.parser.parse({
+          ...withChildContext(
+            context,
+            provisionalConsuming.index,
+            provisionalConsuming.parser.initialState,
+            provisionalConsuming.parser,
+          ),
+          buffer: previouslyConsumed,
+        });
+        const canConsumeShared = checkResult.success &&
+          checkResult.consumed.length === previouslyConsumed.length &&
+          checkResult.consumed.every((c, idx) => c === previouslyConsumed[idx]);
+        if (canConsumeShared && checkResult.success) {
+          const replayExec = mergeChildExec(
+            context.exec,
+            checkResult.next.exec,
+          );
+          const replayedResult = provisionalConsuming.parser.parse(
+            withChildContext(
+              {
+                ...context,
+                ...(replayExec != null
+                  ? {
+                    exec: replayExec,
+                    dependencyRegistry: replayExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              provisionalConsuming.index,
+              checkResult.next.state,
+              provisionalConsuming.parser,
+            ),
+          );
+          // Mirror the definitive branch-switch path: when the replay
+          // fails, propagate that failure so outer combinators see the
+          // real consumed depth and error instead of falling back to
+          // the earlier branch-loop error.
+          if (!replayedResult.success) {
+            return replayedResult;
+          }
+          const mergedExec = mergeChildExec(
+            replayExec,
+            replayedResult.next.exec,
+          );
+          return {
+            success: true,
+            provisional: true,
+            next: {
+              ...context,
+              buffer: replayedResult.next.buffer,
+              optionsTerminated: replayedResult.next.optionsTerminated,
+              state: createExclusiveState(
+                context.state,
+                provisionalConsuming.index,
+                provisionalConsuming.parser,
+                {
+                  ...replayedResult,
+                  // Force `provisional: true` on the stored result so
+                  // subsequent or() parse calls keep treating this branch
+                  // as a tentative selection.  Without this, a replay
+                  // that returns a non-provisional success (e.g., a child
+                  // parser that didn't propagate provisional itself)
+                  // would clear the flag in state, and outer combinators
+                  // would treat the branch as definitive — blocking the
+                  // intended fallthrough to definitive alternatives.
+                  provisional: true as const,
+                  consumed: [
+                    ...previouslyConsumed,
+                    ...replayedResult.consumed,
+                  ],
+                },
+              ),
+              ...(mergedExec != null
+                ? {
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
+                : {}),
+            },
+            consumed: replayedResult.consumed,
+          };
+        }
+      }
+    }
     return { ...error, success: false };
   };
 
@@ -3206,6 +3379,13 @@ export function or(
       result: ParserResult<unknown> & { success: true };
     } | null = null;
     let zeroConsumedCount = 0;
+    // Track provisional consuming results (see sync counterpart).
+    let provisionalConsuming: {
+      index: number;
+      parser: Parser<Mode, unknown, unknown>;
+      result: ParserResult<unknown> & { success: true };
+    } | null = null;
+    let provisionalAmbiguous = false;
     for (const [parser, i] of orderedParsers) {
       const resultOrPromise = parser.parse(
         withChildContext(
@@ -3220,6 +3400,32 @@ export function or(
       );
       const result = await resultOrPromise;
       if (result.success && result.consumed.length > 0) {
+        // Provisional consuming results are deferred (see sync counterpart).
+        if (result.provisional) {
+          const activeBranchLocked = activeState != null &&
+            activeState[1].success &&
+            activeState[1].consumed.length > 0;
+          // Active-branch provisionals win over competing provisionals
+          // (see sync counterpart).
+          if (activeBranchLocked && activeState[0] === i) {
+            provisionalConsuming = { index: i, parser, result };
+            continue;
+          }
+          if (
+            activeBranchLocked &&
+            provisionalConsuming != null &&
+            provisionalConsuming.index === activeState[0]
+          ) {
+            continue;
+          }
+          if (provisionalConsuming == null && !provisionalAmbiguous) {
+            provisionalConsuming = { index: i, parser, result };
+          } else {
+            provisionalConsuming = null;
+            provisionalAmbiguous = true;
+          }
+          continue;
+        }
         if (activeState?.[0] !== i && activeState?.[1].success) {
           // If the active branch consumed nothing (zero-consumed
           // fallback), allow the switch freely (see sync counterpart).
@@ -3395,6 +3601,122 @@ export function or(
         },
         consumed: [],
       };
+    }
+    // Fall back to provisional consuming result (see sync counterpart).
+    if (provisionalConsuming !== null) {
+      const activeIsLockedDifferent = activeState != null &&
+        activeState[1].success &&
+        activeState[1].consumed.length > 0 &&
+        activeState[0] !== provisionalConsuming.index;
+      if (!activeIsLockedDifferent) {
+        const mergedExec = mergeChildExec(
+          context.exec,
+          provisionalConsuming.result.next.exec,
+        );
+        return {
+          success: true,
+          provisional: true,
+          next: {
+            ...context,
+            buffer: provisionalConsuming.result.next.buffer,
+            optionsTerminated:
+              provisionalConsuming.result.next.optionsTerminated,
+            state: createExclusiveState(
+              context.state,
+              provisionalConsuming.index,
+              provisionalConsuming.parser,
+              provisionalConsuming.result,
+            ),
+            ...(mergedExec != null
+              ? {
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
+              : {}),
+          },
+          consumed: provisionalConsuming.result.consumed,
+        };
+      }
+      // Cross-branch provisional vs active locked branch: try a
+      // shared-option replay (mirrors the definitive branch path).
+      // The activeIsLockedDifferent check above already ensures
+      // activeState[1].success, but TypeScript can't carry that
+      // narrowing here, so re-test inline.
+      if (activeState != null && activeState[1].success) {
+        const previouslyConsumed = activeState[1].consumed;
+        const checkResult = await provisionalConsuming.parser.parse({
+          ...withChildContext(
+            context,
+            provisionalConsuming.index,
+            provisionalConsuming.parser.initialState,
+            provisionalConsuming.parser,
+          ),
+          buffer: previouslyConsumed,
+        });
+        const canConsumeShared = checkResult.success &&
+          checkResult.consumed.length === previouslyConsumed.length &&
+          checkResult.consumed.every((c, idx) => c === previouslyConsumed[idx]);
+        if (canConsumeShared && checkResult.success) {
+          const replayExec = mergeChildExec(
+            context.exec,
+            checkResult.next.exec,
+          );
+          const replayedResult = await provisionalConsuming.parser.parse(
+            withChildContext(
+              {
+                ...context,
+                ...(replayExec != null
+                  ? {
+                    exec: replayExec,
+                    dependencyRegistry: replayExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              provisionalConsuming.index,
+              checkResult.next.state,
+              provisionalConsuming.parser,
+            ),
+          );
+          // See the sync counterpart for rationale.
+          if (!replayedResult.success) {
+            return replayedResult;
+          }
+          const mergedExec = mergeChildExec(
+            replayExec,
+            replayedResult.next.exec,
+          );
+          return {
+            success: true,
+            provisional: true,
+            next: {
+              ...context,
+              buffer: replayedResult.next.buffer,
+              optionsTerminated: replayedResult.next.optionsTerminated,
+              state: createExclusiveState(
+                context.state,
+                provisionalConsuming.index,
+                provisionalConsuming.parser,
+                {
+                  ...replayedResult,
+                  // Force `provisional: true` (see sync counterpart).
+                  provisional: true as const,
+                  consumed: [
+                    ...previouslyConsumed,
+                    ...replayedResult.consumed,
+                  ],
+                },
+              ),
+              ...(mergedExec != null
+                ? {
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
+                : {}),
+            },
+            consumed: replayedResult.consumed,
+          };
+        }
+      }
     }
     return { ...error, success: false };
   };
@@ -3835,7 +4157,16 @@ export function longestMatch(
 
       if (result.success) {
         const consumed = context.buffer.length - result.next.buffer.length;
-        if (bestMatch === null || consumed > bestMatch.consumed) {
+        // Prefer non-provisional results over provisional ones at the
+        // same consumed length, so speculative conditional() branches
+        // don't shadow definitive matches at equal length.
+        const bestIsProvisional = bestMatch != null &&
+          bestMatch.result.success && !!bestMatch.result.provisional;
+        if (
+          bestMatch === null || consumed > bestMatch.consumed ||
+          (consumed === bestMatch.consumed &&
+            bestIsProvisional && !result.provisional)
+        ) {
           bestMatch = { index: i, parser, result, consumed };
         }
       } else if (error.consumed < result.consumed) {
@@ -3905,7 +4236,16 @@ export function longestMatch(
 
       if (result.success) {
         const consumed = context.buffer.length - result.next.buffer.length;
-        if (bestMatch === null || consumed > bestMatch.consumed) {
+        // Prefer non-provisional results over provisional ones at the
+        // same consumed length, so speculative conditional() branches
+        // don't shadow definitive matches at equal length.
+        const bestIsProvisional = bestMatch != null &&
+          bestMatch.result.success && !!bestMatch.result.provisional;
+        if (
+          bestMatch === null || consumed > bestMatch.consumed ||
+          (consumed === bestMatch.consumed &&
+            bestIsProvisional && !result.provisional)
+        ) {
           bestMatch = { index: i, parser, result, consumed };
         }
       } else if (error.consumed < result.consumed) {
@@ -9867,6 +10207,7 @@ interface ConditionalState<TDiscriminator extends string> {
   readonly discriminatorValue: TDiscriminator | undefined;
   readonly selectedBranch: SelectedBranch<TDiscriminator> | undefined;
   readonly branchState: unknown;
+  readonly speculative?: true;
 }
 
 /**
@@ -9878,7 +10219,7 @@ export interface ConditionalErrorOptions {
    * Custom error message when branch parser fails.
    * Receives the discriminator value for context.
    */
-  branchError?: (
+  readonly branchError?: (
     discriminatorValue: string | undefined,
     error: Message,
   ) => Message;
@@ -9886,7 +10227,25 @@ export interface ConditionalErrorOptions {
   /**
    * Custom error message for no matching input.
    */
-  noMatch?: Message | ((context: NoMatchContext) => Message);
+  readonly noMatch?: Message | ((context: NoMatchContext) => Message);
+
+  /**
+   * Custom error message when speculative branch parsing committed
+   * to one branch but the resolved discriminator value names a
+   * different branch.  This is the contradictory-input case: tokens
+   * specific to one branch were consumed during the parse phase,
+   * but the discriminator (e.g., from `prompt()` or a deferred
+   * config source) ultimately resolved to a different key.
+   *
+   * Receives both the discriminator value the parser actually
+   * resolved to (`discriminatorValue`) and the speculative key the
+   * branch tokens were committed to (`speculativeKey`).
+   * @since 1.0.1
+   */
+  readonly branchMismatch?: (
+    discriminatorValue: string,
+    speculativeKey: string,
+  ) => Message;
 }
 
 /**
@@ -9897,7 +10256,7 @@ export interface ConditionalOptions {
   /**
    * Custom error messages.
    */
-  errors?: ConditionalErrorOptions;
+  readonly errors?: ConditionalErrorOptions;
 }
 
 /**
@@ -10020,18 +10379,31 @@ export function conditional<
  * // defaultResult.value = [undefined, {}]
  * ```
  *
- * ### Async discriminator limitation
+ * ### Speculative branch parsing
  *
  * When the discriminator is an async parser that succeeds without consuming
  * input (e.g., `prompt(option(...))` with no CLI input), branch selection
- * is deferred to the complete phase.  If the selected branch needs to
- * consume remaining tokens, those tokens cannot be consumed because the
- * branch is not known during parse.  In practice, this means
- * `conditional(prompt(option(...)), { key: option(...) })` cannot parse
- * branch-specific tokens when the discriminator requires interactive
- * resolution.  Provide a default branch or ensure the discriminator
- * can resolve synchronously (e.g., via `bindEnv()` or `withDefault()`)
- * to avoid this limitation.
+ * is normally deferred to the complete phase.  To allow branch-specific
+ * tokens to be consumed, `conditional()` speculatively tries all named
+ * branches during parse.  If exactly one branch can consume tokens, it is
+ * tentatively selected and verified against the resolved discriminator
+ * during the complete phase.
+ *
+ * If the discriminator resolves to a different branch than the one that
+ * consumed tokens (contradictory input), the parse fails.  When multiple
+ * branches can consume the same tokens (ambiguous), speculation is skipped
+ * entirely to keep branch selection order-independent.
+ *
+ * #### Known limitations
+ *
+ * - When a default branch accepts the same tokens as a named branch,
+ *   speculation prefers the named branch.  If the discriminator later
+ *   resolves to a value not in the named branches, the parse fails
+ *   instead of falling back to the default branch.  To avoid this,
+ *   ensure named branch options are distinct from the default branch.
+ * - Within `longestMatch()`, a longer speculative match can beat a
+ *   shorter definitive one.  If the speculative match fails during
+ *   completion, the tokens consumed by it are not recoverable.
  *
  * @since 0.8.0
  */
@@ -10441,6 +10813,17 @@ export function conditional(
         const mergedExec = mergeChildExec(context.exec, branchResult.next.exec);
         return {
           success: true,
+          // While `state.speculative` is set, the selection is still
+          // tentative — the discriminator hasn't yet confirmed it.
+          // Keep parse results provisional across subsequent calls so
+          // outer combinators (or() / longestMatch()) don't treat the
+          // unverified speculative selection as definitive.  The flag
+          // is consulted (and locally cleared) during completion
+          // verification — completeAsync() does not write the cleared
+          // state back into parse-time state.
+          ...((state.speculative || branchResult.provisional)
+            ? { provisional: true as const }
+            : {}),
           next: {
             ...branchResult.next,
             state: {
@@ -10480,20 +10863,172 @@ export function conditional(
       // (e.g., prompt()) during parse.  Sync discriminators are safe
       // to complete during parse even in the async path.
       //
-      // Before deferring, try the default branch — it might be able
-      // to consume remaining tokens that the deferred discriminator
-      // path would otherwise leave orphaned.
+      // Before deferring, try named branches speculatively, then fall
+      // back to the default branch.  Named branches are tried first so
+      // that a matching named branch is preferred over the default —
+      // the discriminator can verify the speculative choice during
+      // complete(), yielding a more specific result.
       if (
         discriminatorResult.consumed.length === 0 &&
         discriminator.$mode === "async"
       ) {
-        // Track default branch parse state so the deferred path can
-        // preserve it even when consumed === 0.
+        // Try named branches speculatively: when the discriminator is
+        // deferred, we don't know which branch to use, but if exactly one
+        // branch can consume tokens from the buffer, commit to it
+        // tentatively.  The complete phase will verify the choice against
+        // the resolved discriminator value.  When multiple branches can
+        // consume tokens (ambiguous), skip speculation entirely so that
+        // branch selection stays order-independent.
+        const discriminatorExec = mergeChildExec(
+          context.exec,
+          discriminatorResult.next.exec,
+        );
+        // Derive the speculation context from `discriminatorResult.next`
+        // rather than the original `context`, so that any buffer or
+        // optionsTerminated changes the discriminator made (without
+        // consuming tokens) propagate to the branch probes.
+        const speculationContext = {
+          ...context,
+          buffer: discriminatorResult.next.buffer,
+          optionsTerminated: discriminatorResult.next.optionsTerminated,
+          ...(discriminatorExec != null
+            ? {
+              exec: discriminatorExec,
+              dependencyRegistry: discriminatorExec.dependencyRegistry,
+            }
+            : {}),
+        };
+        let speculativeHit: {
+          key: string;
+          bp: Parser<Mode, unknown, unknown>;
+          result: ParserResult<unknown>;
+        } | undefined;
+        let provisionalHit: typeof speculativeHit;
+        let provisionalAmbiguous = false;
+        let speculativeError:
+          | (ParserResult<unknown> & {
+            success: false;
+          })
+          | undefined;
+        let ambiguous = false;
+        for (const [key, bp] of branchParsers) {
+          const branchResult = await bp.parse(
+            withChildContext(
+              speculationContext,
+              "_branch",
+              bp.initialState,
+              bp,
+              bp.usage,
+            ),
+          );
+          if (branchResult.success && branchResult.consumed.length > 0) {
+            // Provisional results (e.g., from a nested speculative
+            // conditional) don't count toward the definitive ambiguity
+            // check but are tracked separately.  If multiple
+            // provisional results exist, they are discarded to keep
+            // branch selection order-independent.  Don't break — later
+            // definitive branches must still be examined.
+            if (branchResult.provisional) {
+              if (provisionalHit == null && !provisionalAmbiguous) {
+                provisionalHit = { key, bp, result: branchResult };
+              } else {
+                provisionalHit = undefined;
+                provisionalAmbiguous = true;
+              }
+              continue;
+            }
+            if (speculativeHit != null) {
+              ambiguous = true;
+              break;
+            }
+            speculativeHit = { key, bp, result: branchResult };
+          }
+          // Track consuming failures for better error messages, but
+          // keep trying other branches — a later branch may succeed
+          // (e.g., flag("--x") vs option("--x", string())).
+          if (
+            !branchResult.success && branchResult.consumed > 0 &&
+            (speculativeError == null ||
+              speculativeError.consumed < branchResult.consumed)
+          ) {
+            speculativeError = branchResult;
+          }
+        }
+        // When both a definitive and a provisional hit exist, the
+        // correct choice depends on the unknown discriminator value.
+        // Mark as ambiguous to avoid speculative commitment that may
+        // lose valid parses.
+        if (
+          speculativeHit != null &&
+          (provisionalHit != null || provisionalAmbiguous)
+        ) {
+          ambiguous = true;
+        }
+        // Fall back to a provisional hit (e.g., from a nested
+        // speculative conditional) when no definitive hit was found
+        // and provisional results were unambiguous.
+        if (
+          speculativeHit == null && !ambiguous && !provisionalAmbiguous &&
+          provisionalHit != null
+        ) {
+          speculativeHit = provisionalHit;
+        }
+        if (speculativeHit != null && !ambiguous) {
+          const { key, bp, result: branchResult } = speculativeHit;
+          if (branchResult.success) {
+            const annotatedDiscriminatorState = getAnnotatedChildState(
+              state,
+              discriminatorResult.next.state,
+              discriminator,
+            );
+            const mergedExec = mergeChildExec(
+              discriminatorExec,
+              branchResult.next.exec,
+            );
+            return {
+              success: true,
+              provisional: true,
+              next: {
+                ...branchResult.next,
+                state: {
+                  ...state,
+                  discriminatorState: annotatedDiscriminatorState,
+                  selectedBranch: { kind: "branch", key },
+                  branchState: getAnnotatedChildState(
+                    state,
+                    branchResult.next.state,
+                    bp,
+                  ),
+                  speculative: true,
+                },
+                ...(mergedExec != null
+                  ? {
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
+                  : {}),
+              },
+              consumed: branchResult.consumed,
+            };
+          }
+        }
+
+        // No named branch consumed — fall back to the default branch.
+        // Use speculationContext so the default branch sees any buffer
+        // or optionsTerminated changes from the discriminator parse.
+        //
+        // Skip the default branch when speculation found multiple
+        // candidates (definitive or provisional) but couldn't pick
+        // one.  Committing to the default in that case would silently
+        // discard the discriminator's eventual disambiguation among
+        // the named branches.
         let deferredBranchState: unknown = state.branchState;
-        if (defaultBranch !== undefined) {
+        if (
+          defaultBranch !== undefined && !ambiguous && !provisionalAmbiguous
+        ) {
           const defaultResult = await defaultBranch.parse(
             withChildContext(
-              context,
+              speculationContext,
               "_branch",
               state.branchState ?? defaultBranch.initialState,
               defaultBranch,
@@ -10506,11 +11041,14 @@ export function conditional(
           ) {
             // Commit the default when it consumed tokens.
             const defaultExec = mergeChildExec(
-              context.exec,
+              discriminatorExec ?? context.exec,
               defaultResult.next.exec,
             );
             return {
               success: true,
+              ...(defaultResult.provisional
+                ? { provisional: true as const }
+                : {}),
               next: {
                 ...defaultResult.next,
                 state: {
@@ -10533,20 +11071,13 @@ export function conditional(
             };
           }
           if (!defaultResult.success && defaultResult.consumed > 0) {
-            // Default branch consumed tokens before failing (e.g.,
-            // option missing its value).  Propagate the specific error
-            // instead of masking it behind a generic no-match.
             return defaultResult;
           }
           if (
             defaultResult.success &&
             defaultResult.consumed.length === 0 &&
-            context.buffer.length === 0
+            speculationContext.buffer.length === 0
           ) {
-            // Default succeeded with consumed=[] on empty buffer.
-            // Persist its state so complete() has the right state
-            // for defaults that build values through parse state
-            // (e.g., multiple(constant(...))).
             deferredBranchState = getAnnotatedChildState(
               state,
               defaultResult.next.state,
@@ -10555,31 +11086,34 @@ export function conditional(
           }
         }
 
+        // A branch that consumed tokens before failing has a more
+        // specific error than the generic stall the top-level loop
+        // would produce.  Return it after the default branch has been
+        // tried, and only when speculation was not skipped due to
+        // either definitive or provisional ambiguity — otherwise the
+        // returned error would be order-dependent and contradict the
+        // ambiguity-skip intent.
+        if (
+          speculativeError != null && !ambiguous && !provisionalAmbiguous
+        ) {
+          return speculativeError;
+        }
+
         const annotatedDiscriminatorState = getAnnotatedChildState(
           state,
           discriminatorResult.next.state,
           discriminator,
         );
-        const mergedExec = mergeChildExec(
-          context.exec,
-          discriminatorResult.next.exec,
-        );
         return {
           success: true,
           provisional: true,
           next: {
-            ...context,
+            ...speculationContext,
             state: {
               ...state,
               discriminatorState: annotatedDiscriminatorState,
               branchState: deferredBranchState,
             },
-            ...(mergedExec != null
-              ? {
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
-              : {}),
           },
           consumed: [],
         };
@@ -11078,6 +11612,35 @@ export function conditional(
     state: ConditionalState<string>,
     exec?: ExecutionContext,
   ): Promise<CompleteResult> => {
+    // When a branch was selected speculatively (async discriminator
+    // deferred, but a named branch consumed tokens during parse),
+    // let the normal selected-branch path handle discriminator
+    // completion so that it runs with the dependency runtime.  We
+    // only record a flag here and perform the mismatch check after
+    // the discriminator has been properly completed below.
+    let wasSpeculative = false;
+    if (state.speculative && state.selectedBranch?.kind === "branch") {
+      if (exec?.phase !== "parse" && exec?.phase !== "suggest") {
+        // Real complete: clear speculative; leave discriminatorValue
+        // undefined so the normal path completes the discriminator
+        // with the dependency runtime.
+        wasSpeculative = true;
+        state = { ...state, speculative: undefined };
+      } else {
+        // Parse/suggest probe (e.g., object()'s allCanComplete check):
+        // do NOT call discriminator.complete() OR branchParser.complete().
+        // Both may have deferred side effects (e.g., prompt(), bindEnv).
+        // The probe consumer only inspects `success`, so return success
+        // with a placeholder value built from the speculative key.  The
+        // real complete pass (phase="complete") will run the branch and
+        // verify the discriminator.
+        return {
+          success: true,
+          value: [state.selectedBranch.key, undefined] as const,
+        };
+      }
+    }
+
     // No branch selected yet (see sync counterpart for rationale).
     if (state.selectedBranch === undefined) {
       if (exec?.phase !== "parse" && exec?.phase !== "suggest") {
@@ -11178,7 +11741,26 @@ export function conditional(
         }
       }
 
-      // Default branch (accessible during all phases).
+      // Parse/suggest probe with no branch selected: do NOT call
+      // defaultBranch.complete() OR discriminator.complete() — both
+      // may contain side-effecting completers (e.g., prompt(), bindEnv)
+      // that should only fire during the real complete pass.  This
+      // applies whether or not a default branch is configured: when
+      // there is no default and the discriminator is deferred (e.g.,
+      // an async prompt()), the probe must still succeed so the
+      // parent combinator (object()'s allCanComplete check, etc.)
+      // doesn't bail out before the real complete phase has a chance
+      // to resolve the discriminator interactively.  The probe
+      // consumer only inspects `success`, so return success with a
+      // placeholder value.
+      if (exec?.phase === "parse" || exec?.phase === "suggest") {
+        return {
+          success: true,
+          value: [undefined, undefined] as const,
+        };
+      }
+
+      // Default branch (real complete only).
       if (defaultBranch !== undefined) {
         const branchState = getAnnotatedChildState(
           state,
@@ -11252,11 +11834,13 @@ export function conditional(
       runtime,
     );
     collectSourcesFromState(combinedState, runtime);
-    const resolvedBranchState = getAnnotatedChildState(
-      state,
-      await resolveStateWithRuntimeAsync(state.branchState, runtime),
-      branchParser,
-    );
+    // The branch state may carry deferred dependency parsing
+    // (DeferredParseState).  Resolving it before the speculative
+    // mismatch check would replay parseWithDependency for the *wrong*
+    // branch in mismatch cases, potentially throwing or running side
+    // effects that should have been pre-empted by the mismatch error.
+    // The resolve step is therefore deferred until after the mismatch
+    // check below — see `resolvedBranchState` further down.
     const completionExec: ExecutionContext = {
       ...(exec ?? {
         usage: branchParser.usage,
@@ -11273,36 +11857,47 @@ export function conditional(
         "default" &&
       !(state.discriminatorValue != null &&
         state.discriminatorValue === state.selectedBranch.key);
+    // For speculative verification, complete the discriminator with
+    // a runtime that ONLY contains discriminator-side sources.  In
+    // the non-speculative path, the branch was selected by the
+    // discriminator at parse time and the combined runtime is fine.
+    // In the speculative path (`wasSpeculative`), the chosen branch
+    // is just a guess: if `discriminator.complete()` could see the
+    // speculative branch's dependency sources, a branch that exposes
+    // the same source key as the discriminator could circularly
+    // confirm itself.  Build a discriminator-only runtime so that
+    // the verification is independent of branch-local sources.
+    let discriminatorCompletionExec = completionExec;
+    if (wasSpeculative && needsDiscriminatorCompletion) {
+      const discOnlyState = { _discriminator: annotatedDiscriminatorState };
+      const discOnlyRuntime = createDependencyRuntimeContext(
+        exec?.dependencyRegistry?.clone(),
+      );
+      await collectExplicitSourceValuesAsync(
+        buildRuntimeNodesFromPairs(
+          [["_discriminator", discriminator]] as const,
+          discOnlyState,
+          exec?.path,
+        ),
+        discOnlyRuntime,
+      );
+      collectSourcesFromState(discOnlyState, discOnlyRuntime);
+      discriminatorCompletionExec = {
+        ...completionExec,
+        dependencyRuntime: discOnlyRuntime,
+        dependencyRegistry: discOnlyRuntime.registry,
+      };
+    }
     const discriminatorCompleteResult = needsDiscriminatorCompletion
       ? await discriminator.complete(
         annotatedDiscriminatorState,
-        withChildExecPath(completionExec, "_discriminator"),
+        withChildExecPath(discriminatorCompletionExec, "_discriminator"),
       )
       : undefined;
 
-    const branchResult = unwrapCompleteResult(
-      await branchParser.complete(
-        resolvedBranchState,
-        withChildExecPath(completionExec, "_branch"),
-      ),
-    );
-
-    if (!branchResult.success) {
-      if (
-        state.discriminatorValue !== undefined &&
-        options?.errors?.branchError
-      ) {
-        return {
-          success: false,
-          error: options.errors.branchError(
-            state.discriminatorValue,
-            branchResult.error,
-          ),
-        };
-      }
-      return branchResult;
-    }
-
+    // Determine the discriminator value before completing the branch
+    // so speculative mismatch is caught early, preventing errors from
+    // the wrong branch (e.g., "missing --extra") from leaking out.
     let discriminatorValue: string | undefined;
     if (state.selectedBranch.kind === "default") {
       discriminatorValue = undefined;
@@ -11315,9 +11910,80 @@ export function conditional(
       const completedDiscriminator = unwrapCompleteResult(
         discriminatorCompleteResult,
       );
-      discriminatorValue = completedDiscriminator.success
-        ? completedDiscriminator.value as string
-        : state.selectedBranch.key;
+      if (completedDiscriminator.success) {
+        discriminatorValue = completedDiscriminator.value as string;
+      } else if (wasSpeculative) {
+        // The discriminator never confirmed the speculative branch —
+        // propagate the failure instead of silently falling back to
+        // the guessed key.
+        return completedDiscriminator;
+      } else {
+        discriminatorValue = state.selectedBranch.key;
+      }
+    }
+
+    // When the branch was selected speculatively, verify that the
+    // resolved discriminator value matches.  A mismatch means
+    // contradictory input (e.g., --threads provided but discriminator
+    // resolved to "slow").  The speculative branch already consumed
+    // tokens during parse, so recovery is not possible — the tokens
+    // are committed to the wrong branch.
+    if (
+      wasSpeculative &&
+      state.selectedBranch.kind === "branch" &&
+      discriminatorValue !== state.selectedBranch.key
+    ) {
+      const speculativeKey = state.selectedBranch.key;
+      // `discriminatorValue` is statically `string | undefined`.  In
+      // this branch it should always be a string (the only path that
+      // sets `undefined` is the default-branch case, which is excluded
+      // by the `kind === "branch"` guard above).  Defensively coerce
+      // anyway: a buggy discriminator that violates its return-type
+      // contract by yielding a non-string would otherwise produce a
+      // confusing "resolved to ." message in both the default error
+      // and the `branchMismatch` hook.
+      const resolvedKey = typeof discriminatorValue === "string"
+        ? discriminatorValue
+        : "<unknown>";
+      return {
+        success: false,
+        error: options?.errors?.branchMismatch
+          ? options.errors.branchMismatch(resolvedKey, speculativeKey)
+          : message`Branch mismatch: tokens for ${speculativeKey} were consumed, but the discriminator resolved to ${resolvedKey}.`,
+      };
+    }
+
+    // Now that the speculative branch (if any) is verified, it is
+    // safe to replay deferred dependency parsing for the chosen
+    // branch state.  Doing this before the mismatch check above
+    // would have run parseWithDependency for the wrong branch.
+    const resolvedBranchState = getAnnotatedChildState(
+      state,
+      await resolveStateWithRuntimeAsync(state.branchState, runtime),
+      branchParser,
+    );
+
+    const branchResult = unwrapCompleteResult(
+      await branchParser.complete(
+        resolvedBranchState,
+        withChildExecPath(completionExec, "_branch"),
+      ),
+    );
+
+    if (!branchResult.success) {
+      if (
+        discriminatorValue !== undefined &&
+        options?.errors?.branchError
+      ) {
+        return {
+          success: false,
+          error: options.errors.branchError(
+            discriminatorValue,
+            branchResult.error,
+          ),
+        };
+      }
+      return branchResult;
     }
 
     return {

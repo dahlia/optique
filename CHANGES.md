@@ -381,6 +381,15 @@ To be released.
     zero-consuming discriminators to `complete()` in async mode, and
     resolves them during `parse()` in sync mode.  [[#232], [#773]]
 
+ -  `conditional()` now speculatively parses named branches when the
+    discriminator is an async parser that succeeds without consuming input
+    (e.g., `prompt(option(...))`).  If exactly one branch can consume tokens,
+    it is tentatively selected during parse and verified against the resolved
+    discriminator during the complete phase.  This fixes the “Unexpected
+    option or argument” error that occurred when branch-specific tokens were
+    present but the discriminator was deferred to the complete phase.
+    [[#772], [#774]]
+
  -  Fixed `optional()` and `withDefault()` crashing when the parser's state
     is an annotation-injected object instead of `undefined`.  The state
     discrimination in `modifiers.ts` now uses `Array.isArray(state)` to
@@ -1477,7 +1486,9 @@ To be released.
 [#768]: https://github.com/dahlia/optique/issues/768
 [#769]: https://github.com/dahlia/optique/pull/769
 [#771]: https://github.com/dahlia/optique/pull/771
+[#772]: https://github.com/dahlia/optique/issues/772
 [#773]: https://github.com/dahlia/optique/pull/773
+[#774]: https://github.com/dahlia/optique/pull/774
 
 ### @optique/config
 

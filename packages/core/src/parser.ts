@@ -673,11 +673,26 @@ export type ParserResult<TState> =
     readonly consumed: readonly string[];
 
     /**
-     * When `true`, indicates that this success is tentative: the parser
-     * matched something (e.g., a zero-consuming discriminator resolved to
-     * a branch key) but the selected sub-parser has not consumed any input
-     * yet.  Outer combinators like {@link or} should not treat provisional
-     * successes as definitive zero-consumed fallback candidates.
+     * When `true`, indicates that this success is tentative or
+     * speculative: the parser matched something but the match has not
+     * been confirmed yet.  This covers two cases:
+     *
+     * - A zero-consuming discriminator resolved to a branch key, but
+     *   the selected sub-parser has not consumed any input yet.
+     * - A {@link conditional} parser speculatively committed to a
+     *   named branch that consumed tokens, before the discriminator
+     *   has had a chance to confirm the choice.  In this case the
+     *   marker stays set across subsequent parse calls until
+     *   `complete()` verifies the speculative selection.
+     *
+     * Outer combinators should not treat provisional successes as
+     * definitive.  For example, {@link or} should still allow a
+     * definitive branch to take priority, and a definitive
+     * zero-consuming fallback must not be displaced by a provisional
+     * consuming hit.  {@link longestMatch} may still prefer a longer
+     * provisional match over a shorter definitive one; when match
+     * lengths are equal, definitive results take priority over
+     * provisional ones.
      *
      * @since 1.0.0
      */

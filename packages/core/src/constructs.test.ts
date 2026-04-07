@@ -8110,6 +8110,1277 @@ describe("conditional", () => {
       assert.deepEqual(result.value, ["key", "ann-ok"]);
     }
   });
+
+  it("should speculatively parse branch tokens when async discriminator is deferred", async () => {
+    // Async discriminator that returns consumed=[] during parse,
+    // resolving to "fast" during complete (simulates prompt())
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "fast" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: option("--threads", integer()),
+        slow: option("--timeout", integer()),
+      },
+    );
+
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(result.success, "expected success but got failure");
+    if (result.success) {
+      assert.equal(result.value[0], "fast");
+      assert.equal(result.value[1], 4);
+    }
+  });
+
+  it("should handle mismatch between speculative and actual branch", async () => {
+    // Discriminator resolves to "slow" but user provided --threads (fast branch)
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "slow" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: option("--threads", integer()),
+        slow: option("--timeout", integer()),
+      },
+    );
+
+    // --threads consumed for "fast", but discriminator says "slow"
+    // "slow" branch has no tokens → should fail with a mismatch error
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(!result.success, "expected failure due to branch mismatch");
+    if (!result.success) {
+      const msg = formatMessage(result.error).toLowerCase();
+      assert.ok(
+        msg.includes("mismatch"),
+        `expected a mismatch error, got: ${msg}`,
+      );
+    }
+  });
+
+  it("should work inside object() when async discriminator is deferred", async () => {
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "fast" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = object({
+      mode: conditional(
+        asyncDiscriminator,
+        {
+          fast: option("--threads", integer()),
+          slow: option("--timeout", integer()),
+        },
+      ),
+      verbose: flag("--verbose"),
+    });
+
+    const result = await parseAsync(parser, [
+      "--threads",
+      "4",
+      "--verbose",
+    ]);
+    assert.ok(result.success, "expected success but got failure");
+    if (result.success) {
+      assert.deepEqual(result.value.mode, ["fast", 4]);
+      assert.ok(result.value.verbose);
+    }
+  });
+
+  it("should not run speculative branch complete during a probe", async () => {
+    // Regression for #774 (round 6): when conditional() commits a
+    // speculative branch and then complete() is called with phase
+    // `"parse"` or `"suggest"` (e.g., from object()'s probe path),
+    // the branch parser's complete() must NOT run.  Otherwise a
+    // speculative branch containing prompt() or any deferred completer
+    // would fire during parse-time probes, defeating the whole point of
+    // the parse/suggest phase guard.
+    let branchCompleteCount = 0;
+    let branchCompletePhase: string | undefined;
+    let discriminatorCompleteCount = 0;
+    const branchParser: Parser<"async", number, number> = {
+      $mode: "async",
+      $valueType: [] as readonly number[],
+      $stateType: [0] as [number],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(["--threads"]),
+      acceptingAnyToken: false,
+      initialState: 0,
+      parse: (context) => {
+        if (
+          context.buffer[0] === "--threads" && context.buffer.length >= 2
+        ) {
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              state: Number(context.buffer[1]),
+              buffer: context.buffer.slice(2),
+            },
+            consumed: ["--threads", context.buffer[1]],
+          });
+        }
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: [] as Message,
+        });
+      },
+      complete: (state, exec) => {
+        branchCompleteCount++;
+        branchCompletePhase = exec?.phase;
+        return Promise.resolve({
+          success: true as const,
+          value: state,
+        });
+      },
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () => {
+        discriminatorCompleteCount++;
+        return Promise.resolve({ success: true as const, value: "fast" });
+      },
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: branchParser,
+        slow: option("--timeout", integer()),
+      },
+    );
+
+    // Step 1: drive the parser into the speculative state.
+    const parseResult = await parser.parse({
+      buffer: ["--threads", "4"],
+      optionsTerminated: false,
+      state: parser.initialState,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success, "expected parse to succeed");
+    if (!parseResult.success) return;
+    // The speculative branch parser only ran .parse(), not .complete().
+    assert.equal(branchCompleteCount, 0);
+    assert.equal(discriminatorCompleteCount, 0);
+
+    // Step 2: simulate object()'s probe by calling complete() with
+    // phase="parse".  Neither the branch nor the discriminator may run.
+    const probeResult = await parser.complete(parseResult.next.state, {
+      usage: parser.usage,
+      path: [],
+      phase: "parse",
+      trace: undefined,
+    });
+    assert.ok(probeResult.success, "expected probe to succeed");
+    assert.equal(
+      branchCompleteCount,
+      0,
+      "branch complete fired during a parse-phase probe " +
+        `(phase=${branchCompletePhase})`,
+    );
+    assert.equal(
+      discriminatorCompleteCount,
+      0,
+      "discriminator complete fired during a parse-phase probe",
+    );
+
+    // Step 3: simulate suggest-time runtime seeding with phase="suggest".
+    const suggestProbe = await parser.complete(parseResult.next.state, {
+      usage: parser.usage,
+      path: [],
+      phase: "suggest",
+      trace: undefined,
+    });
+    assert.ok(suggestProbe.success, "expected suggest probe to succeed");
+    assert.equal(
+      branchCompleteCount,
+      0,
+      "branch complete fired during a suggest-phase probe " +
+        `(phase=${branchCompletePhase})`,
+    );
+    assert.equal(
+      discriminatorCompleteCount,
+      0,
+      "discriminator complete fired during a suggest-phase probe",
+    );
+
+    // Step 4: the real complete pass MUST run the branch and resolve
+    // the value normally.
+    const realResult = await parser.complete(parseResult.next.state, {
+      usage: parser.usage,
+      path: [],
+      phase: "complete",
+      trace: undefined,
+    });
+    assert.ok(realResult.success, "expected real complete to succeed");
+    if (realResult.success) {
+      assert.deepEqual(realResult.value, ["fast", 4]);
+    }
+    assert.equal(branchCompleteCount, 1);
+  });
+
+  it("should not run deferred default branch complete during a probe", async () => {
+    // Regression for #774: when no named branch consumed tokens (so
+    // conditional() falls back to the deferred path with
+    // selectedBranch=undefined), a subsequent complete() call from a
+    // parse/suggest probe must NOT invoke defaultBranch.complete().
+    // Otherwise a default branch containing prompt() or any deferred
+    // completer would fire during object()'s allCanComplete probe.
+    let defaultCompleteCount = 0;
+    let defaultCompletePhase: string | undefined;
+    let discriminatorCompleteCount = 0;
+    const defaultBranchParser: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: (_state, exec) => {
+        defaultCompleteCount++;
+        defaultCompletePhase = exec?.phase;
+        return Promise.resolve({
+          success: true as const,
+          value: "default-value",
+        });
+      },
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    // Discriminator resolves to a key NOT in branches so the real
+    // complete path falls through to the default branch.
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () => {
+        discriminatorCompleteCount++;
+        return Promise.resolve({
+          success: true as const,
+          value: "missing-key",
+        });
+      },
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: option("--threads", integer()),
+      },
+      defaultBranchParser,
+    );
+
+    // Step 1: parse with empty input — no named branch consumes, so
+    // conditional() falls back to the deferred path with
+    // selectedBranch=undefined.
+    const parseResult = await parser.parse({
+      buffer: [],
+      optionsTerminated: false,
+      state: parser.initialState,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success, "expected parse to succeed");
+    if (!parseResult.success) return;
+    assert.equal(defaultCompleteCount, 0);
+    assert.equal(discriminatorCompleteCount, 0);
+
+    // Step 2: simulate object()'s probe with phase="parse".  The
+    // default branch's complete() must NOT fire — it may have side
+    // effects (e.g., prompt(), bindEnv).
+    const probeResult = await parser.complete(parseResult.next.state, {
+      usage: parser.usage,
+      path: [],
+      phase: "parse",
+      trace: undefined,
+    });
+    assert.ok(probeResult.success, "expected probe to succeed");
+    assert.equal(
+      defaultCompleteCount,
+      0,
+      "default branch complete fired during a parse-phase probe " +
+        `(phase=${defaultCompletePhase})`,
+    );
+    assert.equal(
+      discriminatorCompleteCount,
+      0,
+      "discriminator complete fired during a parse-phase probe",
+    );
+
+    // Step 3: simulate suggest-time runtime seeding with phase="suggest".
+    const suggestProbe = await parser.complete(parseResult.next.state, {
+      usage: parser.usage,
+      path: [],
+      phase: "suggest",
+      trace: undefined,
+    });
+    assert.ok(suggestProbe.success, "expected suggest probe to succeed");
+    assert.equal(
+      defaultCompleteCount,
+      0,
+      "default branch complete fired during a suggest-phase probe " +
+        `(phase=${defaultCompletePhase})`,
+    );
+    assert.equal(
+      discriminatorCompleteCount,
+      0,
+      "discriminator complete fired during a suggest-phase probe",
+    );
+
+    // Step 4: the real complete pass MUST run the default branch and
+    // resolve to its value.  The discriminator resolves to a key not
+    // in branches, so the deferred path falls through to the default
+    // branch's complete().
+    const realResult = await parser.complete(parseResult.next.state, {
+      usage: parser.usage,
+      path: [],
+      phase: "complete",
+      trace: undefined,
+    });
+    assert.ok(realResult.success, "expected real complete to succeed");
+    if (realResult.success) {
+      assert.deepEqual(realResult.value, [undefined, "default-value"]);
+    }
+    assert.equal(defaultCompleteCount, 1);
+  });
+
+  it("should not fail probe when async discriminator is deferred and there is no default branch", async () => {
+    // Regression for #774 (round 11): when conditional() has an async
+    // discriminator that defers (e.g., prompt(option(...))) and there
+    // is NO default branch, a parse/suggest probe (e.g., from
+    // object()'s allCanComplete check) must still return success with a
+    // placeholder value.  Otherwise the probe sees a "Missing required
+    // discriminator option." failure and bails out before the real
+    // complete pass ever gets a chance to run the discriminator.
+    let discriminatorCompleteCount = 0;
+    let discriminatorPhase: string | undefined;
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: (_state, exec) => {
+        discriminatorCompleteCount++;
+        discriminatorPhase = exec?.phase;
+        return Promise.resolve({
+          success: true as const,
+          value: "fast",
+        });
+      },
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: optional(option("--threads", integer())),
+      },
+    );
+
+    // Step 1: parse with empty input.  No branch consumes, no default
+    // branch — conditional() falls back to the deferred path with
+    // selectedBranch=undefined.
+    const parseResult = await parser.parse({
+      buffer: [],
+      optionsTerminated: false,
+      state: parser.initialState,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success, "expected parse to succeed");
+    if (!parseResult.success) return;
+    assert.equal(discriminatorCompleteCount, 0);
+
+    // Step 2: simulate object()'s probe with phase="parse".  This must
+    // return success with a placeholder so the parent combinator
+    // doesn't short-circuit before the real complete phase.  The
+    // discriminator must NOT fire (it may have deferred side effects).
+    const probeResult = await parser.complete(parseResult.next.state, {
+      usage: parser.usage,
+      path: [],
+      phase: "parse",
+      trace: undefined,
+    });
+    assert.ok(
+      probeResult.success,
+      "expected parse-phase probe to succeed even without a default branch",
+    );
+    assert.equal(
+      discriminatorCompleteCount,
+      0,
+      "discriminator complete fired during a parse-phase probe " +
+        `(phase=${discriminatorPhase})`,
+    );
+
+    // Step 3: simulate suggest-time runtime seeding with phase="suggest".
+    const suggestProbe = await parser.complete(parseResult.next.state, {
+      usage: parser.usage,
+      path: [],
+      phase: "suggest",
+      trace: undefined,
+    });
+    assert.ok(
+      suggestProbe.success,
+      "expected suggest-phase probe to succeed even without a default branch",
+    );
+    assert.equal(
+      discriminatorCompleteCount,
+      0,
+      "discriminator complete fired during a suggest-phase probe",
+    );
+
+    // Step 4: the real complete pass MUST run the discriminator and
+    // resolve to its value.  The discriminator returns "fast", which
+    // matches a known branch, so the deferred path replays the branch.
+    const realResult = await parser.complete(parseResult.next.state, {
+      usage: parser.usage,
+      path: [],
+      phase: "complete",
+      trace: undefined,
+    });
+    assert.ok(realResult.success, "expected real complete to succeed");
+    if (realResult.success) {
+      assert.equal(realResult.value[0], "fast");
+    }
+    assert.equal(discriminatorCompleteCount, 1);
+  });
+
+  it("should fall back to deferred when no branch consumes tokens", async () => {
+    let completeCalled = false;
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () => {
+        completeCalled = true;
+        return Promise.resolve({ success: true as const, value: "key" });
+      },
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: option("--threads", integer()),
+        slow: option("--timeout", integer()),
+      },
+      constant("default-value"),
+    );
+
+    // Empty input — no branch can consume, falls back to default branch
+    const result = await parseAsync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      // Default branch selected since empty buffer triggers default path
+      assert.equal(result.value[1], "default-value");
+    }
+    assert.ok(completeCalled);
+  });
+
+  it("should propagate discriminator failure for speculative branches", async () => {
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      // Discriminator fails during complete
+      complete: () =>
+        Promise.resolve({
+          success: false as const,
+          error: [] as Message,
+        }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: option("--threads", integer()),
+        slow: option("--timeout", integer()),
+      },
+    );
+
+    // --threads consumed speculatively for "fast"
+    // Discriminator fails → propagate the failure (NOT a mismatch error)
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(!result.success, "expected failure when discriminator fails");
+    if (!result.success) {
+      const msg = formatMessage(result.error).toLowerCase();
+      assert.ok(
+        !msg.includes("mismatch"),
+        `expected discriminator failure to propagate, not a mismatch error; got: ${msg}`,
+      );
+    }
+  });
+
+  it("should skip speculation when multiple branches consume tokens", async () => {
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "fast" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    // Both branches accept --threads → ambiguous speculation
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: option("--threads", integer()),
+        slow: option("--threads", integer()),
+      },
+    );
+
+    // Ambiguous: multiple branches consume → speculation skipped → stall
+    // The top-level parse loop will surface its own "Unexpected option"
+    // error rather than committing to either branch.
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(
+      !result.success,
+      "expected failure when speculation is ambiguous",
+    );
+    if (!result.success) {
+      const msg = formatMessage(result.error).toLowerCase();
+      assert.ok(
+        !msg.includes("mismatch"),
+        `ambiguous speculation should not raise mismatch; got: ${msg}`,
+      );
+    }
+  });
+
+  it("should not silently commit to default branch when named-branch speculation is ambiguous", async () => {
+    // When multiple named branches can consume the same tokens, the
+    // current parser cannot disambiguate without speculatively
+    // committing to one (which would be order-dependent).  If a
+    // default branch also matches those tokens, an unguarded fallback
+    // would commit to the default and silently produce [undefined, ...]
+    // even though the discriminator would have resolved to a named
+    // branch.  Skip the default and let the parse fail loudly so that
+    // the ambiguity surfaces instead of being papered over.
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "fast" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    // Both named branches AND the default branch can consume --threads.
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: option("--threads", integer()),
+        slow: option("--threads", integer()),
+      },
+      option("--threads", integer()),
+    );
+
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(
+      !result.success,
+      "ambiguous speculation must not silently commit to the default branch",
+    );
+  });
+
+  it("should reject contradictory input on speculative mismatch with defaults", async () => {
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      // Discriminator resolves to "slow"
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "slow" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: option("--threads", integer()),
+        // slow branch has a default, so it would succeed with empty input
+        slow: withDefault(option("--timeout", integer()), 30),
+      },
+    );
+
+    // --threads consumed by "fast" speculatively, discriminator says "slow"
+    // Must fail even though "slow" branch can succeed with its default
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(!result.success, "expected failure for contradictory input");
+    if (!result.success) {
+      const msg = formatMessage(result.error).toLowerCase();
+      assert.ok(
+        msg.includes("mismatch"),
+        `expected a mismatch error for contradictory input; got: ${msg}`,
+      );
+    }
+  });
+
+  it("should detect mismatch before branch completion errors", async () => {
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      // Discriminator resolves to "slow"
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "slow" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    // "fast" branch requires both --threads and --extra
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: object({
+          threads: option("--threads", integer()),
+          extra: option("--extra", string()),
+        }),
+        slow: option("--timeout", integer()),
+      },
+    );
+
+    // --threads consumed speculatively for "fast", discriminator says "slow"
+    // Should get a mismatch error, NOT "Missing option --extra"
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const msg = formatMessage(result.error);
+      assert.ok(
+        !msg.includes("--extra"),
+        `expected mismatch error, not branch-specific: ${msg}`,
+      );
+      assert.ok(
+        msg.toLowerCase().includes("mismatch"),
+        `expected a mismatch error; got: ${msg}`,
+      );
+    }
+  });
+
+  it("should not block or() alternatives with speculative commit", async () => {
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "slow" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    // or() should fall through to the second branch when conditional's
+    // speculative branch doesn't match the discriminator.
+    const parser = or(
+      conditional(
+        asyncDiscriminator,
+        {
+          fast: option("--threads", integer()),
+          slow: constant("S"),
+        },
+      ),
+      option("--threads", integer()),
+    );
+
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(result.success, "expected or() to fall through to second branch");
+    if (result.success) {
+      assert.equal(result.value, 4);
+    }
+  });
+
+  it("should use the branchMismatch error hook when speculative selection contradicts the discriminator", async () => {
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "slow" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    let receivedDiscriminator: string | undefined;
+    let receivedSpeculativeKey: string | undefined;
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: option("--threads", integer()),
+        slow: option("--timeout", integer()),
+      },
+      constant("default"),
+      {
+        errors: {
+          branchMismatch: (discriminatorValue, speculativeKey) => {
+            receivedDiscriminator = discriminatorValue;
+            receivedSpeculativeKey = speculativeKey;
+            return [{
+              type: "text",
+              text: `custom: ${speculativeKey} vs ${discriminatorValue}`,
+            }];
+          },
+        },
+      },
+    );
+
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(!result.success, "expected failure due to mismatch");
+    if (!result.success) {
+      const msg = formatMessage(result.error);
+      assert.equal(msg, "custom: fast vs slow");
+    }
+    assert.equal(receivedSpeculativeKey, "fast");
+    assert.equal(receivedDiscriminator, "slow");
+  });
+
+  it("should allow shared-option replay when or() falls back to a provisional branch", async () => {
+    // Setup: or() where the first branch consumes a shared option,
+    // and the second branch is a speculative conditional that should
+    // take over once branch-specific tokens appear later.  Without
+    // shared-option replay, the second parse call would reject the
+    // provisional fallback because the active branch already consumed
+    // tokens.
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () => Promise.resolve({ success: true as const, value: "k" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = or(
+      object({ shared: option("--shared", string()) }),
+      conditional(
+        asyncDiscriminator,
+        {
+          k: object({
+            shared: optional(option("--shared", string())),
+            bar: option("--bar", string()),
+          }),
+        },
+      ),
+    );
+
+    const result = await parseAsync(parser, [
+      "--shared",
+      "s",
+      "--bar",
+      "b",
+    ]);
+    assert.ok(
+      result.success,
+      "expected or() to switch via shared-option replay",
+    );
+    if (result.success) {
+      assert.deepEqual(result.value, ["k", { shared: "s", bar: "b" }]);
+    }
+  });
+
+  it("should propagate branch-specific parse errors from speculation", async () => {
+    const asyncDiscriminator: Parser<"async", string> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "fast" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        fast: option("--threads", integer()),
+        slow: option("--timeout", integer()),
+      },
+    );
+
+    // --threads without a value → branch should produce a specific error
+    const result = await parseAsync(parser, ["--threads"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const msg = formatMessage(result.error);
+      assert.ok(
+        msg.includes("--threads"),
+        `expected error about --threads, got: ${msg}`,
+      );
+    }
+  });
+
+  it("should isolate speculative discriminator from branch dependency sources", async () => {
+    // Regression for circular self-confirmation: in the speculative
+    // verification path, the discriminator should NOT see dependency
+    // sources contributed by the speculatively chosen branch.
+    // Otherwise a branch that exposes the same source key as the
+    // discriminator could circularly confirm itself.
+    const branchSourceId = Symbol("test-branch-source");
+
+    // Discriminator inspects the runtime: when isolated from the
+    // branch, it returns "fast" (matching the speculative pick); when
+    // contaminated by the branch's source, it returns "slow" (which
+    // would mismatch).
+    const isolationProbe: Parser<"async", string, null> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: (_state, exec) => {
+        const leaked = exec?.dependencyRuntime?.hasSource(branchSourceId) ??
+          false;
+        return Promise.resolve({
+          success: true as const,
+          value: leaked ? "slow" : "fast",
+        });
+      },
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    // A branch parser that consumes --threads <n> AND exposes a
+    // dependency source so its value is registered in any combined
+    // runtime.
+    const branchWithSource: Parser<
+      "async",
+      number,
+      { readonly value: number } | null
+    > = {
+      $mode: "async",
+      $valueType: [] as readonly number[],
+      $stateType: [null] as [{ readonly value: number } | null],
+      priority: 10,
+      usage: [],
+      leadingNames: new Set<string>(["--threads"]),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) => {
+        if (
+          context.buffer[0] === "--threads" &&
+          context.buffer[1] !== undefined
+        ) {
+          const value = Number.parseInt(context.buffer[1], 10);
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(2),
+              state: { value },
+            },
+            consumed: [context.buffer[0], context.buffer[1]],
+          });
+        }
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: [{ type: "text" as const, text: "expected --threads" }],
+        });
+      },
+      complete: (state) =>
+        Promise.resolve(
+          state != null ? { success: true as const, value: state.value } : {
+            success: false as const,
+            error: [{ type: "text" as const, text: "missing --threads" }],
+          },
+        ),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId: branchSourceId,
+          preservesSourceValue: true,
+          extractSourceValue: (state: unknown) =>
+            Promise.resolve(
+              state != null && typeof state === "object" && "value" in state
+                ? {
+                  success: true as const,
+                  value: (state as { readonly value: number }).value,
+                }
+                : undefined,
+            ),
+        },
+      },
+    };
+
+    const parser = conditional(
+      isolationProbe,
+      {
+        fast: branchWithSource,
+        slow: option("--alt", integer()),
+      },
+    );
+
+    // Speculation picks "fast" (only branch that consumes --threads).
+    // Without runtime isolation, isolationProbe would see
+    // branchSourceId in its runtime and return "slow", causing a
+    // mismatch failure.  With isolation, it returns "fast" and the
+    // parse succeeds.
+    const result = await parseAsync(parser, ["--threads", "4"]);
+    assert.ok(
+      result.success,
+      "expected discriminator to resolve independently of branch source",
+    );
+    if (result.success) {
+      assert.equal(result.value[0], "fast");
+      assert.equal(result.value[1], 4);
+    }
+  });
+
+  it("should suppress speculativeError under provisional ambiguity", async () => {
+    // When multiple named branches return provisional consuming hits
+    // (provisionalAmbiguous = true), speculation is supposed to be
+    // skipped to keep branch selection order-independent.  A separate
+    // branch that fails with consumed > 0 should NOT have its error
+    // surfaced in this case — otherwise the outcome depends on
+    // incidental branch composition and contradicts the ambiguity
+    // skip.
+    const asyncDiscriminator: Parser<"async", string, null> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () => Promise.resolve({ success: true as const, value: "p1" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    // A custom parser that consumes "--a <value>" and returns a
+    // provisional success (mimicking what a nested speculative
+    // conditional() would produce).
+    const makeProvisionalConsumer = (): Parser<"async", string, null> => ({
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(["--a"]),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) => {
+        if (
+          context.buffer[0] === "--a" && context.buffer[1] !== undefined
+        ) {
+          return Promise.resolve({
+            success: true as const,
+            provisional: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(2),
+              state: null,
+            },
+            consumed: [context.buffer[0], context.buffer[1]],
+          });
+        }
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: [{ type: "text" as const, text: "no match" }],
+        });
+      },
+      complete: () => Promise.resolve({ success: true as const, value: "ok" }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    });
+
+    // A custom branch that consumes "--a" and then fails at parse
+    // time (sets speculativeError because !success && consumed > 0).
+    const failingConsumer: Parser<"async", string, null> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [null] as [null],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(["--a"]),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: (context) => {
+        if (context.buffer[0] === "--a") {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 1,
+            error: [{
+              type: "text" as const,
+              text: "fail-specific-marker",
+            }],
+          });
+        }
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: [{ type: "text" as const, text: "no match" }],
+        });
+      },
+      complete: () =>
+        Promise.resolve({
+          success: false as const,
+          error: [{ type: "text" as const, text: "never reached" }],
+        }),
+      suggest: () => (async function* () {})(),
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      asyncDiscriminator,
+      {
+        // Two provisional consumers → provisionalAmbiguous = true
+        p1: makeProvisionalConsumer(),
+        p2: makeProvisionalConsumer(),
+        // Failing consumer with consumed > 0 → speculativeError set
+        fail: failingConsumer,
+      },
+    );
+
+    const result = await parseAsync(parser, ["--a", "v"]);
+    // Without the fix, conditional() would return the failing
+    // branch's error containing "fail-specific-marker".  With the
+    // fix, provisionalAmbiguous suppresses speculativeError and the
+    // parse falls through, producing a generic error from the
+    // top-level loop instead.
+    assert.ok(!result.success);
+    if (!result.success) {
+      const msg = formatMessage(result.error);
+      assert.ok(
+        !msg.includes("fail-specific-marker"),
+        `provisional ambiguity should not leak the failing branch's error; got: ${msg}`,
+      );
+    }
+  });
 });
 
 describe("complex combinator interactions", () => {

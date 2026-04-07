@@ -1626,23 +1626,28 @@ Use `conditional()` when you have an explicit discriminator option that
 determines which set of options is valid. Use `or()` for more general
 mutually exclusive alternatives.
 
-### Async discriminator limitation
+### Speculative branch parsing
 
 When the discriminator is an async parser that succeeds without consuming
 input (e.g., `prompt(option(...))` with no CLI input), branch selection is
-deferred to the complete phase.  If the selected branch needs to consume
-remaining tokens, those tokens cannot be consumed because the branch is
-not known during parse.
+normally deferred to the complete phase.  To allow branch-specific tokens
+to be consumed, `conditional()` speculatively tries all named branches
+during parse.  If exactly one branch can consume tokens, it is tentatively
+selected and verified against the resolved discriminator during the
+complete phase.
 
-To avoid this, ensure the discriminator can resolve synchronously when
-branch-specific tokens are present:
+If the discriminator resolves to a different branch than the one that
+consumed tokens (contradictory input), the parse fails.  When multiple
+branches can consume the same tokens (ambiguous), speculation is skipped
+entirely to keep branch selection order-independent.
 
- -  Wrap the discriminator with `bindEnv()` or `bindConfig()` so it
-    resolves from environment/config without interactive prompting.
- -  Wrap the discriminator with `withDefault()` to provide a fallback
-    value when CLI input is absent.
- -  Provide a default branch to handle the case when the discriminator
-    is not resolved during parse.
+Speculation works best when named branches have distinct leading options
+(e.g., `--threads` vs `--timeout`).  When a default branch accepts the
+same tokens as a named branch, or when the parser is nested inside
+`longestMatch()`, the speculative choice may conflict with the
+discriminator.  To avoid this, ensure named branch options are distinct
+from the default branch, or wrap the discriminator with `withDefault()`
+or `bindEnv()` so it can resolve synchronously.
 
 
 `group()` parser
