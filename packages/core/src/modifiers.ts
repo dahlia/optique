@@ -5,6 +5,7 @@ import {
   annotationKey,
   getAnnotations,
   inheritAnnotations,
+  injectAnnotations,
   isInjectedAnnotationWrapper,
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
@@ -16,6 +17,7 @@ import {
 import {
   defineInheritedAnnotationParser,
   defineSourceBindingOnlyAnnotationCompletionParser,
+  unmatchedNonCliDependencySourceStateMarker,
 } from "./parser.ts";
 import type {
   DocState,
@@ -28,18 +30,6 @@ import type {
   Suggestion,
 } from "./parser.ts";
 import type { DeferredMap, ValueParserResult } from "./valueparser.ts";
-
-/**
- * Internal marker for wrappers that should be skipped by `object()`'s
- * zero-consumption pass.  Set on `optional()`, `withDefault()`, and
- * `prompt()`, since these wrappers have their own completion semantics
- * that should not be short-circuited during parse.
- *
- * @internal
- */
-export const optionalStyleWrapperKey: unique symbol = Symbol.for(
-  "@optique/core/optionalStyleWrapper",
-);
 
 function withChildExecPath(
   exec: ExecutionContext | undefined,
@@ -170,6 +160,44 @@ function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
 }
 
 /**
+ * Computes the inner state to pass through to the wrapped parser inside
+ * {@link optional} / {@link withDefault}.  When the outer state is an
+ * array, the inner state is `state[0]`.  Otherwise — including the
+ * common case where `optional()` sits at top level and the outer state
+ * is either `undefined` or an annotation wrapper from `parseOptionalLike`
+ * / `parse({ annotations })` — we use the wrapped parser's
+ * `initialState`, propagating annotations from the outer state so that
+ * source-binding wrappers under `optional()` / `withDefault()` (e.g.,
+ * `bindEnv()` / `bindConfig()`) can resolve their fallbacks.
+ *
+ * @internal
+ */
+function deriveOptionalInnerParseState<TState>(
+  outerState: [TState] | undefined,
+  parser: Parser<Mode, unknown, TState>,
+): TState {
+  if (Array.isArray(outerState)) {
+    return outerState[0];
+  }
+  const initial = parser.initialState;
+  // Only inject annotations into primitive / null initial states.
+  // Object initial states (e.g., EnvBindState-shaped wrappers) already
+  // have their own annotation slots populated by the inner parser's own
+  // parse() flow, and overwriting them here could mask nested markers.
+  if (
+    outerState != null &&
+    typeof outerState === "object" &&
+    (initial == null || typeof initial !== "object")
+  ) {
+    const annotations = getAnnotations(outerState);
+    if (annotations != null) {
+      return injectAnnotations(initial, annotations) as TState;
+    }
+  }
+  return initial;
+}
+
+/**
  * Internal helper for optional-style parsing logic shared by optional()
  * and withDefault(). Handles the common pattern of:
  * - Unwrapping optional state to inner parser state
@@ -181,9 +209,7 @@ function parseOptionalStyleSync<TState>(
   context: ParserContext<[TState] | undefined>,
   parser: Parser<"sync", unknown, TState>,
 ): ParserResult<[TState] | undefined> {
-  const innerState = Array.isArray(context.state)
-    ? context.state[0]
-    : parser.initialState;
+  const innerState = deriveOptionalInnerParseState(context.state, parser);
 
   const result = parser.parse({
     ...context,
@@ -201,9 +227,7 @@ async function parseOptionalStyleAsync<TState>(
   context: ParserContext<[TState] | undefined>,
   parser: Parser<Mode, unknown, TState>,
 ): Promise<ParserResult<[TState] | undefined>> {
-  const innerState = Array.isArray(context.state)
-    ? context.state[0]
-    : parser.initialState;
+  const innerState = deriveOptionalInnerParseState(context.state, parser);
 
   const result = await parser.parse({
     ...context,
@@ -399,7 +423,15 @@ export function optional<M extends Mode, TValue, TState>(
     $mode: parser.$mode,
     $valueType: [],
     $stateType: [],
-    [optionalStyleWrapperKey]: true as const,
+    // Forward the non-CLI source-binding marker so that `optional()`'s
+    // `complete()` method can delegate to the inner parser when the
+    // wrapped parser is a `bindEnv()` / `bindConfig()` source binding.
+    // This ensures source fallbacks resolve even when object()'s
+    // zero-consumption pass skips `optional.parse()` because the inner
+    // parser has leadingNames from its own wrapped `option()`.
+    ...(parser[unmatchedNonCliDependencySourceStateMarker] === true
+      ? { [unmatchedNonCliDependencySourceStateMarker]: true as const }
+      : {}),
     placeholder: undefined as TValue | undefined,
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
@@ -444,41 +476,44 @@ export function optional<M extends Mode, TValue, TState>(
     },
     complete(state: [TState] | undefined, exec?: ExecutionContext) {
       if (!Array.isArray(state)) {
+        // Helper: delegate to inner.complete() with the optional's
+        // inner state shape, wrapping any inner failure as
+        // `{ success: true, value: undefined }` so optional always
+        // reports success upstream.
+        const delegateToInner = (
+          resolvedInnerState: TState,
+        ): ModeValue<M, ValueParserResult<TValue | undefined>> => {
+          const innerResult = dispatchByMode(
+            parser.$mode,
+            () => syncParser.complete(resolvedInnerState, exec),
+            async () =>
+              (await parser.complete(
+                resolvedInnerState,
+                exec,
+              )) as ValueParserResult<TValue | undefined>,
+          );
+          return mapModeValue(
+            parser.$mode,
+            innerResult,
+            (result) =>
+              result.success
+                ? result
+                : { success: true, value: undefined } as ValueParserResult<
+                  TValue | undefined
+                >,
+          );
+        };
         if (
           typeof parser.shouldDeferCompletion === "function" &&
           state != null &&
           typeof state === "object"
         ) {
-          const innerComplete = (): ModeValue<
-            M,
-            ValueParserResult<TValue | undefined>
-          > => {
-            const innerState = normalizeOptionalLikeInnerState(
-              state,
-              parser.initialState,
-              parser,
-            );
-            const innerResult = dispatchByMode(
-              parser.$mode,
-              () => syncParser.complete(innerState, exec),
-              async () =>
-                (await parser.complete(
-                  innerState,
-                  exec,
-                )) as ValueParserResult<TValue | undefined>,
-            );
-            return mapModeValue(
-              parser.$mode,
-              innerResult,
-              (result) =>
-                result.success
-                  ? result
-                  : { success: true, value: undefined } as ValueParserResult<
-                    TValue | undefined
-                  >,
-            );
-          };
-          return innerComplete();
+          const innerState = normalizeOptionalLikeInnerState(
+            state,
+            parser.initialState,
+            parser,
+          );
+          return delegateToInner(innerState);
         }
         // When the inner parser preserves an omitted-source default via
         // dependency metadata (e.g. optional(withDefault(source))), delegate
@@ -502,6 +537,28 @@ export function optional<M extends Mode, TValue, TState>(
                 exec,
               )) as ValueParserResult<TValue | undefined>,
           );
+        }
+        // When the inner parser is a non-CLI source binding (bindEnv,
+        // bindConfig), give it a chance to satisfy the value from its
+        // source (annotations or active source registry) even though
+        // object()'s zero-consumption pass skipped calling our parse()
+        // (because the inner has leadingNames from its own inner
+        // option()).  The inner parser's `complete()` knows how to read
+        // annotations out of the state, so we pass through the outer
+        // state — possibly an annotation wrapper, possibly undefined —
+        // unchanged.  If the inner fails or returns undefined, we fall
+        // back to optional's undefined result as before.
+        if (
+          parser[unmatchedNonCliDependencySourceStateMarker] === true &&
+          state != null &&
+          typeof state === "object"
+        ) {
+          const innerState = normalizeOptionalLikeInnerState(
+            state,
+            parser.initialState,
+            parser,
+          );
+          return delegateToInner(innerState);
         }
         return { success: true, value: undefined };
       }
@@ -760,7 +817,11 @@ export function withDefault<
     $mode: parser.$mode,
     $valueType: [],
     $stateType: [],
-    [optionalStyleWrapperKey]: true as const,
+    // Forward the non-CLI source-binding marker.  See `optional()` for
+    // the rationale — the same reasoning applies to `withDefault()`.
+    ...(parser[unmatchedNonCliDependencySourceStateMarker] === true
+      ? { [unmatchedNonCliDependencySourceStateMarker]: true as const }
+      : {}),
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
     leadingNames: parser.leadingNames,
@@ -855,6 +916,58 @@ export function withDefault<
             M,
             ValueParserResult<TValue | TDefault>
           >;
+        }
+        // Case: Inner parser is a non-CLI source binding (bindEnv /
+        // bindConfig).  Give it a chance to resolve from its source
+        // before falling back to the configured default, so that
+        // `withDefault(bindEnv(...), fallback)` prefers the env value
+        // over `fallback`.  This mirrors the branch in `optional()`.
+        if (
+          parser[unmatchedNonCliDependencySourceStateMarker] === true &&
+          state != null &&
+          typeof state === "object"
+        ) {
+          const innerState = normalizeOptionalLikeInnerState(
+            state,
+            parser.initialState,
+            parser,
+          );
+          const innerResult = dispatchByMode(
+            parser.$mode,
+            () => syncParser.complete(innerState, exec),
+            async () =>
+              (await parser.complete(
+                innerState,
+                exec,
+              )) as ValueParserResult<TValue>,
+          );
+          const handleInnerResult = (
+            result: ValueParserResult<TValue>,
+          ): ValueParserResult<TValue | TDefault> => {
+            if (result.success && result.value !== undefined) {
+              return result;
+            }
+            // Inner source binding returned nothing → fall back to the
+            // configured default.
+            try {
+              return {
+                success: true as const,
+                value: evaluateDefault(),
+              };
+            } catch (error) {
+              return {
+                success: false as const,
+                error: error instanceof WithDefaultError
+                  ? error.errorMessage
+                  : message`${text(String(error))}`,
+              };
+            }
+          };
+          return mapModeValue(
+            parser.$mode,
+            innerResult,
+            handleInnerResult,
+          ) as ModeValue<M, ValueParserResult<TValue | TDefault>>;
         }
         try {
           const value = evaluateDefault();

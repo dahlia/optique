@@ -28,7 +28,6 @@ import {
   injectAnnotations,
 } from "./annotations.ts";
 import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
-import { optionalStyleWrapperKey } from "./modifiers.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import {
   deduplicateDocFragments,
@@ -5638,8 +5637,7 @@ export function object<
         const typedParser = parser as Parser<"sync", unknown, unknown>;
         if (
           parser.leadingNames.size > 0 ||
-          typedParser.acceptingAnyToken ||
-          Reflect.get(parser, optionalStyleWrapperKey) === true
+          typedParser.acceptingAnyToken
         ) {
           continue;
         }
@@ -5807,11 +5805,8 @@ export function object<
       for (const [field, parser] of parserPairs) {
         if (consumedFields.has(field as string | symbol)) continue;
         if (
-          // Skip interactive and optional-style parsers
-          // (see sync counterpart for rationale).
           parser.leadingNames.size > 0 ||
-          parser.acceptingAnyToken ||
-          Reflect.get(parser, optionalStyleWrapperKey) === true
+          parser.acceptingAnyToken
         ) {
           continue;
         }

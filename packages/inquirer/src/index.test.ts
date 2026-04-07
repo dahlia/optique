@@ -3309,8 +3309,14 @@ describe("prompt()", () => {
     });
 
     it(
-      "does not reuse sentinel prompt cache across parse invocations",
+      "does not prompt when other required fields are missing",
       async () => {
+        // After the phase-based redesign (issue #233), the
+        // completability probe runs with
+        // ExecutionContext.phase === "parse" and does not fire the
+        // prompter.  This means a parse that is going to fail because
+        // of another missing option no longer spuriously prompts the
+        // user during the probe.
         const promptedValues = ["first", "second"];
         let promptCalls = 0;
 
@@ -3327,20 +3333,21 @@ describe("prompt()", () => {
           required: option("--required", string()),
         });
 
-        // First parse fails because --required is missing, but the prompt
-        // parser still runs during object()'s completability check.
+        // First parse fails because --required is missing; the prompt
+        // must NOT fire during the completability probe.
         const first = await parseAsync(parser, []);
         assert.ok(!first.success);
-        assert.equal(promptCalls, 1);
+        assert.equal(promptCalls, 0);
 
-        // Second parse should ask again and use the new prompted value.
+        // Second parse succeeds: the real completion pass fires the
+        // prompt once and the first prompted value is used.
         const second = await parseAsync(parser, ["--required", "ok"]);
         assert.ok(second.success);
         if (second.success) {
-          assert.equal(second.value.prompted, "second");
+          assert.equal(second.value.prompted, "first");
           assert.equal(second.value.required, "ok");
         }
-        assert.equal(promptCalls, 2);
+        assert.equal(promptCalls, 1);
       },
     );
 

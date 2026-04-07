@@ -39,7 +39,6 @@ import {
   inheritParentAnnotationsKey,
 } from "@optique/core/parser";
 import { message } from "@optique/core/message";
-import { optionalStyleWrapperKey } from "@optique/core/modifiers";
 import type { ValueParserResult } from "@optique/core/valueparser";
 
 // Re-export Separator for use in choice lists.
@@ -687,28 +686,24 @@ export function prompt<M extends Mode, TValue, TState>(
     | StringPromptConfig
     | CheckboxConfig;
 
-  // A sentinel promptBindState used as initialState.  When object() calls
-  // complete() with a state structurally equal to this (as part of its
-  // completability check), we cache the result so the actual complete() call
-  // returns the same value without running the prompter a second time.
+  // The initial state for prompt() is a plain PromptBindState with
+  // hasCliValue: false and no cliState.  Unlike the previous sentinel-based
+  // design, we do not rely on the state *instance* to distinguish the
+  // completability probe from the real completion call: that distinction
+  // is now carried by {@link ExecutionContext.phase}, which `object()`
+  // stamps as `"parse"` during its zero-consumption probe and `"complete"`
+  // during the real completion pass.
   //
-  // IMPORTANT: We use a class instance (not a plain object literal) so that
-  // resolveDeferredAsync() in constructs.ts does NOT clone it during the
-  // Phase 2 dependency-resolution pass.  If it were a plain object, the clone
-  // would have a different reference and the `===` sentinel check would fail.
-  const PromptBindInitialStateClass = class {
-    readonly [promptBindStateKey] = true as const;
-    readonly hasCliValue = false as const;
-  };
-  // Cache for the prompt result during object()'s two-phase complete cycle:
-  // 1. completability check (inside object.parse): sets this cache
-  // 2. actual complete (inside object.complete): reads and clears this cache
-  //
-  // Uses a WeakMap keyed by sentinel state instance so concurrent parse
-  // invocations maintain independent caches.  WeakMap ensures entries are
-  // garbage-collected if phase 2 never fires (e.g., after a parse failure).
+  // A WeakMap cache keyed by the PromptBindState *instance* still lives
+  // here, but only to deduplicate within the real-completion phase — i.e.,
+  // to ensure that if `prompt.complete()` is called twice with the same
+  // state object during `object.complete()` (e.g., through nested
+  // composition), the prompter fires at most once.  The cache is never
+  // populated by a probe call, so crossing from probe to real always
+  // re-runs the decision logic, which in turn either re-uses a
+  // source-binding value or fires the prompt.
   const promptCache = new WeakMap<
-    InstanceType<typeof PromptBindInitialStateClass>,
+    object,
     Promise<ValueParserResult<TValue>>
   >();
 
@@ -716,9 +711,7 @@ export function prompt<M extends Mode, TValue, TState>(
     cliState: unknown,
     state: unknown,
   ): boolean {
-    if (
-      cliState == null || cliState instanceof PromptBindInitialStateClass
-    ) {
+    if (cliState == null) {
       return false;
     }
     const cliStateHasAnnotations = typeof cliState === "object" &&
@@ -950,39 +943,14 @@ export function prompt<M extends Mode, TValue, TState>(
     return validatePromptedValue(result);
   }
 
-  function usePromptOrDefer(
-    state: unknown,
-    result: ValueParserResult<TValue>,
-    exec?: ExecutionContext,
-  ): Promise<ValueParserResult<TValue>> {
-    if (result.success) {
-      return Promise.resolve(result);
-    }
-    // Defer when the outer parser (e.g., runWith's two-phase machinery)
-    // signals deferral, regardless of whether the wrapped parser exposes
-    // a placeholder.  Wrappers that forward shouldDeferCompletion without
-    // forwarding placeholder would otherwise fall through to executePrompt
-    // and prompt interactively during phase 1.
-    if (!shouldDeferPrompt(parser, state, exec)) return executePrompt();
-    let ph: TValue | undefined;
-    try {
-      ph = "placeholder" in parser ? parser.placeholder as TValue : undefined;
-    } catch { /* lazy getter may throw before dependencies are ready */ }
-    return Promise.resolve(deferredPromptResult(ph as TValue));
-  }
-
   const promptedParser: Parser<"async", TValue, TState> & {
     readonly [inheritParentAnnotationsKey]: true;
-    readonly [optionalStyleWrapperKey]: true;
   } = {
     $mode: "async",
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
     [inheritParentAnnotationsKey]: true,
-    // Mark as optional-style wrapper so object()'s zero-consumption pass
-    // skips this parser (prompt should fire during complete, not parse).
-    [optionalStyleWrapperKey]: true as const,
     // prompt() makes the CLI argument optional because missing values are
     // handled interactively.  If the inner parser is already optional
     // (e.g., wrapped in optional() or withDefault()), reuse its usage
@@ -1007,11 +975,15 @@ export function prompt<M extends Mode, TValue, TState>(
         "prepend",
       );
     },
-    // Use the sentinel as initialState so complete() can detect the
-    // completability-check call and deduplicate prompt execution.
-    get initialState(): TState {
-      return new PromptBindInitialStateClass() as unknown as TState;
-    },
+    // Plain PromptBindState with hasCliValue: false.  See the comment on
+    // promptCache above for why we no longer use a class-based sentinel:
+    // phase detection is carried by {@link ExecutionContext.phase} instead
+    // of state identity, so object()'s zero-consumption pass can now run
+    // prompt.parse() without breaking the probe-vs-real distinction.
+    initialState: {
+      [promptBindStateKey]: true as const,
+      hasCliValue: false as const,
+    } as unknown as TState,
 
     parse: (context): ModeValue<"async", ParserResult<TState>> => {
       const annotations = getAnnotations(context.state);
@@ -1115,214 +1087,204 @@ export function prompt<M extends Mode, TValue, TState>(
         return Promise.resolve(r as ValueParserResult<TValue>);
       }
 
-      // When state is the sentinel initialState, object() calls complete()
-      // twice: once for the completability check and once for the real
-      // complete phase.  Cache the result so that if the prompt is needed,
-      // it runs only once.
+      // No CLI value provided.  We arrive here in two shapes:
       //
-      // In the sentinel path, try the inner parser's complete() first.  This
-      // lets source-binding wrappers like bindEnv / bindConfig satisfy the
-      // value from their own sources (env var, config file) when no CLI input
-      // was provided, avoiding unnecessary interactive prompts.  The cache
-      // deduplicates the two calls so the prompt (or inner complete) runs once.
-      if (state instanceof PromptBindInitialStateClass) {
-        if (promptCache.has(state)) {
-          // Second call (real complete phase): consume the cache.
-          const cached = promptCache.get(state)!;
-          promptCache.delete(state);
-          return cached;
+      //  1.  Top level (or `object()` skipping the zero-consumption pass
+      //      because the inner parser has leadingNames): `state` is the
+      //      `initialState` (or an annotated view of it).  `cliState` is
+      //      absent, so we do not yet know whether the inner parser can
+      //      satisfy the value from a source binding (bindEnv/bindConfig)
+      //      or a completion-deferral hook.  We simulate an empty-buffer
+      //      parse to probe the inner's state shape before deciding.
+      //
+      //  2.  Inside `object()`'s zero-consumption pass when the inner
+      //      parser has no leadingNames: `state.cliState` is populated
+      //      from that pre-commit parse call, and we can skip the
+      //      simulate-parse step.  (This path is only reachable for
+      //      inner parsers like `constant()` that have no leadingNames;
+      //      for the common `prompt(option(...))` shape `object()` still
+      //      skips the zero-consumption pass because of leadingNames.)
+      //
+      // In both shapes, `ExecutionContext.phase` distinguishes
+      // `object()`'s `allCanComplete` probe (`"parse"`) from the real
+      // completion pass (`"complete"`).  During the probe we must not
+      // fire the prompter — instead we return a success placeholder so
+      // the probe is satisfied, and the real completion pass re-runs
+      // this method to actually prompt.
+      const isProbe = exec?.phase === "parse";
+      const cacheKey: object | null = state != null && typeof state === "object"
+        ? (state as object)
+        : null;
+      // The cache only stores real-phase results (either an inner
+      // source-binding value or a fired-prompt value).  Probe calls
+      // bypass the cache entirely, so probe → real transitions always
+      // re-decide and cache at most once per state instance.
+      if (!isProbe && cacheKey != null && promptCache.has(cacheKey)) {
+        return promptCache.get(cacheKey)!;
+      }
+
+      const annotations = getAnnotations(state);
+
+      // Build the effective inner state to feed parse()/complete() with.
+      // When `parser.initialState` is null/undefined, we must inject the
+      // annotations directly so that downstream source-binding wrappers
+      // (bindEnv / bindConfig) can read them.
+      const innerInitialState = parser.initialState;
+      const effectiveInitialState = annotations != null &&
+          innerInitialState == null
+        ? injectAnnotations(innerInitialState, annotations)
+        : innerInitialState;
+
+      const finalizePrompt = (): Promise<ValueParserResult<TValue>> => {
+        if (shouldDeferPrompt(parser, state, exec)) {
+          let ph: TValue | undefined;
+          try {
+            ph = "placeholder" in parser
+              ? parser.placeholder as TValue
+              : undefined;
+          } catch { /* lazy getter may throw */ }
+          return Promise.resolve(deferredPromptResult(ph as TValue));
         }
-        // First call: try inner parser, fall back to prompt if it fails.
-        const hasDeferHook = typeof parser.shouldDeferCompletion === "function";
+        if (isProbe) {
+          // Probe phase: do not fire the prompter.  Return a placeholder
+          // so that `object()`'s allCanComplete check passes.  The real
+          // completion pass will re-run this path and actually prompt.
+          let ph: TValue | undefined;
+          try {
+            ph = "placeholder" in parser
+              ? parser.placeholder as TValue
+              : undefined;
+          } catch { /* lazy getter may throw */ }
+          return Promise.resolve({
+            success: true as const,
+            value: ph as TValue,
+          });
+        }
+        return executePrompt();
+      };
 
-        const annotations = getAnnotations(state);
+      // Decide whether to try satisfying the value through the inner
+      // parser's complete() before prompting.
+      //
+      // When `shouldDeferCompletion` is present, we always try inner
+      // complete — the hook is the whole point.  Otherwise we simulate
+      // an empty-buffer parse and inspect the resulting state for
+      // source-binding markers (hasCliValue flag plus a symbol-keyed
+      // state shape, as bindEnv/bindConfig produce).  This mirrors what
+      // the old sentinel path did, without requiring a sentinel state
+      // identity — the simulate-parse is driven purely by the phase
+      // signal and the inner parser's own parse() output.
+      const hasDeferHook = typeof parser.shouldDeferCompletion === "function";
 
-        // When parser.initialState is null/undefined (e.g., optional()),
-        // inject annotations directly so wrapper combinators can forward
-        // them to inner source-binding parsers like bindConfig/bindEnv
-        // during phase-two resolution and simulated-parse detection.
-        const innerInitialState = parser.initialState;
-        const effectiveInitialState = annotations != null &&
-            innerInitialState == null
-          ? injectAnnotations(innerInitialState, annotations)
-          : innerInitialState;
+      const decideFromParse = (
+        parseResult: ParserResult<TState>,
+      ): Promise<ValueParserResult<TValue>> => {
+        const consumed = parseResult.success ? parseResult.consumed.length : 0;
+        const cliState = parseResult.success && consumed === 0
+          ? parseResult.next.state
+          : undefined;
+        const cliStateIsInjected = cliState != null &&
+          typeof cliState === "object" &&
+          unwrapInjectedAnnotationWrapper(cliState) !== cliState;
+        const isSourceBinding = shouldCompleteFromSourceBinding(
+          cliState,
+          state,
+        );
+        if (!isSourceBinding) {
+          // Non-source-binding inner (plain option, argument, or an
+          // arbitrary value-on-complete parser such as `alwaysCompletes`
+          // in the inquirer tests) — go straight to prompting.
+          return finalizePrompt();
+        }
+        // Source-binding wrapper detected.  Complete from the
+        // parse-produced state so any derived state the inner parser
+        // built during parse is available during completion.
+        const completeState = parseResult.success
+          ? parseResult.next.state
+          : effectiveInitialState;
+        const innerR = parser.complete(completeState as TState, exec);
+        const handleCompleteResult = (
+          res: ValueParserResult<TValue>,
+        ): Promise<ValueParserResult<TValue>> => {
+          // Prompt when the inner value is undefined and the cliState
+          // was merely an injected annotation wrapper (optional() case
+          // where no source actually satisfied the value).  In any
+          // other case the undefined is a legitimate user-facing value
+          // (withDefault(..., undefined), for example).
+          if (
+            res.success && res.value === undefined && cliStateIsInjected
+          ) {
+            return finalizePrompt();
+          }
+          if (!res.success) {
+            return finalizePrompt();
+          }
+          return Promise.resolve(res);
+        };
+        if (innerR instanceof Promise) {
+          return (innerR as Promise<ValueParserResult<TValue>>).then(
+            handleCompleteResult,
+          );
+        }
+        return handleCompleteResult(innerR as ValueParserResult<TValue>);
+      };
 
-        if (hasDeferHook) {
-          // Has defer hook — try inner complete, fall back to prompt.
-          // Treat { success: true, value: undefined } as "not resolved"
-          // so the prompt still fires.  This handles
-          // optional(bindConfig(...)) inside object() where optional
-          // returns undefined when config is absent.
-          const annotatedR = withAnnotatedInnerState(
+      const resultPromise: Promise<ValueParserResult<TValue>> = hasDeferHook
+        ? (() => {
+          // With a defer hook, we skip the simulate-parse step and try
+          // inner complete() directly.  The hook itself signals deferral
+          // when appropriate.
+          const innerR = withAnnotatedInnerState(
             state,
             effectiveInitialState,
             (annotatedInnerState) => parser.complete(annotatedInnerState, exec),
           );
-          const usePromptOrDeferSentinel = (
+          const handleDeferHookResult = (
             res: ValueParserResult<TValue>,
           ): Promise<ValueParserResult<TValue>> => {
             if (res.success && res.value === undefined) {
-              return usePromptOrDefer(
-                state,
-                { success: false, error: [] },
-                exec,
-              );
+              return finalizePrompt();
             }
-            return usePromptOrDefer(state, res, exec);
+            if (!res.success) {
+              return finalizePrompt();
+            }
+            return Promise.resolve(res);
           };
-          const cachedResult = annotatedR instanceof Promise
-            ? (annotatedR as Promise<ValueParserResult<TValue>>).then(
-              usePromptOrDeferSentinel,
-            )
-            : usePromptOrDeferSentinel(
-              annotatedR as ValueParserResult<TValue>,
+          if (innerR instanceof Promise) {
+            return (innerR as Promise<ValueParserResult<TValue>>).then(
+              handleDeferHookResult,
             );
-          promptCache.set(state, cachedResult);
-          return cachedResult;
-        }
-
-        // No defer hook — simulate a parse with an empty buffer (the
-        // same thing prompt().parse() does at top level) and inspect the
-        // resulting cliState.  Source-binding wrappers (bindEnv) inject
-        // hasCliValue or annotationKey into their output state during
-        // parse, whereas pure combinators (optional, withDefault) don't.
-        const simParseR = withAnnotatedInnerState(
-          state,
-          effectiveInitialState,
-          (annotatedState) =>
-            parser.parse({
-              buffer: [],
-              state: annotatedState,
-              optionsTerminated: false,
-              usage: parser.usage,
-            }),
-        );
-        const decideFromParse = (
-          parseResult: ParserResult<TState>,
-        ): Promise<ValueParserResult<TValue>> => {
-          // Extract cliState the same way processResult does at top level.
-          const consumed = parseResult.success
-            ? parseResult.consumed.length
-            : 0;
-          const cliState = parseResult.success && consumed === 0
-            ? parseResult.next.state
-            : undefined;
-          // Detect source-binding wrappers in the simulated parse state.
-          // shouldAttemptInnerCompletion checks annotation markers, but
-          // may return true when cliState is merely a pass-through of
-          // the injected annotation wrapper (e.g., withDefault returns
-          // the context state unchanged).  Exclude injected annotation
-          // wrappers: at top level these are PromptBindInitialStateClass
-          // instances and shouldAttemptInnerCompletion returns false for
-          // them, so the sentinel path must match.
-          //
-          // The hasCliValue fallback catches bindEnv without annotations
-          // (it can still resolve via the active env source registry).
-          // When optional/withDefault wraps the inner state in an array
-          // (e.g., [envBindState]), unwrap it to check the inner element.
-          // Source-binding wrappers (bindEnv) brand their state with a
-          // Symbol key plus a hasCliValue flag.  Check for both to avoid
-          // false positives from unrelated objects that happen to have a
-          // hasCliValue property.
-          const isSourceBinding = shouldCompleteFromSourceBinding(
-            cliState,
+          }
+          return handleDeferHookResult(innerR as ValueParserResult<TValue>);
+        })()
+        : (() => {
+          // Simulate a parse with an empty buffer and inspect the
+          // resulting state for source-binding markers.
+          const simParseR = withAnnotatedInnerState(
             state,
+            effectiveInitialState,
+            (annotatedState) =>
+              parser.parse({
+                buffer: [],
+                state: annotatedState,
+                optionsTerminated: false,
+                usage: parser.usage,
+              }),
           );
-          if (isSourceBinding) {
-            // Source-binding wrapper detected — complete from the state
-            // produced by parse() (not from initialState) so that any
-            // derived state the inner parser built during parse is
-            // available during completion.
-            const cliStateIsInjected = cliState != null &&
-              typeof cliState === "object" &&
-              unwrapInjectedAnnotationWrapper(cliState) !== cliState;
-            const handleCompleteResult = (
-              res: ValueParserResult<TValue>,
-            ): Promise<ValueParserResult<TValue>> => {
-              // Mirror the top-level useCompleteResultOrPrompt logic:
-              // prompt when value is undefined and the cliState is an
-              // injected annotation wrapper (handles optional()), but
-              // use the value otherwise (handles withDefault(), bindEnv).
-              if (
-                res.success && res.value === undefined && cliStateIsInjected
-              ) {
-                return executePrompt();
-              }
-              return usePromptOrDefer(state, res, exec);
-            };
-            // Complete from the parse-produced state, not initialState.
-            const completeState = parseResult.success
-              ? parseResult.next.state
-              : effectiveInitialState;
-            const completeR = parser.complete(completeState, exec);
-            if (completeR instanceof Promise) {
-              return (completeR as Promise<ValueParserResult<TValue>>).then(
-                handleCompleteResult,
-              );
-            }
-            return handleCompleteResult(
-              completeR as ValueParserResult<TValue>,
+          if (simParseR instanceof Promise) {
+            return (simParseR as Promise<ParserResult<TState>>).then(
+              decideFromParse,
             );
           }
-          // Non-source-binding wrapper → prompt.
-          return executePrompt();
-        };
-        const cachedResult = simParseR instanceof Promise
-          ? (simParseR as Promise<ParserResult<TState>>).then(decideFromParse)
-          : decideFromParse(simParseR as ParserResult<TState>);
-        promptCache.set(state, cachedResult);
-        return cachedResult;
-      }
+          return decideFromParse(simParseR as ParserResult<TState>);
+        })();
 
-      // Normal case: parse() built a PromptBindState with hasCliValue: false.
-      // Only delegate to the inner parser's complete() when the cliState
-      // itself carries annotations — i.e., when it came from a source-binding
-      // wrapper like bindEnv or bindConfig that injected [annotationKey].
-      // Pure combinators such as optional() may preserve the outer
-      // annotation-bearing wrapper state even when no CLI value exists, but
-      // that is not evidence that complete() can satisfy the value without
-      // prompting.
-      const cliState = isPromptBindState(state) ? state.cliState : undefined;
-      const cliStateIsInjectedAnnotationWrapper = cliState != null &&
-        typeof cliState === "object" &&
-        unwrapInjectedAnnotationWrapper(cliState) !== cliState;
-
-      if (shouldCompleteFromSourceBinding(cliState, state)) {
-        const useCompleteResultOrPrompt = (
-          result: ValueParserResult<TValue>,
-        ): Promise<ValueParserResult<TValue>> => {
-          if (
-            result.success &&
-            result.value === undefined &&
-            cliStateIsInjectedAnnotationWrapper
-          ) {
-            return executePrompt();
-          }
-          return usePromptOrDefer(state, result, exec);
-        };
-        const r = withAnnotatedInnerState(
-          state,
-          cliState as TState,
-          (annotatedInnerState) => parser.complete(annotatedInnerState, exec),
-        );
-        if (r instanceof Promise) {
-          return (r as Promise<ValueParserResult<TValue>>).then(
-            useCompleteResultOrPrompt,
-          );
-        }
-        return useCompleteResultOrPrompt(r as ValueParserResult<TValue>);
+      // Only cache real-phase results.  Probe placeholders must not
+      // leak into the real phase.
+      if (!isProbe && cacheKey != null) {
+        promptCache.set(cacheKey, resultPromise);
       }
-
-      if (shouldDeferPrompt(parser, state, exec)) {
-        let ph: TValue | undefined;
-        try {
-          ph = "placeholder" in parser
-            ? parser.placeholder as TValue
-            : undefined;
-        } catch { /* lazy getter may throw */ }
-        return Promise.resolve(deferredPromptResult(ph as TValue));
-      }
-      return executePrompt();
+      return resultPromise;
     },
 
     suggest: (context, prefix) => {

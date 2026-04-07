@@ -40,6 +40,13 @@ through the shared dependency runtime. A missing optional source therefore
 remains visible to derived parsers as “not provided” rather than becoming a
 special wrapper-specific state.
 
+When the wrapped parser produces its value during completion rather than
+argument matching — for example, `constant()`, or `bindEnv()` / `bindConfig()`
+wrappers that resolve from environment variables or configuration files —
+`optional()` preserves that completed value.  It only yields `undefined` when
+the wrapped parser is genuinely absent (no CLI match and no fallback source
+could produce a value).
+
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
@@ -248,6 +255,13 @@ source value has been transformed anywhere in the wrapper chain,
 both to `withDefault(map(source), ...)` and to `map(withDefault(source), ...)`.
 In either form, the default does not invent a dependency-source value for
 downstream derived parsers.
+
+The configured default applies only when the wrapped parser produces no value
+at all.  If the wrapped parser resolves a value during completion — from
+`constant()`, from an environment variable through `bindEnv()`, or from a
+configuration file through `bindConfig()` — that value wins over the
+configured default.  The default is the fallback for the wrapped parser's
+entire resolution chain, not just for the CLI argument path.
 
 ### Default normalization
 

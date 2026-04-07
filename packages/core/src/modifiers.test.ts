@@ -5123,34 +5123,50 @@ describe("state management edge cases", () => {
   });
 
   describe("constant() with optional()", () => {
-    // Note: In object() context, optional(constant()) returns undefined
-    // because object() doesn't call parse() on parsers that can't consume
-    // any more input. This is expected behavior - constant() is typically
-    // used for discriminated unions, not for default values in object().
-    // Use withDefault() instead for default values.
-    it("should return undefined in object() context", () => {
+    // In object() context, `optional(constant())` preserves the constant
+    // value, matching the standalone behaviour.  See
+    // https://github.com/dahlia/optique/issues/233 for the original bug
+    // report.  `withDefault()` composes analogously: the inner parser's
+    // completed value wins over the configured default.
+    it("should preserve constant value in object() context", () => {
       const parser = object({
         mode: optional(constant("default-mode" as const)),
         verbose: optional(option("-v")),
       });
 
-      // Empty input - optional(constant()) returns undefined because
-      // optional-style wrappers (marked with optionalStyleWrapperKey)
-      // are skipped by the zero-consumption pass to preserve their
-      // completion semantics.
+      // Empty input: optional(constant(...)) should produce the constant
+      // value, not undefined.  optional(option(...)) should still return
+      // undefined because the inner option's parse() fails on empty input.
       const result1 = parse(parser, []);
       assert.ok(result1.success);
       if (result1.success) {
-        assert.equal(result1.value.mode, undefined);
+        assert.equal(result1.value.mode, "default-mode");
         assert.equal(result1.value.verbose, undefined);
       }
 
-      // With verbose flag
+      // With verbose flag: the constant should still be preserved.
       const result2 = parse(parser, ["-v"]);
       assert.ok(result2.success);
       if (result2.success) {
-        assert.equal(result2.value.mode, undefined);
+        assert.equal(result2.value.mode, "default-mode");
         assert.equal(result2.value.verbose, true);
+      }
+    });
+
+    it("should preserve constant value through withDefault() in object()", () => {
+      const parser = object({
+        mode: withDefault(
+          constant("inner" as const),
+          "fallback" as const,
+        ),
+      });
+
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        // The inner constant produces a value, so withDefault must not
+        // substitute its own fallback.
+        assert.equal(result.value.mode, "inner");
       }
     });
 
@@ -5228,6 +5244,185 @@ describe("state management edge cases", () => {
         // Inner withDefault makes option return false when not present
         // Outer withDefault doesn't change that
         assert.equal(result.value, false);
+      }
+    });
+  });
+
+  // Regression tests for https://github.com/dahlia/optique/issues/233.
+  // optional()/withDefault() must preserve values from parsers whose
+  // useful result is produced during complete() (e.g. constant(),
+  // bindEnv(), bindConfig() with fallbacks, or custom parsers that
+  // succeed in parse() with consumed: [] and return a value in complete()).
+  describe("complete-only inner parsers (issue #233)", () => {
+    // A minimal custom parser that matches the "complete-only" shape
+    // described in the issue: parse() always succeeds with no consumption,
+    // leaving the initial state intact.  complete() unconditionally
+    // returns a value.
+    function completeOnly<T>(value: T): Parser<"sync", T, undefined> {
+      return {
+        $valueType: [] as T[],
+        $stateType: [] as undefined[],
+        $mode: "sync",
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return { success: true, next: context, consumed: [] };
+        },
+        complete(_state) {
+          return { success: true, value };
+        },
+        suggest(_context, _prefix) {
+          return [];
+        },
+        getDocFragments(_state, _defaultValue?) {
+          return { fragments: [] };
+        },
+      };
+    }
+
+    it("optional(completeOnly) returns inner value standalone", () => {
+      const parser = optional(completeOnly("ok"));
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "ok");
+      }
+    });
+
+    it("withDefault(completeOnly, fallback) prefers inner value", () => {
+      const parser = withDefault(completeOnly("ok"), "fallback");
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "ok");
+      }
+    });
+
+    it("optional(completeOnly) with annotations returns inner value", () => {
+      const annotation = Symbol.for("@test/issue-233-completeOnly");
+      const parser = optional(completeOnly("ok"));
+      const result = parse(parser, [], {
+        annotations: { [annotation]: "present" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "ok");
+      }
+    });
+
+    it("object({ x: optional(completeOnly) }) returns inner value", () => {
+      const parser = object({ x: optional(completeOnly("ok")) });
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.x, "ok");
+      }
+    });
+
+    it("object({ x: withDefault(completeOnly, fb) }) returns inner value", () => {
+      const parser = object({
+        x: withDefault(completeOnly("ok"), "fallback"),
+      });
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.x, "ok");
+      }
+    });
+
+    it("object sync: optional(constant) preserves value alongside flags", () => {
+      const parser = object({
+        mode: optional(constant("default-mode" as const)),
+        verbose: optional(option("-v")),
+      });
+      const result = parse(parser, ["-v"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.mode, "default-mode");
+        assert.equal(result.value.verbose, true);
+      }
+    });
+
+    it("object sync: withDefault(constant, fallback) uses inner value", () => {
+      const parser = object({
+        x: withDefault(constant("inner" as const), "fallback" as const),
+      });
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.x, "inner");
+      }
+    });
+
+    it("parseAsync: optional(completeOnly) standalone returns inner value", async () => {
+      const parser = optional(completeOnly("ok"));
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "ok");
+      }
+    });
+
+    it("parseAsync: object({ x: optional(completeOnly) }) returns inner value", async () => {
+      const parser = object({ x: optional(completeOnly("ok")) });
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.x, "ok");
+      }
+    });
+
+    it("parseAsync: object({ x: withDefault(constant) }) uses inner value", async () => {
+      const parser = object({
+        x: withDefault(constant("inner" as const), "fallback" as const),
+      });
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.x, "inner");
+      }
+    });
+
+    // Negative regression: the fix must NOT cause optional(option(...))
+    // to return a value for a flag that wasn't provided.  The option's
+    // parse() fails with consumed: 0 on empty input, so optional should
+    // still return undefined.
+    it("optional(option(string)) returns undefined when flag is absent", () => {
+      const parser = optional(option("--foo", string()));
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, undefined);
+      }
+    });
+
+    it("optional(boolean option) returns undefined when flag is absent", () => {
+      const parser = optional(option("-v"));
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, undefined);
+      }
+    });
+
+    it("withDefault(option) uses the configured default on absent input", () => {
+      const parser = withDefault(option("--foo", string()), "d");
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "d");
+      }
+    });
+
+    it("object({ verbose: optional(option('-v')) }) preserves absent as undefined", () => {
+      const parser = object({ verbose: optional(option("-v")) });
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.verbose, undefined);
       }
     });
   });
