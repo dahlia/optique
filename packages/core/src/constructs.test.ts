@@ -8251,7 +8251,7 @@ describe("conditional", () => {
     let branchCompleteCount = 0;
     let branchCompletePhase: string | undefined;
     let discriminatorCompleteCount = 0;
-    const branchParser: Parser<"async", number> = {
+    const branchParser: Parser<"async", number, number> = {
       $mode: "async",
       $valueType: [] as readonly number[],
       $stateType: [0] as [number],
@@ -8285,7 +8285,7 @@ describe("conditional", () => {
         branchCompletePhase = exec?.phase;
         return Promise.resolve({
           success: true as const,
-          value: state as number,
+          value: state,
         });
       },
       suggest: () => (async function* () {})(),
