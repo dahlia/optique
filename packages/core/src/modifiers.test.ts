@@ -5669,6 +5669,89 @@ describe("state management edge cases", () => {
         assert.equal(result.value, "ok");
       }
     });
+
+    // Regression test for the review feedback that
+    // `deriveOptionalInnerParseState()` was dropping outer-array
+    // annotations on parse-time re-entry.  When `object()` commits a
+    // child optional() state via `getAnnotatedChildState()`, the
+    // committed value is an annotated array wrapping the inner state.
+    // If `optional.parse()` is then re-invoked with that wrapped state
+    // (e.g., during a subsequent greedy-loop iteration), the helper
+    // must propagate the array's annotations back onto the inner
+    // element so source-binding wrappers under the optional still see
+    // them on the second pass.
+    it("optional() re-entry with annotated array state propagates annotations to inner parse()", () => {
+      const marker = Symbol.for("@test/issue-233-array-reentry");
+      let lastSeenAnnotation: string | undefined;
+      const inner: Parser<"sync", string, { readonly tag: string }> = {
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly { readonly tag: string }[],
+        $mode: "sync",
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: { tag: "initial" },
+        parse(context) {
+          const annotations = getAnnotations(context.state);
+          const tag = (annotations?.[marker] as string | undefined) ??
+            "no-annotations";
+          lastSeenAnnotation = tag;
+          return {
+            success: true,
+            next: { ...context, state: { tag } },
+            consumed: [],
+          };
+        },
+        complete(state) {
+          return { success: true, value: state.tag };
+        },
+        suggest(_context, _prefix) {
+          return [];
+        },
+        getDocFragments(_state, _defaultValue?) {
+          return { fragments: [] };
+        },
+      };
+      const optionalParser = optional(inner);
+
+      // First call: simulate the top-level annotated context that the
+      // initial parse iteration sees.
+      const annotatedInitial = injectAnnotations(
+        optionalParser.initialState,
+        { [marker]: "first" },
+      ) as [{ readonly tag: string }] | undefined;
+      const first = optionalParser.parse({
+        buffer: [],
+        state: annotatedInitial,
+        optionsTerminated: false,
+        usage: optionalParser.usage,
+      });
+      assert.ok(first.success);
+      if (!first.success) return;
+      assert.equal(lastSeenAnnotation, "first");
+
+      // Build the exact shape `object()` would commit: an annotated
+      // array wrapping the inner state from the previous parse, where
+      // the annotations live on the array wrapper rather than the
+      // inner element.
+      const reentryState = injectAnnotations(first.next.state, {
+        [marker]: "reentry",
+      }) as [{ readonly tag: string }];
+
+      // Second call: re-invoke parse() with the annotated array.  The
+      // inner parser must see the re-entry annotation, not the original
+      // tag baked into its state from the first call.
+      lastSeenAnnotation = undefined;
+      const second = optionalParser.parse({
+        buffer: [],
+        state: reentryState,
+        optionsTerminated: false,
+        usage: optionalParser.usage,
+      });
+      assert.ok(second.success);
+      assert.equal(lastSeenAnnotation, "reentry");
+    });
   });
 });
 

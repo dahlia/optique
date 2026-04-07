@@ -176,7 +176,24 @@ function deriveOptionalInnerParseState<TState>(
   parser: Parser<Mode, unknown, TState>,
 ): TState {
   if (Array.isArray(outerState)) {
-    return outerState[0];
+    const innerState = outerState[0];
+    // The outer optional-state array can pick up annotations from
+    // `object()`'s `getAnnotatedChildState()` when the previous parse
+    // iteration's wrapped state is re-committed to the parent object
+    // (the parent stamps the array wrapper, not the inner element).
+    // Mirror `normalizeOptionalLikeInnerState()`'s array handling so
+    // that source-binding wrappers under `optional()` / `withDefault()`
+    // see the same annotations on parse-time re-entry that they see in
+    // complete-time, instead of dropping them on the way back into the
+    // inner parser.
+    if (
+      getAnnotations(outerState) != null &&
+      innerState != null &&
+      typeof innerState === "object"
+    ) {
+      return inheritAnnotations(outerState, innerState) as TState;
+    }
+    return innerState;
   }
   // Propagate any annotations carried by the outer wrapper state into
   // the inner parser's initial state so that source-binding wrappers
