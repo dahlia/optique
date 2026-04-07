@@ -3306,40 +3306,54 @@ export function or(
               provisionalConsuming.parser,
             ),
           );
-          if (replayedResult.success) {
-            const mergedExec = mergeChildExec(
-              replayExec,
-              replayedResult.next.exec,
-            );
-            return {
-              success: true,
-              provisional: true,
-              next: {
-                ...context,
-                buffer: replayedResult.next.buffer,
-                optionsTerminated: replayedResult.next.optionsTerminated,
-                state: createExclusiveState(
-                  context.state,
-                  provisionalConsuming.index,
-                  provisionalConsuming.parser,
-                  {
-                    ...replayedResult,
-                    consumed: [
-                      ...previouslyConsumed,
-                      ...replayedResult.consumed,
-                    ],
-                  },
-                ),
-                ...(mergedExec != null
-                  ? {
-                    exec: mergedExec,
-                    dependencyRegistry: mergedExec.dependencyRegistry,
-                  }
-                  : {}),
-              },
-              consumed: replayedResult.consumed,
-            };
+          // Mirror the definitive branch-switch path: when the replay
+          // fails, propagate that failure so outer combinators see the
+          // real consumed depth and error instead of falling back to
+          // the earlier branch-loop error.
+          if (!replayedResult.success) {
+            return replayedResult;
           }
+          const mergedExec = mergeChildExec(
+            replayExec,
+            replayedResult.next.exec,
+          );
+          return {
+            success: true,
+            provisional: true,
+            next: {
+              ...context,
+              buffer: replayedResult.next.buffer,
+              optionsTerminated: replayedResult.next.optionsTerminated,
+              state: createExclusiveState(
+                context.state,
+                provisionalConsuming.index,
+                provisionalConsuming.parser,
+                {
+                  ...replayedResult,
+                  // Force `provisional: true` on the stored result so
+                  // subsequent or() parse calls keep treating this branch
+                  // as a tentative selection.  Without this, a replay
+                  // that returns a non-provisional success (e.g., a child
+                  // parser that didn't propagate provisional itself)
+                  // would clear the flag in state, and outer combinators
+                  // would treat the branch as definitive — blocking the
+                  // intended fallthrough to definitive alternatives.
+                  provisional: true as const,
+                  consumed: [
+                    ...previouslyConsumed,
+                    ...replayedResult.consumed,
+                  ],
+                },
+              ),
+              ...(mergedExec != null
+                ? {
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
+                : {}),
+            },
+            consumed: replayedResult.consumed,
+          };
         }
       }
     }
@@ -3663,40 +3677,44 @@ export function or(
               provisionalConsuming.parser,
             ),
           );
-          if (replayedResult.success) {
-            const mergedExec = mergeChildExec(
-              replayExec,
-              replayedResult.next.exec,
-            );
-            return {
-              success: true,
-              provisional: true,
-              next: {
-                ...context,
-                buffer: replayedResult.next.buffer,
-                optionsTerminated: replayedResult.next.optionsTerminated,
-                state: createExclusiveState(
-                  context.state,
-                  provisionalConsuming.index,
-                  provisionalConsuming.parser,
-                  {
-                    ...replayedResult,
-                    consumed: [
-                      ...previouslyConsumed,
-                      ...replayedResult.consumed,
-                    ],
-                  },
-                ),
-                ...(mergedExec != null
-                  ? {
-                    exec: mergedExec,
-                    dependencyRegistry: mergedExec.dependencyRegistry,
-                  }
-                  : {}),
-              },
-              consumed: replayedResult.consumed,
-            };
+          // See the sync counterpart for rationale.
+          if (!replayedResult.success) {
+            return replayedResult;
           }
+          const mergedExec = mergeChildExec(
+            replayExec,
+            replayedResult.next.exec,
+          );
+          return {
+            success: true,
+            provisional: true,
+            next: {
+              ...context,
+              buffer: replayedResult.next.buffer,
+              optionsTerminated: replayedResult.next.optionsTerminated,
+              state: createExclusiveState(
+                context.state,
+                provisionalConsuming.index,
+                provisionalConsuming.parser,
+                {
+                  ...replayedResult,
+                  // Force `provisional: true` (see sync counterpart).
+                  provisional: true as const,
+                  consumed: [
+                    ...previouslyConsumed,
+                    ...replayedResult.consumed,
+                  ],
+                },
+              ),
+              ...(mergedExec != null
+                ? {
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
+                : {}),
+            },
+            consumed: replayedResult.consumed,
+          };
         }
       }
     }
