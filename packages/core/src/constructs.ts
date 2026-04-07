@@ -10240,7 +10240,7 @@ export interface ConditionalErrorOptions {
    * Receives both the discriminator value the parser actually
    * resolved to (`discriminatorValue`) and the speculative key the
    * branch tokens were committed to (`speculativeKey`).
-   * @since 0.10.1
+   * @since 1.0.1
    */
   readonly branchMismatch?: (
     discriminatorValue: string,
