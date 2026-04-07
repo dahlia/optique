@@ -2646,6 +2646,140 @@ describe("bindConfig() with dependency sources", () => {
     assert.equal(result.value.level, "debug");
   });
 
+  // Regression tests for https://github.com/dahlia/optique/issues/233.
+  // optional()/withDefault() wrappers placed under object() must allow
+  // bindConfig() to resolve from the config, not just short-circuit to
+  // undefined/fallback.
+  test("optional(bindConfig(...)) in object() uses config value when present", () => {
+    const context = createConfigContext({ schema });
+    const annotations: Annotations = {
+      [context.id]: { data: { mode: "prod" as const } },
+    };
+    const parser = object({
+      mode: optional(
+        bindConfig(option("--mode", choice(["dev", "prod"] as const)), {
+          context,
+          key: "mode",
+        }),
+      ),
+    });
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "prod");
+    }
+  });
+
+  test("withDefault(bindConfig(...), fb) in object() uses config value when present", () => {
+    const context = createConfigContext({ schema });
+    const annotations: Annotations = {
+      [context.id]: { data: { mode: "prod" as const } },
+    };
+    const parser = object({
+      mode: withDefault(
+        bindConfig(option("--mode", choice(["dev", "prod"] as const)), {
+          context,
+          key: "mode",
+        }),
+        "dev" as const,
+      ),
+    });
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "prod");
+    }
+  });
+
+  test("optional(bindConfig(...)) at top level uses config via annotations", () => {
+    const context = createConfigContext({ schema });
+    const annotations: Annotations = {
+      [context.id]: { data: { mode: "prod" as const } },
+    };
+    const parser = optional(
+      bindConfig(option("--mode", choice(["dev", "prod"] as const)), {
+        context,
+        key: "mode",
+      }),
+    );
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "prod");
+    }
+  });
+
+  test(
+    "optional(bindConfig(flag)) at top level uses config via annotations",
+    () => {
+      // Boolean flag options (no value parser) have an object-shaped
+      // initialState `{ success: true, value: false }`.  Regression
+      // test for the annotation injection gap identified in review
+      // of the #233 fix: `deriveOptionalInnerParseState` must inject
+      // annotations into object initial states as well as primitive
+      // ones, otherwise `optional(bindConfig(option("--verbose")))`
+      // cannot see its config fallback at top level.
+      const flagSchema = z.object({ verbose: z.boolean().optional() });
+      const context = createConfigContext({ schema: flagSchema });
+      const annotations: Annotations = {
+        [context.id]: { data: { verbose: true } },
+      };
+      const parser = optional(
+        bindConfig(option("-v", "--verbose"), {
+          context,
+          key: "verbose",
+        }),
+      );
+      const result = parse(parser, [], { annotations });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, true);
+      }
+    },
+  );
+
+  test(
+    "withDefault(bindConfig(flag), fb) at top level uses config via annotations",
+    () => {
+      const flagSchema = z.object({ verbose: z.boolean().optional() });
+      const context = createConfigContext({ schema: flagSchema });
+      const annotations: Annotations = {
+        [context.id]: { data: { verbose: true } },
+      };
+      const parser = withDefault(
+        bindConfig(option("-v", "--verbose"), {
+          context,
+          key: "verbose",
+        }),
+        false as const,
+      );
+      const result = parse(parser, [], { annotations });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, true);
+      }
+    },
+  );
+
+  test("optional(bindConfig(..., default)) uses bindConfig default when config absent", () => {
+    const context = createConfigContext({ schema });
+    const annotations: Annotations = {};
+    const parser = object({
+      mode: optional(
+        bindConfig(option("--mode", choice(["dev", "prod"] as const)), {
+          context,
+          key: "mode",
+          default: "dev" as const,
+        }),
+      ),
+    });
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "dev");
+    }
+  });
+
   test("does not preserve inner missing-source defaults without outer fallback", () => {
     const context = createConfigContext({ schema });
     const parser = bindConfig(

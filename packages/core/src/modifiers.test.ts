@@ -5123,34 +5123,50 @@ describe("state management edge cases", () => {
   });
 
   describe("constant() with optional()", () => {
-    // Note: In object() context, optional(constant()) returns undefined
-    // because object() doesn't call parse() on parsers that can't consume
-    // any more input. This is expected behavior - constant() is typically
-    // used for discriminated unions, not for default values in object().
-    // Use withDefault() instead for default values.
-    it("should return undefined in object() context", () => {
+    // In object() context, `optional(constant())` preserves the constant
+    // value, matching the standalone behaviour.  See
+    // https://github.com/dahlia/optique/issues/233 for the original bug
+    // report.  `withDefault()` composes analogously: the inner parser's
+    // completed value wins over the configured default.
+    it("should preserve constant value in object() context", () => {
       const parser = object({
         mode: optional(constant("default-mode" as const)),
         verbose: optional(option("-v")),
       });
 
-      // Empty input - optional(constant()) returns undefined because
-      // optional-style wrappers (marked with optionalStyleWrapperKey)
-      // are skipped by the zero-consumption pass to preserve their
-      // completion semantics.
+      // Empty input: optional(constant(...)) should produce the constant
+      // value, not undefined.  optional(option(...)) should still return
+      // undefined because the inner option's parse() fails on empty input.
       const result1 = parse(parser, []);
       assert.ok(result1.success);
       if (result1.success) {
-        assert.equal(result1.value.mode, undefined);
+        assert.equal(result1.value.mode, "default-mode");
         assert.equal(result1.value.verbose, undefined);
       }
 
-      // With verbose flag
+      // With verbose flag: the constant should still be preserved.
       const result2 = parse(parser, ["-v"]);
       assert.ok(result2.success);
       if (result2.success) {
-        assert.equal(result2.value.mode, undefined);
+        assert.equal(result2.value.mode, "default-mode");
         assert.equal(result2.value.verbose, true);
+      }
+    });
+
+    it("should preserve constant value through withDefault() in object()", () => {
+      const parser = object({
+        mode: withDefault(
+          constant("inner" as const),
+          "fallback" as const,
+        ),
+      });
+
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        // The inner constant produces a value, so withDefault must not
+        // substitute its own fallback.
+        assert.equal(result.value.mode, "inner");
       }
     });
 
@@ -5229,6 +5245,566 @@ describe("state management edge cases", () => {
         // Outer withDefault doesn't change that
         assert.equal(result.value, false);
       }
+    });
+  });
+
+  // Regression tests for https://github.com/dahlia/optique/issues/233.
+  // optional()/withDefault() must preserve values from parsers whose
+  // useful result is produced during complete() (e.g. constant(),
+  // bindEnv(), bindConfig() with fallbacks, or custom parsers that
+  // succeed in parse() with consumed: [] and return a value in complete()).
+  describe("complete-only inner parsers (issue #233)", () => {
+    // A minimal custom parser that matches the "complete-only" shape
+    // described in the issue: parse() always succeeds with no consumption,
+    // leaving the initial state intact.  complete() unconditionally
+    // returns a value.
+    function completeOnly<T>(value: T): Parser<"sync", T, undefined> {
+      return {
+        $valueType: [] as readonly T[],
+        $stateType: [] as readonly undefined[],
+        $mode: "sync",
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return { success: true, next: context, consumed: [] };
+        },
+        complete(_state) {
+          return { success: true, value };
+        },
+        suggest(_context, _prefix) {
+          return [];
+        },
+        getDocFragments(_state, _defaultValue?) {
+          return { fragments: [] };
+        },
+      };
+    }
+
+    // Async counterpart of `completeOnly()`.  Using a real async parser
+    // here ensures `parseAsync(optional(...))` and
+    // `parseAsync(object({ x: withDefault(...) }))` actually exercise
+    // `parseOptionalStyleAsync` / the async wrapper path, rather than
+    // dispatching through the sync fast path for a sync inner parser.
+    function asyncCompleteOnly<T>(
+      value: T,
+    ): Parser<"async", T, undefined> {
+      return {
+        $valueType: [] as readonly T[],
+        $stateType: [] as readonly undefined[],
+        $mode: "async",
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [] as readonly string[],
+          });
+        },
+        complete(_state) {
+          return Promise.resolve({ success: true as const, value });
+        },
+        suggest(_context, _prefix) {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<
+              Suggestion
+            > {
+              yield* [];
+            },
+          };
+        },
+        getDocFragments(_state, _defaultValue?) {
+          return { fragments: [] };
+        },
+      };
+    }
+
+    // A parser that reads its annotation-propagated state in both
+    // `parse()` and `complete()`.  The value it returns is a function
+    // of the annotation payload passed via `parse(..., { annotations })`,
+    // so any regression that drops annotations on the way from
+    // `deriveOptionalInnerParseState()` into the inner parser's
+    // `parse()` or `complete()` turns into an assertion failure rather
+    // than a silent pass.
+    function annotationReader(
+      marker: symbol,
+    ): Parser<"sync", string, { readonly tag: string }> {
+      const initial: { readonly tag: string } = { tag: "initial" };
+      return {
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly { readonly tag: string }[],
+        $mode: "sync",
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: initial,
+        parse(context) {
+          const annotations = getAnnotations(context.state);
+          const tag = (annotations?.[marker] as string | undefined) ??
+            "no-annotations-in-parse";
+          return {
+            success: true,
+            next: { ...context, state: { tag } },
+            consumed: [],
+          };
+        },
+        complete(state) {
+          const annotations = getAnnotations(state);
+          const completeTag = (annotations?.[marker] as string | undefined) ??
+            state.tag;
+          return { success: true, value: completeTag };
+        },
+        suggest(_context, _prefix) {
+          return [];
+        },
+        getDocFragments(_state, _defaultValue?) {
+          return { fragments: [] };
+        },
+      };
+    }
+
+    it("optional(completeOnly) returns inner value standalone", () => {
+      const parser = optional(completeOnly("ok"));
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "ok");
+      }
+    });
+
+    it("withDefault(completeOnly, fallback) prefers inner value", () => {
+      const parser = withDefault(completeOnly("ok"), "fallback");
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "ok");
+      }
+    });
+
+    it("optional(completeOnly) with annotations returns inner value", () => {
+      const annotation = Symbol.for("@test/issue-233-completeOnly");
+      const parser = optional(completeOnly("ok"));
+      const result = parse(parser, [], {
+        annotations: { [annotation]: "present" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "ok");
+      }
+    });
+
+    it("object({ x: optional(completeOnly) }) returns inner value", () => {
+      const parser = object({ x: optional(completeOnly("ok")) });
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.x, "ok");
+      }
+    });
+
+    it("object({ x: withDefault(completeOnly, fb) }) returns inner value", () => {
+      const parser = object({
+        x: withDefault(completeOnly("ok"), "fallback"),
+      });
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.x, "ok");
+      }
+    });
+
+    it("object sync: optional(constant) preserves value alongside flags", () => {
+      const parser = object({
+        mode: optional(constant("default-mode" as const)),
+        verbose: optional(option("-v")),
+      });
+      const result = parse(parser, ["-v"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.mode, "default-mode");
+        assert.equal(result.value.verbose, true);
+      }
+    });
+
+    it("object sync: withDefault(constant, fallback) uses inner value", () => {
+      const parser = object({
+        x: withDefault(constant("inner" as const), "fallback" as const),
+      });
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.x, "inner");
+      }
+    });
+
+    it("parseAsync: optional(completeOnly) standalone returns inner value", async () => {
+      const parser = optional(completeOnly("ok"));
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "ok");
+      }
+    });
+
+    it("parseAsync: object({ x: optional(completeOnly) }) returns inner value", async () => {
+      const parser = object({ x: optional(completeOnly("ok")) });
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.x, "ok");
+      }
+    });
+
+    it("parseAsync: object({ x: withDefault(constant) }) uses inner value", async () => {
+      const parser = object({
+        x: withDefault(constant("inner" as const), "fallback" as const),
+      });
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.x, "inner");
+      }
+    });
+
+    // Negative regression: the fix must NOT cause optional(option(...))
+    // to return a value for a flag that wasn't provided.  The option's
+    // parse() fails with consumed: 0 on empty input, so optional should
+    // still return undefined.
+    it("optional(option(string)) returns undefined when flag is absent", () => {
+      const parser = optional(option("--foo", string()));
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, undefined);
+      }
+    });
+
+    it("optional(boolean option) returns undefined when flag is absent", () => {
+      const parser = optional(option("-v"));
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, undefined);
+      }
+    });
+
+    it("withDefault(option) uses the configured default on absent input", () => {
+      const parser = withDefault(option("--foo", string()), "d");
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "d");
+      }
+    });
+
+    it("object({ verbose: optional(option('-v')) }) preserves absent as undefined", () => {
+      const parser = object({ verbose: optional(option("-v")) });
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.verbose, undefined);
+      }
+    });
+
+    // Annotation propagation tests that actually verify the annotation
+    // reached the inner parser, not just that the wrapper did not throw.
+    // If `deriveOptionalInnerParseState()` ever stops propagating
+    // annotations from the outer wrapper state into the inner parser's
+    // initial state, these assertions fail.
+    it("optional(annotationReader) exposes the annotation value", () => {
+      const marker = Symbol.for("@test/issue-233-annotation-propagation");
+      const parser = optional(annotationReader(marker));
+      const result = parse(parser, [], {
+        annotations: { [marker]: "propagated" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "propagated");
+      }
+    });
+
+    it("withDefault(annotationReader, fb) exposes the annotation value", () => {
+      const marker = Symbol.for(
+        "@test/issue-233-annotation-propagation-withDefault",
+      );
+      const parser = withDefault(annotationReader(marker), "fallback");
+      const result = parse(parser, [], {
+        annotations: { [marker]: "propagated" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "propagated");
+      }
+    });
+
+    it("object({ x: optional(annotationReader) }) exposes the annotation", () => {
+      const marker = Symbol.for("@test/issue-233-annotation-propagation-obj");
+      const parser = object({ x: optional(annotationReader(marker)) });
+      const result = parse(parser, [], {
+        annotations: { [marker]: "propagated" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.x, "propagated");
+      }
+    });
+
+    // Regression test for the review feedback on `deriveOptionalInnerParseState`:
+    // when the inner parser's `initialState` is a non-plain class
+    // instance (for example one that carries `#private` fields), the
+    // annotation-propagation helper must NOT clone the instance via
+    // `Object.create` + `getOwnPropertyDescriptors`, because that drops
+    // the private fields and produces a broken state object.  Using
+    // `inheritAnnotations()` returns non-plain instances unchanged, so
+    // the inner parser still sees a usable state.
+    it("optional(customParser) preserves class-based initialState under annotations", () => {
+      class StateWithPrivate {
+        #secret = "private-value";
+
+        read(): string {
+          return this.#secret;
+        }
+      }
+
+      const parser: Parser<"sync", string, StateWithPrivate> = {
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly StateWithPrivate[],
+        $mode: "sync",
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: new StateWithPrivate(),
+        parse(context) {
+          return { success: true, next: context, consumed: [] };
+        },
+        complete(state) {
+          return { success: true, value: state.read() };
+        },
+        suggest(_context, _prefix) {
+          return [];
+        },
+        getDocFragments(_state, _defaultValue?) {
+          return { fragments: [] };
+        },
+      };
+
+      const marker = Symbol.for("@test/issue-233-class-state");
+      const optionalResult = parse(optional(parser), [], {
+        annotations: { [marker]: "annotated" },
+      });
+      assert.ok(optionalResult.success);
+      if (optionalResult.success) {
+        assert.equal(optionalResult.value, "private-value");
+      }
+
+      const withDefaultResult = parse(
+        withDefault(parser, "fallback"),
+        [],
+        { annotations: { [marker]: "annotated" } },
+      );
+      assert.ok(withDefaultResult.success);
+      if (withDefaultResult.success) {
+        assert.equal(withDefaultResult.value, "private-value");
+      }
+    });
+
+    // Async coverage using a real `Parser<"async", ...>` inner parser.
+    // The existing async tests above wrap a sync `completeOnly()`, which
+    // dispatches through the sync fast path and does NOT exercise
+    // `parseOptionalStyleAsync()`.  These tests do.
+    it("parseAsync: optional(asyncCompleteOnly) standalone", async () => {
+      const parser = optional(asyncCompleteOnly("ok"));
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "ok");
+      }
+    });
+
+    it("parseAsync: withDefault(asyncCompleteOnly, fb) standalone", async () => {
+      const parser = withDefault(asyncCompleteOnly("ok"), "fallback");
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "ok");
+      }
+    });
+
+    it("parseAsync: object({ x: optional(asyncCompleteOnly) })", async () => {
+      const parser = object({ x: optional(asyncCompleteOnly("ok")) });
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.x, "ok");
+      }
+    });
+
+    it("parseAsync: object({ x: withDefault(asyncCompleteOnly, fb) })", async () => {
+      const parser = object({
+        x: withDefault(asyncCompleteOnly("ok"), "fallback"),
+      });
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.x, "ok");
+      }
+    });
+
+    it("parseAsync: optional(asyncCompleteOnly) with annotations", async () => {
+      const marker = Symbol.for("@test/issue-233-async-annotations");
+      const parser = optional(asyncCompleteOnly("ok"));
+      const result = await parseAsync(parser, [], {
+        annotations: { [marker]: "present" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "ok");
+      }
+    });
+
+    // Regression test for the review feedback that
+    // `deriveOptionalInnerParseState()` was wrapping primitive inner
+    // initial states (e.g. `constant("v")` whose `initialState` IS
+    // `"v"`) into an `injectAnnotations` wrapper object whenever the
+    // outer context carried annotations.  Because echo-semantics
+    // parsers like `constant()` return their state verbatim from
+    // `complete()`, the wrapper leaked into the final value inside
+    // `object({ ... })`, so a field declared as
+    // `optional(constant("v"))` produced `{}` instead of `"v"`.  The
+    // fix is to return the primitive initial state unchanged from
+    // `deriveOptionalInnerParseState()` (nullish initial states still
+    // go through `inheritAnnotations()` so source-binding wrappers
+    // like `bindEnv()` / `bindConfig()` can still resolve from
+    // annotations at parse-time).
+    it("object({ x: optional(constant(...)) }) with annotations returns the primitive", () => {
+      const marker = Symbol.for("@test/issue-233-primitive-constant");
+      const parser = object({ mode: optional(constant("v" as const)) });
+      const result = parse(parser, [], {
+        annotations: { [marker]: "present" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.mode, "v");
+      }
+    });
+
+    it("object({ x: withDefault(constant(...), fb) }) with annotations returns the inner primitive", () => {
+      const marker = Symbol.for(
+        "@test/issue-233-primitive-constant-withDefault",
+      );
+      const parser = object({
+        mode: withDefault(constant("inner" as const), "fallback" as const),
+      });
+      const result = parse(parser, [], {
+        annotations: { [marker]: "present" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.mode, "inner");
+      }
+    });
+
+    it("optional(constant(...)) standalone with annotations returns the primitive", () => {
+      const marker = Symbol.for("@test/issue-233-primitive-standalone");
+      const parser = optional(constant("v" as const));
+      const result = parse(parser, [], {
+        annotations: { [marker]: "present" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "v");
+      }
+    });
+
+    // Regression test for the review feedback that
+    // `deriveOptionalInnerParseState()` was dropping outer-array
+    // annotations on parse-time re-entry.  When `object()` commits a
+    // child optional() state via `getAnnotatedChildState()`, the
+    // committed value is an annotated array wrapping the inner state.
+    // If `optional.parse()` is then re-invoked with that wrapped state
+    // (e.g., during a subsequent greedy-loop iteration), the helper
+    // must propagate the array's annotations back onto the inner
+    // element so source-binding wrappers under the optional still see
+    // them on the second pass.
+    it("optional() re-entry with annotated array state propagates annotations to inner parse()", () => {
+      const marker = Symbol.for("@test/issue-233-array-reentry");
+      let lastSeenAnnotation: string | undefined;
+      const inner: Parser<"sync", string, { readonly tag: string }> = {
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly { readonly tag: string }[],
+        $mode: "sync",
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: { tag: "initial" },
+        parse(context) {
+          const annotations = getAnnotations(context.state);
+          const tag = (annotations?.[marker] as string | undefined) ??
+            "no-annotations";
+          lastSeenAnnotation = tag;
+          return {
+            success: true,
+            next: { ...context, state: { tag } },
+            consumed: [],
+          };
+        },
+        complete(state) {
+          return { success: true, value: state.tag };
+        },
+        suggest(_context, _prefix) {
+          return [];
+        },
+        getDocFragments(_state, _defaultValue?) {
+          return { fragments: [] };
+        },
+      };
+      const optionalParser = optional(inner);
+
+      // First call: simulate the top-level annotated context that the
+      // initial parse iteration sees.
+      const annotatedInitial = injectAnnotations(
+        optionalParser.initialState,
+        { [marker]: "first" },
+      ) as [{ readonly tag: string }] | undefined;
+      const first = optionalParser.parse({
+        buffer: [],
+        state: annotatedInitial,
+        optionsTerminated: false,
+        usage: optionalParser.usage,
+      });
+      assert.ok(first.success);
+      if (!first.success) return;
+      assert.equal(lastSeenAnnotation, "first");
+
+      // Build the exact shape `object()` would commit: an annotated
+      // array wrapping the inner state from the previous parse, where
+      // the annotations live on the array wrapper rather than the
+      // inner element.
+      const reentryState = injectAnnotations(first.next.state, {
+        [marker]: "reentry",
+      }) as [{ readonly tag: string }];
+
+      // Second call: re-invoke parse() with the annotated array.  The
+      // inner parser must see the re-entry annotation, not the original
+      // tag baked into its state from the first call.
+      lastSeenAnnotation = undefined;
+      const second = optionalParser.parse({
+        buffer: [],
+        state: reentryState,
+        optionsTerminated: false,
+        usage: optionalParser.usage,
+      });
+      assert.ok(second.success);
+      assert.equal(lastSeenAnnotation, "reentry");
     });
   });
 });

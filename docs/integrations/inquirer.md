@@ -551,7 +551,7 @@ Prompt and inner parser independence
 The CLI path and the prompt path are *independent value sources*.  When
 a value comes from the CLI, the inner parser's full constraint pipeline
 (value parsing, `choice()` domain checks, `integer({ min, max })`, etc.)
-is applied.  When a value comes from a prompt, it is used as-is — the
+is applied.  When a value comes from a prompt, it is used as-is—the
 inner parser's constraints are *not* re-applied.
 
 This design is intentional: combinators like `map()` can transform the

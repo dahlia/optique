@@ -17,7 +17,7 @@ import { message } from "@optique/core/message";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Parser } from "@optique/core/parser";
 import { parse, suggestAsync, suggestSync } from "@optique/core/parser";
-import { map, multiple, optional } from "@optique/core/modifiers";
+import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { constant, fail, flag, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { bindConfig, createConfigContext } from "../../config/src/index.ts";
@@ -2050,6 +2050,143 @@ describe("bindEnv() with dependency sources", () => {
     assert.ok(result.success);
     assert.equal(result.value.mode, undefined);
     assert.equal(result.value.level, "debug");
+  });
+
+  // Regression tests for https://github.com/dahlia/optique/issues/233.
+  // optional()/withDefault() wrappers placed under object() must allow
+  // bindEnv() to resolve from the env context, not just short-circuit to
+  // undefined/fallback.
+  it("optional(bindEnv(...)) in object() uses env value when present", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = object({
+      mode: optional(
+        bindEnv(option("--mode", choice(["dev", "prod"] as const)), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+      ),
+    });
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "prod");
+    }
+  });
+
+  it("withDefault(bindEnv(...), fb) in object() uses env value when present", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = object({
+      mode: withDefault(
+        bindEnv(option("--mode", choice(["dev", "prod"] as const)), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+        "dev" as const,
+      ),
+    });
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "prod");
+    }
+  });
+
+  it("optional(bindEnv(...)) at top level uses env value via annotations", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = optional(
+      bindEnv(option("--mode", choice(["dev", "prod"] as const)), {
+        context: envContext,
+        key: "MODE",
+        parser: choice(["dev", "prod"] as const),
+      }),
+    );
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "prod");
+    }
+  });
+
+  it("optional(bindEnv(..., default)) uses bindEnv default when env absent", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: () => undefined,
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = object({
+      mode: optional(
+        bindEnv(option("--mode", choice(["dev", "prod"] as const)), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+          default: "dev" as const,
+        }),
+      ),
+    });
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "dev");
+    }
+  });
+
+  it("withDefault(bindEnv(...)) uses outer fallback when env and CLI absent", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: () => undefined,
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = object({
+      mode: withDefault(
+        bindEnv(option("--mode", choice(["dev", "prod"] as const)), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+        "dev" as const,
+      ),
+    });
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "dev");
+    }
+  });
+
+  it("runWith: optional(bindEnv(...)) uses registered env source", async () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const parser = object({
+      level: option("--level", string()),
+      mode: optional(
+        bindEnv(option("--mode", choice(["dev", "prod"] as const)), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+      ),
+    });
+    const result = await runWith(parser, "test", [envContext], {
+      args: ["--level", "info"],
+    });
+    assert.equal(result.mode, "prod");
+    assert.equal(result.level, "info");
   });
 
   it("bindEnv(optional(...)) uses defaultValue when env is absent", () => {

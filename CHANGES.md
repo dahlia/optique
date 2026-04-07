@@ -1175,6 +1175,27 @@ To be released.
  -  `values()` now throws `TypeError` when given an empty array.
     [[#492], [#747]]
 
+ -  Fixed `optional()` and `withDefault()` discarding values from parsers
+    whose useful result is produced during `complete()` rather than
+    `parse()` (e.g., `constant()`, `bindEnv()`, `bindConfig()`).  Wrappers
+    placed under these modifiers in `object()` constructs and at the top
+    level now correctly preserve completed values, and `withDefault()`
+    falls back to its configured default only when the wrapped parser
+    produces no value at all.  [[#233], [#775]]
+
+ -  Removed the internal `optionalStyleWrapperKey` symbol.  `object()`'s
+    zero-consumption pass no longer needs a magic marker; interactive
+    wrappers like `prompt()` now distinguish completability probes from
+    real completion via `ExecutionContext.phase`.  [[#233], [#775]]
+
+ -  `optional()` and `withDefault()` now propagate annotations from the
+    outer state into the inner parser's initial state.  When the outer
+    state is an annotation wrapper (e.g., from
+    `parse(parser, args, { annotations })`), the inner parser's `parse()`
+    now receives an annotated initial state so that `bindEnv()` /
+    `bindConfig()` wrappers under `optional()` / `withDefault()` can
+    resolve their fallbacks at top level.  [[#233], [#775]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -1209,6 +1230,7 @@ To be released.
 [#228]: https://github.com/dahlia/optique/issues/228
 [#229]: https://github.com/dahlia/optique/issues/229
 [#232]: https://github.com/dahlia/optique/issues/232
+[#233]: https://github.com/dahlia/optique/issues/233
 [#235]: https://github.com/dahlia/optique/issues/235
 [#238]: https://github.com/dahlia/optique/issues/238
 [#240]: https://github.com/dahlia/optique/issues/240
@@ -1489,6 +1511,7 @@ To be released.
 [#772]: https://github.com/dahlia/optique/issues/772
 [#773]: https://github.com/dahlia/optique/pull/773
 [#774]: https://github.com/dahlia/optique/pull/774
+[#775]: https://github.com/dahlia/optique/pull/775
 
 ### @optique/config
 
@@ -1793,6 +1816,14 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `ExpandConfig`, and `CheckboxConfig` prompt configurations.  Return
     `true` to accept, or a string error message to reject and re-prompt.
     [[#620], [#625]]
+
+ -  Refactored `prompt()` to detect completability probes via
+    `ExecutionContext.phase` instead of a sentinel `initialState`.  Prompts
+    continue to fire only during the real completion phase, are still
+    skipped when environment variables or config files provide a value, and
+    cancellation still surfaces as a parse failure.  This removes the
+    dependency on *@optique/core*'s internal `optionalStyleWrapperKey`
+    symbol.  [[#233], [#775]]
 
 [#87]: https://github.com/dahlia/optique/issues/87
 [#137]: https://github.com/dahlia/optique/pull/137

@@ -536,7 +536,7 @@ back to a branch that succeeds without consuming any input, such as
  -  The result is not `provisional` (tentative zero-consumed matches
     from nested constructs like `conditional()` are excluded).
  -  The branch has no `leadingNames` and does not accept arbitrary
-    tokens — i.e., it can *never* match an input token.
+    tokens—i.e., it can *never* match an input token.
  -  Exactly one branch qualifies (ambiguous fallbacks are rejected).
  -  No other branch consumed tokens before failing.
  -  The input buffer is empty.

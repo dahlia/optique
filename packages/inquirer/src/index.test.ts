@@ -3254,63 +3254,85 @@ describe("prompt()", () => {
       assert.equal(docDefault, "UPPER");
     });
 
-    it("deduplicates sentinel complete() calls and uses prompt fallback", async () => {
-      let promptCalls = 0;
-      const inner: Parser<"async", string, undefined> = {
-        $mode: "async",
-        $valueType: [] as readonly string[],
-        $stateType: [] as readonly undefined[],
-        priority: 5,
-        usage: [],
-        leadingNames: new Set(),
-        acceptingAnyToken: false,
-        initialState: undefined,
-        parse(_context: ParserContext<undefined>) {
-          return Promise.resolve({
-            success: false as const,
-            consumed: 0,
-            error: message`inner parse failure`,
-          });
-        },
-        complete() {
-          return Promise.resolve({
-            success: false as const,
-            error: message`inner complete failure`,
-          });
-        },
-        suggest() {
-          return {
-            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
-              yield* [];
-            },
-          };
-        },
-        getDocFragments(): DocFragments {
-          return { fragments: [] };
-        },
-      };
+    it(
+      "does not cache prompt results across independent complete() calls",
+      async () => {
+        // After the phase-based redesign (issue #233), `prompt()` no
+        // longer caches prompted results keyed by state identity.  The
+        // old sentinel cache was the root cause of cross-parse reuse:
+        // because `parser.initialState` is a shared object, a WeakMap
+        // cache keyed by it would incorrectly return a previous parse
+        // invocation's prompted value on a subsequent `parse*()` call.
+        //
+        // With no cache, two independent `complete()` calls with the
+        // same state run the prompter twice.  Within a single parse
+        // invocation this is fine because object() calls complete()
+        // at most once per field in the real phase.
+        let promptCalls = 0;
+        const inner: Parser<"async", string, undefined> = {
+          $mode: "async",
+          $valueType: [] as readonly string[],
+          $stateType: [] as readonly undefined[],
+          priority: 5,
+          usage: [],
+          leadingNames: new Set(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(_context: ParserContext<undefined>) {
+            return Promise.resolve({
+              success: false as const,
+              consumed: 0,
+              error: message`inner parse failure`,
+            });
+          },
+          complete() {
+            return Promise.resolve({
+              success: false as const,
+              error: message`inner complete failure`,
+            });
+          },
+          suggest() {
+            return {
+              async *[Symbol.asyncIterator](): AsyncIterableIterator<
+                Suggestion
+              > {
+                yield* [];
+              },
+            };
+          },
+          getDocFragments(): DocFragments {
+            return { fragments: [] };
+          },
+        };
 
-      const parser = prompt(inner, {
-        type: "input",
-        message: "Enter value",
-        prompter: () => {
-          promptCalls++;
-          return Promise.resolve("from-prompt");
-        },
-      });
+        const parser = prompt(inner, {
+          type: "input",
+          message: "Enter value",
+          prompter: () => {
+            promptCalls++;
+            return Promise.resolve("from-prompt");
+          },
+        });
 
-      const initialState = parser.initialState;
-      const first = await parser.complete(initialState);
-      const second = await parser.complete(initialState);
+        const initialState = parser.initialState;
+        const first = await parser.complete(initialState);
+        const second = await parser.complete(initialState);
 
-      assert.ok(first.success);
-      assert.ok(second.success);
-      assert.equal(promptCalls, 1);
-    });
+        assert.ok(first.success);
+        assert.ok(second.success);
+        assert.equal(promptCalls, 2);
+      },
+    );
 
     it(
-      "does not reuse sentinel prompt cache across parse invocations",
+      "does not prompt when other required fields are missing",
       async () => {
+        // After the phase-based redesign (issue #233), the
+        // completability probe runs with
+        // ExecutionContext.phase === "parse" and does not fire the
+        // prompter.  This means a parse that is going to fail because
+        // of another missing option no longer spuriously prompts the
+        // user during the probe.
         const promptedValues = ["first", "second"];
         let promptCalls = 0;
 
@@ -3327,18 +3349,62 @@ describe("prompt()", () => {
           required: option("--required", string()),
         });
 
-        // First parse fails because --required is missing, but the prompt
-        // parser still runs during object()'s completability check.
+        // First parse fails because --required is missing; the prompt
+        // must NOT fire during the completability probe.
         const first = await parseAsync(parser, []);
         assert.ok(!first.success);
-        assert.equal(promptCalls, 1);
+        assert.equal(promptCalls, 0);
 
-        // Second parse should ask again and use the new prompted value.
+        // Second parse succeeds: the real completion pass fires the
+        // prompt once and the first prompted value is used.
         const second = await parseAsync(parser, ["--required", "ok"]);
         assert.ok(second.success);
         if (second.success) {
-          assert.equal(second.value.prompted, "second");
+          assert.equal(second.value.prompted, "first");
           assert.equal(second.value.required, "ok");
+        }
+        assert.equal(promptCalls, 1);
+      },
+    );
+
+    it(
+      "does not reuse prompted values across successful parse invocations",
+      async () => {
+        // Regression test for the cross-parse cache reuse bug identified
+        // in review of the #233 fix: because `parser.initialState` is a
+        // shared object, a state-keyed WeakMap would reuse the previous
+        // parse invocation's prompted value on subsequent `parseAsync()`
+        // calls of the same parser.  After removing the within-invocation
+        // cache, each successful parse must fire the prompter anew.
+        const promptedValues = ["first-prompted", "second-prompted"];
+        let promptCalls = 0;
+
+        const parser = object({
+          prompted: prompt(option("--prompted", string()), {
+            type: "input",
+            message: "Enter prompted",
+            prompter: () => {
+              const value = promptedValues[promptCalls] ?? "fallback";
+              promptCalls++;
+              return Promise.resolve(value);
+            },
+          }),
+          required: option("--required", string()),
+        });
+
+        const first = await parseAsync(parser, ["--required", "v1"]);
+        assert.ok(first.success);
+        if (first.success) {
+          assert.equal(first.value.prompted, "first-prompted");
+          assert.equal(first.value.required, "v1");
+        }
+        assert.equal(promptCalls, 1);
+
+        const second = await parseAsync(parser, ["--required", "v2"]);
+        assert.ok(second.success);
+        if (second.success) {
+          assert.equal(second.value.prompted, "second-prompted");
+          assert.equal(second.value.required, "v2");
         }
         assert.equal(promptCalls, 2);
       },
@@ -4277,6 +4343,65 @@ describe("prompt()", () => {
       assert.ok(result.success);
       assert.equal(result.value, "state");
       assert.equal(promptCalls, 0);
+    });
+
+    // Regression tests for the `effectiveInitialState` primitive
+    // wrapping bug.  Mirror the `deriveOptionalInnerParseState()` fix
+    // on the `@optique/core` side: when the inner parser's
+    // `initialState` is a non-nullish primitive (e.g. `constant("v")`
+    // whose state IS `"v"`), `inheritAnnotations()` previously wrapped
+    // it into an opaque `injectAnnotations` wrapper object, and the
+    // wrapper leaked all the way through the prompt-bind flow as the
+    // field value under `object({ x: prompt(constant(...)) })` with
+    // `parse({ annotations })`.  The inner primitive must be
+    // preserved so echo-semantics parsers continue to work, and the
+    // prompt() wrapper must still decide to fire the prompter for
+    // non-source-binding inner parsers (mirroring the existing
+    // `prompt(alwaysCompletes)` contract).
+    it("prompt(constant) inside object() with annotations prompts without leaking wrapper", async () => {
+      const marker = Symbol.for("@test/prompt-primitive-constant-object");
+      let promptCalls = 0;
+      const parser = object({
+        mode: prompt(constant("fallback" as const), {
+          type: "input",
+          message: "Enter mode:",
+          prompter: () => {
+            promptCalls += 1;
+            return Promise.resolve("entered");
+          },
+        }),
+      });
+      const result = await parseAsync(parser, [], {
+        annotations: { [marker]: "present" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        // Value must be the prompter's result, never the opaque
+        // `injectAnnotations` wrapper (which would serialize as `{}`).
+        assert.equal(result.value.mode, "entered");
+      }
+      assert.equal(promptCalls, 1);
+    });
+
+    it("prompt(constant) standalone with annotations prompts without leaking wrapper", async () => {
+      const marker = Symbol.for("@test/prompt-primitive-constant-standalone");
+      let promptCalls = 0;
+      const parser = prompt(constant("fallback" as const), {
+        type: "input",
+        message: "Enter value:",
+        prompter: () => {
+          promptCalls += 1;
+          return Promise.resolve("entered");
+        },
+      });
+      const result = await parseAsync(parser, [], {
+        annotations: { [marker]: "present" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "entered");
+      }
+      assert.equal(promptCalls, 1);
     });
 
     it("does not duplicate prompts under concurrent object() parses", async () => {
