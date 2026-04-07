@@ -966,7 +966,7 @@ const host = option("--host", hostname({
     invalidHostname: (input) => message`Not a valid hostname: ${input}`,
     wildcardNotAllowed: message`Wildcards are forbidden`,
     localhostNotAllowed: message`Remote hosts only`,
-    tooLong: (hostname, max) => 
+    tooLong: (hostname, max) =>
       message`Hostname too long (max ${text(max.toString())} chars)`,
   },
 }));
@@ -1701,7 +1701,7 @@ const portOpt = option("--ports", portRange({
     invalidFormat: message`Port range must be START-END`,
     invalidRange: message`START must be ≤ END`,
     invalidPort: message`Ports must be 1-65535`,
-    belowMinimum: (port, min) => 
+    belowMinimum: (port, min) =>
       message`Port ${text(port.toString())} is below minimum ${text(min.toString())}`,
     aboveMaximum: (port, max) =>
       message`Port ${text(port.toString())} is above maximum ${text(max.toString())}`,
@@ -2911,7 +2911,7 @@ interface ValueParser<M extends Mode, T> {
     > For dependency-derived value parsers (`deriveFrom()`,
     > `dependency().derive()`), `normalize()` uses the default dependency
     > value to build the inner parser, not the dependency value resolved
-    > during the current parse — the same trade-off that `format()` makes.
+    > during the current parse—the same trade-off that `format()` makes.
     > Exclusive combinators (`or()`, `longestMatch()`) and multi-source
     > combinators (`merge()`) intentionally do not forward normalization
     > because the active branch or key ownership is unknown at default time.
