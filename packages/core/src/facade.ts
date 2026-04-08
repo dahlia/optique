@@ -3575,15 +3575,36 @@ function injectAnnotationsIntoParser<
   parser: Parser<M, TValue, TState>,
   annotations: Annotations,
 ): Parser<M, TValue, TState> {
-  // Create a new initial state with annotations
   const newInitialState = injectAnnotations(
     parser.initialState,
     annotations,
   ) as TState;
-
-  // Return a parser with the new initial state
-  return {
-    ...parser,
-    initialState: newInitialState,
+  const descriptors: PropertyDescriptorMap = {
+    ...Object.getOwnPropertyDescriptors(parser),
   };
+  const initialState = descriptors.initialState;
+  descriptors.initialState = initialState == null
+    ? {
+      value: newInitialState,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    }
+    : "get" in initialState || "set" in initialState
+    ? {
+      value: newInitialState,
+      writable: true,
+      enumerable: initialState.enumerable ?? true,
+      configurable: initialState.configurable ?? true,
+    }
+    : {
+      value: newInitialState,
+      writable: initialState.writable ?? true,
+      enumerable: initialState.enumerable ?? true,
+      configurable: initialState.configurable ?? true,
+    };
+  return Object.create(
+    Object.getPrototypeOf(parser),
+    descriptors,
+  ) as Parser<M, TValue, TState>;
 }

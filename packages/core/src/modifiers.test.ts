@@ -4,6 +4,7 @@ import {
   getAnnotations,
   injectAnnotations,
 } from "@optique/core/annotations";
+import { injectAnnotations as injectAnnotationsLocal } from "./annotations.ts";
 import {
   createDependencySourceState,
   createPendingDependencySourceState,
@@ -28,6 +29,11 @@ import {
   withDefault,
   WithDefaultError,
 } from "@optique/core/modifiers";
+import { multiple as multipleLocal } from "./modifiers.ts";
+import {
+  completeOrExtractPhase2Seed,
+  extractPhase2SeedKey,
+} from "./phase2-seed.ts";
 import { createDependencyRuntimeContext } from "./dependency-runtime.ts";
 import {
   parse,
@@ -7918,6 +7924,51 @@ describe("multiple() dependency source extraction", () => {
     ]);
     assert.deepEqual(result, { success: true, value: "prod" });
     assert.deepEqual(visited, [latest, earlier]);
+  });
+});
+
+describe("multiple() phase-two seed extraction", () => {
+  it("unwraps injected annotation wrappers before extracting item seeds", () => {
+    const marker = Symbol.for("@test/multiple-phase-two-seed");
+    const child: Parser<"sync", string, string> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete() {
+        return { success: false as const, error: message`Missing item.` };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    Object.defineProperty(child, extractPhase2SeedKey, {
+      value(state: string | object) {
+        return typeof state === "string" ? { value: state } : null;
+      },
+    });
+
+    const wrappedItem = injectAnnotationsLocal("optique.json", {
+      [marker]: true,
+    });
+    const seed = completeOrExtractPhase2Seed(
+      multipleLocal(child, { min: 1 }),
+      [wrappedItem],
+    );
+
+    assert.deepEqual(seed, { value: ["optique.json"] });
   });
 });
 

@@ -7,7 +7,7 @@ import {
   or,
   tuple,
 } from "@optique/core/constructs";
-import { getAnnotations } from "@optique/core/annotations";
+import { getAnnotations, inheritAnnotations } from "@optique/core/annotations";
 import type { SourceContext } from "@optique/core/context";
 import type { DocSection } from "@optique/core/doc";
 import {
@@ -24,7 +24,13 @@ import {
   runWithSync,
 } from "@optique/core/facade";
 import { message } from "@optique/core/message";
-import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
+import {
+  map,
+  multiple,
+  nonEmpty,
+  optional,
+  withDefault,
+} from "@optique/core/modifiers";
 import {
   argument,
   command,
@@ -9938,6 +9944,280 @@ describe("branch coverage: facade.ts edge cases", () => {
       !phase2Called,
       "phase 2 context should not hide top-level parse errors",
     );
+  });
+
+  it("runWithSync: phase two preserves group() seed hooks", () => {
+    const tokenKey = Symbol.for("@test/dyn-phase-two-group-seed");
+
+    const tokenParser: Parser<"sync", string, undefined> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete(state) {
+        const annotations = getAnnotations(state);
+        const token = annotations?.[tokenKey];
+        return typeof token === "string"
+          ? { success: true as const, value: token }
+          : { success: false as const, error: message`Missing token.` };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineInheritedAnnotationParser(tokenParser);
+
+    const dynamicContext: SourceContext<{
+      readonly getConfigPath: (
+        parsed: { readonly config: string },
+      ) => string | undefined;
+    }> = {
+      id: tokenKey,
+      mode: "dynamic",
+      getAnnotations(
+        parsed: { readonly config: string } | undefined,
+        options?: {
+          readonly getConfigPath: (
+            parsed: { readonly config: string },
+          ) => string | undefined;
+        },
+      ) {
+        if (parsed == null) return {};
+        const configPath = options?.getConfigPath(parsed);
+        return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
+      },
+    };
+
+    const parser = group(
+      "Config",
+      object({
+        config: option("--config", string()),
+        token: tokenParser,
+      }),
+    );
+
+    const result = runWithSync(parser, "test", [dynamicContext], {
+      args: ["--config", "optique.json"],
+      contextOptions: {
+        getConfigPath: (parsed) => parsed.config,
+      },
+    });
+
+    assert.deepEqual(result, {
+      config: "optique.json",
+      token: "token:optique.json",
+    });
+  });
+
+  it("runWithSync: phase two preserves nonEmpty() seed hooks", () => {
+    const tokenKey = Symbol.for("@test/dyn-phase-two-non-empty-seed");
+
+    const tokenParser: Parser<"sync", string, undefined> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete(state) {
+        const annotations = getAnnotations(state);
+        const token = annotations?.[tokenKey];
+        return typeof token === "string"
+          ? { success: true as const, value: token }
+          : { success: false as const, error: message`Missing token.` };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineInheritedAnnotationParser(tokenParser);
+
+    const dynamicContext: SourceContext<{
+      readonly getConfigPath: (
+        parsed: { readonly config: string },
+      ) => string | undefined;
+    }> = {
+      id: tokenKey,
+      mode: "dynamic",
+      getAnnotations(
+        parsed: { readonly config: string } | undefined,
+        options?: {
+          readonly getConfigPath: (
+            parsed: { readonly config: string },
+          ) => string | undefined;
+        },
+      ) {
+        if (parsed == null) return {};
+        const configPath = options?.getConfigPath(parsed);
+        return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
+      },
+    };
+
+    const parser = nonEmpty(
+      object({
+        config: option("--config", string()),
+        token: tokenParser,
+      }),
+    );
+
+    const result = runWithSync(parser, "test", [dynamicContext], {
+      args: ["--config", "optique.json"],
+      contextOptions: {
+        getConfigPath: (parsed) => parsed.config,
+      },
+    });
+
+    assert.deepEqual(result, {
+      config: "optique.json",
+      token: "token:optique.json",
+    });
+  });
+
+  it("runWithSync: phase two unwraps multiple() item states for seeds", () => {
+    const markerKey = Symbol.for("@test/dyn-phase-two-multiple-marker");
+    const tokenKey = Symbol.for("@test/dyn-phase-two-multiple-seed");
+
+    const markerContext: SourceContext = {
+      id: markerKey,
+      mode: "static",
+      getAnnotations() {
+        return { [markerKey]: true };
+      },
+    };
+
+    const configParser: Parser<"sync", string, string | undefined> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly (string | undefined)[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: true,
+      initialState: undefined,
+      parse(context) {
+        const [head, ...rest] = context.buffer;
+        if (head == null) {
+          return {
+            success: false as const,
+            error: message`Missing config.`,
+            consumed: 0,
+          };
+        }
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            buffer: rest,
+            state: inheritAnnotations(context.state, head),
+          },
+          consumed: [head],
+        };
+      },
+      complete(state) {
+        return typeof state === "string"
+          ? { success: true as const, value: state }
+          : { success: false as const, error: message`Missing config.` };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const tokenParser: Parser<"sync", string, undefined> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete(state) {
+        const annotations = getAnnotations(state);
+        const token = annotations?.[tokenKey];
+        return typeof token === "string"
+          ? { success: true as const, value: token }
+          : { success: false as const, error: message`Missing token.` };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineInheritedAnnotationParser(tokenParser);
+
+    const dynamicContext: SourceContext<{
+      readonly getConfigPath: (
+        parsed: { readonly configs: readonly string[] },
+      ) => string | undefined;
+    }> = {
+      id: tokenKey,
+      mode: "dynamic",
+      getAnnotations(
+        parsed: { readonly configs: readonly string[] } | undefined,
+        options?: {
+          readonly getConfigPath: (
+            parsed: { readonly configs: readonly string[] },
+          ) => string | undefined;
+        },
+      ) {
+        if (parsed == null) return {};
+        const configPath = options?.getConfigPath(parsed);
+        return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
+      },
+    };
+
+    const parser = object({
+      configs: multiple(configParser, { min: 1 }),
+      token: tokenParser,
+    });
+
+    const result = runWithSync(
+      parser,
+      "test",
+      [markerContext, dynamicContext],
+      {
+        args: ["optique.json"],
+        contextOptions: {
+          getConfigPath: (parsed) => parsed.configs[0],
+        },
+      },
+    );
+
+    assert.deepEqual(result, {
+      configs: ["optique.json"],
+      token: "token:optique.json",
+    });
   });
 
   it("runWith: two-phase, first pass fails → error handled via runParser", async () => {

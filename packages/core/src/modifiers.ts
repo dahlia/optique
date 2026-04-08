@@ -1658,6 +1658,56 @@ export function multiple<M extends Mode, TValue, TState>(
       });
     }
   };
+  const extractPhase2SeedSyncWithUnwrappedFallback = (
+    state: TState,
+    exec?: ExecutionContext,
+  ) => {
+    try {
+      const seed = completeOrExtractPhase2Seed(syncParser, state, exec);
+      if (seed == null && isInjectedAnnotationWrapper(state)) {
+        return completeOrExtractPhase2Seed(
+          syncParser,
+          unwrapInjectedWrapper(state),
+          exec,
+        );
+      }
+      return seed;
+    } catch (error) {
+      if (!isInjectedAnnotationWrapper(state)) {
+        throw error;
+      }
+      return completeOrExtractPhase2Seed(
+        syncParser,
+        unwrapInjectedWrapper(state),
+        exec,
+      );
+    }
+  };
+  const extractPhase2SeedAsyncWithUnwrappedFallback = async (
+    state: TState,
+    exec?: ExecutionContext,
+  ) => {
+    try {
+      const seed = await completeOrExtractPhase2Seed(parser, state, exec);
+      if (seed == null && isInjectedAnnotationWrapper(state)) {
+        return await completeOrExtractPhase2Seed(
+          parser,
+          unwrapInjectedWrapper(state),
+          exec,
+        );
+      }
+      return seed;
+    } catch (error) {
+      if (!isInjectedAnnotationWrapper(state)) {
+        throw error;
+      }
+      return await completeOrExtractPhase2Seed(
+        parser,
+        unwrapInjectedWrapper(state),
+        exec,
+      );
+    }
+  };
   const getInnerSuggestRuntimeNodes = (
     state: TState,
     path: readonly PropertyKey[],
@@ -2096,8 +2146,7 @@ export function multiple<M extends Mode, TValue, TState>(
           let hasDeferred = false;
           let hasAnySeed = false;
           for (let i = 0; i < state.length; i++) {
-            const seed = completeOrExtractPhase2Seed(
-              syncParser,
+            const seed = extractPhase2SeedSyncWithUnwrappedFallback(
               state[i] as TState,
               withChildExecPath(exec, i),
             );
@@ -2136,8 +2185,7 @@ export function multiple<M extends Mode, TValue, TState>(
           let hasDeferred = false;
           let hasAnySeed = false;
           for (let i = 0; i < state.length; i++) {
-            const seed = await completeOrExtractPhase2Seed(
-              parser,
+            const seed = await extractPhase2SeedAsyncWithUnwrappedFallback(
               state[i] as TState,
               withChildExecPath(exec, i),
             );
