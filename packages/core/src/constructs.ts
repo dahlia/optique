@@ -2,6 +2,7 @@ import {
   annotationViewTargets,
   getWrappedChildParseState as getParseChildState,
   getWrappedChildState as getAnnotatedChildState,
+  reconcileObjectChildState,
   unwrapAnnotationView,
 } from "./annotation-state.ts";
 import {
@@ -611,16 +612,7 @@ function getObjectParseChildState<TState>(
   childState: TState,
   _parser: Parser<Mode, unknown, unknown>,
 ): TState {
-  const annotations = getAnnotations(parentState);
-  if (
-    annotations === undefined ||
-    childState == null ||
-    typeof childState !== "object" ||
-    getAnnotations(childState) === annotations
-  ) {
-    return childState;
-  }
-  return inheritAnnotations(parentState, childState);
+  return reconcileObjectChildState(parentState, childState);
 }
 
 function buildSuggestRuntimeNodesFromPairs(

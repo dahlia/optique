@@ -2,6 +2,7 @@ import {
   annotationKey,
   type Annotations,
   getAnnotations,
+  inheritAnnotations,
   injectAnnotations,
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
@@ -142,4 +143,26 @@ export function getWrappedChildState<TState>(
     }
   }
   return withAnnotationView(childState, annotations) as TState;
+}
+
+/**
+ * Reconciles object-owned child state with parent annotations using the same
+ * shared object-state inheritance rule across parser families.
+ *
+ * @internal
+ */
+export function reconcileObjectChildState<TState>(
+  parentState: unknown,
+  childState: TState,
+): TState {
+  const annotations = getAnnotations(parentState);
+  if (
+    annotations === undefined ||
+    childState == null ||
+    typeof childState !== "object" ||
+    getAnnotations(childState) === annotations
+  ) {
+    return childState;
+  }
+  return inheritAnnotations(parentState, childState);
 }
