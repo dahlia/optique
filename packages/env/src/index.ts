@@ -663,6 +663,11 @@ function getEnvOrDefault<M extends Mode, TValue>(
  * @throws {Error} Propagates errors thrown by the env source callback
  *                 (`sourceData.source(fullKey)`).
  * @throws {Error} Propagates errors thrown by `options.parser.parse(rawValue)`.
+ * @throws {Error} Propagates errors thrown by
+ *                 `innerParser.validateValue()` while revalidating a
+ *                 successful env-sourced value or the configured
+ *                 `default` against the inner CLI parser's constraints
+ *                 (see issue #414).
  */
 function getEnvSourceValue<M extends Mode, TValue>(
   state: unknown,

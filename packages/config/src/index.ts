@@ -983,6 +983,12 @@ export function bindConfig<
  * returned unchanged to preserve existing behavior.
  *
  * @throws {TypeError} If the key callback returns a Promise or thenable.
+ * @throws {Error} Propagates errors thrown by
+ *                 `innerParser.validateValue()` (via
+ *                 {@link validateFallbackValue}) while revalidating a
+ *                 config-sourced value or the configured `default`
+ *                 against the inner CLI parser's constraints (see
+ *                 issue #414).
  */
 function getConfigOrDefault<
   M extends "sync" | "async",
@@ -1058,6 +1064,14 @@ function getConfigOrDefault<
  * Routes a (successful) fallback value through the inner parser's
  * `validateValue()` hook, or returns the value unchanged when no
  * validator is available.  See {@link getConfigOrDefault} for context.
+ *
+ * @throws {Error} Propagates errors thrown by
+ *                 `innerParser.validateValue()` while revalidating the
+ *                 fallback value against the inner CLI parser's
+ *                 constraints (see issue #414).  When the hook returns
+ *                 a failed {@link Result} the failure is propagated
+ *                 through the return value; only an actual exception
+ *                 thrown by the hook escapes through this path.
  */
 function validateFallbackValue<M extends "sync" | "async", TValue>(
   mode: M,
@@ -1098,6 +1112,12 @@ function validateFallbackValue<M extends "sync" | "async", TValue>(
  * @returns The resolved source value, an async source value, or `undefined`.
  * @throws {TypeError} If {@link getConfigOrDefault} rejects a thenable-returning
  *                     key callback.
+ * @throws {Error} Propagates errors thrown by
+ *                 `innerParser.validateValue()` (via
+ *                 {@link getConfigOrDefault} / {@link validateFallbackValue})
+ *                 while revalidating a config-sourced value or the
+ *                 configured `default` against the inner CLI parser's
+ *                 constraints (see issue #414).
  */
 function getConfigSourceValue<
   M extends "sync" | "async",
