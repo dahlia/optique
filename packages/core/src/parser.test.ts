@@ -3223,9 +3223,10 @@ describe("Annotations system", () => {
     }
 
     it("should not wrap undefined initial state in parseSync()", async () => {
+      const { parseSync } = await import("./parser.ts");
       const { isInjectedAnnotationWrapper } = await import("./annotations.ts");
       const { parser, observations } = makeObservingParser(undefined);
-      const result = parse(parser, [], { annotations: {} });
+      const result = parseSync(parser, [], { annotations: {} });
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value, undefined);
@@ -3237,9 +3238,10 @@ describe("Annotations system", () => {
     });
 
     it("should not wrap null initial state in parseSync()", async () => {
+      const { parseSync } = await import("./parser.ts");
       const { isInjectedAnnotationWrapper } = await import("./annotations.ts");
       const { parser, observations } = makeObservingParser(null);
-      const result = parse(parser, [], { annotations: {} });
+      const result = parseSync(parser, [], { annotations: {} });
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value, null);
@@ -3250,9 +3252,10 @@ describe("Annotations system", () => {
     });
 
     it("should not wrap primitive initial state in parseSync()", async () => {
+      const { parseSync } = await import("./parser.ts");
       const { isInjectedAnnotationWrapper } = await import("./annotations.ts");
       const { parser, observations } = makeObservingParser(42);
-      const result = parse(parser, [], { annotations: {} });
+      const result = parseSync(parser, [], { annotations: {} });
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value, 42);
@@ -3400,6 +3403,29 @@ describe("Annotations system", () => {
       assert.ok(docObs.length > 0);
       for (const obs of docObs) {
         assert.ok(!isInjectedAnnotationWrapper(obs.state));
+      }
+    });
+
+    it("should treat string-keyed annotations as a no-op in parse()", async () => {
+      const { isInjectedAnnotationWrapper } = await import("./annotations.ts");
+      const { parser, observations } = makeObservingParser(undefined);
+      // JavaScript callers can construct string-keyed records even though the
+      // `Annotations` type only permits symbols.  Such records have no own
+      // symbol keys, so they must behave identically to an empty annotations
+      // object and leave parser state untouched.
+      const result = parse(parser, [], {
+        annotations: { stringKey: "value" } as unknown as Record<
+          symbol,
+          unknown
+        >,
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, undefined);
+      }
+      for (const obs of observations) {
+        assert.ok(!isInjectedAnnotationWrapper(obs.state));
+        assert.equal(getAnnotations(obs.state), undefined);
       }
     });
 
