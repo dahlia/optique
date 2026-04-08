@@ -13202,27 +13202,15 @@ describe("branch coverage: constructs.ts edge cases", () => {
   describe(
     "shared-buffer constructs preserve mapped dependency defaults",
     () => {
-      function createMappedDependencyParsers() {
+      it("preserves transformed defaults in sync mode", () => {
         const modeSource = dependency(choice(["fast", "safe"] as const));
         const mapped = map(
           withDefault(option("--mode", modeSource), "fast" as const),
           (value) => ({ type: value, enabled: true }),
         );
-        return {
-          mapped,
-          objectParser: object({ mode: mapped }),
-          mergeParser: merge(object({ mode: mapped }), object({})),
-          tupleParser: tuple([mapped] as const),
-        };
-      }
-
-      it("preserves transformed defaults in sync mode", () => {
-        const {
-          mapped,
-          objectParser,
-          mergeParser,
-          tupleParser,
-        } = createMappedDependencyParsers();
+        const objectParser = object({ mode: mapped });
+        const mergeParser = merge(object({ mode: mapped }), object({}));
+        const tupleParser = tuple([mapped] as const);
 
         const topLevel = parseSync(mapped, []);
         assert.ok(topLevel.success);
@@ -13264,12 +13252,14 @@ describe("branch coverage: constructs.ts edge cases", () => {
       });
 
       it("preserves transformed defaults in async mode", async () => {
-        const {
-          mapped,
-          objectParser,
-          mergeParser,
-          tupleParser,
-        } = createMappedDependencyParsers();
+        const modeSource = dependency(choice(["fast", "safe"] as const));
+        const mapped = map(
+          withDefault(option("--mode", modeSource), "fast" as const),
+          (value) => ({ type: value, enabled: true }),
+        );
+        const objectParser = object({ mode: mapped });
+        const mergeParser = merge(object({ mode: mapped }), object({}));
+        const tupleParser = tuple([mapped] as const);
 
         const topLevel = await parseAsync(mapped, []);
         assert.ok(topLevel.success);
