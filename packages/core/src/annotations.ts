@@ -214,6 +214,24 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
 }
 
 /**
+ * Returns whether an annotations record carries at least one own symbol key.
+ *
+ * An annotations object with no own symbol keys is treated as a no-op by the
+ * injection pipeline: it should behave identically to omitting the
+ * `annotations` option entirely.
+ *
+ * @param annotations The annotations record to check.
+ * @returns `true` when the record has at least one own symbol key.
+ * @internal
+ */
+export function hasMeaningfulAnnotations(
+  annotations: Annotations | undefined,
+): annotations is Annotations {
+  return annotations != null &&
+    Object.getOwnPropertySymbols(annotations).length > 0;
+}
+
+/**
  * Injects annotations into parser state while preserving state shape.
  *
  * - Primitive, null, and undefined states are wrapped with internal metadata.
@@ -221,6 +239,8 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
  * - Plain object states are shallow-cloned with annotations attached.
  * - Built-in object states (Date/Map/Set/RegExp) are cloned by constructor.
  * - Other non-plain object states are cloned via prototype/descriptors.
+ * - If the `annotations` record has no own symbol keys, the state is
+ *   returned unchanged; an empty annotations object is a no-op.
  *
  * @param state The parser state to annotate.
  * @param annotations The annotations to inject.
@@ -231,6 +251,9 @@ export function injectAnnotations<TState>(
   state: TState,
   annotations: Annotations,
 ): TState {
+  if (!hasMeaningfulAnnotations(annotations)) {
+    return state;
+  }
   if (state == null || typeof state !== "object") {
     const wrapper: Record<PropertyKey, unknown> = {};
     Object.defineProperties(wrapper, {

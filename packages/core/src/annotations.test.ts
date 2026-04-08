@@ -162,6 +162,84 @@ describe("injectAnnotations", () => {
     assert.equal(getAnnotations(source), undefined);
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
+
+  describe("with empty annotations object", () => {
+    it("should return primitive state unchanged", () => {
+      assert.equal(injectAnnotations(undefined, {}), undefined);
+      assert.equal(injectAnnotations(null, {}), null);
+      assert.equal(injectAnnotations(42, {}), 42);
+      assert.equal(injectAnnotations("state", {}), "state");
+      assert.equal(injectAnnotations(true, {}), true);
+    });
+
+    it("should not wrap primitive state", () => {
+      const result = injectAnnotations(undefined, {});
+      assert.ok(!isInjectedAnnotationWrapper(result));
+    });
+
+    it("should return identical array state", () => {
+      const source = [1, 2, 3];
+      const result = injectAnnotations(source, {});
+      assert.equal(result, source);
+      assert.equal(getAnnotations(result), undefined);
+    });
+
+    it("should return identical Date state", () => {
+      const source = new Date("2026-03-08T00:00:00.000Z");
+      const result = injectAnnotations(source, {});
+      assert.equal(result, source);
+      assert.equal(getAnnotations(result), undefined);
+    });
+
+    it("should return identical Map state", () => {
+      const source = new Map<string, number>([["a", 1]]);
+      const result = injectAnnotations(source, {});
+      assert.equal(result, source);
+      assert.equal(getAnnotations(result), undefined);
+    });
+
+    it("should return identical Set state", () => {
+      const source = new Set(["a", "b"]);
+      const result = injectAnnotations(source, {});
+      assert.equal(result, source);
+      assert.equal(getAnnotations(result), undefined);
+    });
+
+    it("should return identical RegExp state", () => {
+      const source = /ab+/gi;
+      const result = injectAnnotations(source, {});
+      assert.equal(result, source);
+      assert.equal(getAnnotations(result), undefined);
+    });
+
+    it("should return identical plain object state", () => {
+      const source = { value: 1 };
+      const result = injectAnnotations(source, {});
+      assert.equal(result, source);
+      assert.equal(getAnnotations(result), undefined);
+    });
+
+    it("should return identical class instance state", () => {
+      class CustomState {
+        value = 1;
+      }
+      const source = new CustomState();
+      const result = injectAnnotations(source, {});
+      assert.equal(result, source);
+      assert.equal(getAnnotations(result), undefined);
+    });
+
+    it("should ignore string-keyed entries and still no-op", () => {
+      const source = { value: 1 };
+      const annotationsWithStringKey = { foo: "bar" } as unknown as Record<
+        symbol,
+        unknown
+      >;
+      const result = injectAnnotations(source, annotationsWithStringKey);
+      assert.equal(result, source);
+      assert.equal(getAnnotations(result), undefined);
+    });
+  });
 });
 
 describe("inheritAnnotations", () => {

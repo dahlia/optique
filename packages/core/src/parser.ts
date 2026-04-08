@@ -16,6 +16,7 @@ import {
 } from "./usage.ts";
 import type { DeferredMap, ValueParserResult } from "./valueparser.ts";
 import {
+  hasMeaningfulAnnotations,
   injectAnnotations,
   isInjectedAnnotationWrapper,
   type ParseOptions,
@@ -823,7 +824,7 @@ function injectAnnotationsIntoState<TState>(
   options?: ParseOptions,
 ): TState {
   const annotations = options?.annotations;
-  if (annotations == null) {
+  if (!hasMeaningfulAnnotations(annotations)) {
     return state;
   }
   return injectAnnotations(state, annotations);
@@ -859,7 +860,8 @@ export function parseSync<T>(
   options?: ParseOptions,
 ): Result<T> {
   const initialState = injectAnnotationsIntoState(parser.initialState, options);
-  const shouldUnwrapAnnotatedValue = options?.annotations != null ||
+  const shouldUnwrapAnnotatedValue =
+    hasMeaningfulAnnotations(options?.annotations) ||
     isInjectedAnnotationWrapper(parser.initialState);
 
   const exec: ExecutionContext = {
@@ -949,7 +951,8 @@ export async function parseAsync<T>(
   options?: ParseOptions,
 ): Promise<Result<T>> {
   const initialState = injectAnnotationsIntoState(parser.initialState, options);
-  const shouldUnwrapAnnotatedValue = options?.annotations != null ||
+  const shouldUnwrapAnnotatedValue =
+    hasMeaningfulAnnotations(options?.annotations) ||
     isInjectedAnnotationWrapper(parser.initialState);
 
   const exec: ExecutionContext = {
