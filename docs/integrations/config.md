@@ -816,20 +816,35 @@ bindConfig(option("--port", integer({ min: 1024 })), {
 ~~~~
 
 Validation is forwarded through standard combinators (`optional()`,
-`withDefault()`, `group()`, `command()`, `nonEmpty()`) and through
-wrapping `bindEnv()` / `bindConfig()` layers.  `multiple()` validates
-each array element through the inner parser and additionally enforces
-its own `min` / `max` arity rules against the array length, so a
-fallback array that contains an invalid element or violates the
-configured arity is rejected.  Validation is intentionally *not*
-forwarded through `map()` because the mapping function is one-way: the
-mapped output type no longer corresponds to the inner parser's
-constraints.  Dependency-derived value parsers (`derive` /
-`deriveFrom`) are likewise exempt because their `format()` rebuilds
-from *default* dependency values rather than the live-resolved ones,
-so a round-trip would validate against the wrong branch.  Wrapping an
-inner parser in `map()`, `derive()`, or `deriveFrom()` will therefore
-silently bypass fallback validation.
+`withDefault()`, `group()`, `command()`) and through wrapping
+`bindEnv()` / `bindConfig()` layers, so a constraint defined on a deeply
+nested primitive is still enforced against a fallback value.
+
+`multiple()` attaches its own `validateValue`: it enforces the
+configured `min` / `max` arity against the fallback array length and,
+*if* the inner parser exposes a `validateValue` hook, walks each
+element through it.  Arity enforcement is unconditional — it kicks in
+even when the inner parser has no `validateValue` — and a non-array
+fallback (for example a mis-typed default escaped through `as never`)
+is rejected outright because `multiple()` can never produce a
+non-array shape from CLI input.
+
+`nonEmpty()` is a pure pass-through: it does not add an extra
+non-empty check on the fallback path.  On the CLI path `nonEmpty()`
+still enforces that at least one token was consumed, but on fallback
+values `nonEmpty(multiple(...))` delegates entirely to the inner
+`multiple()`'s arity rules.  If you need a “must have at least one
+element” guarantee against fallback arrays, use
+`multiple(..., { min: 1 })` directly.
+
+`map()`, `derive()`, and `deriveFrom()` intentionally *strip* the
+inner parser's `validateValue`: the mapping function is one-way, so
+the mapped output type no longer corresponds to the inner parser's
+constraints, and derived value parsers rebuild from *default*
+dependency values rather than the live-resolved ones.  Wrapping an
+inner parser in any of these suppresses revalidation of the wrapped
+primitive's constraints — but outer combinators layered above
+(notably `multiple()`) still enforce their own checks.
 
 
 API reference
