@@ -240,8 +240,12 @@ export interface BindEnvOptions<M extends Mode, TValue> {
  *                    {@link ValueParser}.
  * @throws {Error} If the inner parser throws while parsing or completing a
  *                 value, if the environment source throws while reading a
- *                 variable, or if the environment value parser throws while
- *                 parsing the environment variable value.
+ *                 variable, if the environment value parser throws while
+ *                 parsing the environment variable value, or if the inner
+ *                 parser's {@link Parser.validateValue} hook throws while
+ *                 re-validating a fallback value (environment variable value
+ *                 or configured `default`) — the hook can run even when no
+ *                 CLI tokens are parsed (see issue #414).
  * @since 1.0.0
  */
 export function bindEnv<

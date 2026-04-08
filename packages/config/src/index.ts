@@ -675,6 +675,11 @@ export interface BindConfigOptions<T, TValue, TConfigMeta = ConfigMeta> {
  * @param options Binding options including context, key, and default.
  * @returns A new parser with config fallback behavior.
  * @throws {TypeError} If `key` is not a property key or function.
+ * @throws {Error} If the inner parser's {@link Parser.validateValue} hook
+ *                 throws while re-validating a fallback value (a
+ *                 config-sourced value or the configured `default`) —
+ *                 the hook can run even when no CLI tokens are parsed
+ *                 (see issue #414).
  * @since 0.10.0
  *
  * @example
