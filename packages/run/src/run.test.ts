@@ -5,7 +5,13 @@ import type {
 } from "@optique/core/context";
 import { message } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
-import { argument, command, fail, option } from "@optique/core/primitives";
+import {
+  argument,
+  command,
+  constant,
+  fail,
+  option,
+} from "@optique/core/primitives";
 import type { Program } from "@optique/core/program";
 import type { OptionName } from "@optique/core/usage";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
@@ -105,6 +111,22 @@ function runIssue267SyncWith(
   });
 }
 
+const issue183ContextKey = Symbol.for("@test/run-issue-183");
+
+function createIssue183RunFixture() {
+  const parser = or(
+    object({ tag: constant("a" as const), silent: option("--silent") }),
+    object({ tag: constant("b" as const), verbose: option("--verbose") }),
+  );
+  const context: SourceContext = {
+    id: issue183ContextKey,
+    getAnnotations() {
+      return { [issue183ContextKey]: true };
+    },
+  };
+  return { parser, context };
+}
+
 describe("run", () => {
   describe("basic parsing", () => {
     it("should parse simple arguments when provided explicitly", () => {
@@ -118,6 +140,28 @@ describe("run", () => {
       });
 
       assert.deepEqual(result, { name: "Alice" });
+    });
+
+    it("should not crash or() with annotated initial state in runSync()", () => {
+      const { parser, context } = createIssue183RunFixture();
+      const result = runSync(parser, {
+        args: ["--silent"],
+        programName: "test",
+        contexts: [context],
+      });
+
+      assert.deepEqual(result, { tag: "a", silent: true });
+    });
+
+    it("should not crash or() with annotated initial state in run()", async () => {
+      const { parser, context } = createIssue183RunFixture();
+      const result = await run(parser, {
+        args: ["--silent"],
+        programName: "test",
+        contexts: [context],
+      });
+
+      assert.deepEqual(result, { tag: "a", silent: true });
     });
 
     it("should parse options with custom program name", () => {

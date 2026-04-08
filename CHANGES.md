@@ -210,6 +210,13 @@ To be released.
     that phase-two value may be `undefined`.  Phase two is still skipped
     when no usable first-pass seed exists.  [[#180], [#780]]
 
+ -  Fixed `or()` crashing with an internal `TypeError` when parsing started
+    from an annotation-injected initial state.  Exclusive branch selection now
+    treats annotations as transparent parser context, so annotated calls through
+    `parse()`, `parseAsync()`, and context-aware runners (`run()` /
+    `runSync()`) either select a branch normally or return an ordinary parse
+    failure instead of throwing.  [[#183]]
+
  -  Expanded `or()`'s fully inferred overloads from 10 to 15 parser
     arguments, so large alternative sets keep precise union inference without
     collapsing to `unknown` at 11+ arguments.  [[#142], [#143]]
@@ -1295,6 +1302,7 @@ To be released.
 [#177]: https://github.com/dahlia/optique/issues/177
 [#178]: https://github.com/dahlia/optique/issues/178
 [#180]: https://github.com/dahlia/optique/issues/180
+[#183]: https://github.com/dahlia/optique/issues/183
 [#186]: https://github.com/dahlia/optique/issues/186
 [#200]: https://github.com/dahlia/optique/issues/200
 [#223]: https://github.com/dahlia/optique/issues/223

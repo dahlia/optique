@@ -12,7 +12,7 @@ import {
   message,
   text,
 } from "@optique/core/message";
-import { multiple, optional, withDefault } from "@optique/core/modifiers";
+import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
   getDocPage,
   getDocPageAsync,
@@ -46,6 +46,18 @@ import { describe, it } from "node:test";
 function assertErrorIncludes(error: Message, text: string): void {
   const formatted = formatMessage(error);
   assert.ok(formatted.includes(text));
+}
+
+const issue183AnnotationKey = Symbol.for("@test/issue-183");
+const issue183Annotations = {
+  [issue183AnnotationKey]: true,
+} as const;
+
+function createIssue183Parser() {
+  return or(
+    object({ tag: constant("a" as const), silent: option("--silent") }),
+    object({ tag: constant("b" as const), verbose: option("--verbose") }),
+  );
 }
 
 describe("parse", () => {
@@ -108,6 +120,54 @@ describe("parse", () => {
       assert.equal(result.value.verbose, true);
       assert.equal(result.value.port, 8080);
     }
+  });
+
+  it("should parse or() with annotations on the initial state", () => {
+    const parser = createIssue183Parser();
+    const result = parse(parser, ["--silent"], {
+      annotations: issue183Annotations,
+    });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: { tag: "a", silent: true },
+    });
+  });
+
+  it("should return a normal parse failure for annotated or() mismatches", () => {
+    const parser = createIssue183Parser();
+    const result = parse(parser, ["--loud"], {
+      annotations: issue183Annotations,
+    });
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Unexpected option or subcommand");
+    }
+  });
+
+  it("should parse grouped or() with annotations on the initial state", () => {
+    const parser = group("Issue 183", createIssue183Parser());
+    const result = parse(parser, ["--silent"], {
+      annotations: issue183Annotations,
+    });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: { tag: "a", silent: true },
+    });
+  });
+
+  it("should parse mapped or() with annotations on the initial state", () => {
+    const parser = map(createIssue183Parser(), (value) => value.tag);
+    const result = parse(parser, ["--silent"], {
+      annotations: issue183Annotations,
+    });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: "a",
+    });
   });
 
   it("should preserve flat trace when wrappers drop exec", () => {
@@ -2559,6 +2619,18 @@ describe("Annotations system", () => {
     const annotations = getAnnotations(capturedState);
     assert.ok(annotations !== undefined);
     assert.equal(annotations[testKey], testData);
+  });
+
+  it("should parseAsync or() with annotations on the initial state", async () => {
+    const parser = createIssue183Parser();
+    const result = await parseAsync(parser, ["--silent"], {
+      annotations: issue183Annotations,
+    });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: { tag: "a", silent: true },
+    });
   });
 
   it("should preserve non-object parser value when annotations are provided", () => {
