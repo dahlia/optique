@@ -3418,7 +3418,11 @@ function runWithSyncBody<
 
   const firstPassSeed = extractPhase2SeedSync(augmentedParser1, args);
   if (firstPassSeed == null) {
-    return runParser(augmentedParser1, programName, args, options);
+    const augmentedParser = injectAnnotationsIntoParser(
+      parser,
+      phase1Annotations,
+    );
+    return runParser(augmentedParser, programName, args, options);
   }
 
   // Phase 2: Collect annotations with parsed result

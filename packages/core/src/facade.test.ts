@@ -10548,6 +10548,56 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.ok(errorCalled, "error should be called on first-pass failure");
   });
 
+  it("runWithSync: two-phase fallback rebuilds the injected parser", () => {
+    const dynKey = Symbol.for("@test/sync-two-phase-fresh-parser");
+    const seenParsers = new WeakSet<object>();
+    let staleParserReused = false;
+    const context: SourceContext = {
+      id: dynKey,
+      getAnnotations(parsed?: unknown) {
+        if (!parsed) return {};
+        return { [dynKey]: {} };
+      },
+    };
+    const parser: Parser<"sync", string, undefined> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(this: object, _context) {
+        if (seenParsers.has(this)) staleParserReused = true;
+        else seenParsers.add(this);
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`Missing value.`,
+        };
+      },
+      complete() {
+        return {
+          success: false as const,
+          error: message`Missing value.`,
+        };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    runWithSync(parser, "test", [context], {
+      args: [],
+      onError: () => "error",
+      stderr: () => {},
+    });
+
+    assert.equal(staleParserReused, false);
+  });
+
   it("runWithSync: two-phase, first pass throws → handled via runParser", () => {
     const dynKey = Symbol.for("@test/sync-two-phase-throw");
     const context: SourceContext = {
