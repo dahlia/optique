@@ -8149,7 +8149,7 @@ describe("validateValue forwarding through modifiers (#414)", () => {
         option("--format", asyncChoice(["json", "yaml"] as const)),
       );
       assert.ok(typeof parser.validateValue === "function");
-      const badResult = parser.validateValue!("xml" as "json");
+      const badResult = parser.validateValue!("xml" as never);
       assert.ok(badResult instanceof Promise);
       const bad = await badResult;
       assert.ok(!bad.success);
@@ -8172,7 +8172,7 @@ describe("validateValue forwarding through modifiers (#414)", () => {
         "json" as const,
       );
       assert.ok(typeof parser.validateValue === "function");
-      const badResult = parser.validateValue!("xml" as "json");
+      const badResult = parser.validateValue!("xml" as never);
       assert.ok(badResult instanceof Promise);
       const bad = await badResult;
       assert.ok(!bad.success);
@@ -8183,7 +8183,7 @@ describe("validateValue forwarding through modifiers (#414)", () => {
         option("--format", asyncChoice(["json", "yaml"] as const)),
       );
       assert.ok(typeof parser.validateValue === "function");
-      const badResult = parser.validateValue!(["json", "xml" as "json"]);
+      const badResult = parser.validateValue!(["json", "xml" as never]);
       assert.ok(badResult instanceof Promise);
       const bad = await badResult;
       assert.ok(!bad.success);
@@ -8201,7 +8201,7 @@ describe("validateValue forwarding through modifiers (#414)", () => {
         ),
       );
       assert.ok(typeof parser.validateValue === "function");
-      const result = parser.validateValue!(["json", "xml" as "json"]);
+      const result = parser.validateValue!(["json", "xml" as never]);
       assert.ok(result instanceof Promise);
       const awaited = await result;
       assert.ok(!awaited.success);
