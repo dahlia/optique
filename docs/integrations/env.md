@@ -367,12 +367,18 @@ env-level `parser` option — and to the configured `default`.
 For example, the following parser rejects the default `"abc"` because
 it does not match the inner CLI pattern `/^[A-Z]+$/`:
 
-~~~~ typescript
+~~~~ typescript twoslash
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { bindEnv, createEnvContext } from "@optique/env";
+
+const envContext = createEnvContext({ prefix: "MYAPP_" });
+// ---cut-before---
 bindEnv(option("--name", string({ pattern: /^[A-Z]+$/ })), {
   context: envContext,
   key: "NAME",
-  parser: string(),    // looser than the inner parser
-  default: "abc",      // rejected: must match /^[A-Z]+$/
+  parser: string(), // looser than the inner parser
+  default: "abc", // rejected at runtime: must match /^[A-Z]+$/
 });
 ~~~~
 

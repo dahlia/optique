@@ -798,11 +798,20 @@ loaded from the config file and to the configured `default`.
 For example, the following parser rejects the default `80` because it
 is below the inner CLI parser's `min: 1024` bound:
 
-~~~~ typescript
+~~~~ typescript twoslash
+import { z } from "zod";
+import { option } from "@optique/core/primitives";
+import { integer } from "@optique/core/valueparser";
+import { bindConfig, createConfigContext } from "@optique/config";
+
+const configContext = createConfigContext({
+  schema: z.object({ port: z.number().optional() }),
+});
+// ---cut-before---
 bindConfig(option("--port", integer({ min: 1024 })), {
   context: configContext,
   key: "port",
-  default: 80,    // rejected: must be >= 1024
+  default: 80, // rejected at runtime: must be >= 1024
 });
 ~~~~
 
