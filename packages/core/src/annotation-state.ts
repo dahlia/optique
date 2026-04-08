@@ -91,7 +91,7 @@ export function getWrappedChildParseState<TState>(
     Reflect.get(parser, inheritParentAnnotationsKey) === true;
   if (childState == null) {
     if (annotations !== undefined && shouldInheritAnnotations) {
-      return injectAnnotations({}, annotations) as TState;
+      return injectAnnotations(childState, annotations);
     }
     return childState;
   }
@@ -125,7 +125,7 @@ export function getWrappedChildState<TState>(
     Reflect.get(parser, inheritParentAnnotationsKey) === true;
   if (childState == null) {
     if (annotations !== undefined && shouldInheritAnnotations) {
-      return injectAnnotations({}, annotations) as TState;
+      return injectAnnotations(childState, annotations);
     }
     return childState;
   }
