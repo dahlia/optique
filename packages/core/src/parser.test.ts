@@ -3365,6 +3365,17 @@ describe("Annotations system", () => {
       }
     });
 
+    it("should preserve Map identity in suggestSync()", () => {
+      const source = new Map<string, number>([["a", 1]]);
+      const { parser, observations } = makeObservingParser(source);
+      suggestSync(parser, [""], { annotations: {} });
+      const suggestObs = observations.filter((o) => o.phase === "suggest");
+      assert.ok(suggestObs.length > 0);
+      for (const obs of suggestObs) {
+        assert.equal(obs.state, source);
+      }
+    });
+
     it("should not wrap state in suggestAsync()", async () => {
       const { parser, observations } = makeObservingParser(undefined);
       const suggestions = await suggestAsync(parser, [""], {
@@ -3375,6 +3386,17 @@ describe("Annotations system", () => {
       assert.ok(suggestObs.length > 0);
       for (const obs of suggestObs) {
         assert.ok(!isInjectedAnnotationWrapper(obs.state));
+      }
+    });
+
+    it("should preserve Map identity in suggestAsync()", async () => {
+      const source = new Map<string, number>([["a", 1]]);
+      const { parser, observations } = makeObservingParser(source);
+      await suggestAsync(parser, [""], { annotations: {} });
+      const suggestObs = observations.filter((o) => o.phase === "suggest");
+      assert.ok(suggestObs.length > 0);
+      for (const obs of suggestObs) {
+        assert.equal(obs.state, source);
       }
     });
 
@@ -3389,6 +3411,18 @@ describe("Annotations system", () => {
       }
     });
 
+    it("should preserve Map identity in getDocPage()", () => {
+      const source = new Map<string, number>([["a", 1]]);
+      const { parser, observations } = makeObservingParser(source);
+      const doc = getDocPage(parser, { annotations: {} });
+      assert.ok(doc !== undefined);
+      const docObs = observations.filter((o) => o.phase === "getDocFragments");
+      assert.ok(docObs.length > 0);
+      for (const obs of docObs) {
+        assert.equal(obs.state, source);
+      }
+    });
+
     it("should not wrap state in getDocPageSync()", () => {
       const { parser, observations } = makeObservingParser(undefined);
       const doc = getDocPageSync(parser, { annotations: {} });
@@ -3397,6 +3431,18 @@ describe("Annotations system", () => {
       assert.ok(docObs.length > 0);
       for (const obs of docObs) {
         assert.ok(!isInjectedAnnotationWrapper(obs.state));
+      }
+    });
+
+    it("should preserve Map identity in getDocPageSync()", () => {
+      const source = new Map<string, number>([["a", 1]]);
+      const { parser, observations } = makeObservingParser(source);
+      const doc = getDocPageSync(parser, { annotations: {} });
+      assert.ok(doc !== undefined);
+      const docObs = observations.filter((o) => o.phase === "getDocFragments");
+      assert.ok(docObs.length > 0);
+      for (const obs of docObs) {
+        assert.equal(obs.state, source);
       }
     });
 
@@ -3430,6 +3476,18 @@ describe("Annotations system", () => {
       assert.ok(docObs.length > 0);
       for (const obs of docObs) {
         assert.ok(!isInjectedAnnotationWrapper(obs.state));
+      }
+    });
+
+    it("should preserve Map identity in getDocPageAsync()", async () => {
+      const source = new Map<string, number>([["a", 1]]);
+      const { parser, observations } = makeObservingParser(source);
+      const doc = await getDocPageAsync(parser, { annotations: {} });
+      assert.ok(doc !== undefined);
+      const docObs = observations.filter((o) => o.phase === "getDocFragments");
+      assert.ok(docObs.length > 0);
+      for (const obs of docObs) {
+        assert.equal(obs.state, source);
       }
     });
   });
