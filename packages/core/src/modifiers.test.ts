@@ -8017,6 +8017,48 @@ describe("validateValue forwarding through modifiers (#414)", () => {
       assert.ok(result && typeof result === "object" && "success" in result);
       assert.ok(result.success);
     });
+
+    it("formats arity errors identically to the CLI path", () => {
+      const parser = multiple(option("-x", string()), { min: 3 });
+      const result = parser.validateValue!(["a"]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(
+          formatMessage(result.error),
+          "Expected at least 3 values, but got only 1.",
+        );
+      }
+    });
+
+    it("honors options.errors.tooFew in validateValue", () => {
+      const parser = multiple(option("-x", string()), {
+        min: 3,
+        errors: { tooFew: message`custom too-few.` },
+      });
+      const result = parser.validateValue!(["a"]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(formatMessage(result.error), "custom too-few.");
+      }
+    });
+
+    it("honors options.errors.tooMany in validateValue", () => {
+      const parser = multiple(option("-x", string()), {
+        max: 2,
+        errors: {
+          tooMany: (max, actual) =>
+            message`too many: ${text(String(max))}/${text(String(actual))}.`,
+        },
+      });
+      const result = parser.validateValue!(["a", "b", "c"]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(formatMessage(result.error), "too many: 2/3.");
+      }
+    });
   });
 
   describe("nonEmpty()", () => {

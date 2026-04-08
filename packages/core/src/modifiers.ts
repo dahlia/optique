@@ -2326,25 +2326,40 @@ export function multiple<M extends Mode, TValue, TState>(
     const innerValidate = typeof parser.validateValue === "function"
       ? parser.validateValue.bind(parser)
       : undefined;
+    // Mirrors the arity branch of `validateMultipleResult` above so that
+    // fallback validation failures look identical to CLI failures (same
+    // number formatting via `toLocaleString("en")`, same "but got only"
+    // phrasing, and the same `options.errors.tooFew` / `tooMany`
+    // customization).
     const validateArity = (
       values: readonly TValue[],
     ): ValueParserResult<readonly TValue[]> => {
       if (values.length < min) {
+        const customMessage = options.errors?.tooFew;
         return {
           success: false,
-          error: min === 1
-            ? message`Expected at least one value, but got none.`
-            : message`Expected at least ${text(String(min))} values, but got ${
-              text(String(values.length))
+          error: customMessage
+            ? (typeof customMessage === "function"
+              ? customMessage(min, values.length)
+              : customMessage)
+            : message`Expected at least ${
+              text(min.toLocaleString("en"))
+            } values, but got only ${
+              text(values.length.toLocaleString("en"))
             }.`,
         };
       }
       if (values.length > max) {
+        const customMessage = options.errors?.tooMany;
         return {
           success: false,
-          error: message`Expected at most ${
-            text(String(max))
-          } values, but got ${text(String(values.length))}.`,
+          error: customMessage
+            ? (typeof customMessage === "function"
+              ? customMessage(max, values.length)
+              : customMessage)
+            : message`Expected at most ${
+              text(max.toLocaleString("en"))
+            } values, but got ${text(values.length.toLocaleString("en"))}.`,
         };
       }
       return { success: true as const, value: values };
