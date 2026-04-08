@@ -9774,6 +9774,7 @@ describe("branch coverage: facade.ts edge cases", () => {
             ? null
             : { value: { config: state.config } };
         },
+        enumerable: true,
       });
 
       const dynamicContext: SourceContext<{
@@ -9815,6 +9816,129 @@ describe("branch coverage: facade.ts edge cases", () => {
       );
     },
   );
+
+  it("runWith: phase two does not hide top-level async parse throws", async () => {
+    const tokenKey = Symbol.for("@test/dyn-phase-two-top-level-async-throw");
+    let phase2Called = false;
+
+    const parser: Parser<
+      "async",
+      { readonly config: string; readonly token: string },
+      { readonly config?: string; readonly token?: string }
+    > = {
+      $mode: "async",
+      $valueType: [] as readonly {
+        readonly config: string;
+        readonly token: string;
+      }[],
+      $stateType: [] as readonly {
+        readonly config?: string;
+        readonly token?: string;
+      }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: {},
+      parse(context) {
+        const [head, value, ...rest] = context.buffer;
+        if (context.state.config == null) {
+          if (head !== "--config" || value == null) {
+            return Promise.resolve({
+              success: false as const,
+              error: message`Missing config.`,
+              consumed: 0,
+            });
+          }
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              buffer: rest,
+              state: { ...context.state, config: value },
+            },
+            consumed: [head, value],
+          });
+        }
+        const annotations = getAnnotations(context.state);
+        const token = annotations?.[tokenKey];
+        if (typeof token === "string") {
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              buffer: [],
+              state: { ...context.state, token },
+            },
+            consumed: context.buffer,
+          });
+        }
+        throw new Error("Top-level async parse boom.");
+      },
+      complete(state) {
+        return Promise.resolve(
+          state.config != null && state.token != null
+            ? {
+              success: true as const,
+              value: {
+                config: state.config,
+                token: state.token,
+              },
+            }
+            : { success: false as const, error: message`Missing token.` },
+        );
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    Object.defineProperty(parser, extractPhase2SeedKey, {
+      value(state: { readonly config?: string }) {
+        return state.config == null
+          ? null
+          : { value: { config: state.config } };
+      },
+      enumerable: true,
+    });
+
+    const dynamicContext: SourceContext<{
+      readonly getConfigPath: (
+        parsed: { readonly config: string },
+      ) => string | undefined;
+    }> = {
+      id: tokenKey,
+      mode: "dynamic",
+      getAnnotations(
+        parsed: { readonly config: string } | undefined,
+        options?: {
+          readonly getConfigPath: (
+            parsed: { readonly config: string },
+          ) => string | undefined;
+        },
+      ) {
+        if (parsed == null) return {};
+        phase2Called = true;
+        const configPath = options?.getConfigPath(parsed);
+        return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
+      },
+    };
+
+    await assert.rejects(
+      () =>
+        runWith(parser, "test", [dynamicContext], {
+          args: ["--config", "optique.json", "rest"],
+          contextOptions: {
+            getConfigPath: (parsed) => parsed.config,
+          },
+        }),
+      /Top-level async parse boom\./,
+    );
+    assert.ok(
+      !phase2Called,
+      "phase 2 context should not hide top-level parse errors",
+    );
+  });
 
   it("runWith: two-phase, first pass fails → error handled via runParser", async () => {
     const dynKey = Symbol.for("@test/dyn-firstfail");

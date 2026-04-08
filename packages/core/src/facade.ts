@@ -299,25 +299,17 @@ function extractPhase2SeedSync(
 ) {
   let context = createPhase2SeedContext(parser, args);
   while (context.buffer.length > 0) {
-    try {
-      const result = parser.parse(context);
-      if (!result.success) {
-        return completeOrExtractPhase2Seed(
-          parser,
-          context.state,
-          createPhase2SeedExec(parser, context),
-        );
-      }
-      const previousBuffer = context.buffer;
-      context = result.next;
-      if (isBufferUnchanged(previousBuffer, context.buffer)) {
-        return completeOrExtractPhase2Seed(
-          parser,
-          context.state,
-          createPhase2SeedExec(parser, context),
-        );
-      }
-    } catch {
+    const result = parser.parse(context);
+    if (!result.success) {
+      return completeOrExtractPhase2Seed(
+        parser,
+        context.state,
+        createPhase2SeedExec(parser, context),
+      );
+    }
+    const previousBuffer = context.buffer;
+    context = result.next;
+    if (isBufferUnchanged(previousBuffer, context.buffer)) {
       return completeOrExtractPhase2Seed(
         parser,
         context.state,
@@ -338,25 +330,17 @@ async function extractPhase2SeedAsync(
 ) {
   let context = createPhase2SeedContext(parser, args);
   while (context.buffer.length > 0) {
-    try {
-      const result = await parser.parse(context);
-      if (!result.success) {
-        return await completeOrExtractPhase2Seed(
-          parser,
-          context.state,
-          createPhase2SeedExec(parser, context),
-        );
-      }
-      const previousBuffer = context.buffer;
-      context = result.next;
-      if (isBufferUnchanged(previousBuffer, context.buffer)) {
-        return await completeOrExtractPhase2Seed(
-          parser,
-          context.state,
-          createPhase2SeedExec(parser, context),
-        );
-      }
-    } catch {
+    const result = await parser.parse(context);
+    if (!result.success) {
+      return await completeOrExtractPhase2Seed(
+        parser,
+        context.state,
+        createPhase2SeedExec(parser, context),
+      );
+    }
+    const previousBuffer = context.buffer;
+    context = result.next;
+    if (isBufferUnchanged(previousBuffer, context.buffer)) {
       return await completeOrExtractPhase2Seed(
         parser,
         context.state,
