@@ -67,7 +67,12 @@ import {
 } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { object as objectLocal, tuple as tupleLocal } from "./constructs.ts";
+import {
+  concat as concatLocal,
+  conditional as conditionalLocal,
+  object as objectLocal,
+  tuple as tupleLocal,
+} from "./constructs.ts";
 import { dependency as dependencyLocal } from "./dependency.ts";
 import { withDefault as withDefaultLocal } from "./modifiers.ts";
 import {
@@ -13415,6 +13420,122 @@ describe("branch coverage: constructs.ts edge cases", () => {
           value: ["alpha"],
         });
         assert.equal(getCallCount(), 1);
+      });
+
+      it("concat() extracts sync seeds across child boundaries", () => {
+        const { parser: modeParser } = createCountingSourceParser();
+        const parser = concatLocal(
+          tupleLocal([modeParser] as const),
+          tupleLocal([optionLocal("--required", string())] as const),
+        );
+
+        const seed = getLocalPhase2SeedExtractor(parser)(parser.initialState);
+
+        assert.deepEqual(seed, {
+          value: ["alpha"],
+        });
+      });
+
+      it("concat() extracts async seeds across child boundaries", async () => {
+        const { parser: modeParser } = createCountingSourceParser();
+        const parser = concatLocal(
+          tupleLocal([modeParser] as const),
+          tupleLocal(
+            [toAsyncParser(optionLocal("--required", string()))] as const,
+          ),
+        );
+
+        const seed = await getLocalPhase2SeedExtractor(parser)(
+          parser.initialState,
+        );
+
+        assert.deepEqual(seed, {
+          value: ["alpha"],
+        });
+      });
+
+      it("conditional() extracts sync seeds from the selected branch", () => {
+        const { parser: modeParser } = createCountingSourceParser();
+        const discriminator: Parser<"sync", string, undefined> = {
+          $mode: "sync",
+          $valueType: [] as readonly string[],
+          $stateType: [] as readonly undefined[],
+          priority: 0,
+          usage: [],
+          leadingNames: new Set(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context) {
+            return {
+              success: true as const,
+              next: context,
+              consumed: [],
+            };
+          },
+          complete() {
+            return { success: true as const, value: "cfg" };
+          },
+          *suggest() {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        };
+
+        const parser = conditionalLocal(discriminator, {
+          cfg: objectLocal({
+            mode: modeParser,
+            required: optionLocal("--required", string()),
+          }),
+        });
+
+        const seed = getLocalPhase2SeedExtractor(parser)(parser.initialState);
+
+        assert.deepEqual(seed, {
+          value: ["cfg", { mode: "alpha" }],
+        });
+      });
+
+      it("conditional() extracts async seeds from the selected branch", async () => {
+        const { parser: modeParser } = createCountingSourceParser();
+        const discriminator: Parser<"sync", string, undefined> = {
+          $mode: "sync",
+          $valueType: [] as readonly string[],
+          $stateType: [] as readonly undefined[],
+          priority: 0,
+          usage: [],
+          leadingNames: new Set(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context) {
+            return {
+              success: true as const,
+              next: context,
+              consumed: [],
+            };
+          },
+          complete() {
+            return { success: true as const, value: "cfg" };
+          },
+          *suggest() {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        };
+
+        const parser = conditionalLocal(discriminator, {
+          cfg: objectLocal({
+            mode: modeParser,
+            required: toAsyncParser(optionLocal("--required", string())),
+          }),
+        });
+
+        const seed = await getLocalPhase2SeedExtractor(parser)(
+          parser.initialState,
+        );
+
+        assert.deepEqual(seed, {
+          value: ["cfg", { mode: "alpha" }],
+        });
       });
     },
   );

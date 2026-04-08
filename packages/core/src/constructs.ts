@@ -427,6 +427,100 @@ async function reusePreCompletedPhase2SeedAsync(
     : await extractPhase2Seed(parser, state, exec);
 }
 
+function appendFlattenedPhase2Seed(
+  results: unknown[],
+  deferredKeys: Map<PropertyKey, DeferredMap | null>,
+  seed: {
+    readonly value: unknown;
+    readonly deferred?: true;
+    readonly deferredKeys?: DeferredMap;
+  },
+): boolean {
+  const baseIndex = results.length;
+  if (Array.isArray(seed.value)) {
+    results.push(...seed.value);
+    if (seed.deferred && seed.deferredKeys) {
+      for (const [key, value] of seed.deferredKeys) {
+        const numKey = typeof key === "string" ? Number(key) : key;
+        if (typeof numKey === "number" && Number.isInteger(numKey)) {
+          deferredKeys.set(baseIndex + numKey, value);
+        } else {
+          deferredKeys.set(key, value);
+        }
+      }
+      return false;
+    }
+    return seed.deferred === true;
+  }
+
+  results.push(seed.value);
+  if (seed.deferred && seed.deferredKeys) {
+    deferredKeys.set(baseIndex, seed.deferredKeys);
+    return false;
+  }
+  if (
+    seed.deferred &&
+    (seed.value == null || typeof seed.value !== "object")
+  ) {
+    deferredKeys.set(baseIndex, null);
+    return false;
+  }
+  return seed.deferred === true;
+}
+
+function combineTuplePhase2Seeds(
+  first: {
+    readonly value: unknown;
+    readonly deferred?: true;
+    readonly deferredKeys?: DeferredMap;
+  } | null,
+  second: {
+    readonly value: unknown;
+    readonly deferred?: true;
+    readonly deferredKeys?: DeferredMap;
+  } | null,
+) {
+  if (first == null && second == null) return null;
+
+  const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+  let hasDeferred = false;
+  if (first?.deferred) {
+    if (first.deferredKeys) {
+      deferredKeys.set(0, first.deferredKeys);
+    } else if (
+      first.value == null ||
+      typeof first.value !== "object"
+    ) {
+      deferredKeys.set(0, null);
+    } else {
+      hasDeferred = true;
+    }
+  }
+  if (second?.deferred) {
+    if (second.deferredKeys) {
+      deferredKeys.set(1, second.deferredKeys);
+    } else if (
+      second.value == null ||
+      typeof second.value !== "object"
+    ) {
+      deferredKeys.set(1, null);
+    } else {
+      hasDeferred = true;
+    }
+  }
+  return {
+    value: [first?.value, second?.value] as const,
+    ...(deferredKeys.size > 0 || hasDeferred
+      ? {
+        deferred: true as const,
+        ...(deferredKeys.size > 0
+          ? { deferredKeys: deferredKeys as DeferredMap }
+          : {}),
+      }
+      : {}),
+  };
+}
+
 /**
  * Prepares a field state for completion by wrapping `undefined` state
  * with the parser's initial pending dependency state when needed.
@@ -10627,6 +10721,153 @@ export function concat(
       }
       return completeSync(state, exec);
     },
+    [extractPhase2SeedKey](state: readonly unknown[], exec?: ExecutionContext) {
+      return dispatchByMode(
+        combinedMode,
+        () => {
+          const stateArray = state as unknown[];
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec: ExecutionContext = {
+            ...exec,
+            dependencyRuntime: runtime,
+          } as ExecutionContext;
+          const concatPairs = buildIndexedParserPairs(syncParsers);
+          const concatState = createAnnotatedArrayStateRecord(stateArray);
+          const preCompleted = preCompleteAndRegisterDependencies(
+            concatState,
+            concatPairs,
+            runtime.registry,
+            childExec,
+          );
+          collectExplicitSourceValues(
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
+              new Set(preCompleted.keys()),
+            ),
+            runtime,
+          );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: undefined,
+          } as ExecutionContext;
+          const resolvedArray = resolveStateWithRuntime(
+            stateArray,
+            runtime,
+          ) as unknown[];
+
+          const results: unknown[] = [];
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (let i = 0; i < syncParsers.length; i++) {
+            const parser = syncParsers[i];
+            const childExec = withChildExecPath(phase3Exec, i);
+            const preCompletedResult = preCompleted.get(String(i));
+            const seed = preCompletedResult !== undefined
+              ? reusePreCompletedPhase2Seed(
+                parser,
+                prepareStateForCompletion(resolvedArray[i], parser),
+                preCompletedResult,
+                childExec,
+              )
+              : completeOrExtractPhase2Seed(
+                parser,
+                prepareStateForCompletion(resolvedArray[i], parser),
+                childExec,
+              );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            hasDeferred =
+              appendFlattenedPhase2Seed(results, deferredKeys, seed) ||
+              hasDeferred;
+          }
+          if (!hasAnySeed) return null;
+          return {
+            value: results,
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+        async () => {
+          const stateArray = state as unknown[];
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec: ExecutionContext = {
+            ...exec,
+            dependencyRuntime: runtime,
+          } as ExecutionContext;
+          const concatPairs = buildIndexedParserPairs(parsers);
+          const concatState = createAnnotatedArrayStateRecord(stateArray);
+          const preCompleted = await preCompleteAndRegisterDependenciesAsync(
+            concatState,
+            concatPairs,
+            runtime.registry,
+            childExec,
+          );
+          await collectExplicitSourceValuesAsync(
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromArray(parsers, stateArray, exec?.path),
+              new Set(preCompleted.keys()),
+            ),
+            runtime,
+          );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: undefined,
+          } as ExecutionContext;
+          const resolvedArray = await resolveStateWithRuntimeAsync(
+            stateArray,
+            runtime,
+          ) as unknown[];
+
+          const results: unknown[] = [];
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (let i = 0; i < parsers.length; i++) {
+            const parser = parsers[i];
+            const childExec = withChildExecPath(phase3Exec, i);
+            const preCompletedResult = preCompleted.get(String(i));
+            const seed = preCompletedResult !== undefined
+              ? await reusePreCompletedPhase2SeedAsync(
+                parser,
+                prepareStateForCompletion(resolvedArray[i], parser),
+                preCompletedResult,
+                childExec,
+              )
+              : await completeOrExtractPhase2Seed(
+                parser,
+                prepareStateForCompletion(resolvedArray[i], parser),
+                childExec,
+              );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            hasDeferred =
+              appendFlattenedPhase2Seed(results, deferredKeys, seed) ||
+              hasDeferred;
+          }
+          if (!hasAnySeed) return null;
+          return {
+            value: results,
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+      );
+    },
     suggest(context, prefix) {
       if (isAsync) {
         return (async function* () {
@@ -12778,6 +13019,42 @@ export function conditional(
     };
   };
 
+  const getConditionalBranchSeedSync = (
+    currentState: ConditionalState<string>,
+    branchParser: Parser<"sync", unknown, unknown>,
+    branchState: unknown,
+    exec?: ExecutionContext,
+  ) => {
+    const branchExec = withChildExecPath(exec, "_branch");
+    return extractPhase2Seed(
+      branchParser,
+      getAnnotatedChildState(
+        currentState,
+        branchState,
+        branchParser,
+      ),
+      branchExec,
+    );
+  };
+
+  const getConditionalBranchSeedAsync = async (
+    currentState: ConditionalState<string>,
+    branchParser: Parser<Mode, unknown, unknown>,
+    branchState: unknown,
+    exec?: ExecutionContext,
+  ) => {
+    const branchExec = withChildExecPath(exec, "_branch");
+    return await extractPhase2Seed(
+      branchParser,
+      getAnnotatedChildState(
+        currentState,
+        branchState,
+        branchParser,
+      ),
+      branchExec,
+    );
+  };
+
   // Sync suggest implementation
   function* suggestSync(
     context: ParserContext<ConditionalState<string>>,
@@ -13159,6 +13436,148 @@ export function conditional(
         return completeAsync(state, exec);
       }
       return completeSync(state, exec);
+    },
+    [extractPhase2SeedKey](
+      state: ConditionalState<string>,
+      exec?: ExecutionContext,
+    ) {
+      return dispatchByMode(
+        combinedMode,
+        () => {
+          const syncDiscriminator = discriminator as Parser<
+            "sync",
+            string,
+            unknown
+          >;
+          const syncDefaultBranch = defaultBranch as
+            | Parser<"sync", unknown, unknown>
+            | undefined;
+          const syncBranches = branches as Record<
+            string,
+            Parser<"sync", unknown, unknown>
+          >;
+          const discriminatorExec = withChildExecPath(exec, "_discriminator");
+          if (state.selectedBranch === undefined) {
+            const discriminatorSeed = completeOrExtractPhase2Seed(
+              syncDiscriminator,
+              getAnnotatedChildState(
+                state,
+                state.discriminatorState,
+                syncDiscriminator,
+              ),
+              discriminatorExec,
+            );
+            if (typeof discriminatorSeed?.value === "string") {
+              const branchParser = syncBranches[discriminatorSeed.value];
+              if (branchParser != null) {
+                const branchSeed = getConditionalBranchSeedSync(
+                  state,
+                  branchParser,
+                  branchParser.initialState,
+                  exec,
+                );
+                return combineTuplePhase2Seeds(discriminatorSeed, branchSeed);
+              }
+            }
+            if (syncDefaultBranch != null) {
+              const branchSeed = getConditionalBranchSeedSync(
+                state,
+                syncDefaultBranch,
+                state.branchState ?? syncDefaultBranch.initialState,
+                exec,
+              );
+              return combineTuplePhase2Seeds(null, branchSeed);
+            }
+            return combineTuplePhase2Seeds(discriminatorSeed, null);
+          }
+
+          const branchParser = state.selectedBranch.kind === "default"
+            ? syncDefaultBranch!
+            : syncBranches[state.selectedBranch.key];
+          const branchSeed = getConditionalBranchSeedSync(
+            state,
+            branchParser,
+            state.branchState ?? branchParser.initialState,
+            exec,
+          );
+          const discriminatorSeed = state.selectedBranch.kind === "default"
+            ? null
+            : state.discriminatorValue != null &&
+                state.discriminatorValue === state.selectedBranch.key
+            ? { value: state.discriminatorValue }
+            : completeOrExtractPhase2Seed(
+              syncDiscriminator,
+              getAnnotatedChildState(
+                state,
+                state.discriminatorState,
+                syncDiscriminator,
+              ),
+              discriminatorExec,
+            ) ?? { value: state.selectedBranch.key };
+          return combineTuplePhase2Seeds(discriminatorSeed, branchSeed);
+        },
+        async () => {
+          const discriminatorExec = withChildExecPath(exec, "_discriminator");
+          if (state.selectedBranch === undefined) {
+            const discriminatorSeed = await completeOrExtractPhase2Seed(
+              discriminator,
+              getAnnotatedChildState(
+                state,
+                state.discriminatorState,
+                discriminator,
+              ),
+              discriminatorExec,
+            );
+            if (typeof discriminatorSeed?.value === "string") {
+              const branchParser = branches[discriminatorSeed.value];
+              if (branchParser != null) {
+                const branchSeed = await getConditionalBranchSeedAsync(
+                  state,
+                  branchParser,
+                  branchParser.initialState,
+                  exec,
+                );
+                return combineTuplePhase2Seeds(discriminatorSeed, branchSeed);
+              }
+            }
+            if (defaultBranch != null) {
+              const branchSeed = await getConditionalBranchSeedAsync(
+                state,
+                defaultBranch,
+                state.branchState ?? defaultBranch.initialState,
+                exec,
+              );
+              return combineTuplePhase2Seeds(null, branchSeed);
+            }
+            return combineTuplePhase2Seeds(discriminatorSeed, null);
+          }
+
+          const branchParser = state.selectedBranch.kind === "default"
+            ? defaultBranch!
+            : branches[state.selectedBranch.key];
+          const branchSeed = await getConditionalBranchSeedAsync(
+            state,
+            branchParser,
+            state.branchState ?? branchParser.initialState,
+            exec,
+          );
+          const discriminatorSeed = state.selectedBranch.kind === "default"
+            ? null
+            : state.discriminatorValue != null &&
+                state.discriminatorValue === state.selectedBranch.key
+            ? { value: state.discriminatorValue }
+            : await completeOrExtractPhase2Seed(
+              discriminator,
+              getAnnotatedChildState(
+                state,
+                state.discriminatorState,
+                discriminator,
+              ),
+              discriminatorExec,
+            ) ?? { value: state.selectedBranch.key };
+          return combineTuplePhase2Seeds(discriminatorSeed, branchSeed);
+        },
+      );
     },
 
     suggest(context, prefix) {
