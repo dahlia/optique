@@ -208,7 +208,7 @@ To be released.
     `bindConfig(fail<T>(), …)` can still resolve config-only required values.
     Deferred or otherwise unresolved fields in that phase-two value may be
     `undefined`.  Phase two is still skipped when no usable first-pass seed
-    exists.  [[#180]]
+    exists.  [[#180], [#780]]
 
  -  Expanded `or()`'s fully inferred overloads from 10 to 15 parser
     arguments, so large alternative sets keep precise union inference without
@@ -1595,6 +1595,7 @@ To be released.
 [#777]: https://github.com/dahlia/optique/pull/777
 [#778]: https://github.com/dahlia/optique/pull/778
 [#779]: https://github.com/dahlia/optique/pull/779
+[#780]: https://github.com/dahlia/optique/pull/780
 
 ### @optique/config
 
