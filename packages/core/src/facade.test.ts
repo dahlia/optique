@@ -9475,8 +9475,8 @@ describe("branch coverage: facade.ts edge cases", () => {
 
     const tokenParser: Parser<"sync", string, undefined> = {
       $mode: "sync",
-      $valueType: [] as unknown as readonly string[],
-      $stateType: [] as unknown as readonly undefined[],
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -9510,16 +9510,17 @@ describe("branch coverage: facade.ts edge cases", () => {
     }> = {
       id: tokenKey,
       mode: "dynamic",
-      getAnnotations(parsed, options) {
+      getAnnotations(
+        parsed: { readonly config: string } | undefined,
+        options?: {
+          readonly getConfigPath: (
+            parsed: { readonly config: string },
+          ) => string | undefined;
+        },
+      ) {
         if (parsed === undefined) return {};
         phase2Parsed = parsed;
-        const configPath = (
-          options as {
-            readonly getConfigPath: (
-              parsed: { readonly config: string },
-            ) => string | undefined;
-          }
-        ).getConfigPath(parsed as { readonly config: string });
+        const configPath = options?.getConfigPath(parsed);
         return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
       },
     };
@@ -9549,8 +9550,8 @@ describe("branch coverage: facade.ts edge cases", () => {
 
     const tokenParser: Parser<"async", string, undefined> = {
       $mode: "async",
-      $valueType: [] as unknown as readonly string[],
-      $stateType: [] as unknown as readonly undefined[],
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -9585,16 +9586,17 @@ describe("branch coverage: facade.ts edge cases", () => {
     }> = {
       id: tokenKey,
       mode: "dynamic",
-      getAnnotations(parsed, options) {
+      getAnnotations(
+        parsed: { readonly config: string } | undefined,
+        options?: {
+          readonly getConfigPath: (
+            parsed: { readonly config: string },
+          ) => string | undefined;
+        },
+      ) {
         if (parsed === undefined) return {};
         phase2Called = true;
-        const configPath = (
-          options as {
-            readonly getConfigPath: (
-              parsed: { readonly config: string },
-            ) => string | undefined;
-          }
-        ).getConfigPath(parsed as { readonly config: string });
+        const configPath = options?.getConfigPath(parsed);
         return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
       },
     };
@@ -9623,8 +9625,8 @@ describe("branch coverage: facade.ts edge cases", () => {
 
     const tokenParser: Parser<"sync", string, { token: string | null }> = {
       $mode: "sync",
-      $valueType: [] as unknown as readonly string[],
-      $stateType: [] as unknown as readonly { token: string | null }[],
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { token: string | null }[],
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -9665,16 +9667,17 @@ describe("branch coverage: facade.ts edge cases", () => {
     }> = {
       id: tokenKey,
       mode: "dynamic",
-      getAnnotations(parsed, options) {
+      getAnnotations(
+        parsed: { readonly config: string } | undefined,
+        options?: {
+          readonly getConfigPath: (
+            parsed: { readonly config: string },
+          ) => string | undefined;
+        },
+      ) {
         if (parsed === undefined) return {};
         phase2Called = true;
-        const configPath = (
-          options as {
-            readonly getConfigPath: (
-              parsed: { readonly config: string },
-            ) => string | undefined;
-          }
-        ).getConfigPath(parsed as { readonly config: string });
+        const configPath = options?.getConfigPath(parsed);
         return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
       },
     };
@@ -9709,11 +9712,11 @@ describe("branch coverage: facade.ts edge cases", () => {
         { readonly config?: string; readonly token?: string }
       > = {
         $mode: "sync",
-        $valueType: [] as unknown as readonly {
+        $valueType: [] as readonly {
           readonly config: string;
           readonly token: string;
         }[],
-        $stateType: [] as unknown as readonly {
+        $stateType: [] as readonly {
           readonly config?: string;
           readonly token?: string;
         }[],
@@ -9790,16 +9793,17 @@ describe("branch coverage: facade.ts edge cases", () => {
       }> = {
         id: tokenKey,
         mode: "dynamic",
-        getAnnotations(parsed, options) {
+        getAnnotations(
+          parsed: { readonly config: string } | undefined,
+          options?: {
+            readonly getConfigPath: (
+              parsed: { readonly config: string },
+            ) => string | undefined;
+          },
+        ) {
           if (parsed === undefined) return {};
           phase2Called = true;
-          const configPath = (
-            options as {
-              readonly getConfigPath: (
-                parsed: { readonly config: string },
-              ) => string | undefined;
-            }
-          ).getConfigPath(parsed as { readonly config: string });
+          const configPath = options?.getConfigPath(parsed);
           return configPath == null
             ? {}
             : { [tokenKey]: `token:${configPath}` };
@@ -10255,8 +10259,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     // because injectAnnotationsIntoParser spreads initialState as an object.
     const asyncParser: Parser<"async", string, { value: string | null }> = {
       $mode: "async",
-      $valueType: [] as unknown as readonly string[],
-      $stateType: [] as unknown as readonly { value: string | null }[],
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { value: string | null }[],
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -10312,8 +10316,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     // Use a native async parser with object state (not array)
     const asyncParser: Parser<"async", string, { value: string | null }> = {
       $mode: "async",
-      $valueType: [] as unknown as readonly string[],
-      $stateType: [] as unknown as readonly { value: string | null }[],
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { value: string | null }[],
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -10497,8 +10501,8 @@ describe("branch coverage: facade.ts edge cases", () => {
   it("runWith takes async early-exit branch for completion command", async () => {
     const asyncParser: Parser<"async", string, { value: string | null }> = {
       $mode: "async",
-      $valueType: [] as unknown as readonly string[],
-      $stateType: [] as unknown as readonly { value: string | null }[],
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { value: string | null }[],
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -10562,8 +10566,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     };
     const throwingParser: Parser<"async", string, { value: string | null }> = {
       $mode: "async",
-      $valueType: [] as unknown as readonly string[],
-      $stateType: [] as unknown as readonly { value: string | null }[],
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { value: string | null }[],
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -10607,8 +10611,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     };
     const throwingParser: Parser<"sync", string, { value: string | null }> = {
       $mode: "sync",
-      $valueType: [] as unknown as readonly string[],
-      $stateType: [] as unknown as readonly { value: string | null }[],
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { value: string | null }[],
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -10761,8 +10765,8 @@ describe("branch coverage: facade.ts edge cases", () => {
   it("runWith uses async fast-path without contexts and with static contexts", async () => {
     const asyncParser: Parser<"async", string, { value: string | null }> = {
       $mode: "async",
-      $valueType: [] as unknown as readonly string[],
-      $stateType: [] as unknown as readonly { value: string | null }[],
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { value: string | null }[],
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -11207,8 +11211,8 @@ describe("branch coverage: facade.ts edge cases", () => {
   it("aboveError=help with async parser uses promise doc path and usage fallback", async () => {
     const asyncParser: Parser<"async", string, undefined> = {
       $mode: "async",
-      $valueType: [] as unknown as readonly string[],
-      $stateType: [] as unknown as readonly undefined[],
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
       priority: 0,
       usage: [],
       leadingNames: new Set(),
