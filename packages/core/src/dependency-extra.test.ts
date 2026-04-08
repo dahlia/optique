@@ -7604,10 +7604,66 @@ describe("map() with dependencies", () => {
     }
   });
 
-  test("map() with withDefault and dependencies - transforms parsed values", async () => {
-    // Note: map(withDefault(...)) transforms parsed values, but NOT default values
-    // when the option is not provided. This is because dependency sources need
-    // special handling for their raw values.
+  test(
+    "map() with withDefault and dependencies transforms parsed values and visible defaults",
+    async () => {
+      const modeParser = dependency(choice(["fast", "safe"] as const));
+      const configParser = modeParser.derive({
+        metavar: "CONFIG",
+        mode: "sync",
+        defaultValue: () => "fast" as const,
+        factory: (mode: "fast" | "safe") =>
+          choice(
+            mode === "fast"
+              ? (["turbo", "quick"] as const)
+              : (["verified", "checked"] as const),
+          ),
+      });
+
+      const parser = object({
+        mode: map(
+          withDefault(option("--mode", modeParser), "fast" as const),
+          (m) => ({ type: m, enabled: true }),
+        ),
+        config: map(
+          withDefault(option("--config", configParser), "turbo" as const),
+          (c) => `config-${c}`,
+        ),
+      });
+
+      const result0 = await parseAsync(parser, []);
+      assert.ok(result0.success);
+      if (result0.success) {
+        assert.deepEqual(result0.value.mode, { type: "fast", enabled: true });
+        assert.equal(result0.value.config, "config-turbo");
+      }
+
+      // Test with specified values - map() transformation IS applied
+      const result1 = await parseAsync(parser, [
+        "--mode",
+        "safe",
+        "--config",
+        "verified",
+      ]);
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.deepEqual(result1.value.mode, { type: "safe", enabled: true });
+        assert.equal(result1.value.config, "config-verified");
+      }
+
+      // Test with partial - mode specified, config defaults
+      const result2 = await parseAsync(parser, ["--mode", "fast"]);
+      assert.ok(result2.success);
+      if (result2.success) {
+        // mode was parsed, so map() is applied
+        assert.deepEqual(result2.value.mode, { type: "fast", enabled: true });
+        // config used default, map() still transforms
+        assert.equal(result2.value.config, "config-turbo");
+      }
+    },
+  );
+
+  test("mapped defaults do not become dependency source values", async () => {
     const modeParser = dependency(choice(["fast", "safe"] as const));
     const configParser = modeParser.derive({
       metavar: "CONFIG",
@@ -7615,45 +7671,33 @@ describe("map() with dependencies", () => {
       defaultValue: () => "fast" as const,
       factory: (mode: "fast" | "safe") =>
         choice(
-          mode === "fast"
-            ? (["turbo", "quick"] as const)
-            : (["verified", "checked"] as const),
+          mode === "fast" ? (["turbo"] as const) : (["verified"] as const),
         ),
     });
 
     const parser = object({
       mode: map(
-        withDefault(option("--mode", modeParser), "fast" as const),
-        (m) => ({ type: m, enabled: true }),
+        withDefault(option("--mode", modeParser), "safe" as const),
+        (mode) => ({ type: mode, enabled: true }),
       ),
       config: map(
         withDefault(option("--config", configParser), "turbo" as const),
-        (c) => `config-${c}`,
+        (config) => `config-${config}`,
       ),
     });
 
-    // Test with specified values - map() transformation IS applied
-    const result1 = await parseAsync(parser, [
-      "--mode",
-      "safe",
-      "--config",
-      "verified",
-    ]);
-    assert.ok(result1.success);
-    if (result1.success) {
-      assert.deepEqual(result1.value.mode, { type: "safe", enabled: true });
-      assert.equal(result1.value.config, "config-verified");
+    const fastResult = await parseAsync(parser, ["--config", "turbo"]);
+    assert.ok(fastResult.success);
+    if (fastResult.success) {
+      assert.deepEqual(fastResult.value.mode, {
+        type: "safe",
+        enabled: true,
+      });
+      assert.equal(fastResult.value.config, "config-turbo");
     }
 
-    // Test with partial - mode specified, config defaults
-    const result2 = await parseAsync(parser, ["--mode", "fast"]);
-    assert.ok(result2.success);
-    if (result2.success) {
-      // mode was parsed, so map() is applied
-      assert.deepEqual(result2.value.mode, { type: "fast", enabled: true });
-      // config used default, map() still transforms
-      assert.equal(result2.value.config, "config-turbo");
-    }
+    const safeResult = await parseAsync(parser, ["--config", "verified"]);
+    assert.ok(!safeResult.success);
   });
 
   test("alternative pattern: withDefault after map for guaranteed transform", async () => {
