@@ -368,6 +368,19 @@ describe("bindConfig", () => {
       );
       const result = parse(parser, []);
       assert.ok(!result.success);
+      if (!result.success) {
+        // Lock in that the rejection is due to the pattern constraint,
+        // not some unrelated missing-value failure (#414).
+        const formatted = formatMessage(result.error);
+        assert.ok(
+          formatted.includes("--name"),
+          `expected error to mention --name, got: ${formatted}`,
+        );
+        assert.ok(
+          formatted.includes("pattern") || formatted.includes("/^[A-Z]+$/"),
+          `expected error to mention the pattern, got: ${formatted}`,
+        );
+      }
     });
 
     test("rejects a default that fails the inner integer bounds", () => {
@@ -384,6 +397,18 @@ describe("bindConfig", () => {
       );
       const result = parse(parser, []);
       assert.ok(!result.success);
+      if (!result.success) {
+        const formatted = formatMessage(result.error);
+        assert.ok(
+          formatted.includes("--port"),
+          `expected error to mention --port, got: ${formatted}`,
+        );
+        // The inner integer() parser produces an "at least 1,024" message.
+        assert.ok(
+          formatted.includes("1,024"),
+          `expected error to mention the lower bound, got: ${formatted}`,
+        );
+      }
     });
 
     test("revalidates config values through the inner CLI parser", () => {
@@ -403,6 +428,17 @@ describe("bindConfig", () => {
       };
       const result = parse(parser, [], { annotations });
       assert.ok(!result.success);
+      if (!result.success) {
+        const formatted = formatMessage(result.error);
+        assert.ok(
+          formatted.includes("--port"),
+          `expected error to mention --port, got: ${formatted}`,
+        );
+        assert.ok(
+          formatted.includes("1,024"),
+          `expected error to mention the lower bound, got: ${formatted}`,
+        );
+      }
     });
 
     test("accepts valid defaults without breaking existing usage", () => {

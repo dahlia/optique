@@ -8080,5 +8080,100 @@ describe("validateValue forwarding through modifiers (#414)", () => {
       assert.ok(result && typeof result === "object" && "success" in result);
       assert.ok(result.success);
     });
+
+    it("does not add fallback arity checks beyond inner validateValue", () => {
+      // nonEmpty() enforces arity at CLI parse time only; on the fallback
+      // path it must delegate entirely to the inner parser's validator
+      // (see review comment r3048781571).  With an inner multiple()
+      // whose min is 0, an empty array must pass; with min 1 it must
+      // fail because the inner multiple enforces the arity.
+      const min0 = nonEmpty(
+        multiple(option("-x", integer({ min: 1, max: 10 })), { min: 0 }),
+      );
+      const min0Result = min0.validateValue!([]);
+      assert.ok(min0Result && "success" in min0Result);
+      assert.ok(min0Result.success);
+      if (min0Result.success) assert.deepEqual(min0Result.value, []);
+
+      const min1 = nonEmpty(
+        multiple(option("-x", integer({ min: 1, max: 10 })), { min: 1 }),
+      );
+      const min1Result = min1.validateValue!([]);
+      assert.ok(min1Result && "success" in min1Result);
+      assert.ok(!min1Result.success);
+    });
+  });
+
+  describe("async mode", () => {
+    it("optional() forwards validateValue in async mode", async () => {
+      const parser = optional(
+        option("--format", asyncChoice(["json", "yaml"] as const)),
+      );
+      assert.ok(typeof parser.validateValue === "function");
+      const badResult = parser.validateValue!("xml" as "json");
+      assert.ok(badResult instanceof Promise);
+      const bad = await badResult;
+      assert.ok(!bad.success);
+
+      const goodResult = parser.validateValue!("json");
+      assert.ok(goodResult instanceof Promise);
+      const good = await goodResult;
+      assert.ok(good.success);
+      if (good.success) assert.equal(good.value, "json");
+
+      const undefResult = parser.validateValue!(undefined);
+      assert.ok(undefResult instanceof Promise);
+      const undef = await undefResult;
+      assert.ok(undef.success);
+    });
+
+    it("withDefault() forwards validateValue in async mode", async () => {
+      const parser = withDefault(
+        option("--format", asyncChoice(["json", "yaml"] as const)),
+        "json" as const,
+      );
+      assert.ok(typeof parser.validateValue === "function");
+      const badResult = parser.validateValue!("xml" as "json");
+      assert.ok(badResult instanceof Promise);
+      const bad = await badResult;
+      assert.ok(!bad.success);
+    });
+
+    it("multiple() validates each element in async mode", async () => {
+      const parser = multiple(
+        option("--format", asyncChoice(["json", "yaml"] as const)),
+      );
+      assert.ok(typeof parser.validateValue === "function");
+      const badResult = parser.validateValue!(["json", "xml" as "json"]);
+      assert.ok(badResult instanceof Promise);
+      const bad = await badResult;
+      assert.ok(!bad.success);
+
+      const goodResult = parser.validateValue!(["json", "yaml"]);
+      assert.ok(goodResult instanceof Promise);
+      const good = await goodResult;
+      assert.ok(good.success);
+    });
+
+    it("nonEmpty() forwards validateValue in async mode", async () => {
+      const parser = nonEmpty(
+        multiple(
+          option("--format", asyncChoice(["json", "yaml"] as const)),
+        ),
+      );
+      assert.ok(typeof parser.validateValue === "function");
+      const result = parser.validateValue!(["json", "xml" as "json"]);
+      assert.ok(result instanceof Promise);
+      const awaited = await result;
+      assert.ok(!awaited.success);
+    });
+
+    it("map() strips validateValue in async mode too", () => {
+      const parser = map(
+        option("--format", asyncChoice(["json", "yaml"] as const)),
+        (format) => format.toUpperCase(),
+      );
+      assert.equal(parser.validateValue, undefined);
+    });
   });
 });
