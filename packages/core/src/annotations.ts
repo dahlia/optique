@@ -223,6 +223,7 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
  * @param annotations The annotations record to check.
  * @returns `true` when the record has at least one own symbol key.
  * @internal
+ * @since 1.0.0
  */
 export function hasMeaningfulAnnotations(
   annotations: Annotations | undefined,
