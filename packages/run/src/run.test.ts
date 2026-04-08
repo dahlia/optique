@@ -23,20 +23,24 @@ import { bindEnv, createEnvContext } from "../../env/src/index.ts";
 
 const TEST_DIR = join(import.meta.dirname ?? ".", "test-configs");
 
-function createSyncConfigSchema(): Parameters<
-  typeof createConfigContext<{ host: string; port: number }>
+function createPassthroughConfigSchema<T>(): Parameters<
+  typeof createConfigContext<T>
 >[0]["schema"] {
   return {
     "~standard": {
       version: 1,
       vendor: "optique-test",
       validate(input: unknown) {
-        return {
-          value: input as { host: string; port: number },
-        };
+        return { value: input as T };
       },
     },
   };
+}
+
+function createSyncConfigSchema(): Parameters<
+  typeof createConfigContext<{ host: string; port: number }>
+>[0]["schema"] {
+  return createPassthroughConfigSchema<{ host: string; port: number }>();
 }
 
 interface ProgramPathContext extends
@@ -1517,6 +1521,45 @@ describe("run with contexts", () => {
     assert.ok(result instanceof Promise);
     const value = await result;
     assert.deepEqual(value, { name: "Alice" });
+  });
+
+  it("run() keeps phase two alive for config-only required values", async () => {
+    await mkdir(TEST_DIR, { recursive: true });
+    const configPath = join(TEST_DIR, "test-config-run-issue-180.json");
+
+    await writeFile(
+      configPath,
+      JSON.stringify({ token: "config-token" }),
+    );
+
+    try {
+      const context = createConfigContext({
+        schema: createPassthroughConfigSchema<{ token: string }>(),
+      });
+      const parser = object({
+        config: option("--config", string()),
+        token: bindConfig(fail<string>(), {
+          context,
+          key: "token",
+        }),
+      });
+
+      const result = await run(parser, {
+        args: ["--config", configPath],
+        programName: "test",
+        contexts: [context],
+        contextOptions: {
+          getConfigPath: (parsed: { config: string }) => parsed.config,
+        },
+      });
+
+      assert.deepEqual(result, {
+        config: configPath,
+        token: "config-token",
+      });
+    } finally {
+      await rm(configPath, { force: true });
+    }
   });
 
   it("should extract context-required options from RunOptions", async () => {

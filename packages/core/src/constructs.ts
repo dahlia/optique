@@ -28,6 +28,11 @@ import {
   injectAnnotations,
 } from "./annotations.ts";
 import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
+import {
+  completeOrExtractPhase2Seed,
+  extractPhase2Seed,
+  extractPhase2SeedKey,
+} from "./phase2-seed.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import {
   deduplicateDocFragments,
@@ -49,6 +54,7 @@ import type {
   InferValue,
   Mode,
   ModeIterable,
+  ModeValue,
   Parser,
   ParserContext,
   ParserResult,
@@ -1376,6 +1382,24 @@ function getExclusiveSuggestRuntimeNodes(
     parser,
     parserResult.next.state,
     [...path, index],
+  );
+}
+
+function extractExclusivePhase2Seed(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+  state: ExclusiveState,
+  exec: ExecutionContext | undefined,
+  mode: Mode,
+): ModeValue<Mode, import("./phase2-seed.ts").Phase2Seed<unknown> | null> {
+  const activeState = normalizeExclusiveState(state);
+  if (activeState == null || !activeState[1].success) {
+    return dispatchByMode(mode, () => null, () => Promise.resolve(null));
+  }
+  const [index, parserResult] = activeState;
+  return completeOrExtractPhase2Seed(
+    parsers[index],
+    parserResult.next.state,
+    withChildExecPath(exec, index),
   );
 }
 
@@ -3735,6 +3759,9 @@ export function or(
       noMatchContext,
       combinedMode,
     ),
+    [extractPhase2SeedKey](state: OrState, exec?: ExecutionContext) {
+      return extractExclusivePhase2Seed(parsers, state, exec, combinedMode);
+    },
     parse(context: ParserContext<OrState>) {
       return dispatchByMode(
         combinedMode,
@@ -4301,6 +4328,9 @@ export function longestMatch(
       noMatchContext,
       combinedMode,
     ),
+    [extractPhase2SeedKey](state: LongestMatchState, exec?: ExecutionContext) {
+      return extractExclusivePhase2Seed(parsers, state, exec, combinedMode);
+    },
     parse(context: ParserContext<LongestMatchState>) {
       return dispatchByMode(
         combinedMode,
@@ -6246,6 +6276,222 @@ export function object<
         },
       );
     },
+    [extractPhase2SeedKey](
+      state: { readonly [K in keyof T]: unknown },
+      exec?: ExecutionContext,
+    ) {
+      return dispatchByMode(
+        combinedMode,
+        () => {
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec: ExecutionContext = {
+            ...exec,
+            dependencyRuntime: runtime,
+          } as ExecutionContext;
+          const typedParserPairs = filterExcludedFieldParsers(
+            parserPairs as readonly (readonly [
+              string | symbol,
+              Parser<Mode, unknown, unknown>,
+            ])[],
+            exec?.excludedSourceFields,
+          );
+          const preCompleted = preCompleteAndRegisterDependencies(
+            state as Record<string | symbol, unknown>,
+            typedParserPairs,
+            runtime.registry,
+            childExec,
+          );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: undefined,
+          } as ExecutionContext;
+
+          const getFieldState = createFieldStateGetter(state);
+          const annotatedState: Record<string | symbol, unknown> = {};
+          for (const field of parserKeys) {
+            const fieldKey = field as string | symbol;
+            const fieldParser = parsers[field] as Parser<
+              "sync",
+              unknown,
+              unknown
+            >;
+            annotatedState[fieldKey] = getFieldState(field, fieldParser);
+          }
+          collectExplicitSourceValues(
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromPairs(
+                typedParserPairs,
+                annotatedState,
+                exec?.path,
+              ),
+              new Set(preCompleted.keys()),
+            ),
+            runtime,
+          );
+          const resolvedFieldStates = resolveStateWithRuntime(
+            annotatedState,
+            runtime,
+          ) as Record<string | symbol, unknown>;
+
+          const result = {} as {
+            [K in keyof T]: T[K]["$valueType"][number];
+          };
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (const field of parserKeys) {
+            const fieldKey = field as string | symbol;
+            const fieldParser = parsers[field] as Parser<
+              "sync",
+              unknown,
+              unknown
+            >;
+            const preCompletedResult = preCompleted.get(fieldKey);
+            const seed = preCompletedResult !== undefined &&
+                unwrapCompleteResult(preCompletedResult).success
+              ? completeOrExtractPhase2Seed(
+                fieldParser,
+                resolvedFieldStates[fieldKey],
+                withChildExecPath(phase3Exec, fieldKey),
+              )
+              : completeOrExtractPhase2Seed(
+                fieldParser,
+                resolvedFieldStates[fieldKey],
+                withChildExecPath(phase3Exec, fieldKey),
+              );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            (result as Record<string | symbol, unknown>)[fieldKey] = seed.value;
+            if (seed.deferred) {
+              if (seed.deferredKeys) {
+                deferredKeys.set(fieldKey, seed.deferredKeys);
+              } else if (
+                seed.value == null ||
+                typeof seed.value !== "object"
+              ) {
+                deferredKeys.set(fieldKey, null);
+              } else {
+                hasDeferred = true;
+              }
+            }
+          }
+
+          if (!hasAnySeed) return null;
+          return {
+            value: result,
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+        async () => {
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec: ExecutionContext = {
+            ...exec,
+            dependencyRuntime: runtime,
+          } as ExecutionContext;
+          const asyncParserPairs = filterExcludedFieldParsers(
+            parserPairs as readonly (readonly [
+              string | symbol,
+              Parser<Mode, unknown, unknown>,
+            ])[],
+            exec?.excludedSourceFields,
+          );
+          const preCompleted = await preCompleteAndRegisterDependenciesAsync(
+            state as Record<string | symbol, unknown>,
+            asyncParserPairs,
+            runtime.registry,
+            childExec,
+          );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: undefined,
+          } as ExecutionContext;
+
+          const getFieldState = createFieldStateGetter(state);
+          const annotatedState: Record<string | symbol, unknown> = {};
+          for (const field of parserKeys) {
+            const fieldKey = field as string | symbol;
+            const fieldParser = parsers[field];
+            annotatedState[fieldKey] = getFieldState(field, fieldParser);
+          }
+          await collectExplicitSourceValuesAsync(
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromPairs(
+                asyncParserPairs,
+                annotatedState,
+                exec?.path,
+              ),
+              new Set(preCompleted.keys()),
+            ),
+            runtime,
+          );
+          const resolvedFieldStates = await resolveStateWithRuntimeAsync(
+            annotatedState,
+            runtime,
+          ) as Record<string | symbol, unknown>;
+
+          const result = {} as {
+            [K in keyof T]: T[K]["$valueType"][number];
+          };
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (const field of parserKeys) {
+            const fieldKey = field as string | symbol;
+            const fieldParser = parsers[field];
+            const preCompletedResult = preCompleted.get(fieldKey);
+            const seed = preCompletedResult !== undefined &&
+                unwrapCompleteResult(preCompletedResult).success
+              ? await completeOrExtractPhase2Seed(
+                fieldParser,
+                resolvedFieldStates[fieldKey],
+                withChildExecPath(phase3Exec, fieldKey),
+              )
+              : await completeOrExtractPhase2Seed(
+                fieldParser,
+                resolvedFieldStates[fieldKey],
+                withChildExecPath(phase3Exec, fieldKey),
+              );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            (result as Record<string | symbol, unknown>)[fieldKey] = seed.value;
+            if (seed.deferred) {
+              if (seed.deferredKeys) {
+                deferredKeys.set(fieldKey, seed.deferredKeys);
+              } else if (
+                seed.value == null ||
+                typeof seed.value !== "object"
+              ) {
+                deferredKeys.set(fieldKey, null);
+              } else {
+                hasDeferred = true;
+              }
+            }
+          }
+
+          if (!hasAnySeed) return null;
+          return {
+            value: result,
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+      );
+    },
     suggest(
       context: ParserContext<{ readonly [K in keyof T]: unknown }>,
       prefix: string,
@@ -7454,6 +7700,157 @@ export function tuple<
         },
       );
     },
+    [extractPhase2SeedKey](state: TupleState, exec?: ExecutionContext) {
+      return dispatchByMode(
+        combinedMode,
+        () => {
+          const stateArray = state as unknown[];
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec: ExecutionContext = {
+            ...exec,
+            dependencyRuntime: runtime,
+          } as ExecutionContext;
+          const tuplePairs = buildIndexedParserPairs(syncParsers);
+          const tupleState = createAnnotatedArrayStateRecord(stateArray);
+          const preCompleted = preCompleteAndRegisterDependencies(
+            tupleState,
+            tuplePairs,
+            runtime.registry,
+            childExec,
+          );
+          collectExplicitSourceValues(
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
+              new Set(preCompleted.keys()),
+            ),
+            runtime,
+          );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: undefined,
+          } as ExecutionContext;
+          const resolvedArray = resolveStateWithRuntime(
+            stateArray,
+            runtime,
+          ) as unknown[];
+
+          const result: unknown[] = [];
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (let i = 0; i < syncParsers.length; i++) {
+            const elementParser = syncParsers[i];
+            const seed = completeOrExtractPhase2Seed(
+              elementParser,
+              prepareStateForCompletion(resolvedArray[i], elementParser),
+              withChildExecPath(phase3Exec, i),
+            );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            result[i] = seed.value;
+            if (seed.deferred) {
+              if (seed.deferredKeys) {
+                deferredKeys.set(i, seed.deferredKeys);
+              } else if (
+                seed.value == null ||
+                typeof seed.value !== "object"
+              ) {
+                deferredKeys.set(i, null);
+              } else {
+                hasDeferred = true;
+              }
+            }
+          }
+
+          if (!hasAnySeed) return null;
+          return {
+            value: result as { [K in keyof T]: T[K]["$valueType"][number] },
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+        async () => {
+          const stateArray = state as unknown[];
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec: ExecutionContext = {
+            ...exec,
+            dependencyRuntime: runtime,
+          } as ExecutionContext;
+          const tuplePairs = buildIndexedParserPairs(parsers);
+          const tupleState = createAnnotatedArrayStateRecord(stateArray);
+          const preCompleted = await preCompleteAndRegisterDependenciesAsync(
+            tupleState,
+            tuplePairs,
+            runtime.registry,
+            childExec,
+          );
+          await collectExplicitSourceValuesAsync(
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromArray(parsers, stateArray, exec?.path),
+              new Set(preCompleted.keys()),
+            ),
+            runtime,
+          );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: undefined,
+          } as ExecutionContext;
+          const resolvedArray = await resolveStateWithRuntimeAsync(
+            stateArray,
+            runtime,
+          ) as unknown[];
+
+          const result: unknown[] = [];
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (let i = 0; i < parsers.length; i++) {
+            const elementParser = parsers[i];
+            const seed = await completeOrExtractPhase2Seed(
+              elementParser,
+              prepareStateForCompletion(resolvedArray[i], elementParser),
+              withChildExecPath(phase3Exec, i),
+            );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            result[i] = seed.value;
+            if (seed.deferred) {
+              if (seed.deferredKeys) {
+                deferredKeys.set(i, seed.deferredKeys);
+              } else if (
+                seed.value == null ||
+                typeof seed.value !== "object"
+              ) {
+                deferredKeys.set(i, null);
+              } else {
+                hasDeferred = true;
+              }
+            }
+          }
+
+          if (!hasAnySeed) return null;
+          return {
+            value: result as { [K in keyof T]: T[K]["$valueType"][number] },
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+      );
+    },
     suggest(
       context: ParserContext<TupleState>,
       prefix: string,
@@ -8430,6 +8827,313 @@ export function merge(
             : {}),
         };
       })();
+    },
+    [extractPhase2SeedKey](state: MergeState, exec?: ExecutionContext) {
+      const extractMergeCompleteState = (
+        parser: Parser<Mode, MergeState, MergeState>,
+        resolvedState: MergeState,
+        index: number,
+      ): unknown => {
+        if (parser.initialState === undefined) {
+          const key = parserStateKey(index);
+          if (
+            resolvedState && typeof resolvedState === "object" &&
+            key in resolvedState
+          ) {
+            return resolvedState[key];
+          }
+          return undefined;
+        } else if (
+          parser.initialState && typeof parser.initialState === "object"
+        ) {
+          const key = localObjectStateKey(index);
+          if (
+            shouldPreserveLocalChildState(parser) &&
+            resolvedState && typeof resolvedState === "object" &&
+            key in resolvedState
+          ) {
+            return resolvedState[key];
+          }
+          if (resolvedState && typeof resolvedState === "object") {
+            const extractedState: MergeState = {};
+            for (const field in parser.initialState) {
+              extractedState[field] = field in resolvedState
+                ? resolvedState[field]
+                : parser.initialState[field];
+            }
+            return inheritAnnotations(resolvedState, extractedState);
+          }
+          return parser.initialState;
+        }
+        return parser.initialState;
+      };
+      return dispatchByMode(
+        combinedMode,
+        () => {
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec: ExecutionContext = {
+            ...exec,
+            dependencyRuntime: runtime,
+          } as ExecutionContext;
+          const duplicateFieldNames = collectDuplicateFieldNames(
+            mergedFieldParsers,
+          );
+          const unambiguousFieldParsers = filterDuplicateFieldParsers(
+            mergedFieldParsers,
+          );
+          type FieldPairs = ReadonlyArray<
+            readonly [string | symbol, Parser<Mode, unknown, unknown>]
+          >;
+          const perChildPhase1 = syncParsers.map((parser, i) => {
+            if (fieldParsersKey in parser) {
+              const pairs = (parser as { [fieldParsersKey]: FieldPairs })[
+                fieldParsersKey
+              ];
+              const excludedSourceFields = new Set(
+                pairs
+                  .map(([field]) => field)
+                  .filter((field) => duplicateFieldNames.has(field)),
+              );
+              const phase1Pairs = filterExcludedFieldParsers(
+                pairs,
+                excludedSourceFields,
+              );
+              const preCompleted = preCompleteAndRegisterDependencies(
+                state as Record<string | symbol, unknown>,
+                phase1Pairs,
+                runtime.registry,
+                withChildExecPath(childExec, i),
+              );
+              return {
+                cache: filterDuplicateKeys(preCompleted, phase1Pairs),
+                excludedSourceFields: excludedSourceFields.size > 0
+                  ? excludedSourceFields
+                  : undefined,
+              };
+            }
+            return { cache: undefined, excludedSourceFields: undefined };
+          });
+          collectExplicitSourceValues(
+            buildRuntimeNodesFromPairs(
+              unambiguousFieldParsers,
+              state as Record<PropertyKey, unknown>,
+              exec?.path,
+            ),
+            runtime,
+          );
+          const resolvedState = resolveStateWithRuntime(
+            state,
+            runtime,
+          ) as MergeState;
+
+          const object: MergeState = {};
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (let i = 0; i < syncParsers.length; i++) {
+            const parser = syncParsers[i];
+            const parserState = extractMergeCompleteState(
+              parser,
+              resolvedState,
+              i,
+            );
+            const { cache, excludedSourceFields } = perChildPhase1[i];
+            const childCompleteExec = withChildExecPath(childExec, i);
+            const completeExec = excludedSourceFields == null
+              ? {
+                ...childCompleteExec,
+                preCompletedByParser: cache,
+              }
+              : (() => {
+                const childRuntime = createDependencyRuntimeContext(
+                  runtime.registry.clone(),
+                );
+                return {
+                  ...childCompleteExec,
+                  dependencyRuntime: childRuntime,
+                  dependencyRegistry: childRuntime.registry,
+                  preCompletedByParser: cache,
+                };
+              })();
+            const seed = completeOrExtractPhase2Seed(
+              parser,
+              parserState as Parameters<typeof parser.complete>[0],
+              completeExec as ExecutionContext,
+            );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            const seedValue = seed.value as MergeState;
+            for (const field in seedValue) {
+              object[field] = seedValue[field];
+              if (
+                deferredKeys.has(field) &&
+                !(seed.deferred && seed.deferredKeys?.has(field))
+              ) {
+                deferredKeys.delete(field);
+              }
+            }
+            if (seed.deferred && seed.deferredKeys) {
+              for (const [key, value] of seed.deferredKeys) {
+                deferredKeys.set(key, value);
+              }
+            } else if (seed.deferred) {
+              hasDeferred = true;
+            }
+          }
+
+          if (!hasAnySeed) return null;
+          return {
+            value: object,
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+        async () => {
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec: ExecutionContext = {
+            ...exec,
+            dependencyRuntime: runtime,
+          } as ExecutionContext;
+          const duplicateFieldNames = collectDuplicateFieldNames(
+            mergedFieldParsers,
+          );
+          const unambiguousFieldParsers = filterDuplicateFieldParsers(
+            mergedFieldParsers,
+          );
+          type AsyncFieldPairs = ReadonlyArray<
+            readonly [string | symbol, Parser<Mode, unknown, unknown>]
+          >;
+          const perChildPhase1: {
+            readonly cache?: ReadonlyMap<string | symbol, unknown>;
+            readonly excludedSourceFields?: ReadonlySet<string | symbol>;
+          }[] = [];
+          for (let i = 0; i < parsers.length; i++) {
+            const parser = parsers[i];
+            if (fieldParsersKey in parser) {
+              const pairs = (parser as { [fieldParsersKey]: AsyncFieldPairs })[
+                fieldParsersKey
+              ];
+              const excludedSourceFields = new Set(
+                pairs
+                  .map(([field]) => field)
+                  .filter((field) => duplicateFieldNames.has(field)),
+              );
+              const phase1Pairs = filterExcludedFieldParsers(
+                pairs,
+                excludedSourceFields,
+              );
+              const preCompleted =
+                await preCompleteAndRegisterDependenciesAsync(
+                  state as Record<string | symbol, unknown>,
+                  phase1Pairs,
+                  runtime.registry,
+                  withChildExecPath(childExec, i),
+                );
+              perChildPhase1.push({
+                cache: filterDuplicateKeys(preCompleted, phase1Pairs),
+                excludedSourceFields: excludedSourceFields.size > 0
+                  ? excludedSourceFields
+                  : undefined,
+              });
+            } else {
+              perChildPhase1.push({
+                cache: undefined,
+                excludedSourceFields: undefined,
+              });
+            }
+          }
+          await collectExplicitSourceValuesAsync(
+            buildRuntimeNodesFromPairs(
+              unambiguousFieldParsers,
+              state as Record<PropertyKey, unknown>,
+              exec?.path,
+            ),
+            runtime,
+          );
+          const resolvedState = await resolveStateWithRuntimeAsync(
+            state,
+            runtime,
+          ) as MergeState;
+
+          const object: MergeState = {};
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (let i = 0; i < parsers.length; i++) {
+            const parser = parsers[i];
+            const parserState = extractMergeCompleteState(
+              parser,
+              resolvedState,
+              i,
+            );
+            const { cache: asyncCache, excludedSourceFields } = perChildPhase1[
+              i
+            ];
+            const childCompleteExec = withChildExecPath(childExec, i);
+            const completeExec = excludedSourceFields == null
+              ? {
+                ...childCompleteExec,
+                preCompletedByParser: asyncCache,
+              }
+              : (() => {
+                const childRuntime = createDependencyRuntimeContext(
+                  runtime.registry.clone(),
+                );
+                return {
+                  ...childCompleteExec,
+                  dependencyRuntime: childRuntime,
+                  dependencyRegistry: childRuntime.registry,
+                  preCompletedByParser: asyncCache,
+                };
+              })();
+            const seed = await completeOrExtractPhase2Seed(
+              parser,
+              parserState as Parameters<typeof parser.complete>[0],
+              completeExec as ExecutionContext,
+            );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            const seedValue = seed.value as MergeState;
+            for (const field in seedValue) {
+              object[field] = seedValue[field];
+              if (
+                deferredKeys.has(field) &&
+                !(seed.deferred && seed.deferredKeys?.has(field))
+              ) {
+                deferredKeys.delete(field);
+              }
+            }
+            if (seed.deferred && seed.deferredKeys) {
+              for (const [key, value] of seed.deferredKeys) {
+                deferredKeys.set(key, value);
+              }
+            } else if (seed.deferred) {
+              hasDeferred = true;
+            }
+          }
+
+          if (!hasAnySeed) return null;
+          return {
+            value: object,
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+      );
     },
     suggest(
       context: ParserContext<MergeState>,
@@ -10171,6 +10875,13 @@ export function group<M extends Mode, TValue, TState>(
       };
     },
   };
+  Object.defineProperty(groupParser, extractPhase2SeedKey, {
+    value(state: TState, exec?: ExecutionContext) {
+      return extractPhase2Seed(parser, state, exec);
+    },
+    configurable: true,
+    enumerable: false,
+  });
   // Lazily forward placeholder from inner parser to avoid eagerly
   // evaluating derived value parser factories at construction time.
   if ("placeholder" in parser) {

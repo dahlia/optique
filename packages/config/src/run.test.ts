@@ -6,7 +6,7 @@ import { join, relative, resolve } from "node:path";
 import { z } from "zod";
 import { object } from "@optique/core/constructs";
 import type { SourceContext } from "@optique/core/context";
-import { flag, option } from "@optique/core/primitives";
+import { fail, flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { withDefault } from "@optique/core/modifiers";
 import { runWith, runWithSync } from "@optique/core/facade";
@@ -74,6 +74,48 @@ describe("run with config context", { concurrency: false }, () => {
       await rm(configPath, { force: true });
     }
   });
+
+  test(
+    "runWith() keeps phase two alive for config-only required values",
+    async () => {
+      await mkdir(TEST_DIR, { recursive: true });
+      const configPath = join(TEST_DIR, "test-config-issue-180.json");
+
+      await writeFile(
+        configPath,
+        JSON.stringify({ token: "config-token" }),
+      );
+
+      try {
+        const schema = z.object({
+          token: z.string(),
+        });
+
+        const context = createConfigContext({ schema });
+        const parser = object({
+          config: option("--config", string()),
+          token: bindConfig(fail<string>(), {
+            context,
+            key: "token",
+          }),
+        });
+
+        const result = await runWith(parser, "test", [context], {
+          contextOptions: {
+            getConfigPath: (parsed: { config: string }) => parsed.config,
+          },
+          args: ["--config", configPath],
+        });
+
+        assert.deepEqual(result, {
+          config: configPath,
+          token: "config-token",
+        });
+      } finally {
+        await rm(configPath, { force: true });
+      }
+    },
+  );
 
   test("config loaders preserve parsed object identity when no scrub is needed", async () => {
     const schema = z.object({
@@ -1382,4 +1424,46 @@ describe("run with config context", { concurrency: false }, () => {
       await rm(configPath, { force: true });
     }
   });
+
+  test(
+    "runWithSync() keeps phase two alive for config-only required values",
+    async () => {
+      await mkdir(TEST_DIR, { recursive: true });
+      const configPath = join(TEST_DIR, "test-config-sync-issue-180.json");
+
+      await writeFile(
+        configPath,
+        JSON.stringify({ token: "config-token" }),
+      );
+
+      try {
+        const schema = z.object({
+          token: z.string(),
+        });
+
+        const context = createConfigContext({ schema });
+        const parser = object({
+          config: option("--config", string()),
+          token: bindConfig(fail<string>(), {
+            context,
+            key: "token",
+          }),
+        });
+
+        const result = runWithSync(parser, "test", [context], {
+          contextOptions: {
+            getConfigPath: (parsed: { config: string }) => parsed.config,
+          },
+          args: ["--config", configPath],
+        });
+
+        assert.deepEqual(result, {
+          config: configPath,
+          token: "config-token",
+        });
+      } finally {
+        await rm(configPath, { force: true });
+      }
+    },
+  );
 });

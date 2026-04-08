@@ -10,7 +10,10 @@ import {
 import { getAnnotations } from "@optique/core/annotations";
 import type { SourceContext } from "@optique/core/context";
 import type { DocSection } from "@optique/core/doc";
-import type { Parser } from "@optique/core/parser";
+import {
+  defineInheritedAnnotationParser,
+  type Parser,
+} from "@optique/core/parser";
 import {
   type RunOptions,
   runParser,
@@ -9457,6 +9460,80 @@ describe("branch coverage: facade.ts edge cases", () => {
     });
     assert.deepEqual(result, { x: "hello" });
     assert.ok(phase2Called, "phase 2 context should be called");
+  });
+
+  it("runWith: phase two can recover from first-pass completion failure", async () => {
+    const tokenKey = Symbol.for("@test/dyn-phase-two-recovery");
+    let phase2Parsed: unknown;
+
+    const tokenParser: Parser<"sync", string, undefined> = {
+      $mode: "sync",
+      $valueType: [] as unknown as readonly string[],
+      $stateType: [] as unknown as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete(state) {
+        const annotations = getAnnotations(state);
+        const token = annotations?.[tokenKey];
+        return typeof token === "string"
+          ? { success: true as const, value: token }
+          : { success: false as const, error: message`Missing token.` };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineInheritedAnnotationParser(tokenParser);
+
+    const dynamicContext: SourceContext<{
+      readonly getConfigPath: (
+        parsed: { readonly config: string },
+      ) => string | undefined;
+    }> = {
+      id: tokenKey,
+      mode: "dynamic",
+      getAnnotations(parsed, options) {
+        if (parsed === undefined) return {};
+        phase2Parsed = parsed;
+        const configPath = (
+          options as {
+            readonly getConfigPath: (
+              parsed: { readonly config: string },
+            ) => string | undefined;
+          }
+        ).getConfigPath(parsed as { readonly config: string });
+        return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
+      },
+    };
+
+    const parser = object({
+      config: option("--config", string()),
+      token: tokenParser,
+    });
+
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: ["--config", "optique.json"],
+      contextOptions: {
+        getConfigPath: (parsed) => parsed.config,
+      },
+    });
+
+    assert.deepEqual(result, {
+      config: "optique.json",
+      token: "token:optique.json",
+    });
+    assert.deepEqual(phase2Parsed, { config: "optique.json" });
   });
 
   it("runWith: two-phase, first pass fails → error handled via runParser", async () => {
