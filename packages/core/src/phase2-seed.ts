@@ -95,7 +95,7 @@ export function extractPhase2Seed<
 
 /**
  * Attempts to complete a parser and falls back to the internal phase-two
- * seed hook when completion fails or throws.
+ * seed hook when completion returns an unsuccessful result.
  *
  * @internal
  */
@@ -111,16 +111,12 @@ export function completeOrExtractPhase2Seed<
   return dispatchByMode(
     parser.$mode,
     () => {
-      try {
-        const result = (parser as Parser<"sync", TValue, TState>).complete(
-          state,
-          exec,
-        );
-        if (result.success) {
-          return phase2SeedFromValueResult(result);
-        }
-      } catch {
-        // Fall back to the best-effort extraction hook below.
+      const result = (parser as Parser<"sync", TValue, TState>).complete(
+        state,
+        exec,
+      );
+      if (result.success) {
+        return phase2SeedFromValueResult(result);
       }
       return extractPhase2Seed(
         parser as Parser<"sync", TValue, TState>,
@@ -129,15 +125,11 @@ export function completeOrExtractPhase2Seed<
       );
     },
     async () => {
-      try {
-        const result = await (
-          parser as Parser<"async", TValue, TState>
-        ).complete(state, exec);
-        if (result.success) {
-          return phase2SeedFromValueResult(result);
-        }
-      } catch {
-        // Fall back to the best-effort extraction hook below.
+      const result = await (
+        parser as Parser<"async", TValue, TState>
+      ).complete(state, exec);
+      if (result.success) {
+        return phase2SeedFromValueResult(result);
       }
       return await extractPhase2Seed(
         parser as Parser<"async", TValue, TState>,

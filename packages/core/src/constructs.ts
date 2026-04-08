@@ -6347,19 +6347,11 @@ export function object<
               unknown,
               unknown
             >;
-            const preCompletedResult = preCompleted.get(fieldKey);
-            const seed = preCompletedResult !== undefined &&
-                unwrapCompleteResult(preCompletedResult).success
-              ? completeOrExtractPhase2Seed(
-                fieldParser,
-                resolvedFieldStates[fieldKey],
-                withChildExecPath(phase3Exec, fieldKey),
-              )
-              : completeOrExtractPhase2Seed(
-                fieldParser,
-                resolvedFieldStates[fieldKey],
-                withChildExecPath(phase3Exec, fieldKey),
-              );
+            const seed = completeOrExtractPhase2Seed(
+              fieldParser,
+              resolvedFieldStates[fieldKey],
+              withChildExecPath(phase3Exec, fieldKey),
+            );
             if (seed == null) continue;
             hasAnySeed = true;
             (result as Record<string | symbol, unknown>)[fieldKey] = seed.value;
@@ -6447,19 +6439,11 @@ export function object<
           for (const field of parserKeys) {
             const fieldKey = field as string | symbol;
             const fieldParser = parsers[field];
-            const preCompletedResult = preCompleted.get(fieldKey);
-            const seed = preCompletedResult !== undefined &&
-                unwrapCompleteResult(preCompletedResult).success
-              ? await completeOrExtractPhase2Seed(
-                fieldParser,
-                resolvedFieldStates[fieldKey],
-                withChildExecPath(phase3Exec, fieldKey),
-              )
-              : await completeOrExtractPhase2Seed(
-                fieldParser,
-                resolvedFieldStates[fieldKey],
-                withChildExecPath(phase3Exec, fieldKey),
-              );
+            const seed = await completeOrExtractPhase2Seed(
+              fieldParser,
+              resolvedFieldStates[fieldKey],
+              withChildExecPath(phase3Exec, fieldKey),
+            );
             if (seed == null) continue;
             hasAnySeed = true;
             (result as Record<string | symbol, unknown>)[fieldKey] = seed.value;

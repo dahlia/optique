@@ -39,6 +39,7 @@ import type { ValueParser } from "@optique/core/valueparser";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { extractPhase2SeedKey } from "./phase2-seed.ts";
 import { bindEnv, createEnvContext } from "../../env/src/index.ts";
 
 type AssertNever<T extends never> = T;
@@ -9535,6 +9536,285 @@ describe("branch coverage: facade.ts edge cases", () => {
     });
     assert.deepEqual(phase2Parsed, { config: "optique.json" });
   });
+
+  it("runWith: phase two does not hide first-pass completion throws", async () => {
+    const tokenKey = Symbol.for("@test/dyn-phase-two-complete-throw");
+    let phase2Called = false;
+
+    const tokenParser: Parser<"async", string, undefined> = {
+      $mode: "async",
+      $valueType: [] as unknown as readonly string[],
+      $stateType: [] as unknown as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete(state) {
+        const annotations = getAnnotations(state);
+        const token = annotations?.[tokenKey];
+        if (typeof token === "string") {
+          return Promise.resolve({ success: true as const, value: token });
+        }
+        return Promise.reject(new Error("Completion boom."));
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineInheritedAnnotationParser(tokenParser);
+
+    const dynamicContext: SourceContext<{
+      readonly getConfigPath: (
+        parsed: { readonly config: string },
+      ) => string | undefined;
+    }> = {
+      id: tokenKey,
+      mode: "dynamic",
+      getAnnotations(parsed, options) {
+        if (parsed === undefined) return {};
+        phase2Called = true;
+        const configPath = (
+          options as {
+            readonly getConfigPath: (
+              parsed: { readonly config: string },
+            ) => string | undefined;
+          }
+        ).getConfigPath(parsed as { readonly config: string });
+        return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
+      },
+    };
+
+    const parser = object({
+      config: option("--config", string()),
+      token: tokenParser,
+    });
+
+    await assert.rejects(
+      () =>
+        runWith(parser, "test", [dynamicContext], {
+          args: ["--config", "optique.json"],
+          contextOptions: {
+            getConfigPath: (parsed) => parsed.config,
+          },
+        }),
+      /Completion boom\./,
+    );
+    assert.ok(!phase2Called, "phase 2 context should not hide thrown errors");
+  });
+
+  it("runWithSync: phase two does not hide first-pass parse throws", () => {
+    const tokenKey = Symbol.for("@test/dyn-phase-two-parse-throw");
+    let phase2Called = false;
+
+    const tokenParser: Parser<"sync", string, { token: string | null }> = {
+      $mode: "sync",
+      $valueType: [] as unknown as readonly string[],
+      $stateType: [] as unknown as readonly { token: string | null }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { token: null },
+      parse(context) {
+        const annotations = getAnnotations(context.state);
+        const token = annotations?.[tokenKey];
+        if (typeof token !== "string") {
+          throw new Error("Parse boom.");
+        }
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            buffer: [],
+            state: { token },
+          },
+          consumed: context.buffer,
+        };
+      },
+      complete(state) {
+        return state.token == null
+          ? { success: false as const, error: message`Missing token.` }
+          : { success: true as const, value: state.token };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineInheritedAnnotationParser(tokenParser);
+
+    const dynamicContext: SourceContext<{
+      readonly getConfigPath: (
+        parsed: { readonly config: string },
+      ) => string | undefined;
+    }> = {
+      id: tokenKey,
+      mode: "dynamic",
+      getAnnotations(parsed, options) {
+        if (parsed === undefined) return {};
+        phase2Called = true;
+        const configPath = (
+          options as {
+            readonly getConfigPath: (
+              parsed: { readonly config: string },
+            ) => string | undefined;
+          }
+        ).getConfigPath(parsed as { readonly config: string });
+        return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
+      },
+    };
+
+    const parser = object({
+      config: option("--config", string()),
+      token: tokenParser,
+    });
+
+    assert.throws(
+      () =>
+        runWithSync(parser, "test", [dynamicContext], {
+          args: ["--config", "optique.json", "rest"],
+          contextOptions: {
+            getConfigPath: (parsed) => parsed.config,
+          },
+        }),
+      /Parse boom\./,
+    );
+    assert.ok(!phase2Called, "phase 2 context should not hide thrown errors");
+  });
+
+  it(
+    "runWithSync: phase two does not hide top-level parse throws",
+    () => {
+      const tokenKey = Symbol.for("@test/dyn-phase-two-top-level-parse-throw");
+      let phase2Called = false;
+
+      const parser: Parser<
+        "sync",
+        { readonly config: string; readonly token: string },
+        { readonly config?: string; readonly token?: string }
+      > = {
+        $mode: "sync",
+        $valueType: [] as unknown as readonly {
+          readonly config: string;
+          readonly token: string;
+        }[],
+        $stateType: [] as unknown as readonly {
+          readonly config?: string;
+          readonly token?: string;
+        }[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: {},
+        parse(context) {
+          const [head, value, ...rest] = context.buffer;
+          if (context.state.config == null) {
+            if (head !== "--config" || value == null) {
+              return {
+                success: false as const,
+                error: message`Missing config.`,
+                consumed: 0,
+              };
+            }
+            return {
+              success: true as const,
+              next: {
+                ...context,
+                buffer: rest,
+                state: { ...context.state, config: value },
+              },
+              consumed: [head, value],
+            };
+          }
+
+          const annotations = getAnnotations(context.state);
+          const token = annotations?.[tokenKey];
+          if (typeof token === "string") {
+            return {
+              success: true as const,
+              next: {
+                ...context,
+                buffer: [],
+                state: { ...context.state, token },
+              },
+              consumed: context.buffer,
+            };
+          }
+          throw new Error("Top-level parse boom.");
+        },
+        complete(state) {
+          return state.config != null && state.token != null
+            ? {
+              success: true as const,
+              value: {
+                config: state.config,
+                token: state.token,
+              },
+            }
+            : { success: false as const, error: message`Missing token.` };
+        },
+        *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      Object.defineProperty(parser, extractPhase2SeedKey, {
+        value(state: { readonly config?: string }) {
+          return state.config == null
+            ? null
+            : { value: { config: state.config } };
+        },
+      });
+
+      const dynamicContext: SourceContext<{
+        readonly getConfigPath: (
+          parsed: { readonly config: string },
+        ) => string | undefined;
+      }> = {
+        id: tokenKey,
+        mode: "dynamic",
+        getAnnotations(parsed, options) {
+          if (parsed === undefined) return {};
+          phase2Called = true;
+          const configPath = (
+            options as {
+              readonly getConfigPath: (
+                parsed: { readonly config: string },
+              ) => string | undefined;
+            }
+          ).getConfigPath(parsed as { readonly config: string });
+          return configPath == null
+            ? {}
+            : { [tokenKey]: `token:${configPath}` };
+        },
+      };
+
+      assert.throws(
+        () =>
+          runWithSync(parser, "test", [dynamicContext], {
+            args: ["--config", "optique.json", "rest"],
+            contextOptions: {
+              getConfigPath: (parsed) => parsed.config,
+            },
+          }),
+        /Top-level parse boom\./,
+      );
+      assert.ok(
+        !phase2Called,
+        "phase 2 context should not hide top-level parse errors",
+      );
+    },
+  );
 
   it("runWith: two-phase, first pass fails → error handled via runParser", async () => {
     const dynKey = Symbol.for("@test/dyn-firstfail");
