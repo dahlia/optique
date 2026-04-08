@@ -28,6 +28,12 @@ import {
   injectAnnotations,
 } from "./annotations.ts";
 import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
+import {
+  completeOrExtractPhase2Seed,
+  extractPhase2Seed,
+  extractPhase2SeedKey,
+  phase2SeedFromValueResult,
+} from "./phase2-seed.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import {
   deduplicateDocFragments,
@@ -49,6 +55,7 @@ import type {
   InferValue,
   Mode,
   ModeIterable,
+  ModeValue,
   Parser,
   ParserContext,
   ParserResult,
@@ -108,6 +115,28 @@ function withChildExecPath(
   return {
     ...exec,
     path: [...(exec.path ?? []), segment],
+  };
+}
+
+function withDependencyRuntimeExec(
+  usage: ExecutionContext["usage"],
+  exec: ExecutionContext | undefined,
+  runtime: ReturnType<typeof createDependencyRuntimeContext>,
+): ExecutionContext {
+  if (exec == null) {
+    return {
+      usage,
+      phase: "complete",
+      path: [],
+      trace: undefined,
+      dependencyRuntime: runtime,
+      dependencyRegistry: runtime.registry,
+    };
+  }
+  return {
+    ...exec,
+    dependencyRuntime: runtime,
+    dependencyRegistry: runtime.registry,
   };
 }
 
@@ -393,6 +422,146 @@ function unwrapCompleteResult(
   return value === unwrappedResult.value ? unwrappedResult : {
     ...unwrappedResult,
     value,
+  };
+}
+
+function reusePreCompletedPhase2Seed(
+  parser: Parser<"sync", unknown, unknown>,
+  state: unknown,
+  preCompletedResult: unknown,
+  exec?: ExecutionContext,
+) {
+  const result = unwrapCompleteResult(preCompletedResult);
+  return result.success
+    ? phase2SeedFromValueResult(result)
+    : extractPhase2Seed(parser, state, exec);
+}
+
+async function reusePreCompletedPhase2SeedAsync(
+  parser: Parser<Mode, unknown, unknown>,
+  state: unknown,
+  preCompletedResult: unknown,
+  exec?: ExecutionContext,
+) {
+  const result = unwrapCompleteResult(preCompletedResult);
+  return result.success
+    ? phase2SeedFromValueResult(result)
+    : await extractPhase2Seed(parser, state, exec);
+}
+
+function extractOrCompletePhase2SeedSync<TValue, TState>(
+  parser: Parser<"sync", TValue, TState>,
+  state: TState,
+  exec?: ExecutionContext,
+) {
+  const extracted = extractPhase2Seed(parser, state, exec);
+  if (extracted != null) return extracted;
+  const result = parser.complete(state, exec);
+  return result.success ? phase2SeedFromValueResult(result) : null;
+}
+
+async function extractOrCompletePhase2SeedAsync<TValue, TState>(
+  parser: Parser<Mode, TValue, TState>,
+  state: TState,
+  exec?: ExecutionContext,
+) {
+  const extracted = await extractPhase2Seed(parser, state, exec);
+  if (extracted != null) return extracted;
+  const result = await parser.complete(state, exec);
+  return result.success ? phase2SeedFromValueResult(result) : null;
+}
+
+function appendFlattenedPhase2Seed(
+  results: unknown[],
+  deferredKeys: Map<PropertyKey, DeferredMap | null>,
+  seed: {
+    readonly value: unknown;
+    readonly deferred?: true;
+    readonly deferredKeys?: DeferredMap;
+  },
+): boolean {
+  const baseIndex = results.length;
+  if (Array.isArray(seed.value)) {
+    results.push(...seed.value);
+    if (seed.deferred && seed.deferredKeys) {
+      for (const [key, value] of seed.deferredKeys) {
+        const numKey = typeof key === "string" ? Number(key) : key;
+        if (typeof numKey === "number" && Number.isInteger(numKey)) {
+          deferredKeys.set(baseIndex + numKey, value);
+        } else {
+          deferredKeys.set(key, value);
+        }
+      }
+      return false;
+    }
+    return seed.deferred === true;
+  }
+
+  results.push(seed.value);
+  if (seed.deferred && seed.deferredKeys) {
+    deferredKeys.set(baseIndex, seed.deferredKeys);
+    return false;
+  }
+  if (
+    seed.deferred &&
+    (seed.value == null || typeof seed.value !== "object")
+  ) {
+    deferredKeys.set(baseIndex, null);
+    return false;
+  }
+  return seed.deferred === true;
+}
+
+function combineTuplePhase2Seeds(
+  first: {
+    readonly value: unknown;
+    readonly deferred?: true;
+    readonly deferredKeys?: DeferredMap;
+  } | null,
+  second: {
+    readonly value: unknown;
+    readonly deferred?: true;
+    readonly deferredKeys?: DeferredMap;
+  } | null,
+) {
+  if (first == null && second == null) return null;
+
+  const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+  let hasDeferred = false;
+  if (first?.deferred) {
+    if (first.deferredKeys) {
+      deferredKeys.set(0, first.deferredKeys);
+    } else if (
+      first.value == null ||
+      typeof first.value !== "object"
+    ) {
+      deferredKeys.set(0, null);
+    } else {
+      hasDeferred = true;
+    }
+  }
+  if (second?.deferred) {
+    if (second.deferredKeys) {
+      deferredKeys.set(1, second.deferredKeys);
+    } else if (
+      second.value == null ||
+      typeof second.value !== "object"
+    ) {
+      deferredKeys.set(1, null);
+    } else {
+      hasDeferred = true;
+    }
+  }
+  return {
+    value: [first?.value, second?.value] as const,
+    ...(deferredKeys.size > 0 || hasDeferred
+      ? {
+        deferred: true as const,
+        ...(deferredKeys.size > 0
+          ? { deferredKeys: deferredKeys as DeferredMap }
+          : {}),
+      }
+      : {}),
   };
 }
 
@@ -1092,6 +1261,7 @@ function createExclusiveComplete(
 ) => ValueParserResult<unknown> | Promise<ValueParserResult<unknown>> {
   // Cast to sync parsers for sync operations
   const syncParsers = parsers as Parser<"sync", unknown, unknown>[];
+
   return (state, exec?) => {
     const activeState = normalizeExclusiveState(state);
     if (activeState == null) {
@@ -1108,48 +1278,24 @@ function createExclusiveComplete(
       return dispatchByMode(
         mode,
         () => {
-          const emptyCtx = {
-            buffer: [] as string[],
-            optionsTerminated: false,
-            usage: [] as never[],
+          const candidate = findExclusiveZeroInputCandidateSync(
+            syncParsers,
+            state,
             exec,
-            dependencyRegistry: exec?.dependencyRegistry,
-          };
-          // Single pass: count candidates and cache the first result.
-          let candidateIndex = -1;
-          let candidateCount = 0;
-          let candidateParseResult:
-            | (ParserResult<unknown> & { success: true })
-            | undefined;
-          for (let i = 0; i < syncParsers.length; i++) {
-            const p = syncParsers[i];
-            if (p.leadingNames.size > 0 || p.acceptingAnyToken) continue;
-            const parseResult = p.parse({
-              ...emptyCtx,
-              state: getAnnotatedChildState(state, p.initialState, p),
-            });
-            if (!parseResult.success || parseResult.provisional) continue;
-            candidateCount++;
-            if (candidateIndex < 0) {
-              candidateIndex = i;
-              candidateParseResult = parseResult;
-            }
-            if (candidateCount > 1) break;
-          }
+          );
           // Complete only the unique candidate.
           if (
-            candidateCount === 1 && candidateIndex >= 0 &&
-            candidateParseResult
+            candidate != null
           ) {
-            const p = syncParsers[candidateIndex];
+            const p = syncParsers[candidate.index];
             const annotatedState = getAnnotatedChildState(
               state,
-              candidateParseResult.next.state,
+              candidate.parseResult.next.state,
               p,
             );
             return p.complete(
               annotatedState,
-              withChildExecPath(exec, candidateIndex),
+              withChildExecPath(exec, candidate.index),
             );
           }
           return {
@@ -1158,35 +1304,11 @@ function createExclusiveComplete(
           };
         },
         async () => {
-          const emptyCtx = {
-            buffer: [] as string[],
-            optionsTerminated: false,
-            usage: [] as never[],
+          const candidate = await findExclusiveZeroInputCandidateAsync(
+            parsers,
+            state,
             exec,
-            dependencyRegistry: exec?.dependencyRegistry,
-          };
-          // Single pass: count candidates and cache the first result
-          // (see sync counterpart).
-          let candidateIndex = -1;
-          let candidateCount = 0;
-          let candidateParseResult:
-            | (ParserResult<unknown> & { success: true })
-            | undefined;
-          for (let i = 0; i < parsers.length; i++) {
-            const p = parsers[i];
-            if (p.leadingNames.size > 0 || p.acceptingAnyToken) continue;
-            const parseResult = await p.parse({
-              ...emptyCtx,
-              state: getAnnotatedChildState(state, p.initialState, p),
-            });
-            if (!parseResult.success || parseResult.provisional) continue;
-            candidateCount++;
-            if (candidateIndex < 0) {
-              candidateIndex = i;
-              candidateParseResult = parseResult;
-            }
-            if (candidateCount > 1) break;
-          }
+          );
           // Complete only the unique candidate.
           // Skip async candidates during parse/suggest probes to
           // avoid triggering side effects (e.g., prompt()) before
@@ -1194,20 +1316,19 @@ function createExclusiveComplete(
           // to complete during probes (needed for object()'s
           // completability check on empty input).
           if (
-            candidateCount === 1 && candidateIndex >= 0 &&
-            candidateParseResult &&
-            (parsers[candidateIndex].$mode === "sync" ||
+            candidate != null &&
+            (parsers[candidate.index].$mode === "sync" ||
               (exec?.phase !== "parse" && exec?.phase !== "suggest"))
           ) {
-            const p = parsers[candidateIndex];
+            const p = parsers[candidate.index];
             const annotatedState = getAnnotatedChildState(
               state,
-              candidateParseResult.next.state,
+              candidate.parseResult.next.state,
               p,
             );
             return await p.complete(
               annotatedState,
-              withChildExecPath(exec, candidateIndex),
+              withChildExecPath(exec, candidate.index),
             );
           }
           return {
@@ -1376,6 +1497,142 @@ function getExclusiveSuggestRuntimeNodes(
     parser,
     parserResult.next.state,
     [...path, index],
+  );
+}
+
+function findExclusiveZeroInputCandidateSync(
+  parsers: readonly Parser<"sync", unknown, unknown>[],
+  state: ExclusiveState,
+  exec?: ExecutionContext,
+):
+  | {
+    readonly index: number;
+    readonly parseResult: ParserResult<unknown> & { readonly success: true };
+  }
+  | null {
+  const emptyCtx = {
+    buffer: [] as string[],
+    optionsTerminated: false,
+    usage: [] as never[],
+    exec,
+    dependencyRegistry: exec?.dependencyRegistry,
+  };
+  let candidateIndex = -1;
+  let candidateCount = 0;
+  let candidateParseResult:
+    | (ParserResult<unknown> & { readonly success: true })
+    | undefined;
+  for (let i = 0; i < parsers.length; i++) {
+    const parser = parsers[i];
+    if (parser.leadingNames.size > 0 || parser.acceptingAnyToken) continue;
+    const parseResult = parser.parse({
+      ...emptyCtx,
+      state: getAnnotatedChildState(state, parser.initialState, parser),
+    });
+    if (!parseResult.success || parseResult.provisional) continue;
+    candidateCount++;
+    if (candidateIndex < 0) {
+      candidateIndex = i;
+      candidateParseResult = parseResult;
+    }
+    if (candidateCount > 1) break;
+  }
+  return candidateCount === 1 && candidateIndex >= 0 &&
+      candidateParseResult != null
+    ? { index: candidateIndex, parseResult: candidateParseResult }
+    : null;
+}
+
+async function findExclusiveZeroInputCandidateAsync(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+  state: ExclusiveState,
+  exec?: ExecutionContext,
+): Promise<
+  | {
+    readonly index: number;
+    readonly parseResult: ParserResult<unknown> & { readonly success: true };
+  }
+  | null
+> {
+  const emptyCtx = {
+    buffer: [] as string[],
+    optionsTerminated: false,
+    usage: [] as never[],
+    exec,
+    dependencyRegistry: exec?.dependencyRegistry,
+  };
+  let candidateIndex = -1;
+  let candidateCount = 0;
+  let candidateParseResult:
+    | (ParserResult<unknown> & { readonly success: true })
+    | undefined;
+  for (let i = 0; i < parsers.length; i++) {
+    const parser = parsers[i];
+    if (parser.leadingNames.size > 0 || parser.acceptingAnyToken) continue;
+    const parseResult = await parser.parse({
+      ...emptyCtx,
+      state: getAnnotatedChildState(state, parser.initialState, parser),
+    });
+    if (!parseResult.success || parseResult.provisional) continue;
+    candidateCount++;
+    if (candidateIndex < 0) {
+      candidateIndex = i;
+      candidateParseResult = parseResult;
+    }
+    if (candidateCount > 1) break;
+  }
+  return candidateCount === 1 && candidateIndex >= 0 &&
+      candidateParseResult != null
+    ? { index: candidateIndex, parseResult: candidateParseResult }
+    : null;
+}
+
+function extractExclusivePhase2Seed(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+  state: ExclusiveState,
+  exec: ExecutionContext | undefined,
+  mode: Mode,
+): ModeValue<Mode, import("./phase2-seed.ts").Phase2Seed<unknown> | null> {
+  const activeState = normalizeExclusiveState(state);
+  if (activeState == null) {
+    return dispatchByMode(
+      mode,
+      () => {
+        const candidate = findExclusiveZeroInputCandidateSync(
+          parsers as readonly Parser<"sync", unknown, unknown>[],
+          state,
+          exec,
+        );
+        if (candidate == null) return null;
+        return extractOrCompletePhase2SeedSync(
+          parsers[candidate.index] as Parser<"sync", unknown, unknown>,
+          candidate.parseResult.next.state,
+          withChildExecPath(exec, candidate.index),
+        );
+      },
+      async () => {
+        const candidate = await findExclusiveZeroInputCandidateAsync(
+          parsers,
+          state,
+          exec,
+        );
+        if (candidate == null) return null;
+        return await extractOrCompletePhase2SeedAsync(
+          parsers[candidate.index],
+          candidate.parseResult.next.state,
+          withChildExecPath(exec, candidate.index),
+        );
+      },
+    );
+  }
+  if (!activeState[1].success) {
+    return dispatchByMode(mode, () => null, () => Promise.resolve(null));
+  }
+  const [index, parserResult] = activeState;
+  return completeOrExtractPhase2Seed(
+    parsers[index],
+    parserResult.next.state,
+    withChildExecPath(exec, index),
   );
 }
 
@@ -3735,6 +3992,9 @@ export function or(
       noMatchContext,
       combinedMode,
     ),
+    [extractPhase2SeedKey](state: OrState, exec?: ExecutionContext) {
+      return extractExclusivePhase2Seed(parsers, state, exec, combinedMode);
+    },
     parse(context: ParserContext<OrState>) {
       return dispatchByMode(
         combinedMode,
@@ -4301,6 +4561,9 @@ export function longestMatch(
       noMatchContext,
       combinedMode,
     ),
+    [extractPhase2SeedKey](state: LongestMatchState, exec?: ExecutionContext) {
+      return extractExclusivePhase2Seed(parsers, state, exec, combinedMode);
+    },
     parse(context: ParserContext<LongestMatchState>) {
       return dispatchByMode(
         combinedMode,
@@ -6246,6 +6509,226 @@ export function object<
         },
       );
     },
+    [extractPhase2SeedKey](
+      state: { readonly [K in keyof T]: unknown },
+      exec?: ExecutionContext,
+    ) {
+      return dispatchByMode(
+        combinedMode,
+        () => {
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec = withDependencyRuntimeExec(
+            objectParser.usage,
+            exec,
+            runtime,
+          );
+          const typedParserPairs = filterExcludedFieldParsers(
+            parserPairs as readonly (readonly [
+              string | symbol,
+              Parser<Mode, unknown, unknown>,
+            ])[],
+            exec?.excludedSourceFields,
+          );
+          const preCompleted = preCompleteAndRegisterDependencies(
+            state as Record<string | symbol, unknown>,
+            typedParserPairs,
+            runtime.registry,
+            childExec,
+          );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: undefined,
+          } as ExecutionContext;
+
+          const getFieldState = createFieldStateGetter(state);
+          const annotatedState: Record<string | symbol, unknown> = {};
+          for (const field of parserKeys) {
+            const fieldKey = field as string | symbol;
+            const fieldParser = parsers[field] as Parser<
+              "sync",
+              unknown,
+              unknown
+            >;
+            annotatedState[fieldKey] = getFieldState(field, fieldParser);
+          }
+          collectExplicitSourceValues(
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromPairs(
+                typedParserPairs,
+                annotatedState,
+                exec?.path,
+              ),
+              new Set(preCompleted.keys()),
+            ),
+            runtime,
+          );
+          const resolvedFieldStates = resolveStateWithRuntime(
+            annotatedState,
+            runtime,
+          ) as Record<string | symbol, unknown>;
+
+          const result = {} as {
+            [K in keyof T]: T[K]["$valueType"][number];
+          };
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (const field of parserKeys) {
+            const fieldKey = field as string | symbol;
+            const fieldParser = parsers[field] as Parser<
+              "sync",
+              unknown,
+              unknown
+            >;
+            const childExec = withChildExecPath(phase3Exec, fieldKey);
+            const preCompletedResult = preCompleted.get(fieldKey);
+            const seed = preCompletedResult !== undefined
+              ? reusePreCompletedPhase2Seed(
+                fieldParser,
+                resolvedFieldStates[fieldKey],
+                preCompletedResult,
+                childExec,
+              )
+              : completeOrExtractPhase2Seed(
+                fieldParser,
+                resolvedFieldStates[fieldKey],
+                childExec,
+              );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            (result as Record<string | symbol, unknown>)[fieldKey] = seed.value;
+            if (seed.deferred) {
+              if (seed.deferredKeys) {
+                deferredKeys.set(fieldKey, seed.deferredKeys);
+              } else if (
+                seed.value == null ||
+                typeof seed.value !== "object"
+              ) {
+                deferredKeys.set(fieldKey, null);
+              } else {
+                hasDeferred = true;
+              }
+            }
+          }
+
+          if (!hasAnySeed) return null;
+          return {
+            value: result,
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+        async () => {
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec = withDependencyRuntimeExec(
+            objectParser.usage,
+            exec,
+            runtime,
+          );
+          const asyncParserPairs = filterExcludedFieldParsers(
+            parserPairs as readonly (readonly [
+              string | symbol,
+              Parser<Mode, unknown, unknown>,
+            ])[],
+            exec?.excludedSourceFields,
+          );
+          const preCompleted = await preCompleteAndRegisterDependenciesAsync(
+            state as Record<string | symbol, unknown>,
+            asyncParserPairs,
+            runtime.registry,
+            childExec,
+          );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: undefined,
+          } as ExecutionContext;
+
+          const getFieldState = createFieldStateGetter(state);
+          const annotatedState: Record<string | symbol, unknown> = {};
+          for (const field of parserKeys) {
+            const fieldKey = field as string | symbol;
+            const fieldParser = parsers[field];
+            annotatedState[fieldKey] = getFieldState(field, fieldParser);
+          }
+          await collectExplicitSourceValuesAsync(
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromPairs(
+                asyncParserPairs,
+                annotatedState,
+                exec?.path,
+              ),
+              new Set(preCompleted.keys()),
+            ),
+            runtime,
+          );
+          const resolvedFieldStates = await resolveStateWithRuntimeAsync(
+            annotatedState,
+            runtime,
+          ) as Record<string | symbol, unknown>;
+
+          const result = {} as {
+            [K in keyof T]: T[K]["$valueType"][number];
+          };
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (const field of parserKeys) {
+            const fieldKey = field as string | symbol;
+            const fieldParser = parsers[field];
+            const childExec = withChildExecPath(phase3Exec, fieldKey);
+            const preCompletedResult = preCompleted.get(fieldKey);
+            const seed = preCompletedResult !== undefined
+              ? await reusePreCompletedPhase2SeedAsync(
+                fieldParser,
+                resolvedFieldStates[fieldKey],
+                preCompletedResult,
+                childExec,
+              )
+              : await completeOrExtractPhase2Seed(
+                fieldParser,
+                resolvedFieldStates[fieldKey],
+                childExec,
+              );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            (result as Record<string | symbol, unknown>)[fieldKey] = seed.value;
+            if (seed.deferred) {
+              if (seed.deferredKeys) {
+                deferredKeys.set(fieldKey, seed.deferredKeys);
+              } else if (
+                seed.value == null ||
+                typeof seed.value !== "object"
+              ) {
+                deferredKeys.set(fieldKey, null);
+              } else {
+                hasDeferred = true;
+              }
+            }
+          }
+
+          if (!hasAnySeed) return null;
+          return {
+            value: result,
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+      );
+    },
     suggest(
       context: ParserContext<{ readonly [K in keyof T]: unknown }>,
       prefix: string,
@@ -7454,6 +7937,177 @@ export function tuple<
         },
       );
     },
+    [extractPhase2SeedKey](state: TupleState, exec?: ExecutionContext) {
+      return dispatchByMode(
+        combinedMode,
+        () => {
+          const stateArray = state as unknown[];
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec = withDependencyRuntimeExec(
+            tupleParser.usage,
+            exec,
+            runtime,
+          );
+          const tuplePairs = buildIndexedParserPairs(syncParsers);
+          const tupleState = createAnnotatedArrayStateRecord(stateArray);
+          const preCompleted = preCompleteAndRegisterDependencies(
+            tupleState,
+            tuplePairs,
+            runtime.registry,
+            childExec,
+          );
+          collectExplicitSourceValues(
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
+              new Set(preCompleted.keys()),
+            ),
+            runtime,
+          );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: undefined,
+          } as ExecutionContext;
+          const resolvedArray = resolveStateWithRuntime(
+            stateArray,
+            runtime,
+          ) as unknown[];
+
+          const result: unknown[] = [];
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (let i = 0; i < syncParsers.length; i++) {
+            const elementParser = syncParsers[i];
+            const childExec = withChildExecPath(phase3Exec, i);
+            const preCompletedResult = preCompleted.get(String(i));
+            const seed = preCompletedResult !== undefined
+              ? reusePreCompletedPhase2Seed(
+                elementParser,
+                prepareStateForCompletion(resolvedArray[i], elementParser),
+                preCompletedResult,
+                childExec,
+              )
+              : completeOrExtractPhase2Seed(
+                elementParser,
+                prepareStateForCompletion(resolvedArray[i], elementParser),
+                childExec,
+              );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            result[i] = seed.value;
+            if (seed.deferred) {
+              if (seed.deferredKeys) {
+                deferredKeys.set(i, seed.deferredKeys);
+              } else if (
+                seed.value == null ||
+                typeof seed.value !== "object"
+              ) {
+                deferredKeys.set(i, null);
+              } else {
+                hasDeferred = true;
+              }
+            }
+          }
+
+          if (!hasAnySeed) return null;
+          return {
+            value: result as { [K in keyof T]: T[K]["$valueType"][number] },
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+        async () => {
+          const stateArray = state as unknown[];
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec = withDependencyRuntimeExec(
+            tupleParser.usage,
+            exec,
+            runtime,
+          );
+          const tuplePairs = buildIndexedParserPairs(parsers);
+          const tupleState = createAnnotatedArrayStateRecord(stateArray);
+          const preCompleted = await preCompleteAndRegisterDependenciesAsync(
+            tupleState,
+            tuplePairs,
+            runtime.registry,
+            childExec,
+          );
+          await collectExplicitSourceValuesAsync(
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromArray(parsers, stateArray, exec?.path),
+              new Set(preCompleted.keys()),
+            ),
+            runtime,
+          );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: undefined,
+          } as ExecutionContext;
+          const resolvedArray = await resolveStateWithRuntimeAsync(
+            stateArray,
+            runtime,
+          ) as unknown[];
+
+          const result: unknown[] = [];
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (let i = 0; i < parsers.length; i++) {
+            const elementParser = parsers[i];
+            const childExec = withChildExecPath(phase3Exec, i);
+            const preCompletedResult = preCompleted.get(String(i));
+            const seed = preCompletedResult !== undefined
+              ? await reusePreCompletedPhase2SeedAsync(
+                elementParser,
+                prepareStateForCompletion(resolvedArray[i], elementParser),
+                preCompletedResult,
+                childExec,
+              )
+              : await completeOrExtractPhase2Seed(
+                elementParser,
+                prepareStateForCompletion(resolvedArray[i], elementParser),
+                childExec,
+              );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            result[i] = seed.value;
+            if (seed.deferred) {
+              if (seed.deferredKeys) {
+                deferredKeys.set(i, seed.deferredKeys);
+              } else if (
+                seed.value == null ||
+                typeof seed.value !== "object"
+              ) {
+                deferredKeys.set(i, null);
+              } else {
+                hasDeferred = true;
+              }
+            }
+          }
+
+          if (!hasAnySeed) return null;
+          return {
+            value: result as { [K in keyof T]: T[K]["$valueType"][number] },
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+      );
+    },
     suggest(
       context: ParserContext<TupleState>,
       prefix: string,
@@ -8430,6 +9084,315 @@ export function merge(
             : {}),
         };
       })();
+    },
+    [extractPhase2SeedKey](state: MergeState, exec?: ExecutionContext) {
+      const extractMergeCompleteState = (
+        parser: Parser<Mode, MergeState, MergeState>,
+        resolvedState: MergeState,
+        index: number,
+      ): unknown => {
+        if (parser.initialState === undefined) {
+          const key = parserStateKey(index);
+          if (
+            resolvedState && typeof resolvedState === "object" &&
+            key in resolvedState
+          ) {
+            return resolvedState[key];
+          }
+          return undefined;
+        } else if (
+          parser.initialState && typeof parser.initialState === "object"
+        ) {
+          const key = localObjectStateKey(index);
+          if (
+            shouldPreserveLocalChildState(parser) &&
+            resolvedState && typeof resolvedState === "object" &&
+            key in resolvedState
+          ) {
+            return resolvedState[key];
+          }
+          if (resolvedState && typeof resolvedState === "object") {
+            const extractedState: MergeState = {};
+            for (const field in parser.initialState) {
+              extractedState[field] = field in resolvedState
+                ? resolvedState[field]
+                : parser.initialState[field];
+            }
+            return inheritAnnotations(resolvedState, extractedState);
+          }
+          return parser.initialState;
+        }
+        return parser.initialState;
+      };
+      return dispatchByMode(
+        combinedMode,
+        () => {
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec = withDependencyRuntimeExec(
+            mergeParser.usage,
+            exec,
+            runtime,
+          );
+          const duplicateFieldNames = collectDuplicateFieldNames(
+            mergedFieldParsers,
+          );
+          const unambiguousFieldParsers = filterDuplicateFieldParsers(
+            mergedFieldParsers,
+          );
+          type FieldPairs = ReadonlyArray<
+            readonly [string | symbol, Parser<Mode, unknown, unknown>]
+          >;
+          const perChildPhase1 = syncParsers.map((parser, i) => {
+            if (fieldParsersKey in parser) {
+              const pairs = (parser as { [fieldParsersKey]: FieldPairs })[
+                fieldParsersKey
+              ];
+              const excludedSourceFields = new Set(
+                pairs
+                  .map(([field]) => field)
+                  .filter((field) => duplicateFieldNames.has(field)),
+              );
+              const phase1Pairs = filterExcludedFieldParsers(
+                pairs,
+                excludedSourceFields,
+              );
+              const preCompleted = preCompleteAndRegisterDependencies(
+                state as Record<string | symbol, unknown>,
+                phase1Pairs,
+                runtime.registry,
+                withChildExecPath(childExec, i),
+              );
+              return {
+                cache: filterDuplicateKeys(preCompleted, phase1Pairs),
+                excludedSourceFields: excludedSourceFields.size > 0
+                  ? excludedSourceFields
+                  : undefined,
+              };
+            }
+            return { cache: undefined, excludedSourceFields: undefined };
+          });
+          collectExplicitSourceValues(
+            buildRuntimeNodesFromPairs(
+              unambiguousFieldParsers,
+              state as Record<PropertyKey, unknown>,
+              exec?.path,
+            ),
+            runtime,
+          );
+          const resolvedState = resolveStateWithRuntime(
+            state,
+            runtime,
+          ) as MergeState;
+
+          const object: MergeState = {};
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (let i = 0; i < syncParsers.length; i++) {
+            const parser = syncParsers[i];
+            const parserState = extractMergeCompleteState(
+              parser,
+              resolvedState,
+              i,
+            );
+            const { cache, excludedSourceFields } = perChildPhase1[i];
+            const childCompleteExec = withChildExecPath(childExec, i);
+            const completeExec = excludedSourceFields == null
+              ? {
+                ...childCompleteExec,
+                preCompletedByParser: cache,
+              }
+              : (() => {
+                const childRuntime = createDependencyRuntimeContext(
+                  runtime.registry.clone(),
+                );
+                return {
+                  ...childCompleteExec,
+                  dependencyRuntime: childRuntime,
+                  dependencyRegistry: childRuntime.registry,
+                  preCompletedByParser: cache,
+                };
+              })();
+            const seed = completeOrExtractPhase2Seed(
+              parser,
+              parserState as Parameters<typeof parser.complete>[0],
+              completeExec as ExecutionContext,
+            );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            const seedValue = seed.value as MergeState;
+            for (const field in seedValue) {
+              object[field] = seedValue[field];
+              if (
+                deferredKeys.has(field) &&
+                !(seed.deferred && seed.deferredKeys?.has(field))
+              ) {
+                deferredKeys.delete(field);
+              }
+            }
+            if (seed.deferred && seed.deferredKeys) {
+              for (const [key, value] of seed.deferredKeys) {
+                deferredKeys.set(key, value);
+              }
+            } else if (seed.deferred) {
+              hasDeferred = true;
+            }
+          }
+
+          if (!hasAnySeed) return null;
+          return {
+            value: object,
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+        async () => {
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec = withDependencyRuntimeExec(
+            mergeParser.usage,
+            exec,
+            runtime,
+          );
+          const duplicateFieldNames = collectDuplicateFieldNames(
+            mergedFieldParsers,
+          );
+          const unambiguousFieldParsers = filterDuplicateFieldParsers(
+            mergedFieldParsers,
+          );
+          type AsyncFieldPairs = ReadonlyArray<
+            readonly [string | symbol, Parser<Mode, unknown, unknown>]
+          >;
+          const perChildPhase1: {
+            readonly cache?: ReadonlyMap<string | symbol, unknown>;
+            readonly excludedSourceFields?: ReadonlySet<string | symbol>;
+          }[] = [];
+          for (let i = 0; i < parsers.length; i++) {
+            const parser = parsers[i];
+            if (fieldParsersKey in parser) {
+              const pairs = (parser as { [fieldParsersKey]: AsyncFieldPairs })[
+                fieldParsersKey
+              ];
+              const excludedSourceFields = new Set(
+                pairs
+                  .map(([field]) => field)
+                  .filter((field) => duplicateFieldNames.has(field)),
+              );
+              const phase1Pairs = filterExcludedFieldParsers(
+                pairs,
+                excludedSourceFields,
+              );
+              const preCompleted =
+                await preCompleteAndRegisterDependenciesAsync(
+                  state as Record<string | symbol, unknown>,
+                  phase1Pairs,
+                  runtime.registry,
+                  withChildExecPath(childExec, i),
+                );
+              perChildPhase1.push({
+                cache: filterDuplicateKeys(preCompleted, phase1Pairs),
+                excludedSourceFields: excludedSourceFields.size > 0
+                  ? excludedSourceFields
+                  : undefined,
+              });
+            } else {
+              perChildPhase1.push({
+                cache: undefined,
+                excludedSourceFields: undefined,
+              });
+            }
+          }
+          await collectExplicitSourceValuesAsync(
+            buildRuntimeNodesFromPairs(
+              unambiguousFieldParsers,
+              state as Record<PropertyKey, unknown>,
+              exec?.path,
+            ),
+            runtime,
+          );
+          const resolvedState = await resolveStateWithRuntimeAsync(
+            state,
+            runtime,
+          ) as MergeState;
+
+          const object: MergeState = {};
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (let i = 0; i < parsers.length; i++) {
+            const parser = parsers[i];
+            const parserState = extractMergeCompleteState(
+              parser,
+              resolvedState,
+              i,
+            );
+            const { cache: asyncCache, excludedSourceFields } = perChildPhase1[
+              i
+            ];
+            const childCompleteExec = withChildExecPath(childExec, i);
+            const completeExec = excludedSourceFields == null
+              ? {
+                ...childCompleteExec,
+                preCompletedByParser: asyncCache,
+              }
+              : (() => {
+                const childRuntime = createDependencyRuntimeContext(
+                  runtime.registry.clone(),
+                );
+                return {
+                  ...childCompleteExec,
+                  dependencyRuntime: childRuntime,
+                  dependencyRegistry: childRuntime.registry,
+                  preCompletedByParser: asyncCache,
+                };
+              })();
+            const seed = await completeOrExtractPhase2Seed(
+              parser,
+              parserState as Parameters<typeof parser.complete>[0],
+              completeExec as ExecutionContext,
+            );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            const seedValue = seed.value as MergeState;
+            for (const field in seedValue) {
+              object[field] = seedValue[field];
+              if (
+                deferredKeys.has(field) &&
+                !(seed.deferred && seed.deferredKeys?.has(field))
+              ) {
+                deferredKeys.delete(field);
+              }
+            }
+            if (seed.deferred && seed.deferredKeys) {
+              for (const [key, value] of seed.deferredKeys) {
+                deferredKeys.set(key, value);
+              }
+            } else if (seed.deferred) {
+              hasDeferred = true;
+            }
+          }
+
+          if (!hasAnySeed) return null;
+          return {
+            value: object,
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+      );
     },
     suggest(
       context: ParserContext<MergeState>,
@@ -9878,6 +10841,155 @@ export function concat(
       }
       return completeSync(state, exec);
     },
+    [extractPhase2SeedKey](state: readonly unknown[], exec?: ExecutionContext) {
+      return dispatchByMode(
+        combinedMode,
+        () => {
+          const stateArray = state as unknown[];
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec = withDependencyRuntimeExec(
+            concatParser.usage,
+            exec,
+            runtime,
+          );
+          const concatPairs = buildIndexedParserPairs(syncParsers);
+          const concatState = createAnnotatedArrayStateRecord(stateArray);
+          const preCompleted = preCompleteAndRegisterDependencies(
+            concatState,
+            concatPairs,
+            runtime.registry,
+            childExec,
+          );
+          collectExplicitSourceValues(
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
+              new Set(preCompleted.keys()),
+            ),
+            runtime,
+          );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: undefined,
+          } as ExecutionContext;
+          const resolvedArray = resolveStateWithRuntime(
+            stateArray,
+            runtime,
+          ) as unknown[];
+
+          const results: unknown[] = [];
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (let i = 0; i < syncParsers.length; i++) {
+            const parser = syncParsers[i];
+            const childExec = withChildExecPath(phase3Exec, i);
+            const preCompletedResult = preCompleted.get(String(i));
+            const seed = preCompletedResult !== undefined
+              ? reusePreCompletedPhase2Seed(
+                parser,
+                prepareStateForCompletion(resolvedArray[i], parser),
+                preCompletedResult,
+                childExec,
+              )
+              : completeOrExtractPhase2Seed(
+                parser,
+                prepareStateForCompletion(resolvedArray[i], parser),
+                childExec,
+              );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            hasDeferred =
+              appendFlattenedPhase2Seed(results, deferredKeys, seed) ||
+              hasDeferred;
+          }
+          if (!hasAnySeed) return null;
+          return {
+            value: results,
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+        async () => {
+          const stateArray = state as unknown[];
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec = withDependencyRuntimeExec(
+            concatParser.usage,
+            exec,
+            runtime,
+          );
+          const concatPairs = buildIndexedParserPairs(parsers);
+          const concatState = createAnnotatedArrayStateRecord(stateArray);
+          const preCompleted = await preCompleteAndRegisterDependenciesAsync(
+            concatState,
+            concatPairs,
+            runtime.registry,
+            childExec,
+          );
+          await collectExplicitSourceValuesAsync(
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromArray(parsers, stateArray, exec?.path),
+              new Set(preCompleted.keys()),
+            ),
+            runtime,
+          );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: undefined,
+          } as ExecutionContext;
+          const resolvedArray = await resolveStateWithRuntimeAsync(
+            stateArray,
+            runtime,
+          ) as unknown[];
+
+          const results: unknown[] = [];
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (let i = 0; i < parsers.length; i++) {
+            const parser = parsers[i];
+            const childExec = withChildExecPath(phase3Exec, i);
+            const preCompletedResult = preCompleted.get(String(i));
+            const seed = preCompletedResult !== undefined
+              ? await reusePreCompletedPhase2SeedAsync(
+                parser,
+                prepareStateForCompletion(resolvedArray[i], parser),
+                preCompletedResult,
+                childExec,
+              )
+              : await completeOrExtractPhase2Seed(
+                parser,
+                prepareStateForCompletion(resolvedArray[i], parser),
+                childExec,
+              );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            hasDeferred =
+              appendFlattenedPhase2Seed(results, deferredKeys, seed) ||
+              hasDeferred;
+          }
+          if (!hasAnySeed) return null;
+          return {
+            value: results,
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+      );
+    },
     suggest(context, prefix) {
       if (isAsync) {
         return (async function* () {
@@ -10171,6 +11283,13 @@ export function group<M extends Mode, TValue, TState>(
       };
     },
   };
+  Object.defineProperty(groupParser, extractPhase2SeedKey, {
+    value(state: TState, exec?: ExecutionContext) {
+      return extractPhase2Seed(parser, state, exec);
+    },
+    configurable: true,
+    enumerable: false,
+  });
   // Lazily forward placeholder from inner parser to avoid eagerly
   // evaluating derived value parser factories at construction time.
   if ("placeholder" in parser) {
@@ -12022,6 +13141,44 @@ export function conditional(
     };
   };
 
+  const getConditionalBranchSeedSync = (
+    currentState: ConditionalState<string>,
+    branchParser: Parser<"sync", unknown, unknown>,
+    branchState: unknown,
+    exec?: ExecutionContext,
+  ) => {
+    const branchExec = withChildExecPath(exec, "_branch");
+    const annotatedState = getAnnotatedChildState(
+      currentState,
+      branchState,
+      branchParser,
+    );
+    return extractOrCompletePhase2SeedSync(
+      branchParser,
+      annotatedState,
+      branchExec,
+    );
+  };
+
+  const getConditionalBranchSeedAsync = async (
+    currentState: ConditionalState<string>,
+    branchParser: Parser<Mode, unknown, unknown>,
+    branchState: unknown,
+    exec?: ExecutionContext,
+  ) => {
+    const branchExec = withChildExecPath(exec, "_branch");
+    const annotatedState = getAnnotatedChildState(
+      currentState,
+      branchState,
+      branchParser,
+    );
+    return await extractOrCompletePhase2SeedAsync(
+      branchParser,
+      annotatedState,
+      branchExec,
+    );
+  };
+
   // Sync suggest implementation
   function* suggestSync(
     context: ParserContext<ConditionalState<string>>,
@@ -12403,6 +13560,148 @@ export function conditional(
         return completeAsync(state, exec);
       }
       return completeSync(state, exec);
+    },
+    [extractPhase2SeedKey](
+      state: ConditionalState<string>,
+      exec?: ExecutionContext,
+    ) {
+      return dispatchByMode(
+        combinedMode,
+        () => {
+          const syncDiscriminator = discriminator as Parser<
+            "sync",
+            string,
+            unknown
+          >;
+          const syncDefaultBranch = defaultBranch as
+            | Parser<"sync", unknown, unknown>
+            | undefined;
+          const syncBranches = branches as Record<
+            string,
+            Parser<"sync", unknown, unknown>
+          >;
+          const discriminatorExec = withChildExecPath(exec, "_discriminator");
+          if (state.selectedBranch === undefined) {
+            const discriminatorSeed = completeOrExtractPhase2Seed(
+              syncDiscriminator,
+              getAnnotatedChildState(
+                state,
+                state.discriminatorState,
+                syncDiscriminator,
+              ),
+              discriminatorExec,
+            );
+            if (typeof discriminatorSeed?.value === "string") {
+              const branchParser = syncBranches[discriminatorSeed.value];
+              if (branchParser != null) {
+                const branchSeed = getConditionalBranchSeedSync(
+                  state,
+                  branchParser,
+                  branchParser.initialState,
+                  exec,
+                );
+                return combineTuplePhase2Seeds(discriminatorSeed, branchSeed);
+              }
+            }
+            if (syncDefaultBranch != null) {
+              const branchSeed = getConditionalBranchSeedSync(
+                state,
+                syncDefaultBranch,
+                state.branchState ?? syncDefaultBranch.initialState,
+                exec,
+              );
+              return combineTuplePhase2Seeds(null, branchSeed);
+            }
+            return combineTuplePhase2Seeds(discriminatorSeed, null);
+          }
+
+          const branchParser = state.selectedBranch.kind === "default"
+            ? syncDefaultBranch!
+            : syncBranches[state.selectedBranch.key];
+          const branchSeed = getConditionalBranchSeedSync(
+            state,
+            branchParser,
+            state.branchState ?? branchParser.initialState,
+            exec,
+          );
+          const discriminatorSeed = state.selectedBranch.kind === "default"
+            ? null
+            : state.discriminatorValue != null &&
+                state.discriminatorValue === state.selectedBranch.key
+            ? { value: state.discriminatorValue }
+            : completeOrExtractPhase2Seed(
+              syncDiscriminator,
+              getAnnotatedChildState(
+                state,
+                state.discriminatorState,
+                syncDiscriminator,
+              ),
+              discriminatorExec,
+            ) ?? { value: state.selectedBranch.key };
+          return combineTuplePhase2Seeds(discriminatorSeed, branchSeed);
+        },
+        async () => {
+          const discriminatorExec = withChildExecPath(exec, "_discriminator");
+          if (state.selectedBranch === undefined) {
+            const discriminatorSeed = await completeOrExtractPhase2Seed(
+              discriminator,
+              getAnnotatedChildState(
+                state,
+                state.discriminatorState,
+                discriminator,
+              ),
+              discriminatorExec,
+            );
+            if (typeof discriminatorSeed?.value === "string") {
+              const branchParser = branches[discriminatorSeed.value];
+              if (branchParser != null) {
+                const branchSeed = await getConditionalBranchSeedAsync(
+                  state,
+                  branchParser,
+                  branchParser.initialState,
+                  exec,
+                );
+                return combineTuplePhase2Seeds(discriminatorSeed, branchSeed);
+              }
+            }
+            if (defaultBranch != null) {
+              const branchSeed = await getConditionalBranchSeedAsync(
+                state,
+                defaultBranch,
+                state.branchState ?? defaultBranch.initialState,
+                exec,
+              );
+              return combineTuplePhase2Seeds(null, branchSeed);
+            }
+            return combineTuplePhase2Seeds(discriminatorSeed, null);
+          }
+
+          const branchParser = state.selectedBranch.kind === "default"
+            ? defaultBranch!
+            : branches[state.selectedBranch.key];
+          const branchSeed = await getConditionalBranchSeedAsync(
+            state,
+            branchParser,
+            state.branchState ?? branchParser.initialState,
+            exec,
+          );
+          const discriminatorSeed = state.selectedBranch.kind === "default"
+            ? null
+            : state.discriminatorValue != null &&
+                state.discriminatorValue === state.selectedBranch.key
+            ? { value: state.discriminatorValue }
+            : await completeOrExtractPhase2Seed(
+              discriminator,
+              getAnnotatedChildState(
+                state,
+                state.discriminatorState,
+                discriminator,
+              ),
+              discriminatorExec,
+            ) ?? { value: state.selectedBranch.key };
+          return combineTuplePhase2Seeds(discriminatorSeed, branchSeed);
+        },
+      );
     },
 
     suggest(context, prefix) {

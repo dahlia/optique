@@ -18,6 +18,10 @@ import {
   dispatchIterableByMode,
   wrapForMode,
 } from "./mode-dispatch.ts";
+import {
+  completeOrExtractPhase2Seed,
+  extractPhase2SeedKey,
+} from "./phase2-seed.ts";
 import type { TraceEntry } from "./input-trace.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import { validateCommandNames, validateOptionNames } from "./validate.ts";
@@ -2729,6 +2733,67 @@ export function command<M extends Mode, T, TState>(
         error: options.errors?.invalidState ??
           message`Invalid command state during completion.`,
       };
+    },
+    [extractPhase2SeedKey](
+      state: CommandState<TState>,
+      exec?: ExecutionContext,
+    ) {
+      if (typeof state === "undefined") {
+        return wrapForMode(parser.$mode, null);
+      }
+      if (state[0] === "matched") {
+        const childExec = withChildExecPath(exec, name);
+        const childContext = {
+          buffer: [],
+          optionsTerminated: false,
+          usage: parser.usage,
+          state: parser.initialState,
+          ...(childExec != null
+            ? {
+              exec: childExec,
+              trace: childExec.trace,
+              dependencyRegistry: childExec.dependencyRegistry,
+            }
+            : {}),
+        };
+        return dispatchByMode(
+          parser.$mode,
+          () => {
+            const parseResult = syncInnerParser.parse(childContext);
+            const nextExec = parseResult.success
+              ? mergeChildExec(childExec, parseResult.next.exec)
+              : childExec;
+            return completeOrExtractPhase2Seed(
+              syncInnerParser,
+              parseResult.success
+                ? parseResult.next.state
+                : syncInnerParser.initialState,
+              nextExec,
+            );
+          },
+          async () => {
+            const parseResult = await asyncInnerParser.parse(childContext);
+            const nextExec = parseResult.success
+              ? mergeChildExec(childExec, parseResult.next.exec)
+              : childExec;
+            return await completeOrExtractPhase2Seed(
+              asyncInnerParser,
+              parseResult.success
+                ? parseResult.next.state
+                : parser.initialState,
+              nextExec,
+            );
+          },
+        );
+      }
+      if (state[0] === "parsing") {
+        return completeOrExtractPhase2Seed(
+          parser,
+          state[1],
+          withChildExecPath(exec, name),
+        );
+      }
+      return wrapForMode(parser.$mode, null);
     },
     suggest(
       context: ParserContext<CommandState<TState>>,

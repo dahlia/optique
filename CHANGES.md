@@ -200,6 +200,16 @@ To be released.
     for `bindConfig(fail<T>(), { … })` when a value should come only from a
     config file and has no corresponding CLI flag.  [[#120]]
 
+ -  Fixed `runWith()`, `runWithSync()`, and the higher-level `run()` helpers
+    aborting two-phase context collection too early when the first pass had
+    already parsed enough data to identify context inputs but still did not
+    complete successfully.  Dynamic contexts now receive a best-effort
+    first-pass value extracted from parser state in that case, so
+    compositions like `bindConfig(fail<T>(), …)` can still resolve
+    config-only required values.  Deferred or otherwise unresolved fields in
+    that phase-two value may be `undefined`.  Phase two is still skipped
+    when no usable first-pass seed exists.  [[#180], [#780]]
+
  -  Expanded `or()`'s fully inferred overloads from 10 to 15 parser
     arguments, so large alternative sets keep precise union inference without
     collapsing to `unknown` at 11+ arguments.  [[#142], [#143]]
@@ -1284,6 +1294,7 @@ To be released.
 [#157]: https://github.com/dahlia/optique/issues/157
 [#177]: https://github.com/dahlia/optique/issues/177
 [#178]: https://github.com/dahlia/optique/issues/178
+[#180]: https://github.com/dahlia/optique/issues/180
 [#186]: https://github.com/dahlia/optique/issues/186
 [#200]: https://github.com/dahlia/optique/issues/200
 [#223]: https://github.com/dahlia/optique/issues/223
@@ -1584,6 +1595,7 @@ To be released.
 [#777]: https://github.com/dahlia/optique/pull/777
 [#778]: https://github.com/dahlia/optique/pull/778
 [#779]: https://github.com/dahlia/optique/pull/779
+[#780]: https://github.com/dahlia/optique/pull/780
 
 ### @optique/config
 

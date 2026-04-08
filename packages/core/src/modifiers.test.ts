@@ -4,6 +4,7 @@ import {
   getAnnotations,
   injectAnnotations,
 } from "@optique/core/annotations";
+import { injectAnnotations as injectAnnotationsLocal } from "./annotations.ts";
 import {
   createDependencySourceState,
   createPendingDependencySourceState,
@@ -28,6 +29,11 @@ import {
   withDefault,
   WithDefaultError,
 } from "@optique/core/modifiers";
+import { map as mapLocal, multiple as multipleLocal } from "./modifiers.ts";
+import {
+  completeOrExtractPhase2Seed,
+  extractPhase2SeedKey,
+} from "./phase2-seed.ts";
 import { createDependencyRuntimeContext } from "./dependency-runtime.ts";
 import {
   parse,
@@ -7918,6 +7924,132 @@ describe("multiple() dependency source extraction", () => {
     ]);
     assert.deepEqual(result, { success: true, value: "prod" });
     assert.deepEqual(visited, [latest, earlier]);
+  });
+});
+
+describe("multiple() phase-two seed extraction", () => {
+  it("unwraps injected annotation wrappers before extracting item seeds", () => {
+    const marker = Symbol.for("@test/multiple-phase-two-seed");
+    const child: Parser<"sync", string, string> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete() {
+        return { success: false as const, error: message`Missing item.` };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    Object.defineProperty(child, extractPhase2SeedKey, {
+      value(state: string | object) {
+        return typeof state === "string" ? { value: state } : null;
+      },
+    });
+
+    const wrappedItem = injectAnnotationsLocal("optique.json", {
+      [marker]: true,
+    });
+    const seed = completeOrExtractPhase2Seed(
+      multipleLocal(child, { min: 1 }),
+      [wrappedItem],
+    );
+
+    assert.deepEqual(seed, { value: ["optique.json"] });
+  });
+});
+
+describe("withDefault() phase-two seed extraction", () => {
+  it("preserves default-only seeds", () => {
+    const seed = completeOrExtractPhase2Seed(
+      withDefault(option("--name", string()), "fallback"),
+      undefined,
+    );
+
+    assert.deepEqual(seed, { value: "fallback" });
+  });
+});
+
+describe("map() phase-two seed extraction", () => {
+  function createExtractOnlyParser(
+    seed:
+      | { readonly value: number; readonly deferred?: true }
+      | null,
+  ): Parser<"sync", number, number> {
+    const parser: Parser<"sync", number, number> = {
+      $mode: "sync",
+      $valueType: [] as readonly number[],
+      $stateType: [] as readonly number[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: 0,
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete() {
+        return { success: false as const, error: message`Missing value.` };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    Object.defineProperty(parser, extractPhase2SeedKey, {
+      value() {
+        return seed;
+      },
+    });
+    return parser;
+  }
+
+  it("propagates non-deferred transform failures", () => {
+    const parser = mapLocal(
+      createExtractOnlyParser({ value: 1 }),
+      (_value) => {
+        throw new Error("Seed transform boom.");
+      },
+    );
+
+    assert.throws(
+      () => completeOrExtractPhase2Seed(parser, 1),
+      /Seed transform boom\./,
+    );
+  });
+
+  it("keeps deferred transform failures as placeholders", () => {
+    const parser = mapLocal(
+      createExtractOnlyParser({ value: 1, deferred: true }),
+      (_value) => {
+        throw new Error("Deferred transform boom.");
+      },
+    );
+
+    assert.deepEqual(
+      completeOrExtractPhase2Seed(parser, 1),
+      {
+        value: undefined,
+        deferred: true,
+      },
+    );
   });
 });
 

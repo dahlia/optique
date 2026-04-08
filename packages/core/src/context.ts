@@ -144,9 +144,14 @@ export interface SourceContext<TRequiredOptions = void> {
    *
    * 1. *First call*: `parsed` is `undefined`. Static contexts should return
    *    their annotations, while dynamic contexts should return an empty object.
-   * 2. *Second call*: `parsed` contains the result from the first parse pass.
-   *    Dynamic contexts can use this to load external data (e.g., reading
-   *    a config file whose path was determined in the first pass).
+   * 2. *Second call*: `parsed` contains the first pass result, or a
+   *    best-effort partial value extracted from parser state when the first
+   *    pass reached a usable intermediate state but still did not complete
+   *    successfully. Dynamic contexts can use this to load external data
+   *    (e.g., reading a config file whose path was determined in the first
+   *    pass). Deferred or otherwise unresolved fields may be `undefined`.
+   *    If the runner cannot extract a usable value at all, this second call
+   *    is skipped and the original parse failure is reported instead.
    *
    * @param parsed Optional parsed result from a previous parse pass.
    *               Static contexts can ignore this parameter.

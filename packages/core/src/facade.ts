@@ -28,6 +28,8 @@ import {
 import { multiple, optional, withDefault } from "./modifiers.ts";
 import type { Program } from "./program.ts";
 import {
+  createParserContext,
+  type ExecutionContext,
   getDocPage,
   type InferMode,
   type InferValue,
@@ -42,6 +44,9 @@ import {
   suggestAsync,
 } from "./parser.ts";
 import { dispatchByMode } from "./mode-dispatch.ts";
+import { createDependencyRuntimeContext } from "./dependency-runtime.ts";
+import { createInputTrace } from "./input-trace.ts";
+import { completeOrExtractPhase2Seed } from "./phase2-seed.ts";
 import { argument, command, constant, flag, option } from "./primitives.ts";
 import {
   extractCommandNames,
@@ -232,6 +237,122 @@ function withPreparedParsedForContext<T>(
   run: (prepared: unknown) => T,
 ): T {
   return run(finalizeParsedForContext(context, preparedParsed));
+}
+
+function isBufferUnchanged(
+  previous: readonly string[],
+  current: readonly string[],
+): boolean {
+  return (
+    current.length > 0 &&
+    current.length === previous.length &&
+    current.every((item, i) => item === previous[i])
+  );
+}
+
+function createPhase2SeedExec(
+  parser: Parser<Mode, unknown, unknown>,
+  context: {
+    readonly trace?: ReturnType<typeof createInputTrace>;
+    readonly exec?: ExecutionContext;
+  },
+): ExecutionContext {
+  const exec: ExecutionContext = {
+    usage: parser.usage,
+    phase: "parse",
+    path: [],
+    trace: createInputTrace(),
+  };
+  const runtime = createDependencyRuntimeContext();
+  return {
+    ...exec,
+    phase: "complete",
+    dependencyRuntime: runtime,
+    dependencyRegistry: runtime.registry,
+    trace: context.exec?.trace ?? context.trace ?? exec.trace,
+  };
+}
+
+function createPhase2SeedContext(
+  parser: Parser<Mode, unknown, unknown>,
+  args: readonly string[],
+) {
+  const exec: ExecutionContext = {
+    usage: parser.usage,
+    phase: "parse",
+    path: [],
+    trace: createInputTrace(),
+  };
+  return createParserContext(
+    {
+      buffer: args,
+      state: parser.initialState,
+      optionsTerminated: false,
+    },
+    exec,
+  );
+}
+
+function extractPhase2SeedSync(
+  parser: Parser<"sync", unknown, unknown>,
+  args: readonly string[],
+) {
+  let context = createPhase2SeedContext(parser, args);
+  do {
+    const result = parser.parse(context);
+    if (!result.success) {
+      return completeOrExtractPhase2Seed(
+        parser,
+        context.state,
+        createPhase2SeedExec(parser, context),
+      );
+    }
+    const previousBuffer = context.buffer;
+    context = result.next;
+    if (isBufferUnchanged(previousBuffer, context.buffer)) {
+      return completeOrExtractPhase2Seed(
+        parser,
+        context.state,
+        createPhase2SeedExec(parser, context),
+      );
+    }
+  } while (context.buffer.length > 0);
+  return completeOrExtractPhase2Seed(
+    parser,
+    context.state,
+    createPhase2SeedExec(parser, context),
+  );
+}
+
+async function extractPhase2SeedAsync(
+  parser: Parser<Mode, unknown, unknown>,
+  args: readonly string[],
+) {
+  let context = createPhase2SeedContext(parser, args);
+  do {
+    const result = await parser.parse(context);
+    if (!result.success) {
+      return await completeOrExtractPhase2Seed(
+        parser,
+        context.state,
+        createPhase2SeedExec(parser, context),
+      );
+    }
+    const previousBuffer = context.buffer;
+    context = result.next;
+    if (isBufferUnchanged(previousBuffer, context.buffer)) {
+      return await completeOrExtractPhase2Seed(
+        parser,
+        context.state,
+        createPhase2SeedExec(parser, context),
+      );
+    }
+  } while (context.buffer.length > 0);
+  return await completeOrExtractPhase2Seed(
+    parser,
+    context.state,
+    createPhase2SeedExec(parser, context),
+  );
 }
 
 /**
@@ -3067,44 +3188,20 @@ async function runWithBody<
     phase1Annotations,
   );
 
-  let firstPassResult: unknown;
-  let firstPassDeferred: true | undefined;
-  let firstPassDeferredKeys: DeferredMap | undefined;
-  let firstPassFailed = false;
-  try {
-    if (parser.$mode === "async") {
-      firstPassResult = await parseAsync(augmentedParser1, args);
-    } else {
-      firstPassResult = parseSync(
+  const firstPassSeed = await dispatchByMode(
+    parser.$mode,
+    () =>
+      extractPhase2SeedSync(
         augmentedParser1 as Parser<"sync", unknown, unknown>,
         args,
-      );
-    }
-
-    // Extract value and deferred metadata from result
-    if (
-      typeof firstPassResult === "object" && firstPassResult !== null &&
-      "success" in firstPassResult
-    ) {
-      const result = firstPassResult as
-        & Result<unknown>
-        & { deferred?: true; deferredKeys?: DeferredMap };
-      if (result.success) {
-        firstPassResult = result.value;
-        firstPassDeferred = result.deferred;
-        firstPassDeferredKeys = result.deferredKeys;
-      } else {
-        firstPassFailed = true;
-      }
-    }
-  } catch {
-    firstPassFailed = true;
-  }
+      ),
+    () => extractPhase2SeedAsync(augmentedParser1, args),
+  );
 
   // First pass failed - run through runParser for proper error handling.
   // This is done outside the try-catch to prevent the catch block from
   // re-invoking runParser when it throws (which caused double error output).
-  if (firstPassFailed) {
+  if (firstPassSeed == null) {
     const augmentedParser = injectAnnotationsIntoParser(
       parser,
       phase1Annotations,
@@ -3129,10 +3226,10 @@ async function runWithBody<
   // Phase 2: Collect annotations with parsed result
   const { annotationsList: phase2AnnotationsList } = await collectAnnotations(
     contexts,
-    firstPassResult,
+    firstPassSeed.value,
     ctxOptions,
-    firstPassDeferred,
-    firstPassDeferredKeys,
+    firstPassSeed.deferred,
+    firstPassSeed.deferredKeys,
   );
 
   // Final parse with merged annotations
@@ -3167,13 +3264,19 @@ async function runWithBody<
  *
  * 1. *Phase 1*: Collect annotations from all contexts (static contexts return
  *    their data, dynamic contexts may return empty).
- * 2. *First parse*: Parse with Phase 1 annotations.
+ * 2. *First parse*: Parse with Phase 1 annotations. If that pass finishes
+ *    successfully, its value becomes the phase-two input. If the parser
+ *    reaches a usable intermediate state but still does not complete
+ *    successfully, the runner extracts a best-effort seed from that state
+ *    instead.
  * 3. *Phase 2*: Call `getAnnotations(parsed)` on all contexts with the first
- *    parse result.
+ *    pass value. Deferred or otherwise unresolved fields in `parsed` may be
+ *    `undefined`.
  * 4. *Second parse*: Parse again with merged annotations from both phases.
  *
- * If all contexts are static (no dynamic contexts), the second parse is skipped
- * for optimization.
+ * If all contexts are static (no dynamic contexts), the second parse is
+ * skipped for optimization. Phase 2 is also skipped when the first pass does
+ * not yield any usable seed at all.
  *
  * @template TParser The parser type.
  * @template THelp Return type when help is shown.
@@ -3313,33 +3416,22 @@ function runWithSyncBody<
     phase1Annotations,
   );
 
-  let firstPassResult: unknown;
-  let firstPassDeferred: true | undefined;
-  let firstPassDeferredKeys: DeferredMap | undefined;
-  try {
-    const result = parseSync(augmentedParser1, args) as
-      & { success: boolean; value?: unknown; error?: unknown }
-      & { deferred?: true; deferredKeys?: DeferredMap };
-    if (result.success) {
-      firstPassResult = result.value;
-      firstPassDeferred = result.deferred;
-      firstPassDeferredKeys = result.deferredKeys;
-    } else {
-      // First pass failed - run through runParser for proper error handling
-      return runParser(augmentedParser1, programName, args, options);
-    }
-  } catch {
-    // First pass threw - run through runParser for proper error handling
-    return runParser(augmentedParser1, programName, args, options);
+  const firstPassSeed = extractPhase2SeedSync(augmentedParser1, args);
+  if (firstPassSeed == null) {
+    const augmentedParser = injectAnnotationsIntoParser(
+      parser,
+      phase1Annotations,
+    );
+    return runParser(augmentedParser, programName, args, options);
   }
 
   // Phase 2: Collect annotations with parsed result
   const { annotationsList: phase2AnnotationsList } = collectAnnotationsSync(
     contexts,
-    firstPassResult,
+    firstPassSeed.value,
     ctxOptions,
-    firstPassDeferred,
-    firstPassDeferredKeys,
+    firstPassSeed.deferred,
+    firstPassSeed.deferredKeys,
   );
 
   // Final parse with merged annotations
@@ -3359,7 +3451,9 @@ function runWithSyncBody<
  * Runs a synchronous parser with multiple source contexts.
  *
  * This is the sync-only variant of {@link runWith}. All contexts must return
- * annotations synchronously (not Promises).
+ * annotations synchronously (not Promises). It uses the same two-phase
+ * best-effort seed extraction as {@link runWith} when dynamic contexts are
+ * present.
  *
  * @template TParser The sync parser type.
  * @template THelp Return type when help is shown.
@@ -3489,15 +3583,36 @@ function injectAnnotationsIntoParser<
   parser: Parser<M, TValue, TState>,
   annotations: Annotations,
 ): Parser<M, TValue, TState> {
-  // Create a new initial state with annotations
   const newInitialState = injectAnnotations(
     parser.initialState,
     annotations,
   ) as TState;
-
-  // Return a parser with the new initial state
-  return {
-    ...parser,
-    initialState: newInitialState,
+  const descriptors: PropertyDescriptorMap = {
+    ...Object.getOwnPropertyDescriptors(parser),
   };
+  const initialState = descriptors.initialState;
+  descriptors.initialState = initialState == null
+    ? {
+      value: newInitialState,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    }
+    : "get" in initialState || "set" in initialState
+    ? {
+      value: newInitialState,
+      writable: true,
+      enumerable: initialState.enumerable ?? true,
+      configurable: initialState.configurable ?? true,
+    }
+    : {
+      value: newInitialState,
+      writable: initialState.writable ?? true,
+      enumerable: initialState.enumerable ?? true,
+      configurable: initialState.configurable ?? true,
+    };
+  return Object.create(
+    Object.getPrototypeOf(parser),
+    descriptors,
+  ) as Parser<M, TValue, TState>;
 }

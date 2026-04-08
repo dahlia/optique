@@ -15,6 +15,11 @@ import {
   wrapForMode,
 } from "./mode-dispatch.ts";
 import {
+  completeOrExtractPhase2Seed,
+  extractPhase2Seed,
+  extractPhase2SeedKey,
+} from "./phase2-seed.ts";
+import {
   defineInheritedAnnotationParser,
   defineSourceBindingOnlyAnnotationCompletionParser,
   unmatchedNonCliDependencySourceStateMarker,
@@ -157,6 +162,28 @@ function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
     (typeof value === "object" || typeof value === "function") &&
     "then" in value &&
     typeof (value as Record<string, unknown>).then === "function";
+}
+
+function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
+  parser: Parser<M, TValue, TState>,
+  state: [TState] | TState | undefined,
+  exec?: ExecutionContext,
+): ModeValue<M, import("./phase2-seed.ts").Phase2Seed<TValue> | null> {
+  if (
+    !Array.isArray(state) &&
+    !(state != null && typeof state === "object")
+  ) {
+    return wrapForMode(parser.$mode, null);
+  }
+  return completeOrExtractPhase2Seed(
+    parser,
+    normalizeOptionalLikeInnerState(
+      state,
+      parser.initialState,
+      parser,
+    ),
+    exec,
+  );
 }
 
 /**
@@ -487,6 +514,12 @@ export function optional<M extends Mode, TValue, TState>(
         (parser.dependencyMetadata?.source != null
           ? [{ path, parser, state: innerState }]
           : []);
+    },
+    [extractPhase2SeedKey](
+      state: [TState] | undefined,
+      exec?: ExecutionContext,
+    ) {
+      return extractOptionalLikePhase2Seed(parser, state, exec);
     },
     parse(context: ParserContext<[TState] | undefined>) {
       return dispatchByMode(
@@ -899,6 +932,12 @@ export function withDefault<
         (parser.dependencyMetadata?.source != null
           ? [{ path, parser, state: innerState }]
           : []);
+    },
+    [extractPhase2SeedKey](
+      state: [TState] | undefined,
+      exec?: ExecutionContext,
+    ) {
+      return extractOptionalLikePhase2Seed(parser, state, exec);
     },
     parse(context: ParserContext<[TState] | undefined>) {
       return dispatchByMode(
@@ -1336,6 +1375,29 @@ export function map<M extends Mode, T, U, TState>(
     ...parser,
     $valueType: [] as readonly U[],
     complete,
+    [extractPhase2SeedKey](state: TState, exec?: ExecutionContext) {
+      return mapModeValue(
+        parser.$mode,
+        completeOrExtractPhase2Seed(parser, state, exec),
+        (seed) => {
+          if (seed == null) return null;
+          if (seed.deferred) {
+            try {
+              return {
+                value: transform(seed.value as T),
+                deferred: true as const,
+              };
+            } catch {
+              return {
+                value: undefined as unknown as U,
+                deferred: true as const,
+              };
+            }
+          }
+          return { value: transform(seed.value as T) };
+        },
+      );
+    },
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
       if (mappedParser.dependencyMetadata?.source != null) {
         return [{ path, parser: mappedParser, state }];
@@ -1590,6 +1652,56 @@ export function multiple<M extends Mode, TValue, TState>(
         ...context,
         state: unwrapInjectedWrapper(context.state),
       });
+    }
+  };
+  const extractPhase2SeedSyncWithUnwrappedFallback = (
+    state: TState,
+    exec?: ExecutionContext,
+  ) => {
+    try {
+      const seed = completeOrExtractPhase2Seed(syncParser, state, exec);
+      if (seed == null && isInjectedAnnotationWrapper(state)) {
+        return completeOrExtractPhase2Seed(
+          syncParser,
+          unwrapInjectedWrapper(state),
+          exec,
+        );
+      }
+      return seed;
+    } catch (error) {
+      if (!isInjectedAnnotationWrapper(state)) {
+        throw error;
+      }
+      return completeOrExtractPhase2Seed(
+        syncParser,
+        unwrapInjectedWrapper(state),
+        exec,
+      );
+    }
+  };
+  const extractPhase2SeedAsyncWithUnwrappedFallback = async (
+    state: TState,
+    exec?: ExecutionContext,
+  ) => {
+    try {
+      const seed = await completeOrExtractPhase2Seed(parser, state, exec);
+      if (seed == null && isInjectedAnnotationWrapper(state)) {
+        return await completeOrExtractPhase2Seed(
+          parser,
+          unwrapInjectedWrapper(state),
+          exec,
+        );
+      }
+      return seed;
+    } catch (error) {
+      if (!isInjectedAnnotationWrapper(state)) {
+        throw error;
+      }
+      return await completeOrExtractPhase2Seed(
+        parser,
+        unwrapInjectedWrapper(state),
+        exec,
+      );
     }
   };
   const getInnerSuggestRuntimeNodes = (
@@ -2018,6 +2130,89 @@ export function multiple<M extends Mode, TValue, TState>(
             }
           }
           return validateMultipleResult(values, deferredIndices, hasDeferred);
+        },
+      );
+    },
+    [extractPhase2SeedKey](state: MultipleState, exec?: ExecutionContext) {
+      return dispatchByMode(
+        parser.$mode,
+        () => {
+          const values: TValue[] = [];
+          const deferredIndices = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (let i = 0; i < state.length; i++) {
+            const seed = extractPhase2SeedSyncWithUnwrappedFallback(
+              state[i] as TState,
+              withChildExecPath(exec, i),
+            );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            values[i] = seed.value;
+            if (seed.deferred) {
+              if (seed.deferredKeys) {
+                deferredIndices.set(i, seed.deferredKeys);
+              } else if (
+                seed.value == null ||
+                typeof seed.value !== "object"
+              ) {
+                deferredIndices.set(i, null);
+              } else {
+                hasDeferred = true;
+              }
+            }
+          }
+          if (!hasAnySeed) return null;
+          return {
+            value: values as readonly TValue[],
+            ...(deferredIndices.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredIndices.size > 0
+                  ? { deferredKeys: deferredIndices as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+        async () => {
+          const values: TValue[] = [];
+          const deferredIndices = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (let i = 0; i < state.length; i++) {
+            const seed = await extractPhase2SeedAsyncWithUnwrappedFallback(
+              state[i] as TState,
+              withChildExecPath(exec, i),
+            );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            values[i] = seed.value;
+            if (seed.deferred) {
+              if (seed.deferredKeys) {
+                deferredIndices.set(i, seed.deferredKeys);
+              } else if (
+                seed.value == null ||
+                typeof seed.value !== "object"
+              ) {
+                deferredIndices.set(i, null);
+              } else {
+                hasDeferred = true;
+              }
+            }
+          }
+          if (!hasAnySeed) return null;
+          return {
+            value: values as readonly TValue[],
+            ...(deferredIndices.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredIndices.size > 0
+                  ? { deferredKeys: deferredIndices as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
         },
       );
     },
@@ -2614,6 +2809,13 @@ export function nonEmpty<M extends Mode, T, TState>(
       enumerable: false,
     });
   }
+  Object.defineProperty(nonEmptyParser, extractPhase2SeedKey, {
+    value(state: TState, exec?: ExecutionContext) {
+      return extractPhase2Seed(parser, state, exec);
+    },
+    configurable: true,
+    enumerable: false,
+  });
   // Forward value normalization as non-enumerable.
   if (typeof parser.normalizeValue === "function") {
     Object.defineProperty(nonEmptyParser, "normalizeValue", {
