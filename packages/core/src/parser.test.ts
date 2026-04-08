@@ -18,7 +18,9 @@ import {
   getDocPageAsync,
   getDocPageSync,
   parse,
+  parseAsync,
   type Parser,
+  parseSync,
   suggestAsync,
   suggestSync,
 } from "@optique/core/parser";
@@ -30,7 +32,11 @@ import {
   option,
 } from "@optique/core/primitives";
 import { dependency, deriveFromSync } from "@optique/core/dependency";
-import { getAnnotations, type ParseOptions } from "@optique/core/annotations";
+import {
+  getAnnotations,
+  isInjectedAnnotationWrapper,
+  type ParseOptions,
+} from "@optique/core/annotations";
 import type { Usage } from "@optique/core/usage";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { type DocEntry, formatDocPage } from "@optique/core/doc";
@@ -3222,9 +3228,7 @@ describe("Annotations system", () => {
       return { parser, observations };
     }
 
-    it("should not wrap undefined initial state in parseSync()", async () => {
-      const { parseSync } = await import("./parser.ts");
-      const { isInjectedAnnotationWrapper } = await import("./annotations.ts");
+    it("should not wrap undefined initial state in parseSync()", () => {
       const { parser, observations } = makeObservingParser(undefined);
       const result = parseSync(parser, [], { annotations: {} });
       assert.ok(result.success);
@@ -3237,9 +3241,7 @@ describe("Annotations system", () => {
       }
     });
 
-    it("should not wrap null initial state in parseSync()", async () => {
-      const { parseSync } = await import("./parser.ts");
-      const { isInjectedAnnotationWrapper } = await import("./annotations.ts");
+    it("should not wrap null initial state in parseSync()", () => {
       const { parser, observations } = makeObservingParser(null);
       const result = parseSync(parser, [], { annotations: {} });
       assert.ok(result.success);
@@ -3251,9 +3253,7 @@ describe("Annotations system", () => {
       }
     });
 
-    it("should not wrap primitive initial state in parseSync()", async () => {
-      const { parseSync } = await import("./parser.ts");
-      const { isInjectedAnnotationWrapper } = await import("./annotations.ts");
+    it("should not wrap primitive initial state in parseSync()", () => {
       const { parser, observations } = makeObservingParser(42);
       const result = parseSync(parser, [], { annotations: {} });
       assert.ok(result.success);
@@ -3343,8 +3343,6 @@ describe("Annotations system", () => {
     });
 
     it("should not wrap state in parseAsync()", async () => {
-      const { parseAsync } = await import("./parser.ts");
-      const { isInjectedAnnotationWrapper } = await import("./annotations.ts");
       const { parser, observations } = makeObservingParser(undefined);
       const result = await parseAsync(parser, [], { annotations: {} });
       assert.ok(result.success);
@@ -3356,8 +3354,7 @@ describe("Annotations system", () => {
       }
     });
 
-    it("should not wrap state in suggestSync()", async () => {
-      const { isInjectedAnnotationWrapper } = await import("./annotations.ts");
+    it("should not wrap state in suggestSync()", () => {
       const { parser, observations } = makeObservingParser(undefined);
       const suggestions = suggestSync(parser, [""], { annotations: {} });
       assert.deepEqual(suggestions, [{ kind: "literal", text: "x" }]);
@@ -3369,7 +3366,6 @@ describe("Annotations system", () => {
     });
 
     it("should not wrap state in suggestAsync()", async () => {
-      const { isInjectedAnnotationWrapper } = await import("./annotations.ts");
       const { parser, observations } = makeObservingParser(undefined);
       const suggestions = await suggestAsync(parser, [""], {
         annotations: {},
@@ -3382,8 +3378,7 @@ describe("Annotations system", () => {
       }
     });
 
-    it("should not wrap state in getDocPage()", async () => {
-      const { isInjectedAnnotationWrapper } = await import("./annotations.ts");
+    it("should not wrap state in getDocPage()", () => {
       const { parser, observations } = makeObservingParser(undefined);
       const doc = getDocPage(parser, { annotations: {} });
       assert.ok(doc !== undefined);
@@ -3394,8 +3389,7 @@ describe("Annotations system", () => {
       }
     });
 
-    it("should not wrap state in getDocPageSync()", async () => {
-      const { isInjectedAnnotationWrapper } = await import("./annotations.ts");
+    it("should not wrap state in getDocPageSync()", () => {
       const { parser, observations } = makeObservingParser(undefined);
       const doc = getDocPageSync(parser, { annotations: {} });
       assert.ok(doc !== undefined);
@@ -3406,8 +3400,7 @@ describe("Annotations system", () => {
       }
     });
 
-    it("should treat string-keyed annotations as a no-op in parse()", async () => {
-      const { isInjectedAnnotationWrapper } = await import("./annotations.ts");
+    it("should treat string-keyed annotations as a no-op in parse()", () => {
       const { parser, observations } = makeObservingParser(undefined);
       // JavaScript callers can construct string-keyed records even though the
       // `Annotations` type only permits symbols.  Such records have no own
@@ -3430,7 +3423,6 @@ describe("Annotations system", () => {
     });
 
     it("should not wrap state in getDocPageAsync()", async () => {
-      const { isInjectedAnnotationWrapper } = await import("./annotations.ts");
       const { parser, observations } = makeObservingParser(undefined);
       const doc = await getDocPageAsync(parser, { annotations: {} });
       assert.ok(doc !== undefined);
