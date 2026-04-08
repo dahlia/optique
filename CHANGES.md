@@ -202,13 +202,13 @@ To be released.
 
  -  Fixed `runWith()`, `runWithSync()`, and the higher-level `run()` helpers
     aborting two-phase context collection too early when the first pass had
-    already parsed enough data to identify context inputs but still failed
-    during completion.  Dynamic contexts now receive a best-effort first-pass
-    value extracted from parser state in that case, so compositions like
-    `bindConfig(fail<T>(), …)` can still resolve config-only required values.
-    Deferred or otherwise unresolved fields in that phase-two value may be
-    `undefined`.  Phase two is still skipped when no usable first-pass seed
-    exists.  [[#180], [#780]]
+    already parsed enough data to identify context inputs but still did not
+    complete successfully.  Dynamic contexts now receive a best-effort
+    first-pass value extracted from parser state in that case, so
+    compositions like `bindConfig(fail<T>(), …)` can still resolve
+    config-only required values.  Deferred or otherwise unresolved fields in
+    that phase-two value may be `undefined`.  Phase two is still skipped
+    when no usable first-pass seed exists.  [[#180], [#780]]
 
  -  Expanded `or()`'s fully inferred overloads from 10 to 15 parser
     arguments, so large alternative sets keep precise union inference without

@@ -3262,9 +3262,10 @@ async function runWithBody<
  * 1. *Phase 1*: Collect annotations from all contexts (static contexts return
  *    their data, dynamic contexts may return empty).
  * 2. *First parse*: Parse with Phase 1 annotations. If that pass finishes
- *    successfully, its value becomes the phase-two input. If completion fails
- *    after building a usable intermediate state, the runner extracts a
- *    best-effort seed from that state instead.
+ *    successfully, its value becomes the phase-two input. If the parser
+ *    reaches a usable intermediate state but still does not complete
+ *    successfully, the runner extracts a best-effort seed from that state
+ *    instead.
  * 3. *Phase 2*: Call `getAnnotations(parsed)` on all contexts with the first
  *    pass value. Deferred or otherwise unresolved fields in `parsed` may be
  *    `undefined`.
