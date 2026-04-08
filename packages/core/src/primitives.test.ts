@@ -7144,22 +7144,58 @@ describe("validateValue on primitives (#414)", () => {
       // yields `true` when the flag is present and `false` when it is
       // missing, so the accepted value domain is boolean.  The
       // attached validator must therefore return success for both
-      // `true` and `false` — there are no constraints to enforce.
-      if (typeof parser.validateValue === "function") {
-        const trueResult = parser.validateValue(true);
-        assert.ok(
-          trueResult && typeof trueResult === "object" &&
-            "success" in trueResult,
-        );
-        assert.ok(trueResult.success);
+      // `true` and `false`.  Hard-fail if the hook is missing so the
+      // #414 regression contract cannot silently disappear.
+      assert.ok(typeof parser.validateValue === "function");
+      const trueResult = parser.validateValue!(true);
+      assert.ok(
+        trueResult && typeof trueResult === "object" &&
+          "success" in trueResult,
+      );
+      assert.ok(trueResult.success);
 
-        const falseResult = parser.validateValue(false);
+      const falseResult = parser.validateValue!(false);
+      assert.ok(
+        falseResult && typeof falseResult === "object" &&
+          "success" in falseResult,
+      );
+      assert.ok(falseResult.success);
+    });
+
+    it("rejects non-boolean fallback values on a flag-form option", () => {
+      // bindEnv() / bindConfig() can feed values from `unknown` config /
+      // env sources into validateValue.  A non-boolean fallback would
+      // leak through as the parsed result even though the CLI parser
+      // can only ever produce a boolean for flag-form options.
+      // validateValue must reject such inputs with an option-scoped
+      // error.
+      const parser = option("-f");
+      assert.ok(typeof parser.validateValue === "function");
+
+      const stringResult = parser.validateValue!("yes" as never);
+      assert.ok(
+        stringResult && typeof stringResult === "object" &&
+          "success" in stringResult,
+      );
+      assert.ok(!stringResult.success);
+      if (!stringResult.success) {
+        const formatted = formatMessage(stringResult.error);
         assert.ok(
-          falseResult && typeof falseResult === "object" &&
-            "success" in falseResult,
+          formatted.includes("-f"),
+          `expected error to mention the option name, got: ${formatted}`,
         );
-        assert.ok(falseResult.success);
+        assert.ok(
+          formatted.toLowerCase().includes("boolean"),
+          `expected error to mention "boolean", got: ${formatted}`,
+        );
       }
+
+      const numberResult = parser.validateValue!(1 as never);
+      assert.ok(
+        numberResult && typeof numberResult === "object" &&
+          "success" in numberResult,
+      );
+      assert.ok(!numberResult.success);
     });
   });
 

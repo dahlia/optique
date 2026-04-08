@@ -1426,17 +1426,26 @@ export function option<M extends Mode, T>(
   if (valueParser == null) {
     // Flag-form option (no value parser): the runtime value is a plain
     // boolean — `true` when the flag is present and `false` when it is
-    // missing (see `option().complete()`).  There are no constraints to
-    // enforce in either case, so we attach a trivial validator that
-    // accepts any boolean.  Having *some* validator attached lets
-    // bindEnv(flag-form) / bindConfig(flag-form) forward validateValue
-    // through downstream wrappers without losing the hook.
+    // missing (see `option().complete()`).  There are no shape
+    // constraints to enforce, but fallback values from `bindEnv()` /
+    // `bindConfig()` originate in `unknown`-typed config / env sources
+    // and a non-boolean would otherwise leak through as the parsed
+    // result.  Reject non-booleans with an option-scoped error and
+    // accept any boolean unchanged.  Having *some* validator attached
+    // also lets bindEnv(flag-form) / bindConfig(flag-form) forward
+    // validateValue through downstream wrappers without losing the hook.
     Object.defineProperty(result, "validateValue", {
-      value(v: boolean): ModeValue<"sync", ValueParserResult<boolean>> {
-        return { success: true as const, value: v } as ModeValue<
-          "sync",
-          ValueParserResult<boolean>
-        >;
+      value(v: boolean): ModeValue<M, ValueParserResult<boolean>> {
+        if (typeof v !== "boolean") {
+          const actualType = v === null ? "null" : typeof v;
+          return wrapForMode(mode, {
+            success: false as const,
+            error: formatInvalidValueError(
+              message`Expected a boolean value, but received ${actualType}.`,
+            ),
+          });
+        }
+        return wrapForMode(mode, { success: true as const, value: v });
       },
       configurable: true,
       enumerable: false,
