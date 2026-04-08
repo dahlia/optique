@@ -523,6 +523,42 @@ export function bindEnv<
   return boundParser;
 }
 
+/**
+ * Resolves a `bindEnv()` fallback value with env > default > inner
+ * `complete()` priority, running each candidate through the inner
+ * parser's `validateValue()` hook when available so the inner CLI
+ * parser's constraints are enforced on fallback values (see issue
+ * #414).
+ *
+ * @param state The wrapper state, which may carry env annotations.
+ * @param options The binding options with lookup and default settings.
+ * @param mode The parser mode (`"sync"` or `"async"`), used to
+ *             dispatch env parsing and fallback validation.
+ * @param innerParser Optional wrapped parser.  When present, its
+ *                    `validateValue()` hook is used to re-validate
+ *                    fallback values and its `complete()` is
+ *                    delegated to as the last fallback.
+ * @param innerState Optional unwrapped inner state to pass through to
+ *                   `innerParser.complete()`.
+ * @param exec Optional execution context forwarded to
+ *             `innerParser.complete()`.
+ * @returns The resolved value as a mode-dependent result.
+ * @throws {Error} Propagates errors thrown by the env source callback
+ *                 (`sourceData.source(fullKey)`) while reading the
+ *                 environment variable.
+ * @throws {Error} Propagates errors thrown by
+ *                 `options.parser.parse(rawValue)` (sync or async)
+ *                 while parsing the raw env string into `TValue`.
+ * @throws {Error} Propagates errors thrown by
+ *                 `innerParser.validateValue()` while re-validating
+ *                 a successful env-sourced value or the configured
+ *                 `default` against the inner CLI parser's
+ *                 constraints.
+ * @throws {Error} Propagates errors thrown by `innerParser.complete()`
+ *                 when falling through to the inner parser (e.g.,
+ *                 `bindEnv(bindConfig(...))` with neither env nor
+ *                 default set).
+ */
 function getEnvOrDefault<M extends Mode, TValue>(
   state: unknown,
   options: BindEnvOptions<M, TValue>,
