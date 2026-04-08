@@ -22,7 +22,7 @@ To be released.
     resolved values.  `map()`, `or()`, `longestMatch()`, `merge()`, and
     `concat()` intentionally do not forward this method.  Used by
     `bindEnv()` and `bindConfig()` to enforce parser constraints on
-    fallback values.  [[#414]]
+    fallback values.  [[#414], [#777]]
 
  -  Added `provisional` field to the success variant of `ParserResult`.
     When `true`, it indicates that the parse succeeded tentatively: the
@@ -1554,6 +1554,7 @@ To be released.
 [#774]: https://github.com/dahlia/optique/pull/774
 [#775]: https://github.com/dahlia/optique/pull/775
 [#776]: https://github.com/dahlia/optique/pull/776
+[#777]: https://github.com/dahlia/optique/pull/777
 
 ### @optique/config
 
@@ -1572,7 +1573,7 @@ To be released.
     value parsers (`derive` / `deriveFrom`) are also exempt because
     their `format()` rebuilds from default dependency values.  This is
     a behavior change for any code that relied on constraint-violating
-    config values or defaults being accepted.  [[#414]]
+    config values or defaults being accepted.  [[#414], [#777]]
 
  -  Removed `configKey` symbol.  Each `ConfigContext` instance now stores
     its data under its own unique `id` symbol (i.e., `context.id`) so that
@@ -1729,7 +1730,7 @@ environment variable integration via source contexts.  [[#86], [#135]]
     (`derive` / `deriveFrom`) are also exempt because their `format()`
     rebuilds from default dependency values.  This is a behavior change
     for any code that relied on constraint-violating environment values
-    or defaults being accepted.  [[#414]]
+    or defaults being accepted.  [[#414], [#777]]
 
  -  Added `createEnvContext()` for creating static environment contexts with
     optional key prefixes and custom source functions.
