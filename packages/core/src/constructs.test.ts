@@ -13199,6 +13199,109 @@ describe("branch coverage: constructs.ts edge cases", () => {
     }
   });
 
+  describe(
+    "shared-buffer constructs preserve mapped dependency defaults",
+    () => {
+      it("preserves transformed defaults in sync mode", () => {
+        const modeSource = dependency(choice(["fast", "safe"] as const));
+        const mapped = map(
+          withDefault(option("--mode", modeSource), "fast" as const),
+          (value) => ({ type: value, enabled: true }),
+        );
+        const objectParser = object({ mode: mapped });
+        const mergeParser = merge(object({ mode: mapped }), object({}));
+        const tupleParser = tuple([mapped] as const);
+
+        const topLevel = parseSync(mapped, []);
+        assert.ok(topLevel.success);
+        if (topLevel.success) {
+          assert.deepEqual(topLevel.value, { type: "fast", enabled: true });
+        }
+
+        const objectResult = parseSync(objectParser, []);
+        assert.ok(objectResult.success);
+        if (objectResult.success) {
+          assert.deepEqual(objectResult.value, {
+            mode: { type: "fast", enabled: true },
+          });
+        }
+
+        const mergeResult = parseSync(mergeParser, []);
+        assert.ok(mergeResult.success);
+        if (mergeResult.success) {
+          assert.deepEqual(mergeResult.value, {
+            mode: { type: "fast", enabled: true },
+          });
+        }
+
+        const tupleResult = parseSync(tupleParser, []);
+        assert.ok(tupleResult.success);
+        if (tupleResult.success) {
+          assert.deepEqual(tupleResult.value, [
+            { type: "fast", enabled: true },
+          ]);
+        }
+
+        const cliControl = parseSync(objectParser, ["--mode", "safe"]);
+        assert.ok(cliControl.success);
+        if (cliControl.success) {
+          assert.deepEqual(cliControl.value, {
+            mode: { type: "safe", enabled: true },
+          });
+        }
+      });
+
+      it("preserves transformed defaults in async mode", async () => {
+        const modeSource = dependency(choice(["fast", "safe"] as const));
+        const mapped = map(
+          withDefault(option("--mode", modeSource), "fast" as const),
+          (value) => ({ type: value, enabled: true }),
+        );
+        const objectParser = object({ mode: mapped });
+        const mergeParser = merge(object({ mode: mapped }), object({}));
+        const tupleParser = tuple([mapped] as const);
+
+        const topLevel = await parseAsync(mapped, []);
+        assert.ok(topLevel.success);
+        if (topLevel.success) {
+          assert.deepEqual(topLevel.value, { type: "fast", enabled: true });
+        }
+
+        const objectResult = await parseAsync(objectParser, []);
+        assert.ok(objectResult.success);
+        if (objectResult.success) {
+          assert.deepEqual(objectResult.value, {
+            mode: { type: "fast", enabled: true },
+          });
+        }
+
+        const mergeResult = await parseAsync(mergeParser, []);
+        assert.ok(mergeResult.success);
+        if (mergeResult.success) {
+          assert.deepEqual(mergeResult.value, {
+            mode: { type: "fast", enabled: true },
+          });
+        }
+
+        const tupleResult = await parseAsync(tupleParser, []);
+        assert.ok(tupleResult.success);
+        if (tupleResult.success) {
+          assert.deepEqual(tupleResult.value, [
+            { type: "fast", enabled: true },
+          ]);
+        }
+
+        const cliControl = await parseAsync(objectParser, ["--mode", "safe"]);
+        assert.ok(cliControl.success);
+        if (cliControl.success) {
+          assert.deepEqual(cliControl.value, {
+            mode: { type: "safe", enabled: true },
+          });
+        }
+      });
+    },
+  );
+
   it("conditional() suggest handles undefined and selected branch states", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",

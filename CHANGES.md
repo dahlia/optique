@@ -78,6 +78,14 @@ To be released.
     underlying dependency source was provided explicitly.
     [[#750], [#755], [#765]]
 
+ -  Fixed `map(withDefault(option(..., dependencySource), default), transform)`
+    leaking raw dependency defaults through shared-buffer constructs.
+    `object()`, `tuple()`, and `merge()` now preserve the mapped fallback
+    value on the no-input path, matching top-level parsing.  This does
+    not change dependency-resolution semantics: mapped fallbacks still do
+    not register as dependency-source values for downstream derived
+    parsers.  [[#239], [#779]]
+
  -  Fixed redundant replay of derived-parser factories when all dependency
     values came from defaults.  Previously, `resolveSingleDeferred()` always
     re-invoked the user-supplied factory even when the resolved values were
@@ -1289,6 +1297,7 @@ To be released.
 [#233]: https://github.com/dahlia/optique/issues/233
 [#235]: https://github.com/dahlia/optique/issues/235
 [#238]: https://github.com/dahlia/optique/issues/238
+[#239]: https://github.com/dahlia/optique/issues/239
 [#240]: https://github.com/dahlia/optique/issues/240
 [#241]: https://github.com/dahlia/optique/issues/241
 [#242]: https://github.com/dahlia/optique/issues/242
@@ -1574,6 +1583,7 @@ To be released.
 [#776]: https://github.com/dahlia/optique/pull/776
 [#777]: https://github.com/dahlia/optique/pull/777
 [#778]: https://github.com/dahlia/optique/pull/778
+[#779]: https://github.com/dahlia/optique/pull/779
 
 ### @optique/config
 
