@@ -298,7 +298,7 @@ function extractPhase2SeedSync(
   args: readonly string[],
 ) {
   let context = createPhase2SeedContext(parser, args);
-  while (context.buffer.length > 0) {
+  do {
     const result = parser.parse(context);
     if (!result.success) {
       return completeOrExtractPhase2Seed(
@@ -316,7 +316,7 @@ function extractPhase2SeedSync(
         createPhase2SeedExec(parser, context),
       );
     }
-  }
+  } while (context.buffer.length > 0);
   return completeOrExtractPhase2Seed(
     parser,
     context.state,
@@ -329,7 +329,7 @@ async function extractPhase2SeedAsync(
   args: readonly string[],
 ) {
   let context = createPhase2SeedContext(parser, args);
-  while (context.buffer.length > 0) {
+  do {
     const result = await parser.parse(context);
     if (!result.success) {
       return await completeOrExtractPhase2Seed(
@@ -347,7 +347,7 @@ async function extractPhase2SeedAsync(
         createPhase2SeedExec(parser, context),
       );
     }
-  }
+  } while (context.buffer.length > 0);
   return await completeOrExtractPhase2Seed(
     parser,
     context.state,
@@ -3188,12 +3188,15 @@ async function runWithBody<
     phase1Annotations,
   );
 
-  const firstPassSeed = parser.$mode === "async"
-    ? await extractPhase2SeedAsync(augmentedParser1, args)
-    : extractPhase2SeedSync(
-      augmentedParser1 as Parser<"sync", unknown, unknown>,
-      args,
-    );
+  const firstPassSeed = await dispatchByMode(
+    parser.$mode,
+    () =>
+      extractPhase2SeedSync(
+        augmentedParser1 as Parser<"sync", unknown, unknown>,
+        args,
+      ),
+    () => extractPhase2SeedAsync(augmentedParser1, args),
+  );
 
   // First pass failed - run through runParser for proper error handling.
   // This is done outside the try-catch to prevent the catch block from

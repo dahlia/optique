@@ -9950,6 +9950,134 @@ describe("branch coverage: facade.ts edge cases", () => {
     );
   });
 
+  it("runWithSync: phase two still runs the first parse step for empty argv", () => {
+    const tokenKey = Symbol.for("@test/dyn-phase-two-empty-sync");
+    let phase2Called = false;
+
+    const parser: Parser<"sync", string, undefined> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        const annotations = getAnnotations(context.state);
+        const token = annotations?.[tokenKey];
+        if (typeof token === "string") {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        }
+        throw new Error("Empty sync parse boom.");
+      },
+      complete(state) {
+        const token = getAnnotations(state)?.[tokenKey];
+        return typeof token === "string"
+          ? { success: true as const, value: token }
+          : { success: false as const, error: message`Missing token.` };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    Object.defineProperty(parser, extractPhase2SeedKey, {
+      value() {
+        return { value: {} };
+      },
+      enumerable: true,
+    });
+
+    const dynamicContext: SourceContext = {
+      id: tokenKey,
+      mode: "dynamic",
+      getAnnotations(parsed) {
+        if (parsed == null) return {};
+        phase2Called = true;
+        return { [tokenKey]: "from-phase-two" };
+      },
+    };
+
+    assert.throws(
+      () => runWithSync(parser, "test", [dynamicContext], { args: [] }),
+      /Empty sync parse boom\./,
+    );
+    assert.ok(
+      !phase2Called,
+      "phase 2 should not run before the empty-argv parse step",
+    );
+  });
+
+  it("runWith: phase two still runs the first async parse step for empty argv", async () => {
+    const tokenKey = Symbol.for("@test/dyn-phase-two-empty-async");
+    let phase2Called = false;
+
+    const parser: Parser<"async", string, undefined> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        const annotations = getAnnotations(context.state);
+        const token = annotations?.[tokenKey];
+        if (typeof token === "string") {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        }
+        return Promise.reject(new Error("Empty async parse boom."));
+      },
+      complete(state) {
+        const token = getAnnotations(state)?.[tokenKey];
+        return Promise.resolve(
+          typeof token === "string"
+            ? { success: true as const, value: token }
+            : { success: false as const, error: message`Missing token.` },
+        );
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    Object.defineProperty(parser, extractPhase2SeedKey, {
+      value() {
+        return Promise.resolve({ value: {} });
+      },
+      enumerable: true,
+    });
+
+    const dynamicContext: SourceContext = {
+      id: tokenKey,
+      mode: "dynamic",
+      getAnnotations(parsed) {
+        if (parsed == null) return {};
+        phase2Called = true;
+        return { [tokenKey]: "from-phase-two" };
+      },
+    };
+
+    await assert.rejects(
+      () => runWith(parser, "test", [dynamicContext], { args: [] }),
+      /Empty async parse boom\./,
+    );
+    assert.ok(
+      !phase2Called,
+      "phase 2 should not run before the empty-argv parse step",
+    );
+  });
+
   it("runWithSync: phase two preserves group() seed hooks", () => {
     const tokenKey = Symbol.for("@test/dyn-phase-two-group-seed");
 
