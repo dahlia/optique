@@ -38,6 +38,7 @@ import {
   type ExecutionContext,
   getDocPage,
   type InferValue,
+  type Mode,
   parseAsync,
   type Parser,
   type ParserContext,
@@ -66,6 +67,14 @@ import {
 } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { object as objectLocal, tuple as tupleLocal } from "./constructs.ts";
+import { dependency as dependencyLocal } from "./dependency.ts";
+import { withDefault as withDefaultLocal } from "./modifiers.ts";
+import {
+  extractPhase2SeedKey,
+  type Phase2SeedExtractor,
+} from "./phase2-seed.ts";
+import { option as optionLocal } from "./primitives.ts";
 
 function collectEntries(
   fragments: readonly DocFragment[],
@@ -13298,6 +13307,114 @@ describe("branch coverage: constructs.ts edge cases", () => {
             mode: { type: "safe", enabled: true },
           });
         }
+      });
+    },
+  );
+
+  describe(
+    "phase-two seed extraction reuses pre-completed source completions",
+    () => {
+      function getLocalPhase2SeedExtractor<TValue, TState>(
+        parser: Parser<Mode, TValue, TState>,
+      ): Phase2SeedExtractor<Mode, TState, TValue> {
+        const extract = (parser as Parser<Mode, TValue, TState> & {
+          readonly [extractPhase2SeedKey]?: Phase2SeedExtractor<
+            Mode,
+            TState,
+            TValue
+          >;
+        })[extractPhase2SeedKey];
+        assert.ok(extract != null);
+        return extract;
+      }
+
+      function createCountingSourceParser() {
+        const values = ["alpha", "beta", "gamma"] as const;
+        let calls = 0;
+        const parser = withDefaultLocal(
+          optionLocal("--mode", dependencyLocal(choice(values))),
+          () => values[calls++]!,
+        );
+        return {
+          parser,
+          getCallCount: () => calls,
+        };
+      }
+
+      it("object() reuses sync pre-completed defaults", () => {
+        const { parser: modeParser, getCallCount } =
+          createCountingSourceParser();
+        const parser = objectLocal({
+          mode: modeParser,
+          required: optionLocal("--required", string()),
+        });
+
+        const seed = getLocalPhase2SeedExtractor(parser)(parser.initialState);
+
+        assert.deepEqual(seed, {
+          value: {
+            mode: "alpha",
+          },
+        });
+        assert.equal(getCallCount(), 1);
+      });
+
+      it("object() reuses async pre-completed defaults", async () => {
+        const { parser: modeParser, getCallCount } =
+          createCountingSourceParser();
+        const parser = objectLocal({
+          mode: modeParser,
+          required: toAsyncParser(optionLocal("--required", string())),
+        });
+
+        const seed = await getLocalPhase2SeedExtractor(parser)(
+          parser.initialState,
+        );
+
+        assert.deepEqual(seed, {
+          value: {
+            mode: "alpha",
+          },
+        });
+        assert.equal(getCallCount(), 1);
+      });
+
+      it("tuple() reuses sync pre-completed defaults", () => {
+        const { parser: modeParser, getCallCount } =
+          createCountingSourceParser();
+        const parser = tupleLocal(
+          [
+            modeParser,
+            optionLocal("--required", string()),
+          ] as const,
+        );
+
+        const seed = getLocalPhase2SeedExtractor(parser)(parser.initialState);
+
+        assert.deepEqual(seed, {
+          value: ["alpha"],
+        });
+        assert.equal(getCallCount(), 1);
+      });
+
+      it("tuple() reuses async pre-completed defaults", async () => {
+        const { parser: modeParser, getCallCount } =
+          createCountingSourceParser();
+        const parser = tupleLocal(
+          [
+            modeParser,
+            toAsyncParser(optionLocal("--required", string())),
+          ] as const,
+        );
+
+        const seed = await getLocalPhase2SeedExtractor(parser)(
+          parser.initialState,
+        );
+
+        assert.deepEqual(seed, {
+          value: ["alpha"],
+        });
+        assert.equal(getCallCount(), 1);
       });
     },
   );

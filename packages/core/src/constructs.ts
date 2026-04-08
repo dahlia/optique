@@ -32,6 +32,7 @@ import {
   completeOrExtractPhase2Seed,
   extractPhase2Seed,
   extractPhase2SeedKey,
+  phase2SeedFromValueResult,
 } from "./phase2-seed.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import {
@@ -400,6 +401,30 @@ function unwrapCompleteResult(
     ...unwrappedResult,
     value,
   };
+}
+
+function reusePreCompletedPhase2Seed(
+  parser: Parser<"sync", unknown, unknown>,
+  state: unknown,
+  preCompletedResult: unknown,
+  exec?: ExecutionContext,
+) {
+  const result = unwrapCompleteResult(preCompletedResult);
+  return result.success
+    ? phase2SeedFromValueResult(result)
+    : extractPhase2Seed(parser, state, exec);
+}
+
+async function reusePreCompletedPhase2SeedAsync(
+  parser: Parser<Mode, unknown, unknown>,
+  state: unknown,
+  preCompletedResult: unknown,
+  exec?: ExecutionContext,
+) {
+  const result = unwrapCompleteResult(preCompletedResult);
+  return result.success
+    ? phase2SeedFromValueResult(result)
+    : await extractPhase2Seed(parser, state, exec);
 }
 
 /**
@@ -6347,11 +6372,20 @@ export function object<
               unknown,
               unknown
             >;
-            const seed = completeOrExtractPhase2Seed(
-              fieldParser,
-              resolvedFieldStates[fieldKey],
-              withChildExecPath(phase3Exec, fieldKey),
-            );
+            const childExec = withChildExecPath(phase3Exec, fieldKey);
+            const preCompletedResult = preCompleted.get(fieldKey);
+            const seed = preCompletedResult !== undefined
+              ? reusePreCompletedPhase2Seed(
+                fieldParser,
+                resolvedFieldStates[fieldKey],
+                preCompletedResult,
+                childExec,
+              )
+              : completeOrExtractPhase2Seed(
+                fieldParser,
+                resolvedFieldStates[fieldKey],
+                childExec,
+              );
             if (seed == null) continue;
             hasAnySeed = true;
             (result as Record<string | symbol, unknown>)[fieldKey] = seed.value;
@@ -6439,11 +6473,20 @@ export function object<
           for (const field of parserKeys) {
             const fieldKey = field as string | symbol;
             const fieldParser = parsers[field];
-            const seed = await completeOrExtractPhase2Seed(
-              fieldParser,
-              resolvedFieldStates[fieldKey],
-              withChildExecPath(phase3Exec, fieldKey),
-            );
+            const childExec = withChildExecPath(phase3Exec, fieldKey);
+            const preCompletedResult = preCompleted.get(fieldKey);
+            const seed = preCompletedResult !== undefined
+              ? await reusePreCompletedPhase2SeedAsync(
+                fieldParser,
+                resolvedFieldStates[fieldKey],
+                preCompletedResult,
+                childExec,
+              )
+              : await completeOrExtractPhase2Seed(
+                fieldParser,
+                resolvedFieldStates[fieldKey],
+                childExec,
+              );
             if (seed == null) continue;
             hasAnySeed = true;
             (result as Record<string | symbol, unknown>)[fieldKey] = seed.value;
@@ -7725,11 +7768,20 @@ export function tuple<
           let hasAnySeed = false;
           for (let i = 0; i < syncParsers.length; i++) {
             const elementParser = syncParsers[i];
-            const seed = completeOrExtractPhase2Seed(
-              elementParser,
-              prepareStateForCompletion(resolvedArray[i], elementParser),
-              withChildExecPath(phase3Exec, i),
-            );
+            const childExec = withChildExecPath(phase3Exec, i);
+            const preCompletedResult = preCompleted.get(String(i));
+            const seed = preCompletedResult !== undefined
+              ? reusePreCompletedPhase2Seed(
+                elementParser,
+                prepareStateForCompletion(resolvedArray[i], elementParser),
+                preCompletedResult,
+                childExec,
+              )
+              : completeOrExtractPhase2Seed(
+                elementParser,
+                prepareStateForCompletion(resolvedArray[i], elementParser),
+                childExec,
+              );
             if (seed == null) continue;
             hasAnySeed = true;
             result[i] = seed.value;
@@ -7798,11 +7850,20 @@ export function tuple<
           let hasAnySeed = false;
           for (let i = 0; i < parsers.length; i++) {
             const elementParser = parsers[i];
-            const seed = await completeOrExtractPhase2Seed(
-              elementParser,
-              prepareStateForCompletion(resolvedArray[i], elementParser),
-              withChildExecPath(phase3Exec, i),
-            );
+            const childExec = withChildExecPath(phase3Exec, i);
+            const preCompletedResult = preCompleted.get(String(i));
+            const seed = preCompletedResult !== undefined
+              ? await reusePreCompletedPhase2SeedAsync(
+                elementParser,
+                prepareStateForCompletion(resolvedArray[i], elementParser),
+                preCompletedResult,
+                childExec,
+              )
+              : await completeOrExtractPhase2Seed(
+                elementParser,
+                prepareStateForCompletion(resolvedArray[i], elementParser),
+                childExec,
+              );
             if (seed == null) continue;
             hasAnySeed = true;
             result[i] = seed.value;
