@@ -70,7 +70,9 @@ import { describe, it } from "node:test";
 import {
   concat as concatLocal,
   conditional as conditionalLocal,
+  longestMatch as longestMatchLocal,
   object as objectLocal,
+  or as orLocal,
   tuple as tupleLocal,
 } from "./constructs.ts";
 import { dependency as dependencyLocal } from "./dependency.ts";
@@ -13423,7 +13425,8 @@ describe("branch coverage: constructs.ts edge cases", () => {
       });
 
       it("concat() extracts sync seeds across child boundaries", () => {
-        const { parser: modeParser } = createCountingSourceParser();
+        const { parser: modeParser, getCallCount } =
+          createCountingSourceParser();
         const parser = concatLocal(
           tupleLocal([modeParser] as const),
           tupleLocal([optionLocal("--required", string())] as const),
@@ -13434,10 +13437,12 @@ describe("branch coverage: constructs.ts edge cases", () => {
         assert.deepEqual(seed, {
           value: ["alpha"],
         });
+        assert.equal(getCallCount(), 1);
       });
 
       it("concat() extracts async seeds across child boundaries", async () => {
-        const { parser: modeParser } = createCountingSourceParser();
+        const { parser: modeParser, getCallCount } =
+          createCountingSourceParser();
         const parser = concatLocal(
           tupleLocal([modeParser] as const),
           tupleLocal(
@@ -13452,10 +13457,12 @@ describe("branch coverage: constructs.ts edge cases", () => {
         assert.deepEqual(seed, {
           value: ["alpha"],
         });
+        assert.equal(getCallCount(), 1);
       });
 
       it("conditional() extracts sync seeds from the selected branch", () => {
-        const { parser: modeParser } = createCountingSourceParser();
+        const { parser: modeParser, getCallCount } =
+          createCountingSourceParser();
         const discriminator: Parser<"sync", string, undefined> = {
           $mode: "sync",
           $valueType: [] as readonly string[],
@@ -13493,10 +13500,12 @@ describe("branch coverage: constructs.ts edge cases", () => {
         assert.deepEqual(seed, {
           value: ["cfg", { mode: "alpha" }],
         });
+        assert.equal(getCallCount(), 1);
       });
 
       it("conditional() extracts async seeds from the selected branch", async () => {
-        const { parser: modeParser } = createCountingSourceParser();
+        const { parser: modeParser, getCallCount } =
+          createCountingSourceParser();
         const discriminator: Parser<"sync", string, undefined> = {
           $mode: "sync",
           $valueType: [] as readonly string[],
@@ -13536,7 +13545,235 @@ describe("branch coverage: constructs.ts edge cases", () => {
         assert.deepEqual(seed, {
           value: ["cfg", { mode: "alpha" }],
         });
+        assert.equal(getCallCount(), 1);
       });
+
+      it("object() seeds child completion with a fallback exec", () => {
+        let childExec: ExecutionContext | undefined;
+        const seedableParser: Parser<"sync", string, undefined> = {
+          $mode: "sync",
+          $valueType: [] as readonly string[],
+          $stateType: [] as readonly undefined[],
+          priority: 0,
+          usage: [],
+          leadingNames: new Set(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context) {
+            return {
+              success: true as const,
+              next: context,
+              consumed: [],
+            };
+          },
+          complete(_state, exec) {
+            childExec = exec;
+            return { success: false as const, error: message`Missing value.` };
+          },
+          *suggest() {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        };
+        Object.defineProperty(seedableParser, extractPhase2SeedKey, {
+          value: () => ({ value: "seed" }),
+        });
+
+        const parser = objectLocal({
+          value: seedableParser,
+          required: optionLocal("--required", string()),
+        });
+        const seed = getLocalPhase2SeedExtractor(parser)(parser.initialState);
+
+        assert.deepEqual(seed, {
+          value: {
+            value: "seed",
+          },
+        });
+        assert.equal(childExec?.phase, "complete");
+        assert.equal(childExec?.usage, parser.usage);
+        assert.deepEqual(childExec?.path, ["value"]);
+      });
+
+      it("tuple() seeds child completion with a fallback exec", () => {
+        let childExec: ExecutionContext | undefined;
+        const seedableParser: Parser<"sync", string, undefined> = {
+          $mode: "sync",
+          $valueType: [] as readonly string[],
+          $stateType: [] as readonly undefined[],
+          priority: 0,
+          usage: [],
+          leadingNames: new Set(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context) {
+            return {
+              success: true as const,
+              next: context,
+              consumed: [],
+            };
+          },
+          complete(_state, exec) {
+            childExec = exec;
+            return { success: false as const, error: message`Missing value.` };
+          },
+          *suggest() {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        };
+        Object.defineProperty(seedableParser, extractPhase2SeedKey, {
+          value: () => ({ value: "seed" }),
+        });
+
+        const parser = tupleLocal(
+          [
+            seedableParser,
+            optionLocal("--required", string()),
+          ] as const,
+        );
+        const seed = getLocalPhase2SeedExtractor(parser)(parser.initialState);
+
+        assert.deepEqual(seed, {
+          value: ["seed"],
+        });
+        assert.equal(childExec?.phase, "complete");
+        assert.equal(childExec?.usage, parser.usage);
+        assert.deepEqual(childExec?.path, [0]);
+      });
+
+      for (
+        const [name, buildExclusive] of [
+          [
+            "or()",
+            (
+              seedableParser: Parser<
+                "sync",
+                string,
+                { readonly ready: boolean }
+              >,
+            ) => orLocal(seedableParser, optionLocal("--required", string())),
+          ],
+          [
+            "longestMatch()",
+            (
+              seedableParser: Parser<
+                "sync",
+                string,
+                { readonly ready: boolean }
+              >,
+            ) =>
+              longestMatchLocal(
+                seedableParser,
+                optionLocal("--required", string()),
+              ),
+          ],
+        ] as const
+      ) {
+        it(`${name} extracts seeds from a unique zero-input branch`, () => {
+          const seedableParser: Parser<"sync", string, { ready: boolean }> = {
+            $mode: "sync",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly { ready: boolean }[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set(),
+            acceptingAnyToken: false,
+            initialState: { ready: false },
+            parse(context) {
+              return {
+                success: true as const,
+                next: {
+                  ...context,
+                  state: { ready: true },
+                },
+                consumed: [],
+              };
+            },
+            complete() {
+              return {
+                success: false as const,
+                error: message`Missing seeded value.`,
+              };
+            },
+            *suggest() {},
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          Object.defineProperty(seedableParser, extractPhase2SeedKey, {
+            value: (state: { ready: boolean }) =>
+              state.ready ? { value: "seed" } : null,
+          });
+
+          const parser = buildExclusive(seedableParser);
+          const seed = getLocalPhase2SeedExtractor(parser)(parser.initialState);
+
+          assert.deepEqual(seed, {
+            value: "seed",
+          });
+        });
+      }
+
+      it(
+        "conditional() extracts sync completion-only seeds from the default branch",
+        () => {
+          const parser = conditionalLocal(
+            fail<string>(),
+            { cfg: optionLocal("--config", string()) },
+            withDefaultLocal(optionLocal("--fallback", string()), "alpha"),
+          );
+
+          const seed = getLocalPhase2SeedExtractor(parser)(parser.initialState);
+
+          assert.deepEqual(seed, {
+            value: [undefined, "alpha"],
+          });
+        },
+      );
+
+      it(
+        "conditional() extracts async completion-only seeds from the selected branch",
+        async () => {
+          const discriminator: Parser<"sync", string, undefined> = {
+            $mode: "sync",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly undefined[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set(),
+            acceptingAnyToken: false,
+            initialState: undefined,
+            parse(context) {
+              return {
+                success: true as const,
+                next: context,
+                consumed: [],
+              };
+            },
+            complete() {
+              return { success: true as const, value: "cfg" };
+            },
+            *suggest() {},
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          const parser = conditionalLocal(discriminator, {
+            cfg: toAsyncParser(
+              withDefaultLocal(optionLocal("--fallback", string()), "alpha"),
+            ),
+          });
+
+          const seed = await getLocalPhase2SeedExtractor(parser)(
+            parser.initialState,
+          );
+
+          assert.deepEqual(seed, {
+            value: ["cfg", "alpha"],
+          });
+        },
+      );
     },
   );
 

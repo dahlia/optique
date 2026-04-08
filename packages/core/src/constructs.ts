@@ -118,6 +118,28 @@ function withChildExecPath(
   };
 }
 
+function withDependencyRuntimeExec(
+  usage: ExecutionContext["usage"],
+  exec: ExecutionContext | undefined,
+  runtime: ReturnType<typeof createDependencyRuntimeContext>,
+): ExecutionContext {
+  if (exec == null) {
+    return {
+      usage,
+      phase: "complete",
+      path: [],
+      trace: undefined,
+      dependencyRuntime: runtime,
+      dependencyRegistry: runtime.registry,
+    };
+  }
+  return {
+    ...exec,
+    dependencyRuntime: runtime,
+    dependencyRegistry: runtime.registry,
+  };
+}
+
 function mergeChildExec(
   parent: ExecutionContext | undefined,
   child: ExecutionContext | undefined,
@@ -425,6 +447,28 @@ async function reusePreCompletedPhase2SeedAsync(
   return result.success
     ? phase2SeedFromValueResult(result)
     : await extractPhase2Seed(parser, state, exec);
+}
+
+function extractOrCompletePhase2SeedSync<TValue, TState>(
+  parser: Parser<"sync", TValue, TState>,
+  state: TState,
+  exec?: ExecutionContext,
+) {
+  const extracted = extractPhase2Seed(parser, state, exec);
+  if (extracted != null) return extracted;
+  const result = parser.complete(state, exec);
+  return result.success ? phase2SeedFromValueResult(result) : null;
+}
+
+async function extractOrCompletePhase2SeedAsync<TValue, TState>(
+  parser: Parser<Mode, TValue, TState>,
+  state: TState,
+  exec?: ExecutionContext,
+) {
+  const extracted = await extractPhase2Seed(parser, state, exec);
+  if (extracted != null) return extracted;
+  const result = await parser.complete(state, exec);
+  return result.success ? phase2SeedFromValueResult(result) : null;
 }
 
 function appendFlattenedPhase2Seed(
@@ -1217,6 +1261,7 @@ function createExclusiveComplete(
 ) => ValueParserResult<unknown> | Promise<ValueParserResult<unknown>> {
   // Cast to sync parsers for sync operations
   const syncParsers = parsers as Parser<"sync", unknown, unknown>[];
+
   return (state, exec?) => {
     const activeState = normalizeExclusiveState(state);
     if (activeState == null) {
@@ -1233,48 +1278,24 @@ function createExclusiveComplete(
       return dispatchByMode(
         mode,
         () => {
-          const emptyCtx = {
-            buffer: [] as string[],
-            optionsTerminated: false,
-            usage: [] as never[],
+          const candidate = findExclusiveZeroInputCandidateSync(
+            syncParsers,
+            state,
             exec,
-            dependencyRegistry: exec?.dependencyRegistry,
-          };
-          // Single pass: count candidates and cache the first result.
-          let candidateIndex = -1;
-          let candidateCount = 0;
-          let candidateParseResult:
-            | (ParserResult<unknown> & { success: true })
-            | undefined;
-          for (let i = 0; i < syncParsers.length; i++) {
-            const p = syncParsers[i];
-            if (p.leadingNames.size > 0 || p.acceptingAnyToken) continue;
-            const parseResult = p.parse({
-              ...emptyCtx,
-              state: getAnnotatedChildState(state, p.initialState, p),
-            });
-            if (!parseResult.success || parseResult.provisional) continue;
-            candidateCount++;
-            if (candidateIndex < 0) {
-              candidateIndex = i;
-              candidateParseResult = parseResult;
-            }
-            if (candidateCount > 1) break;
-          }
+          );
           // Complete only the unique candidate.
           if (
-            candidateCount === 1 && candidateIndex >= 0 &&
-            candidateParseResult
+            candidate != null
           ) {
-            const p = syncParsers[candidateIndex];
+            const p = syncParsers[candidate.index];
             const annotatedState = getAnnotatedChildState(
               state,
-              candidateParseResult.next.state,
+              candidate.parseResult.next.state,
               p,
             );
             return p.complete(
               annotatedState,
-              withChildExecPath(exec, candidateIndex),
+              withChildExecPath(exec, candidate.index),
             );
           }
           return {
@@ -1283,35 +1304,11 @@ function createExclusiveComplete(
           };
         },
         async () => {
-          const emptyCtx = {
-            buffer: [] as string[],
-            optionsTerminated: false,
-            usage: [] as never[],
+          const candidate = await findExclusiveZeroInputCandidateAsync(
+            parsers,
+            state,
             exec,
-            dependencyRegistry: exec?.dependencyRegistry,
-          };
-          // Single pass: count candidates and cache the first result
-          // (see sync counterpart).
-          let candidateIndex = -1;
-          let candidateCount = 0;
-          let candidateParseResult:
-            | (ParserResult<unknown> & { success: true })
-            | undefined;
-          for (let i = 0; i < parsers.length; i++) {
-            const p = parsers[i];
-            if (p.leadingNames.size > 0 || p.acceptingAnyToken) continue;
-            const parseResult = await p.parse({
-              ...emptyCtx,
-              state: getAnnotatedChildState(state, p.initialState, p),
-            });
-            if (!parseResult.success || parseResult.provisional) continue;
-            candidateCount++;
-            if (candidateIndex < 0) {
-              candidateIndex = i;
-              candidateParseResult = parseResult;
-            }
-            if (candidateCount > 1) break;
-          }
+          );
           // Complete only the unique candidate.
           // Skip async candidates during parse/suggest probes to
           // avoid triggering side effects (e.g., prompt()) before
@@ -1319,20 +1316,19 @@ function createExclusiveComplete(
           // to complete during probes (needed for object()'s
           // completability check on empty input).
           if (
-            candidateCount === 1 && candidateIndex >= 0 &&
-            candidateParseResult &&
-            (parsers[candidateIndex].$mode === "sync" ||
+            candidate != null &&
+            (parsers[candidate.index].$mode === "sync" ||
               (exec?.phase !== "parse" && exec?.phase !== "suggest"))
           ) {
-            const p = parsers[candidateIndex];
+            const p = parsers[candidate.index];
             const annotatedState = getAnnotatedChildState(
               state,
-              candidateParseResult.next.state,
+              candidate.parseResult.next.state,
               p,
             );
             return await p.complete(
               annotatedState,
-              withChildExecPath(exec, candidateIndex),
+              withChildExecPath(exec, candidate.index),
             );
           }
           return {
@@ -1504,6 +1500,93 @@ function getExclusiveSuggestRuntimeNodes(
   );
 }
 
+function findExclusiveZeroInputCandidateSync(
+  parsers: readonly Parser<"sync", unknown, unknown>[],
+  state: ExclusiveState,
+  exec?: ExecutionContext,
+):
+  | {
+    readonly index: number;
+    readonly parseResult: ParserResult<unknown> & { readonly success: true };
+  }
+  | null {
+  const emptyCtx = {
+    buffer: [] as string[],
+    optionsTerminated: false,
+    usage: [] as never[],
+    exec,
+    dependencyRegistry: exec?.dependencyRegistry,
+  };
+  let candidateIndex = -1;
+  let candidateCount = 0;
+  let candidateParseResult:
+    | (ParserResult<unknown> & { readonly success: true })
+    | undefined;
+  for (let i = 0; i < parsers.length; i++) {
+    const parser = parsers[i];
+    if (parser.leadingNames.size > 0 || parser.acceptingAnyToken) continue;
+    const parseResult = parser.parse({
+      ...emptyCtx,
+      state: getAnnotatedChildState(state, parser.initialState, parser),
+    });
+    if (!parseResult.success || parseResult.provisional) continue;
+    candidateCount++;
+    if (candidateIndex < 0) {
+      candidateIndex = i;
+      candidateParseResult = parseResult;
+    }
+    if (candidateCount > 1) break;
+  }
+  return candidateCount === 1 && candidateIndex >= 0 &&
+      candidateParseResult != null
+    ? { index: candidateIndex, parseResult: candidateParseResult }
+    : null;
+}
+
+async function findExclusiveZeroInputCandidateAsync(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+  state: ExclusiveState,
+  exec?: ExecutionContext,
+): Promise<
+  | {
+    readonly index: number;
+    readonly parseResult: ParserResult<unknown> & { readonly success: true };
+  }
+  | null
+> {
+  const emptyCtx = {
+    buffer: [] as string[],
+    optionsTerminated: false,
+    usage: [] as never[],
+    exec,
+    dependencyRegistry: exec?.dependencyRegistry,
+  };
+  let candidateIndex = -1;
+  let candidateCount = 0;
+  let candidateParseResult:
+    | (ParserResult<unknown> & { readonly success: true })
+    | undefined;
+  for (let i = 0; i < parsers.length; i++) {
+    const parser = parsers[i];
+    if (parser.leadingNames.size > 0 || parser.acceptingAnyToken) continue;
+    const parseResult = await parser.parse({
+      ...emptyCtx,
+      state: getAnnotatedChildState(state, parser.initialState, parser),
+    });
+    if (!parseResult.success || parseResult.provisional) continue;
+    candidateCount++;
+    if (candidateIndex < 0) {
+      candidateIndex = i;
+      candidateParseResult = parseResult;
+    }
+    if (candidateCount > 1) break;
+  }
+  return candidateCount === 1 && candidateIndex >= 0 &&
+      candidateParseResult != null
+    ? { index: candidateIndex, parseResult: candidateParseResult }
+    : null;
+}
+
 function extractExclusivePhase2Seed(
   parsers: readonly Parser<Mode, unknown, unknown>[],
   state: ExclusiveState,
@@ -1511,7 +1594,38 @@ function extractExclusivePhase2Seed(
   mode: Mode,
 ): ModeValue<Mode, import("./phase2-seed.ts").Phase2Seed<unknown> | null> {
   const activeState = normalizeExclusiveState(state);
-  if (activeState == null || !activeState[1].success) {
+  if (activeState == null) {
+    return dispatchByMode(
+      mode,
+      () => {
+        const candidate = findExclusiveZeroInputCandidateSync(
+          parsers as readonly Parser<"sync", unknown, unknown>[],
+          state,
+          exec,
+        );
+        if (candidate == null) return null;
+        return extractOrCompletePhase2SeedSync(
+          parsers[candidate.index] as Parser<"sync", unknown, unknown>,
+          candidate.parseResult.next.state,
+          withChildExecPath(exec, candidate.index),
+        );
+      },
+      async () => {
+        const candidate = await findExclusiveZeroInputCandidateAsync(
+          parsers,
+          state,
+          exec,
+        );
+        if (candidate == null) return null;
+        return await extractOrCompletePhase2SeedAsync(
+          parsers[candidate.index],
+          candidate.parseResult.next.state,
+          withChildExecPath(exec, candidate.index),
+        );
+      },
+    );
+  }
+  if (!activeState[1].success) {
     return dispatchByMode(mode, () => null, () => Promise.resolve(null));
   }
   const [index, parserResult] = activeState;
@@ -6404,10 +6518,11 @@ export function object<
         () => {
           const runtime = exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
-          const childExec: ExecutionContext = {
-            ...exec,
-            dependencyRuntime: runtime,
-          } as ExecutionContext;
+          const childExec = withDependencyRuntimeExec(
+            objectParser.usage,
+            exec,
+            runtime,
+          );
           const typedParserPairs = filterExcludedFieldParsers(
             parserPairs as readonly (readonly [
               string | symbol,
@@ -6513,10 +6628,11 @@ export function object<
         async () => {
           const runtime = exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
-          const childExec: ExecutionContext = {
-            ...exec,
-            dependencyRuntime: runtime,
-          } as ExecutionContext;
+          const childExec = withDependencyRuntimeExec(
+            objectParser.usage,
+            exec,
+            runtime,
+          );
           const asyncParserPairs = filterExcludedFieldParsers(
             parserPairs as readonly (readonly [
               string | symbol,
@@ -7828,10 +7944,11 @@ export function tuple<
           const stateArray = state as unknown[];
           const runtime = exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
-          const childExec: ExecutionContext = {
-            ...exec,
-            dependencyRuntime: runtime,
-          } as ExecutionContext;
+          const childExec = withDependencyRuntimeExec(
+            tupleParser.usage,
+            exec,
+            runtime,
+          );
           const tuplePairs = buildIndexedParserPairs(syncParsers);
           const tupleState = createAnnotatedArrayStateRecord(stateArray);
           const preCompleted = preCompleteAndRegisterDependencies(
@@ -7910,10 +8027,11 @@ export function tuple<
           const stateArray = state as unknown[];
           const runtime = exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
-          const childExec: ExecutionContext = {
-            ...exec,
-            dependencyRuntime: runtime,
-          } as ExecutionContext;
+          const childExec = withDependencyRuntimeExec(
+            tupleParser.usage,
+            exec,
+            runtime,
+          );
           const tuplePairs = buildIndexedParserPairs(parsers);
           const tupleState = createAnnotatedArrayStateRecord(stateArray);
           const preCompleted = await preCompleteAndRegisterDependenciesAsync(
@@ -9011,10 +9129,11 @@ export function merge(
         () => {
           const runtime = exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
-          const childExec: ExecutionContext = {
-            ...exec,
-            dependencyRuntime: runtime,
-          } as ExecutionContext;
+          const childExec = withDependencyRuntimeExec(
+            mergeParser.usage,
+            exec,
+            runtime,
+          );
           const duplicateFieldNames = collectDuplicateFieldNames(
             mergedFieldParsers,
           );
@@ -9137,10 +9256,11 @@ export function merge(
         async () => {
           const runtime = exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
-          const childExec: ExecutionContext = {
-            ...exec,
-            dependencyRuntime: runtime,
-          } as ExecutionContext;
+          const childExec = withDependencyRuntimeExec(
+            mergeParser.usage,
+            exec,
+            runtime,
+          );
           const duplicateFieldNames = collectDuplicateFieldNames(
             mergedFieldParsers,
           );
@@ -10728,10 +10848,11 @@ export function concat(
           const stateArray = state as unknown[];
           const runtime = exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
-          const childExec: ExecutionContext = {
-            ...exec,
-            dependencyRuntime: runtime,
-          } as ExecutionContext;
+          const childExec = withDependencyRuntimeExec(
+            concatParser.usage,
+            exec,
+            runtime,
+          );
           const concatPairs = buildIndexedParserPairs(syncParsers);
           const concatState = createAnnotatedArrayStateRecord(stateArray);
           const preCompleted = preCompleteAndRegisterDependencies(
@@ -10799,10 +10920,11 @@ export function concat(
           const stateArray = state as unknown[];
           const runtime = exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
-          const childExec: ExecutionContext = {
-            ...exec,
-            dependencyRuntime: runtime,
-          } as ExecutionContext;
+          const childExec = withDependencyRuntimeExec(
+            concatParser.usage,
+            exec,
+            runtime,
+          );
           const concatPairs = buildIndexedParserPairs(parsers);
           const concatState = createAnnotatedArrayStateRecord(stateArray);
           const preCompleted = await preCompleteAndRegisterDependenciesAsync(
@@ -13026,13 +13148,14 @@ export function conditional(
     exec?: ExecutionContext,
   ) => {
     const branchExec = withChildExecPath(exec, "_branch");
-    return extractPhase2Seed(
+    const annotatedState = getAnnotatedChildState(
+      currentState,
+      branchState,
       branchParser,
-      getAnnotatedChildState(
-        currentState,
-        branchState,
-        branchParser,
-      ),
+    );
+    return extractOrCompletePhase2SeedSync(
+      branchParser,
+      annotatedState,
       branchExec,
     );
   };
@@ -13044,13 +13167,14 @@ export function conditional(
     exec?: ExecutionContext,
   ) => {
     const branchExec = withChildExecPath(exec, "_branch");
-    return await extractPhase2Seed(
+    const annotatedState = getAnnotatedChildState(
+      currentState,
+      branchState,
       branchParser,
-      getAnnotatedChildState(
-        currentState,
-        branchState,
-        branchParser,
-      ),
+    );
+    return await extractOrCompletePhase2SeedAsync(
+      branchParser,
+      annotatedState,
       branchExec,
     );
   };
