@@ -3118,7 +3118,11 @@ describe("bindConfig() with dependency sources", () => {
 
   test("optional(bindConfig(..., default)) uses bindConfig default when config absent", () => {
     const context = createConfigContext({ schema });
-    const annotations: Annotations = {};
+    // The config context is bound, but the config object is empty — bindConfig
+    // should fall back to its own `default` for the unbound key.
+    const annotations: Annotations = {
+      [context.id]: { data: {} },
+    };
     const parser = object({
       mode: optional(
         bindConfig(option("--mode", choice(["dev", "prod"] as const)), {

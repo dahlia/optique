@@ -13099,7 +13099,10 @@ describe("branch coverage: constructs.ts edge cases", () => {
 
   it("shared-buffer constructs skip annotation injection for missing plain dependency sources", () => {
     const modeSource = dependency(choice(["dev", "prod"] as const));
-    const annotations = { source: "annotation" };
+    const annotationSourceKey = Symbol.for(
+      "@test/shared-buffer-missing-dependency",
+    );
+    const annotations = { [annotationSourceKey]: "annotation" };
     const parsers: ReadonlyArray<
       readonly [string, Parser<"sync", unknown, unknown>]
     > = [
@@ -13140,7 +13143,10 @@ describe("branch coverage: constructs.ts edge cases", () => {
   });
 
   it("shared-buffer suggest preserves missing optional-like child states", () => {
-    const annotations = { source: "annotation" };
+    const annotationSourceKey = Symbol.for(
+      "@test/shared-buffer-missing-optional",
+    );
+    const annotations = { [annotationSourceKey]: "annotation" };
     const parsers: ReadonlyArray<
       readonly [string, Parser<"sync", unknown, unknown>]
     > = [

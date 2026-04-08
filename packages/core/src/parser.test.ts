@@ -18,7 +18,9 @@ import {
   getDocPageAsync,
   getDocPageSync,
   parse,
+  parseAsync,
   type Parser,
+  parseSync,
   suggestAsync,
   suggestSync,
 } from "@optique/core/parser";
@@ -30,7 +32,11 @@ import {
   option,
 } from "@optique/core/primitives";
 import { dependency, deriveFromSync } from "@optique/core/dependency";
-import { getAnnotations, type ParseOptions } from "@optique/core/annotations";
+import {
+  getAnnotations,
+  isInjectedAnnotationWrapper,
+  type ParseOptions,
+} from "@optique/core/annotations";
 import type { Usage } from "@optique/core/usage";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { type DocEntry, formatDocPage } from "@optique/core/doc";
@@ -3174,6 +3180,316 @@ describe("Annotations system", () => {
     assert.ok(wrapper() !== undefined);
     assert.ok(wrapper([]) !== undefined);
     assert.ok(wrapper({ annotations: {} }) !== undefined);
+  });
+
+  describe("empty annotations object is a no-op (issue #484)", () => {
+    // Regression tests for
+    // https://github.com/dahlia/optique/issues/484
+    // An empty annotations object should behave like no annotations at all
+    // and must not change parser state shape or identity.
+    function makeObservingParser(initialState: unknown) {
+      const observations: Array<{
+        phase: "parse" | "complete" | "suggest" | "getDocFragments";
+        state: unknown;
+      }> = [];
+      const parser: Parser<"sync", unknown, unknown> = {
+        $mode: "sync",
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState,
+        parse(context) {
+          observations.push({ phase: "parse", state: context.state });
+          return {
+            success: true as const,
+            next: { ...context, buffer: [] },
+            consumed: [],
+          };
+        },
+        complete(state) {
+          observations.push({ phase: "complete", state });
+          return { success: true as const, value: state };
+        },
+        *suggest(context) {
+          observations.push({ phase: "suggest", state: context.state });
+          yield { kind: "literal" as const, text: "x" };
+        },
+        getDocFragments(state) {
+          observations.push({
+            phase: "getDocFragments",
+            state: state.kind === "available" ? state.state : undefined,
+          });
+          return { fragments: [] };
+        },
+      };
+      return { parser, observations };
+    }
+
+    it("should not wrap undefined initial state in parseSync()", () => {
+      const { parser, observations } = makeObservingParser(undefined);
+      const result = parseSync(parser, [], { annotations: {} });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, undefined);
+      }
+      for (const obs of observations) {
+        assert.ok(!isInjectedAnnotationWrapper(obs.state));
+        assert.equal(getAnnotations(obs.state), undefined);
+      }
+    });
+
+    it("should not wrap null initial state in parseSync()", () => {
+      const { parser, observations } = makeObservingParser(null);
+      const result = parseSync(parser, [], { annotations: {} });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, null);
+      }
+      for (const obs of observations) {
+        assert.ok(!isInjectedAnnotationWrapper(obs.state));
+      }
+    });
+
+    it("should not wrap primitive initial state in parseSync()", () => {
+      const { parser, observations } = makeObservingParser(42);
+      const result = parseSync(parser, [], { annotations: {} });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, 42);
+      }
+      for (const obs of observations) {
+        assert.ok(!isInjectedAnnotationWrapper(obs.state));
+        assert.equal(obs.state, 42);
+      }
+    });
+
+    it("should preserve referential identity of Date initial state", () => {
+      const source = new Date("2026-03-08T00:00:00.000Z");
+      const { parser, observations } = makeObservingParser(source);
+      const result = parse(parser, [], { annotations: {} });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, source);
+      }
+      for (const obs of observations) {
+        assert.equal(obs.state, source);
+      }
+    });
+
+    it("should preserve referential identity of Map initial state", () => {
+      const source = new Map<string, number>([["a", 1]]);
+      const { parser, observations } = makeObservingParser(source);
+      const result = parse(parser, [], { annotations: {} });
+      assert.ok(result.success);
+      for (const obs of observations) {
+        assert.equal(obs.state, source);
+      }
+    });
+
+    it("should preserve referential identity of Set initial state", () => {
+      const source = new Set(["a", "b"]);
+      const { parser, observations } = makeObservingParser(source);
+      const result = parse(parser, [], { annotations: {} });
+      assert.ok(result.success);
+      for (const obs of observations) {
+        assert.equal(obs.state, source);
+      }
+    });
+
+    it("should preserve referential identity of RegExp initial state", () => {
+      const source = /ab+/gi;
+      const { parser, observations } = makeObservingParser(source);
+      const result = parse(parser, [], { annotations: {} });
+      assert.ok(result.success);
+      for (const obs of observations) {
+        assert.equal(obs.state, source);
+      }
+    });
+
+    it("should preserve referential identity of array initial state", () => {
+      const source: readonly string[] = ["a", "b"];
+      const { parser, observations } = makeObservingParser(source);
+      const result = parse(parser, [], { annotations: {} });
+      assert.ok(result.success);
+      for (const obs of observations) {
+        assert.equal(obs.state, source);
+      }
+    });
+
+    it("should preserve referential identity of class instance initial state", () => {
+      class CustomState {
+        value = 1;
+      }
+      const source = new CustomState();
+      const { parser, observations } = makeObservingParser(source);
+      const result = parse(parser, [], { annotations: {} });
+      assert.ok(result.success);
+      for (const obs of observations) {
+        assert.equal(obs.state, source);
+      }
+    });
+
+    it("should preserve referential identity of plain object initial state", () => {
+      const source = { value: 1 };
+      const { parser, observations } = makeObservingParser(source);
+      const result = parse(parser, [], { annotations: {} });
+      assert.ok(result.success);
+      for (const obs of observations) {
+        assert.equal(obs.state, source);
+      }
+    });
+
+    it("should not wrap state in parseAsync()", async () => {
+      const { parser, observations } = makeObservingParser(undefined);
+      const result = await parseAsync(parser, [], { annotations: {} });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, undefined);
+      }
+      for (const obs of observations) {
+        assert.ok(!isInjectedAnnotationWrapper(obs.state));
+      }
+    });
+
+    it("should not wrap state in suggestSync()", () => {
+      const { parser, observations } = makeObservingParser(undefined);
+      const suggestions = suggestSync(parser, [""], { annotations: {} });
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "x" }]);
+      const suggestObs = observations.filter((o) => o.phase === "suggest");
+      assert.ok(suggestObs.length > 0);
+      for (const obs of suggestObs) {
+        assert.ok(!isInjectedAnnotationWrapper(obs.state));
+      }
+    });
+
+    it("should preserve Map identity in suggestSync()", () => {
+      const source = new Map<string, number>([["a", 1]]);
+      const { parser, observations } = makeObservingParser(source);
+      suggestSync(parser, [""], { annotations: {} });
+      const suggestObs = observations.filter((o) => o.phase === "suggest");
+      assert.ok(suggestObs.length > 0);
+      for (const obs of suggestObs) {
+        assert.equal(obs.state, source);
+      }
+    });
+
+    it("should not wrap state in suggestAsync()", async () => {
+      const { parser, observations } = makeObservingParser(undefined);
+      const suggestions = await suggestAsync(parser, [""], {
+        annotations: {},
+      });
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "x" }]);
+      const suggestObs = observations.filter((o) => o.phase === "suggest");
+      assert.ok(suggestObs.length > 0);
+      for (const obs of suggestObs) {
+        assert.ok(!isInjectedAnnotationWrapper(obs.state));
+      }
+    });
+
+    it("should preserve Map identity in suggestAsync()", async () => {
+      const source = new Map<string, number>([["a", 1]]);
+      const { parser, observations } = makeObservingParser(source);
+      await suggestAsync(parser, [""], { annotations: {} });
+      const suggestObs = observations.filter((o) => o.phase === "suggest");
+      assert.ok(suggestObs.length > 0);
+      for (const obs of suggestObs) {
+        assert.equal(obs.state, source);
+      }
+    });
+
+    it("should not wrap state in getDocPage()", () => {
+      const { parser, observations } = makeObservingParser(undefined);
+      const doc = getDocPage(parser, { annotations: {} });
+      assert.ok(doc !== undefined);
+      const docObs = observations.filter((o) => o.phase === "getDocFragments");
+      assert.ok(docObs.length > 0);
+      for (const obs of docObs) {
+        assert.ok(!isInjectedAnnotationWrapper(obs.state));
+      }
+    });
+
+    it("should preserve Map identity in getDocPage()", () => {
+      const source = new Map<string, number>([["a", 1]]);
+      const { parser, observations } = makeObservingParser(source);
+      const doc = getDocPage(parser, { annotations: {} });
+      assert.ok(doc !== undefined);
+      const docObs = observations.filter((o) => o.phase === "getDocFragments");
+      assert.ok(docObs.length > 0);
+      for (const obs of docObs) {
+        assert.equal(obs.state, source);
+      }
+    });
+
+    it("should not wrap state in getDocPageSync()", () => {
+      const { parser, observations } = makeObservingParser(undefined);
+      const doc = getDocPageSync(parser, { annotations: {} });
+      assert.ok(doc !== undefined);
+      const docObs = observations.filter((o) => o.phase === "getDocFragments");
+      assert.ok(docObs.length > 0);
+      for (const obs of docObs) {
+        assert.ok(!isInjectedAnnotationWrapper(obs.state));
+      }
+    });
+
+    it("should preserve Map identity in getDocPageSync()", () => {
+      const source = new Map<string, number>([["a", 1]]);
+      const { parser, observations } = makeObservingParser(source);
+      const doc = getDocPageSync(parser, { annotations: {} });
+      assert.ok(doc !== undefined);
+      const docObs = observations.filter((o) => o.phase === "getDocFragments");
+      assert.ok(docObs.length > 0);
+      for (const obs of docObs) {
+        assert.equal(obs.state, source);
+      }
+    });
+
+    it("should treat string-keyed annotations as a no-op in parse()", () => {
+      const { parser, observations } = makeObservingParser(undefined);
+      // JavaScript callers can construct string-keyed records even though the
+      // `Annotations` type only permits symbols.  Such records have no own
+      // symbol keys, so they must behave identically to an empty annotations
+      // object and leave parser state untouched.
+      const result = parse(parser, [], {
+        annotations: { stringKey: "value" } as unknown as Record<
+          symbol,
+          unknown
+        >,
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, undefined);
+      }
+      for (const obs of observations) {
+        assert.ok(!isInjectedAnnotationWrapper(obs.state));
+        assert.equal(getAnnotations(obs.state), undefined);
+      }
+    });
+
+    it("should not wrap state in getDocPageAsync()", async () => {
+      const { parser, observations } = makeObservingParser(undefined);
+      const doc = await getDocPageAsync(parser, { annotations: {} });
+      assert.ok(doc !== undefined);
+      const docObs = observations.filter((o) => o.phase === "getDocFragments");
+      assert.ok(docObs.length > 0);
+      for (const obs of docObs) {
+        assert.ok(!isInjectedAnnotationWrapper(obs.state));
+      }
+    });
+
+    it("should preserve Map identity in getDocPageAsync()", async () => {
+      const source = new Map<string, number>([["a", 1]]);
+      const { parser, observations } = makeObservingParser(source);
+      const doc = await getDocPageAsync(parser, { annotations: {} });
+      assert.ok(doc !== undefined);
+      const docObs = observations.filter((o) => o.phase === "getDocFragments");
+      assert.ok(docObs.length > 0);
+      for (const obs of docObs) {
+        assert.equal(obs.state, source);
+      }
+    });
   });
 });
 

@@ -7661,7 +7661,8 @@ describe("shouldDeferCompletion forwarding", () => {
         success: true,
         value: "hello",
       };
-      const annotations = { testCtx: "phase1" };
+      const testCtxKey = Symbol.for("@test/optional-defer-ctx");
+      const annotations = { [testCtxKey]: "phase1" };
       const annotatedOuter = injectAnnotations(
         [innerState] as [ValueParserResult<string>],
         annotations,
@@ -7741,7 +7742,8 @@ describe("shouldDeferCompletion forwarding", () => {
         success: true,
         value: "hello",
       };
-      const annotations = { testCtx: "phase1" };
+      const testCtxKey = Symbol.for("@test/withDefault-defer-ctx");
+      const annotations = { [testCtxKey]: "phase1" };
       const annotatedOuter = injectAnnotations(
         [innerState] as [ValueParserResult<string>],
         annotations,
