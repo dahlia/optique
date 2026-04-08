@@ -129,8 +129,12 @@ function toAsyncParser<TValue, TState>(
   };
   if (typeof validateValue === "function") {
     Object.defineProperty(asyncParser, "validateValue", {
+      // Preserve the original `this` binding in case an implementation
+      // of validateValue relies on it.  Other forwarding sites in the
+      // codebase use `.bind(parser)`; here we use `.call(parser, v)`
+      // since we already hold a destructured reference.
       // deno-lint-ignore require-await -- async wraps sync result
-      value: async (v: TValue) => validateValue(v),
+      value: async (v: TValue) => validateValue.call(parser, v),
       configurable: true,
       enumerable: false,
     });
