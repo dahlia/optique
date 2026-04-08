@@ -8060,6 +8060,51 @@ describe("validateValue forwarding through modifiers (#414)", () => {
       }
     });
 
+    it("preserves canonicalized element values from innerValidate", () => {
+      // When the inner value parser canonicalizes on parse (e.g., a
+      // URL parser that strips trailing slashes, or here a string
+      // parser that uppercases), CLI parsing passes the normalized
+      // value through.  The fallback path must do the same — returning
+      // the original array would let non-canonical values leak from
+      // bindEnv() / bindConfig() defaults (review r3048978718).
+      const upcaseString: ValueParser<"sync", string> = {
+        $mode: "sync",
+        metavar: "TEXT",
+        placeholder: "",
+        parse: (input: string) => ({
+          success: true,
+          value: input.toUpperCase(),
+        }),
+        format: (value: string) => value,
+      };
+      const parser = multiple(option("-x", upcaseString));
+      const result = parser.validateValue!(["hello", "world"]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, ["HELLO", "WORLD"]);
+      }
+    });
+
+    it("preserves canonicalized element values in async mode", async () => {
+      const upcaseString: ValueParser<"async", string> = {
+        $mode: "async",
+        metavar: "TEXT",
+        placeholder: "",
+        parse: (input: string) =>
+          Promise.resolve({ success: true, value: input.toUpperCase() }),
+        format: (value: string) => value,
+      };
+      const parser = multiple(option("-x", upcaseString));
+      const promise = parser.validateValue!(["foo", "bar"]);
+      assert.ok(promise instanceof Promise);
+      const result = await promise;
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, ["FOO", "BAR"]);
+      }
+    });
+
     it("rejects non-array fallback values", () => {
       // Fallback validation is the only barrier between a mis-typed
       // default (escaped via `as never`) and the parsed result; a

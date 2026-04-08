@@ -2394,21 +2394,41 @@ export function multiple<M extends Mode, TValue, TState>(
             ValueParserResult<readonly TValue[]>
           >;
         }
+        // Preserve any canonicalization performed by the inner
+        // parser's validateValue (e.g., a URL parser stripping
+        // trailing slashes) so the fallback path matches CLI parsing
+        // semantics.  Only allocate a new array when at least one
+        // element actually changed to avoid needless churn on the
+        // common "already canonical" case (see review r3048978718).
         return dispatchByMode(
           parser.$mode,
           () => {
+            let changed = false;
+            const normalized: TValue[] = [];
             for (const v of values) {
               const r = innerValidate(v) as ValueParserResult<TValue>;
               if (!r.success) return r;
+              normalized.push(r.value);
+              if (r.value !== v) changed = true;
             }
-            return { success: true as const, value: values };
+            return {
+              success: true as const,
+              value: changed ? normalized : values,
+            };
           },
           async () => {
+            let changed = false;
+            const normalized: TValue[] = [];
             for (const v of values) {
               const r = (await innerValidate(v)) as ValueParserResult<TValue>;
               if (!r.success) return r;
+              normalized.push(r.value);
+              if (r.value !== v) changed = true;
             }
-            return { success: true as const, value: values };
+            return {
+              success: true as const,
+              value: changed ? normalized : values,
+            };
           },
         ) as ModeValue<M, ValueParserResult<readonly TValue[]>>;
       },
