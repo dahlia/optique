@@ -387,7 +387,7 @@ Validation is forwarded through standard combinators (`optional()`,
 wrapping `bindEnv()` / `bindConfig()` layers.  `multiple()` validates
 each array element through the inner parser and additionally enforces
 its own `min` / `max` arity rules against the array length, so a
-config-loaded array that contains an invalid element or violates the
+fallback array that contains an invalid element or violates the
 configured arity is rejected.  Validation is intentionally *not*
 forwarded through `map()` because the mapping function is one-way: the
 mapped output type no longer corresponds to the inner parser's
