@@ -224,7 +224,7 @@ To be released.
     primitives, so positional arguments, subcommands, and top-level
     value-suggestion flows behave the same way they do without annotations.
     Wrapper compositions that forward primitive state directly, such as
-    `group(argument(...))`, inherit the fix as well.  [[#187]]
+    `group(argument(...))`, inherit the fix as well.  [[#187], [#781]]
 
  -  Expanded `or()`'s fully inferred overloads from 10 to 15 parser
     arguments, so large alternative sets keep precise union inference without
@@ -1614,6 +1614,7 @@ To be released.
 [#778]: https://github.com/dahlia/optique/pull/778
 [#779]: https://github.com/dahlia/optique/pull/779
 [#780]: https://github.com/dahlia/optique/pull/780
+[#781]: https://github.com/dahlia/optique/pull/781
 
 ### @optique/config
 
