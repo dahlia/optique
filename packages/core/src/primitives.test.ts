@@ -7140,14 +7140,25 @@ describe("validateValue on primitives (#414)", () => {
 
     it("returns success for boolean-flag option form (no value parser)", () => {
       const parser = option("-f");
-      // Flag-form options have no value parser; validateValue is
-      // optional on this path because there's nothing to validate —
-      // the only valid value is `true`.  If implemented, it must
-      // return success.
+      // Flag-form options have no value parser; `option().complete()`
+      // yields `true` when the flag is present and `false` when it is
+      // missing, so the accepted value domain is boolean.  The
+      // attached validator must therefore return success for both
+      // `true` and `false` — there are no constraints to enforce.
       if (typeof parser.validateValue === "function") {
-        const result = parser.validateValue(true);
-        assert.ok(result && typeof result === "object" && "success" in result);
-        assert.ok(result.success);
+        const trueResult = parser.validateValue(true);
+        assert.ok(
+          trueResult && typeof trueResult === "object" &&
+            "success" in trueResult,
+        );
+        assert.ok(trueResult.success);
+
+        const falseResult = parser.validateValue(false);
+        assert.ok(
+          falseResult && typeof falseResult === "object" &&
+            "success" in falseResult,
+        );
+        assert.ok(falseResult.success);
       }
     });
   });
