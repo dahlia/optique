@@ -3329,6 +3329,16 @@ describe("Annotations system", () => {
       }
     });
 
+    it("should preserve referential identity of plain object initial state", () => {
+      const source = { value: 1 };
+      const { parser, observations } = makeObservingParser(source);
+      const result = parse(parser, [], { annotations: {} });
+      assert.ok(result.success);
+      for (const obs of observations) {
+        assert.equal(obs.state, source);
+      }
+    });
+
     it("should not wrap state in parseAsync()", async () => {
       const { parseAsync } = await import("./parser.ts");
       const { isInjectedAnnotationWrapper } = await import("./annotations.ts");

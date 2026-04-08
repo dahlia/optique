@@ -91,14 +91,15 @@ To be released.
     `getDocPageAsync()` entrypoints treating `annotations: {}` as a
     state-wrapping operation instead of a no-op.  Previously, passing an
     empty annotations object caused primitive parser states to be wrapped in
-    an injected annotation wrapper and non-primitive states (arrays, `Date`,
-    `Map`, `Set`, `RegExp`, class instances) to be cloned, so custom parsers
-    could observe a changed state shape or identity even though there was no
-    annotation data to carry.  An annotations record with no own symbol keys
-    now behaves identically to omitting the `annotations` option entirely:
-    `injectAnnotations()` short-circuits, `injectAnnotationsIntoState()`
-    bypasses injection, and the top-level `parseSync()` / `parseAsync()`
-    unwrap step is no longer triggered.  [[#484]]
+    an injected annotation wrapper and non-primitive states (plain objects,
+    arrays, `Date`, `Map`, `Set`, `RegExp`, and class instances) to be
+    cloned, so custom parsers could observe a changed state shape or
+    identity even though there was no annotation data to carry.  An
+    annotations record with no own symbol keys now behaves identically to
+    omitting the `annotations` option entirely: `injectAnnotations()`
+    short-circuits, `injectAnnotationsIntoState()` bypasses injection, and
+    the top-level `parseSync()` / `parseAsync()` unwrap step is no longer
+    triggered.  [[#484]]
 
  -  Fixed `withDefault()` default thunks being evaluated more than once in
     nested `merge()` compositions.  When an outer `merge()` Phase 1 had

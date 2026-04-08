@@ -100,6 +100,13 @@ In this example, we attach a `configData` object containing default values.
 Custom parsers can later retrieve this data and use it as a fallback when
 command-line arguments are not provided.
 
+> [!NOTE]
+> An annotations object with no own symbol keys (e.g., the empty record
+> `{}`) is treated as equivalent to omitting the `annotations` option
+> entirely.  Parser state is left untouched in that case, so callers can
+> safely pass a computed annotations object without worrying about paying
+> a state-cloning cost when it happens to be empty.
+
 ### Accessing annotations
 
 Inside a parser, you can retrieve annotations using the `getAnnotations()`
