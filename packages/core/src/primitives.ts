@@ -1,4 +1,10 @@
 import {
+  getWrappedChildParseState,
+  getWrappedChildState,
+  isAnnotationWrappedInitialState,
+  normalizeInjectedAnnotationState,
+} from "./annotation-state.ts";
+import {
   type DerivedValueParser,
   getDefaultValuesFunction,
   getDependencyIds,
@@ -6,14 +12,7 @@ import {
   isDerivedValueParser,
   suggestWithDependency,
 } from "./dependency.ts";
-import {
-  annotateFreshArray,
-  annotationKey,
-  type Annotations,
-  getAnnotations,
-  injectAnnotations,
-  unwrapInjectedAnnotationWrapper,
-} from "./annotations.ts";
+import { annotateFreshArray, getAnnotations } from "./annotations.ts";
 import { extractDependencyMetadata } from "./dependency-metadata.ts";
 import {
   replayDerivedParser,
@@ -90,103 +89,6 @@ function withChildContext<TState>(
       }
       : {}),
   };
-}
-
-const annotationViewTargets = new WeakMap<object, object>();
-
-function unwrapAnnotationView<T>(value: T): T {
-  if (value == null || typeof value !== "object") {
-    return value;
-  }
-  return (annotationViewTargets.get(value as object) as T | undefined) ??
-    value;
-}
-
-function withAnnotationView<T extends object>(
-  state: T,
-  annotations: Annotations,
-): T {
-  const target = unwrapAnnotationView(state) as T;
-  const view = new Proxy(target, {
-    get(target, key) {
-      if (key === annotationKey) {
-        return annotations;
-      }
-      const value = Reflect.get(target, key, target);
-      return typeof value === "function" ? value.bind(target) : value;
-    },
-    has(target, key) {
-      return key === annotationKey || Reflect.has(target, key);
-    },
-  });
-  annotationViewTargets.set(view, target);
-  return view;
-}
-
-function normalizeInjectedAnnotationState<T>(state: T): T {
-  return unwrapInjectedAnnotationWrapper(state);
-}
-
-function isAnnotationWrappedInitialState(state: unknown): boolean {
-  return normalizeInjectedAnnotationState(state) === undefined;
-}
-
-function getWrappedChildParseState<TState>(
-  parentState: unknown,
-  childState: TState,
-  parser: Parser<Mode, unknown, unknown>,
-): TState {
-  const annotations = getAnnotations(parentState);
-  const shouldInheritAnnotations =
-    Reflect.get(parser, inheritParentAnnotationsKey) === true;
-  if (childState == null) {
-    if (annotations !== undefined && shouldInheritAnnotations) {
-      return injectAnnotations({}, annotations) as TState;
-    }
-    return childState;
-  }
-  if (
-    annotations === undefined ||
-    typeof childState !== "object" ||
-    getAnnotations(childState) === annotations ||
-    !shouldInheritAnnotations
-  ) {
-    return childState;
-  }
-  const injectedState = injectAnnotations(childState, annotations);
-  return getAnnotations(injectedState) === annotations
-    ? injectedState as TState
-    : childState;
-}
-
-function getWrappedChildState<TState>(
-  parentState: unknown,
-  childState: TState,
-  parser: Parser<Mode, unknown, unknown>,
-): TState {
-  const annotations = getAnnotations(parentState);
-  const shouldInheritAnnotations =
-    Reflect.get(parser, inheritParentAnnotationsKey) === true;
-  if (childState == null) {
-    if (annotations !== undefined && shouldInheritAnnotations) {
-      return injectAnnotations({}, annotations) as TState;
-    }
-    return childState;
-  }
-  if (
-    annotations === undefined ||
-    typeof childState !== "object" ||
-    getAnnotations(childState) === annotations
-  ) {
-    return childState;
-  }
-  if (shouldInheritAnnotations) {
-    const injectedState = injectAnnotations(childState, annotations);
-    if (getAnnotations(injectedState) === annotations) {
-      return injectedState as TState;
-    }
-  }
-  return withAnnotationView(childState, annotations) as TState;
 }
 
 /** @internal */
@@ -364,7 +266,6 @@ import type {
   ParserResult,
   Suggestion,
 } from "./parser.ts";
-import { inheritParentAnnotationsKey } from "./parser.ts";
 import {
   createErrorWithSuggestions,
   createSuggestionMessage,

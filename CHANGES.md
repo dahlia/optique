@@ -1313,6 +1313,7 @@ To be released.
 [#180]: https://github.com/dahlia/optique/issues/180
 [#183]: https://github.com/dahlia/optique/issues/183
 [#186]: https://github.com/dahlia/optique/issues/186
+[#187]: https://github.com/dahlia/optique/issues/187
 [#200]: https://github.com/dahlia/optique/issues/200
 [#223]: https://github.com/dahlia/optique/issues/223
 [#224]: https://github.com/dahlia/optique/issues/224

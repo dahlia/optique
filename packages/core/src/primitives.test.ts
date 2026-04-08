@@ -2089,6 +2089,16 @@ describe("primitives additional branch coverage", () => {
     assert.deepEqual(result, { success: true, value: "value" });
   });
 
+  it("map(argument()) stays annotation-transparent", () => {
+    const annotation = Symbol.for("@test/issue-187/map-argument");
+    const parser = map(argument(string()), (value) => value.toUpperCase());
+    const result = parse(parser, ["value"], {
+      annotations: { [annotation]: true },
+    });
+
+    assert.deepEqual(result, { success: true, value: "VALUE" });
+  });
+
   it("option parse rejects instead of throwing when async value parsing throws synchronously", async () => {
     const throwingParser: ValueParser<"async", string> = {
       $mode: "async",
@@ -2471,6 +2481,22 @@ describe("command", () => {
     });
 
     assert.deepEqual(suggestions, [{ kind: "literal", text: "go" }]);
+  });
+
+  it("group(command()) stays annotation-transparent", () => {
+    const annotation = Symbol.for("@test/issue-187/group-command");
+    const parser = group(
+      "Commands",
+      command("go", object({ silent: option("--silent") })),
+    );
+    const result = parse(parser, ["go", "--silent"], {
+      annotations: { [annotation]: true },
+    });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: { silent: true },
+    });
   });
 
   it("should create a parser that matches a subcommand and applies inner parser", () => {
