@@ -12,6 +12,7 @@ import {
   dispatchByMode,
   dispatchIterableByMode,
   mapModeValue,
+  wrapForMode,
 } from "./mode-dispatch.ts";
 import {
   defineInheritedAnnotationParser,
@@ -642,6 +643,26 @@ export function optional<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
+  // Forward value validation (see issue #414).  `undefined` always
+  // passes; everything else delegates to the inner validator.
+  if (typeof parser.validateValue === "function") {
+    const innerValidate = parser.validateValue.bind(parser);
+    Object.defineProperty(optionalParser, "validateValue", {
+      value(
+        v: TValue | undefined,
+      ): ModeValue<M, ValueParserResult<TValue | undefined>> {
+        if (v === undefined) {
+          return wrapForMode<M, ValueParserResult<TValue | undefined>>(
+            parser.$mode,
+            { success: true as const, value: v },
+          );
+        }
+        return innerValidate(v);
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
   // Compose dependency metadata for the optional wrapper.
   if (parser.dependencyMetadata != null) {
     const composed = composeDependencyMetadata(
@@ -991,11 +1012,15 @@ export function withDefault<
               };
             }
           };
-          return mapModeValue(
+          return mapModeValue<
+            M,
+            ValueParserResult<TValue>,
+            ValueParserResult<TValue | TDefault>
+          >(
             parser.$mode,
             innerResult,
             handleInnerResult,
-          ) as ModeValue<M, ValueParserResult<TValue | TDefault>>;
+          );
         }
         try {
           const value = evaluateDefault();
@@ -1113,6 +1138,24 @@ export function withDefault<
         } catch {
           return v;
         }
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  // Forward value validation as non-enumerable (see issue #414).  The
+  // inner validator already swallows exceptions from sentinel-default
+  // format() calls, so we delegate directly without an extra try/catch.
+  if (typeof parser.validateValue === "function") {
+    const innerValidate = parser.validateValue.bind(parser);
+    Object.defineProperty(withDefaultParser, "validateValue", {
+      value(
+        v: TValue | TDefault,
+      ): ModeValue<M, ValueParserResult<TValue | TDefault>> {
+        return innerValidate(v as TValue) as ModeValue<
+          M,
+          ValueParserResult<TValue | TDefault>
+        >;
       },
       configurable: true,
       enumerable: false,
@@ -1313,6 +1356,11 @@ export function map<M extends Mode, T, U, TState>(
   // spread.  The inner normalizer operates on type T, not the mapped type U,
   // so keeping it would corrupt mapped defaults.
   delete mappedParser.normalizeValue;
+  // Strip validateValue for the same reason (see issue #414): the
+  // inner validator operates on type T, not the mapped type U, so
+  // retaining it would attempt to format mapped outputs through the
+  // inner ValueParser and produce wrong results or crashes.
+  delete (mappedParser as { validateValue?: unknown }).validateValue;
   // Lazily compute the mapped placeholder.  Non-enumerable so that
   // further ...parser spreads in downstream wrappers do not eagerly
   // evaluate the getter and trigger inner factory side effects.
@@ -2269,6 +2317,129 @@ export function multiple<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
+  // Forward value validation (see issue #414): validate each element
+  // through the inner parser's validateValue and also re-check the
+  // multiple()'s own min/max rules against the array length.  Attached
+  // unconditionally so that multiple()'s arity bounds are enforced on
+  // fallback values even when the inner parser has no validateValue.
+  // Non-enumerable so map()'s spread does not propagate it.
+  {
+    const innerValidate = typeof parser.validateValue === "function"
+      ? parser.validateValue.bind(parser)
+      : undefined;
+    // Mirrors the arity branch of `validateMultipleResult` above so that
+    // fallback validation failures look identical to CLI failures (same
+    // number formatting via `toLocaleString("en")`, same "but got only"
+    // phrasing, and the same `options.errors.tooFew` / `tooMany`
+    // customization).
+    const validateArity = (
+      values: readonly TValue[],
+    ): ValueParserResult<readonly TValue[]> => {
+      if (values.length < min) {
+        const customMessage = options.errors?.tooFew;
+        return {
+          success: false,
+          error: customMessage
+            ? (typeof customMessage === "function"
+              ? customMessage(min, values.length)
+              : customMessage)
+            : message`Expected at least ${
+              text(min.toLocaleString("en"))
+            } values, but got only ${
+              text(values.length.toLocaleString("en"))
+            }.`,
+        };
+      }
+      if (values.length > max) {
+        const customMessage = options.errors?.tooMany;
+        return {
+          success: false,
+          error: customMessage
+            ? (typeof customMessage === "function"
+              ? customMessage(max, values.length)
+              : customMessage)
+            : message`Expected at most ${
+              text(max.toLocaleString("en"))
+            } values, but got ${text(values.length.toLocaleString("en"))}.`,
+        };
+      }
+      return { success: true as const, value: values };
+    };
+    Object.defineProperty(resultParser, "validateValue", {
+      value(
+        values: readonly TValue[],
+      ): ModeValue<M, ValueParserResult<readonly TValue[]>> {
+        // multiple() can never produce a non-array shape from CLI input,
+        // so a non-array fallback (e.g., an `as never`-coerced default
+        // or a mis-shaped config value) is always a type error and must
+        // be rejected rather than silently passed through (#414).  The
+        // error names the received type so users can locate the source.
+        if (!Array.isArray(values)) {
+          const actualType = values === null ? "null" : typeof values;
+          return wrapForMode<M, ValueParserResult<readonly TValue[]>>(
+            parser.$mode,
+            {
+              success: false as const,
+              error:
+                message`Expected an array of values, but received ${actualType}.`,
+            },
+          );
+        }
+        const arity = validateArity(values);
+        if (!arity.success) {
+          return wrapForMode<M, ValueParserResult<readonly TValue[]>>(
+            parser.$mode,
+            arity,
+          );
+        }
+        if (innerValidate == null) {
+          return wrapForMode<M, ValueParserResult<readonly TValue[]>>(
+            parser.$mode,
+            arity,
+          );
+        }
+        // Preserve any canonicalization performed by the inner
+        // parser's validateValue (e.g., a URL parser stripping
+        // trailing slashes) so the fallback path matches CLI parsing
+        // semantics.  Only allocate a new array when at least one
+        // element actually changed to avoid needless churn on the
+        // common "already canonical" case (see review r3048978718).
+        return dispatchByMode<M, ValueParserResult<readonly TValue[]>>(
+          parser.$mode,
+          () => {
+            let changed = false;
+            const normalized: TValue[] = [];
+            for (const v of values) {
+              const r = innerValidate(v) as ValueParserResult<TValue>;
+              if (!r.success) return r;
+              normalized.push(r.value);
+              if (r.value !== v) changed = true;
+            }
+            return {
+              success: true as const,
+              value: changed ? normalized : values,
+            };
+          },
+          async () => {
+            let changed = false;
+            const normalized: TValue[] = [];
+            for (const v of values) {
+              const r = (await innerValidate(v)) as ValueParserResult<TValue>;
+              if (!r.success) return r;
+              normalized.push(r.value);
+              if (r.value !== v) changed = true;
+            }
+            return {
+              success: true as const,
+              value: changed ? normalized : values,
+            };
+          },
+        );
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
   if (parser.dependencyMetadata?.source != null) {
     const innerSource = parser.dependencyMetadata.source;
     Object.defineProperty(resultParser, "dependencyMetadata", {
@@ -2447,6 +2618,18 @@ export function nonEmpty<M extends Mode, T, TState>(
   if (typeof parser.normalizeValue === "function") {
     Object.defineProperty(nonEmptyParser, "normalizeValue", {
       value: parser.normalizeValue.bind(parser),
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  // Forward value validation as non-enumerable (see issue #414).
+  // nonEmpty() is state-shape preserving and only constrains parse-time
+  // token consumption, so it can pass validateValue through to the
+  // inner parser unchanged.  Users who need an arity-1 enforcement on
+  // fallback values should use `multiple(..., { min: 1 })` directly.
+  if (typeof parser.validateValue === "function") {
+    Object.defineProperty(nonEmptyParser, "validateValue", {
+      value: parser.validateValue.bind(parser),
       configurable: true,
       enumerable: false,
     });

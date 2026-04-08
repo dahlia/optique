@@ -3,14 +3,21 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 import { getDocPage, parse, suggestSync } from "@optique/core/parser";
 import type { Parser } from "@optique/core/parser";
-import { concat, merge, object, or, tuple } from "@optique/core/constructs";
+import {
+  concat,
+  group,
+  merge,
+  object,
+  or,
+  tuple,
+} from "@optique/core/constructs";
 import { getAnnotations, injectAnnotations } from "@optique/core/annotations";
 import { dependency } from "@optique/core/dependency";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { constant, fail, flag, option } from "@optique/core/primitives";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { choice, integer, string } from "@optique/core/valueparser";
-import { message } from "@optique/core/message";
+import { formatMessage, message } from "@optique/core/message";
 import { bindEnv, createEnvContext } from "@optique/env";
 
 import type { Annotations } from "@optique/core/annotations";
@@ -341,6 +348,354 @@ describe("bindConfig", () => {
     const result = parse(parser, []);
     assert.ok(result.success);
     assert.equal(result.value, "localhost");
+  });
+
+  // Regression tests for issue #414: bindConfig() must revalidate fallback
+  // values (config-sourced values and configured defaults) against the
+  // inner CLI parser's constraints.
+  describe("fallback validation (#414)", () => {
+    test("rejects a default that fails the inner string pattern", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string().optional() }),
+      });
+      const parser = bindConfig(
+        option("--name", string({ pattern: /^[A-Z]+$/ })),
+        {
+          context,
+          key: "name",
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+      if (!result.success) {
+        // Lock in that the rejection is due to the pattern constraint,
+        // not some unrelated missing-value failure (#414).
+        const formatted = formatMessage(result.error);
+        assert.ok(
+          formatted.includes("--name"),
+          `expected error to mention --name, got: ${formatted}`,
+        );
+        assert.ok(
+          formatted.includes("pattern") || formatted.includes("/^[A-Z]+$/"),
+          `expected error to mention the pattern, got: ${formatted}`,
+        );
+      }
+    });
+
+    test("rejects a default that fails the inner integer bounds", () => {
+      const context = createConfigContext({
+        schema: z.object({ port: z.number().optional() }),
+      });
+      const parser = bindConfig(
+        option("--port", integer({ min: 1024, max: 65535 })),
+        {
+          context,
+          key: "port",
+          default: 80 as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const formatted = formatMessage(result.error);
+        assert.ok(
+          formatted.includes("--port"),
+          `expected error to mention --port, got: ${formatted}`,
+        );
+        // The inner integer() parser produces an "at least 1,024" message.
+        assert.ok(
+          formatted.includes("1,024"),
+          `expected error to mention the lower bound, got: ${formatted}`,
+        );
+      }
+    });
+
+    test("revalidates config values through the inner CLI parser", () => {
+      const context = createConfigContext({
+        schema: z.object({ port: z.number() }),
+      });
+      const parser = bindConfig(
+        option("--port", integer({ min: 1024 })),
+        {
+          context,
+          key: "port",
+          default: 8080,
+        },
+      );
+      const annotations: Annotations = {
+        [context.id]: { data: { port: 80 } },
+      };
+      const result = parse(parser, [], { annotations });
+      assert.ok(!result.success);
+      if (!result.success) {
+        const formatted = formatMessage(result.error);
+        assert.ok(
+          formatted.includes("--port"),
+          `expected error to mention --port, got: ${formatted}`,
+        );
+        assert.ok(
+          formatted.includes("1,024"),
+          `expected error to mention the lower bound, got: ${formatted}`,
+        );
+      }
+    });
+
+    test("accepts valid defaults without breaking existing usage", () => {
+      const context = createConfigContext({
+        schema: z.object({ port: z.number().optional() }),
+      });
+      const parser = bindConfig(
+        option("--port", integer({ min: 1, max: 65535 })),
+        {
+          context,
+          key: "port",
+          default: 3000,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, 3000);
+    });
+
+    test("validates defaults through optional() wrapping", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string().optional() }),
+      });
+      const parser = bindConfig(
+        optional(option("--name", string({ pattern: /^[A-Z]+$/ }))),
+        {
+          context,
+          key: "name",
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    test("validates defaults through withDefault() wrapping", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string().optional() }),
+      });
+      const parser = bindConfig(
+        withDefault(
+          option("--name", string({ pattern: /^[A-Z]+$/ })),
+          "FALLBACK",
+        ),
+        {
+          context,
+          key: "name",
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    test("falls through map() without validation", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string().optional() }),
+      });
+      const parser = bindConfig(
+        map(option("--name", string()), (n) => n.toUpperCase()),
+        {
+          context,
+          key: "name",
+          default: "already-upper" as never,
+        },
+      );
+      // map() strips validateValue; fallback is returned unvalidated.
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, "already-upper");
+    });
+
+    test("propagates validation into bindEnv(bindConfig(...)) composition", () => {
+      const configContext = createConfigContext({
+        schema: z.object({ name: z.string().optional() }),
+      });
+      const envContext = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        bindConfig(
+          option("--name", string({ pattern: /^[A-Z]+$/ })),
+          {
+            context: configContext,
+            key: "name",
+          },
+        ),
+        {
+          context: envContext,
+          key: "NAME",
+          parser: string(),
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    test("validates dependency-source config values through inner parser", () => {
+      const context = createConfigContext({
+        schema: z.object({ port: z.number() }),
+      });
+      const source = dependency(integer({ min: 1024 }));
+      const portParser = bindConfig(option("--port", source), {
+        context,
+        key: "port",
+      });
+      const annotations: Annotations = {
+        [context.id]: { data: { port: 80 } },
+      };
+      const parseResult = portParser.parse({
+        buffer: [],
+        state: injectAnnotations(portParser.initialState, annotations),
+        optionsTerminated: false,
+        usage: portParser.usage,
+      });
+      assert.ok(parseResult.success);
+      const extracted = portParser.dependencyMetadata?.source
+        ?.extractSourceValue(parseResult.next.state);
+      assert.ok(extracted != null && !(extracted instanceof Promise));
+      assert.ok(!extracted.success);
+    });
+
+    test("validates dependency-source defaults through inner parser", () => {
+      const context = createConfigContext({
+        schema: z.object({ port: z.number().optional() }),
+      });
+      const source = dependency(integer({ min: 1024 }));
+      const portParser = bindConfig(option("--port", source), {
+        context,
+        key: "port",
+        default: 80 as never,
+      });
+      const parseResult = portParser.parse({
+        buffer: [],
+        state: portParser.initialState,
+        optionsTerminated: false,
+        usage: portParser.usage,
+      });
+      assert.ok(parseResult.success);
+      // getMissingSourceValue routes through inner parser's validator.
+      const getMissing = portParser.dependencyMetadata?.source
+        ?.getMissingSourceValue;
+      assert.ok(typeof getMissing === "function");
+      const missing = getMissing!();
+      assert.ok(missing != null && !(missing instanceof Promise));
+      assert.ok(!missing.success);
+    });
+
+    test("bindConfig revalidates each element of a multiple() fallback", () => {
+      const context = createConfigContext({
+        schema: z.object({
+          roles: z.array(z.string()).optional(),
+        }),
+      });
+      const parser = bindConfig(
+        multiple(option("--role", choice(["admin", "user"] as const))),
+        {
+          context,
+          key: "roles",
+        },
+      );
+      const annotations: Annotations = {
+        [context.id]: { data: { roles: ["admin", "root"] as const } as never },
+      };
+      const result = parse(parser, [], { annotations });
+      assert.ok(!result.success);
+    });
+
+    test("bindConfig rejects multiple() defaults below the min arity", () => {
+      const context = createConfigContext({
+        schema: z.object({ tags: z.array(z.string()).optional() }),
+      });
+      const parser = bindConfig(
+        multiple(option("--tag", string()), { min: 2 }),
+        {
+          context,
+          key: "tags",
+          default: ["only-one"] as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    test("bindConfig fallback errors carry the option-name prefix", () => {
+      const context = createConfigContext({
+        schema: z.object({ port: z.number().optional() }),
+      });
+      const parser = bindConfig(
+        option("--port", integer({ min: 1024, max: 65535 })),
+        {
+          context,
+          key: "port",
+          default: 80 as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const formatted = formatMessage(result.error);
+        assert.ok(
+          formatted.includes("--port"),
+          `expected error to include --port prefix, got: ${formatted}`,
+        );
+      }
+    });
+
+    test("does not attach validateValue to derived value parsers", () => {
+      const source = dependency(string());
+      const derived = source.deriveSync({
+        metavar: "TAG",
+        defaultValue: () => "default-dep",
+        factory: (dep: string): ValueParser<"sync", string> => ({
+          $mode: "sync",
+          metavar: "TAG",
+          placeholder: "",
+          parse: (input: string) => ({
+            success: true as const,
+            value: `${dep}:${input}`,
+          }),
+          format: (value: string) => value,
+        }),
+      });
+      const derivedOption = option("--tag", derived);
+      assert.equal(derivedOption.validateValue, undefined);
+      const context = createConfigContext({
+        schema: z.object({ tag: z.string().optional() }),
+      });
+      const parser = bindConfig(derivedOption, {
+        context,
+        key: "tag",
+        default: "fallback" as never,
+      });
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, "fallback");
+    });
+
+    test("forwards validateValue through group() wrapping", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string().optional() }),
+      });
+      const parser = bindConfig(
+        group(
+          "Server",
+          option("--name", string({ pattern: /^[A-Z]+$/ })),
+        ),
+        {
+          context,
+          key: "name",
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
   });
 
   test("marks usage as optional when default is provided", () => {

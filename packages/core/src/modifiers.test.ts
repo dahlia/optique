@@ -7918,3 +7918,346 @@ describe("multiple() dependency source extraction", () => {
     assert.deepEqual(visited, [latest, earlier]);
   });
 });
+
+describe("validateValue forwarding through modifiers (#414)", () => {
+  describe("optional()", () => {
+    it("forwards validation to the inner parser for defined values", () => {
+      const parser = optional(option("-x", integer({ min: 1, max: 10 })));
+      assert.ok(typeof parser.validateValue === "function");
+      const result = parser.validateValue!(99);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("returns success for undefined values", () => {
+      const parser = optional(option("-x", integer({ min: 1, max: 10 })));
+      const result = parser.validateValue!(undefined);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, undefined);
+    });
+
+    it("returns success for valid defined values", () => {
+      const parser = optional(option("-x", integer({ min: 1, max: 10 })));
+      const result = parser.validateValue!(5);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, 5);
+    });
+  });
+
+  describe("withDefault()", () => {
+    it("forwards validation to the inner parser", () => {
+      const parser = withDefault(
+        option("-x", integer({ min: 1, max: 10 })),
+        5,
+      );
+      assert.ok(typeof parser.validateValue === "function");
+      const result = parser.validateValue!(99);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("accepts valid values from the inner parser's type", () => {
+      const parser = withDefault(
+        option("-x", integer({ min: 1, max: 10 })),
+        5,
+      );
+      const result = parser.validateValue!(7);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, 7);
+    });
+  });
+
+  describe("map()", () => {
+    it("strips validateValue because the mapping is one-way", () => {
+      const parser = map(
+        option("-x", integer({ min: 1, max: 10 })),
+        (n) => n * 2,
+      );
+      assert.equal(parser.validateValue, undefined);
+    });
+  });
+
+  describe("multiple()", () => {
+    it("validates each element through the inner parser", () => {
+      const parser = multiple(option("-x", integer({ min: 1, max: 10 })));
+      assert.ok(typeof parser.validateValue === "function");
+      const result = parser.validateValue!([5, 99, 3]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("accepts arrays where every element is valid", () => {
+      const parser = multiple(option("-x", integer({ min: 1, max: 10 })));
+      const result = parser.validateValue!([1, 5, 10]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+    });
+
+    it("rejects arrays shorter than min", () => {
+      const parser = multiple(option("-x", string()), { min: 2 });
+      assert.ok(typeof parser.validateValue === "function");
+      const result = parser.validateValue!(["only-one"]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("rejects arrays longer than max", () => {
+      const parser = multiple(option("-x", string()), { max: 2 });
+      const result = parser.validateValue!(["a", "b", "c"]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("accepts arrays within min and max", () => {
+      const parser = multiple(option("-x", string()), { min: 1, max: 3 });
+      const result = parser.validateValue!(["a", "b"]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+    });
+
+    it("formats arity errors identically to the CLI path", () => {
+      const parser = multiple(option("-x", string()), { min: 3 });
+      const result = parser.validateValue!(["a"]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(
+          formatMessage(result.error),
+          "Expected at least 3 values, but got only 1.",
+        );
+      }
+    });
+
+    it("honors options.errors.tooFew in validateValue", () => {
+      const parser = multiple(option("-x", string()), {
+        min: 3,
+        errors: { tooFew: message`custom too-few.` },
+      });
+      const result = parser.validateValue!(["a"]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(formatMessage(result.error), "custom too-few.");
+      }
+    });
+
+    it("honors options.errors.tooMany in validateValue", () => {
+      const parser = multiple(option("-x", string()), {
+        max: 2,
+        errors: {
+          tooMany: (max, actual) =>
+            message`too many: ${text(String(max))}/${text(String(actual))}.`,
+        },
+      });
+      const result = parser.validateValue!(["a", "b", "c"]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(formatMessage(result.error), "too many: 2/3.");
+      }
+    });
+
+    it("preserves canonicalized element values from innerValidate", () => {
+      // When the inner value parser canonicalizes on parse (e.g., a
+      // URL parser that strips trailing slashes, or here a string
+      // parser that uppercases), CLI parsing passes the normalized
+      // value through.  The fallback path must do the same — returning
+      // the original array would let non-canonical values leak from
+      // bindEnv() / bindConfig() defaults (review r3048978718).
+      const upcaseString: ValueParser<"sync", string> = {
+        $mode: "sync",
+        metavar: "TEXT",
+        placeholder: "",
+        parse: (input: string) => ({
+          success: true,
+          value: input.toUpperCase(),
+        }),
+        format: (value: string) => value,
+      };
+      const parser = multiple(option("-x", upcaseString));
+      const result = parser.validateValue!(["hello", "world"]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, ["HELLO", "WORLD"]);
+      }
+    });
+
+    it("preserves canonicalized element values in async mode", async () => {
+      const upcaseString: ValueParser<"async", string> = {
+        $mode: "async",
+        metavar: "TEXT",
+        placeholder: "",
+        parse: (input: string) =>
+          Promise.resolve({ success: true, value: input.toUpperCase() }),
+        format: (value: string) => value,
+      };
+      const parser = multiple(option("-x", upcaseString));
+      const promise = parser.validateValue!(["foo", "bar"]);
+      assert.ok(promise instanceof Promise);
+      const result = await promise;
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, ["FOO", "BAR"]);
+      }
+    });
+
+    it("rejects non-array fallback values", () => {
+      // Fallback validation is the only barrier between a mis-typed
+      // default (escaped via `as never`) and the parsed result; a
+      // multiple() parser can never produce a non-array shape from CLI
+      // input, so validateValue must reject one instead of silently
+      // accepting it (see review comment r3048902497).
+      const parser = multiple(option("-x", string()));
+      const stringResult = parser.validateValue!("admin" as never);
+      assert.ok(
+        stringResult && typeof stringResult === "object" &&
+          "success" in stringResult,
+      );
+      assert.ok(!stringResult.success);
+      if (!stringResult.success) {
+        const formatted = formatMessage(stringResult.error);
+        assert.ok(
+          formatted.includes("array"),
+          `expected error to mention "array", got: ${formatted}`,
+        );
+        assert.ok(
+          formatted.includes("string"),
+          `expected error to mention the received type, got: ${formatted}`,
+        );
+      }
+
+      const nullResult = parser.validateValue!(null as never);
+      assert.ok(
+        nullResult && typeof nullResult === "object" && "success" in nullResult,
+      );
+      assert.ok(!nullResult.success);
+      if (!nullResult.success) {
+        const formatted = formatMessage(nullResult.error);
+        assert.ok(
+          formatted.includes("null"),
+          `expected error to mention "null", got: ${formatted}`,
+        );
+      }
+    });
+  });
+
+  describe("nonEmpty()", () => {
+    it("passes validateValue through from the inner parser", () => {
+      const parser = nonEmpty(
+        multiple(option("-x", integer({ min: 1, max: 10 }))),
+      );
+      assert.ok(typeof parser.validateValue === "function");
+      const result = parser.validateValue!([99, 5]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("accepts values that pass the inner parser's validation", () => {
+      const parser = nonEmpty(
+        multiple(option("-x", integer({ min: 1, max: 10 }))),
+      );
+      const result = parser.validateValue!([5, 7]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+    });
+
+    it("does not add fallback arity checks beyond inner validateValue", () => {
+      // nonEmpty() enforces arity at CLI parse time only; on the fallback
+      // path it must delegate entirely to the inner parser's validator
+      // (see review comment r3048781571).  With an inner multiple()
+      // whose min is 0, an empty array must pass; with min 1 it must
+      // fail because the inner multiple enforces the arity.
+      const min0 = nonEmpty(
+        multiple(option("-x", integer({ min: 1, max: 10 })), { min: 0 }),
+      );
+      const min0Result = min0.validateValue!([]);
+      assert.ok(min0Result && "success" in min0Result);
+      assert.ok(min0Result.success);
+      if (min0Result.success) assert.deepEqual(min0Result.value, []);
+
+      const min1 = nonEmpty(
+        multiple(option("-x", integer({ min: 1, max: 10 })), { min: 1 }),
+      );
+      const min1Result = min1.validateValue!([]);
+      assert.ok(min1Result && "success" in min1Result);
+      assert.ok(!min1Result.success);
+    });
+  });
+
+  describe("async mode", () => {
+    it("optional() forwards validateValue in async mode", async () => {
+      const parser = optional(
+        option("--format", asyncChoice(["json", "yaml"] as const)),
+      );
+      assert.ok(typeof parser.validateValue === "function");
+      const badResult = parser.validateValue!("xml" as never);
+      assert.ok(badResult instanceof Promise);
+      const bad = await badResult;
+      assert.ok(!bad.success);
+
+      const goodResult = parser.validateValue!("json");
+      assert.ok(goodResult instanceof Promise);
+      const good = await goodResult;
+      assert.ok(good.success);
+      if (good.success) assert.equal(good.value, "json");
+
+      const undefResult = parser.validateValue!(undefined);
+      assert.ok(undefResult instanceof Promise);
+      const undef = await undefResult;
+      assert.ok(undef.success);
+    });
+
+    it("withDefault() forwards validateValue in async mode", async () => {
+      const parser = withDefault(
+        option("--format", asyncChoice(["json", "yaml"] as const)),
+        "json" as const,
+      );
+      assert.ok(typeof parser.validateValue === "function");
+      const badResult = parser.validateValue!("xml" as never);
+      assert.ok(badResult instanceof Promise);
+      const bad = await badResult;
+      assert.ok(!bad.success);
+    });
+
+    it("multiple() validates each element in async mode", async () => {
+      const parser = multiple(
+        option("--format", asyncChoice(["json", "yaml"] as const)),
+      );
+      assert.ok(typeof parser.validateValue === "function");
+      const badResult = parser.validateValue!(["json", "xml" as never]);
+      assert.ok(badResult instanceof Promise);
+      const bad = await badResult;
+      assert.ok(!bad.success);
+
+      const goodResult = parser.validateValue!(["json", "yaml"]);
+      assert.ok(goodResult instanceof Promise);
+      const good = await goodResult;
+      assert.ok(good.success);
+    });
+
+    it("nonEmpty() forwards validateValue in async mode", async () => {
+      const parser = nonEmpty(
+        multiple(
+          option("--format", asyncChoice(["json", "yaml"] as const)),
+        ),
+      );
+      assert.ok(typeof parser.validateValue === "function");
+      const result = parser.validateValue!(["json", "xml" as never]);
+      assert.ok(result instanceof Promise);
+      const awaited = await result;
+      assert.ok(!awaited.success);
+    });
+
+    it("map() strips validateValue in async mode too", () => {
+      const parser = map(
+        option("--format", asyncChoice(["json", "yaml"] as const)),
+        (format) => format.toUpperCase(),
+      );
+      assert.equal(parser.validateValue, undefined);
+    });
+  });
+});

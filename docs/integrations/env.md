@@ -356,6 +356,63 @@ Invalid Boolean value: "maybe". Expected one of "true", "1", "yes", "on",
 "false", "0", "no", or "off"
 ~~~~
 
+### Fallback validation
+
+Since Optique 1.0.0, fallback values produced by `bindEnv()` are
+re-validated against the inner CLI parser's constraints (regex patterns,
+numeric bounds, `choice()` values, etc.).  This applies to both
+environment variable values — which may have been parsed by a looser
+env-level `parser` option — and to the configured `default`.
+
+For example, the following parser rejects the default `"abc"` because
+it does not match the inner CLI pattern `/^[A-Z]+$/`:
+
+~~~~ typescript twoslash
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { bindEnv, createEnvContext } from "@optique/env";
+
+const envContext = createEnvContext({ prefix: "MYAPP_" });
+// ---cut-before---
+bindEnv(option("--name", string({ pattern: /^[A-Z]+$/ })), {
+  context: envContext,
+  key: "NAME",
+  parser: string(), // looser than the inner parser
+  default: "abc", // rejected at runtime: must match /^[A-Z]+$/
+});
+~~~~
+
+Validation is forwarded through standard combinators (`optional()`,
+`withDefault()`, `group()`, `command()`) and through wrapping
+`bindEnv()` / `bindConfig()` layers, so a constraint defined on a deeply
+nested primitive is still enforced against a fallback value.
+
+`multiple()` attaches its own `validateValue`: it enforces the
+configured `min` / `max` arity against the fallback array length and,
+*if* the inner parser exposes a `validateValue` hook, walks each
+element through it.  Arity enforcement is unconditional — it kicks in
+even when the inner parser has no `validateValue` — and a non-array
+fallback (for example a mis-typed default escaped through `as never`)
+is rejected outright because `multiple()` can never produce a
+non-array shape from CLI input.
+
+`nonEmpty()` is a pure pass-through: it does not add an extra
+non-empty check on the fallback path.  On the CLI path `nonEmpty()`
+still enforces that at least one token was consumed, but on fallback
+values `nonEmpty(multiple(...))` delegates entirely to the inner
+`multiple()`'s arity rules.  If you need a “must have at least one
+element” guarantee against fallback arrays, use
+`multiple(..., { min: 1 })` directly.
+
+`map()`, `derive()`, and `deriveFrom()` intentionally *strip* the
+inner parser's `validateValue`: the mapping function is one-way, so
+the mapped output type no longer corresponds to the inner parser's
+constraints, and derived value parsers rebuild from *default*
+dependency values rather than the live-resolved ones.  Wrapping an
+inner parser in any of these suppresses revalidation of the wrapped
+primitive's constraints — but outer combinators layered above
+(notably `multiple()`) still enforce their own checks.
+
 ### Help, version, and completion
 
 Like config contexts, environment contexts work seamlessly with help,
@@ -410,6 +467,12 @@ Returns
 
 Binds a parser to environment variables with fallback priority
 (CLI > environment > default > error).
+
+Fallback values — environment variable values and the configured
+`default` — are re-validated against the inner CLI parser's constraints,
+so constraints like `integer({ min })`, `string({ pattern })`, and
+`choice([...])` cannot be bypassed through an environment variable or
+default.  See *Fallback validation* under “Error handling” for details.
 
 Parameters
 :    -  `parser`: The inner parser to wrap.

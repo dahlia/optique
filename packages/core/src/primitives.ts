@@ -13,7 +13,11 @@ import {
   replayDerivedParserAsync,
 } from "./dependency-runtime.ts";
 import type { DocFragment } from "./doc.ts";
-import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
+import {
+  dispatchByMode,
+  dispatchIterableByMode,
+  wrapForMode,
+} from "./mode-dispatch.ts";
 import type { TraceEntry } from "./input-trace.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import { validateCommandNames, validateOptionNames } from "./validate.ts";
@@ -950,6 +954,16 @@ export function option<M extends Mode, T>(
   const dependencyMetadata = valueParser != null
     ? extractDependencyMetadata(valueParser)
     : undefined;
+  // Shared error formatter used by both complete() and validateValue()
+  // so that fallback validation errors from bindEnv() / bindConfig()
+  // carry the same option-name prefix and `options.errors.invalidValue`
+  // customization as CLI-sourced errors (see issue #414).
+  const formatInvalidValueError = (error: Message): Message =>
+    options.errors?.invalidValue
+      ? (typeof options.errors.invalidValue === "function"
+        ? options.errors.invalidValue(error)
+        : options.errors.invalidValue)
+      : message`${eOptionNames(optionNames)}: ${error}`;
 
   // Use 'as any' to allow both sync and async returns from parse method
   // The actual mode is set correctly at the end via spread with $mode
@@ -1274,12 +1288,6 @@ export function option<M extends Mode, T>(
       state: ValueParserResult<T | boolean> | undefined,
       exec?: ExecutionContext,
     ): ModeValue<M, ValueParserResult<T | boolean>> {
-      const formatInvalidValueError = (error: Message) =>
-        options.errors?.invalidValue
-          ? (typeof options.errors.invalidValue === "function"
-            ? options.errors.invalidValue(error)
-            : options.errors.invalidValue)
-          : message`${eOptionNames(optionNames)}: ${error}`;
       const missing = valueParser == null
         ? { success: true as const, value: false }
         : {
@@ -1398,6 +1406,94 @@ export function option<M extends Mode, T>(
         } catch {
           return v;
         }
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  // Define validateValue as non-enumerable so that ...parser spread in
+  // map() does not propagate it to the mapped type (see issue #414).
+  // Re-validates a value as if it had been parsed from CLI input by
+  // round-tripping through ValueParser.format() + ValueParser.parse().
+  // Used by bindEnv() and bindConfig() to enforce parser constraints
+  // on fallback values.
+  //
+  // Derived value parsers (`deriveFrom`) are exempt: their `format()`
+  // rebuilds the parser from *default* dependency values rather than
+  // the live ones resolved at parse time, so a format+parse round-trip
+  // would validate against the wrong branch.  For those parsers we
+  // return the value unchanged instead of mis-validating.
+  if (valueParser == null) {
+    // Flag-form option (no value parser): the runtime value is a plain
+    // boolean — `true` when the flag is present and `false` when it is
+    // missing (see `option().complete()`).  There are no shape
+    // constraints to enforce, but fallback values from `bindEnv()` /
+    // `bindConfig()` originate in `unknown`-typed config / env sources
+    // and a non-boolean would otherwise leak through as the parsed
+    // result.  Reject non-booleans with an option-scoped error and
+    // accept any boolean unchanged.  Having *some* validator attached
+    // also lets bindEnv(flag-form) / bindConfig(flag-form) forward
+    // validateValue through downstream wrappers without losing the hook.
+    Object.defineProperty(result, "validateValue", {
+      value(v: boolean): ModeValue<M, ValueParserResult<boolean>> {
+        if (typeof v !== "boolean") {
+          const actualType = v === null ? "null" : typeof v;
+          return wrapForMode(mode, {
+            success: false as const,
+            error: formatInvalidValueError(
+              message`Expected a boolean value, but received ${actualType}.`,
+            ),
+          });
+        }
+        return wrapForMode(mode, { success: true as const, value: v });
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  } else if (!isDerivedValueParser(valueParser)) {
+    const vp = valueParser;
+    // Wraps a ValueParser.parse() failure with the same option-scoped
+    // error formatting that `complete()` applies to CLI-sourced errors,
+    // so fallback validation failures look identical to CLI failures.
+    const wrapParseResult = (
+      parsed: ValueParserResult<T>,
+    ): ValueParserResult<T | boolean> =>
+      parsed.success
+        ? parsed
+        : { success: false, error: formatInvalidValueError(parsed.error) };
+    Object.defineProperty(result, "validateValue", {
+      value(
+        v: T | boolean,
+      ): ModeValue<M, ValueParserResult<T | boolean>> {
+        let stringified: string;
+        try {
+          stringified = vp.format(v as T);
+        } catch {
+          // format() may throw for sentinel defaults whose type cannot
+          // be serialized by this value parser.  Skip validation and
+          // return success unchanged so sentinel-default users are
+          // not broken.
+          return wrapForMode(mode, {
+            success: true as const,
+            value: v,
+          });
+        }
+        if (typeof stringified !== "string") {
+          // A non-string serialization is unsupported for the round-
+          // trip; skip validation rather than crashing.
+          return wrapForMode(mode, {
+            success: true as const,
+            value: v,
+          });
+        }
+        return dispatchByMode(
+          mode,
+          () =>
+            wrapParseResult(
+              (vp as ValueParser<"sync", T>).parse(stringified),
+            ),
+          async () => wrapParseResult(await vp.parse(stringified)),
+        );
       },
       configurable: true,
       enumerable: false,
@@ -1874,6 +1970,16 @@ export function argument<M extends Mode, T>(
   const isAsync = valueParser.$mode === "async";
   const syncValueParser = valueParser as ValueParser<"sync", T>;
   const dependencyMetadata = extractDependencyMetadata(valueParser);
+  // Shared error formatter used by both complete() and validateValue()
+  // so that fallback validation errors from bindEnv() / bindConfig()
+  // carry the same metavar prefix and `options.errors.invalidValue`
+  // customization as CLI-sourced errors (see issue #414).
+  const formatInvalidValueError = (error: Message): Message =>
+    options.errors?.invalidValue
+      ? (typeof options.errors.invalidValue === "function"
+        ? options.errors.invalidValue(error)
+        : options.errors.invalidValue)
+      : message`${metavar(valueParser.metavar)}: ${error}`;
 
   const optionPattern = /^--?[a-z0-9-]+$/i;
   const term: UsageTerm = {
@@ -2001,12 +2107,6 @@ export function argument<M extends Mode, T>(
       state: ValueParserResult<T> | undefined,
       exec?: ExecutionContext,
     ): ModeValue<M, ValueParserResult<T>> {
-      const formatInvalidValueError = (error: Message) =>
-        options.errors?.invalidValue
-          ? (typeof options.errors.invalidValue === "function"
-            ? options.errors.invalidValue(error)
-            : options.errors.invalidValue)
-          : message`${metavar(valueParser.metavar)}: ${error}`;
       const missing = {
         success: false as const,
         error: options.errors?.endOfInput ??
@@ -2114,6 +2214,59 @@ export function argument<M extends Mode, T>(
         } catch {
           return v;
         }
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  // Define validateValue as non-enumerable so that ...parser spread in
+  // map() does not propagate it to the mapped type (see issue #414).
+  // Re-validates a value as if it had been parsed from CLI input by
+  // round-tripping through ValueParser.format() + ValueParser.parse().
+  //
+  // Derived value parsers (`deriveFrom`) are exempt: their `format()`
+  // rebuilds the parser from *default* dependency values rather than
+  // the live ones resolved at parse time, so a format+parse round-trip
+  // would validate against the wrong branch.  For those parsers we
+  // skip attaching validateValue entirely.
+  if (!isDerivedValueParser(valueParser)) {
+    const vp = valueParser;
+    const vpMode = valueParser.$mode;
+    // Wraps a ValueParser.parse() failure with the same metavar-scoped
+    // error formatting that `complete()` applies to CLI-sourced errors,
+    // so fallback validation failures look identical to CLI failures.
+    const wrapParseResult = (
+      parsed: ValueParserResult<T>,
+    ): ValueParserResult<T> =>
+      parsed.success
+        ? parsed
+        : { success: false, error: formatInvalidValueError(parsed.error) };
+    Object.defineProperty(result, "validateValue", {
+      value(v: T): ModeValue<M, ValueParserResult<T>> {
+        let stringified: string;
+        try {
+          stringified = vp.format(v);
+        } catch {
+          // format() may throw for sentinel defaults whose type cannot
+          // be serialized by this value parser.  Skip validation and
+          // return success unchanged so sentinel-default users are
+          // not broken.
+          return wrapForMode<M, ValueParserResult<T>>(vpMode, {
+            success: true as const,
+            value: v,
+          });
+        }
+        if (typeof stringified !== "string") {
+          return wrapForMode<M, ValueParserResult<T>>(vpMode, {
+            success: true as const,
+            value: v,
+          });
+        }
+        return dispatchByMode<M, ValueParserResult<T>>(
+          vpMode,
+          () => wrapParseResult(syncValueParser.parse(stringified)),
+          async () => wrapParseResult(await vp.parse(stringified)),
+        );
       },
       configurable: true,
       enumerable: false,
@@ -2646,6 +2799,16 @@ export function command<M extends Mode, T, TState>(
   if (typeof parser.normalizeValue === "function") {
     Object.defineProperty(result, "normalizeValue", {
       value: parser.normalizeValue.bind(parser),
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  // Forward fallback validation as non-enumerable (see issue #414).
+  // command() is a transparent wrapper over its inner parser, so when
+  // a command's result has a validateValue hook it is delegated as-is.
+  if (typeof parser.validateValue === "function") {
+    Object.defineProperty(result, "validateValue", {
+      value: parser.validateValue.bind(parser),
       configurable: true,
       enumerable: false,
     });

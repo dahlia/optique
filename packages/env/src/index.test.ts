@@ -13,10 +13,15 @@ import {
 } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import { runWith } from "@optique/core/facade";
-import { message } from "@optique/core/message";
+import { formatMessage, message } from "@optique/core/message";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Parser } from "@optique/core/parser";
-import { parse, suggestAsync, suggestSync } from "@optique/core/parser";
+import {
+  parse,
+  parseAsync,
+  suggestAsync,
+  suggestSync,
+} from "@optique/core/parser";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { constant, fail, flag, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
@@ -570,6 +575,330 @@ describe("bindEnv()", () => {
     }
     const result = parse(parser, [], { annotations });
     assert.ok(!result.success);
+  });
+
+  // Regression tests for issue #414: bindEnv() must revalidate fallback
+  // values (env-sourced values parsed by a looser env parser, and
+  // configured defaults) against the inner CLI parser's constraints.
+  describe("fallback validation (#414)", () => {
+    it("rejects a default that fails the inner string pattern", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        option("--name", string({ pattern: /^[A-Z]+$/ })),
+        {
+          context,
+          key: "NAME",
+          parser: string(),
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    it("rejects a default that fails the inner integer bounds", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        option("--port", integer({ min: 1024, max: 65535 })),
+        {
+          context,
+          key: "PORT",
+          parser: integer(),
+          default: 80 as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    it("revalidates env values through the inner CLI parser", () => {
+      const context = createEnvContext({
+        source: (key) => ({ PORT: "80" })[key],
+      });
+      const parser = bindEnv(
+        option("--port", integer({ min: 1024 })),
+        {
+          context,
+          key: "PORT",
+          parser: integer(),
+          default: 8080,
+        },
+      );
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const result = parse(parser, [], { annotations });
+      assert.ok(!result.success);
+    });
+
+    it("accepts valid defaults without breaking existing usage", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        option("--port", integer({ min: 1, max: 65535 })),
+        {
+          context,
+          key: "PORT",
+          parser: integer(),
+          default: 3000,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, 3000);
+    });
+
+    it("validates defaults through optional() wrapping", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        optional(option("--name", string({ pattern: /^[A-Z]+$/ }))),
+        {
+          context,
+          key: "NAME",
+          parser: string(),
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    it("accepts undefined through optional() wrapping", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        optional(option("--name", string({ pattern: /^[A-Z]+$/ }))),
+        {
+          context,
+          key: "NAME",
+          parser: string(),
+          default: undefined as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(result.success);
+    });
+
+    it("validates defaults through withDefault() wrapping", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        withDefault(
+          option("--name", string({ pattern: /^[A-Z]+$/ })),
+          "FALLBACK",
+        ),
+        {
+          context,
+          key: "NAME",
+          parser: string(),
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    it("falls through map() without validation", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        map(option("--name", string()), (n) => n.toUpperCase()),
+        {
+          context,
+          key: "NAME",
+          parser: string(),
+          default: "already-upper" as never,
+        },
+      );
+      // map() strips validateValue; fallback returned unvalidated.
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, "already-upper");
+    });
+
+    it("validates defaults in async mode", async () => {
+      const asyncStringWithPattern: ValueParser<"async", string> = {
+        $mode: "async",
+        metavar: "NAME",
+        placeholder: "",
+        parse(input: string) {
+          if (!/^[A-Z]+$/.test(input)) {
+            return Promise.resolve({
+              success: false as const,
+              error: message`Expected uppercase, got: ${input}.`,
+            });
+          }
+          return Promise.resolve({
+            success: true as const,
+            value: input,
+          });
+        },
+        format(value: string) {
+          return value;
+        },
+      };
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        option("--name", asyncStringWithPattern),
+        {
+          context,
+          key: "NAME",
+          parser: asyncStringWithPattern,
+          default: "abc" as never,
+        },
+      );
+      const result = await parseAsync(parser, []);
+      assert.ok(!result.success);
+    });
+
+    it("forwards validateValue through group() wrapping", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        group(
+          "Server",
+          option("--name", string({ pattern: /^[A-Z]+$/ })),
+        ),
+        {
+          context,
+          key: "NAME",
+          parser: string(),
+          default: "abc" as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
+    it("validates dependency-source env values through inner parser", () => {
+      const context = createEnvContext({
+        source: (key) => ({ PORT: "80" })[key],
+      });
+      const source = dependency(integer({ min: 1024 }));
+      const portParser = bindEnv(option("--port", source), {
+        context,
+        key: "PORT",
+        parser: integer(),
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parseResult = portParser.parse({
+        buffer: [],
+        state: injectAnnotations(portParser.initialState, annotations),
+        optionsTerminated: false,
+        usage: portParser.usage,
+      });
+      assert.ok(parseResult.success);
+      const extracted = portParser.dependencyMetadata?.source
+        ?.extractSourceValue(parseResult.next.state);
+      assert.ok(extracted != null && !(extracted instanceof Promise));
+      assert.ok(!extracted.success);
+    });
+
+    it("validates dependency-source defaults through inner parser", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const source = dependency(integer({ min: 1024 }));
+      const portParser = bindEnv(option("--port", source), {
+        context,
+        key: "PORT",
+        parser: integer(),
+        default: 80 as never,
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parseResult = portParser.parse({
+        buffer: [],
+        state: injectAnnotations(portParser.initialState, annotations),
+        optionsTerminated: false,
+        usage: portParser.usage,
+      });
+      assert.ok(parseResult.success);
+      const extracted = portParser.dependencyMetadata?.source
+        ?.extractSourceValue(parseResult.next.state);
+      assert.ok(extracted != null && !(extracted instanceof Promise));
+      assert.ok(!extracted.success);
+    });
+
+    it("bindEnv fallback errors carry the option-name prefix", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        option("--port", integer({ min: 1024, max: 65535 })),
+        {
+          context,
+          key: "PORT",
+          parser: integer(),
+          default: 80 as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const formatted = formatMessage(result.error);
+        assert.ok(
+          formatted.includes("--port"),
+          `expected error to include --port prefix, got: ${formatted}`,
+        );
+      }
+    });
+
+    it("does not attach validateValue to derived value parsers", () => {
+      // Derived value parsers (deriveFrom / derive) rebuild from default
+      // dependency values, so their format() does not correspond to a
+      // live-validated round-trip.  bindEnv must skip validation in that
+      // case and return the configured default unchanged.
+      const source = dependency(string());
+      const derived = source.deriveSync({
+        metavar: "TAG",
+        defaultValue: () => "default-dep",
+        factory: (dep: string): ValueParser<"sync", string> => ({
+          $mode: "sync",
+          metavar: "TAG",
+          placeholder: "",
+          parse: (input: string) => ({
+            success: true as const,
+            value: `${dep}:${input}`,
+          }),
+          format: (value: string) => value,
+        }),
+      });
+      const derivedOption = option("--tag", derived);
+      // Sanity check: derived value parsers have no validateValue.
+      assert.equal(derivedOption.validateValue, undefined);
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(derivedOption, {
+        context,
+        key: "TAG",
+        parser: string(),
+        default: "fallback" as never,
+      });
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, "fallback");
+    });
   });
 
   it("supports env-only values via fail() parser", () => {

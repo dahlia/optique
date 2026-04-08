@@ -7112,3 +7112,186 @@ describe("acceptingAnyToken", () => {
     assert.ok(!passThrough().acceptingAnyToken);
   });
 });
+
+describe("validateValue on primitives (#414)", () => {
+  describe("option()", () => {
+    it("accepts values passing the inner ValueParser constraints", () => {
+      const parser = option("-x", string({ pattern: /^[A-Z]+$/ }));
+      assert.ok(typeof parser.validateValue === "function");
+      const result = parser.validateValue!("APPLE");
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, "APPLE");
+    });
+
+    it("rejects values failing the inner ValueParser pattern", () => {
+      const parser = option("-x", string({ pattern: /^[A-Z]+$/ }));
+      const result = parser.validateValue!("hello");
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("rejects values failing integer bounds", () => {
+      const parser = option("-x", integer({ min: 1, max: 10 }));
+      const result = parser.validateValue!(99);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("returns success for boolean-flag option form (no value parser)", () => {
+      const parser = option("-f");
+      // Flag-form options have no value parser; `option().complete()`
+      // yields `true` when the flag is present and `false` when it is
+      // missing, so the accepted value domain is boolean.  The
+      // attached validator must therefore return success for both
+      // `true` and `false`.  Hard-fail if the hook is missing so the
+      // #414 regression contract cannot silently disappear.
+      assert.ok(typeof parser.validateValue === "function");
+      const trueResult = parser.validateValue!(true);
+      assert.ok(
+        trueResult && typeof trueResult === "object" &&
+          "success" in trueResult,
+      );
+      assert.ok(trueResult.success);
+
+      const falseResult = parser.validateValue!(false);
+      assert.ok(
+        falseResult && typeof falseResult === "object" &&
+          "success" in falseResult,
+      );
+      assert.ok(falseResult.success);
+    });
+
+    it("rejects non-boolean fallback values on a flag-form option", () => {
+      // bindEnv() / bindConfig() can feed values from `unknown` config /
+      // env sources into validateValue.  A non-boolean fallback would
+      // leak through as the parsed result even though the CLI parser
+      // can only ever produce a boolean for flag-form options.
+      // validateValue must reject such inputs with an option-scoped
+      // error.
+      const parser = option("-f");
+      assert.ok(typeof parser.validateValue === "function");
+
+      const stringResult = parser.validateValue!("yes" as never);
+      assert.ok(
+        stringResult && typeof stringResult === "object" &&
+          "success" in stringResult,
+      );
+      assert.ok(!stringResult.success);
+      if (!stringResult.success) {
+        const formatted = formatMessage(stringResult.error);
+        assert.ok(
+          formatted.includes("-f"),
+          `expected error to mention the option name, got: ${formatted}`,
+        );
+        assert.ok(
+          formatted.toLowerCase().includes("boolean"),
+          `expected error to mention "boolean", got: ${formatted}`,
+        );
+      }
+
+      const numberResult = parser.validateValue!(1 as never);
+      assert.ok(
+        numberResult && typeof numberResult === "object" &&
+          "success" in numberResult,
+      );
+      assert.ok(!numberResult.success);
+    });
+  });
+
+  describe("argument()", () => {
+    it("accepts values passing the inner pattern", () => {
+      const parser = argument(string({ pattern: /^[A-Z]+$/ }));
+      assert.ok(typeof parser.validateValue === "function");
+      const result = parser.validateValue!("APPLE");
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+    });
+
+    it("rejects values failing the inner pattern", () => {
+      const parser = argument(string({ pattern: /^[A-Z]+$/ }));
+      const result = parser.validateValue!("hello");
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("choice()", () => {
+    it("rejects values outside the choice set", () => {
+      const parser = option("-x", choice(["red", "green", "blue"]));
+      // @ts-expect-error: intentional type violation to exercise
+      // validateValue against an out-of-set literal.
+      const result = parser.validateValue!("purple");
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("accepts values inside the choice set", () => {
+      const parser = option("-x", choice(["red", "green", "blue"]));
+      const result = parser.validateValue!("red");
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+    });
+  });
+
+  describe("error formatting", () => {
+    it("option() prefixes validateValue failures with the option name", () => {
+      const parser = option("-x", "--xval", integer({ min: 1, max: 10 }));
+      const result = parser.validateValue!(99);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const formatted = formatMessage(result.error);
+        assert.ok(
+          formatted.includes("-x") || formatted.includes("--xval"),
+          `expected error to mention option name, got: ${formatted}`,
+        );
+      }
+    });
+
+    it("option() honors options.errors.invalidValue in validateValue", () => {
+      const parser = option("-x", integer({ min: 1, max: 10 }), {
+        errors: {
+          invalidValue: message`custom invalid value error.`,
+        },
+      });
+      const result = parser.validateValue!(99);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(
+          formatMessage(result.error),
+          "custom invalid value error.",
+        );
+      }
+    });
+
+    it("argument() prefixes validateValue failures with the metavar", () => {
+      const parser = argument(integer({ min: 1, max: 10 }));
+      const result = parser.validateValue!(99);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const formatted = formatMessage(result.error);
+        assert.ok(
+          formatted.includes("INTEGER"),
+          `expected error to mention metavar, got: ${formatted}`,
+        );
+      }
+    });
+
+    it("argument() honors options.errors.invalidValue in validateValue", () => {
+      const parser = argument(integer({ min: 1, max: 10 }), {
+        errors: {
+          invalidValue: message`custom arg error.`,
+        },
+      });
+      const result = parser.validateValue!(99);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(formatMessage(result.error), "custom arg error.");
+      }
+    });
+  });
+});
