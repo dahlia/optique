@@ -7979,4 +7979,64 @@ describe("validateValue forwarding through modifiers (#414)", () => {
       assert.equal(parser.validateValue, undefined);
     });
   });
+
+  describe("multiple()", () => {
+    it("validates each element through the inner parser", () => {
+      const parser = multiple(option("-x", integer({ min: 1, max: 10 })));
+      assert.ok(typeof parser.validateValue === "function");
+      const result = parser.validateValue!([5, 99, 3]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("accepts arrays where every element is valid", () => {
+      const parser = multiple(option("-x", integer({ min: 1, max: 10 })));
+      const result = parser.validateValue!([1, 5, 10]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+    });
+
+    it("rejects arrays shorter than min", () => {
+      const parser = multiple(option("-x", string()), { min: 2 });
+      assert.ok(typeof parser.validateValue === "function");
+      const result = parser.validateValue!(["only-one"]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("rejects arrays longer than max", () => {
+      const parser = multiple(option("-x", string()), { max: 2 });
+      const result = parser.validateValue!(["a", "b", "c"]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("accepts arrays within min and max", () => {
+      const parser = multiple(option("-x", string()), { min: 1, max: 3 });
+      const result = parser.validateValue!(["a", "b"]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+    });
+  });
+
+  describe("nonEmpty()", () => {
+    it("passes validateValue through from the inner parser", () => {
+      const parser = nonEmpty(
+        multiple(option("-x", integer({ min: 1, max: 10 }))),
+      );
+      assert.ok(typeof parser.validateValue === "function");
+      const result = parser.validateValue!([99, 5]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+    });
+
+    it("accepts values that pass the inner parser's validation", () => {
+      const parser = nonEmpty(
+        multiple(option("-x", integer({ min: 1, max: 10 }))),
+      );
+      const result = parser.validateValue!([5, 7]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+    });
+  });
 });

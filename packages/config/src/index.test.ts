@@ -552,6 +552,42 @@ describe("bindConfig", () => {
       assert.ok(!missing.success);
     });
 
+    test("bindConfig revalidates each element of a multiple() fallback", () => {
+      const context = createConfigContext({
+        schema: z.object({
+          roles: z.array(z.string()).optional(),
+        }),
+      });
+      const parser = bindConfig(
+        multiple(option("--role", choice(["admin", "user"] as const))),
+        {
+          context,
+          key: "roles",
+        },
+      );
+      const annotations: Annotations = {
+        [context.id]: { data: { roles: ["admin", "root"] as const } as never },
+      };
+      const result = parse(parser, [], { annotations });
+      assert.ok(!result.success);
+    });
+
+    test("bindConfig rejects multiple() defaults below the min arity", () => {
+      const context = createConfigContext({
+        schema: z.object({ tags: z.array(z.string()).optional() }),
+      });
+      const parser = bindConfig(
+        multiple(option("--tag", string()), { min: 2 }),
+        {
+          context,
+          key: "tags",
+          default: ["only-one"] as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+    });
+
     test("bindConfig fallback errors carry the option-name prefix", () => {
       const context = createConfigContext({
         schema: z.object({ port: z.number().optional() }),

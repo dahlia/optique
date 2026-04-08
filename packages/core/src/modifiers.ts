@@ -2316,6 +2316,84 @@ export function multiple<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
+  // Forward value validation (see issue #414): validate each element
+  // through the inner parser's validateValue and also re-check the
+  // multiple()'s own min/max rules against the array length.  Attached
+  // unconditionally so that multiple()'s arity bounds are enforced on
+  // fallback values even when the inner parser has no validateValue.
+  // Non-enumerable so map()'s spread does not propagate it.
+  {
+    const innerValidate = typeof parser.validateValue === "function"
+      ? parser.validateValue.bind(parser)
+      : undefined;
+    const validateArity = (
+      values: readonly TValue[],
+    ): ValueParserResult<readonly TValue[]> => {
+      if (values.length < min) {
+        return {
+          success: false,
+          error: min === 1
+            ? message`Expected at least one value, but got none.`
+            : message`Expected at least ${text(String(min))} values, but got ${
+              text(String(values.length))
+            }.`,
+        };
+      }
+      if (values.length > max) {
+        return {
+          success: false,
+          error: message`Expected at most ${
+            text(String(max))
+          } values, but got ${text(String(values.length))}.`,
+        };
+      }
+      return { success: true as const, value: values };
+    };
+    Object.defineProperty(resultParser, "validateValue", {
+      value(
+        values: readonly TValue[],
+      ): ModeValue<M, ValueParserResult<readonly TValue[]>> {
+        if (!Array.isArray(values)) {
+          return wrapForMode(parser.$mode, {
+            success: true as const,
+            value: values,
+          }) as ModeValue<M, ValueParserResult<readonly TValue[]>>;
+        }
+        const arity = validateArity(values);
+        if (!arity.success) {
+          return wrapForMode(parser.$mode, arity) as ModeValue<
+            M,
+            ValueParserResult<readonly TValue[]>
+          >;
+        }
+        if (innerValidate == null) {
+          return wrapForMode(parser.$mode, arity) as ModeValue<
+            M,
+            ValueParserResult<readonly TValue[]>
+          >;
+        }
+        return dispatchByMode(
+          parser.$mode,
+          () => {
+            for (const v of values) {
+              const r = innerValidate(v) as ValueParserResult<TValue>;
+              if (!r.success) return r;
+            }
+            return { success: true as const, value: values };
+          },
+          async () => {
+            for (const v of values) {
+              const r = (await innerValidate(v)) as ValueParserResult<TValue>;
+              if (!r.success) return r;
+            }
+            return { success: true as const, value: values };
+          },
+        ) as ModeValue<M, ValueParserResult<readonly TValue[]>>;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
   if (parser.dependencyMetadata?.source != null) {
     const innerSource = parser.dependencyMetadata.source;
     Object.defineProperty(resultParser, "dependencyMetadata", {
@@ -2494,6 +2572,18 @@ export function nonEmpty<M extends Mode, T, TState>(
   if (typeof parser.normalizeValue === "function") {
     Object.defineProperty(nonEmptyParser, "normalizeValue", {
       value: parser.normalizeValue.bind(parser),
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  // Forward value validation as non-enumerable (see issue #414).
+  // nonEmpty() is state-shape preserving and only constrains parse-time
+  // token consumption, so it can pass validateValue through to the
+  // inner parser unchanged.  Users who need an arity-1 enforcement on
+  // fallback values should use `multiple(..., { min: 1 })` directly.
+  if (typeof parser.validateValue === "function") {
+    Object.defineProperty(nonEmptyParser, "validateValue", {
+      value: parser.validateValue.bind(parser),
       configurable: true,
       enumerable: false,
     });

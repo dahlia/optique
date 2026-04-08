@@ -807,15 +807,20 @@ bindConfig(option("--port", integer({ min: 1024 })), {
 ~~~~
 
 Validation is forwarded through standard combinators (`optional()`,
-`withDefault()`, `group()`, `command()`) and through wrapping `bindEnv()`
-/ `bindConfig()` layers.  It is intentionally *not* forwarded through
-`map()` because the mapping function is one-way: the mapped output type
-no longer corresponds to the inner parser's constraints.  Dependency-
-derived value parsers (`derive` / `deriveFrom`) are likewise exempt
-because their `format()` rebuilds from *default* dependency values
-rather than the live-resolved ones, so a round-trip would validate
-against the wrong branch.  Wrapping an inner parser in `map()` or
-`derive()` will therefore silently bypass fallback validation.
+`withDefault()`, `group()`, `command()`, `nonEmpty()`) and through
+wrapping `bindEnv()` / `bindConfig()` layers.  `multiple()` validates
+each array element through the inner parser and additionally enforces
+its own `min` / `max` arity rules against the array length, so a
+config-loaded array that contains an invalid element or violates the
+configured arity is rejected.  Validation is intentionally *not*
+forwarded through `map()` because the mapping function is one-way: the
+mapped output type no longer corresponds to the inner parser's
+constraints.  Dependency-derived value parsers (`derive` /
+`deriveFrom`) are likewise exempt because their `format()` rebuilds
+from *default* dependency values rather than the live-resolved ones,
+so a round-trip would validate against the wrong branch.  Wrapping an
+inner parser in `map()`, `derive()`, or `deriveFrom()` will therefore
+silently bypass fallback validation.
 
 
 API reference

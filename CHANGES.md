@@ -15,14 +15,16 @@ To be released.
     `ValueParser`'s constraints (e.g., regex patterns, numeric bounds,
     `choice()` values).  Built-in primitives (`option()`, `argument()`)
     implement it via a `format()`+`parse()` round-trip; combinator
-    wrappers (`optional()`, `withDefault()`, `group()`, `command()`)
-    forward it from inner parsers.  Dependency-derived value parsers
-    (`deriveFrom` / `derive`) are exempt because their `format()`
-    rebuilds from default dependency values rather than the live
-    resolved values.  `map()`, `or()`, `longestMatch()`, `merge()`, and
-    `concat()` intentionally do not forward this method.  Used by
-    `bindEnv()` and `bindConfig()` to enforce parser constraints on
-    fallback values.  [[#414], [#777]]
+    wrappers (`optional()`, `withDefault()`, `group()`, `command()`,
+    `nonEmpty()`) forward it from inner parsers.  `multiple()` validates
+    each array element through the inner parser and additionally
+    enforces its own `min` / `max` arity rules against the array length.
+    Dependency-derived value parsers (`deriveFrom` / `derive`) are
+    exempt because their `format()` rebuilds from default dependency
+    values rather than the live resolved values.  `map()`, `or()`,
+    `longestMatch()`, `merge()`, and `concat()` intentionally do not
+    forward this method.  Used by `bindEnv()` and `bindConfig()` to
+    enforce parser constraints on fallback values.  [[#414], [#777]]
 
  -  Added `provisional` field to the success variant of `ParserResult`.
     When `true`, it indicates that the parse succeeded tentatively: the
