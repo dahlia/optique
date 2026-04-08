@@ -218,15 +218,15 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
  *
  * An annotations object with no own symbol keys is treated as a no-op by the
  * injection pipeline: it should behave identically to omitting the
- * `annotations` option entirely.
+ * `annotations` option entirely.  `null` and `undefined` are accepted for
+ * call-site convenience and always return `false`.
  *
  * @param annotations The annotations record to check.
  * @returns `true` when the record has at least one own symbol key.
  * @internal
- * @since 1.0.0
  */
 export function hasMeaningfulAnnotations(
-  annotations: Annotations | undefined,
+  annotations: Annotations | null | undefined,
 ): annotations is Annotations {
   return annotations != null &&
     Object.getOwnPropertySymbols(annotations).length > 0;
