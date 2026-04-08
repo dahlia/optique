@@ -99,7 +99,7 @@ To be released.
     omitting the `annotations` option entirely: `injectAnnotations()`
     short-circuits, `injectAnnotationsIntoState()` bypasses injection, and
     the top-level `parseSync()` / `parseAsync()` unwrap step is no longer
-    triggered.  [[#484]]
+    triggered.  [[#484], [#778]]
 
  -  Fixed `withDefault()` default thunks being evaluated more than once in
     nested `merge()` compositions.  When an outer `merge()` Phase 1 had
@@ -1573,6 +1573,7 @@ To be released.
 [#775]: https://github.com/dahlia/optique/pull/775
 [#776]: https://github.com/dahlia/optique/pull/776
 [#777]: https://github.com/dahlia/optique/pull/777
+[#778]: https://github.com/dahlia/optique/pull/778
 
 ### @optique/config
 
