@@ -2368,10 +2368,17 @@ export function multiple<M extends Mode, TValue, TState>(
       value(
         values: readonly TValue[],
       ): ModeValue<M, ValueParserResult<readonly TValue[]>> {
+        // multiple() can never produce a non-array shape from CLI input,
+        // so a non-array fallback (e.g., an `as never`-coerced default
+        // or a mis-shaped config value) is always a type error and must
+        // be rejected rather than silently passed through (#414).  The
+        // error names the received type so users can locate the source.
         if (!Array.isArray(values)) {
+          const actualType = values === null ? "null" : typeof values;
           return wrapForMode(parser.$mode, {
-            success: true as const,
-            value: values,
+            success: false as const,
+            error:
+              message`Expected an array of values, but received ${actualType}.`,
           }) as ModeValue<M, ValueParserResult<readonly TValue[]>>;
         }
         const arity = validateArity(values);

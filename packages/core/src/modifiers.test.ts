@@ -8059,6 +8059,45 @@ describe("validateValue forwarding through modifiers (#414)", () => {
         assert.equal(formatMessage(result.error), "too many: 2/3.");
       }
     });
+
+    it("rejects non-array fallback values", () => {
+      // Fallback validation is the only barrier between a mis-typed
+      // default (escaped via `as never`) and the parsed result; a
+      // multiple() parser can never produce a non-array shape from CLI
+      // input, so validateValue must reject one instead of silently
+      // accepting it (see review comment r3048902497).
+      const parser = multiple(option("-x", string()));
+      const stringResult = parser.validateValue!("admin" as never);
+      assert.ok(
+        stringResult && typeof stringResult === "object" &&
+          "success" in stringResult,
+      );
+      assert.ok(!stringResult.success);
+      if (!stringResult.success) {
+        const formatted = formatMessage(stringResult.error);
+        assert.ok(
+          formatted.includes("array"),
+          `expected error to mention "array", got: ${formatted}`,
+        );
+        assert.ok(
+          formatted.includes("string"),
+          `expected error to mention the received type, got: ${formatted}`,
+        );
+      }
+
+      const nullResult = parser.validateValue!(null as never);
+      assert.ok(
+        nullResult && typeof nullResult === "object" && "success" in nullResult,
+      );
+      assert.ok(!nullResult.success);
+      if (!nullResult.success) {
+        const formatted = formatMessage(nullResult.error);
+        assert.ok(
+          formatted.includes("null"),
+          `expected error to mention "null", got: ${formatted}`,
+        );
+      }
+    });
   });
 
   describe("nonEmpty()", () => {
