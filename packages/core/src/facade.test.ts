@@ -26,14 +26,17 @@ import {
   argument,
   command,
   constant,
+  fail,
   flag,
   option,
 } from "@optique/core/primitives";
 import type { Program } from "@optique/core/program";
+import type { OptionName } from "@optique/core/usage";
 import type { ValueParser } from "@optique/core/valueparser";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { bindEnv, createEnvContext } from "../../env/src/index.ts";
 
 type AssertNever<T extends never> = T;
 
@@ -10707,6 +10710,81 @@ describe("runWithSync async parser rejection", () => {
 
 // https://github.com/dahlia/optique/issues/228
 describe("options terminator (--) handling", () => {
+  function createIssue267Fixture() {
+    const envContext = createEnvContext({
+      source: (key) => key === "HOST" ? "env-host" : undefined,
+    });
+    const parser = object({
+      file: argument(string()),
+      host: bindEnv(fail(), {
+        context: envContext,
+        key: "HOST",
+        parser: string(),
+      }),
+    });
+    return { parser, envContext };
+  }
+
+  async function runIssue267With(
+    token: string,
+    kind: "help" | "version",
+    names?: readonly [OptionName, ...OptionName[]],
+  ) {
+    const { parser, envContext } = createIssue267Fixture();
+    return await runWith(parser, "test", [envContext], {
+      args: ["--", token],
+      help: kind === "help"
+        ? {
+          option: names == null ? true : { names },
+          onShow: () => "help",
+        }
+        : { option: true, onShow: () => "help" },
+      version: kind === "version"
+        ? {
+          value: "1.0.0",
+          option: names == null ? true : { names },
+          onShow: () => "version",
+        }
+        : {
+          value: "1.0.0",
+          option: true,
+          onShow: () => "version",
+        },
+      stdout: () => {},
+      stderr: () => {},
+    });
+  }
+
+  function runIssue267SyncWith(
+    token: string,
+    kind: "help" | "version",
+    names?: readonly [OptionName, ...OptionName[]],
+  ) {
+    const { parser, envContext } = createIssue267Fixture();
+    return runWithSync(parser, "test", [envContext], {
+      args: ["--", token],
+      help: kind === "help"
+        ? {
+          option: names == null ? true : { names },
+          onShow: () => "help",
+        }
+        : { option: true, onShow: () => "help" },
+      version: kind === "version"
+        ? {
+          value: "1.0.0",
+          option: names == null ? true : { names },
+          onShow: () => "version",
+        }
+        : {
+          value: "1.0.0",
+          option: true,
+          onShow: () => "version",
+        },
+      stdout: () => {},
+      stderr: () => {},
+    });
+  }
+
   it("runParser ignores --completion after -- terminator", () => {
     const parser = object({ args: multiple(argument(string())) });
     const result = runParser(parser, "test", ["--", "--completion", "bash"], {
@@ -10855,5 +10933,51 @@ describe("options terminator (--) handling", () => {
       stderr: () => {},
     });
     assert.deepEqual(result, { args: ["--version"] });
+  });
+
+  // https://github.com/dahlia/optique/issues/267
+  it("runWith preserves context-backed parsing for --help and --version after --", async () => {
+    assert.deepEqual(await runIssue267With("--help", "help"), {
+      file: "--help",
+      host: "env-host",
+    });
+    assert.deepEqual(await runIssue267With("--version", "version"), {
+      file: "--version",
+      host: "env-host",
+    });
+    assert.deepEqual(
+      await runIssue267With("--assist", "help", ["--assist"]),
+      {
+        file: "--assist",
+        host: "env-host",
+      },
+    );
+    assert.deepEqual(await runIssue267With("--ver", "version", ["--ver"]), {
+      file: "--ver",
+      host: "env-host",
+    });
+  });
+
+  // https://github.com/dahlia/optique/issues/267
+  it("runWithSync preserves context-backed parsing for --help and --version after --", () => {
+    assert.deepEqual(runIssue267SyncWith("--help", "help"), {
+      file: "--help",
+      host: "env-host",
+    });
+    assert.deepEqual(runIssue267SyncWith("--version", "version"), {
+      file: "--version",
+      host: "env-host",
+    });
+    assert.deepEqual(
+      runIssue267SyncWith("--assist", "help", ["--assist"]),
+      {
+        file: "--assist",
+        host: "env-host",
+      },
+    );
+    assert.deepEqual(runIssue267SyncWith("--ver", "version", ["--ver"]), {
+      file: "--ver",
+      host: "env-host",
+    });
   });
 });

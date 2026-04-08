@@ -5,8 +5,9 @@ import type {
 } from "@optique/core/context";
 import { message } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
-import { argument, command, option } from "@optique/core/primitives";
+import { argument, command, fail, option } from "@optique/core/primitives";
 import type { Program } from "@optique/core/program";
+import type { OptionName } from "@optique/core/usage";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { integer, string } from "@optique/core/valueparser";
 import type { DocSection } from "@optique/core/doc";
@@ -18,6 +19,7 @@ import { join } from "node:path";
 import process from "node:process";
 import { describe, it } from "node:test";
 import { bindConfig, createConfigContext } from "../../config/src/index.ts";
+import { bindEnv, createEnvContext } from "../../env/src/index.ts";
 
 const TEST_DIR = join(import.meta.dirname ?? ".", "test-configs");
 
@@ -41,6 +43,63 @@ interface ProgramPathContext extends
   SourceContext<{
     readonly getPath: (parsed: ParserValuePlaceholder) => string;
   }> {}
+
+function createIssue267Fixture() {
+  const envContext = createEnvContext({
+    source: (key) => key === "HOST" ? "env-host" : undefined,
+  });
+  const parser = object({
+    file: argument(string()),
+    host: bindEnv(fail(), {
+      context: envContext,
+      key: "HOST",
+      parser: string(),
+    }),
+  });
+  return { parser, envContext };
+}
+
+async function runIssue267With(
+  token: string,
+  kind: "help" | "version",
+  names?: readonly [OptionName, ...OptionName[]],
+) {
+  const { parser, envContext } = createIssue267Fixture();
+  return await run(parser, {
+    args: ["--", token],
+    programName: "test",
+    contexts: [envContext],
+    help: kind === "help"
+      ? names == null ? "option" : { option: { names } }
+      : "option",
+    version: kind === "version"
+      ? names == null ? "1.0.0" : { value: "1.0.0", option: { names } }
+      : "1.0.0",
+    stdout: () => {},
+    stderr: () => {},
+  });
+}
+
+function runIssue267SyncWith(
+  token: string,
+  kind: "help" | "version",
+  names?: readonly [OptionName, ...OptionName[]],
+) {
+  const { parser, envContext } = createIssue267Fixture();
+  return runSync(parser, {
+    args: ["--", token],
+    programName: "test",
+    contexts: [envContext],
+    help: kind === "help"
+      ? names == null ? "option" : { option: { names } }
+      : "option",
+    version: kind === "version"
+      ? names == null ? "1.0.0" : { value: "1.0.0", option: { names } }
+      : "1.0.0",
+    stdout: () => {},
+    stderr: () => {},
+  });
+}
 
 describe("run", () => {
   describe("basic parsing", () => {
@@ -1413,6 +1472,28 @@ describe("runAsync", () => {
 });
 
 describe("run with contexts", () => {
+  it("preserves context-backed parsing for help/version names after --", async () => {
+    assert.deepEqual(await runIssue267With("--help", "help"), {
+      file: "--help",
+      host: "env-host",
+    });
+    assert.deepEqual(await runIssue267With("--version", "version"), {
+      file: "--version",
+      host: "env-host",
+    });
+    assert.deepEqual(
+      await runIssue267With("--assist", "help", ["--assist"]),
+      {
+        file: "--assist",
+        host: "env-host",
+      },
+    );
+    assert.deepEqual(await runIssue267With("--ver", "version", ["--ver"]), {
+      file: "--ver",
+      host: "env-host",
+    });
+  });
+
   it("should delegate to runWith and return a Promise when contexts are provided", async () => {
     const envKey = Symbol.for("@test/env-run");
     const context: SourceContext = {
@@ -1953,6 +2034,28 @@ describe("run with contexts", () => {
 });
 
 describe("runSync with contexts", () => {
+  it("preserves context-backed parsing for help/version names after --", () => {
+    assert.deepEqual(runIssue267SyncWith("--help", "help"), {
+      file: "--help",
+      host: "env-host",
+    });
+    assert.deepEqual(runIssue267SyncWith("--version", "version"), {
+      file: "--version",
+      host: "env-host",
+    });
+    assert.deepEqual(
+      runIssue267SyncWith("--assist", "help", ["--assist"]),
+      {
+        file: "--assist",
+        host: "env-host",
+      },
+    );
+    assert.deepEqual(runIssue267SyncWith("--ver", "version", ["--ver"]), {
+      file: "--ver",
+      host: "env-host",
+    });
+  });
+
   it("should delegate to runWithSync when contexts are provided", () => {
     const envKey = Symbol.for("@test/env-runsync");
     const context: SourceContext = {
