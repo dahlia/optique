@@ -2251,22 +2251,22 @@ export function argument<M extends Mode, T>(
           // be serialized by this value parser.  Skip validation and
           // return success unchanged so sentinel-default users are
           // not broken.
-          return wrapForMode(vpMode, {
+          return wrapForMode<M, ValueParserResult<T>>(vpMode, {
             success: true as const,
             value: v,
-          }) as ModeValue<M, ValueParserResult<T>>;
+          });
         }
         if (typeof stringified !== "string") {
-          return wrapForMode(vpMode, {
+          return wrapForMode<M, ValueParserResult<T>>(vpMode, {
             success: true as const,
             value: v,
-          }) as ModeValue<M, ValueParserResult<T>>;
+          });
         }
-        return dispatchByMode(
+        return dispatchByMode<M, ValueParserResult<T>>(
           vpMode,
           () => wrapParseResult(syncValueParser.parse(stringified)),
           async () => wrapParseResult(await vp.parse(stringified)),
-        ) as ModeValue<M, ValueParserResult<T>>;
+        );
       },
       configurable: true,
       enumerable: false,

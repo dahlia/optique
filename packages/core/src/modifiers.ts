@@ -652,15 +652,12 @@ export function optional<M extends Mode, TValue, TState>(
         v: TValue | undefined,
       ): ModeValue<M, ValueParserResult<TValue | undefined>> {
         if (v === undefined) {
-          return wrapForMode(parser.$mode, {
-            success: true as const,
-            value: v,
-          }) as ModeValue<M, ValueParserResult<TValue | undefined>>;
+          return wrapForMode<M, ValueParserResult<TValue | undefined>>(
+            parser.$mode,
+            { success: true as const, value: v },
+          );
         }
-        return innerValidate(v) as ModeValue<
-          M,
-          ValueParserResult<TValue | undefined>
-        >;
+        return innerValidate(v);
       },
       configurable: true,
       enumerable: false,
@@ -1015,11 +1012,15 @@ export function withDefault<
               };
             }
           };
-          return mapModeValue(
+          return mapModeValue<
+            M,
+            ValueParserResult<TValue>,
+            ValueParserResult<TValue | TDefault>
+          >(
             parser.$mode,
             innerResult,
             handleInnerResult,
-          ) as ModeValue<M, ValueParserResult<TValue | TDefault>>;
+          );
         }
         try {
           const value = evaluateDefault();
@@ -2375,24 +2376,27 @@ export function multiple<M extends Mode, TValue, TState>(
         // error names the received type so users can locate the source.
         if (!Array.isArray(values)) {
           const actualType = values === null ? "null" : typeof values;
-          return wrapForMode(parser.$mode, {
-            success: false as const,
-            error:
-              message`Expected an array of values, but received ${actualType}.`,
-          }) as ModeValue<M, ValueParserResult<readonly TValue[]>>;
+          return wrapForMode<M, ValueParserResult<readonly TValue[]>>(
+            parser.$mode,
+            {
+              success: false as const,
+              error:
+                message`Expected an array of values, but received ${actualType}.`,
+            },
+          );
         }
         const arity = validateArity(values);
         if (!arity.success) {
-          return wrapForMode(parser.$mode, arity) as ModeValue<
-            M,
-            ValueParserResult<readonly TValue[]>
-          >;
+          return wrapForMode<M, ValueParserResult<readonly TValue[]>>(
+            parser.$mode,
+            arity,
+          );
         }
         if (innerValidate == null) {
-          return wrapForMode(parser.$mode, arity) as ModeValue<
-            M,
-            ValueParserResult<readonly TValue[]>
-          >;
+          return wrapForMode<M, ValueParserResult<readonly TValue[]>>(
+            parser.$mode,
+            arity,
+          );
         }
         // Preserve any canonicalization performed by the inner
         // parser's validateValue (e.g., a URL parser stripping
@@ -2400,7 +2404,7 @@ export function multiple<M extends Mode, TValue, TState>(
         // semantics.  Only allocate a new array when at least one
         // element actually changed to avoid needless churn on the
         // common "already canonical" case (see review r3048978718).
-        return dispatchByMode(
+        return dispatchByMode<M, ValueParserResult<readonly TValue[]>>(
           parser.$mode,
           () => {
             let changed = false;
@@ -2430,7 +2434,7 @@ export function multiple<M extends Mode, TValue, TState>(
               value: changed ? normalized : values,
             };
           },
-        ) as ModeValue<M, ValueParserResult<readonly TValue[]>>;
+        );
       },
       configurable: true,
       enumerable: false,
