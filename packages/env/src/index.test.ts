@@ -13,7 +13,7 @@ import {
 } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import { runWith } from "@optique/core/facade";
-import { message } from "@optique/core/message";
+import { formatMessage, message } from "@optique/core/message";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Parser } from "@optique/core/parser";
 import {
@@ -837,6 +837,30 @@ describe("bindEnv()", () => {
         ?.extractSourceValue(parseResult.next.state);
       assert.ok(extracted != null && !(extracted instanceof Promise));
       assert.ok(!extracted.success);
+    });
+
+    it("bindEnv fallback errors carry the option-name prefix", () => {
+      const context = createEnvContext({
+        source: () => undefined,
+      });
+      const parser = bindEnv(
+        option("--port", integer({ min: 1024, max: 65535 })),
+        {
+          context,
+          key: "PORT",
+          parser: integer(),
+          default: 80 as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const formatted = formatMessage(result.error);
+        assert.ok(
+          formatted.includes("--port"),
+          `expected error to include --port prefix, got: ${formatted}`,
+        );
+      }
     });
 
     it("does not attach validateValue to derived value parsers", () => {

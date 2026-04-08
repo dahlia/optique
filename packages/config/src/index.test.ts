@@ -17,7 +17,7 @@ import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { constant, fail, flag, option } from "@optique/core/primitives";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { choice, integer, string } from "@optique/core/valueparser";
-import { message } from "@optique/core/message";
+import { formatMessage, message } from "@optique/core/message";
 import { bindEnv, createEnvContext } from "@optique/env";
 
 import type { Annotations } from "@optique/core/annotations";
@@ -550,6 +550,29 @@ describe("bindConfig", () => {
       const missing = getMissing!();
       assert.ok(missing != null && !(missing instanceof Promise));
       assert.ok(!missing.success);
+    });
+
+    test("bindConfig fallback errors carry the option-name prefix", () => {
+      const context = createConfigContext({
+        schema: z.object({ port: z.number().optional() }),
+      });
+      const parser = bindConfig(
+        option("--port", integer({ min: 1024, max: 65535 })),
+        {
+          context,
+          key: "port",
+          default: 80 as never,
+        },
+      );
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const formatted = formatMessage(result.error);
+        assert.ok(
+          formatted.includes("--port"),
+          `expected error to include --port prefix, got: ${formatted}`,
+        );
+      }
     });
 
     test("does not attach validateValue to derived value parsers", () => {

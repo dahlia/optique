@@ -7172,7 +7172,9 @@ describe("validateValue on primitives (#414)", () => {
   describe("choice()", () => {
     it("rejects values outside the choice set", () => {
       const parser = option("-x", choice(["red", "green", "blue"]));
-      const result = parser.validateValue!("purple" as "red");
+      // @ts-expect-error: intentional type violation to exercise
+      // validateValue against an out-of-set literal.
+      const result = parser.validateValue!("purple");
       assert.ok(result && typeof result === "object" && "success" in result);
       assert.ok(!result.success);
     });
@@ -7182,6 +7184,67 @@ describe("validateValue on primitives (#414)", () => {
       const result = parser.validateValue!("red");
       assert.ok(result && typeof result === "object" && "success" in result);
       assert.ok(result.success);
+    });
+  });
+
+  describe("error formatting", () => {
+    it("option() prefixes validateValue failures with the option name", () => {
+      const parser = option("-x", "--xval", integer({ min: 1, max: 10 }));
+      const result = parser.validateValue!(99);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const formatted = formatMessage(result.error);
+        assert.ok(
+          formatted.includes("-x") || formatted.includes("--xval"),
+          `expected error to mention option name, got: ${formatted}`,
+        );
+      }
+    });
+
+    it("option() honors options.errors.invalidValue in validateValue", () => {
+      const parser = option("-x", integer({ min: 1, max: 10 }), {
+        errors: {
+          invalidValue: message`custom invalid value error.`,
+        },
+      });
+      const result = parser.validateValue!(99);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(
+          formatMessage(result.error),
+          "custom invalid value error.",
+        );
+      }
+    });
+
+    it("argument() prefixes validateValue failures with the metavar", () => {
+      const parser = argument(integer({ min: 1, max: 10 }));
+      const result = parser.validateValue!(99);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const formatted = formatMessage(result.error);
+        assert.ok(
+          formatted.includes("INTEGER"),
+          `expected error to mention metavar, got: ${formatted}`,
+        );
+      }
+    });
+
+    it("argument() honors options.errors.invalidValue in validateValue", () => {
+      const parser = argument(integer({ min: 1, max: 10 }), {
+        errors: {
+          invalidValue: message`custom arg error.`,
+        },
+      });
+      const result = parser.validateValue!(99);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(formatMessage(result.error), "custom arg error.");
+      }
     });
   });
 });

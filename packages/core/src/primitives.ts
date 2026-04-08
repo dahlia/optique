@@ -954,6 +954,16 @@ export function option<M extends Mode, T>(
   const dependencyMetadata = valueParser != null
     ? extractDependencyMetadata(valueParser)
     : undefined;
+  // Shared error formatter used by both complete() and validateValue()
+  // so that fallback validation errors from bindEnv() / bindConfig()
+  // carry the same option-name prefix and `options.errors.invalidValue`
+  // customization as CLI-sourced errors (see issue #414).
+  const formatInvalidValueError = (error: Message): Message =>
+    options.errors?.invalidValue
+      ? (typeof options.errors.invalidValue === "function"
+        ? options.errors.invalidValue(error)
+        : options.errors.invalidValue)
+      : message`${eOptionNames(optionNames)}: ${error}`;
 
   // Use 'as any' to allow both sync and async returns from parse method
   // The actual mode is set correctly at the end via spread with $mode
@@ -1278,12 +1288,6 @@ export function option<M extends Mode, T>(
       state: ValueParserResult<T | boolean> | undefined,
       exec?: ExecutionContext,
     ): ModeValue<M, ValueParserResult<T | boolean>> {
-      const formatInvalidValueError = (error: Message) =>
-        options.errors?.invalidValue
-          ? (typeof options.errors.invalidValue === "function"
-            ? options.errors.invalidValue(error)
-            : options.errors.invalidValue)
-          : message`${eOptionNames(optionNames)}: ${error}`;
       const missing = valueParser == null
         ? { success: true as const, value: false }
         : {
@@ -1420,11 +1424,13 @@ export function option<M extends Mode, T>(
   // would validate against the wrong branch.  For those parsers we
   // return the value unchanged instead of mis-validating.
   if (valueParser == null) {
-    // Flag-form option (no value parser): the only runtime value is
-    // the literal `true`, and there are no constraints to enforce.
-    // Attach a trivial validator so that bindEnv(flag-form) /
-    // bindConfig(flag-form) can forward validateValue through
-    // downstream wrappers without losing the hook.
+    // Flag-form option (no value parser): the runtime value is a plain
+    // boolean — `true` when the flag is present and `false` when it is
+    // missing (see `option().complete()`).  There are no constraints to
+    // enforce in either case, so we attach a trivial validator that
+    // accepts any boolean.  Having *some* validator attached lets
+    // bindEnv(flag-form) / bindConfig(flag-form) forward validateValue
+    // through downstream wrappers without losing the hook.
     Object.defineProperty(result, "validateValue", {
       value(v: boolean): ModeValue<"sync", ValueParserResult<boolean>> {
         return { success: true as const, value: v } as ModeValue<
@@ -1437,6 +1443,15 @@ export function option<M extends Mode, T>(
     });
   } else if (!isDerivedValueParser(valueParser)) {
     const vp = valueParser;
+    // Wraps a ValueParser.parse() failure with the same option-scoped
+    // error formatting that `complete()` applies to CLI-sourced errors,
+    // so fallback validation failures look identical to CLI failures.
+    const wrapParseResult = (
+      parsed: ValueParserResult<T>,
+    ): ValueParserResult<T | boolean> =>
+      parsed.success
+        ? parsed
+        : { success: false, error: formatInvalidValueError(parsed.error) };
     Object.defineProperty(result, "validateValue", {
       value(
         v: T | boolean,
@@ -1465,11 +1480,10 @@ export function option<M extends Mode, T>(
         return dispatchByMode(
           mode,
           () =>
-            (vp as ValueParser<"sync", T>).parse(
-              stringified,
-            ) as ValueParserResult<T | boolean>,
-          async () =>
-            (await vp.parse(stringified)) as ValueParserResult<T | boolean>,
+            wrapParseResult(
+              (vp as ValueParser<"sync", T>).parse(stringified),
+            ),
+          async () => wrapParseResult(await vp.parse(stringified)),
         );
       },
       configurable: true,
@@ -1947,6 +1961,16 @@ export function argument<M extends Mode, T>(
   const isAsync = valueParser.$mode === "async";
   const syncValueParser = valueParser as ValueParser<"sync", T>;
   const dependencyMetadata = extractDependencyMetadata(valueParser);
+  // Shared error formatter used by both complete() and validateValue()
+  // so that fallback validation errors from bindEnv() / bindConfig()
+  // carry the same metavar prefix and `options.errors.invalidValue`
+  // customization as CLI-sourced errors (see issue #414).
+  const formatInvalidValueError = (error: Message): Message =>
+    options.errors?.invalidValue
+      ? (typeof options.errors.invalidValue === "function"
+        ? options.errors.invalidValue(error)
+        : options.errors.invalidValue)
+      : message`${metavar(valueParser.metavar)}: ${error}`;
 
   const optionPattern = /^--?[a-z0-9-]+$/i;
   const term: UsageTerm = {
@@ -2074,12 +2098,6 @@ export function argument<M extends Mode, T>(
       state: ValueParserResult<T> | undefined,
       exec?: ExecutionContext,
     ): ModeValue<M, ValueParserResult<T>> {
-      const formatInvalidValueError = (error: Message) =>
-        options.errors?.invalidValue
-          ? (typeof options.errors.invalidValue === "function"
-            ? options.errors.invalidValue(error)
-            : options.errors.invalidValue)
-          : message`${metavar(valueParser.metavar)}: ${error}`;
       const missing = {
         success: false as const,
         error: options.errors?.endOfInput ??
@@ -2205,6 +2223,15 @@ export function argument<M extends Mode, T>(
   if (!isDerivedValueParser(valueParser)) {
     const vp = valueParser;
     const vpMode = valueParser.$mode;
+    // Wraps a ValueParser.parse() failure with the same metavar-scoped
+    // error formatting that `complete()` applies to CLI-sourced errors,
+    // so fallback validation failures look identical to CLI failures.
+    const wrapParseResult = (
+      parsed: ValueParserResult<T>,
+    ): ValueParserResult<T> =>
+      parsed.success
+        ? parsed
+        : { success: false, error: formatInvalidValueError(parsed.error) };
     Object.defineProperty(result, "validateValue", {
       value(v: T): ModeValue<M, ValueParserResult<T>> {
         let stringified: string;
@@ -2228,8 +2255,8 @@ export function argument<M extends Mode, T>(
         }
         return dispatchByMode(
           vpMode,
-          () => syncValueParser.parse(stringified),
-          async () => (await vp.parse(stringified)) as ValueParserResult<T>,
+          () => wrapParseResult(syncValueParser.parse(stringified)),
+          async () => wrapParseResult(await vp.parse(stringified)),
         ) as ModeValue<M, ValueParserResult<T>>;
       },
       configurable: true,
