@@ -719,13 +719,18 @@ function getEnvSourceValue<M extends Mode, TValue>(
         } must be a string, but got: ${type}.`,
       };
     }
-    const parsed = options.parser.parse(rawValue);
-    if (parsed instanceof Promise) {
-      return parsed.then((p) =>
-        validateFallback(p as ValueParserResult<TValue>)
-      );
-    }
-    return validateFallback(parsed);
+    // Route both sync and async env-parse results through the inner
+    // parser's validateValue() without manually checking for Promises
+    // (see CLAUDE.md: "All mode-based type assertions are isolated in
+    // mode-dispatch.ts").
+    return mapModeValue(
+      options.parser.$mode,
+      options.parser.parse(rawValue),
+      (p) => validateFallback(p as ValueParserResult<TValue>),
+    ) as
+      | ValueParserResult<unknown>
+      | Promise<ValueParserResult<unknown> | undefined>
+      | undefined;
   }
 
   if (options.default !== undefined) {

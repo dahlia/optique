@@ -1142,28 +1142,19 @@ export function withDefault<
       enumerable: false,
     });
   }
-  // Forward value validation as non-enumerable (see issue #414).  Wrap
-  // the delegation in try/catch because TDefault may be a sentinel type
-  // whose format() fails or throws in the inner parser's validator; in
-  // that case the value is accepted unchanged to preserve existing
-  // sentinel-default users.
+  // Forward value validation as non-enumerable (see issue #414).  The
+  // inner validator already swallows exceptions from sentinel-default
+  // format() calls, so we delegate directly without an extra try/catch.
   if (typeof parser.validateValue === "function") {
     const innerValidate = parser.validateValue.bind(parser);
     Object.defineProperty(withDefaultParser, "validateValue", {
       value(
         v: TValue | TDefault,
       ): ModeValue<M, ValueParserResult<TValue | TDefault>> {
-        try {
-          return innerValidate(v as TValue) as ModeValue<
-            M,
-            ValueParserResult<TValue | TDefault>
-          >;
-        } catch {
-          return wrapForMode(parser.$mode, {
-            success: true as const,
-            value: v,
-          }) as ModeValue<M, ValueParserResult<TValue | TDefault>>;
-        }
+        return innerValidate(v as TValue) as ModeValue<
+          M,
+          ValueParserResult<TValue | TDefault>
+        >;
       },
       configurable: true,
       enumerable: false,
