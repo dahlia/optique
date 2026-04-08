@@ -6659,6 +6659,43 @@ describe("runWithSync", () => {
     assert.equal(result, "ok");
   });
 
+  it("should keep argument parsing transparent for static contexts", () => {
+    const annotation = Symbol.for("@test/issue-187/runwithsync-argument");
+    const context: SourceContext = {
+      id: annotation,
+      mode: "static",
+      getAnnotations() {
+        return { [annotation]: true };
+      },
+    };
+
+    const result = runWithSync(argument(string()), "test", [context], {
+      args: ["value"],
+    });
+
+    assert.equal(result, "value");
+  });
+
+  it("should keep command parsing transparent for static contexts", () => {
+    const annotation = Symbol.for("@test/issue-187/runwithsync-command");
+    const context: SourceContext = {
+      id: annotation,
+      mode: "static",
+      getAnnotations() {
+        return { [annotation]: true };
+      },
+    };
+
+    const result = runWithSync(
+      command("go", object({ silent: option("--silent") })),
+      "test",
+      [context],
+      { args: ["go", "--silent"] },
+    );
+
+    assert.deepEqual(result, { silent: true });
+  });
+
   it("should preserve array parser state shape with annotations", () => {
     const envKey = Symbol.for("@test/env-array");
     const envContext: SourceContext = {

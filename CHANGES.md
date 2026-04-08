@@ -217,6 +217,15 @@ To be released.
     `runSync()`) either select a branch normally or return an ordinary parse
     failure instead of throwing.  [[#183]]
 
+ -  Fixed `argument()` and `command()` misinterpreting annotation-injected
+    initial state as real parser-local state.  Annotated calls through
+    `parse()`, `suggest()`, `runWith()`, `runWithSync()`, `run()`, and
+    `runSync()` now treat annotations as transparent runtime context for these
+    primitives, so positional arguments, subcommands, and top-level
+    value-suggestion flows behave the same way they do without annotations.
+    Wrapper compositions that forward primitive state directly, such as
+    `group(argument(...))`, inherit the fix as well.  [[#187]]
+
  -  Expanded `or()`'s fully inferred overloads from 10 to 15 parser
     arguments, so large alternative sets keep precise union inference without
     collapsing to `unknown` at 11+ arguments.  [[#142], [#143]]
