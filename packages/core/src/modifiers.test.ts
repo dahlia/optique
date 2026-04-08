@@ -29,7 +29,7 @@ import {
   withDefault,
   WithDefaultError,
 } from "@optique/core/modifiers";
-import { multiple as multipleLocal } from "./modifiers.ts";
+import { map as mapLocal, multiple as multipleLocal } from "./modifiers.ts";
 import {
   completeOrExtractPhase2Seed,
   extractPhase2SeedKey,
@@ -7969,6 +7969,87 @@ describe("multiple() phase-two seed extraction", () => {
     );
 
     assert.deepEqual(seed, { value: ["optique.json"] });
+  });
+});
+
+describe("withDefault() phase-two seed extraction", () => {
+  it("preserves default-only seeds", () => {
+    const seed = completeOrExtractPhase2Seed(
+      withDefault(option("--name", string()), "fallback"),
+      undefined,
+    );
+
+    assert.deepEqual(seed, { value: "fallback" });
+  });
+});
+
+describe("map() phase-two seed extraction", () => {
+  function createExtractOnlyParser(
+    seed:
+      | { readonly value: number; readonly deferred?: true }
+      | null,
+  ): Parser<"sync", number, number> {
+    const parser: Parser<"sync", number, number> = {
+      $mode: "sync",
+      $valueType: [] as readonly number[],
+      $stateType: [] as readonly number[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: 0,
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete() {
+        return { success: false as const, error: message`Missing value.` };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    Object.defineProperty(parser, extractPhase2SeedKey, {
+      value() {
+        return seed;
+      },
+    });
+    return parser;
+  }
+
+  it("propagates non-deferred transform failures", () => {
+    const parser = mapLocal(
+      createExtractOnlyParser({ value: 1 }),
+      (_value) => {
+        throw new Error("Seed transform boom.");
+      },
+    );
+
+    assert.throws(
+      () => completeOrExtractPhase2Seed(parser, 1),
+      /Seed transform boom\./,
+    );
+  });
+
+  it("keeps deferred transform failures as placeholders", () => {
+    const parser = mapLocal(
+      createExtractOnlyParser({ value: 1, deferred: true }),
+      (_value) => {
+        throw new Error("Deferred transform boom.");
+      },
+    );
+
+    assert.deepEqual(
+      completeOrExtractPhase2Seed(parser, 1),
+      {
+        value: undefined,
+        deferred: true,
+      },
+    );
   });
 });
 

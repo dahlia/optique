@@ -1394,11 +1394,7 @@ export function map<M extends Mode, T, U, TState>(
               };
             }
           }
-          try {
-            return { value: transform(seed.value as T) };
-          } catch {
-            return null;
-          }
+          return { value: transform(seed.value as T) };
         },
       );
     },
