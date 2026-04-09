@@ -715,10 +715,10 @@ API reference
 
 ### Types from `@optique/core/context`
 
-`SourceContextMode`
-:   Type alias for `"static" | "dynamic"`. Indicates whether a context is
-    static (can provide data without any parsed results) or dynamic (needs
-    parsed results from a first pass to do its work).
+`SourceContextPhase`
+:   Type alias for `"single-pass" | "two-pass"`. Indicates whether a context
+    contributes only its phase-1 annotations or is recollected after a usable
+    first parse pass to refine them.
 
 `SourceContext<TRequiredOptions = void>`
 :   Interface for data sources that provide annotations. The `TRequiredOptions`
@@ -728,9 +728,8 @@ API reference
     Members:
 
      -  `id: symbol` — Unique identifier for the context
-     -  `mode?: SourceContextMode` — Optional hint declaring whether this
-        context is `"static"` or `"dynamic"`. When set, `isStaticContext()`
-        uses this field directly instead of probing `getAnnotations()`.
+     -  `phase: SourceContextPhase` — Required policy declaring whether this
+        context is `"single-pass"` or `"two-pass"`
      -  `getAnnotations(parsed?, options?): Promise<Annotations> | Annotations`
         — Returns annotations to inject into parsing
      -  `getInternalAnnotations?(parsed, annotations): Annotations | undefined`
@@ -778,18 +777,11 @@ API reference
     const myData = annotations?.[myKey];
     ~~~~
 
-`isStaticContext(context: SourceContext): boolean`
-:   Checks whether a context is static (returns non-empty annotations without
-    needing parsed results). When the context has a `mode` field set,
-    `isStaticContext()` uses it directly (`"static"` → `true`,
-    `"dynamic"` → `false`). When `mode` is absent, the function probes
-    `getAnnotations()` with no arguments to determine the answer.
-
 ### Functions from `@optique/core/facade`
 
 `runWith(parser, programName, contexts, options): Promise<T>`
 :   Runs a parser with multiple source contexts. Automatically handles
-    static and dynamic contexts with two-phase parsing when needed.
+    single-pass and two-pass contexts with two-phase parsing when needed.
 
     The `options` parameter accepts a `contextOptions` property for any options
     required by the contexts.  For example, if a context specifies
@@ -847,7 +839,7 @@ import type { SourceContext } from "@optique/core/context";
 
 const envContext: SourceContext = {
   id: Symbol.for("@myapp/env"),
-  mode: "static",
+  phase: "single-pass",
   getAnnotations() {
     return {
       [Symbol.for("@myapp/env")]: {
@@ -860,21 +852,22 @@ const envContext: SourceContext = {
 ~~~~
 
 The `id` symbol identifies this context for debugging and priority resolution.
-The optional `mode` field declares whether the context is `"static"` or
-`"dynamic"`, which lets `isStaticContext()` determine static-ness without
-probing `getAnnotations()`. The `runWith*()` runners also use it when
-deciding whether a second parse pass may be required, instead of inferring
-dynamic-ness from an empty first-pass result or `Promise`.
+The required `phase` field declares whether the context is `"single-pass"` or
+`"two-pass"`. This removes the old inference ambiguity between “this context
+already has some phase-1 data” and “this context still needs phase-2
+refinement.”
 The `getAnnotations()` method returns an object mapping annotation keys to
 their values. Parsers can then access these values using `getAnnotations()`.
 
-### Static vs dynamic contexts
+### Single-pass vs two-pass contexts
 
-Contexts can be either *static* or *dynamic*:
+Contexts can be either *single-pass* or *two-pass*:
 
- -  *Static contexts* return data immediately (e.g., environment variables)
- -  *Dynamic contexts* need parsing results first (e.g., config files whose
-    path is determined by a CLI option)
+ -  *Single-pass contexts* contribute their final annotations before parsing
+    starts (e.g., environment variables)
+ -  *Two-pass contexts* may contribute phase-1 annotations and then refine
+    them after a usable first parse pass (e.g., config files whose path is
+    determined by a CLI option)
 
 The difference lies in whether `getAnnotations()` needs the parsed result to
 do its work:
@@ -882,10 +875,10 @@ do its work:
 ~~~~ typescript
 import type { SourceContext } from "@optique/core/context";
 
-// Static context: data is always available
+// Single-pass context: data is always available
 const envContext: SourceContext = {
   id: Symbol.for("@myapp/env"),
-  mode: "static",
+  phase: "single-pass",
   getAnnotations() {
     // Returns immediately - no need for parsing results
     return {
@@ -894,10 +887,10 @@ const envContext: SourceContext = {
   }
 };
 
-// Dynamic context: needs parsed result to load config
+// Two-pass context: needs parsed result to load config
 const configContext: SourceContext = {
   id: Symbol.for("@myapp/config"),
-  mode: "dynamic",
+  phase: "two-pass",
   async getAnnotations(parsed?: unknown) {
     if (!parsed) return {}; // Return empty on first pass
     
@@ -913,10 +906,12 @@ const configContext: SourceContext = {
 };
 ~~~~
 
-The static `envContext` reads environment variables directly and doesn't need
-any parsed values. The dynamic `configContext`, however, needs to know the
-config file path from the parsed `--config` option before it can load the file.
-When `parsed` is `undefined` (first pass), it returns an empty object.
+The single-pass `envContext` reads environment variables directly and doesn't
+need any parsed values. The two-pass `configContext`, however, needs to know
+the config file path from the parsed `--config` option before it can load the
+file. When `parsed` is `undefined` (phase 1), it can return empty data or a
+provisional snapshot; phase 2 still runs because the context explicitly opted
+into `"two-pass"`.
 
 
 Using `runWith()`
@@ -941,6 +936,7 @@ import type { SourceContext } from "@optique/core/context";
 
 const envContext: SourceContext = {
   id: Symbol.for("@myapp/env"),
+  phase: "single-pass",
   getAnnotations() {
     return {
       [Symbol.for("@myapp/env")]: {
@@ -984,23 +980,25 @@ const result = await runWith(
 
 ### Two-phase parsing
 
-When dynamic contexts are present, `runWith()` automatically performs two-phase
-parsing:
+When two-pass contexts are present, `runWith()` automatically performs
+two-phase parsing:
 
-1.  *Phase 1*: Parse with static context data to get initial result
-2.  *Phase 2*: Call `getAnnotations(parsed)` on all contexts with the parsed
-    result, then parse again with the merged phase-2 annotations
+1.  *Phase 1*: Parse with phase-1 annotations from all contexts
+2.  *Phase 2*: Call `getAnnotations(parsed)` on two-pass contexts with the
+    parsed result, then parse again with the merged final annotations
 
-For each context, the phase-2 return value replaces that context's phase-1
-annotation set for the final parse.  This means returning an empty object
-from `getAnnotations(parsed)` clears any annotations the same context
-contributed during phase 1.
+For each two-pass context, the phase-2 return value replaces that context's
+phase-1 annotation set for the final parse.  This means returning an empty
+object from `getAnnotations(parsed)` clears any annotations the same context
+contributed during phase 1. Single-pass contexts keep their phase-1 snapshot.
 
 This ensures that:
 
- -  Static contexts (like environment variables) are available immediately
- -  Dynamic contexts (like config files) can extract information from the
-    first parse pass
+ -  Single-pass contexts (like environment variables) are available
+    immediately
+ -  Two-pass contexts (like config files) can extract information from the
+    first parse pass without being misclassified when phase 1 already returns
+    non-empty annotations
 
 During phase 1, parsers whose values are not yet resolved (e.g., deferred
 interactive prompts) use the `ValueParser.placeholder` property to produce a
@@ -1081,7 +1079,7 @@ interface EnvData {
 export function createEnvContext(prefix: string = ""): SourceContext {
   return {
     id: envKey,
-    mode: "static",
+    phase: "single-pass",
     getAnnotations(): Annotations {
       const data: EnvData = {
         HOST: process.env[`${prefix}HOST`],
@@ -1098,12 +1096,12 @@ const envContext = createEnvContext("MYAPP_");
 ~~~~
 
 When called with `"MYAPP_"`, the context reads `MYAPP_HOST`, `MYAPP_PORT`, and
-`MYAPP_DEBUG` from the environment. This is a static context since it doesn't
-need any parsed values.
+`MYAPP_DEBUG` from the environment. This is a single-pass context since it
+doesn't need any parsed values.
 
 ### Creating a config file context
 
-A config file context is dynamic because it needs to know the file path from
+A config file context is two-pass because it needs to know the file path from
 parsed arguments. The `getAnnotations()` method receives the parsed result and
 uses it to load the configuration:
 
@@ -1121,7 +1119,7 @@ interface ConfigData {
 export function createConfigContext(): SourceContext {
   return {
     id: configKey,
-    mode: "dynamic",
+    phase: "two-pass",
     async getAnnotations(parsed?: unknown): Promise<Annotations> {
       if (!parsed) return {}; // First pass - no config yet
       
@@ -1183,7 +1181,7 @@ interface ConfigContext extends SourceContext<ConfigContextOptions> {
 export function createConfigContext(): ConfigContext {
   const context: ConfigContext = {
     id: configKey,
-    mode: "dynamic",
+    phase: "two-pass",
     async getAnnotations(parsed?: unknown): Promise<Annotations> {
       if (!parsed) return {};
       
@@ -1244,11 +1242,10 @@ guide for a complete implementation.
 
  -  *Use unique symbols*: Always use `Symbol.for()` with a namespaced string
     matching your package name
- -  *Declare `mode` explicitly*: Set `mode: "static"` or `mode: "dynamic"` on
-    every context so `isStaticContext()` can determine static-ness without
-    probing `getAnnotations()`, and so `runWith*()` does not have to infer
-    dynamic-ness from an empty first-pass result or `Promise`, avoiding
-    unnecessary two-phase parsing and duplicate `getAnnotations()` calls
+ -  *Declare `phase` explicitly*: Set `phase: "single-pass"` or
+    `phase: "two-pass"` on every context. This makes refinement intent
+    explicit and prevents the runner from guessing based on the shape of the
+    phase-1 annotations
  -  *Handle missing data gracefully*: Return empty objects instead of throwing
     errors
  -  *Keep contexts focused*: Each context should handle one data source
@@ -1293,11 +1290,11 @@ Annotation injection creates a shallow copy of the initial state. This has
 minimal performance impact, but be aware that it happens on every call to
 `parse()`, `suggest()`, or `getDocPage()` when annotations are provided.
 
-For `runWith()` with dynamic contexts, two parse passes are performed. This
+For `runWith()` with two-pass contexts, two parse passes are performed. This
 is necessary for the two-phase approach but doubles the parsing overhead.
 For performance-critical applications:
 
- -  Use only static contexts when possible (single pass)
+ -  Use only single-pass contexts when possible (single pass)
  -  Cache parsed results rather than re-parsing multiple times
  -  Consider using `runWithSync()` for sync-only contexts to avoid Promise
     overhead

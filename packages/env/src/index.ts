@@ -173,7 +173,7 @@ export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
     id: contextId,
     prefix,
     source,
-    mode: "static",
+    phase: "single-pass",
 
     getAnnotations(): Annotations {
       const sourceData: EnvSourceData = { prefix, source };

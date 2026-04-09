@@ -219,6 +219,16 @@ To be released.
     contribution instead of letting stale data override later contexts.
     [[#231], [#782]]
 
+ -  Replaced `SourceContext`'s inferred `mode` contract with an explicit
+    required `phase` field whose value must be `"single-pass"` or
+    `"two-pass"`.  `SourceContextMode`, `SourceContext.mode`, and
+    `isStaticContext()` have been removed.  `runWith()`, `runWithSync()`, and
+    higher-level runners now decide whether to perform phase 2 solely from
+    `context.phase`, which fixes contexts that emit non-empty phase-1
+    annotations and still need phase-2 refinement.  `createEnvContext()`
+    now declares `phase: "single-pass"` and `createConfigContext()`
+    declares `phase: "two-pass"`.  [[#243], [#783]]
+
  -  Fixed `or()` crashing with an internal `TypeError` when parsing started
     from an annotation-injected initial state.  Exclusive branch selection now
     treats annotations as transparent parser context, so annotated calls through
@@ -368,7 +378,7 @@ To be released.
  -  Replaced the `DeferredPromptValue` sentinel with type-appropriate
     placeholder values during two-phase parsing.  `prompt()` now uses
     `Parser.placeholder` instead of a branded sentinel when deferring,
-    so `map()` transforms always receive valid values and dynamic contexts
+    so `map()` transforms always receive valid values and two-pass contexts
     observe structurally valid objects.  Note that `map()` intentionally
     does not propagate `deferredKeys`, so mapped structured outputs may
     still carry placeholder values for deferred fields.  This removes the
@@ -1358,6 +1368,7 @@ To be released.
 [#240]: https://github.com/dahlia/optique/issues/240
 [#241]: https://github.com/dahlia/optique/issues/241
 [#242]: https://github.com/dahlia/optique/issues/242
+[#243]: https://github.com/dahlia/optique/issues/243
 [#245]: https://github.com/dahlia/optique/issues/245
 [#246]: https://github.com/dahlia/optique/issues/246
 [#247]: https://github.com/dahlia/optique/issues/247
@@ -1644,6 +1655,7 @@ To be released.
 [#780]: https://github.com/dahlia/optique/pull/780
 [#781]: https://github.com/dahlia/optique/pull/781
 [#782]: https://github.com/dahlia/optique/pull/782
+[#783]: https://github.com/dahlia/optique/pull/783
 
 ### @optique/config
 

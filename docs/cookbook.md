@@ -1360,8 +1360,8 @@ an interactive fallback *after* checking CLI arguments, environment variables,
 and config files.
 
 A practical approach is to preload config annotations once and expose them via
-a static context. This keeps the fallback order predictable while still using
-`bindEnv()` and `bindConfig()` together:
+a single-pass context. This keeps the fallback order predictable while still
+using `bindEnv()` and `bindConfig()` together:
 
 ~~~~ typescript twoslash
 import { z } from "zod";
@@ -1403,7 +1403,7 @@ const configAnnotations = await configContext.getAnnotations(
 
 const staticConfigContext = {
   id: configContext.id,
-  mode: "static" as const,
+  phase: "single-pass" as const,
   getAnnotations() {
     return configAnnotations;
   },

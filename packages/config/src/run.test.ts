@@ -130,7 +130,7 @@ describe("run with config context", { concurrency: false }, () => {
     const metadataByParsed = new WeakMap<object, string>();
     const identityContext: SourceContext = {
       id: Symbol.for("@test/config-loader-identity"),
-      mode: "dynamic",
+      phase: "two-pass",
       getAnnotations(parsed?: unknown) {
         if (parsed != null && typeof parsed === "object") {
           metadataByParsed.set(parsed as object, "seen");

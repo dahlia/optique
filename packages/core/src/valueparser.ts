@@ -113,7 +113,7 @@ export interface ValueParser<M extends Mode = "sync", T = unknown> {
    * A type-appropriate default value used as a stand-in during deferred
    * prompt resolution.  When an interactive prompt is deferred during
    * two-phase parsing, this value is used instead of an internal sentinel
-   * so that `map()` transforms and dynamic contexts always receive a valid
+   * so that `map()` transforms and two-pass contexts always receive a valid
    * value of type {@link T}.
    *
    * The placeholder does not need to be meaningful; it only needs to be
