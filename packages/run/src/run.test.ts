@@ -1559,10 +1559,10 @@ describe("runAsync", () => {
       assert.ok(typeof helpOutput === "string");
     });
 
-    it("preserves positional values that match built-in help commands", () => {
+    it("preserves positional values that match built-in help commands", async () => {
       const parser = object({ value: argument(string()) });
       let exited = false;
-      const result = run(parser, {
+      const result = await runAsync(parser, {
         args: ["help"],
         programName: "myapp",
         help: "command",
