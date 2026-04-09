@@ -43,6 +43,7 @@ import {
   suggest,
   suggestAsync,
   type Suggestion,
+  suggestSync,
 } from "@optique/core/parser";
 import {
   argument,
@@ -3490,7 +3491,7 @@ describe("multiple", () => {
     );
   });
 
-  it("keeps top-level choice suggestions under annotations via public entrypoints", () => {
+  it("keeps top-level choice suggestions under annotations via suggestSync()", () => {
     const annotation = Symbol.for("@test/issue-189/top-level-choice");
     const parser = multiple(argument(choice(["alpha", "beta"] as const)));
 
@@ -3499,7 +3500,7 @@ describe("multiple", () => {
     });
     assert.deepEqual(parsed, { success: true, value: ["alpha"] });
 
-    const suggestions = suggest(parser, ["a"], {
+    const suggestions = suggestSync(parser, ["a"], {
       annotations: { [annotation]: true },
     });
     assert.deepEqual(suggestions, [{ kind: "literal", text: "alpha" }]);
