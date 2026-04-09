@@ -67,7 +67,10 @@ export function normalizeInjectedAnnotationState<T>(state: T): T {
 }
 
 /**
- * Returns whether a state is still the annotation-wrapped initial sentinel.
+ * Returns whether a state is still at the initial sentinel after normalizing
+ * Optique's injected annotation wrapper.
+ *
+ * This treats plain `undefined` and annotation-wrapped `undefined` the same.
  *
  * @internal
  */
