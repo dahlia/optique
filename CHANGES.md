@@ -225,7 +225,7 @@ To be released.
     the user parser leaves them unconsumed, so positional values like `help`
     and option values like `--help` can be parsed as ordinary data.  Startup
     validation now also permits user parsers to reuse built-in meta names and
-    aliases.  [[#230]]
+    aliases.  [[#230], [#784]]
 
  -  *Breaking change:* Replaced `SourceContext`'s inferred `mode`
     contract with an explicit required `phase` field whose value must be
@@ -1667,6 +1667,7 @@ To be released.
 [#781]: https://github.com/dahlia/optique/pull/781
 [#782]: https://github.com/dahlia/optique/pull/782
 [#783]: https://github.com/dahlia/optique/pull/783
+[#784]: https://github.com/dahlia/optique/pull/784
 
 ### @optique/config
 
@@ -2164,7 +2165,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     help, version, and completion semantics from *@optique/core*.  Built-in
     meta requests now yield to ordinary parser data, while genuine meta
     requests still bypass context loading and process handling as before.
-    [[#230]]
+    [[#230], [#784]]
 
  -  Fixed `path()` extension validation for dotfiles (e.g., `.env`,
     `.gitignore`) and multi-part extensions (e.g., `.tar.gz`, `.d.ts`).
