@@ -1249,7 +1249,10 @@ const result = await runAsync(parser, {
 When `contexts` is provided, the runner delegates to `runWith()` (or
 `runWithSync()` for sync parsers) from `@optique/core/facade`, which handles
 static and dynamic contexts automatically and performs two-phase parsing only
-when needed.  Context-specific options like `getConfigPath` are passed through
+when needed.  In two-phase runs, each context's phase-two annotations replace
+that same context's phase-one contribution for the final parse, so returning
+an empty object from `getAnnotations(parsed)` clears that context's earlier
+annotations.  Context-specific options like `getConfigPath` are passed through
 to the contexts via the `contextOptions` property.
 
 For more details on config file integration, see the

@@ -5499,6 +5499,71 @@ describe("runWith", () => {
 
       assert.equal(result, "phase1-early");
     });
+
+    it("lets phase 2 clear a context's phase 1 annotations", async () => {
+      const sharedKey = Symbol.for("@test/phase-clear-priority");
+
+      const parser: Parser<"sync", string | undefined, undefined> = {
+        $mode: "sync",
+        $valueType: [] as readonly (string | undefined)[],
+        $stateType: [] as readonly undefined[],
+        priority: 1,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        },
+        complete(state) {
+          return {
+            success: true as const,
+            value: getAnnotations(state)?.[sharedKey] as string | undefined,
+          };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+
+      const clearingContext: SourceContext = {
+        id: Symbol.for("@test/phase-clear-early"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed == null) {
+            return { [sharedKey]: "phase1-early" };
+          }
+          return {};
+        },
+      };
+
+      const fallbackContext: SourceContext = {
+        id: Symbol.for("@test/phase-clear-late"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed == null) {
+            return {};
+          }
+          return { [sharedKey]: "phase2-late" };
+        },
+      };
+
+      const result = await runWith(
+        parser,
+        "test",
+        [clearingContext, fallbackContext],
+        { args: [] },
+      );
+
+      assert.equal(result, "phase2-late");
+    });
   });
 
   describe("dynamic contexts", () => {
@@ -7366,6 +7431,71 @@ describe("runWithSync", () => {
       );
 
       assert.equal(result, "phase1-early");
+    });
+
+    it("lets phase 2 clear a context's phase 1 annotations", () => {
+      const sharedKey = Symbol.for("@test/phase-clear-priority-sync");
+
+      const parser: Parser<"sync", string | undefined, undefined> = {
+        $mode: "sync",
+        $valueType: [] as readonly (string | undefined)[],
+        $stateType: [] as readonly undefined[],
+        priority: 1,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        },
+        complete(state) {
+          return {
+            success: true as const,
+            value: getAnnotations(state)?.[sharedKey] as string | undefined,
+          };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+
+      const clearingContext: SourceContext = {
+        id: Symbol.for("@test/phase-clear-sync-early"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed == null) {
+            return { [sharedKey]: "phase1-early" };
+          }
+          return {};
+        },
+      };
+
+      const fallbackContext: SourceContext = {
+        id: Symbol.for("@test/phase-clear-sync-late"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed == null) {
+            return {};
+          }
+          return { [sharedKey]: "phase2-late" };
+        },
+      };
+
+      const result = runWithSync(
+        parser,
+        "test",
+        [clearingContext, fallbackContext],
+        { args: [] },
+      );
+
+      assert.equal(result, "phase2-late");
     });
   });
 
