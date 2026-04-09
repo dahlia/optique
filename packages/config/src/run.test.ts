@@ -6,16 +6,12 @@ import { join, relative, resolve } from "node:path";
 import { z } from "zod";
 import { object } from "@optique/core/constructs";
 import type { SourceContext } from "@optique/core/context";
+import { parse } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { withDefault } from "@optique/core/modifiers";
 import { runWith, runWithSync } from "@optique/core/facade";
-import {
-  bindConfig,
-  createConfigContext,
-  getActiveConfig,
-  getActiveConfigMeta,
-} from "./index.ts";
+import { bindConfig, createConfigContext } from "./index.ts";
 import type { ConfigMeta } from "./index.ts";
 
 const TEST_DIR = join(import.meta.dirname ?? ".", "test-configs");
@@ -1135,7 +1131,7 @@ describe("run with config context", { concurrency: false }, () => {
     assert.deepEqual(result, { enabled: true, dependent: "foo" });
   });
 
-  test("dispose clears active config registry after runWith", async () => {
+  test("runWith does not leak config state into later plain parses", async () => {
     await mkdir(TEST_DIR, { recursive: true });
     const configPath = join(TEST_DIR, "test-config-dispose.json");
     await writeFile(
@@ -1146,6 +1142,10 @@ describe("run with config context", { concurrency: false }, () => {
     try {
       const schema = z.object({ host: z.string() });
       const context = createConfigContext({ schema });
+      const detachedParser = bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+      });
 
       const parser = object({
         config: withDefault(option("--config", string()), configPath),
@@ -1163,9 +1163,8 @@ describe("run with config context", { concurrency: false }, () => {
         args: [],
       });
 
-      // After runWith completes, dispose should have cleared the registries
-      assert.equal(getActiveConfig(context.id), undefined);
-      assert.equal(getActiveConfigMeta(context.id), undefined);
+      const detachedResult = parse(detachedParser, []);
+      assert.ok(!detachedResult.success);
     } finally {
       await rm(configPath, { force: true });
     }

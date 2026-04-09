@@ -84,40 +84,6 @@ export interface EnvContextOptions {
   readonly source?: EnvSource;
 }
 
-const activeEnvSourceRegistry: Map<symbol, EnvSourceData> = new Map();
-
-/**
- * Sets active environment source data for a context.
- *
- * @internal
- */
-export function setActiveEnvSource(
-  contextId: symbol,
-  sourceData: EnvSourceData,
-): void {
-  activeEnvSourceRegistry.set(contextId, sourceData);
-}
-
-/**
- * Gets active environment source data for a context.
- *
- * @internal
- */
-export function getActiveEnvSource(
-  contextId: symbol,
-): EnvSourceData | undefined {
-  return activeEnvSourceRegistry.get(contextId);
-}
-
-/**
- * Clears active environment source data for a context.
- *
- * @internal
- */
-export function clearActiveEnvSource(contextId: symbol): void {
-  activeEnvSourceRegistry.delete(contextId);
-}
-
 function defaultEnvSource(key: string): string | undefined {
   const denoGlobal = (globalThis as {
     readonly Deno?: { readonly env?: { readonly get?: EnvSource } };
@@ -133,6 +99,11 @@ function defaultEnvSource(key: string): string | undefined {
 
 /**
  * Creates an environment context for use with Optique runners.
+ *
+ * When calling `context.getAnnotations()` manually, pass the returned
+ * annotations to low-level APIs such as `parse()`, `parseAsync()`,
+ * `suggest()`, or `getDocPage()`. Calling `getAnnotations()` by itself does
+ * not affect later parses.
  *
  * @param options Environment context options.
  * @returns A context that provides environment source annotations.
@@ -177,7 +148,6 @@ export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
 
     getAnnotations(): Annotations {
       const sourceData: EnvSourceData = { prefix, source };
-      setActiveEnvSource(contextId, sourceData);
       // Use the per-instance contextId as the annotation key so that
       // multiple EnvContext instances can coexist without overwriting each
       // other during mergeAnnotations().  See:
@@ -186,7 +156,7 @@ export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
     },
 
     [Symbol.dispose]() {
-      clearActiveEnvSource(contextId);
+      // No-op. Env annotations are detached parse-time snapshots.
     },
   };
 }
@@ -571,9 +541,9 @@ function getEnvOrDefault<M extends Mode, TValue>(
   // Read from the per-instance context id so that the correct source is
   // selected even when annotations from multiple env contexts are merged.
   // See: https://github.com/dahlia/optique/issues/136
-  const sourceData =
-    (annotations?.[options.context.id] as EnvSourceData | undefined) ??
-      getActiveEnvSource(options.context.id);
+  const sourceData = annotations?.[options.context.id] as
+    | EnvSourceData
+    | undefined;
 
   const fullKey = `${
     sourceData?.prefix ?? options.context.prefix
@@ -679,10 +649,9 @@ function getEnvOrDefault<M extends Mode, TValue>(
 /**
  * Resolves an env-backed dependency source with env and default fallbacks.
  *
- * This first checks annotations or the active env registry for the bound
- * variable. If no env-backed value is available, it falls back to
- * `options.default` and finally delegates to the wrapped parser's source
- * extractor.
+ * This first checks annotations for the bound variable. If no env-backed value
+ * is available, it falls back to `options.default` and finally delegates to
+ * the wrapped parser's source extractor.
  *
  * When `innerParser` exposes a `validateValue` hook, env-sourced values
  * and the configured default are re-validated against the inner parser's
@@ -721,9 +690,9 @@ function getEnvSourceValue<M extends Mode, TValue>(
   | Promise<ValueParserResult<unknown> | undefined>
   | undefined {
   const annotations = getAnnotations(state);
-  const sourceData =
-    (annotations?.[options.context.id] as EnvSourceData | undefined) ??
-      getActiveEnvSource(options.context.id);
+  const sourceData = annotations?.[options.context.id] as
+    | EnvSourceData
+    | undefined;
 
   const fullKey = `${
     sourceData?.prefix ?? options.context.prefix

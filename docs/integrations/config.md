@@ -867,6 +867,12 @@ Parameters
 Returns
 :   `ConfigContext<T, TConfigMeta>` implementing `SourceContext` interface
 
+> [!IMPORTANT]
+> If you call `configContext.getAnnotations()` manually, pass the returned
+> object to low-level APIs such as `parse()`, `parseAsync()`, `suggest()`,
+> or `getDocPage()`. Calling `getAnnotations()` alone does not affect later
+> parses.
+
 ### `bindConfig(parser, options)`
 
 Binds a parser to configuration values with fallback priority.
