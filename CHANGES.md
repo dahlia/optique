@@ -1671,7 +1671,7 @@ To be released.
     later plain parses unless the returned annotations are passed
     explicitly or the parser is run through a context-aware runner.
     This also fixes stale config values surviving later empty or
-    failing probes.  [[#234]]
+    failing probes.  [[#234], [#785]]
 
  -  Fixed `bindConfig()` not re-validating fallback values (values loaded
     from the config file and configured defaults) against the inner CLI
@@ -1826,6 +1826,7 @@ To be released.
 [#655]: https://github.com/dahlia/optique/pull/655
 [#680]: https://github.com/dahlia/optique/pull/680
 [#770]: https://github.com/dahlia/optique/pull/770
+[#785]: https://github.com/dahlia/optique/pull/785
 
 ### @optique/env
 
@@ -1836,7 +1837,7 @@ environment variable integration via source contexts.  [[#86], [#135]]
     Calling `envContext.getAnnotations()` manually no longer affects
     later plain parses unless the returned annotations are passed
     explicitly or the parser is run through a context-aware runner.
-    [[#234]]
+    [[#234], [#785]]
 
  -  Fixed `bindEnv()` not re-validating fallback values (environment
     variable values parsed by a looser env-level `parser` and configured
@@ -1959,7 +1960,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     prompts based on stale source state from earlier manual
     `getAnnotations()` calls. Prompts are skipped only when the current
     parse carries explicit annotations or runner-provided contexts.
-    [[#234]]
+    [[#234], [#785]]
 
  -  Added `prompt()` for wrapping any parser with an interactive prompt that
     fires when no CLI value is provided.  Supports ten prompt types:
