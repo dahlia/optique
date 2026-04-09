@@ -3561,7 +3561,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
           option: true,
         },
         stdout: (text) => {
-          completionOutput = text;
+          completionOutput += text;
         },
       });
 
@@ -3581,7 +3581,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
           option: true,
         },
         stdout: (text) => {
-          completionOutput = text;
+          completionOutput += text;
         },
       });
 
@@ -3713,6 +3713,46 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       // "compdef".  With first-match, --completion=bash is the meta option
       // and "--completion=zsh" is payload, so no zsh script is generated.
       assert.ok(!completionOutput.includes("compdef"));
+    });
+
+    it("should preserve completion payload after -- for separated option form", () => {
+      const parser = or(
+        command("build", object({})),
+        command("beta", object({})),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["--completion", "bash", "--", "b"], {
+        completion: {
+          option: true,
+        },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      assert.deepEqual(completionOutput.split("\n").sort(), ["beta", "build"]);
+    });
+
+    it("should preserve completion payload after -- for equals-form option", () => {
+      const parser = or(
+        command("build", object({})),
+        command("beta", object({})),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["--completion=bash", "--", "b"], {
+        completion: {
+          option: true,
+        },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      assert.deepEqual(completionOutput.split("\n").sort(), ["beta", "build"]);
     });
 
     it("should report missing shell for separated --completion option", () => {

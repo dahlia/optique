@@ -1263,7 +1263,8 @@ interface MetaAction {
 }
 
 function classifyOptionMeta(
-  args: readonly string[],
+  scanArgs: readonly string[],
+  fullArgs: readonly string[],
   helpOptionNames: readonly string[],
   versionOptionNames: readonly string[],
   completionOptionNames: readonly string[],
@@ -1272,8 +1273,8 @@ function classifyOptionMeta(
   readonly completion?: CompletionOptionMatch;
 } {
   let lastHelpVersion: MetaAction | undefined;
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
+  for (let i = 0; i < scanArgs.length; i++) {
+    const arg = scanArgs[i];
 
     if (helpOptionNames.includes(arg)) {
       lastHelpVersion = { index: i, kind: "help" };
@@ -1290,18 +1291,19 @@ function classifyOptionMeta(
         completion: {
           index: i,
           shell: arg.slice(equalsMatch.length + 1),
-          args: args.slice(i + 1),
+          args: fullArgs.slice(i + 1),
         },
       };
     }
 
     if (completionOptionNames.includes(arg)) {
+      const shell = scanArgs[i + 1] ?? "";
       return {
         lastHelpVersion,
         completion: {
           index: i,
-          shell: args[i + 1] ?? "",
-          args: i + 1 < args.length ? args.slice(i + 2) : [],
+          shell,
+          args: shell === "" ? [] : fullArgs.slice(i + 2),
         },
       };
     }
@@ -1364,6 +1366,7 @@ function classifyParseFailure(
   })();
   const { lastHelpVersion, completion } = classifyOptionMeta(
     optionArgs,
+    failure.remainingArgs,
     helpOptionNames,
     versionOptionNames,
     completionOptionNames,
