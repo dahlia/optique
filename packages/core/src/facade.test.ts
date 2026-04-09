@@ -11637,6 +11637,160 @@ describe("branch coverage: facade.ts edge cases", () => {
     });
   });
 
+  it("does not reclassify consumed help tokens after sync parse failures", () => {
+    const parsers: readonly Parser<"sync", string, undefined>[] = [
+      {
+        $mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(["--help"]),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse() {
+          return {
+            success: false as const,
+            consumed: 1,
+            error: message`Consumed token failure.`,
+          };
+        },
+        complete() {
+          return {
+            success: false as const,
+            error: message`Should not complete.`,
+          };
+        },
+        *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      },
+      {
+        $mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(["--help"]),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: ["--help"],
+          };
+        },
+        complete() {
+          return {
+            success: false as const,
+            error: message`Should not complete.`,
+          };
+        },
+        *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      },
+    ];
+
+    for (const parser of parsers) {
+      let stdoutOutput = "";
+      const result = runParser(parser, "test", ["--help"], {
+        help: {
+          option: true,
+          onShow: () => "help",
+        },
+        onError: () => "error",
+        stdout: (text) => {
+          stdoutOutput += text;
+        },
+        stderr: () => {},
+      });
+
+      assert.equal(result, "error");
+      assert.equal(stdoutOutput, "");
+    }
+  });
+
+  it("does not reclassify consumed help tokens after async parse failures", async () => {
+    const parsers: readonly Parser<"async", string, undefined>[] = [
+      {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(["--help"]),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse() {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 1,
+            error: message`Consumed token failure.`,
+          });
+        },
+        complete() {
+          return Promise.resolve({
+            success: false as const,
+            error: message`Should not complete.`,
+          });
+        },
+        async *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      },
+      {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(["--help"]),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: ["--help"],
+          });
+        },
+        complete() {
+          return Promise.resolve({
+            success: false as const,
+            error: message`Should not complete.`,
+          });
+        },
+        async *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      },
+    ];
+
+    for (const parser of parsers) {
+      let stdoutOutput = "";
+      const result = await runParser(parser, "test", ["--help"], {
+        help: {
+          option: true,
+          onShow: () => "help",
+        },
+        onError: () => "error",
+        stdout: (text) => {
+          stdoutOutput += text;
+        },
+        stderr: () => {},
+      });
+
+      assert.equal(result, "error");
+      assert.equal(stdoutOutput, "");
+    }
+  });
+
   it("needsEarlyExit does not trigger for non-matching completion option args", () => {
     const parser = object({ name: argument(string()) });
     const result = runParser(parser, "test", ["Alice"], {

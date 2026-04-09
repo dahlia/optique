@@ -250,6 +250,20 @@ function isBufferUnchanged(
   );
 }
 
+function getFailureProgress(
+  args: readonly string[],
+  buffer: readonly string[],
+  consumedInStep: number,
+): {
+  readonly remainingArgs: readonly string[];
+  readonly consumedCount: number;
+} {
+  return {
+    remainingArgs: buffer.slice(consumedInStep),
+    consumedCount: args.length - buffer.length + consumedInStep,
+  };
+}
+
 type ParseAttempt<T> =
   | {
     readonly kind: "success";
@@ -324,11 +338,16 @@ function attemptParseSync<T>(
   do {
     const result = parser.parse(context);
     if (!result.success) {
+      const progress = getFailureProgress(
+        args,
+        context.buffer,
+        result.consumed,
+      );
       return {
         kind: "failure",
         error: result.error,
-        remainingArgs: context.buffer,
-        consumedCount: args.length - context.buffer.length,
+        remainingArgs: progress.remainingArgs,
+        consumedCount: progress.consumedCount,
         optionsTerminated: context.optionsTerminated,
         commandPath: getCommandPath(context.exec),
       };
@@ -336,11 +355,16 @@ function attemptParseSync<T>(
     const previousBuffer = context.buffer;
     context = result.next;
     if (isBufferUnchanged(previousBuffer, context.buffer)) {
+      const progress = getFailureProgress(
+        args,
+        previousBuffer,
+        result.consumed.length,
+      );
       return {
         kind: "failure",
         error: message`Unexpected option or argument: ${context.buffer[0]}.`,
-        remainingArgs: context.buffer,
-        consumedCount: args.length - context.buffer.length,
+        remainingArgs: progress.remainingArgs,
+        consumedCount: progress.consumedCount,
         optionsTerminated: context.optionsTerminated,
         commandPath: getCommandPath(context.exec),
       };
@@ -402,11 +426,16 @@ async function attemptParseAsync<T>(
   do {
     const result = await parser.parse(context);
     if (!result.success) {
+      const progress = getFailureProgress(
+        args,
+        context.buffer,
+        result.consumed,
+      );
       return {
         kind: "failure",
         error: result.error,
-        remainingArgs: context.buffer,
-        consumedCount: args.length - context.buffer.length,
+        remainingArgs: progress.remainingArgs,
+        consumedCount: progress.consumedCount,
         optionsTerminated: context.optionsTerminated,
         commandPath: getCommandPath(context.exec),
       };
@@ -414,11 +443,16 @@ async function attemptParseAsync<T>(
     const previousBuffer = context.buffer;
     context = result.next;
     if (isBufferUnchanged(previousBuffer, context.buffer)) {
+      const progress = getFailureProgress(
+        args,
+        previousBuffer,
+        result.consumed.length,
+      );
       return {
         kind: "failure",
         error: message`Unexpected option or argument: ${context.buffer[0]}.`,
-        remainingArgs: context.buffer,
-        consumedCount: args.length - context.buffer.length,
+        remainingArgs: progress.remainingArgs,
+        consumedCount: progress.consumedCount,
         optionsTerminated: context.optionsTerminated,
         commandPath: getCommandPath(context.exec),
       };
