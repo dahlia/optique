@@ -1015,15 +1015,15 @@ without requiring valid configuration files or contexts, but it checks
 the user parser first.  These features are treated as runner-level meta
 requests only when the parser leaves the token sequence unconsumed:
 
- -  `--help` displays help even if config files are missing or invalid
- -  `--version` shows version information without loading contexts
- -  Completion scripts generate instantly regardless of environment setup
+ -  `--help` displays help even if later parse phases would fail
+ -  `--version` shows version information without running phase 2
+ -  Completion scripts still skip phase-two context refinement
 
 If the parser accepts the same tokens as ordinary data, such as a
 positional `help` value or an option value `--help`, the parse result
 wins and normal context collection continues.  Genuine meta requests
-still bypass context loading, so users can access documentation and
-basic information even in misconfigured environments.
+still stop after phase 1, so users can access documentation and basic
+information without needing a successful second parse pass.
 
 ~~~~ typescript
 // Help works even if config file is missing or invalid

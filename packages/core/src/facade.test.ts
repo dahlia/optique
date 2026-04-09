@@ -5732,7 +5732,7 @@ describe("runWith", () => {
   });
 
   describe("early exit for help/version/completion", () => {
-    it("should not call context.getAnnotations() when --help option is provided", async () => {
+    it("should collect phase 1 annotations when --help option is provided", async () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
@@ -5761,10 +5761,10 @@ describe("runWith", () => {
       });
 
       assert.ok(helpShown);
-      assert.equal(annotationsCallCount, 0);
+      assert.equal(annotationsCallCount, 1);
     });
 
-    it("should not call context.getAnnotations() when --version option is provided", async () => {
+    it("should collect phase 1 annotations when --version option is provided", async () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
@@ -5794,10 +5794,10 @@ describe("runWith", () => {
       });
 
       assert.ok(versionShown);
-      assert.equal(annotationsCallCount, 0);
+      assert.equal(annotationsCallCount, 1);
     });
 
-    it("should not call context.getAnnotations() when help command is provided", async () => {
+    it("should collect phase 1 annotations when help command is provided", async () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
@@ -5826,10 +5826,10 @@ describe("runWith", () => {
       });
 
       assert.ok(helpShown);
-      assert.equal(annotationsCallCount, 0);
+      assert.equal(annotationsCallCount, 1);
     });
 
-    it("should not call context.getAnnotations() when version command is provided", async () => {
+    it("should collect phase 1 annotations when version command is provided", async () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
@@ -5859,10 +5859,10 @@ describe("runWith", () => {
       });
 
       assert.ok(versionShown);
-      assert.equal(annotationsCallCount, 0);
+      assert.equal(annotationsCallCount, 1);
     });
 
-    it("should not call context.getAnnotations() when completion command is provided", async () => {
+    it("should collect phase 1 annotations when completion command is provided", async () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
@@ -5891,10 +5891,10 @@ describe("runWith", () => {
       });
 
       assert.ok(completionShown);
-      assert.equal(annotationsCallCount, 0);
+      assert.equal(annotationsCallCount, 1);
     });
 
-    it("should not call context.getAnnotations() when --completion option is provided", async () => {
+    it("should collect phase 1 annotations when --completion option is provided", async () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
@@ -5923,10 +5923,10 @@ describe("runWith", () => {
       });
 
       assert.ok(completionShown);
-      assert.equal(annotationsCallCount, 0);
+      assert.equal(annotationsCallCount, 1);
     });
 
-    it("should not call context.getAnnotations() when completions (plural) command is provided", async () => {
+    it("should collect phase 1 annotations when completions (plural) command is provided", async () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
@@ -5955,10 +5955,10 @@ describe("runWith", () => {
       });
 
       assert.ok(completionShown);
-      assert.equal(annotationsCallCount, 0);
+      assert.equal(annotationsCallCount, 1);
     });
 
-    it("should not call context.getAnnotations() when --completions (plural) option is provided", async () => {
+    it("should collect phase 1 annotations when --completions (plural) option is provided", async () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
@@ -5987,7 +5987,7 @@ describe("runWith", () => {
       });
 
       assert.ok(completionShown);
-      assert.equal(annotationsCallCount, 0);
+      assert.equal(annotationsCallCount, 1);
     });
 
     it("should continue to context collection when completion option is configured but absent", async () => {
@@ -6014,6 +6014,82 @@ describe("runWith", () => {
 
       assert.deepEqual(result, { name: "alice" });
       assert.equal(annotationsCallCount, 1);
+    });
+
+    it("should let phase 1 annotations keep --help as ordinary parser data", async () => {
+      const key = Symbol.for("@test/phase1-meta-shadow-async");
+      let phase1Calls = 0;
+      let helpShown = false;
+
+      const parser: Parser<
+        "sync",
+        { readonly value: string },
+        string | undefined
+      > = {
+        $mode: "sync",
+        $valueType: [] as readonly { readonly value: string }[],
+        $stateType: [] as readonly (string | undefined)[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          const [head, ...rest] = context.buffer;
+          if (
+            head === "--help" &&
+            getAnnotations(context.state)?.[key] === true
+          ) {
+            return {
+              success: true as const,
+              next: { ...context, buffer: rest, state: head },
+              consumed: [head],
+            };
+          }
+          return {
+            success: false as const,
+            error: message`Missing annotated help value.`,
+            consumed: 0,
+          };
+        },
+        complete(state) {
+          return state == null
+            ? {
+              success: false as const,
+              error: message`Missing annotated help value.`,
+            }
+            : { success: true as const, value: { value: state } };
+        },
+        *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+
+      const context: SourceContext = {
+        id: key,
+        phase: "single-pass",
+        getAnnotations() {
+          phase1Calls++;
+          return { [key]: true };
+        },
+      };
+
+      const result = await runWith(parser, "test", [context], {
+        args: ["--help"],
+        help: {
+          option: true,
+          onShow: () => {
+            helpShown = true;
+            return "help" as const;
+          },
+        },
+        stdout: () => {},
+      });
+
+      assert.deepEqual(result, { value: "--help" });
+      assert.ok(!helpShown, "help should remain ordinary parser data");
+      assert.equal(phase1Calls, 1);
     });
   });
 
@@ -6921,7 +6997,7 @@ describe("runWithSync", () => {
   });
 
   describe("early exit for help/version/completion", () => {
-    it("should not call context.getAnnotations() when --help option is provided", () => {
+    it("should collect phase 1 annotations when --help option is provided", () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
@@ -6950,10 +7026,10 @@ describe("runWithSync", () => {
       });
 
       assert.ok(helpShown);
-      assert.equal(annotationsCallCount, 0);
+      assert.equal(annotationsCallCount, 1);
     });
 
-    it("should not call context.getAnnotations() when --version option is provided", () => {
+    it("should collect phase 1 annotations when --version option is provided", () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
@@ -6983,10 +7059,10 @@ describe("runWithSync", () => {
       });
 
       assert.ok(versionShown);
-      assert.equal(annotationsCallCount, 0);
+      assert.equal(annotationsCallCount, 1);
     });
 
-    it("should not call context.getAnnotations() when completion command is provided", () => {
+    it("should collect phase 1 annotations when completion command is provided", () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
@@ -7015,7 +7091,86 @@ describe("runWithSync", () => {
       });
 
       assert.ok(completionShown);
-      assert.equal(annotationsCallCount, 0);
+      assert.equal(annotationsCallCount, 1);
+    });
+
+    it("should let phase 1 annotations keep --completion=bash as ordinary parser data", () => {
+      const key = Symbol.for("@test/phase1-meta-shadow-sync");
+      let phase1Calls = 0;
+      let completionShown = false;
+
+      const parser: Parser<
+        "sync",
+        { readonly value: string },
+        string | undefined
+      > = {
+        $mode: "sync",
+        $valueType: [] as readonly { readonly value: string }[],
+        $stateType: [] as readonly (string | undefined)[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          const [head, ...rest] = context.buffer;
+          if (
+            head === "--completion=bash" &&
+            getAnnotations(context.state)?.[key] === true
+          ) {
+            return {
+              success: true as const,
+              next: { ...context, buffer: rest, state: head },
+              consumed: [head],
+            };
+          }
+          return {
+            success: false as const,
+            error: message`Missing annotated completion value.`,
+            consumed: 0,
+          };
+        },
+        complete(state) {
+          return state == null
+            ? {
+              success: false as const,
+              error: message`Missing annotated completion value.`,
+            }
+            : { success: true as const, value: { value: state } };
+        },
+        *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+
+      const context: SourceContext = {
+        id: key,
+        phase: "single-pass",
+        getAnnotations() {
+          phase1Calls++;
+          return { [key]: true };
+        },
+      };
+
+      const result = runWithSync(parser, "test", [context], {
+        args: ["--completion=bash"],
+        completion: {
+          option: true,
+          onShow: () => {
+            completionShown = true;
+            return "completion" as const;
+          },
+        },
+        stdout: () => {},
+      });
+
+      assert.deepEqual(result, { value: "--completion=bash" });
+      assert.ok(
+        !completionShown,
+        "completion should remain ordinary parser data",
+      );
+      assert.equal(phase1Calls, 1);
     });
   });
 
@@ -10752,14 +10907,19 @@ describe("branch coverage: facade.ts edge cases", () => {
   });
 
   // Lines 2698/2736/2740/2818: runWithSync two-phase paths
-  it("runWithSync: needsEarlyExit skips context processing", () => {
+  it("runWithSync: needsEarlyExit skips phase two processing", () => {
     const dynKey = Symbol.for("@test/sync-early-exit");
-    let contextCalled = false;
+    let phase1Calls = 0;
+    let phase2Calls = 0;
     const context: SourceContext = {
       id: dynKey,
-      phase: "single-pass",
-      getAnnotations() {
-        contextCalled = true;
+      phase: "two-pass",
+      getAnnotations(parsed?: unknown) {
+        if (parsed === undefined) {
+          phase1Calls++;
+          return { [dynKey]: {} };
+        }
+        phase2Calls++;
         return { [dynKey]: {} };
       },
     };
@@ -10777,7 +10937,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       stdout: () => {},
     });
     assert.ok(helpShown, "help should be shown");
-    assert.ok(!contextCalled, "context should not be called on early exit");
+    assert.equal(phase1Calls, 1, "phase 1 should still run");
+    assert.equal(phase2Calls, 0, "phase 2 should be skipped on early exit");
   });
 
   it("runWithSync: two-phase, first pass fails → handled via runParser", () => {

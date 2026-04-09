@@ -2272,7 +2272,7 @@ describe("runSync with contexts", () => {
     assert.ok(disposed);
   });
 
-  it("should handle help with contexts in runSync", () => {
+  it("should collect phase 1 annotations for help in runSync", () => {
     const key = Symbol.for("@test/runsync-help");
     let annotationsCallCount = 0;
     const context: SourceContext = {
@@ -2310,8 +2310,8 @@ describe("runSync with contexts", () => {
     }
 
     assert.ok(helpShown);
-    // Contexts should not be called for early exits
-    assert.equal(annotationsCallCount, 0);
+    // Genuine meta requests still stop after phase 1.
+    assert.equal(annotationsCallCount, 1);
   });
 
   it("should support Program input with contexts", () => {

@@ -2164,7 +2164,8 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
  -  Fixed `run()`, `runSync()`, and `runAsync()` to follow the parser-aware
     help, version, and completion semantics from *@optique/core*.  Built-in
     meta requests now yield to ordinary parser data, while genuine meta
-    requests still bypass context loading and process handling as before.
+    requests still stop after phase 1 and bypass phase-two context
+    refinement and process handling as before.
     [[#230], [#784]]
 
  -  Fixed `path()` extension validation for dotfiles (e.g., `.env`,

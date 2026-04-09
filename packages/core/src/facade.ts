@@ -3220,18 +3220,6 @@ async function runWithBody<
   validateContextIds(contexts);
   validateContextPhases(contexts);
 
-  // Early exit: skip context processing for help/version/completion
-  if (await needsEarlyExitAsync(parser, args, options)) {
-    if (parser.$mode === "async") {
-      return runParser(parser, programName, args, options) as Promise<
-        InferValue<TParser>
-      >;
-    }
-    return Promise.resolve(
-      runParser(parser, programName, args, options) as InferValue<TParser>,
-    );
-  }
-
   // Phase 1: Collect initial annotations
   const ctxOptions = options.contextOptions;
   const {
@@ -3239,25 +3227,49 @@ async function runWithBody<
     needsTwoPhase,
     snapshots: phase1Snapshots,
   } = await collectPhase1Annotations(contexts, ctxOptions);
+  const earlyExitParser = injectAnnotationsIntoParser(
+    parser,
+    phase1Annotations,
+  );
 
-  if (!needsTwoPhase) {
-    // All contexts are single-pass.
-    // Inject annotations into the parser's initial state
-    const augmentedParser = injectAnnotationsIntoParser(
-      parser,
-      phase1Annotations,
-    );
-
+  // Early exit: skip phase-two processing for genuine help/version/
+  // completion requests, but only after phase-1 annotations have been
+  // injected because they may change what the parser accepts as ordinary data.
+  if (await needsEarlyExitAsync(earlyExitParser, args, options)) {
     if (parser.$mode === "async") {
       return runParser(
-        augmentedParser,
+        earlyExitParser,
         programName,
         args,
         options,
       ) as Promise<InferValue<TParser>>;
     }
     return Promise.resolve(
-      runParser(augmentedParser, programName, args, options) as InferValue<
+      runParser(
+        earlyExitParser,
+        programName,
+        args,
+        options,
+      ) as InferValue<TParser>,
+    );
+  }
+  const augmentedParser1 = injectAnnotationsIntoParser(
+    parser,
+    phase1Annotations,
+  );
+
+  if (!needsTwoPhase) {
+    // All contexts are single-pass.
+    if (parser.$mode === "async") {
+      return runParser(
+        augmentedParser1,
+        programName,
+        args,
+        options,
+      ) as Promise<InferValue<TParser>>;
+    }
+    return Promise.resolve(
+      runParser(augmentedParser1, programName, args, options) as InferValue<
         TParser
       >,
     );
@@ -3265,11 +3277,6 @@ async function runWithBody<
 
   // Two-phase parsing for two-pass contexts.
   // First pass: parse with Phase 1 annotations to get initial result
-  const augmentedParser1 = injectAnnotationsIntoParser(
-    parser,
-    phase1Annotations,
-  );
-
   const firstPassSeed = await dispatchByMode(
     parser.$mode,
     () =>
@@ -3284,13 +3291,13 @@ async function runWithBody<
   // This is done outside the try-catch to prevent the catch block from
   // re-invoking runParser when it throws (which caused double error output).
   if (firstPassSeed == null) {
-    const augmentedParser = injectAnnotationsIntoParser(
+    const fallbackParser = injectAnnotationsIntoParser(
       parser,
       phase1Annotations,
     );
     if (parser.$mode === "async") {
       return runParser(
-        augmentedParser,
+        fallbackParser,
         programName,
         args,
         options,
@@ -3299,7 +3306,7 @@ async function runWithBody<
       >;
     }
     return Promise.resolve(
-      runParser(augmentedParser, programName, args, options) as InferValue<
+      runParser(fallbackParser, programName, args, options) as InferValue<
         TParser
       >,
     );
@@ -3472,11 +3479,6 @@ function runWithSyncBody<
   validateContextIds(contexts);
   validateContextPhases(contexts);
 
-  // Early exit: skip context processing for help/version/completion
-  if (needsEarlyExitSync(parser, args, options)) {
-    return runParser(parser, programName, args, options);
-  }
-
   // Phase 1: Collect initial annotations
   const ctxOptions = options.contextOptions;
   const {
@@ -3484,30 +3486,36 @@ function runWithSyncBody<
     needsTwoPhase,
     snapshots: phase1Snapshots,
   } = collectPhase1AnnotationsSync(contexts, ctxOptions);
+  const earlyExitParser = injectAnnotationsIntoParser(
+    parser,
+    phase1Annotations,
+  );
 
-  if (!needsTwoPhase) {
-    // All contexts are single-pass.
-    const augmentedParser = injectAnnotationsIntoParser(
-      parser,
-      phase1Annotations,
-    );
-    return runParser(augmentedParser, programName, args, options);
+  // Early exit: skip phase-two processing for genuine help/version/
+  // completion requests, but only after phase-1 annotations have been
+  // injected because they may change what the parser accepts as ordinary data.
+  if (needsEarlyExitSync(earlyExitParser, args, options)) {
+    return runParser(earlyExitParser, programName, args, options);
   }
-
-  // Two-phase parsing for two-pass contexts.
-  // First pass: parse with Phase 1 annotations
   const augmentedParser1 = injectAnnotationsIntoParser(
     parser,
     phase1Annotations,
   );
 
+  if (!needsTwoPhase) {
+    // All contexts are single-pass.
+    return runParser(augmentedParser1, programName, args, options);
+  }
+
+  // Two-phase parsing for two-pass contexts.
+  // First pass: parse with Phase 1 annotations
   const firstPassSeed = extractPhase2SeedSync(augmentedParser1, args);
   if (firstPassSeed == null) {
-    const augmentedParser = injectAnnotationsIntoParser(
+    const fallbackParser = injectAnnotationsIntoParser(
       parser,
       phase1Annotations,
     );
-    return runParser(augmentedParser, programName, args, options);
+    return runParser(fallbackParser, programName, args, options);
   }
 
   // Phase 2: Collect annotations with parsed result
