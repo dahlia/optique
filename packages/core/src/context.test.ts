@@ -95,7 +95,7 @@ describe("SourceContext", () => {
         id: configKey,
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (!parsed) return {};
+          if (parsed === undefined) return {};
           return { [configKey]: { host: "config-host" } };
         },
       };

@@ -6592,7 +6592,7 @@ describe("runWith", () => {
         phase: "two-pass",
         getAnnotations(parsed?: unknown, options?: unknown) {
           receivedOptionsPerCall.push(options);
-          if (!parsed) return {};
+          if (parsed === undefined) return {};
           return { [dynamicKey]: { value: "loaded" } };
         },
       };
@@ -6929,7 +6929,7 @@ describe("runWithSync", () => {
       id: mixedKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {}; // sync (empty → dynamic)
+        if (parsed === undefined) return {}; // sync (empty → dynamic)
         return Promise.resolve({ [mixedKey]: { value: "loaded" } });
       },
     };
@@ -9708,7 +9708,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: dynKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {};
+        if (parsed === undefined) return {};
         phase2Called = true;
         return { [dynKey]: {} };
       },
@@ -10667,7 +10667,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: dynKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {};
+        if (parsed === undefined) return {};
         return { [dynKey]: {} };
       },
     };
@@ -10690,7 +10690,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: dynKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {}; // dynamic (no symbols → hasDynamic = true)
+        if (parsed === undefined) return {}; // dynamic (no symbols → hasDynamic = true)
         return { [dynKey]: {} };
       },
     };
@@ -10749,7 +10749,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: dynKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {}; // dynamic
+        if (parsed === undefined) return {}; // dynamic
         return { [dynKey]: {} };
       },
     };
@@ -10845,7 +10845,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: dynKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {}; // dynamic
+        if (parsed === undefined) return {}; // dynamic
         return { [dynKey]: {} };
       },
     };
@@ -10870,7 +10870,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: dynKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {};
+        if (parsed === undefined) return {};
         return { [dynKey]: {} };
       },
     };
@@ -10919,7 +10919,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: dynKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {}; // dynamic
+        if (parsed === undefined) return {}; // dynamic
         return { [dynKey]: {} };
       },
     };
@@ -11202,7 +11202,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: Symbol.for("@test/dyn-throw-in-first-pass"),
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {};
+        if (parsed === undefined) return {};
         return { [Symbol.for("@test/dyn-throw-in-first-pass")]: {} };
       },
     };
@@ -11248,7 +11248,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: Symbol.for("@test/sync-dyn-throw-in-first-pass"),
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {};
+        if (parsed === undefined) return {};
         return { [Symbol.for("@test/sync-dyn-throw-in-first-pass")]: {} };
       },
     };
