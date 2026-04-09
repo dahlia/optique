@@ -15,6 +15,9 @@ import {
 /**
  * Shared targets for annotation-view proxies.
  *
+ * Maps a proxy returned by {@link withAnnotationView} back to its original
+ * target object.
+ *
  * @internal
  */
 export const annotationViewTargets = new WeakMap<object, object>();
@@ -22,6 +25,9 @@ export const annotationViewTargets = new WeakMap<object, object>();
 /**
  * Unwraps an annotation-view proxy to its original target object.
  *
+ * @param value The candidate value that may be an annotation-view proxy.
+ * @returns The original target object when the input is a tracked
+ *          annotation-view proxy; otherwise the input value unchanged.
  * @internal
  */
 export function unwrapAnnotationView<T>(value: T): T {
@@ -34,6 +40,10 @@ export function unwrapAnnotationView<T>(value: T): T {
 /**
  * Creates a proxy that exposes annotations without changing the target shape.
  *
+ * @param state The object state to expose through an annotation-aware view.
+ * @param annotations The annotations to surface through the proxy.
+ * @returns A proxy over the unwrapped target object that reports the supplied
+ *          annotations while preserving the target's structural behavior.
  * @internal
  */
 export function withAnnotationView<T extends object>(
@@ -60,6 +70,9 @@ export function withAnnotationView<T extends object>(
 /**
  * Removes Optique's internal primitive-state annotation wrapper when present.
  *
+ * @param state The parser state to normalize.
+ * @returns The wrapped primitive sentinel when the input is an injected
+ *          annotation wrapper; otherwise the original input unchanged.
  * @internal
  */
 export function normalizeInjectedAnnotationState<T>(state: T): T {
@@ -72,6 +85,9 @@ export function normalizeInjectedAnnotationState<T>(state: T): T {
  *
  * This treats plain `undefined` and annotation-wrapped `undefined` the same.
  *
+ * @param state The parser state to inspect.
+ * @returns `true` when the normalized state is still `undefined`;
+ *          otherwise `false`.
  * @internal
  */
 export function isAnnotationWrappedInitialState(state: unknown): boolean {
@@ -82,6 +98,14 @@ export function isAnnotationWrappedInitialState(state: unknown): boolean {
  * Propagates parent annotations into a child parse state when the child parser
  * explicitly opts into parent annotation inheritance.
  *
+ * @param parentState The parent parser state that may carry annotations.
+ * @param childState The child parse state that may receive inherited
+ *                   annotations.
+ * @param parser The child parser whose inheritance marker controls whether
+ *               wrapper injection is allowed.
+ * @returns The original child state when no injection is needed or possible,
+ *          or an annotation-injected child state that preserves the original
+ *          sentinel or object shape when inheritance applies.
  * @internal
  */
 export function getWrappedChildParseState<TState>(
@@ -116,6 +140,13 @@ export function getWrappedChildParseState<TState>(
  * Propagates parent annotations into a child state while preserving the child
  * state's shape for parsers that do not opt into full wrapper injection.
  *
+ * @param parentState The parent parser state that may carry annotations.
+ * @param childState The child state that may receive inherited annotations.
+ * @param parser The child parser whose inheritance marker controls whether
+ *               full wrapper injection is allowed.
+ * @returns The original child state when no wrapping is needed, an
+ *          annotation-injected child state when inheritance applies, or an
+ *          annotation-view proxy that preserves the child's object shape.
  * @internal
  */
 export function getWrappedChildState<TState>(
@@ -152,6 +183,11 @@ export function getWrappedChildState<TState>(
  * Reconciles object-owned child state with parent annotations using the same
  * shared object-state inheritance rule across parser families.
  *
+ * @param parentState The parent parser state that may carry annotations.
+ * @param childState The object-owned child state to reconcile.
+ * @returns The original child state when no reconciliation is needed, or a
+ *          child state with inherited annotations when the object state should
+ *          carry the parent's annotations.
  * @internal
  */
 export function reconcileObjectChildState<TState>(
