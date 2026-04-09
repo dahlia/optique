@@ -219,15 +219,17 @@ To be released.
     contribution instead of letting stale data override later contexts.
     [[#231], [#782]]
 
- -  Replaced `SourceContext`'s inferred `mode` contract with an explicit
-    required `phase` field whose value must be `"single-pass"` or
-    `"two-pass"`.  `SourceContextMode`, `SourceContext.mode`, and
-    `isStaticContext()` have been removed.  `runWith()`, `runWithSync()`, and
-    higher-level runners now decide whether to perform phase 2 solely from
-    `context.phase`, which fixes contexts that emit non-empty phase-1
-    annotations and still need phase-2 refinement.  `createEnvContext()`
-    now declares `phase: "single-pass"` and `createConfigContext()`
-    declares `phase: "two-pass"`.  [[#243], [#783]]
+ -  *Breaking change:* Replaced `SourceContext`'s inferred `mode`
+    contract with an explicit required `phase` field whose value must be
+    `"single-pass"` or `"two-pass"`.  `SourceContextMode`,
+    `SourceContext.mode`, and `isStaticContext()` have been removed.
+    `runWith()`, `runWithSync()`, and higher-level runners now decide
+    whether to perform phase 2 solely from `context.phase`, which fixes
+    contexts that emit non-empty phase-1 annotations and still need
+    phase-2 refinement.  `createEnvContext()` now declares
+    `phase: "single-pass"` and `createConfigContext()` declares
+    `phase: "two-pass"`.  Consumers must migrate custom contexts to this
+    new API contract.  [[#243], [#783]]
 
  -  Fixed `or()` crashing with an internal `TypeError` when parsing started
     from an annotation-injected initial state.  Exclusive branch selection now
