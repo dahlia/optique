@@ -35,11 +35,9 @@ import {
   type InferValue,
   type Mode,
   type ModeValue,
-  parseAsync,
   type Parser,
+  type ParserContext,
   type ParserResult,
-  parseSync,
-  type Result,
   suggest,
   suggestAsync,
 } from "./parser.ts";
@@ -49,16 +47,18 @@ import { createInputTrace } from "./input-trace.ts";
 import { completeOrExtractPhase2Seed } from "./phase2-seed.ts";
 import { argument, command, constant, flag, option } from "./primitives.ts";
 import {
-  extractCommandNames,
-  extractLiteralValues,
-  extractOptionNames,
   formatUsage,
   type HiddenVisibility,
   type OptionName,
   type Usage,
 } from "./usage.ts";
 import { type DeferredMap, string } from "./valueparser.ts";
-import { type Annotations, injectAnnotations } from "./annotations.ts";
+import {
+  type Annotations,
+  injectAnnotations,
+  isInjectedAnnotationWrapper,
+  unwrapInjectedAnnotationWrapper,
+} from "./annotations.ts";
 import {
   type MetaEntry,
   validateCommandNames,
@@ -250,6 +250,244 @@ function isBufferUnchanged(
   );
 }
 
+function getFailureProgress(
+  args: readonly string[],
+  buffer: readonly string[],
+  consumedInStep: number,
+): {
+  readonly remainingArgs: readonly string[];
+  readonly consumedCount: number;
+} {
+  return {
+    remainingArgs: buffer.slice(consumedInStep),
+    consumedCount: args.length - buffer.length + consumedInStep,
+  };
+}
+
+type ParseAttempt<T> =
+  | {
+    readonly kind: "success";
+    readonly value: T;
+  }
+  | {
+    readonly kind: "failure";
+    readonly error: Message;
+    readonly remainingArgs: readonly string[];
+    readonly consumedCount: number;
+    readonly optionsTerminated: boolean;
+    readonly commandPath: readonly string[];
+  };
+
+function createParseExec(
+  parser: Parser<Mode, unknown, unknown>,
+): ExecutionContext {
+  return {
+    usage: parser.usage,
+    phase: "parse",
+    path: [],
+    commandPath: [],
+    trace: createInputTrace(),
+  };
+}
+
+function getCommandPath(exec: ExecutionContext | undefined): readonly string[] {
+  return exec?.commandPath ?? [];
+}
+
+function createCompleteExec(
+  exec: ExecutionContext,
+  context: {
+    readonly exec?: ExecutionContext;
+    readonly trace?: ReturnType<typeof createInputTrace>;
+  },
+): ExecutionContext {
+  const runtime = createDependencyRuntimeContext();
+  return {
+    ...exec,
+    phase: "complete",
+    dependencyRuntime: runtime,
+    dependencyRegistry: runtime.registry,
+    commandPath: getCommandPath(context.exec) ?? exec.commandPath,
+    trace: context.exec?.trace ?? context.trace ?? exec.trace,
+  };
+}
+
+function attemptParseSync<T>(
+  parser: Parser<"sync", T, unknown>,
+  args: readonly string[],
+): ParseAttempt<T>;
+function attemptParseSync(
+  parser: Parser<"sync", unknown, unknown>,
+  args: readonly string[],
+  mode: "parse-only",
+): ParseAttempt<undefined>;
+function attemptParseSync<T>(
+  parser: Parser<"sync", T, unknown>,
+  args: readonly string[],
+  mode: "complete" | "parse-only" = "complete",
+): ParseAttempt<T | undefined> {
+  const shouldUnwrapAnnotatedValue = isInjectedAnnotationWrapper(
+    parser.initialState,
+  );
+  const exec = createParseExec(parser);
+  let context: ParserContext<unknown> = createParserContext(
+    { buffer: args, state: parser.initialState, optionsTerminated: false },
+    exec,
+  );
+
+  do {
+    const result = parser.parse(context);
+    if (!result.success) {
+      const progress = getFailureProgress(
+        args,
+        context.buffer,
+        result.consumed,
+      );
+      return {
+        kind: "failure",
+        error: result.error,
+        remainingArgs: progress.remainingArgs,
+        consumedCount: progress.consumedCount,
+        optionsTerminated: context.optionsTerminated,
+        commandPath: getCommandPath(context.exec),
+      };
+    }
+    const previousBuffer = context.buffer;
+    context = result.next;
+    if (isBufferUnchanged(previousBuffer, context.buffer)) {
+      const progress = getFailureProgress(
+        args,
+        previousBuffer,
+        result.consumed.length,
+      );
+      return {
+        kind: "failure",
+        error: message`Unexpected option or argument: ${context.buffer[0]}.`,
+        remainingArgs: progress.remainingArgs,
+        consumedCount: progress.consumedCount,
+        optionsTerminated: context.optionsTerminated,
+        commandPath: getCommandPath(context.exec),
+      };
+    }
+  } while (context.buffer.length > 0);
+
+  if (mode === "parse-only") {
+    return {
+      kind: "success",
+      value: undefined,
+    };
+  }
+
+  const endResult = parser.complete(
+    context.state,
+    createCompleteExec(exec, context),
+  );
+  if (!endResult.success) {
+    return {
+      kind: "failure",
+      error: endResult.error,
+      remainingArgs: [],
+      consumedCount: args.length,
+      optionsTerminated: context.optionsTerminated,
+      commandPath: getCommandPath(context.exec),
+    };
+  }
+  return {
+    kind: "success",
+    value: shouldUnwrapAnnotatedValue
+      ? unwrapInjectedAnnotationWrapper(endResult.value)
+      : endResult.value,
+  };
+}
+
+async function attemptParseAsync<T>(
+  parser: Parser<Mode, T, unknown>,
+  args: readonly string[],
+): Promise<ParseAttempt<T>>;
+async function attemptParseAsync(
+  parser: Parser<Mode, unknown, unknown>,
+  args: readonly string[],
+  mode: "parse-only",
+): Promise<ParseAttempt<undefined>>;
+async function attemptParseAsync<T>(
+  parser: Parser<Mode, T, unknown>,
+  args: readonly string[],
+  mode: "complete" | "parse-only" = "complete",
+): Promise<ParseAttempt<T | undefined>> {
+  const shouldUnwrapAnnotatedValue = isInjectedAnnotationWrapper(
+    parser.initialState,
+  );
+  const exec = createParseExec(parser);
+  let context: ParserContext<unknown> = createParserContext(
+    { buffer: args, state: parser.initialState, optionsTerminated: false },
+    exec,
+  );
+
+  do {
+    const result = await parser.parse(context);
+    if (!result.success) {
+      const progress = getFailureProgress(
+        args,
+        context.buffer,
+        result.consumed,
+      );
+      return {
+        kind: "failure",
+        error: result.error,
+        remainingArgs: progress.remainingArgs,
+        consumedCount: progress.consumedCount,
+        optionsTerminated: context.optionsTerminated,
+        commandPath: getCommandPath(context.exec),
+      };
+    }
+    const previousBuffer = context.buffer;
+    context = result.next;
+    if (isBufferUnchanged(previousBuffer, context.buffer)) {
+      const progress = getFailureProgress(
+        args,
+        previousBuffer,
+        result.consumed.length,
+      );
+      return {
+        kind: "failure",
+        error: message`Unexpected option or argument: ${context.buffer[0]}.`,
+        remainingArgs: progress.remainingArgs,
+        consumedCount: progress.consumedCount,
+        optionsTerminated: context.optionsTerminated,
+        commandPath: getCommandPath(context.exec),
+      };
+    }
+  } while (context.buffer.length > 0);
+
+  if (mode === "parse-only") {
+    return {
+      kind: "success",
+      value: undefined,
+    };
+  }
+
+  const endResult = await parser.complete(
+    context.state,
+    createCompleteExec(exec, context),
+  );
+  if (!endResult.success) {
+    return {
+      kind: "failure",
+      error: endResult.error,
+      remainingArgs: [],
+      consumedCount: args.length,
+      optionsTerminated: context.optionsTerminated,
+      commandPath: getCommandPath(context.exec),
+    };
+  }
+  return {
+    kind: "success",
+    value: shouldUnwrapAnnotatedValue
+      ? unwrapInjectedAnnotationWrapper(endResult.value)
+      : endResult.value,
+  };
+}
+
 function createPhase2SeedExec(
   parser: Parser<Mode, unknown, unknown>,
   context: {
@@ -261,6 +499,7 @@ function createPhase2SeedExec(
     usage: parser.usage,
     phase: "parse",
     path: [],
+    commandPath: [],
     trace: createInputTrace(),
   };
   const runtime = createDependencyRuntimeContext();
@@ -269,6 +508,7 @@ function createPhase2SeedExec(
     phase: "complete",
     dependencyRuntime: runtime,
     dependencyRegistry: runtime.registry,
+    commandPath: getCommandPath(context.exec),
     trace: context.exec?.trace ?? context.trace ?? exec.trace,
   };
 }
@@ -281,6 +521,7 @@ function createPhase2SeedContext(
     usage: parser.usage,
     phase: "parse",
     path: [],
+    commandPath: [],
     trace: createInputTrace(),
   };
   return createParserContext(
@@ -492,10 +733,6 @@ interface MetaParseResult {
   readonly versionFlag?: boolean;
 }
 
-function isMetaParseResult(value: unknown): value is MetaParseResult {
-  return typeof value === "object" && value != null && metaResultBrand in value;
-}
-
 /**
  * Sub-configuration for a meta command's command form.
  *
@@ -676,11 +913,17 @@ function createCompletionParser(
  */
 type ParsedResult =
   | { readonly type: "success"; readonly value: unknown }
-  | { readonly type: "help"; readonly commands: readonly string[] }
+  | {
+    readonly type: "help";
+    readonly commands: readonly string[];
+    readonly preferUserCommandDocs?: boolean;
+  }
   | { readonly type: "version" }
   | {
     readonly type: "completion";
+    readonly source: "command" | "option";
     readonly shell: string;
+    readonly commandPath?: readonly string[];
     readonly args: readonly string[];
   }
   | { readonly type: "error"; readonly error: Message };
@@ -1049,101 +1292,187 @@ function combineWithHelpVersion(
   return combined;
 }
 
-/**
- * Classifies the parsing result into a discriminated union for cleaner
- * handling.
- */
-function classifyResult(
-  result: Result<unknown>,
+interface CompletionOptionMatch {
+  readonly index: number;
+  readonly shell: string;
+  readonly args: readonly string[];
+}
+
+interface MetaAction {
+  readonly index: number;
+  readonly kind: "help" | "version";
+}
+
+function classifyOptionMeta(
+  scanArgs: readonly string[],
+  fullArgs: readonly string[],
+  helpOptionNames: readonly string[],
+  versionOptionNames: readonly string[],
+  completionOptionNames: readonly string[],
+): {
+  readonly lastHelpVersion?: MetaAction;
+  readonly completion?: CompletionOptionMatch;
+} {
+  let lastHelpVersion: MetaAction | undefined;
+  for (let i = 0; i < scanArgs.length; i++) {
+    const arg = scanArgs[i];
+
+    if (helpOptionNames.includes(arg)) {
+      lastHelpVersion = { index: i, kind: "help" };
+    } else if (versionOptionNames.includes(arg)) {
+      lastHelpVersion = { index: i, kind: "version" };
+    }
+
+    const equalsMatch = completionOptionNames.find((name) =>
+      arg.startsWith(name + "=")
+    );
+    if (equalsMatch != null) {
+      return {
+        lastHelpVersion,
+        completion: {
+          index: i,
+          shell: arg.slice(equalsMatch.length + 1),
+          args: fullArgs.slice(i + 1),
+        },
+      };
+    }
+
+    if (completionOptionNames.includes(arg)) {
+      const shell = scanArgs[i + 1] ?? "";
+      return {
+        lastHelpVersion,
+        completion: {
+          index: i,
+          shell,
+          args: shell === "" ? [] : fullArgs.slice(i + 2),
+        },
+      };
+    }
+  }
+  return { lastHelpVersion };
+}
+
+function getHelpCommandContext(
+  commandPath: readonly string[],
   args: readonly string[],
+  helpIndex: number,
+): readonly string[] {
+  const commands = [...commandPath];
+  for (let i = 0; i < helpIndex; i++) {
+    const arg = args[i];
+    if (!arg.startsWith("-")) {
+      commands.push(arg);
+    }
+  }
+  return commands;
+}
+
+function classifyParseFailure(
+  failure: Extract<ParseAttempt<unknown>, { readonly kind: "failure" }>,
   helpOptionNames: readonly string[],
   helpCommandNames: readonly string[],
   versionOptionNames: readonly string[],
   versionCommandNames: readonly string[],
+  completionOptionNames: readonly string[],
   completionCommandNames: readonly string[],
-): ParsedResult {
-  if (!result.success) {
-    return { type: "error", error: result.error };
+): Exclude<ParsedResult, { readonly type: "success" }> {
+  if (failure.remainingArgs.length < 1) {
+    return { type: "error", error: failure.error };
   }
 
-  const value = result.value;
-  if (isMetaParseResult(value)) {
-    const parsedValue = value;
+  const hasConsumedPrefix = failure.consumedCount > 0;
+  const firstArg = failure.remainingArgs[0];
 
-    const hasVersionOption = versionOptionNames.some((n) => args.includes(n));
-    const hasVersionCommand = args.length > 0 &&
-      versionCommandNames.includes(args[0]);
-    const hasCompletionCommand = args.length > 0 &&
-      completionCommandNames.includes(args[0]);
-    const hasHelpOption = hasCompletionCommand
-      // Completion command detected: only check args[1] for help
-      ? helpOptionNames.length > 0 && args.length >= 2 &&
-        helpOptionNames.includes(args[1])
-      : helpOptionNames.some((n) => args.includes(n));
-    const hasHelpCommand = args.length > 0 &&
-      helpCommandNames.includes(args[0]);
-
-    // Standard CLI behavior:
-    // 1. `command --help` should show help for that command
-    // 2. `--help` and `--version` together follow last-option-wins
-    // 3. `--version` alone should show version
-    // 4. `--help` alone should show help
-    // 5. `completion --help` should show help for completion command
-
-    // If we have both version command and help flag, help takes precedence
-    // (show help for version)
-    if (hasVersionCommand && hasHelpOption && parsedValue.helpFlag) {
-      return { type: "help", commands: [args[0]] };
+  if (
+    !hasConsumedPrefix &&
+    completionCommandNames.includes(firstArg)
+  ) {
+    const secondArg = failure.remainingArgs[1];
+    if (helpOptionNames.includes(secondArg)) {
+      return { type: "help", commands: [firstArg] };
     }
-
-    // If we have both completion command and help flag, help takes precedence
-    // (show help for completion)
-    if (hasCompletionCommand && hasHelpOption && parsedValue.helpFlag) {
-      return { type: "help", commands: [args[0]] };
-    }
-
-    // If we have help command or help option, show help
-    if (parsedValue.help && (hasHelpOption || hasHelpCommand)) {
-      let commandContext: readonly string[] = [];
-
-      if (Array.isArray(parsedValue.commands)) {
-        commandContext = parsedValue.commands;
-      } else if (
-        typeof parsedValue.commands === "object" &&
-        parsedValue.commands != null &&
-        "length" in parsedValue.commands
-      ) {
-        commandContext = parsedValue.commands as readonly string[];
-      }
-
-      return { type: "help", commands: commandContext };
-    }
-
-    // If version is present and help is not requested, show version
-    if (
-      (hasVersionOption || hasVersionCommand) &&
-      (parsedValue.version || parsedValue.versionFlag)
-    ) {
-      return { type: "version" };
-    }
-
-    // If completion is present and help is not requested, show completion
-    if (parsedValue.completion && parsedValue.completionData) {
-      return {
-        type: "completion",
-        shell: parsedValue.completionData.shell ?? "",
-        args: parsedValue.completionData.args ?? [],
-      };
-    }
-
-    // Neither help nor version nor completion requested, return actual result
     return {
-      type: "success",
-      value: "result" in parsedValue ? parsedValue.result : value,
+      type: "completion",
+      source: "command",
+      shell: secondArg ?? "",
+      args: failure.remainingArgs.slice(2),
     };
   }
 
-  return { type: "success", value };
+  const optionArgs = failure.optionsTerminated ? [] : (() => {
+    const terminatorIndex = failure.remainingArgs.indexOf("--");
+    return terminatorIndex >= 0
+      ? failure.remainingArgs.slice(0, terminatorIndex)
+      : failure.remainingArgs;
+  })();
+  const { lastHelpVersion, completion } = classifyOptionMeta(
+    optionArgs,
+    failure.remainingArgs,
+    helpOptionNames,
+    versionOptionNames,
+    completionOptionNames,
+  );
+
+  if (!hasConsumedPrefix && versionCommandNames.includes(firstArg)) {
+    const secondArg = failure.remainingArgs[1];
+    if (helpOptionNames.includes(secondArg)) {
+      return { type: "help", commands: [firstArg] };
+    }
+    const isCompletionImmediatelyAfter = completion?.index === 1;
+    if (
+      secondArg == null ||
+      isCompletionImmediatelyAfter ||
+      (lastHelpVersion?.index === 1 && lastHelpVersion.kind === "version")
+    ) {
+      return { type: "version" };
+    }
+    return { type: "error", error: failure.error };
+  }
+
+  let commandAction: MetaAction | undefined;
+  if (!hasConsumedPrefix && helpCommandNames.includes(firstArg)) {
+    commandAction = { index: 0, kind: "help" };
+  }
+
+  const winner = lastHelpVersion == null
+    ? commandAction
+    : commandAction == null || lastHelpVersion.index >= commandAction.index
+    ? lastHelpVersion
+    : commandAction;
+
+  if (winner?.kind === "help") {
+    if (winner === commandAction) {
+      return {
+        type: "help",
+        commands: failure.remainingArgs.slice(1),
+      };
+    }
+    return {
+      type: "help",
+      commands: getHelpCommandContext(
+        failure.commandPath,
+        failure.remainingArgs,
+        winner.index,
+      ),
+      preferUserCommandDocs: failure.commandPath.length > 0,
+    };
+  }
+
+  if (winner?.kind === "version") {
+    return { type: "version" };
+  }
+
+  if (completion != null) {
+    return {
+      type: "completion",
+      source: "option",
+      shell: completion.shell,
+      commandPath: failure.commandPath,
+      args: completion.args,
+    };
+  }
+
+  return { type: "error", error: failure.error };
 }
 
 /**
@@ -1751,12 +2080,8 @@ export function runParser<
   const completionOptionNames: readonly string[] =
     completionOptionConfig?.names ?? ["--completion"];
 
-  // Validate meta name collisions (meta-vs-user and meta-vs-meta).
-  // The collision scope is position-aware:
-  //   - Meta "command" entries only match at args[0], so they are checked
-  //     against leading user names.
-  //   - Meta "option" entries use lenient scanners that match anywhere in
-  //     argv, so they are checked against all user names at every depth.
+  // Validate only meta/meta collisions. Parser-defined names may now overlap
+  // with meta names; the runner resolves those cases parser-first at runtime.
   const activeMetaEntries: MetaEntry[] = [];
   if (options.help && helpOptionConfig) {
     activeMetaEntries.push(["option", "help option", helpOptionNames]);
@@ -1789,15 +2114,7 @@ export function runParser<
       completionCommandNames,
     ]);
   }
-  validateMetaNameCollisions(
-    {
-      leadingNames: parser.leadingNames,
-      allOptions: extractOptionNames(parser.usage, true),
-      allCommands: extractCommandNames(parser.usage, true),
-      allLiterals: extractLiteralValues(parser.usage),
-    },
-    activeMetaEntries,
-  );
+  validateMetaNameCollisions(activeMetaEntries);
 
   // Get available shells (defaults + user-provided)
   const defaultShells: Record<string, ShellCompletion> = {
@@ -1829,183 +2146,6 @@ export function runParser<
     )
     : { completionCommand: null, completionOption: null };
 
-  // Early return for completion requests (avoids parser conflicts)
-  // Exception: if a help option is present, let the parser handle it
-  if (options.completion) {
-    // Only consider args before the options terminator ("--") when checking
-    // for help options; tokens after "--" are positional data.
-    const helpTerminatorIndex = args.indexOf("--");
-    const helpOptionArgs = helpTerminatorIndex >= 0
-      ? args.slice(0, helpTerminatorIndex)
-      : args;
-
-    const hasHelpOption = helpOptionConfig
-      ? (completionCommandConfig && completionCommandNames.includes(args[0]))
-        // Completion command detected: only check args[1] for help
-        ? args.length >= 2 && helpOptionNames.includes(args[1])
-        // No completion command: check args before "--" only
-        : helpOptionNames.some((n) => helpOptionArgs.includes(n))
-      : false;
-
-    // Handle completion command format: "completion <shell> [args...]"
-    if (
-      completionCommandConfig &&
-      args.length >= 1 &&
-      completionCommandNames.includes(args[0]) &&
-      !hasHelpOption // Let parser handle "completion --help"
-    ) {
-      return handleCompletion<
-        InferMode<TParser>,
-        InferValue<TParser>,
-        InferValue<TParser>
-      >(
-        args.slice(1),
-        programName,
-        parser,
-        completionParsers.completionCommand,
-        stdout,
-        stderr,
-        onCompletionResult,
-        onErrorResult,
-        availableShells,
-        colors,
-        maxWidth,
-        completionCommandNames[0],
-        completionOptionNames[0],
-        false,
-        sectionOrder,
-      ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
-    }
-
-    // Handle completion option format: "--completion=<shell> [args...]"
-    // The first --completion match is the meta option; everything after it
-    // (including the shell name) is opaque completion payload and must not
-    // be re-interpreted as another meta option.
-    // Exception: if a help or version option/command appears *before* the
-    // completion option, skip the early return and let the combined parser
-    // handle precedence — but only with args truncated at the completion
-    // option position so payload tokens stay opaque.
-    //
-    // This uses a naive token scan (matching raw argv strings against known
-    // meta option names).  The combined parser's lenient help/version parsers
-    // use the same naive approach: they scan the parse buffer for meta flag
-    // names and match regardless of whether a token is actually an option
-    // value.  So this early-return check is consistent with what the combined
-    // parser would do — both treat any token matching a meta flag name as
-    // that meta flag.
-    // Check whether any help/version meta entry (option or command form)
-    // appears in args before a given index.  Command-form entries are only
-    // checked at args[0] since commands are always the first token.
-    const hasMetaEntryBefore = (endIndex: number): boolean => {
-      const argsBefore = args.slice(0, endIndex);
-      if (
-        helpOptionConfig &&
-        helpOptionNames.some((n) => argsBefore.includes(n))
-      ) return true;
-      if (
-        versionOptionConfig &&
-        versionOptionNames.some((n) => argsBefore.includes(n))
-      ) return true;
-      if (endIndex > 0) {
-        if (
-          helpCommandConfig &&
-          helpCommandNames.includes(args[0])
-        ) return true;
-        if (
-          versionCommandConfig &&
-          versionCommandNames.includes(args[0])
-        ) return true;
-      }
-      return false;
-    };
-
-    let completionOptionIndex = -1;
-    if (completionOptionConfig) {
-      // Only scan args before the options terminator; reuse the index
-      // already computed for the hasHelpOption check above.
-      const loopBound = helpTerminatorIndex >= 0
-        ? helpTerminatorIndex
-        : args.length;
-      for (let i = 0; i < loopBound; i++) {
-        const arg = args[i];
-
-        // Check for "--completion=<shell>" format
-        const equalsMatch = completionOptionNames.find((n) =>
-          arg.startsWith(n + "=")
-        );
-        if (equalsMatch) {
-          if (hasMetaEntryBefore(i)) {
-            completionOptionIndex = i;
-            break; // Fall through with truncated args
-          }
-          const shell = arg.slice(equalsMatch.length + 1);
-          const completionArgs = args.slice(i + 1);
-          return handleCompletion<
-            InferMode<TParser>,
-            InferValue<TParser>,
-            InferValue<TParser>
-          >(
-            [shell, ...completionArgs],
-            programName,
-            parser,
-            completionParsers.completionOption,
-            stdout,
-            stderr,
-            onCompletionResult,
-            onErrorResult,
-            availableShells,
-            colors,
-            maxWidth,
-            completionCommandNames[0],
-            completionOptionNames[0],
-            true,
-            sectionOrder,
-          ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
-        }
-
-        // Check for "--completion <shell>" format (separate arg)
-        const exactMatch = completionOptionNames.includes(arg);
-        if (exactMatch) {
-          if (hasMetaEntryBefore(i)) {
-            completionOptionIndex = i;
-            break; // Fall through with truncated args
-          }
-          const shell = i + 1 < args.length ? args[i + 1] : "";
-          const completionArgs = i + 1 < args.length ? args.slice(i + 2) : [];
-          return handleCompletion<
-            InferMode<TParser>,
-            InferValue<TParser>,
-            InferValue<TParser>
-          >(
-            [shell, ...completionArgs],
-            programName,
-            parser,
-            completionParsers.completionOption,
-            stdout,
-            stderr,
-            onCompletionResult,
-            onErrorResult,
-            availableShells,
-            colors,
-            maxWidth,
-            completionCommandNames[0],
-            completionOptionNames[0],
-            true,
-            sectionOrder,
-          ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
-        }
-      }
-    }
-
-    // When help/version precedes --completion, truncate args so the combined
-    // parser and classifyResult only see tokens before the completion option.
-    // This keeps completion payload opaque — e.g., --version after
-    // --completion is not re-interpreted as a meta flag.
-    if (completionOptionIndex >= 0) {
-      args = args.slice(0, completionOptionIndex);
-    }
-  }
-
   // Build augmented parser with help, version, and completion functionality
   const augmentedParser = !options.help && !options.version &&
       !options.completion
@@ -2033,18 +2173,8 @@ export function runParser<
   // For async parsers, this may return a Promise when help/error handling
   // requires awaiting getDocPage.
   const handleResult = (
-    result: Result<unknown>,
+    classified: ParsedResult,
   ): InferValue<TParser> | Promise<InferValue<TParser>> => {
-    const classified = classifyResult(
-      result,
-      args,
-      helpOptionConfig ? [...helpOptionNames] : [],
-      helpCommandConfig ? [...helpCommandNames] : [],
-      versionOptionConfig ? [...versionOptionNames] : [],
-      versionCommandConfig ? [...versionCommandNames] : [],
-      completionCommandConfig ? [...completionCommandNames] : [],
-    );
-
     switch (classified.type) {
       case "success":
         return classified.value;
@@ -2054,11 +2184,33 @@ export function runParser<
         return onVersion(0);
 
       case "completion":
-        // This case should never be reached due to early return,
-        // but keep it for type safety
-        throw new RunParserError(
-          "Completion should be handled by early return",
-        );
+        return handleCompletion<
+          InferMode<TParser>,
+          InferValue<TParser>,
+          InferValue<TParser>
+        >(
+          [
+            classified.shell,
+            ...(classified.commandPath ?? []),
+            ...classified.args,
+          ],
+          programName,
+          parser,
+          classified.source === "command"
+            ? completionParsers.completionCommand
+            : completionParsers.completionOption,
+          stdout,
+          stderr,
+          onCompletionResult,
+          onErrorResult,
+          availableShells,
+          colors,
+          maxWidth,
+          completionCommandNames[0],
+          completionOptionNames[0],
+          classified.source === "option",
+          sectionOrder,
+        ) as InferValue<TParser>;
 
       case "help": {
         // Handle help request - determine which parser to use for help
@@ -2076,6 +2228,7 @@ export function runParser<
         const requestedCommand = classified.commands[0];
         if (
           requestedCommand != null &&
+          !classified.preferUserCommandDocs &&
           completionCommandNames.includes(requestedCommand) &&
           completionAsCommand &&
           completionParsers.completionCommand
@@ -2084,6 +2237,7 @@ export function runParser<
           helpGeneratorParser = completionParsers.completionCommand;
         } else if (
           requestedCommand != null &&
+          !classified.preferUserCommandDocs &&
           helpCommandNames.includes(requestedCommand) &&
           helpAsCommand &&
           helpParsers.helpCommand
@@ -2092,6 +2246,7 @@ export function runParser<
           helpGeneratorParser = helpParsers.helpCommand;
         } else if (
           requestedCommand != null &&
+          !classified.preferUserCommandDocs &&
           versionCommandNames.includes(requestedCommand) &&
           versionAsCommand &&
           versionParsers.versionCommand
@@ -2464,19 +2619,41 @@ export function runParser<
   return dispatchByMode(
     parserMode,
     () => {
-      const result = parseSync(
-        augmentedParser as Parser<"sync", unknown, unknown>,
+      const attempted = attemptParseSync(
+        parser as Parser<"sync", unknown, unknown>,
         args,
       );
-      const handled = handleResult(result);
+      const classified: ParsedResult = attempted.kind === "success"
+        ? { type: "success", value: attempted.value }
+        : classifyParseFailure(
+          attempted,
+          helpOptionConfig ? [...helpOptionNames] : [],
+          helpCommandConfig ? [...helpCommandNames] : [],
+          versionOptionConfig ? [...versionOptionNames] : [],
+          versionCommandConfig ? [...versionCommandNames] : [],
+          completionOptionConfig ? [...completionOptionNames] : [],
+          completionCommandConfig ? [...completionCommandNames] : [],
+        );
+      const handled = handleResult(classified);
       if (handled instanceof Promise) {
         throw new RunParserError("Synchronous parser returned async result.");
       }
       return handled;
     },
     async () => {
-      const result = await parseAsync(augmentedParser, args);
-      const handled = handleResult(result);
+      const attempted = await attemptParseAsync(parser, args);
+      const classified: ParsedResult = attempted.kind === "success"
+        ? { type: "success", value: attempted.value }
+        : classifyParseFailure(
+          attempted,
+          helpOptionConfig ? [...helpOptionNames] : [],
+          helpCommandConfig ? [...helpCommandNames] : [],
+          versionOptionConfig ? [...versionOptionNames] : [],
+          versionCommandConfig ? [...versionCommandNames] : [],
+          completionOptionConfig ? [...completionOptionNames] : [],
+          completionCommandConfig ? [...completionCommandNames] : [],
+        );
+      const handled = handleResult(classified);
       return handled instanceof Promise ? await handled : handled;
     },
   ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
@@ -2566,106 +2743,85 @@ function indentLines(text: string, indent: number): string {
   return text.split("\n").join("\n" + " ".repeat(indent));
 }
 
+function isMetaEarlyExit(classified: ParsedResult): boolean {
+  return classified.type === "help" ||
+    classified.type === "version" ||
+    classified.type === "completion";
+}
+
+function classifyEarlyExitFailure<THelp, TError>(
+  failure: Extract<ParseAttempt<unknown>, { readonly kind: "failure" }>,
+  options: RunWithOptions<THelp, TError>,
+): Exclude<ParsedResult, { readonly type: "success" }> {
+  const norm = <T>(c: true | T | undefined): T | undefined =>
+    c === true ? ({} as T) : c;
+  const helpOptionConfig = norm<OptionSubConfig>(options.help?.option);
+  const helpCommandConfig = norm<CommandSubConfig>(options.help?.command);
+  const versionOptionConfig = norm<OptionSubConfig>(options.version?.option);
+  const versionCommandConfig = norm<CommandSubConfig>(
+    options.version?.command,
+  );
+  const completionOptionConfig = norm<OptionSubConfig>(
+    options.completion?.option,
+  );
+  const completionCommandConfig = norm<CommandSubConfig>(
+    options.completion?.command,
+  );
+
+  return classifyParseFailure(
+    failure,
+    helpOptionConfig ? [...(helpOptionConfig.names ?? ["--help"])] : [],
+    helpCommandConfig ? [...(helpCommandConfig.names ?? ["help"])] : [],
+    versionOptionConfig
+      ? [...(versionOptionConfig.names ?? ["--version"])]
+      : [],
+    versionCommandConfig
+      ? [...(versionCommandConfig.names ?? ["version"])]
+      : [],
+    completionOptionConfig
+      ? [...(completionOptionConfig.names ?? ["--completion"])]
+      : [],
+    completionCommandConfig
+      ? [...(completionCommandConfig.names ?? ["completion"])]
+      : [],
+  );
+}
+
+function shouldProbeEarlyExit<THelp, TError>(
+  options: RunWithOptions<THelp, TError>,
+  needsTwoPhase: boolean,
+): boolean {
+  return needsTwoPhase &&
+    (options.help != null ||
+      options.version != null ||
+      options.completion != null);
+}
+
 /**
- * Checks if the arguments contain help, version, or completion requests
- * that should be handled immediately without context processing.
- *
- * This enables early exit optimization: when users request help, version,
- * or completion, we skip annotation collection and context processing
- * entirely, delegating directly to runParser().
- *
- * @param args Command-line arguments to check.
- * @param options Run options containing help/version/completion configuration.
- * @returns `true` if early exit should be performed, `false` otherwise.
+ * Checks if the arguments contain parser-visible meta requests that can be
+ * handled without collecting source-context annotations first.
  */
-function needsEarlyExit<THelp, TError>(
+function needsEarlyExitSync<THelp, TError>(
+  parser: Parser<"sync", unknown, unknown>,
   args: readonly string[],
   options: RunWithOptions<THelp, TError>,
 ): boolean {
-  const norm = <T>(c: true | T | undefined): T | undefined =>
-    c === true ? ({} as T) : c;
+  const attempted = attemptParseSync(parser, args, "parse-only");
+  if (attempted.kind === "success") return false;
+  return isMetaEarlyExit(classifyEarlyExitFailure(attempted, options));
+}
 
-  // Only scan args before the options terminator ("--") for option-form
-  // matches; tokens after "--" are positional data and must not be
-  // interpreted as meta options.
-  const terminatorIndex = args.indexOf("--");
-  const optionArgs = terminatorIndex >= 0
-    ? args.slice(0, terminatorIndex)
-    : args;
-
-  // Check help
-  if (options.help) {
-    const helpOptionConfig = norm<OptionSubConfig>(options.help.option);
-    const helpCommandConfig = norm<CommandSubConfig>(options.help.command);
-    const helpOptionNames: readonly string[] = helpOptionConfig?.names ??
-      ["--help"];
-    const helpCommandNames: readonly string[] = helpCommandConfig?.names ??
-      ["help"];
-
-    if (
-      helpOptionConfig &&
-      helpOptionNames.some((n) => optionArgs.includes(n))
-    ) {
-      return true;
-    }
-    if (helpCommandConfig && helpCommandNames.includes(args[0])) {
-      return true;
-    }
-  }
-
-  // Check version
-  if (options.version) {
-    const versionOptionConfig = norm<OptionSubConfig>(options.version.option);
-    const versionCommandConfig = norm<CommandSubConfig>(
-      options.version.command,
-    );
-    const versionOptionNames: readonly string[] = versionOptionConfig?.names ??
-      ["--version"];
-    const versionCommandNames: readonly string[] =
-      versionCommandConfig?.names ?? ["version"];
-
-    if (
-      versionOptionConfig &&
-      versionOptionNames.some((n) => optionArgs.includes(n))
-    ) {
-      return true;
-    }
-    if (versionCommandConfig && versionCommandNames.includes(args[0])) {
-      return true;
-    }
-  }
-
-  // Check completion
-  if (options.completion) {
-    const completionCommandConfig = norm<CommandSubConfig>(
-      options.completion.command,
-    );
-    const completionOptionConfig = norm<OptionSubConfig>(
-      options.completion.option,
-    );
-    const completionCommandNames: readonly string[] =
-      completionCommandConfig?.names ?? ["completion"];
-    const completionOptionNames: readonly string[] =
-      completionOptionConfig?.names ?? ["--completion"];
-
-    // Command mode
-    if (completionCommandConfig && completionCommandNames.includes(args[0])) {
-      return true;
-    }
-
-    // Option mode
-    if (completionOptionConfig) {
-      for (const arg of optionArgs) {
-        for (const name of completionOptionNames) {
-          if (arg === name || arg.startsWith(name + "=")) {
-            return true;
-          }
-        }
-      }
-    }
-  }
-
-  return false;
+/**
+ * Async variant of {@link needsEarlyExitSync}.
+ */
+async function needsEarlyExitAsync<THelp, TError>(
+  parser: Parser<Mode, unknown, unknown>,
+  args: readonly string[],
+  options: RunWithOptions<THelp, TError>,
+): Promise<boolean> {
+  const attempted = await attemptParseAsync(parser, args, "parse-only");
+  if (attempted.kind === "success") return false;
+  return isMetaEarlyExit(classifyEarlyExitFailure(attempted, options));
 }
 
 /**
@@ -3130,18 +3286,6 @@ async function runWithBody<
   validateContextIds(contexts);
   validateContextPhases(contexts);
 
-  // Early exit: skip context processing for help/version/completion
-  if (needsEarlyExit(args, options)) {
-    if (parser.$mode === "async") {
-      return runParser(parser, programName, args, options) as Promise<
-        InferValue<TParser>
-      >;
-    }
-    return Promise.resolve(
-      runParser(parser, programName, args, options) as InferValue<TParser>,
-    );
-  }
-
   // Phase 1: Collect initial annotations
   const ctxOptions = options.contextOptions;
   const {
@@ -3149,25 +3293,52 @@ async function runWithBody<
     needsTwoPhase,
     snapshots: phase1Snapshots,
   } = await collectPhase1Annotations(contexts, ctxOptions);
-
-  if (!needsTwoPhase) {
-    // All contexts are single-pass.
-    // Inject annotations into the parser's initial state
-    const augmentedParser = injectAnnotationsIntoParser(
+  if (shouldProbeEarlyExit(options, needsTwoPhase)) {
+    const earlyExitParser = injectAnnotationsIntoParser(
       parser,
       phase1Annotations,
     );
 
+    // Early exit: skip phase-two processing for genuine help/version/
+    // completion requests, but only after phase-1 annotations have been
+    // injected because they may change what the parser accepts as ordinary
+    // data.
+    if (await needsEarlyExitAsync(earlyExitParser, args, options)) {
+      if (parser.$mode === "async") {
+        return runParser(
+          earlyExitParser,
+          programName,
+          args,
+          options,
+        ) as Promise<InferValue<TParser>>;
+      }
+      return Promise.resolve(
+        runParser(
+          earlyExitParser,
+          programName,
+          args,
+          options,
+        ) as InferValue<TParser>,
+      );
+    }
+  }
+  const augmentedParser1 = injectAnnotationsIntoParser(
+    parser,
+    phase1Annotations,
+  );
+
+  if (!needsTwoPhase) {
+    // All contexts are single-pass.
     if (parser.$mode === "async") {
       return runParser(
-        augmentedParser,
+        augmentedParser1,
         programName,
         args,
         options,
       ) as Promise<InferValue<TParser>>;
     }
     return Promise.resolve(
-      runParser(augmentedParser, programName, args, options) as InferValue<
+      runParser(augmentedParser1, programName, args, options) as InferValue<
         TParser
       >,
     );
@@ -3175,11 +3346,6 @@ async function runWithBody<
 
   // Two-phase parsing for two-pass contexts.
   // First pass: parse with Phase 1 annotations to get initial result
-  const augmentedParser1 = injectAnnotationsIntoParser(
-    parser,
-    phase1Annotations,
-  );
-
   const firstPassSeed = await dispatchByMode(
     parser.$mode,
     () =>
@@ -3194,13 +3360,13 @@ async function runWithBody<
   // This is done outside the try-catch to prevent the catch block from
   // re-invoking runParser when it throws (which caused double error output).
   if (firstPassSeed == null) {
-    const augmentedParser = injectAnnotationsIntoParser(
+    const fallbackParser = injectAnnotationsIntoParser(
       parser,
       phase1Annotations,
     );
     if (parser.$mode === "async") {
       return runParser(
-        augmentedParser,
+        fallbackParser,
         programName,
         args,
         options,
@@ -3209,7 +3375,7 @@ async function runWithBody<
       >;
     }
     return Promise.resolve(
-      runParser(augmentedParser, programName, args, options) as InferValue<
+      runParser(fallbackParser, programName, args, options) as InferValue<
         TParser
       >,
     );
@@ -3382,11 +3548,6 @@ function runWithSyncBody<
   validateContextIds(contexts);
   validateContextPhases(contexts);
 
-  // Early exit: skip context processing for help/version/completion
-  if (needsEarlyExit(args, options)) {
-    return runParser(parser, programName, args, options);
-  }
-
   // Phase 1: Collect initial annotations
   const ctxOptions = options.contextOptions;
   const {
@@ -3394,30 +3555,39 @@ function runWithSyncBody<
     needsTwoPhase,
     snapshots: phase1Snapshots,
   } = collectPhase1AnnotationsSync(contexts, ctxOptions);
-
-  if (!needsTwoPhase) {
-    // All contexts are single-pass.
-    const augmentedParser = injectAnnotationsIntoParser(
+  if (shouldProbeEarlyExit(options, needsTwoPhase)) {
+    const earlyExitParser = injectAnnotationsIntoParser(
       parser,
       phase1Annotations,
     );
-    return runParser(augmentedParser, programName, args, options);
-  }
 
-  // Two-phase parsing for two-pass contexts.
-  // First pass: parse with Phase 1 annotations
+    // Early exit: skip phase-two processing for genuine help/version/
+    // completion requests, but only after phase-1 annotations have been
+    // injected because they may change what the parser accepts as ordinary
+    // data.
+    if (needsEarlyExitSync(earlyExitParser, args, options)) {
+      return runParser(earlyExitParser, programName, args, options);
+    }
+  }
   const augmentedParser1 = injectAnnotationsIntoParser(
     parser,
     phase1Annotations,
   );
 
+  if (!needsTwoPhase) {
+    // All contexts are single-pass.
+    return runParser(augmentedParser1, programName, args, options);
+  }
+
+  // Two-phase parsing for two-pass contexts.
+  // First pass: parse with Phase 1 annotations
   const firstPassSeed = extractPhase2SeedSync(augmentedParser1, args);
   if (firstPassSeed == null) {
-    const augmentedParser = injectAnnotationsIntoParser(
+    const fallbackParser = injectAnnotationsIntoParser(
       parser,
       phase1Annotations,
     );
-    return runParser(augmentedParser, programName, args, options);
+    return runParser(fallbackParser, programName, args, options);
   }
 
   // Phase 2: Collect annotations with parsed result

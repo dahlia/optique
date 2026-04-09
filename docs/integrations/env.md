@@ -416,9 +416,11 @@ primitive's constraints — but outer combinators layered above
 ### Help, version, and completion
 
 Like config contexts, environment contexts work seamlessly with help,
-version, and completion features.  These are handled before environment
-variable lookup, so `--help` always works even when required environment
-variables are missing:
+version, and completion features.  Genuine help, version, and
+completion requests are handled before environment variable lookup, so
+`--help` still works even when required environment variables are
+missing, unless the user parser already consumes that same token
+sequence as ordinary data:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";

@@ -262,6 +262,14 @@ Both approaches automatically handle:
     subcommands
  -  *Usage display*: Shows command syntax when errors occur
 
+Built-in help, version, and completion requests are parser-aware.  The
+runner treats `help`, `version`, `completion`, `--help`, `--version`,
+`--completion`, and any configured aliases as meta requests only when
+the user parser leaves them unconsumed.  If your parser accepts the
+same token sequence as ordinary data, such as a positional `help` value
+or an option value `--help`, the parse result wins and the runner does
+not intercept it.
+
 The `RunOptions` interface provides extensive customization:
 
 ~~~~ typescript twoslash

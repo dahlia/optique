@@ -453,6 +453,17 @@ export interface ExecutionContext {
   readonly path: readonly PropertyKey[];
 
   /**
+   * Matched command names in parse order.
+   *
+   * This is tracked separately from {@link path} because parse-tree paths also
+   * include object fields and other wrapper segments.  Runners use it to
+   * recover subcommand help context from partial parses.
+   *
+   * @internal
+   */
+  readonly commandPath?: readonly string[];
+
+  /**
    * Immutable trace of raw primitive inputs recorded during parsing.
    *
    * Primitives append trace entries keyed by {@link path}, allowing later

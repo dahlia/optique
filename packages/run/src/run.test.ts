@@ -536,7 +536,7 @@ describe("run", () => {
 
     it("should handle version as object with custom mode", () => {
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       let output = "";
@@ -1558,6 +1558,24 @@ describe("runAsync", () => {
 
       assert.ok(typeof helpOutput === "string");
     });
+
+    it("preserves positional values that match built-in help commands", async () => {
+      const parser = object({ value: argument(string()) });
+      let exited = false;
+      const result = await runAsync(parser, {
+        args: ["help"],
+        programName: "myapp",
+        help: "command",
+        stdout: () => {},
+        stderr: () => {},
+        onExit: (code) => {
+          exited = true;
+          throw new Error(`UNEXPECTED_EXIT:${code}`);
+        },
+      });
+      assert.deepEqual(result, { value: "help" });
+      assert.ok(!exited);
+    });
   });
 });
 
@@ -2174,6 +2192,24 @@ describe("run with contexts", () => {
 });
 
 describe("runSync with contexts", () => {
+  it("preserves parser options that shadow the built-in help option", () => {
+    const parser = object({ help: option("--help") });
+    let exited = false;
+    const result = runSync(parser, {
+      args: ["--help"],
+      programName: "myapp",
+      help: "option",
+      stdout: () => {},
+      stderr: () => {},
+      onExit: (code) => {
+        exited = true;
+        throw new Error(`UNEXPECTED_EXIT:${code}`);
+      },
+    });
+    assert.deepEqual(result, { help: true });
+    assert.ok(!exited);
+  });
+
   it("preserves context-backed parsing for help/version names after --", () => {
     assert.deepEqual(runIssue267SyncWith("--help", "help"), {
       file: "--help",
@@ -2248,7 +2284,7 @@ describe("runSync with contexts", () => {
     assert.ok(disposed);
   });
 
-  it("should handle help with contexts in runSync", () => {
+  it("should collect phase 1 annotations for help in runSync", () => {
     const key = Symbol.for("@test/runsync-help");
     let annotationsCallCount = 0;
     const context: SourceContext = {
@@ -2286,8 +2322,8 @@ describe("runSync with contexts", () => {
     }
 
     assert.ok(helpShown);
-    // Contexts should not be called for early exits
-    assert.equal(annotationsCallCount, 0);
+    // Genuine meta requests still stop after phase 1.
+    assert.equal(annotationsCallCount, 1);
   });
 
   it("should support Program input with contexts", () => {

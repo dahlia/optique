@@ -219,6 +219,14 @@ To be released.
     contribution instead of letting stale data override later contexts.
     [[#231], [#782]]
 
+ -  Fixed `runParser()`, `runWith()`, and `runWithSync()` treating built-in
+    help, version, and completion tokens as globally reserved.  These runner
+    features are now parser-aware: command and option forms only trigger when
+    the user parser leaves them unconsumed, so positional values like `help`
+    and option values like `--help` can be parsed as ordinary data.  Startup
+    validation now also permits user parsers to reuse built-in meta names and
+    aliases.  [[#230], [#784]]
+
  -  *Breaking change:* Replaced `SourceContext`'s inferred `mode`
     contract with an explicit required `phase` field whose value must be
     `"single-pass"` or `"two-pass"`.  `SourceContextMode`,
@@ -319,18 +327,13 @@ To be released.
     whitespace-only strings, strings with embedded whitespace, and strings
     with control characters.  [[#401], [#732]]
 
- -  Added meta name collision detection to `runParser()`.  The runner now
-    throws `TypeError` when built-in meta feature names (help, version,
-    completion) collide with user-defined parser names or with each other.
-    Previously, colliding names were silently shadowed by the built-in meta
-    parser, making user-defined commands or options unreachable.
-
-    The check is position-aware: command-form meta features (which only
-    match at `args[0]`) are compared against `Parser.leadingNames`, while
-    option-form meta features (whose lenient scanners match anywhere in
-    `argv`) are compared against all user names at every depth, including
-    literal values from `conditional()` discriminators.  The completion
-    option's `name=value` prefix form is also detected.  [[#227], [#736]]
+ -  Added meta name collision detection to `runParser()`.  The runner
+    rejects collisions among built-in meta features (help, version,
+    completion), including option aliases that shadow completion's
+    `name=value` prefix form.  User-defined parser names are no longer
+    rejected here; runner meta handling is now parser-aware, so ordinary
+    parser data may reuse built-in meta names and aliases when the parser
+    consumes them first.  [[#227], [#736], [#230], [#784]]
 
  -  Added `leadingNames` and `acceptingAnyToken` properties to the `Parser`
     interface.  Each combinator now reports which leading tokens (option
@@ -1361,6 +1364,7 @@ To be released.
 [#227]: https://github.com/dahlia/optique/issues/227
 [#228]: https://github.com/dahlia/optique/issues/228
 [#229]: https://github.com/dahlia/optique/issues/229
+[#230]: https://github.com/dahlia/optique/issues/230
 [#231]: https://github.com/dahlia/optique/issues/231
 [#232]: https://github.com/dahlia/optique/issues/232
 [#233]: https://github.com/dahlia/optique/issues/233
@@ -1658,6 +1662,7 @@ To be released.
 [#781]: https://github.com/dahlia/optique/pull/781
 [#782]: https://github.com/dahlia/optique/pull/782
 [#783]: https://github.com/dahlia/optique/pull/783
+[#784]: https://github.com/dahlia/optique/pull/784
 
 ### @optique/config
 
@@ -2150,6 +2155,13 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     wrapping async parsers) at runtime and returning `Promise`s instead of
     throwing.  `runSync()` now validates `parser.$mode` at runtime and throws
     `TypeError` if the parser is not synchronous.  [[#279], [#676]]
+
+ -  Fixed `run()`, `runSync()`, and `runAsync()` to follow the parser-aware
+    help, version, and completion semantics from *@optique/core*.  Built-in
+    meta requests now yield to ordinary parser data, while genuine meta
+    requests still stop after phase 1 and bypass phase-two context
+    refinement and process handling as before.
+    [[#230], [#784]]
 
  -  Fixed `path()` extension validation for dotfiles (e.g., `.env`,
     `.gitignore`) and multi-part extensions (e.g., `.tar.gz`, `.d.ts`).

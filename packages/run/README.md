@@ -23,6 +23,12 @@ Use *@optique/core* instead when:
  -  Working in environments without `process` (browsers, web workers)
  -  Building reusable parser components
 
+Built-in help, version, and completion are parser-aware.  Optique only
+intercepts `help`, `version`, `completion`, `--help`, `--version`,
+`--completion`, and configured aliases when the user parser leaves them
+unconsumed.  If your parser uses the same token sequence as ordinary
+data, the parse result wins.
+
 
 Installation
 ------------

@@ -205,8 +205,10 @@ Help, version, and completion
 
 When using `run()` or `runAsync()` with config contexts, help messages,
 version display, and shell completion generation all work seamlessly.
-These features work even when configuration files are missing or invalid,
-ensuring users can always access help:
+Genuine help, version, and completion requests work even when
+configuration files are missing or invalid, ensuring users can still
+access those features unless the user parser already consumes the same
+token sequence as ordinary data:
 
 ~~~~ typescript twoslash
 import { z } from "zod";
@@ -263,8 +265,11 @@ myapp --version
 myapp --completion bash > myapp-completion.sh
 ~~~~
 
-The key benefit is that help, version, and completion work *before* config
-file loading, so they succeed even when the config file is invalid or missing.
+The key benefit is that genuine help, version, and completion requests
+work *before* config file loading, so they succeed even when the config
+file is invalid or missing.  If the parser accepts the same tokens as
+ordinary input, parsing takes precedence and config loading proceeds as
+usual.
 
 
 Nested config values
