@@ -327,18 +327,13 @@ To be released.
     whitespace-only strings, strings with embedded whitespace, and strings
     with control characters.  [[#401], [#732]]
 
- -  Added meta name collision detection to `runParser()`.  The runner now
-    throws `TypeError` when built-in meta feature names (help, version,
-    completion) collide with user-defined parser names or with each other.
-    Previously, colliding names were silently shadowed by the built-in meta
-    parser, making user-defined commands or options unreachable.
-
-    The check is position-aware: command-form meta features (which only
-    match at `args[0]`) are compared against `Parser.leadingNames`, while
-    option-form meta features (whose lenient scanners match anywhere in
-    `argv`) are compared against all user names at every depth, including
-    literal values from `conditional()` discriminators.  The completion
-    option's `name=value` prefix form is also detected.  [[#227], [#736]]
+ -  Added meta name collision detection to `runParser()`.  The runner
+    rejects collisions among built-in meta features (help, version,
+    completion), including option aliases that shadow completion's
+    `name=value` prefix form.  User-defined parser names are no longer
+    rejected here; runner meta handling is now parser-aware, so ordinary
+    parser data may reuse built-in meta names and aliases when the parser
+    consumes them first.  [[#227], [#736], [#230], [#784]]
 
  -  Added `leadingNames` and `acceptingAnyToken` properties to the `Parser`
     interface.  Each combinator now reports which leading tokens (option
