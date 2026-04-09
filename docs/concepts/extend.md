@@ -989,7 +989,12 @@ parsing:
 
 1.  *Phase 1*: Parse with static context data to get initial result
 2.  *Phase 2*: Call `getAnnotations(parsed)` on all contexts with the parsed
-    result, then parse again with merged annotations
+    result, then parse again with the merged phase-2 annotations
+
+For each context, the phase-2 return value replaces that context's phase-1
+annotation set for the final parse.  This means returning an empty object
+from `getAnnotations(parsed)` clears any annotations the same context
+contributed during phase 1.
 
 This ensures that:
 

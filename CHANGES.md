@@ -210,6 +210,15 @@ To be released.
     that phase-two value may be `undefined`.  Phase two is still skipped
     when no usable first-pass seed exists.  [[#180], [#780]]
 
+ -  Fixed `runWith()`, `runWithSync()`, and the higher-level `run()` helpers
+    preserving a context's phase-1 annotations into the final parse when that
+    same context returned an empty annotation object in phase 2.  In two-phase
+    runs, each context's phase-2 annotation set is now treated as that
+    context's final snapshot for the second parse pass.  Returning `{}` from
+    `getAnnotations(parsed)` now clears that context's earlier phase-1
+    contribution instead of letting stale data override later contexts.
+    [[#231]]
+
  -  Fixed `or()` crashing with an internal `TypeError` when parsing started
     from an annotation-injected initial state.  Exclusive branch selection now
     treats annotations as transparent parser context, so annotated calls through
@@ -1340,6 +1349,7 @@ To be released.
 [#227]: https://github.com/dahlia/optique/issues/227
 [#228]: https://github.com/dahlia/optique/issues/228
 [#229]: https://github.com/dahlia/optique/issues/229
+[#231]: https://github.com/dahlia/optique/issues/231
 [#232]: https://github.com/dahlia/optique/issues/232
 [#233]: https://github.com/dahlia/optique/issues/233
 [#235]: https://github.com/dahlia/optique/issues/235

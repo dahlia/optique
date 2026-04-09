@@ -2705,7 +2705,6 @@ async function collectPhase1Annotations(
 ): Promise<
   {
     readonly annotations: Annotations;
-    readonly annotationsList: readonly Annotations[];
     readonly hasDynamic: boolean;
   }
 > {
@@ -2729,7 +2728,6 @@ async function collectPhase1Annotations(
 
   return {
     annotations: mergeAnnotations(annotationsList),
-    annotationsList,
     hasDynamic,
   };
 }
@@ -2748,10 +2746,7 @@ async function collectAnnotations(
   options?: unknown,
   deferred?: true,
   deferredKeys?: DeferredMap,
-): Promise<{
-  readonly annotations: Annotations;
-  readonly annotationsList: readonly Annotations[];
-}> {
+): Promise<{ readonly annotations: Annotations }> {
   const annotationsList: Annotations[] = [];
   const preparedParsed = prepareParsedForContexts(
     parsed,
@@ -2780,7 +2775,6 @@ async function collectAnnotations(
 
   return {
     annotations: mergeAnnotations(annotationsList),
-    annotationsList,
   };
 }
 
@@ -2798,7 +2792,6 @@ function collectPhase1AnnotationsSync(
   options?: unknown,
 ): {
   readonly annotations: Annotations;
-  readonly annotationsList: readonly Annotations[];
   readonly hasDynamic: boolean;
 } {
   const annotationsList: Annotations[] = [];
@@ -2826,7 +2819,6 @@ function collectPhase1AnnotationsSync(
 
   return {
     annotations: mergeAnnotations(annotationsList),
-    annotationsList,
     hasDynamic,
   };
 }
@@ -2868,10 +2860,7 @@ function collectAnnotationsSync(
   options?: unknown,
   deferred?: true,
   deferredKeys?: DeferredMap,
-): {
-  readonly annotations: Annotations;
-  readonly annotationsList: readonly Annotations[];
-} {
+): { readonly annotations: Annotations } {
   const annotationsList: Annotations[] = [];
   const preparedParsed = prepareParsedForContexts(
     parsed,
@@ -2905,28 +2894,7 @@ function collectAnnotationsSync(
 
   return {
     annotations: mergeAnnotations(annotationsList),
-    annotationsList,
   };
-}
-
-function mergeTwoPhaseAnnotations(
-  phase1AnnotationsList: readonly Annotations[],
-  phase2AnnotationsList: readonly Annotations[],
-): Annotations {
-  const mergedPerContext: Annotations[] = [];
-  const length = Math.max(
-    phase1AnnotationsList.length,
-    phase2AnnotationsList.length,
-  );
-  for (let i = 0; i < length; i++) {
-    mergedPerContext.push(
-      mergeAnnotations([
-        phase2AnnotationsList[i] ?? {},
-        phase1AnnotationsList[i] ?? {},
-      ]),
-    );
-  }
-  return mergeAnnotations(mergedPerContext);
 }
 
 /**
@@ -3154,7 +3122,6 @@ async function runWithBody<
   const ctxOptions = options.contextOptions;
   const {
     annotations: phase1Annotations,
-    annotationsList: phase1AnnotationsList,
     hasDynamic: needsTwoPhase,
   } = await collectPhase1Annotations(contexts, ctxOptions);
 
@@ -3224,7 +3191,7 @@ async function runWithBody<
   }
 
   // Phase 2: Collect annotations with parsed result
-  const { annotationsList: phase2AnnotationsList } = await collectAnnotations(
+  const { annotations: finalAnnotations } = await collectAnnotations(
     contexts,
     firstPassSeed.value,
     ctxOptions,
@@ -3232,11 +3199,7 @@ async function runWithBody<
     firstPassSeed.deferredKeys,
   );
 
-  // Final parse with merged annotations
-  const finalAnnotations = mergeTwoPhaseAnnotations(
-    phase1AnnotationsList,
-    phase2AnnotationsList,
-  );
+  // Final parse with phase-two annotations as the final per-context snapshot.
   const augmentedParser2 = injectAnnotationsIntoParser(
     parser,
     finalAnnotations,
@@ -3271,8 +3234,10 @@ async function runWithBody<
  *    instead.
  * 3. *Phase 2*: Call `getAnnotations(parsed)` on all contexts with the first
  *    pass value. Deferred or otherwise unresolved fields in `parsed` may be
- *    `undefined`.
- * 4. *Second parse*: Parse again with merged annotations from both phases.
+ *    `undefined`. Each context's phase-two return value replaces its own
+ *    phase-one contribution for the final parse, so returning `{}` clears any
+ *    annotations that context provided during phase 1.
+ * 4. *Second parse*: Parse again with the merged phase-two annotations.
  *
  * If all contexts are static (no dynamic contexts), the second parse is
  * skipped for optimization. Phase 2 is also skipped when the first pass does
@@ -3396,7 +3361,6 @@ function runWithSyncBody<
   const ctxOptions = options.contextOptions;
   const {
     annotations: phase1Annotations,
-    annotationsList: phase1AnnotationsList,
     hasDynamic: needsTwoPhase,
   } = collectPhase1AnnotationsSync(contexts, ctxOptions);
 
@@ -3426,7 +3390,7 @@ function runWithSyncBody<
   }
 
   // Phase 2: Collect annotations with parsed result
-  const { annotationsList: phase2AnnotationsList } = collectAnnotationsSync(
+  const { annotations: finalAnnotations } = collectAnnotationsSync(
     contexts,
     firstPassSeed.value,
     ctxOptions,
@@ -3434,11 +3398,7 @@ function runWithSyncBody<
     firstPassSeed.deferredKeys,
   );
 
-  // Final parse with merged annotations
-  const finalAnnotations = mergeTwoPhaseAnnotations(
-    phase1AnnotationsList,
-    phase2AnnotationsList,
-  );
+  // Final parse with phase-two annotations as the final per-context snapshot.
   const augmentedParser2 = injectAnnotationsIntoParser(
     parser,
     finalAnnotations,
@@ -3453,7 +3413,9 @@ function runWithSyncBody<
  * This is the sync-only variant of {@link runWith}. All contexts must return
  * annotations synchronously (not Promises). It uses the same two-phase
  * best-effort seed extraction as {@link runWith} when dynamic contexts are
- * present.
+ * present. In two-phase runs, each context's phase-two return value replaces
+ * that context's phase-one contribution for the final parse, so returning `{}`
+ * clears any annotations that context provided during phase 1.
  *
  * @template TParser The sync parser type.
  * @template THelp Return type when help is shown.

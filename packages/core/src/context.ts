@@ -150,8 +150,11 @@ export interface SourceContext<TRequiredOptions = void> {
    *    successfully. Dynamic contexts can use this to load external data
    *    (e.g., reading a config file whose path was determined in the first
    *    pass). Deferred or otherwise unresolved fields may be `undefined`.
-   *    If the runner cannot extract a usable value at all, this second call
-   *    is skipped and the original parse failure is reported instead.
+   *    This second return value is treated as the context's final annotation
+   *    snapshot for the second parse pass, replacing that context's phase-one
+   *    contribution. If the runner cannot extract a usable value at all, this
+   *    second call is skipped and the original parse failure is reported
+   *    instead.
    *
    * @param parsed Optional parsed result from a previous parse pass.
    *               Static contexts can ignore this parameter.
@@ -159,8 +162,10 @@ export interface SourceContext<TRequiredOptions = void> {
    * @param options Optional context-required options provided by the caller
    *               of `runWith()`. These are the options declared via the
    *               `TRequiredOptions` type parameter.
-   * @returns Annotations to merge into the parsing session. Can be a Promise
-   *          for async operations (e.g., loading config files).
+   * @returns Annotations to merge into the parsing session. During phase 2,
+   *          returning `{}` clears any annotations this context contributed
+   *          during phase 1. Can be a Promise for async operations (e.g.,
+   *          loading config files).
    */
   getAnnotations(
     parsed?: unknown,
