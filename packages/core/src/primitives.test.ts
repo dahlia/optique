@@ -47,6 +47,7 @@ import {
   type Parser,
   type ParserContext,
   parseSync,
+  suggest,
   type Suggestion,
 } from "@optique/core/parser";
 import type { Usage } from "@optique/core/usage";
@@ -1795,6 +1796,26 @@ describe("flag() error customization", () => {
 });
 
 describe("argument", () => {
+  it("should treat annotations as transparent during top-level parsing", () => {
+    const annotation = Symbol.for("@test/issue-187/argument-parse");
+    const result = parse(argument(string()), ["value"], {
+      annotations: { [annotation]: true },
+    });
+
+    assert.deepEqual(result, { success: true, value: "value" });
+  });
+
+  it("should keep top-level suggestions when annotations are present", () => {
+    const annotation = Symbol.for("@test/issue-187/argument-suggest");
+    const suggestions = suggest(
+      argument(choice(["alpha", "beta"] as const)),
+      ["a"],
+      { annotations: { [annotation]: true } },
+    );
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "alpha" }]);
+  });
+
   it("should create a parser that expects a single argument", () => {
     const parser = argument(string({ metavar: "FILE" }));
 
@@ -2045,6 +2066,37 @@ describe("primitives additional branch coverage", () => {
       assert.deepEqual(resolved.consumed, ["--count", "42"]);
       assert.deepEqual(resolved.next.buffer, []);
     }
+  });
+
+  it("option suggest keeps top-level value suggestions under annotations", () => {
+    const annotation = Symbol.for("@test/issue-187/option-suggest");
+    const suggestions = suggest(
+      option("--env", choice(["alpha", "beta"] as const)),
+      ["a"],
+      { annotations: { [annotation]: true } },
+    );
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "alpha" }]);
+  });
+
+  it("group(argument()) stays annotation-transparent", () => {
+    const annotation = Symbol.for("@test/issue-187/group-argument");
+    const parser = group("Arguments", argument(string()));
+    const result = parse(parser, ["value"], {
+      annotations: { [annotation]: true },
+    });
+
+    assert.deepEqual(result, { success: true, value: "value" });
+  });
+
+  it("map(argument()) stays annotation-transparent", () => {
+    const annotation = Symbol.for("@test/issue-187/map-argument");
+    const parser = map(argument(string()), (value) => value.toUpperCase());
+    const result = parse(parser, ["value"], {
+      annotations: { [annotation]: true },
+    });
+
+    assert.deepEqual(result, { success: true, value: "VALUE" });
   });
 
   it("option parse rejects instead of throwing when async value parsing throws synchronously", async () => {
@@ -2406,6 +2458,46 @@ describe("command", () => {
       },
     };
   }
+
+  it("should treat annotations as transparent during top-level parsing", () => {
+    const annotation = Symbol.for("@test/issue-187/command-parse");
+    const parser = command("go", object({ silent: option("--silent") }));
+
+    const result = parse(parser, ["go", "--silent"], {
+      annotations: { [annotation]: true },
+    });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: { silent: true },
+    });
+  });
+
+  it("should keep top-level suggestions when annotations are present", () => {
+    const annotation = Symbol.for("@test/issue-187/command-suggest");
+    const parser = command("go", object({ silent: option("--silent") }));
+    const suggestions = suggest(parser, ["g"], {
+      annotations: { [annotation]: true },
+    });
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "go" }]);
+  });
+
+  it("group(command()) stays annotation-transparent", () => {
+    const annotation = Symbol.for("@test/issue-187/group-command");
+    const parser = group(
+      "Commands",
+      command("go", object({ silent: option("--silent") })),
+    );
+    const result = parse(parser, ["go", "--silent"], {
+      annotations: { [annotation]: true },
+    });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: { silent: true },
+    });
+  });
 
   it("should create a parser that matches a subcommand and applies inner parser", () => {
     const showParser = command(

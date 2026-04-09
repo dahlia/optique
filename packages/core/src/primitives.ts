@@ -1,4 +1,10 @@
 import {
+  getWrappedChildParseState,
+  getWrappedChildState,
+  isAnnotationWrappedInitialState,
+  normalizeInjectedAnnotationState,
+} from "./annotation-state.ts";
+import {
   type DerivedValueParser,
   getDefaultValuesFunction,
   getDependencyIds,
@@ -601,7 +607,7 @@ function* suggestOptionSync<T>(
       } // Scenario 2: Empty buffer, state is undefined, and the prefix is
       // not itself starting an option token.
       else if (
-        context.state === undefined &&
+        isAnnotationWrappedInitialState(context.state) &&
         context.buffer.length === 0 &&
         (context.exec?.path?.length ?? 0) === 0 &&
         !(prefix.startsWith("--") || prefix.startsWith("-") ||
@@ -781,7 +787,7 @@ async function* suggestOptionAsync<T>(
       } // Scenario 2: Empty buffer, state is undefined, and the prefix is
       // not itself starting an option token.
       else if (
-        context.state === undefined &&
+        isAnnotationWrappedInitialState(context.state) &&
         context.buffer.length === 0 &&
         (context.exec?.path?.length ?? 0) === 0 &&
         !(prefix.startsWith("--") || prefix.startsWith("-") ||
@@ -2006,6 +2012,7 @@ export function argument<M extends Mode, T>(
         ValueParserResult<T> | undefined
       >,
     ) {
+      const localState = normalizeInjectedAnnotationState(context.state);
       if (context.buffer.length < 1) {
         return {
           success: false,
@@ -2042,7 +2049,7 @@ export function argument<M extends Mode, T>(
         };
       }
 
-      if (context.state != null) {
+      if (localState != null) {
         return {
           success: false,
           consumed: i,
@@ -2153,7 +2160,7 @@ export function argument<M extends Mode, T>(
       >,
       prefix: string,
     ) {
-      if (context.state != null) {
+      if (normalizeInjectedAnnotationState(context.state) != null) {
         return dispatchIterableByMode<M, Suggestion>(
           valueParser.$mode,
           function* () {},
@@ -2402,6 +2409,41 @@ type CommandState<TState> =
   | ["matched", string] // Command matched but inner parser not started
   | ["parsing", TState]; // Command matched and inner parser active
 
+function normalizeCommandState<TState>(
+  state: CommandState<TState>,
+): CommandState<TState> {
+  return normalizeInjectedAnnotationState(state);
+}
+
+function getCommandParseChildState<TState>(
+  commandState: CommandState<TState>,
+  childState: TState,
+  parser: Parser<Mode, unknown, unknown>,
+): TState {
+  return getWrappedChildParseState(commandState, childState, parser);
+}
+
+function getCommandChildState<TState>(
+  commandState: CommandState<TState>,
+  childState: TState,
+  parser: Parser<Mode, unknown, unknown>,
+): TState {
+  return getWrappedChildState(commandState, childState, parser);
+}
+
+function createCommandState<TState>(
+  sourceState: unknown,
+  state: Exclude<CommandState<TState>, undefined>,
+): Exclude<CommandState<TState>, undefined> {
+  return annotateFreshArray(
+    sourceState,
+    state as readonly unknown[],
+  ) as Exclude<
+    CommandState<TState>,
+    undefined
+  >;
+}
+
 function* suggestCommandSync<T, TState>(
   context: ParserContext<CommandState<TState>>,
   prefix: string,
@@ -2413,8 +2455,10 @@ function* suggestCommandSync<T, TState>(
     return;
   }
 
+  const state = normalizeCommandState(context.state);
+
   // Handle different command states
-  if (context.state === undefined) {
+  if (state === undefined) {
     // Command not yet matched - suggest command name if it matches prefix
     if (name.startsWith(prefix)) {
       yield {
@@ -2423,16 +2467,26 @@ function* suggestCommandSync<T, TState>(
         ...(options.description && { description: options.description }),
       };
     }
-  } else if (context.state[0] === "matched") {
+  } else if (state[0] === "matched") {
     // Command matched but inner parser not started - delegate to inner parser
     yield* parser.suggest(
-      withChildContext(context, name, parser.initialState, parser.usage),
+      withChildContext(
+        context,
+        name,
+        getCommandChildState(context.state, parser.initialState, parser),
+        parser.usage,
+      ),
       prefix,
     );
-  } else if (context.state[0] === "parsing") {
+  } else if (state[0] === "parsing") {
     // Command in parsing state - delegate to inner parser
     yield* parser.suggest(
-      withChildContext(context, name, context.state[1], parser.usage),
+      withChildContext(
+        context,
+        name,
+        getCommandChildState(context.state, state[1], parser),
+        parser.usage,
+      ),
       prefix,
     );
   }
@@ -2449,8 +2503,10 @@ async function* suggestCommandAsync<T, TState>(
     return;
   }
 
+  const state = normalizeCommandState(context.state);
+
   // Handle different command states
-  if (context.state === undefined) {
+  if (state === undefined) {
     // Command not yet matched - suggest command name if it matches prefix
     if (name.startsWith(prefix)) {
       yield {
@@ -2459,19 +2515,29 @@ async function* suggestCommandAsync<T, TState>(
         ...(options.description && { description: options.description }),
       };
     }
-  } else if (context.state[0] === "matched") {
+  } else if (state[0] === "matched") {
     // Command matched but inner parser not started - delegate to inner parser
     const suggestions = parser.suggest(
-      withChildContext(context, name, parser.initialState, parser.usage),
+      withChildContext(
+        context,
+        name,
+        getCommandChildState(context.state, parser.initialState, parser),
+        parser.usage,
+      ),
       prefix,
     ) as AsyncIterable<Suggestion>;
     for await (const s of suggestions) {
       yield s;
     }
-  } else if (context.state[0] === "parsing") {
+  } else if (state[0] === "parsing") {
     // Command in parsing state - delegate to inner parser
     const suggestions = parser.suggest(
-      withChildContext(context, name, context.state[1], parser.usage),
+      withChildContext(
+        context,
+        name,
+        getCommandChildState(context.state, state[1], parser),
+        parser.usage,
+      ),
       prefix,
     ) as AsyncIterable<Suggestion>;
     for await (const s of suggestions) {
@@ -2529,12 +2595,13 @@ export function command<M extends Mode, T, TState>(
       state: CommandState<TState>,
       path: readonly PropertyKey[],
     ) {
-      if (state === undefined) {
+      const normalizedState = normalizeCommandState(state);
+      if (normalizedState === undefined) {
         return [];
       }
-      const childState = state[0] === "matched"
-        ? parser.initialState
-        : state[1];
+      const childState = normalizedState[0] === "matched"
+        ? getCommandChildState(state, parser.initialState, parser)
+        : getCommandChildState(state, normalizedState[1], parser);
       const childPath = [...path, name];
       return parser.getSuggestRuntimeNodes?.(childState, childPath) ??
         (parser.dependencyMetadata?.source != null
@@ -2542,8 +2609,9 @@ export function command<M extends Mode, T, TState>(
           : []);
     },
     parse(context: ParserContext<CommandState<TState>>) {
+      const state = normalizeCommandState(context.state);
       // Handle different states
-      if (context.state === undefined) {
+      if (state === undefined) {
         // Check if buffer starts with our command name
         if (context.buffer.length < 1 || context.buffer[0] !== name) {
           const actual = context.buffer.length > 0 ? context.buffer[0] : null;
@@ -2600,19 +2668,26 @@ export function command<M extends Mode, T, TState>(
           next: {
             ...context,
             buffer: context.buffer.slice(1),
-            state: ["matched", name] as ["matched", string],
+            state: createCommandState(
+              context.state,
+              ["matched", name] as ["matched", string],
+            ),
           },
           consumed: context.buffer.slice(0, 1),
         };
       } else if (
-        context.state[0] === "matched" ||
-        context.state[0] === "parsing"
+        state[0] === "matched" ||
+        state[0] === "parsing"
       ) {
         // "matched": command was matched, start the inner parser
         // "parsing": delegate to inner parser with existing state
-        const innerState = context.state[0] === "matched"
-          ? parser.initialState
-          : context.state[1];
+        const innerState = state[0] === "matched"
+          ? getCommandParseChildState(
+            context.state,
+            parser.initialState,
+            parser,
+          )
+          : getCommandParseChildState(context.state, state[1], parser);
 
         const wrapState = (
           parseResult: ParserResult<TState>,
@@ -2626,10 +2701,13 @@ export function command<M extends Mode, T, TState>(
               success: true as const,
               next: {
                 ...parseResult.next,
-                state: ["parsing", parseResult.next.state] as [
-                  "parsing",
-                  TState,
-                ],
+                state: createCommandState(
+                  context.state,
+                  ["parsing", parseResult.next.state] as [
+                    "parsing",
+                    TState,
+                  ],
+                ),
                 ...(mergedExec != null
                   ? {
                     exec: mergedExec,
@@ -2667,13 +2745,14 @@ export function command<M extends Mode, T, TState>(
       };
     },
     complete(state: CommandState<TState>, exec?: ExecutionContext) {
-      if (typeof state === "undefined") {
+      const normalizedState = normalizeCommandState(state);
+      if (typeof normalizedState === "undefined") {
         return {
           success: false,
           error: options.errors?.notFound ??
             message`Command ${eOptionName(name)} was not matched.`,
         };
-      } else if (state[0] === "matched") {
+      } else if (normalizedState[0] === "matched") {
         // Command matched but inner parser never started.
         // First give the inner parser a chance to run with empty buffer,
         // then complete with the resulting state.
@@ -2682,7 +2761,7 @@ export function command<M extends Mode, T, TState>(
           buffer: [],
           optionsTerminated: false,
           usage: parser.usage,
-          state: parser.initialState,
+          state: getCommandParseChildState(state, parser.initialState, parser),
           ...(childExec != null
             ? {
               exec: childExec,
@@ -2700,8 +2779,12 @@ export function command<M extends Mode, T, TState>(
               : childExec;
             return syncInnerParser.complete(
               parseResult.success
-                ? parseResult.next.state
-                : syncInnerParser.initialState,
+                ? getCommandChildState(state, parseResult.next.state, parser)
+                : getCommandChildState(
+                  state,
+                  syncInnerParser.initialState,
+                  parser,
+                ),
               nextExec,
             );
           },
@@ -2712,19 +2795,27 @@ export function command<M extends Mode, T, TState>(
               : childExec;
             return asyncInnerParser.complete(
               parseResult.success
-                ? parseResult.next.state
-                : parser.initialState,
+                ? getCommandChildState(state, parseResult.next.state, parser)
+                : getCommandChildState(state, parser.initialState, parser),
               nextExec,
             );
           },
         );
-      } else if (state[0] === "parsing") {
+      } else if (normalizedState[0] === "parsing") {
         // Delegate to inner parser
         const childExec = withChildExecPath(exec, name);
         return dispatchByMode(
           parser.$mode,
-          () => syncInnerParser.complete(state[1], childExec),
-          async () => await asyncInnerParser.complete(state[1], childExec),
+          () =>
+            syncInnerParser.complete(
+              getCommandChildState(state, normalizedState[1], parser),
+              childExec,
+            ),
+          async () =>
+            await asyncInnerParser.complete(
+              getCommandChildState(state, normalizedState[1], parser),
+              childExec,
+            ),
         );
       }
       // Should never reach here
@@ -2738,16 +2829,17 @@ export function command<M extends Mode, T, TState>(
       state: CommandState<TState>,
       exec?: ExecutionContext,
     ) {
-      if (typeof state === "undefined") {
+      const normalizedState = normalizeCommandState(state);
+      if (typeof normalizedState === "undefined") {
         return wrapForMode(parser.$mode, null);
       }
-      if (state[0] === "matched") {
+      if (normalizedState[0] === "matched") {
         const childExec = withChildExecPath(exec, name);
         const childContext = {
           buffer: [],
           optionsTerminated: false,
           usage: parser.usage,
-          state: parser.initialState,
+          state: getCommandParseChildState(state, parser.initialState, parser),
           ...(childExec != null
             ? {
               exec: childExec,
@@ -2766,8 +2858,12 @@ export function command<M extends Mode, T, TState>(
             return completeOrExtractPhase2Seed(
               syncInnerParser,
               parseResult.success
-                ? parseResult.next.state
-                : syncInnerParser.initialState,
+                ? getCommandChildState(state, parseResult.next.state, parser)
+                : getCommandChildState(
+                  state,
+                  syncInnerParser.initialState,
+                  parser,
+                ),
               nextExec,
             );
           },
@@ -2779,17 +2875,17 @@ export function command<M extends Mode, T, TState>(
             return await completeOrExtractPhase2Seed(
               asyncInnerParser,
               parseResult.success
-                ? parseResult.next.state
-                : parser.initialState,
+                ? getCommandChildState(state, parseResult.next.state, parser)
+                : getCommandChildState(state, parser.initialState, parser),
               nextExec,
             );
           },
         );
       }
-      if (state[0] === "parsing") {
+      if (normalizedState[0] === "parsing") {
         return completeOrExtractPhase2Seed(
           parser,
-          state[1],
+          getCommandChildState(state, normalizedState[1], parser),
           withChildExecPath(exec, name),
         );
       }
@@ -2817,7 +2913,10 @@ export function command<M extends Mode, T, TState>(
       );
     },
     getDocFragments(state: DocState<CommandState<TState>>, defaultValue?: T) {
-      if (state.kind === "unavailable" || typeof state.state === "undefined") {
+      const commandState = state.kind === "available"
+        ? normalizeCommandState(state.state)
+        : undefined;
+      if (state.kind === "unavailable" || typeof commandState === "undefined") {
         // When the command is not matched (showing in a list), apply hidden option
         if (isDocHidden(options.hidden)) {
           return { fragments: [], description: options.description };
@@ -2837,9 +2936,19 @@ export function command<M extends Mode, T, TState>(
       }
       // When the command is matched and executing, show inner parser documentation
       // regardless of hidden status
-      const innerState: DocState<TState> = state.state[0] === "parsing"
-        ? { kind: "available", state: state.state[1] }
-        : { kind: "available", state: parser.initialState };
+      const innerState: DocState<TState> = commandState[0] === "parsing"
+        ? {
+          kind: "available",
+          state: getCommandChildState(state.state, commandState[1], parser),
+        }
+        : {
+          kind: "available",
+          state: getCommandChildState(
+            state.state,
+            parser.initialState,
+            parser,
+          ),
+        };
       const innerFragments = parser.getDocFragments(
         innerState,
         defaultValue,

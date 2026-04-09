@@ -1,4 +1,11 @@
 import {
+  annotationViewTargets,
+  getWrappedChildParseState as getParseChildState,
+  getWrappedChildState as getAnnotatedChildState,
+  reconcileObjectChildState,
+  unwrapAnnotationView,
+} from "./annotation-state.ts";
+import {
   createDependencySourceState,
   dependencyId,
   isDependencySourceState,
@@ -21,11 +28,8 @@ import {
 } from "./dependency-runtime.ts";
 import {
   annotateFreshArray,
-  annotationKey,
-  type Annotations,
   getAnnotations,
   inheritAnnotations,
-  injectAnnotations,
 } from "./annotations.ts";
 import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
 import {
@@ -64,7 +68,6 @@ import type {
 import {
   defineInheritedAnnotationParser,
   getParserSuggestRuntimeNodes,
-  inheritParentAnnotationsKey,
   unmatchedNonCliDependencySourceStateMarker,
 } from "./parser.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
@@ -307,13 +310,6 @@ const fieldParsersKey: unique symbol = Symbol("fieldParsers");
  * to consume results from parsers that still return `DependencySourceState`.
  * @internal
  */
-function unwrapAnnotationView<T>(value: T): T {
-  if (value == null || typeof value !== "object") {
-    return value;
-  }
-  return (annotationViewTargets.get(value as object) as T | undefined) ?? value;
-}
-
 function containsAnnotationView(
   value: unknown,
   seen = new WeakSet<object>(),
@@ -611,103 +607,12 @@ function getAnnotatedFieldState(
   return getAnnotatedChildState(parentState, sourceState, parser);
 }
 
-const annotationViewTargets = new WeakMap<object, object>();
-
-function withAnnotationView<T extends object>(
-  state: T,
-  annotations: Annotations,
-): T {
-  const target = unwrapAnnotationView(state) as T;
-  const view = new Proxy(target, {
-    get(target, key) {
-      if (key === annotationKey) {
-        return annotations;
-      }
-      const value = Reflect.get(target, key, target);
-      return typeof value === "function" ? value.bind(target) : value;
-    },
-    has(target, key) {
-      return key === annotationKey || Reflect.has(target, key);
-    },
-  });
-  annotationViewTargets.set(view, target);
-  return view;
-}
-
-function getParseChildState(
+function getObjectParseChildState<TState>(
   parentState: unknown,
-  childState: unknown,
-  parser: Parser<Mode, unknown, unknown>,
-): unknown {
-  const annotations = getAnnotations(parentState);
-  const shouldInheritAnnotations =
-    Reflect.get(parser, inheritParentAnnotationsKey) === true;
-  if (childState == null) {
-    if (annotations !== undefined && shouldInheritAnnotations) {
-      return injectAnnotations({}, annotations);
-    }
-    return childState;
-  }
-  if (
-    annotations === undefined ||
-    typeof childState !== "object" ||
-    getAnnotations(childState) === annotations ||
-    !shouldInheritAnnotations
-  ) {
-    return childState;
-  }
-  const injectedState = injectAnnotations(childState, annotations);
-  return getAnnotations(injectedState) === annotations
-    ? injectedState
-    : childState;
-}
-
-function getObjectParseChildState(
-  parentState: unknown,
-  childState: unknown,
+  childState: TState,
   _parser: Parser<Mode, unknown, unknown>,
-): unknown {
-  const annotations = getAnnotations(parentState);
-  if (
-    annotations === undefined ||
-    childState == null ||
-    typeof childState !== "object" ||
-    getAnnotations(childState) === annotations
-  ) {
-    return childState;
-  }
-  return inheritAnnotations(parentState, childState);
-}
-
-function getAnnotatedChildState(
-  parentState: unknown,
-  childState: unknown,
-  parser: Parser<Mode, unknown, unknown>,
-): unknown {
-  const annotations = getAnnotations(parentState);
-  const shouldInheritAnnotations =
-    Reflect.get(parser, inheritParentAnnotationsKey) === true;
-  if (childState == null) {
-    if (annotations !== undefined && shouldInheritAnnotations) {
-      return injectAnnotations({}, annotations);
-    }
-    return childState;
-  }
-  if (typeof childState !== "object") {
-    return childState;
-  }
-  if (
-    annotations === undefined || getAnnotations(childState) === annotations
-  ) {
-    return childState;
-  }
-  if (shouldInheritAnnotations) {
-    const injectedState = injectAnnotations(childState, annotations);
-    if (getAnnotations(injectedState) === annotations) {
-      return injectedState;
-    }
-  }
-  return withAnnotationView(childState, annotations);
+): TState {
+  return reconcileObjectChildState(parentState, childState);
 }
 
 function buildSuggestRuntimeNodesFromPairs(

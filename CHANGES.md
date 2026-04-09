@@ -217,6 +217,15 @@ To be released.
     `runSync()`) either select a branch normally or return an ordinary parse
     failure instead of throwing.  [[#183]]
 
+ -  Fixed `argument()` and `command()` misinterpreting annotation-injected
+    initial state as real parser-local state.  Annotated calls through
+    `parse()`, `suggest()`, `runWith()`, `runWithSync()`, `run()`, and
+    `runSync()` now treat annotations as transparent runtime context for these
+    primitives, so positional arguments, subcommands, and top-level
+    value-suggestion flows behave the same way they do without annotations.
+    Wrapper compositions that forward primitive state directly, such as
+    `group(argument(...))`, inherit the fix as well.  [[#187], [#781]]
+
  -  Expanded `or()`'s fully inferred overloads from 10 to 15 parser
     arguments, so large alternative sets keep precise union inference without
     collapsing to `unknown` at 11+ arguments.  [[#142], [#143]]
@@ -1304,6 +1313,7 @@ To be released.
 [#180]: https://github.com/dahlia/optique/issues/180
 [#183]: https://github.com/dahlia/optique/issues/183
 [#186]: https://github.com/dahlia/optique/issues/186
+[#187]: https://github.com/dahlia/optique/issues/187
 [#200]: https://github.com/dahlia/optique/issues/200
 [#223]: https://github.com/dahlia/optique/issues/223
 [#224]: https://github.com/dahlia/optique/issues/224
@@ -1604,6 +1614,7 @@ To be released.
 [#778]: https://github.com/dahlia/optique/pull/778
 [#779]: https://github.com/dahlia/optique/pull/779
 [#780]: https://github.com/dahlia/optique/pull/780
+[#781]: https://github.com/dahlia/optique/pull/781
 
 ### @optique/config
 

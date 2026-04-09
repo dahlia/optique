@@ -164,6 +164,47 @@ describe("run", () => {
       assert.deepEqual(result, { tag: "a", silent: true });
     });
 
+    it("should parse arguments with annotated static contexts in runSync()", () => {
+      const annotation = Symbol.for("@test/issue-187/run-runSync");
+      const context: SourceContext = {
+        id: annotation,
+        mode: "static",
+        getAnnotations() {
+          return { [annotation]: true };
+        },
+      };
+
+      const result = runSync(argument(string()), {
+        args: ["value"],
+        programName: "test",
+        contexts: [context],
+      });
+
+      assert.equal(result, "value");
+    });
+
+    it("should parse commands with annotated static contexts in run()", async () => {
+      const annotation = Symbol.for("@test/issue-187/run-run");
+      const context: SourceContext = {
+        id: annotation,
+        mode: "static",
+        getAnnotations() {
+          return { [annotation]: true };
+        },
+      };
+
+      const result = await run(
+        command("go", object({ silent: option("--silent") })),
+        {
+          args: ["go", "--silent"],
+          programName: "test",
+          contexts: [context],
+        },
+      );
+
+      assert.deepEqual(result, { silent: true });
+    });
+
     it("should parse options with custom program name", () => {
       const parser = object({
         verbose: option("--verbose"),
