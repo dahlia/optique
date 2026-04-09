@@ -2725,8 +2725,7 @@ async function collectPhase1Annotations(
   options?: unknown,
 ): Promise<CollectedPhase1Annotations> {
   const annotationsList: Annotations[] = [];
-  const snapshots: Annotations[] = [];
-  let needsTwoPhase = false;
+  let snapshots: Annotations[] | undefined;
 
   for (const context of contexts) {
     const result = context.getAnnotations(undefined, options);
@@ -2739,14 +2738,17 @@ async function collectPhase1Annotations(
       ? annotations
       : mergeAnnotations([annotations, internalAnnotations]);
     annotationsList.push(snapshot);
-    snapshots.push(snapshot);
-    needsTwoPhase ||= context.phase === "two-pass";
+    if (snapshots != null) {
+      snapshots.push(snapshot);
+    } else if (context.phase === "two-pass") {
+      snapshots = [...annotationsList];
+    }
   }
 
   return {
     annotations: mergeAnnotations(annotationsList),
-    needsTwoPhase,
-    snapshots,
+    needsTwoPhase: snapshots != null,
+    snapshots: snapshots ?? [],
   };
 }
 
@@ -2822,8 +2824,7 @@ function collectPhase1AnnotationsSync(
   options?: unknown,
 ): CollectedPhase1Annotations {
   const annotationsList: Annotations[] = [];
-  const snapshots: Annotations[] = [];
-  let needsTwoPhase = false;
+  let snapshots: Annotations[] | undefined;
 
   for (const context of contexts) {
     const result = context.getAnnotations(undefined, options);
@@ -2841,14 +2842,17 @@ function collectPhase1AnnotationsSync(
       ? result
       : mergeAnnotations([result, internalAnnotations]);
     annotationsList.push(snapshot);
-    snapshots.push(snapshot);
-    needsTwoPhase ||= context.phase === "two-pass";
+    if (snapshots != null) {
+      snapshots.push(snapshot);
+    } else if (context.phase === "two-pass") {
+      snapshots = [...annotationsList];
+    }
   }
 
   return {
     annotations: mergeAnnotations(annotationsList),
-    needsTwoPhase,
-    snapshots,
+    needsTwoPhase: snapshots != null,
+    snapshots: snapshots ?? [],
   };
 }
 
