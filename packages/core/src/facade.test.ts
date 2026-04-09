@@ -5577,12 +5577,14 @@ describe("runWith", () => {
   describe("two-pass contexts", () => {
     it("should handle a two-pass context with two-phase parsing", async () => {
       const configKey = Symbol.for("@test/config");
+      let phase2Called = false;
 
       const dynamicContext: SourceContext = {
         id: configKey,
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (!parsed) return {};
+          if (parsed === undefined) return {};
+          phase2Called = true;
           const result = parsed as { config?: string };
           if (!result.config) return {};
           // Simulate loaded config
@@ -5602,6 +5604,7 @@ describe("runWith", () => {
       // Parser should complete successfully
       assert.equal(result.config, "test.json");
       assert.equal(result.host, "default");
+      assert.ok(phase2Called, "phase 2 context should be called");
     });
 
     it("preserves plain parsed object identity when no scrub is needed", async () => {
@@ -5648,6 +5651,7 @@ describe("runWith", () => {
     it("should handle mixed single-pass and two-pass contexts", async () => {
       const envKey = Symbol.for("@test/env");
       const configKey = Symbol.for("@test/config");
+      let phase2Called = false;
 
       const staticContext: SourceContext = {
         id: envKey,
@@ -5661,7 +5665,8 @@ describe("runWith", () => {
         id: configKey,
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (!parsed) return {};
+          if (parsed === undefined) return {};
+          phase2Called = true;
           return { [configKey]: { host: "config-host" } };
         },
       };
@@ -5678,6 +5683,7 @@ describe("runWith", () => {
       );
 
       assert.deepEqual(result, { host: "default" });
+      assert.ok(phase2Called, "phase 2 context should be called");
     });
 
     it("should handle async context", async () => {
