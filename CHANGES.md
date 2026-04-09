@@ -217,7 +217,7 @@ To be released.
     context's final snapshot for the second parse pass.  Returning `{}` from
     `getAnnotations(parsed)` now clears that context's earlier phase-1
     contribution instead of letting stale data override later contexts.
-    [[#231]]
+    [[#231], [#782]]
 
  -  Fixed `or()` crashing with an internal `TypeError` when parsing started
     from an annotation-injected initial state.  Exclusive branch selection now
@@ -1643,6 +1643,7 @@ To be released.
 [#779]: https://github.com/dahlia/optique/pull/779
 [#780]: https://github.com/dahlia/optique/pull/780
 [#781]: https://github.com/dahlia/optique/pull/781
+[#782]: https://github.com/dahlia/optique/pull/782
 
 ### @optique/config
 
