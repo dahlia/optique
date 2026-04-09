@@ -11231,6 +11231,70 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(phase2Calls, 0, "phase 2 should be skipped on early exit");
   });
 
+  it("runWithSync: skips the meta probe for single-pass contexts", () => {
+    let parseCalls = 0;
+    const ctxKey = Symbol.for("@test/sync-single-pass-meta-probe");
+    const parser: Parser<"sync", string, string | undefined> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly (string | undefined)[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        parseCalls++;
+        const [head, ...rest] = context.buffer;
+        if (head == null) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Missing value.`,
+          };
+        }
+        return {
+          success: true as const,
+          next: { ...context, buffer: rest, state: head },
+          consumed: [head],
+        };
+      },
+      complete(state) {
+        if (state == null) {
+          return {
+            success: false as const,
+            error: message`Missing value.`,
+          };
+        }
+        return {
+          success: true as const,
+          value: state,
+        };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const context: SourceContext = {
+      id: ctxKey,
+      phase: "single-pass",
+      getAnnotations() {
+        return { [ctxKey]: {} };
+      },
+    };
+
+    const result = runWithSync(parser, "test", [context], {
+      args: ["value"],
+      help: { option: true },
+      stdout: () => {},
+      stderr: () => {},
+    });
+
+    assert.equal(result, "value");
+    assert.equal(parseCalls, 1, "single-pass runs should parse only once");
+  });
+
   it("runWithSync: two-phase, first pass fails → handled via runParser", () => {
     const dynKey = Symbol.for("@test/sync-two-phase-fail");
     const context: SourceContext = {
@@ -12006,6 +12070,67 @@ describe("branch coverage: facade.ts edge cases", () => {
       args: ["second"],
     });
     assert.equal(withStaticContext, "second");
+  });
+
+  it("runWith skips the meta probe when meta handling is disabled", async () => {
+    let parseCalls = 0;
+    const ctxKey = Symbol.for("@test/async-two-phase-no-meta-probe");
+    const parser: Parser<"async", string, string | undefined> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly (string | undefined)[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        parseCalls++;
+        const [head, ...rest] = context.buffer;
+        if (head == null) {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`Missing value.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, buffer: rest, state: head },
+          consumed: [head],
+        });
+      },
+      complete(state) {
+        if (state == null) {
+          return Promise.resolve({
+            success: false as const,
+            error: message`Missing value.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          value: state,
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const context: SourceContext = {
+      id: ctxKey,
+      phase: "two-pass",
+      getAnnotations() {
+        return {};
+      },
+    };
+
+    const result = await runWith(parser, "test", [context], {
+      args: ["value"],
+    });
+
+    assert.equal(result, "value");
+    assert.equal(parseCalls, 2, "two-pass runs should not add a meta probe");
   });
 
   it("completion callbacks preserve real callback errors", () => {

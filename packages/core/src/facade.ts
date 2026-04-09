@@ -2787,6 +2787,16 @@ function classifyEarlyExitFailure<THelp, TError>(
   );
 }
 
+function shouldProbeEarlyExit<THelp, TError>(
+  options: RunWithOptions<THelp, TError>,
+  needsTwoPhase: boolean,
+): boolean {
+  return needsTwoPhase &&
+    (options.help != null ||
+      options.version != null ||
+      options.completion != null);
+}
+
 /**
  * Checks if the arguments contain parser-visible meta requests that can be
  * handled without collecting source-context annotations first.
@@ -3283,31 +3293,34 @@ async function runWithBody<
     needsTwoPhase,
     snapshots: phase1Snapshots,
   } = await collectPhase1Annotations(contexts, ctxOptions);
-  const earlyExitParser = injectAnnotationsIntoParser(
-    parser,
-    phase1Annotations,
-  );
-
-  // Early exit: skip phase-two processing for genuine help/version/
-  // completion requests, but only after phase-1 annotations have been
-  // injected because they may change what the parser accepts as ordinary data.
-  if (await needsEarlyExitAsync(earlyExitParser, args, options)) {
-    if (parser.$mode === "async") {
-      return runParser(
-        earlyExitParser,
-        programName,
-        args,
-        options,
-      ) as Promise<InferValue<TParser>>;
-    }
-    return Promise.resolve(
-      runParser(
-        earlyExitParser,
-        programName,
-        args,
-        options,
-      ) as InferValue<TParser>,
+  if (shouldProbeEarlyExit(options, needsTwoPhase)) {
+    const earlyExitParser = injectAnnotationsIntoParser(
+      parser,
+      phase1Annotations,
     );
+
+    // Early exit: skip phase-two processing for genuine help/version/
+    // completion requests, but only after phase-1 annotations have been
+    // injected because they may change what the parser accepts as ordinary
+    // data.
+    if (await needsEarlyExitAsync(earlyExitParser, args, options)) {
+      if (parser.$mode === "async") {
+        return runParser(
+          earlyExitParser,
+          programName,
+          args,
+          options,
+        ) as Promise<InferValue<TParser>>;
+      }
+      return Promise.resolve(
+        runParser(
+          earlyExitParser,
+          programName,
+          args,
+          options,
+        ) as InferValue<TParser>,
+      );
+    }
   }
   const augmentedParser1 = injectAnnotationsIntoParser(
     parser,
@@ -3542,16 +3555,19 @@ function runWithSyncBody<
     needsTwoPhase,
     snapshots: phase1Snapshots,
   } = collectPhase1AnnotationsSync(contexts, ctxOptions);
-  const earlyExitParser = injectAnnotationsIntoParser(
-    parser,
-    phase1Annotations,
-  );
+  if (shouldProbeEarlyExit(options, needsTwoPhase)) {
+    const earlyExitParser = injectAnnotationsIntoParser(
+      parser,
+      phase1Annotations,
+    );
 
-  // Early exit: skip phase-two processing for genuine help/version/
-  // completion requests, but only after phase-1 annotations have been
-  // injected because they may change what the parser accepts as ordinary data.
-  if (needsEarlyExitSync(earlyExitParser, args, options)) {
-    return runParser(earlyExitParser, programName, args, options);
+    // Early exit: skip phase-two processing for genuine help/version/
+    // completion requests, but only after phase-1 annotations have been
+    // injected because they may change what the parser accepts as ordinary
+    // data.
+    if (needsEarlyExitSync(earlyExitParser, args, options)) {
+      return runParser(earlyExitParser, programName, args, options);
+    }
   }
   const augmentedParser1 = injectAnnotationsIntoParser(
     parser,
