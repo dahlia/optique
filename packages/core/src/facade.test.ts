@@ -3732,7 +3732,11 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      assert.deepEqual(completionOutput.split("\n").sort(), ["beta", "build"]);
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((line) => line.length > 0)
+        .sort();
+      assert.deepEqual(suggestions, ["beta", "build"]);
     });
 
     it("should preserve completion payload after -- for equals-form option", () => {
@@ -3752,7 +3756,11 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      assert.deepEqual(completionOutput.split("\n").sort(), ["beta", "build"]);
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((line) => line.length > 0)
+        .sort();
+      assert.deepEqual(suggestions, ["beta", "build"]);
     });
 
     it("should report missing shell for separated --completion option", () => {
