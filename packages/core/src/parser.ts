@@ -266,7 +266,7 @@ export interface Parser<
    * A type-appropriate default value used as a stand-in during deferred
    * prompt resolution.  When present, combinators like `prompt()` use this
    * value instead of an internal sentinel during two-phase parsing, so that
-   * `map()` transforms and dynamic contexts always receive a valid value
+   * `map()` transforms and two-pass contexts always receive a valid value
    * of type {@link TValue}.
    *
    * This property is set automatically by `option()` and `argument()` from

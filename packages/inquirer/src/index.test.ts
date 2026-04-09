@@ -1516,7 +1516,7 @@ describe("prompt()", () => {
       let phase2Parsed: { readonly config: string } | undefined;
       const dynamicContext: SourceContext = {
         id: Symbol.for("@test/prompt-phase-two"),
-        mode: "dynamic",
+        phase: "two-pass",
         getAnnotations(parsed?: unknown) {
           if (parsed === undefined) {
             return {};
@@ -1555,7 +1555,7 @@ describe("prompt()", () => {
         let phase2Parsed: { readonly apiKey?: string | undefined } | undefined;
         const dynamicContext: SourceContext = {
           id: Symbol.for("@test/config-prompt-phase-two"),
-          mode: "dynamic",
+          phase: "two-pass",
           getAnnotations(parsed?: unknown) {
             if (parsed === undefined) {
               return {};
@@ -1609,7 +1609,7 @@ describe("prompt()", () => {
         let sawUndefined = false;
         const dynamicContext: SourceContext = {
           id: Symbol.for("@test/top-level-config-prompt-phase-two"),
-          mode: "dynamic",
+          phase: "two-pass",
           getAnnotations(parsed?: unknown) {
             sawUndefined = parsed === undefined;
             return {};
@@ -1661,7 +1661,7 @@ describe("prompt()", () => {
         let phase2Parsed: ConfigInput | undefined;
         const dynamicContext: SourceContext = {
           id: Symbol.for("@test/non-plain-phase-two"),
-          mode: "dynamic",
+          phase: "two-pass",
           getAnnotations(parsed?: unknown) {
             if (parsed !== undefined) {
               phase2Parsed = parsed as ConfigInput;
@@ -1735,7 +1735,7 @@ describe("prompt()", () => {
         let phase2Masked: string | undefined;
         const dynamicContext: SourceContext = {
           id: Symbol.for("@test/private-field-phase-two"),
-          mode: "dynamic",
+          phase: "two-pass",
           getAnnotations(parsed?: unknown) {
             if (parsed !== undefined) {
               phase2SawSecretHolder = parsed instanceof SecretHolder;
@@ -1801,7 +1801,7 @@ describe("prompt()", () => {
       let phase2Values: readonly unknown[] | undefined;
       const dynamicContext: SourceContext = {
         id: Symbol.for("@test/set-phase-two"),
-        mode: "dynamic",
+        phase: "two-pass",
         getAnnotations(parsed?: unknown) {
           if (parsed instanceof Set) {
             phase2Values = [...parsed];
@@ -1862,7 +1862,7 @@ describe("prompt()", () => {
         let phase2ApiKey: string | undefined;
         const dynamicContext: SourceContext = {
           id: Symbol.for("@test/set-own-prop-phase-two"),
-          mode: "dynamic",
+          phase: "two-pass",
           getAnnotations(parsed?: unknown) {
             if (parsed instanceof BoxSet) {
               phase2WasBoxSet = true;
@@ -1922,7 +1922,7 @@ describe("prompt()", () => {
       let phase2Set: BoxSet | undefined;
       const dynamicContext: SourceContext = {
         id: Symbol.for("@test/nested-clean-collection-phase-two"),
-        mode: "dynamic",
+        phase: "two-pass",
         getAnnotations(parsed?: unknown) {
           if (parsed != null && typeof parsed === "object") {
             phase2Set = (parsed as { readonly clean: BoxSet }).clean;
@@ -1991,7 +1991,7 @@ describe("prompt()", () => {
       let phase2Value: string | undefined;
       const dynamicContext: SourceContext = {
         id: Symbol.for("@test/nested-clean-non-plain-phase-two"),
-        mode: "dynamic",
+        phase: "two-pass",
         getAnnotations(parsed?: unknown) {
           if (parsed != null && typeof parsed === "object") {
             phase2Box = (parsed as { readonly clean: CleanBox }).clean;
@@ -2053,7 +2053,7 @@ describe("prompt()", () => {
         let phase2ApiKey: string | undefined;
         const dynamicContext: SourceContext = {
           id: Symbol.for("@test/nested-non-plain-phase-two"),
-          mode: "dynamic",
+          phase: "two-pass",
           getAnnotations(parsed?: unknown) {
             if (parsed != null && typeof parsed === "object") {
               phase2ApiKey = (
@@ -2180,7 +2180,7 @@ describe("prompt()", () => {
         const metadataByParsed = new WeakMap<object, string>();
         const identityContext: SourceContext = {
           id: Symbol.for("@test/scrubbed-phase-two-identity"),
-          mode: "dynamic",
+          phase: "two-pass",
           getAnnotations(parsed?: unknown) {
             if (parsed != null && typeof parsed === "object") {
               metadataByParsed.set(parsed as object, "seen");
@@ -2332,7 +2332,7 @@ describe("prompt()", () => {
         let phase2Token: string | undefined;
         const dynamicContext: SourceContext = {
           id: Symbol.for("@test/mapped-placeholder-phase-two"),
-          mode: "dynamic",
+          phase: "two-pass",
           getAnnotations(parsed?: unknown) {
             if (parsed != null && typeof parsed === "object") {
               phase2Token = (parsed as { readonly token: string }).token;
@@ -2374,7 +2374,7 @@ describe("prompt()", () => {
         );
 
         // map() drops deferredKeys because the transform is opaque.
-        // The placeholder "" leaks through to the dynamic context.
+        // The placeholder "" leaks through to the two-pass context.
         // This is an intentional trade-off: forwarding stale inner
         // keys would risk stripping the wrong output fields.
         assert.equal(phase2Token, "");
@@ -2392,7 +2392,7 @@ describe("prompt()", () => {
         let phase2Parsed: unknown = "not-called";
         const dynamicContext: SourceContext = {
           id: Symbol.for("@test/mapped-throw-phase-two"),
-          mode: "dynamic",
+          phase: "two-pass",
           getAnnotations(parsed?: unknown) {
             phase2Parsed = parsed;
             return {};
@@ -2460,7 +2460,7 @@ describe("prompt()", () => {
       const phaseOneValues: unknown[] = [];
       const spyContext: SourceContext = {
         id: Symbol("spy"),
-        mode: "dynamic",
+        phase: "two-pass",
         getAnnotations(parsed?: unknown) {
           if (parsed !== undefined) {
             phaseOneValues.push(parsed);

@@ -46,7 +46,7 @@ const configContext = createConfigContext({ schema: configSchema });
 
 const args = Deno.args;
 
-// Preload config annotations once and expose them through a static context so
+// Preload config annotations once and expose them through a single-pass context so
 // prompt() remains the final fallback after CLI/env/config values.
 const configAnnotations = await configContext.getAnnotations(
   { config: getConfigPathFromArgs(args) },
@@ -55,7 +55,7 @@ const configAnnotations = await configContext.getAnnotations(
 
 const staticConfigContext = {
   id: configContext.id,
-  mode: "static" as const,
+  phase: "single-pass" as const,
   getAnnotations() {
     return configAnnotations;
   },

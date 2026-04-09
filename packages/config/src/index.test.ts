@@ -1319,7 +1319,7 @@ describe("bindConfig parity with bindEnv", () => {
       { context: envCtx, key: "PORT", parser: integer() },
     );
 
-    // Provide env annotations (as a static context, getAnnotations() is called
+    // Provide env annotations (as a single-pass context, getAnnotations() is called
     // manually here to simulate what runWith() does).
     const envAnnotations = envCtx.getAnnotations();
     if (envAnnotations instanceof Promise) {

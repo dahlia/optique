@@ -430,7 +430,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
   const context: ConfigContext<T, TConfigMeta> = {
     id: contextId,
     schema: rawSchema,
-    mode: "dynamic",
+    phase: "two-pass",
     getInternalAnnotations(parsed: unknown, annotations: Annotations) {
       if (parsed === undefined) {
         return { [contextId]: phase1ConfigAnnotationMarker };

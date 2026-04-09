@@ -3,8 +3,8 @@
  *
  * This module provides the SourceContext interface that allows packages to
  * provide data sources (environment variables, config files, etc.) in a
- * standard way with clear priority ordering and automatic static/dynamic
- * optimization.
+ * standard way with clear priority ordering and explicit single-pass /
+ * two-pass execution.
  *
  * @module
  * @since 0.10.0
@@ -15,16 +15,15 @@ import type { Annotations } from "./annotations.ts";
 export type { Annotations } from "./annotations.ts";
 
 /**
- * Declares whether a {@link SourceContext} provides its annotations
- * immediately (`"static"`) or only after a prior parse pass (`"dynamic"`).
+ * Declares whether a {@link SourceContext} participates only in the initial
+ * annotation collection (`"single-pass"`) or is recollected after a usable
+ * first parse pass (`"two-pass"`).
  *
- * Used as the type of the optional `mode` field on {@link SourceContext}.
- * When set, {@link isStaticContext} reads this value directly instead of
- * calling `getAnnotations()`, preventing any side effects.
+ * Used as the type of the required `phase` field on {@link SourceContext}.
  *
  * @since 1.0.0
  */
-export type SourceContextMode = "static" | "dynamic";
+export type SourceContextPhase = "single-pass" | "two-pass";
 
 /**
  * Brand symbol for ParserValuePlaceholder type.
@@ -65,12 +64,14 @@ export type ParserValuePlaceholder = {
 /**
  * A source context that can provide data to parsers via annotations.
  *
- * Source contexts are used to inject external data (like environment variables
- * or config files) into the parsing process. They can be either:
+ * Source contexts are used to inject external data (like environment
+ * variables or config files) into the parsing process. They can be either:
  *
- * - *Static*: Data is immediately available (e.g., environment variables)
- * - *Dynamic*: Data depends on parsing results (e.g., config files whose path
- *   is determined by a CLI option)
+ * - *Single-pass*: The runner collects annotations once before parsing
+ *   (e.g., environment variables)
+ * - *Two-pass*: The runner collects annotations before parsing and then
+ *   recollects them after a usable first parse pass (e.g., config files whose
+ *   path is determined by a CLI option)
  *
  * Contexts may optionally implement `Disposable` or `AsyncDisposable` for
  * cleanup.  When present, `runWith()` and `runWithSync()` call the dispose
@@ -83,9 +84,10 @@ export type ParserValuePlaceholder = {
  *
  * @example
  * ```typescript
- * // Static context example (environment variables) - no extra options needed
+ * // Single-pass context example (environment variables)
  * const envContext: SourceContext = {
  *   id: Symbol.for("@myapp/env"),
+ *   phase: "single-pass",
  *   getAnnotations() {
  *     return {
  *       [Symbol.for("@myapp/env")]: {
@@ -96,7 +98,7 @@ export type ParserValuePlaceholder = {
  *   }
  * };
  *
- * // Dynamic context that requires options from runWith()
+ * // Two-pass context that requires options from runWith()
  * interface ConfigContext extends SourceContext<{
  *   getConfigPath: (parsed: ParserValuePlaceholder) => string | undefined;
  * }> {
@@ -124,41 +126,38 @@ export interface SourceContext<TRequiredOptions = void> {
   readonly $requiredOptions?: TRequiredOptions;
 
   /**
-   * Optional declaration of whether this context is static or dynamic.
+   * Declares whether this context is collected once or recollected after a
+   * usable first parse pass.
    *
-   * When present, {@link isStaticContext} reads this field directly instead
-   * of calling {@link getAnnotations}, avoiding any side effects that
-   * `getAnnotations` might have (such as mutating a global registry).
-   *
-   * If omitted, {@link isStaticContext} falls back to calling
-   * `getAnnotations()` with no arguments to determine static-ness.
+   * `single-pass` contexts contribute only their phase-1 annotations to the
+   * final parse. `two-pass` contexts are called again with the first-pass
+   * parsed value (or a best-effort seed extracted from parser state) and that
+   * second return value becomes the context's final annotation snapshot.
    *
    * @since 1.0.0
    */
-  readonly mode?: SourceContextMode;
+  readonly phase: SourceContextPhase;
 
   /**
    * Get annotations to inject into parsing.
    *
-   * This method is called twice during `runWith()` execution:
+   * This method is called during phase 1 for every context and during phase 2
+   * only for `two-pass` contexts:
    *
-   * 1. *First call*: `parsed` is `undefined`. Static contexts should return
-   *    their annotations, while dynamic contexts should return an empty object.
-   * 2. *Second call*: `parsed` contains the first pass result, or a
-   *    best-effort partial value extracted from parser state when the first
-   *    pass reached a usable intermediate state but still did not complete
-   *    successfully. Dynamic contexts can use this to load external data
-   *    (e.g., reading a config file whose path was determined in the first
-   *    pass). Deferred or otherwise unresolved fields may be `undefined`.
-   *    This second return value is treated as the context's final annotation
+   * 1. *Phase 1*: `parsed` is `undefined`.
+   * 2. *Phase 2*: `parsed` contains the first pass result, or a best-effort
+   *    partial value extracted from parser state when the first pass reached a
+   *    usable intermediate state but still did not complete successfully.
+   *    Deferred or otherwise unresolved fields may be `undefined`. This
+   *    second return value is treated as the context's final annotation
    *    snapshot for the second parse pass, replacing that context's phase-one
    *    contribution. If the runner cannot extract a usable value at all, this
    *    second call is skipped and the original parse failure is reported
    *    instead.
    *
    * @param parsed Optional parsed result from a previous parse pass.
-   *               Static contexts can ignore this parameter.
-   *               Dynamic contexts use this to extract necessary data.
+   *               `single-pass` contexts can ignore this parameter.
+   *               `two-pass` contexts use this to extract or refine data.
    * @param options Optional context-required options provided by the caller
    *               of `runWith()`. These are the options declared via the
    *               `TRequiredOptions` type parameter.
@@ -220,31 +219,4 @@ export interface SourceContext<TRequiredOptions = void> {
    * Promise.
    */
   [Symbol.asyncDispose]?(): void | PromiseLike<void>;
-}
-
-/**
- * Checks whether a context is static (returns annotations without needing
- * parsed results).
- *
- * A context is considered static if it declares `mode: "static"` or if
- * `getAnnotations()` called without arguments returns a non-empty
- * annotations object synchronously.
- *
- * @param context The source context to check.
- * @returns `true` if the context is static, `false` otherwise.
- * @since 0.10.0
- */
-export function isStaticContext(context: SourceContext<unknown>): boolean {
-  // If the context explicitly declares its static-ness, use that directly
-  // to avoid calling getAnnotations() and triggering any side effects it
-  // might have (e.g. mutating a global registry as EnvContext does).
-  if (context.mode !== undefined) {
-    return context.mode === "static";
-  }
-
-  const result = context.getAnnotations();
-  if (result instanceof Promise) {
-    return false;
-  }
-  return Object.getOwnPropertySymbols(result).length > 0;
 }

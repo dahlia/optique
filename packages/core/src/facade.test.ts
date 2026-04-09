@@ -5255,6 +5255,7 @@ describe("runWith", () => {
       const envKey = Symbol.for("@test/env-primitive-async");
       const envContext: SourceContext = {
         id: envKey,
+        phase: "single-pass",
         getAnnotations() {
           return { [envKey]: { HOST: "localhost" } };
         },
@@ -5278,10 +5279,11 @@ describe("runWith", () => {
       assert.deepEqual(result, { name: "Alice" });
     });
 
-    it("should parse with a static context", async () => {
+    it("should parse with a single-pass context", async () => {
       const envKey = Symbol.for("@test/env");
       const envContext: SourceContext = {
         id: envKey,
+        phase: "single-pass",
         getAnnotations() {
           return { [envKey]: { HOST: "localhost" } };
         },
@@ -5299,10 +5301,11 @@ describe("runWith", () => {
       assert.deepEqual(result, { host: "default" });
     });
 
-    it("should call static context once in async runWith", async () => {
+    it("should call a single-pass context once in async runWith", async () => {
       let callCount = 0;
       const staticContext: SourceContext = {
         id: Symbol.for("@test/static-once"),
+        phase: "single-pass",
         getAnnotations() {
           callCount++;
           return {
@@ -5323,11 +5326,11 @@ describe("runWith", () => {
       assert.equal(callCount, 1);
     });
 
-    it('should not force two-phase parsing for mode: "static" with empty annotations', async () => {
+    it('should not force two-phase parsing for phase: "single-pass" with empty annotations', async () => {
       let callCount = 0;
       const staticContext: SourceContext = {
         id: Symbol.for("@test/static-empty-once"),
-        mode: "static",
+        phase: "single-pass",
         getAnnotations() {
           callCount++;
           return {};
@@ -5346,11 +5349,11 @@ describe("runWith", () => {
       assert.equal(callCount, 1);
     });
 
-    it('should not force two-phase parsing for async mode: "static" contexts', async () => {
+    it('should not force two-phase parsing for async phase: "single-pass" contexts', async () => {
       let callCount = 0;
       const staticContext: SourceContext = {
         id: Symbol.for("@test/static-empty-async-once"),
-        mode: "static",
+        phase: "single-pass",
         getAnnotations() {
           callCount++;
           return Promise.resolve({});
@@ -5369,12 +5372,13 @@ describe("runWith", () => {
       assert.equal(callCount, 1);
     });
 
-    it("should parse with multiple static contexts", async () => {
+    it("should parse with multiple single-pass contexts", async () => {
       const envKey = Symbol.for("@test/env");
       const configKey = Symbol.for("@test/config");
 
       const envContext: SourceContext = {
         id: envKey,
+        phase: "single-pass",
         getAnnotations() {
           return { [envKey]: { HOST: "env-host" } };
         },
@@ -5382,6 +5386,7 @@ describe("runWith", () => {
 
       const configContext: SourceContext = {
         id: configKey,
+        phase: "single-pass",
         getAnnotations() {
           return { [configKey]: { host: "config-host" } };
         },
@@ -5408,6 +5413,7 @@ describe("runWith", () => {
 
       const context1: SourceContext = {
         id: Symbol.for("@test/context1"),
+        phase: "single-pass",
         getAnnotations() {
           return { [sharedKey]: { value: "from-context1" } };
         },
@@ -5415,6 +5421,7 @@ describe("runWith", () => {
 
       const context2: SourceContext = {
         id: Symbol.for("@test/context2"),
+        phase: "single-pass",
         getAnnotations() {
           return { [sharedKey]: { value: "from-context2" } };
         },
@@ -5474,6 +5481,7 @@ describe("runWith", () => {
 
       const earlyContext: SourceContext = {
         id: Symbol.for("@test/phase-merge-early"),
+        phase: "single-pass",
         getAnnotations() {
           return { [sharedKey]: "phase1-early" };
         },
@@ -5481,7 +5489,7 @@ describe("runWith", () => {
 
       const lateDynamicContext: SourceContext = {
         id: Symbol.for("@test/phase-merge-late"),
-        mode: "dynamic",
+        phase: "two-pass",
         getAnnotations(parsed?: unknown) {
           if (parsed == null) {
             return {};
@@ -5535,7 +5543,7 @@ describe("runWith", () => {
 
       const clearingContext: SourceContext = {
         id: Symbol.for("@test/phase-clear-early"),
-        mode: "dynamic",
+        phase: "two-pass",
         getAnnotations(parsed?: unknown) {
           if (parsed == null) {
             return { [sharedKey]: "phase1-early" };
@@ -5546,7 +5554,7 @@ describe("runWith", () => {
 
       const fallbackContext: SourceContext = {
         id: Symbol.for("@test/phase-clear-late"),
-        mode: "dynamic",
+        phase: "two-pass",
         getAnnotations(parsed?: unknown) {
           if (parsed == null) {
             return {};
@@ -5566,14 +5574,17 @@ describe("runWith", () => {
     });
   });
 
-  describe("dynamic contexts", () => {
-    it("should handle dynamic context with two-phase parsing", async () => {
+  describe("two-pass contexts", () => {
+    it("should handle a two-pass context with two-phase parsing", async () => {
       const configKey = Symbol.for("@test/config");
+      let phase2Called = false;
 
       const dynamicContext: SourceContext = {
         id: configKey,
+        phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (!parsed) return {};
+          if (parsed === undefined) return {};
+          phase2Called = true;
           const result = parsed as { config?: string };
           if (!result.config) return {};
           // Simulate loaded config
@@ -5593,6 +5604,7 @@ describe("runWith", () => {
       // Parser should complete successfully
       assert.equal(result.config, "test.json");
       assert.equal(result.host, "default");
+      assert.ok(phase2Called, "phase 2 context should be called");
     });
 
     it("preserves plain parsed object identity when no scrub is needed", async () => {
@@ -5601,7 +5613,7 @@ describe("runWith", () => {
 
       const firstContext: SourceContext = {
         id: Symbol.for("@test/phase-two-identity-first"),
-        mode: "dynamic",
+        phase: "two-pass",
         getAnnotations(parsed?: unknown) {
           if (parsed != null && typeof parsed === "object") {
             seenParsed.set(parsed as object, true);
@@ -5612,7 +5624,7 @@ describe("runWith", () => {
 
       const secondContext: SourceContext = {
         id: Symbol.for("@test/phase-two-identity-second"),
-        mode: "dynamic",
+        phase: "two-pass",
         getAnnotations(parsed?: unknown) {
           reusedIdentity = parsed != null &&
             typeof parsed === "object" &&
@@ -5636,12 +5648,14 @@ describe("runWith", () => {
       assert.deepEqual(result, { name: "default" });
     });
 
-    it("should handle mixed static and dynamic contexts", async () => {
+    it("should handle mixed single-pass and two-pass contexts", async () => {
       const envKey = Symbol.for("@test/env");
       const configKey = Symbol.for("@test/config");
+      let phase2Called = false;
 
       const staticContext: SourceContext = {
         id: envKey,
+        phase: "single-pass",
         getAnnotations() {
           return { [envKey]: { HOST: "env-host" } };
         },
@@ -5649,8 +5663,10 @@ describe("runWith", () => {
 
       const dynamicContext: SourceContext = {
         id: configKey,
+        phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (!parsed) return {};
+          if (parsed === undefined) return {};
+          phase2Called = true;
           return { [configKey]: { host: "config-host" } };
         },
       };
@@ -5667,6 +5683,7 @@ describe("runWith", () => {
       );
 
       assert.deepEqual(result, { host: "default" });
+      assert.ok(phase2Called, "phase 2 context should be called");
     });
 
     it("should handle async context", async () => {
@@ -5674,6 +5691,7 @@ describe("runWith", () => {
 
       const asyncContext: SourceContext = {
         id: asyncKey,
+        phase: "single-pass",
         async getAnnotations() {
           await new Promise((resolve) => setTimeout(resolve, 1));
           return { [asyncKey]: { value: "async-value" } };
@@ -5777,6 +5795,7 @@ describe("runWith", () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
+        phase: "single-pass",
         getAnnotations() {
           annotationsCallCount++;
           return {};
@@ -5808,6 +5827,7 @@ describe("runWith", () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
+        phase: "single-pass",
         getAnnotations() {
           annotationsCallCount++;
           return {};
@@ -5840,6 +5860,7 @@ describe("runWith", () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
+        phase: "single-pass",
         getAnnotations() {
           annotationsCallCount++;
           return {};
@@ -5871,6 +5892,7 @@ describe("runWith", () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
+        phase: "single-pass",
         getAnnotations() {
           annotationsCallCount++;
           return {};
@@ -5903,6 +5925,7 @@ describe("runWith", () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
+        phase: "single-pass",
         getAnnotations() {
           annotationsCallCount++;
           return {};
@@ -5934,6 +5957,7 @@ describe("runWith", () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
+        phase: "single-pass",
         getAnnotations() {
           annotationsCallCount++;
           return {};
@@ -5965,6 +5989,7 @@ describe("runWith", () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
+        phase: "single-pass",
         getAnnotations() {
           annotationsCallCount++;
           return {};
@@ -5996,6 +6021,7 @@ describe("runWith", () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
+        phase: "single-pass",
         getAnnotations() {
           annotationsCallCount++;
           return {};
@@ -6023,10 +6049,11 @@ describe("runWith", () => {
       assert.equal(annotationsCallCount, 0);
     });
 
-    it("should continue to context phase when completion option is configured but absent", async () => {
+    it("should continue to context collection when completion option is configured but absent", async () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking-present-but-absent-completion"),
+        phase: "single-pass",
         getAnnotations() {
           annotationsCallCount++;
           return {};
@@ -6045,12 +6072,12 @@ describe("runWith", () => {
       });
 
       assert.deepEqual(result, { name: "alice" });
-      assert.equal(annotationsCallCount, 2);
+      assert.equal(annotationsCallCount, 1);
     });
   });
 
   describe("error handling", () => {
-    it("should display error only once with dynamic context and empty args", async () => {
+    it("should display error only once with a two-pass context and empty args", async () => {
       const cmd1 = command("foo", object({ cmd: constant("foo") }));
       const cmd2 = command("bar", object({ cmd: constant("bar") }));
       const parser = merge(
@@ -6060,6 +6087,7 @@ describe("runWith", () => {
 
       const dynamicContext: SourceContext = {
         id: Symbol("dynamic"),
+        phase: "two-pass",
         getAnnotations(_parsed?: unknown) {
           return Promise.resolve({});
         },
@@ -6103,6 +6131,7 @@ describe("runWith", () => {
       let disposed = false;
       const context: SourceContext = {
         id: Symbol.for("@test/disposable"),
+        phase: "single-pass",
         getAnnotations() {
           return {
             [Symbol.for("@test/disposable")]: { value: true },
@@ -6125,6 +6154,7 @@ describe("runWith", () => {
       let disposed = false;
       const context: SourceContext = {
         id: Symbol.for("@test/disposable-error"),
+        phase: "single-pass",
         getAnnotations() {
           return {
             [Symbol.for("@test/disposable-error")]: { value: true },
@@ -6156,6 +6186,7 @@ describe("runWith", () => {
       const disposed: string[] = [];
       const context: SourceContext = {
         id: Symbol.for("@test/async-disposable"),
+        phase: "single-pass",
         getAnnotations() {
           return {
             [Symbol.for("@test/async-disposable")]: { value: true },
@@ -6182,6 +6213,7 @@ describe("runWith", () => {
 
       const context1: SourceContext = {
         id: Symbol.for("@test/dispose1"),
+        phase: "single-pass",
         getAnnotations() {
           return {
             [Symbol.for("@test/dispose1")]: { value: 1 },
@@ -6194,6 +6226,7 @@ describe("runWith", () => {
 
       const context2: SourceContext = {
         id: Symbol.for("@test/dispose2"),
+        phase: "single-pass",
         getAnnotations() {
           return {
             [Symbol.for("@test/dispose2")]: { value: 2 },
@@ -6217,6 +6250,7 @@ describe("runWith", () => {
 
       const context1: SourceContext = {
         id: Symbol.for("@test/dispose-error-1"),
+        phase: "single-pass",
         getAnnotations() {
           return {
             [Symbol.for("@test/dispose-error-1")]: { value: 1 },
@@ -6230,6 +6264,7 @@ describe("runWith", () => {
 
       const context2: SourceContext = {
         id: Symbol.for("@test/dispose-error-2"),
+        phase: "single-pass",
         getAnnotations() {
           return {
             [Symbol.for("@test/dispose-error-2")]: { value: 2 },
@@ -6254,6 +6289,7 @@ describe("runWith", () => {
     it("should handle context without dispose methods", async () => {
       const context: SourceContext = {
         id: Symbol.for("@test/no-dispose"),
+        phase: "single-pass",
         getAnnotations() {
           return {
             [Symbol.for("@test/no-dispose")]: { value: true },
@@ -6274,6 +6310,7 @@ describe("runWith", () => {
       let disposed = 0;
       const context: SourceContext = {
         id: Symbol.for("@test/dispose-help"),
+        phase: "single-pass",
         getAnnotations() {
           return {};
         },
@@ -6301,6 +6338,7 @@ describe("runWith", () => {
       let disposed = 0;
       const context: SourceContext = {
         id: Symbol.for("@test/dispose-version"),
+        phase: "single-pass",
         getAnnotations() {
           return {};
         },
@@ -6329,6 +6367,7 @@ describe("runWith", () => {
       let disposed = 0;
       const context: SourceContext = {
         id: Symbol.for("@test/async-dispose-help"),
+        phase: "single-pass",
         getAnnotations() {
           return {};
         },
@@ -6356,6 +6395,7 @@ describe("runWith", () => {
       let disposed = 0;
       const context: SourceContext = {
         id: Symbol.for("@test/dispose-completion"),
+        phase: "single-pass",
         getAnnotations() {
           return {};
         },
@@ -6383,6 +6423,7 @@ describe("runWith", () => {
       let disposed = false;
       const context: SourceContext = {
         id: Symbol.for("@test/dispose-shadow"),
+        phase: "single-pass",
         getAnnotations() {
           return {};
         },
@@ -6427,6 +6468,7 @@ describe("runWith", () => {
 
       const context1: SourceContext = {
         id: Symbol.for("@test/dispose-shadow-multi-1"),
+        phase: "single-pass",
         getAnnotations() {
           return {};
         },
@@ -6438,6 +6480,7 @@ describe("runWith", () => {
 
       const context2: SourceContext = {
         id: Symbol.for("@test/dispose-shadow-multi-2"),
+        phase: "single-pass",
         getAnnotations() {
           return {};
         },
@@ -6478,6 +6521,7 @@ describe("runWith", () => {
       let disposed = false;
       const context: SourceContext = {
         id: Symbol.for("@test/dispose-no-shadow"),
+        phase: "single-pass",
         getAnnotations() {
           return {};
         },
@@ -6514,6 +6558,7 @@ describe("runWith", () => {
       // extra fields.  The context reads options from the untyped second arg.
       const context: SourceContext = {
         id: passthroughKey,
+        phase: "two-pass",
         getAnnotations(_parsed?: unknown, options?: unknown) {
           receivedOptions = options;
           if (!_parsed) return {};
@@ -6544,9 +6589,10 @@ describe("runWith", () => {
 
       const context: SourceContext = {
         id: dynamicKey,
+        phase: "two-pass",
         getAnnotations(parsed?: unknown, options?: unknown) {
           receivedOptionsPerCall.push(options);
-          if (!parsed) return {};
+          if (parsed === undefined) return {};
           return { [dynamicKey]: { value: "loaded" } };
         },
       };
@@ -6573,6 +6619,7 @@ describe("runWith", () => {
 
       const context: SourceContext<{ args: string[] }> = {
         id: key,
+        phase: "two-pass",
         getAnnotations(_parsed?: unknown, options?: unknown) {
           receivedOptions = options;
           return {};
@@ -6602,6 +6649,7 @@ describe("runWith", () => {
 
       const context: SourceContext<{ help: string; programName: string }> = {
         id: key,
+        phase: "two-pass",
         getAnnotations(_parsed?: unknown, options?: unknown) {
           receivedOptions = options;
           return {};
@@ -6630,6 +6678,7 @@ describe("runWith", () => {
 
       const context: SourceContext<Record<never, never>> = {
         id: key,
+        phase: "single-pass",
         getAnnotations() {
           return {};
         },
@@ -6653,6 +6702,7 @@ describe("runWith", () => {
 
       const context: SourceContext<{ profile?: string }> = {
         id: key,
+        phase: "two-pass",
         getAnnotations(_parsed?: unknown, options?: unknown) {
           receivedOptions = options;
           return {};
@@ -6689,10 +6739,12 @@ describe("runWith", () => {
       const shared = Symbol.for("@test/dup-runWith");
       const ctx1: SourceContext = {
         id: shared,
+        phase: "single-pass",
         getAnnotations: () => ({ [shared]: "one" }),
       };
       const ctx2: SourceContext = {
         id: shared,
+        phase: "single-pass",
         getAnnotations: () => ({ [shared]: "two" }),
       };
 
@@ -6712,6 +6764,7 @@ describe("runWithSync", () => {
     const envKey = Symbol.for("@test/env-primitive");
     const envContext: SourceContext = {
       id: envKey,
+      phase: "single-pass",
       getAnnotations() {
         return { [envKey]: { HOST: "localhost" } };
       },
@@ -6724,11 +6777,11 @@ describe("runWithSync", () => {
     assert.equal(result, "ok");
   });
 
-  it("should keep argument parsing transparent for static contexts", () => {
+  it("should keep argument parsing transparent for single-pass contexts", () => {
     const annotation = Symbol.for("@test/issue-187/runwithsync-argument");
     const context: SourceContext = {
       id: annotation,
-      mode: "static",
+      phase: "single-pass",
       getAnnotations() {
         return { [annotation]: true };
       },
@@ -6741,11 +6794,11 @@ describe("runWithSync", () => {
     assert.equal(result, "value");
   });
 
-  it("should keep command parsing transparent for static contexts", () => {
+  it("should keep command parsing transparent for single-pass contexts", () => {
     const annotation = Symbol.for("@test/issue-187/runwithsync-command");
     const context: SourceContext = {
       id: annotation,
-      mode: "static",
+      phase: "single-pass",
       getAnnotations() {
         return { [annotation]: true };
       },
@@ -6765,6 +6818,7 @@ describe("runWithSync", () => {
     const envKey = Symbol.for("@test/env-array");
     const envContext: SourceContext = {
       id: envKey,
+      phase: "single-pass",
       getAnnotations() {
         return { [envKey]: { value: true } };
       },
@@ -6778,10 +6832,11 @@ describe("runWithSync", () => {
     assert.deepEqual(result, ["alpha"]);
   });
 
-  it("should parse with static contexts synchronously", () => {
+  it("should parse with single-pass contexts synchronously", () => {
     const envKey = Symbol.for("@test/env");
     const envContext: SourceContext = {
       id: envKey,
+      phase: "single-pass",
       getAnnotations() {
         return { [envKey]: { HOST: "localhost" } };
       },
@@ -6798,10 +6853,11 @@ describe("runWithSync", () => {
     assert.deepEqual(result, { host: "default" });
   });
 
-  it("should call static context once in runWithSync", () => {
+  it("should call a single-pass context once in runWithSync", () => {
     let callCount = 0;
     const staticContext: SourceContext = {
       id: Symbol.for("@test/static-once-sync"),
+      phase: "single-pass",
       getAnnotations() {
         callCount++;
         return {
@@ -6822,11 +6878,11 @@ describe("runWithSync", () => {
     assert.equal(callCount, 1);
   });
 
-  it('should not force two-phase parsing in runWithSync for mode: "static" with empty annotations', () => {
+  it('should not force two-phase parsing in runWithSync for phase: "single-pass" with empty annotations', () => {
     let callCount = 0;
     const staticContext: SourceContext = {
       id: Symbol.for("@test/static-empty-once-sync"),
-      mode: "static",
+      phase: "single-pass",
       getAnnotations() {
         callCount++;
         return {};
@@ -6849,6 +6905,7 @@ describe("runWithSync", () => {
     const asyncKey = Symbol.for("@test/async");
     const asyncContext: SourceContext = {
       id: asyncKey,
+      phase: "single-pass",
       getAnnotations() {
         return Promise.resolve({ [asyncKey]: { value: "async" } });
       },
@@ -6870,8 +6927,9 @@ describe("runWithSync", () => {
     const mixedKey = Symbol.for("@test/mixed-async");
     const mixedContext: SourceContext = {
       id: mixedKey,
+      phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {}; // sync (empty → dynamic)
+        if (parsed === undefined) return {}; // sync (empty → dynamic)
         return Promise.resolve({ [mixedKey]: { value: "loaded" } });
       },
     };
@@ -6926,6 +6984,7 @@ describe("runWithSync", () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
+        phase: "single-pass",
         getAnnotations() {
           annotationsCallCount++;
           return {};
@@ -6957,6 +7016,7 @@ describe("runWithSync", () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
+        phase: "single-pass",
         getAnnotations() {
           annotationsCallCount++;
           return {};
@@ -6989,6 +7049,7 @@ describe("runWithSync", () => {
       let annotationsCallCount = 0;
       const trackingContext: SourceContext = {
         id: Symbol.for("@test/tracking"),
+        phase: "single-pass",
         getAnnotations() {
           annotationsCallCount++;
           return {};
@@ -7022,6 +7083,7 @@ describe("runWithSync", () => {
       let disposed = false;
       const context: SourceContext = {
         id: Symbol.for("@test/sync-disposable"),
+        phase: "single-pass",
         getAnnotations() {
           return {
             [Symbol.for("@test/sync-disposable")]: { value: true },
@@ -7044,6 +7106,7 @@ describe("runWithSync", () => {
       let disposed = false;
       const context: SourceContext = {
         id: Symbol.for("@test/sync-disposable-error"),
+        phase: "single-pass",
         getAnnotations() {
           return {
             [Symbol.for("@test/sync-disposable-error")]: { value: true },
@@ -7075,6 +7138,7 @@ describe("runWithSync", () => {
       const disposed: string[] = [];
       const context: SourceContext = {
         id: Symbol.for("@test/sync-no-async-dispose"),
+        phase: "single-pass",
         getAnnotations() {
           return {
             [Symbol.for("@test/sync-no-async-dispose")]: { value: true },
@@ -7100,6 +7164,7 @@ describe("runWithSync", () => {
       const disposed: string[] = [];
       const context: SourceContext = {
         id: Symbol.for("@test/sync-async-dispose-only"),
+        phase: "single-pass",
         getAnnotations() {
           return {
             [Symbol.for("@test/sync-async-dispose-only")]: { value: true },
@@ -7123,6 +7188,7 @@ describe("runWithSync", () => {
 
       const context1: SourceContext = {
         id: Symbol.for("@test/sync-dispose-error-1"),
+        phase: "single-pass",
         getAnnotations() {
           return {
             [Symbol.for("@test/sync-dispose-error-1")]: { value: 1 },
@@ -7136,6 +7202,7 @@ describe("runWithSync", () => {
 
       const context2: SourceContext = {
         id: Symbol.for("@test/sync-dispose-error-2"),
+        phase: "single-pass",
         getAnnotations() {
           return {
             [Symbol.for("@test/sync-dispose-error-2")]: { value: 2 },
@@ -7160,6 +7227,7 @@ describe("runWithSync", () => {
       let disposed = 0;
       const context: SourceContext = {
         id: Symbol.for("@test/sync-dispose-help"),
+        phase: "single-pass",
         getAnnotations() {
           return {};
         },
@@ -7187,6 +7255,7 @@ describe("runWithSync", () => {
       let disposed = 0;
       const context: SourceContext = {
         id: Symbol.for("@test/sync-dispose-version"),
+        phase: "single-pass",
         getAnnotations() {
           return {};
         },
@@ -7215,6 +7284,7 @@ describe("runWithSync", () => {
       let disposed = 0;
       const context: SourceContext = {
         id: Symbol.for("@test/sync-dispose-completion"),
+        phase: "single-pass",
         getAnnotations() {
           return {};
         },
@@ -7242,6 +7312,7 @@ describe("runWithSync", () => {
       let disposed = false;
       const context: SourceContext = {
         id: Symbol.for("@test/sync-dispose-shadow"),
+        phase: "single-pass",
         getAnnotations() {
           return {};
         },
@@ -7286,6 +7357,7 @@ describe("runWithSync", () => {
 
       const context1: SourceContext = {
         id: Symbol.for("@test/sync-dispose-shadow-multi-1"),
+        phase: "single-pass",
         getAnnotations() {
           return {};
         },
@@ -7297,6 +7369,7 @@ describe("runWithSync", () => {
 
       const context2: SourceContext = {
         id: Symbol.for("@test/sync-dispose-shadow-multi-2"),
+        phase: "single-pass",
         getAnnotations() {
           return {};
         },
@@ -7337,6 +7410,7 @@ describe("runWithSync", () => {
       let disposed = false;
       const context: SourceContext = {
         id: Symbol.for("@test/sync-dispose-no-shadow"),
+        phase: "single-pass",
         getAnnotations() {
           return {};
         },
@@ -7407,6 +7481,7 @@ describe("runWithSync", () => {
 
       const earlyContext: SourceContext = {
         id: Symbol.for("@test/phase-merge-sync-early"),
+        phase: "single-pass",
         getAnnotations() {
           return { [sharedKey]: "phase1-early" };
         },
@@ -7414,7 +7489,7 @@ describe("runWithSync", () => {
 
       const lateDynamicContext: SourceContext = {
         id: Symbol.for("@test/phase-merge-sync-late"),
-        mode: "dynamic",
+        phase: "two-pass",
         getAnnotations(parsed?: unknown) {
           if (parsed == null) {
             return {};
@@ -7468,7 +7543,7 @@ describe("runWithSync", () => {
 
       const clearingContext: SourceContext = {
         id: Symbol.for("@test/phase-clear-sync-early"),
-        mode: "dynamic",
+        phase: "two-pass",
         getAnnotations(parsed?: unknown) {
           if (parsed == null) {
             return { [sharedKey]: "phase1-early" };
@@ -7479,7 +7554,7 @@ describe("runWithSync", () => {
 
       const fallbackContext: SourceContext = {
         id: Symbol.for("@test/phase-clear-sync-late"),
-        mode: "dynamic",
+        phase: "two-pass",
         getAnnotations(parsed?: unknown) {
           if (parsed == null) {
             return {};
@@ -7506,6 +7581,7 @@ describe("runWithSync", () => {
 
       const context: SourceContext = {
         id: syncKey,
+        phase: "two-pass",
         getAnnotations(_parsed?: unknown, options?: unknown) {
           receivedOptions = options;
           if (!_parsed) return {};
@@ -7536,6 +7612,7 @@ describe("runWithSync", () => {
 
       const context: SourceContext<{ help: string; programName: string }> = {
         id: key,
+        phase: "two-pass",
         getAnnotations(_parsed?: unknown, options?: unknown) {
           receivedOptions = options;
           return {};
@@ -7565,10 +7642,12 @@ describe("runWithSync", () => {
       const shared = Symbol.for("@test/dup-runWithSync");
       const ctx1: SourceContext = {
         id: shared,
+        phase: "single-pass",
         getAnnotations: () => ({ [shared]: "one" }),
       };
       const ctx2: SourceContext = {
         id: shared,
+        phase: "single-pass",
         getAnnotations: () => ({ [shared]: "two" }),
       };
 
@@ -7588,6 +7667,7 @@ describe("runWithAsync", () => {
     const asyncKey = Symbol.for("@test/async");
     const asyncContext: SourceContext = {
       id: asyncKey,
+      phase: "single-pass",
       async getAnnotations() {
         await new Promise((resolve) => setTimeout(resolve, 1));
         return { [asyncKey]: { value: "async-value" } };
@@ -7623,6 +7703,7 @@ describe("runWithAsync", () => {
 
     const context1: SourceContext = {
       id: key1,
+      phase: "single-pass",
       async getAnnotations() {
         await new Promise((resolve) => setTimeout(resolve, 1));
         return { [key1]: { value: "value1" } };
@@ -7631,6 +7712,7 @@ describe("runWithAsync", () => {
 
     const context2: SourceContext = {
       id: key2,
+      phase: "single-pass",
       async getAnnotations() {
         await new Promise((resolve) => setTimeout(resolve, 1));
         return { [key2]: { value: "value2" } };
@@ -9315,10 +9397,12 @@ describe("runWithAsync", () => {
       const shared = Symbol.for("@test/dup-runWithAsync");
       const ctx1: SourceContext = {
         id: shared,
+        phase: "single-pass",
         getAnnotations: () => ({ [shared]: "one" }),
       };
       const ctx2: SourceContext = {
         id: shared,
+        phase: "single-pass",
         getAnnotations: () => ({ [shared]: "two" }),
       };
 
@@ -9617,13 +9701,14 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.deepEqual(result, { name: "Alice" });
   });
 
-  it("runWith: dynamic context (hasDynamic) triggers two-phase, first pass succeeds", async () => {
+  it("runWith: two-pass context triggers phase 2 after a successful first pass", async () => {
     const dynKey = Symbol.for("@test/dyn-two-phase");
     let phase2Called = false;
     const dynamicContext: SourceContext = {
       id: dynKey,
+      phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {}; // dynamic: no symbols → hasDynamic = true
+        if (parsed === undefined) return {};
         phase2Called = true;
         return { [dynKey]: {} };
       },
@@ -9633,6 +9718,63 @@ describe("branch coverage: facade.ts edge cases", () => {
       args: ["hello"],
     });
     assert.deepEqual(result, { x: "hello" });
+    assert.ok(phase2Called, "phase 2 context should be called");
+  });
+
+  it("runWith: two-pass context refines non-empty phase-1 annotations", async () => {
+    const key = Symbol.for("@test/two-pass-refine-non-empty-async");
+    let phase2Called = false;
+    type AnnotationValue = { readonly phase1?: true; readonly phase2?: true };
+    const isAnnotationValue = (
+      value: unknown,
+    ): value is AnnotationValue => value != null && typeof value === "object";
+
+    const parser: Parser<"sync", AnnotationValue | null, undefined> = {
+      $valueType: [] as readonly (AnnotationValue | null)[],
+      $stateType: [] as readonly undefined[],
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete(state) {
+        const value = getAnnotations(state)?.[key];
+        return {
+          success: true as const,
+          value: isAnnotationValue(value) ? value : null,
+        };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const context: SourceContext = {
+      id: key,
+      phase: "two-pass",
+      getAnnotations(parsed?: unknown) {
+        if (parsed === undefined) {
+          return { [key]: { phase1: true } };
+        }
+        phase2Called = true;
+        return { [key]: { phase2: true } };
+      },
+    };
+
+    const result = await runWith(parser, "test", [context], {
+      args: [],
+    });
+
+    assert.deepEqual(result, { phase2: true });
     assert.ok(phase2Called, "phase 2 context should be called");
   });
 
@@ -9676,7 +9818,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       ) => string | undefined;
     }> = {
       id: tokenKey,
-      mode: "dynamic",
+      phase: "two-pass",
       getAnnotations(
         parsed: { readonly config: string } | undefined,
         options?: {
@@ -9752,7 +9894,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       ) => string | undefined;
     }> = {
       id: tokenKey,
-      mode: "dynamic",
+      phase: "two-pass",
       getAnnotations(
         parsed: { readonly config: string } | undefined,
         options?: {
@@ -9833,7 +9975,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       ) => string | undefined;
     }> = {
       id: tokenKey,
-      mode: "dynamic",
+      phase: "two-pass",
       getAnnotations(
         parsed: { readonly config: string } | undefined,
         options?: {
@@ -9959,7 +10101,7 @@ describe("branch coverage: facade.ts edge cases", () => {
         ) => string | undefined;
       }> = {
         id: tokenKey,
-        mode: "dynamic",
+        phase: "two-pass",
         getAnnotations(
           parsed: { readonly config: string } | undefined,
           options?: {
@@ -10085,7 +10227,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       ) => string | undefined;
     }> = {
       id: tokenKey,
-      mode: "dynamic",
+      phase: "two-pass",
       getAnnotations(
         parsed: { readonly config: string } | undefined,
         options?: {
@@ -10162,7 +10304,7 @@ describe("branch coverage: facade.ts edge cases", () => {
 
     const dynamicContext: SourceContext = {
       id: tokenKey,
-      mode: "dynamic",
+      phase: "two-pass",
       getAnnotations(parsed) {
         if (parsed == null) return {};
         phase2Called = true;
@@ -10227,7 +10369,7 @@ describe("branch coverage: facade.ts edge cases", () => {
 
     const dynamicContext: SourceContext = {
       id: tokenKey,
-      mode: "dynamic",
+      phase: "two-pass",
       getAnnotations(parsed) {
         if (parsed == null) return {};
         phase2Called = true;
@@ -10284,7 +10426,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       ) => string | undefined;
     }> = {
       id: tokenKey,
-      mode: "dynamic",
+      phase: "two-pass",
       getAnnotations(
         parsed: { readonly config: string } | undefined,
         options?: {
@@ -10359,7 +10501,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       ) => string | undefined;
     }> = {
       id: tokenKey,
-      mode: "dynamic",
+      phase: "two-pass",
       getAnnotations(
         parsed: { readonly config: string } | undefined,
         options?: {
@@ -10400,7 +10542,7 @@ describe("branch coverage: facade.ts edge cases", () => {
 
     const markerContext: SourceContext = {
       id: markerKey,
-      mode: "static",
+      phase: "single-pass",
       getAnnotations() {
         return { [markerKey]: true };
       },
@@ -10481,7 +10623,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       ) => string | undefined;
     }> = {
       id: tokenKey,
-      mode: "dynamic",
+      phase: "two-pass",
       getAnnotations(
         parsed: { readonly configs: readonly string[] } | undefined,
         options?: {
@@ -10523,8 +10665,9 @@ describe("branch coverage: facade.ts edge cases", () => {
     const dynKey = Symbol.for("@test/dyn-firstfail");
     const dynamicContext: SourceContext = {
       id: dynKey,
+      phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {};
+        if (parsed === undefined) return {};
         return { [dynKey]: {} };
       },
     };
@@ -10545,8 +10688,9 @@ describe("branch coverage: facade.ts edge cases", () => {
     const dynKey = Symbol.for("@test/dyn-async-parser2");
     const dynamicContext: SourceContext = {
       id: dynKey,
+      phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {}; // dynamic (no symbols → hasDynamic = true)
+        if (parsed === undefined) return {}; // dynamic (no symbols → hasDynamic = true)
         return { [dynKey]: {} };
       },
     };
@@ -10603,8 +10747,9 @@ describe("branch coverage: facade.ts edge cases", () => {
     const dynKey = Symbol.for("@test/dyn-async-fail2");
     const dynamicContext: SourceContext = {
       id: dynKey,
+      phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {}; // dynamic
+        if (parsed === undefined) return {}; // dynamic
         return { [dynKey]: {} };
       },
     };
@@ -10671,6 +10816,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     let contextCalled = false;
     const context: SourceContext = {
       id: dynKey,
+      phase: "single-pass",
       getAnnotations() {
         contextCalled = true;
         return { [dynKey]: {} };
@@ -10697,8 +10843,9 @@ describe("branch coverage: facade.ts edge cases", () => {
     const dynKey = Symbol.for("@test/sync-two-phase-fail");
     const context: SourceContext = {
       id: dynKey,
+      phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {}; // dynamic
+        if (parsed === undefined) return {}; // dynamic
         return { [dynKey]: {} };
       },
     };
@@ -10721,8 +10868,9 @@ describe("branch coverage: facade.ts edge cases", () => {
     let staleParserReused = false;
     const context: SourceContext = {
       id: dynKey,
+      phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {};
+        if (parsed === undefined) return {};
         return { [dynKey]: {} };
       },
     };
@@ -10769,8 +10917,9 @@ describe("branch coverage: facade.ts edge cases", () => {
     const dynKey = Symbol.for("@test/sync-two-phase-throw");
     const context: SourceContext = {
       id: dynKey,
+      phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {}; // dynamic
+        if (parsed === undefined) return {}; // dynamic
         return { [dynKey]: {} };
       },
     };
@@ -10785,6 +10934,153 @@ describe("branch coverage: facade.ts edge cases", () => {
       args: ["hi"],
     });
     assert.deepEqual(result, { x: "hi" });
+  });
+
+  it("runWithSync: two-pass context refines non-empty phase-1 annotations", () => {
+    const key = Symbol.for("@test/two-pass-refine-non-empty-sync");
+    let phase2Called = false;
+    type AnnotationValue = { readonly phase1?: true; readonly phase2?: true };
+    const isAnnotationValue = (
+      value: unknown,
+    ): value is AnnotationValue => value != null && typeof value === "object";
+
+    const parser: Parser<"sync", AnnotationValue | null, undefined> = {
+      $valueType: [] as readonly (AnnotationValue | null)[],
+      $stateType: [] as readonly undefined[],
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete(state) {
+        const value = getAnnotations(state)?.[key];
+        return {
+          success: true as const,
+          value: isAnnotationValue(value) ? value : null,
+        };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const context: SourceContext = {
+      id: key,
+      phase: "two-pass",
+      getAnnotations(parsed?: unknown) {
+        if (parsed === undefined) {
+          return { [key]: { phase1: true } };
+        }
+        phase2Called = true;
+        return { [key]: { phase2: true } };
+      },
+    };
+
+    const result = runWithSync(parser, "test", [context], {
+      args: [],
+    });
+
+    assert.deepEqual(result, { phase2: true });
+    assert.ok(phase2Called, "phase 2 context should be called");
+  });
+
+  it("runWithSync: should reject contexts without explicit phase", () => {
+    const key = Symbol.for("@test/missing-phase-sync");
+    const parser = object({
+      name: withDefault(option("--name", string()), "x"),
+    });
+    const context = {
+      id: key,
+      getAnnotations() {
+        return {};
+      },
+    };
+
+    assert.throws(
+      () => runWithSync(parser, "test", [context as never], { args: [] }),
+      {
+        name: "TypeError",
+        message: `Context ${String(key)} must declare phase as ` +
+          '"single-pass" or "two-pass".',
+      },
+    );
+  });
+
+  it("runWithSync: should reject contexts with invalid phase", () => {
+    const key = Symbol.for("@test/invalid-phase-sync");
+    const parser = object({
+      name: withDefault(option("--name", string()), "x"),
+    });
+    const context = {
+      id: key,
+      phase: "invalid",
+      getAnnotations() {
+        return {};
+      },
+    };
+
+    assert.throws(
+      () => runWithSync(parser, "test", [context as never], { args: [] }),
+      {
+        name: "TypeError",
+        message: `Context ${String(key)} must declare phase as ` +
+          '"single-pass" or "two-pass".',
+      },
+    );
+  });
+
+  it("runWith: should reject contexts without explicit phase", async () => {
+    const key = Symbol.for("@test/missing-phase-async");
+    const parser = object({
+      name: withDefault(option("--name", string()), "x"),
+    });
+    const context = {
+      id: key,
+      getAnnotations() {
+        return {};
+      },
+    };
+
+    await assert.rejects(
+      () => runWith(parser, "test", [context as never], { args: [] }),
+      {
+        name: "TypeError",
+        message: `Context ${String(key)} must declare phase as ` +
+          '"single-pass" or "two-pass".',
+      },
+    );
+  });
+
+  it("runWith: should reject contexts with invalid phase", async () => {
+    const key = Symbol.for("@test/invalid-phase-async");
+    const parser = object({
+      name: withDefault(option("--name", string()), "x"),
+    });
+    const context = {
+      id: key,
+      phase: "invalid",
+      getAnnotations() {
+        return {};
+      },
+    };
+
+    await assert.rejects(
+      () => runWith(parser, "test", [context as never], { args: [] }),
+      {
+        name: "TypeError",
+        message: `Context ${String(key)} must declare phase as ` +
+          '"single-pass" or "two-pass".',
+      },
+    );
   });
 
   it("runWithAsync wraps runWith and returns Promise", async () => {
@@ -10904,8 +11200,9 @@ describe("branch coverage: facade.ts edge cases", () => {
   it("runWith handles first-pass throw in two-phase flow", async () => {
     const dynamicContext: SourceContext = {
       id: Symbol.for("@test/dyn-throw-in-first-pass"),
+      phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {};
+        if (parsed === undefined) return {};
         return { [Symbol.for("@test/dyn-throw-in-first-pass")]: {} };
       },
     };
@@ -10949,8 +11246,9 @@ describe("branch coverage: facade.ts edge cases", () => {
   it("runWithSync handles first-pass throw in two-phase flow", () => {
     const dynamicContext: SourceContext = {
       id: Symbol.for("@test/sync-dyn-throw-in-first-pass"),
+      phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (!parsed) return {};
+        if (parsed === undefined) return {};
         return { [Symbol.for("@test/sync-dyn-throw-in-first-pass")]: {} };
       },
     };
@@ -11107,7 +11405,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.deepEqual(result, { name: "Alice" });
   });
 
-  it("runWith uses async fast-path without contexts and with static contexts", async () => {
+  it("runWith uses async fast-path without contexts and with single-pass contexts", async () => {
     const asyncParser: Parser<"async", string, { value: string | null }> = {
       $mode: "async",
       $valueType: [] as readonly string[],
@@ -11157,6 +11455,7 @@ describe("branch coverage: facade.ts edge cases", () => {
 
     const staticContext: SourceContext = {
       id: Symbol.for("@test/facade-static-fastpath"),
+      phase: "single-pass",
       getAnnotations() {
         return { [Symbol.for("@test/facade-static-fastpath")]: {} };
       },
@@ -11803,6 +12102,7 @@ describe("runWithSync async parser rejection", () => {
     const parser = object({ name: argument(asyncVp) });
     const ctx: SourceContext = {
       id: Symbol.for("@test/async-reject"),
+      phase: "single-pass",
       getAnnotations() {
         return {};
       },

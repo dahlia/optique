@@ -19,7 +19,7 @@ export const annotationKey: unique symbol = Symbol.for(
 
 /**
  * Internal marker attached during the first pass of `runWith()` so wrappers
- * with side effects can defer work until dynamic contexts have resolved.
+ * with side effects can defer work until two-pass contexts have resolved.
  *
  * @internal
  */

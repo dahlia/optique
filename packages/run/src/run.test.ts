@@ -120,6 +120,7 @@ function createIssue183RunFixture() {
   );
   const context: SourceContext = {
     id: issue183ContextKey,
+    phase: "single-pass",
     getAnnotations() {
       return { [issue183ContextKey]: true };
     },
@@ -164,11 +165,11 @@ describe("run", () => {
       assert.deepEqual(result, { tag: "a", silent: true });
     });
 
-    it("should parse arguments with annotated static contexts in runSync()", () => {
+    it("should parse arguments with annotated single-pass contexts in runSync()", () => {
       const annotation = Symbol.for("@test/issue-187/run-runSync");
       const context: SourceContext = {
         id: annotation,
-        mode: "static",
+        phase: "single-pass",
         getAnnotations() {
           return { [annotation]: true };
         },
@@ -183,11 +184,11 @@ describe("run", () => {
       assert.equal(result, "value");
     });
 
-    it("should parse commands with annotated static contexts in run()", async () => {
+    it("should parse commands with annotated single-pass contexts in run()", async () => {
       const annotation = Symbol.for("@test/issue-187/run-run");
       const context: SourceContext = {
         id: annotation,
-        mode: "static",
+        phase: "single-pass",
         getAnnotations() {
           return { [annotation]: true };
         },
@@ -1587,6 +1588,7 @@ describe("run with contexts", () => {
     const envKey = Symbol.for("@test/env-run");
     const context: SourceContext = {
       id: envKey,
+      phase: "single-pass",
       getAnnotations() {
         return { [envKey]: { HOST: "localhost" } };
       },
@@ -1653,6 +1655,7 @@ describe("run with contexts", () => {
 
     const context: SourceContext = {
       id: key,
+      phase: "two-pass",
       getAnnotations(_parsed?: unknown, options?: unknown) {
         receivedOptions = options;
         if (!_parsed) return {};
@@ -1685,6 +1688,7 @@ describe("run with contexts", () => {
 
     const context: SourceContext<{ help: string }> = {
       id: key,
+      phase: "two-pass",
       getAnnotations(_parsed?: unknown, options?: unknown) {
         receivedOptions = options;
         return {};
@@ -1717,6 +1721,7 @@ describe("run with contexts", () => {
 
     const context: SourceContext<{ programName: string }> = {
       id: key,
+      phase: "two-pass",
       getAnnotations(_parsed?: unknown, options?: unknown) {
         receivedOptions = options;
         return {};
@@ -1747,6 +1752,7 @@ describe("run with contexts", () => {
 
     const context: SourceContext = {
       id: key,
+      phase: "single-pass",
       getAnnotations() {
         return { [key]: { value: true } };
       },
@@ -1802,13 +1808,14 @@ describe("run with contexts", () => {
     assert.deepEqual(result, { name: "Alice" });
   });
 
-  it("should widen parser run() for dynamic context arrays", async () => {
+  it("should widen parser run() for context arrays", async () => {
     const key = Symbol.for("@test/parser-run-dynamic-contexts");
     const parser = object({
       name: withDefault(option("--name", string()), "default"),
     });
     const context: SourceContext = {
       id: key,
+      phase: "single-pass",
       getAnnotations() {
         return { [key]: { value: true } };
       },
@@ -1836,7 +1843,7 @@ describe("run with contexts", () => {
     assert.ok(filledResult instanceof Promise);
     assert.deepEqual(await filledResult, { name: "default" });
 
-    // @ts-expect-error - dynamic context arrays may still resolve async.
+    // @ts-expect-error - context arrays may still resolve async.
     const syncResult: { name: string } = run(parser, {
       args: [],
       contexts: filledContexts,
@@ -1847,6 +1854,7 @@ describe("run with contexts", () => {
   it("should reject Program run() with contexts when options are missing", () => {
     const context: ProgramPathContext = {
       id: Symbol.for("@test/program-run-missing-options"),
+      phase: "single-pass",
       getAnnotations() {
         return {};
       },
@@ -1894,6 +1902,7 @@ describe("run with contexts", () => {
     const key = Symbol.for("@test/program-run-runoptions-contexts");
     const context: SourceContext = {
       id: key,
+      phase: "single-pass",
       getAnnotations() {
         return { [key]: { value: true } };
       },
@@ -1940,10 +1949,11 @@ describe("run with contexts", () => {
     void _wrap;
   });
 
-  it("should widen Program run() for dynamic context arrays", async () => {
+  it("should widen Program run() for context arrays", async () => {
     let resolvedPath: string | undefined;
     const context: ProgramPathContext = {
       id: Symbol.for("@test/program-run-dynamic-context-array"),
+      phase: "two-pass",
       getAnnotations(parsed, options) {
         if (parsed && options) {
           resolvedPath = (
@@ -2002,7 +2012,7 @@ describe("run with contexts", () => {
     });
     assert.equal(resolvedPath, "optique.json");
 
-    // @ts-expect-error - dynamic context arrays may resolve asynchronously.
+    // @ts-expect-error - context arrays may resolve asynchronously.
     const syncResult: { config: string; host: string } = run(program, {
       args: [],
       contexts: filledContexts,
@@ -2057,6 +2067,7 @@ describe("run with contexts", () => {
     let resolvedPath: string | undefined;
     const context: ProgramPathContext = {
       id: Symbol.for("@test/program-run-context"),
+      phase: "two-pass",
       getAnnotations(parsed, options) {
         if (parsed && options) {
           resolvedPath = (
@@ -2108,6 +2119,7 @@ describe("run with contexts", () => {
     let resolvedPath: string | undefined;
     const context: ProgramPathContext = {
       id: Symbol.for("@test/program-run-dynamic-contexts"),
+      phase: "two-pass",
       getAnnotations(parsed, options) {
         if (parsed && options) {
           resolvedPath = (
@@ -2188,6 +2200,7 @@ describe("runSync with contexts", () => {
     const envKey = Symbol.for("@test/env-runsync");
     const context: SourceContext = {
       id: envKey,
+      phase: "single-pass",
       getAnnotations() {
         return { [envKey]: { HOST: "localhost" } };
       },
@@ -2213,6 +2226,7 @@ describe("runSync with contexts", () => {
 
     const context: SourceContext = {
       id: key,
+      phase: "single-pass",
       getAnnotations() {
         return { [key]: { value: true } };
       },
@@ -2239,6 +2253,7 @@ describe("runSync with contexts", () => {
     let annotationsCallCount = 0;
     const context: SourceContext = {
       id: key,
+      phase: "single-pass",
       getAnnotations() {
         annotationsCallCount++;
         return {};
@@ -2279,6 +2294,7 @@ describe("runSync with contexts", () => {
     const contextKey = Symbol.for("@test/runsync-program-context");
     const context: SourceContext = {
       id: contextKey,
+      phase: "single-pass",
       getAnnotations() {
         return { [contextKey]: { value: true } };
       },
@@ -2310,6 +2326,7 @@ describe("runSync with contexts", () => {
   it("should reject Program runSync() with contexts when options are missing", () => {
     const context: ProgramPathContext = {
       id: Symbol.for("@test/program-runsync-missing-options"),
+      phase: "single-pass",
       getAnnotations() {
         return {};
       },
@@ -2414,6 +2431,7 @@ describe("runSync with contexts", () => {
     let resolvedPath: string | undefined;
     const context: ProgramPathContext = {
       id: Symbol.for("@test/program-runsync-context"),
+      phase: "two-pass",
       getAnnotations(parsed, options) {
         if (parsed && options) {
           resolvedPath = (
@@ -2559,6 +2577,7 @@ describe("runAsync with contexts", () => {
     const envKey = Symbol.for("@test/env-runasync");
     const context: SourceContext = {
       id: envKey,
+      phase: "single-pass",
       getAnnotations() {
         return { [envKey]: { HOST: "localhost" } };
       },
@@ -2583,6 +2602,7 @@ describe("runAsync with contexts", () => {
 
     const context: SourceContext = {
       id: key,
+      phase: "single-pass",
       getAnnotations() {
         return { [key]: { value: true } };
       },
@@ -2608,6 +2628,7 @@ describe("runAsync with contexts", () => {
     const key = Symbol.for("@test/runasync-extra-options");
     const context: SourceContext = {
       id: key,
+      phase: "single-pass",
       getAnnotations() {
         return { [key]: { value: true } };
       },
@@ -2633,6 +2654,7 @@ describe("runAsync with contexts", () => {
     let resolvedPath: string | undefined;
     const context: ProgramPathContext = {
       id: Symbol.for("@test/program-runasync-context"),
+      phase: "two-pass",
       getAnnotations(parsed, options) {
         if (parsed && options) {
           resolvedPath = (

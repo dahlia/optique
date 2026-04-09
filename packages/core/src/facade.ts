@@ -2691,57 +2691,83 @@ function mergeAnnotations(
   return result;
 }
 
+type CollectedPhase1Annotations = {
+  readonly annotations: Annotations;
+  readonly needsTwoPhase: boolean;
+  readonly snapshots: readonly Annotations[];
+};
+
+function validateContextPhases(
+  contexts: readonly SourceContext<unknown>[],
+): void {
+  for (const context of contexts) {
+    const phase = (context as { readonly phase?: unknown }).phase;
+    if (phase !== "single-pass" && phase !== "two-pass") {
+      throw new TypeError(
+        `Context ${String(context.id)} must declare phase as ` +
+          '"single-pass" or "two-pass".',
+      );
+    }
+  }
+}
+
 /**
  * Collects phase 1 annotations from all contexts and determines whether
  * two-phase parsing is needed.
  *
  * @param contexts Source contexts to collect annotations from.
  * @param options Optional context-required options to pass to each context.
- * @returns Promise with merged annotations and dynamic-context hint.
+ * @returns Promise with merged annotations, per-context snapshots, and a
+ * two-phase hint.
  */
 async function collectPhase1Annotations(
   contexts: readonly SourceContext<unknown>[],
   options?: unknown,
-): Promise<
-  {
-    readonly annotations: Annotations;
-    readonly hasDynamic: boolean;
-  }
-> {
+): Promise<CollectedPhase1Annotations> {
   const annotationsList: Annotations[] = [];
-  let hasDynamic = false;
+  let snapshots: Annotations[] | undefined;
 
   for (const context of contexts) {
     const result = context.getAnnotations(undefined, options);
-    hasDynamic ||= needsTwoPhaseContext(context, result);
     const annotations = result instanceof Promise ? await result : result;
     const internalAnnotations = context.getInternalAnnotations?.(
       undefined,
       annotations,
     );
-    annotationsList.push(
-      internalAnnotations == null
-        ? annotations
-        : mergeAnnotations([annotations, internalAnnotations]),
-    );
+    const snapshot = internalAnnotations == null
+      ? annotations
+      : mergeAnnotations([annotations, internalAnnotations]);
+    annotationsList.push(snapshot);
+    if (snapshots != null) {
+      snapshots.push(snapshot);
+    } else if (context.phase === "two-pass") {
+      snapshots = [...annotationsList];
+    }
   }
 
   return {
     annotations: mergeAnnotations(annotationsList),
-    hasDynamic,
+    needsTwoPhase: snapshots != null,
+    snapshots: snapshots ?? [],
   };
 }
 
 /**
- * Collects annotations from all contexts.
+ * Collects final annotations from all contexts.
+ *
+ * `single-pass` contexts reuse their phase-1 snapshot. `two-pass` contexts
+ * are recollected with the parsed value and replace their own phase-1
+ * snapshot in the final merge.
  *
  * @param contexts Source contexts to collect annotations from.
+ * @param phase1Snapshots Per-context snapshots collected during phase 1.
  * @param parsed Optional parsed result from a previous parse pass.
  * @param options Optional context-required options to pass to each context.
  * @returns Promise that resolves to merged annotations.
  */
-async function collectAnnotations(
+async function collectFinalAnnotations(
   contexts: readonly SourceContext<unknown>[],
+  phase1Snapshots: readonly Annotations[],
   parsed?: unknown,
   options?: unknown,
   deferred?: true,
@@ -2754,7 +2780,13 @@ async function collectAnnotations(
     deferredKeys,
   );
 
-  for (const context of contexts) {
+  for (let index = 0; index < contexts.length; index++) {
+    const context = contexts[index];
+    if (context.phase === "single-pass") {
+      annotationsList.push(phase1Snapshots[index]);
+      continue;
+    }
+
     const mergedAnnotations = await withPreparedParsedForContext(
       context,
       preparedParsed,
@@ -2784,18 +2816,15 @@ async function collectAnnotations(
  *
  * @param contexts Source contexts to collect annotations from.
  * @param options Optional context-required options to pass to each context.
- * @returns Merged annotations with dynamic-context hint.
+ * @returns Merged annotations, per-context snapshots, and a two-phase hint.
  * @throws Error if any context returns a Promise.
  */
 function collectPhase1AnnotationsSync(
   contexts: readonly SourceContext<unknown>[],
   options?: unknown,
-): {
-  readonly annotations: Annotations;
-  readonly hasDynamic: boolean;
-} {
+): CollectedPhase1Annotations {
   const annotationsList: Annotations[] = [];
-  let hasDynamic = false;
+  let snapshots: Annotations[] | undefined;
 
   for (const context of contexts) {
     const result = context.getAnnotations(undefined, options);
@@ -2805,57 +2834,45 @@ function collectPhase1AnnotationsSync(
           "Use runWith() or runWithAsync() for async contexts.",
       );
     }
-    hasDynamic ||= needsTwoPhaseContext(context, result);
     const internalAnnotations = context.getInternalAnnotations?.(
       undefined,
       result,
     );
-    annotationsList.push(
-      internalAnnotations == null
-        ? result
-        : mergeAnnotations([result, internalAnnotations]),
-    );
+    const snapshot = internalAnnotations == null
+      ? result
+      : mergeAnnotations([result, internalAnnotations]);
+    annotationsList.push(snapshot);
+    if (snapshots != null) {
+      snapshots.push(snapshot);
+    } else if (context.phase === "two-pass") {
+      snapshots = [...annotationsList];
+    }
   }
 
   return {
     annotations: mergeAnnotations(annotationsList),
-    hasDynamic,
+    needsTwoPhase: snapshots != null,
+    snapshots: snapshots ?? [],
   };
 }
 
 /**
- * Determines whether a context requires a second parse pass.
+ * Collects final annotations from all contexts synchronously.
  *
- * Explicit `mode` declarations take precedence over legacy heuristics so
- * static contexts are not forced into two-phase parsing when they return
- * empty annotations or a Promise.
- */
-function needsTwoPhaseContext(
-  context: SourceContext<unknown>,
-  result: Promise<Annotations> | Annotations,
-): boolean {
-  if (context.mode !== undefined) {
-    return context.mode === "dynamic";
-  }
-
-  if (result instanceof Promise) {
-    return true;
-  }
-
-  return Object.getOwnPropertySymbols(result).length === 0;
-}
-
-/**
- * Collects annotations from all contexts synchronously.
+ * `single-pass` contexts reuse their phase-1 snapshot. `two-pass` contexts
+ * are recollected with the parsed value and replace their own phase-1
+ * snapshot in the final merge.
  *
  * @param contexts Source contexts to collect annotations from.
+ * @param phase1Snapshots Per-context snapshots collected during phase 1.
  * @param parsed Optional parsed result from a previous parse pass.
  * @param options Optional context-required options to pass to each context.
  * @returns Merged annotations.
  * @throws Error if any context returns a Promise.
  */
-function collectAnnotationsSync(
+function collectFinalAnnotationsSync(
   contexts: readonly SourceContext<unknown>[],
+  phase1Snapshots: readonly Annotations[],
   parsed?: unknown,
   options?: unknown,
   deferred?: true,
@@ -2868,7 +2885,13 @@ function collectAnnotationsSync(
     deferredKeys,
   );
 
-  for (const context of contexts) {
+  for (let index = 0; index < contexts.length; index++) {
+    const context = contexts[index];
+    if (context.phase === "single-pass") {
+      annotationsList.push(phase1Snapshots[index]);
+      continue;
+    }
+
     const mergedAnnotations = withPreparedParsedForContext(
       context,
       preparedParsed,
@@ -3105,6 +3128,7 @@ async function runWithBody<
   options: RunWithOptions<THelp, TError>,
 ): Promise<InferValue<TParser>> {
   validateContextIds(contexts);
+  validateContextPhases(contexts);
 
   // Early exit: skip context processing for help/version/completion
   if (needsEarlyExit(args, options)) {
@@ -3122,11 +3146,12 @@ async function runWithBody<
   const ctxOptions = options.contextOptions;
   const {
     annotations: phase1Annotations,
-    hasDynamic: needsTwoPhase,
+    needsTwoPhase,
+    snapshots: phase1Snapshots,
   } = await collectPhase1Annotations(contexts, ctxOptions);
 
   if (!needsTwoPhase) {
-    // All static contexts - single pass is sufficient
+    // All contexts are single-pass.
     // Inject annotations into the parser's initial state
     const augmentedParser = injectAnnotationsIntoParser(
       parser,
@@ -3148,7 +3173,7 @@ async function runWithBody<
     );
   }
 
-  // Two-phase parsing for dynamic contexts
+  // Two-phase parsing for two-pass contexts.
   // First pass: parse with Phase 1 annotations to get initial result
   const augmentedParser1 = injectAnnotationsIntoParser(
     parser,
@@ -3191,8 +3216,9 @@ async function runWithBody<
   }
 
   // Phase 2: Collect annotations with parsed result
-  const { annotations: finalAnnotations } = await collectAnnotations(
+  const { annotations: finalAnnotations } = await collectFinalAnnotations(
     contexts,
+    phase1Snapshots,
     firstPassSeed.value,
     ctxOptions,
     firstPassSeed.deferred,
@@ -3220,28 +3246,28 @@ async function runWithBody<
 /**
  * Runs a parser with multiple source contexts.
  *
- * This function automatically handles static and dynamic contexts with proper
- * priority. Earlier contexts in the array override later ones.
+ * This function automatically handles single-pass and two-pass contexts with
+ * proper priority. Earlier contexts in the array override later ones.
  *
  * The function uses a smart two-phase approach:
  *
- * 1. *Phase 1*: Collect annotations from all contexts (static contexts return
- *    their data, dynamic contexts may return empty).
+ * 1. *Phase 1*: Collect annotations from all contexts.
  * 2. *First parse*: Parse with Phase 1 annotations. If that pass finishes
  *    successfully, its value becomes the phase-two input. If the parser
  *    reaches a usable intermediate state but still does not complete
  *    successfully, the runner extracts a best-effort seed from that state
  *    instead.
- * 3. *Phase 2*: Call `getAnnotations(parsed)` on all contexts with the first
- *    pass value. Deferred or otherwise unresolved fields in `parsed` may be
- *    `undefined`. Each context's phase-two return value replaces its own
- *    phase-one contribution for the final parse, so returning `{}` clears any
- *    annotations that context provided during phase 1.
+ * 3. *Phase 2*: Call `getAnnotations(parsed)` on all two-pass contexts with
+ *    the first pass value. Deferred or otherwise unresolved fields in
+ *    `parsed` may be `undefined`. Each two-pass context's phase-two return
+ *    value replaces its own phase-one contribution for the final parse, so
+ *    returning `{}` clears any annotations that context provided during
+ *    phase 1. Single-pass contexts reuse their phase-one snapshot.
  * 4. *Second parse*: Parse again with the merged phase-two annotations.
  *
- * If all contexts are static (no dynamic contexts), the second parse is
- * skipped for optimization. Phase 2 is also skipped when the first pass does
- * not yield any usable seed at all.
+ * If all contexts are single-pass, the second parse is skipped for
+ * optimization. Phase 2 is also skipped when the first pass does not yield
+ * any usable seed at all.
  *
  * @template TParser The parser type.
  * @template THelp Return type when help is shown.
@@ -3253,6 +3279,8 @@ async function runWithBody<
  * @returns Promise that resolves to the parsed result.
  * @throws {TypeError} If two or more contexts share the same
  * {@link SourceContext.id}.
+ * @throws {TypeError} If any context omits `phase` or declares an invalid
+ * phase value.
  * @throws {SuppressedError} If the runner throws and a context's disposal
  * also throws.  The original error is available via `.suppressed` and the
  * disposal error via `.error`.
@@ -3265,6 +3293,7 @@ async function runWithBody<
  *
  * const envContext: SourceContext = {
  *   id: Symbol.for("@myapp/env"),
+ *   phase: "single-pass",
  *   getAnnotations() {
  *     return { [Symbol.for("@myapp/env")]: process.env };
  *   }
@@ -3351,6 +3380,7 @@ function runWithSyncBody<
   options: RunWithOptions<THelp, TError>,
 ): InferValue<TParser> {
   validateContextIds(contexts);
+  validateContextPhases(contexts);
 
   // Early exit: skip context processing for help/version/completion
   if (needsEarlyExit(args, options)) {
@@ -3361,11 +3391,12 @@ function runWithSyncBody<
   const ctxOptions = options.contextOptions;
   const {
     annotations: phase1Annotations,
-    hasDynamic: needsTwoPhase,
+    needsTwoPhase,
+    snapshots: phase1Snapshots,
   } = collectPhase1AnnotationsSync(contexts, ctxOptions);
 
   if (!needsTwoPhase) {
-    // All static contexts - single pass is sufficient
+    // All contexts are single-pass.
     const augmentedParser = injectAnnotationsIntoParser(
       parser,
       phase1Annotations,
@@ -3373,7 +3404,7 @@ function runWithSyncBody<
     return runParser(augmentedParser, programName, args, options);
   }
 
-  // Two-phase parsing for dynamic contexts
+  // Two-phase parsing for two-pass contexts.
   // First pass: parse with Phase 1 annotations
   const augmentedParser1 = injectAnnotationsIntoParser(
     parser,
@@ -3390,8 +3421,9 @@ function runWithSyncBody<
   }
 
   // Phase 2: Collect annotations with parsed result
-  const { annotations: finalAnnotations } = collectAnnotationsSync(
+  const { annotations: finalAnnotations } = collectFinalAnnotationsSync(
     contexts,
+    phase1Snapshots,
     firstPassSeed.value,
     ctxOptions,
     firstPassSeed.deferred,
@@ -3412,10 +3444,10 @@ function runWithSyncBody<
  *
  * This is the sync-only variant of {@link runWith}. All contexts must return
  * annotations synchronously (not Promises). It uses the same two-phase
- * best-effort seed extraction as {@link runWith} when dynamic contexts are
- * present. In two-phase runs, each context's phase-two return value replaces
- * that context's phase-one contribution for the final parse, so returning `{}`
- * clears any annotations that context provided during phase 1.
+ * best-effort seed extraction as {@link runWith} when two-pass contexts are
+ * present. In two-phase runs, each two-pass context's phase-two return value
+ * replaces that context's phase-one contribution for the final parse, so
+ * returning `{}` clears any annotations that context provided during phase 1.
  *
  * @template TParser The sync parser type.
  * @template THelp Return type when help is shown.
@@ -3429,6 +3461,8 @@ function runWithSyncBody<
  * {@link runWith} or {@link runWithAsync} for async parsers.
  * @throws {TypeError} If two or more contexts share the same
  * {@link SourceContext.id}.
+ * @throws {TypeError} If any context omits `phase` or declares an invalid
+ * phase value.
  * @throws {Error} If any context returns a Promise or if a context's
  * `[Symbol.asyncDispose]` returns a Promise.
  * @throws {SuppressedError} If the runner throws and a context's disposal

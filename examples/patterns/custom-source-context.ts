@@ -50,8 +50,9 @@ interface ConfigContext extends SourceContext<ConfigContextOptions> {
 function createConfigContext(): ConfigContext {
   const context: ConfigContext = {
     id: configKey,
+    phase: "two-pass",
     async getAnnotations(parsed?: unknown): Promise<Annotations> {
-      if (!parsed) return {}; // First pass - no config yet
+      if (parsed === undefined) return {}; // First pass - no config yet
 
       // Use the injected getConfigPath function
       const configPath = context.getConfigPath?.(parsed);
