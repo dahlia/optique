@@ -60,6 +60,45 @@ function createIssue183Parser() {
   );
 }
 
+const issue184AnnotationKey = Symbol.for("@test/issue-184");
+const issue184Annotations = {
+  [issue184AnnotationKey]: true,
+} as const;
+
+function createIssue184Branches() {
+  return [
+    object({ tag: constant("a" as const), silent: option("--silent") }),
+    object({ tag: constant("b" as const), verbose: option("--verbose") }),
+  ] as const;
+}
+
+function createIssue184OrParser() {
+  const [parserA, parserB] = createIssue184Branches();
+  return or(parserA, parserB);
+}
+
+function createIssue184LongestMatchParser() {
+  const [parserA, parserB] = createIssue184Branches();
+  return longestMatch(parserA, parserB);
+}
+
+function createIssue184SuggestionParsers() {
+  return [
+    ["or()", createIssue184OrParser()],
+    ["longestMatch()", createIssue184LongestMatchParser()],
+    ["group(or())", group("Issue 184", createIssue184OrParser())],
+    [
+      "group(longestMatch())",
+      group("Issue 184", createIssue184LongestMatchParser()),
+    ],
+    ["map(or())", map(createIssue184OrParser(), (value) => value)],
+    [
+      "map(longestMatch())",
+      map(createIssue184LongestMatchParser(), (value) => value),
+    ],
+  ] as const;
+}
+
 describe("parse", () => {
   it("should parse simple option successfully", () => {
     const parser = option("-v");
@@ -2889,6 +2928,20 @@ describe("Annotations system", () => {
     assert.deepEqual(result, []);
   });
 
+  it("should keep issue 184 exclusive suggestions under annotations in suggestSync()", () => {
+    for (const [name, parser] of createIssue184SuggestionParsers()) {
+      const suggestions = suggestSync(parser, ["--s"], {
+        annotations: issue184Annotations,
+      });
+
+      assert.deepEqual(
+        suggestions,
+        [{ kind: "literal", text: "--silent" }],
+        `${name} should keep annotated exclusive suggestions.`,
+      );
+    }
+  });
+
   it("should support annotations in suggestAsync() with non-object state", async () => {
     const testKey = Symbol.for("@test/suggest-async");
     const parser = constant("ok");
@@ -2896,6 +2949,20 @@ describe("Annotations system", () => {
       annotations: { [testKey]: "async" },
     });
     assert.deepEqual(result, []);
+  });
+
+  it("should keep issue 184 exclusive suggestions under annotations in suggestAsync()", async () => {
+    for (const [name, parser] of createIssue184SuggestionParsers()) {
+      const suggestions = await suggestAsync(parser, ["--s"], {
+        annotations: issue184Annotations,
+      });
+
+      assert.deepEqual(
+        suggestions,
+        [{ kind: "literal", text: "--silent" }],
+        `${name} should keep annotated exclusive suggestions.`,
+      );
+    }
   });
 
   it("should support annotations in getDocPage() with non-object state", () => {

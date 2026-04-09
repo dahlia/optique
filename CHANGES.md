@@ -217,6 +217,15 @@ To be released.
     `runSync()`) either select a branch normally or return an ordinary parse
     failure instead of throwing.  [[#183]]
 
+ -  Fixed `or()` and `longestMatch()` throwing an internal `TypeError` while
+    generating suggestions from an annotation-injected initial state.
+    Annotated calls through `suggest()`, `suggestSync()`, `suggestAsync()`,
+    and typo-driven *“Did you mean?”* error flows now treat exclusive parser
+    state as transparent runtime context, so they return ordinary completion
+    candidates or no suggestions instead of crashing.  Wrapper compositions
+    that forward exclusive suggestions, such as `group(or(...))` and
+    `map(longestMatch(...))`, inherit the fix as well.  [[#184]]
+
  -  Fixed `argument()` and `command()` misinterpreting annotation-injected
     initial state as real parser-local state.  Annotated calls through
     `parse()`, `suggest()`, `runWith()`, `runWithSync()`, `run()`, and
@@ -1312,6 +1321,7 @@ To be released.
 [#178]: https://github.com/dahlia/optique/issues/178
 [#180]: https://github.com/dahlia/optique/issues/180
 [#183]: https://github.com/dahlia/optique/issues/183
+[#184]: https://github.com/dahlia/optique/issues/184
 [#186]: https://github.com/dahlia/optique/issues/186
 [#187]: https://github.com/dahlia/optique/issues/187
 [#200]: https://github.com/dahlia/optique/issues/200

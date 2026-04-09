@@ -1,7 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { type Annotations, injectAnnotations } from "./annotations.ts";
 import {
   command,
+  constant,
   flag,
   longestMatch,
   object,
@@ -11,6 +13,10 @@ import {
 } from "./index.ts";
 import { formatMessage } from "./message.ts";
 import { string } from "./valueparser.ts";
+
+const issue184Annotations = {
+  [Symbol.for("@test/issue-184/error-suggestions")]: true,
+} satisfies Annotations;
 
 /**
  * Integration tests for "Did you mean?" suggestions in error messages.
@@ -265,6 +271,37 @@ describe("Parser error suggestions", () => {
         assert.match(errorMsg, /--verbose/);
       }
     });
+
+    it("should keep issue 184 suggestions when annotations are present", () => {
+      const parser = or(
+        object({
+          tag: constant("a" as const),
+          silent: option("--silent"),
+        }),
+        object({
+          tag: constant("b" as const),
+          verbose: option("--verbose"),
+        }),
+      );
+
+      const context: ParserContext<typeof parser.initialState> = {
+        buffer: ["--silen"] as readonly string[],
+        state: injectAnnotations(parser.initialState, issue184Annotations),
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const errorMsg = formatMessage(result.error, {
+          quotes: false,
+          colors: false,
+        });
+        assert.match(errorMsg, /Did you mean/);
+        assert.match(errorMsg, /--silent/);
+      }
+    });
   });
 
   describe("longestMatch() parser", () => {
@@ -294,6 +331,37 @@ describe("Parser error suggestions", () => {
         });
         assert.match(errorMsg, /Did you mean/);
         assert.match(errorMsg, /--verbose/);
+      }
+    });
+
+    it("should keep issue 184 suggestions when annotations are present", () => {
+      const parser = longestMatch(
+        object({
+          tag: constant("a" as const),
+          silent: option("--silent"),
+        }),
+        object({
+          tag: constant("b" as const),
+          verbose: option("--verbose"),
+        }),
+      );
+
+      const context: ParserContext<typeof parser.initialState> = {
+        buffer: ["--silen"] as readonly string[],
+        state: injectAnnotations(parser.initialState, issue184Annotations),
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const errorMsg = formatMessage(result.error, {
+          quotes: false,
+          colors: false,
+        });
+        assert.match(errorMsg, /Did you mean/);
+        assert.match(errorMsg, /--silent/);
       }
     });
   });
