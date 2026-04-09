@@ -1,4 +1,4 @@
-import { longestMatch, object } from "@optique/core/constructs";
+import { group, longestMatch, object } from "@optique/core/constructs";
 import {
   annotationStateValueKey,
   getAnnotations,
@@ -40,9 +40,17 @@ import {
   parseAsync,
   type Parser,
   type ParserContext,
+  suggest,
+  suggestAsync,
   type Suggestion,
 } from "@optique/core/parser";
-import { argument, constant, flag, option } from "@optique/core/primitives";
+import {
+  argument,
+  command,
+  constant,
+  flag,
+  option,
+} from "@optique/core/primitives";
 import {
   choice,
   domain,
@@ -3480,6 +3488,61 @@ describe("multiple", () => {
     assert.ok(
       suggestions.some((s) => s.kind === "literal" && s.text === "beta"),
     );
+  });
+
+  it("keeps top-level choice suggestions under annotations via public entrypoints", () => {
+    const annotation = Symbol.for("@test/issue-189/top-level-choice");
+    const parser = multiple(argument(choice(["alpha", "beta"] as const)));
+
+    const parsed = parse(parser, ["alpha"], {
+      annotations: { [annotation]: true },
+    });
+    assert.deepEqual(parsed, { success: true, value: ["alpha"] });
+
+    const suggestions = suggest(parser, ["a"], {
+      annotations: { [annotation]: true },
+    });
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "alpha" }]);
+  });
+
+  it("keeps top-level command suggestions under annotations via public entrypoints", () => {
+    const annotation = Symbol.for("@test/issue-189/top-level-command");
+    const parser = multiple(
+      command("go", object({ silent: option("--silent") })),
+    );
+
+    const suggestions = suggest(parser, ["g"], {
+      annotations: { [annotation]: true },
+    });
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "go" }]);
+  });
+
+  it("keeps forwarding wrapper suggestions under annotations via public entrypoints", () => {
+    const annotation = Symbol.for("@test/issue-189/group-wrapper");
+    const parser = group(
+      "wrapped",
+      multiple(argument(choice(["alpha", "beta"] as const))),
+    );
+
+    const suggestions = suggest(parser, ["a"], {
+      annotations: { [annotation]: true },
+    });
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "alpha" }]);
+  });
+
+  it("keeps async top-level suggestions under annotations via public entrypoints", async () => {
+    const annotation = Symbol.for("@test/issue-189/top-level-async");
+    const parser = multiple(argument(asyncChoice(["alpha", "beta"] as const)));
+
+    const parsed = await parseAsync(parser, ["alpha"], {
+      annotations: { [annotation]: true },
+    });
+    assert.deepEqual(parsed, { success: true, value: ["alpha"] });
+
+    const suggestions = await suggestAsync(parser, ["a"], {
+      annotations: { [annotation]: true },
+    });
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "alpha" }]);
   });
 
   it("should continue suggestions from the in-progress sync item", () => {

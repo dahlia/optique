@@ -235,6 +235,13 @@ To be released.
     Wrapper compositions that forward primitive state directly, such as
     `group(argument(...))`, inherit the fix as well.  [[#187], [#781]]
 
+ -  Fixed top-level `multiple()` dropping suggestions when annotations are
+    present around wrapped parsers with meaningful suggestion behavior such as
+    `argument(choice(...))` and `command(...)`.  Annotated calls through the
+    public `suggest()`, `suggestSync()`, and `suggestAsync()` entrypoints now
+    preserve the wrapped parser's completion behavior for bare `multiple(...)`
+    roots and forwarding wrappers like `group(multiple(...))`.  [[#189]]
+
  -  Expanded `or()`'s fully inferred overloads from 10 to 15 parser
     arguments, so large alternative sets keep precise union inference without
     collapsing to `unknown` at 11+ arguments.  [[#142], [#143]]
@@ -1324,6 +1331,7 @@ To be released.
 [#184]: https://github.com/dahlia/optique/issues/184
 [#186]: https://github.com/dahlia/optique/issues/186
 [#187]: https://github.com/dahlia/optique/issues/187
+[#189]: https://github.com/dahlia/optique/issues/189
 [#200]: https://github.com/dahlia/optique/issues/200
 [#223]: https://github.com/dahlia/optique/issues/223
 [#224]: https://github.com/dahlia/optique/issues/224
