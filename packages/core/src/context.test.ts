@@ -33,7 +33,7 @@ describe("SourceContext", () => {
         id: configKey,
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (!parsed) {
+          if (parsed === undefined) {
             return { [configKey]: { phase1: true } };
           }
           const result = parsed as { config?: string };

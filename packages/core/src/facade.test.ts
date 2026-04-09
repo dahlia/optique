@@ -9718,10 +9718,14 @@ describe("branch coverage: facade.ts edge cases", () => {
   it("runWith: two-pass context refines non-empty phase-1 annotations", async () => {
     const key = Symbol.for("@test/two-pass-refine-non-empty-async");
     let phase2Called = false;
+    type AnnotationValue = { readonly phase1?: true; readonly phase2?: true };
+    const isAnnotationValue = (
+      value: unknown,
+    ): value is AnnotationValue => value != null && typeof value === "object";
 
-    const parser: Parser<"sync", unknown, undefined> = {
-      $valueType: [] as unknown[],
-      $stateType: [] as undefined[],
+    const parser: Parser<"sync", AnnotationValue | null, undefined> = {
+      $valueType: [] as readonly (AnnotationValue | null)[],
+      $stateType: [] as readonly undefined[],
       $mode: "sync",
       priority: 0,
       usage: [],
@@ -9736,9 +9740,10 @@ describe("branch coverage: facade.ts edge cases", () => {
         };
       },
       complete(state) {
+        const value = getAnnotations(state)?.[key];
         return {
           success: true as const,
-          value: getAnnotations(state)?.[key] ?? null,
+          value: isAnnotationValue(value) ? value : null,
         };
       },
       *suggest() {},
@@ -10928,10 +10933,14 @@ describe("branch coverage: facade.ts edge cases", () => {
   it("runWithSync: two-pass context refines non-empty phase-1 annotations", () => {
     const key = Symbol.for("@test/two-pass-refine-non-empty-sync");
     let phase2Called = false;
+    type AnnotationValue = { readonly phase1?: true; readonly phase2?: true };
+    const isAnnotationValue = (
+      value: unknown,
+    ): value is AnnotationValue => value != null && typeof value === "object";
 
-    const parser: Parser<"sync", unknown, undefined> = {
-      $valueType: [] as unknown[],
-      $stateType: [] as undefined[],
+    const parser: Parser<"sync", AnnotationValue | null, undefined> = {
+      $valueType: [] as readonly (AnnotationValue | null)[],
+      $stateType: [] as readonly undefined[],
       $mode: "sync",
       priority: 0,
       usage: [],
@@ -10946,9 +10955,10 @@ describe("branch coverage: facade.ts edge cases", () => {
         };
       },
       complete(state) {
+        const value = getAnnotations(state)?.[key];
         return {
           success: true as const,
-          value: getAnnotations(state)?.[key] ?? null,
+          value: isAnnotationValue(value) ? value : null,
         };
       },
       *suggest() {},
@@ -10987,10 +10997,10 @@ describe("branch coverage: facade.ts edge cases", () => {
       getAnnotations() {
         return {};
       },
-    } as unknown as SourceContext;
+    };
 
     assert.throws(
-      () => runWithSync(parser, "test", [context], { args: [] }),
+      () => runWithSync(parser, "test", [context as never], { args: [] }),
       {
         name: "TypeError",
         message: `Context ${String(key)} must declare phase as ` +
@@ -11010,10 +11020,10 @@ describe("branch coverage: facade.ts edge cases", () => {
       getAnnotations() {
         return {};
       },
-    } as unknown as SourceContext;
+    };
 
     assert.throws(
-      () => runWithSync(parser, "test", [context], { args: [] }),
+      () => runWithSync(parser, "test", [context as never], { args: [] }),
       {
         name: "TypeError",
         message: `Context ${String(key)} must declare phase as ` +
@@ -11032,10 +11042,10 @@ describe("branch coverage: facade.ts edge cases", () => {
       getAnnotations() {
         return {};
       },
-    } as unknown as SourceContext;
+    };
 
     await assert.rejects(
-      () => runWith(parser, "test", [context], { args: [] }),
+      () => runWith(parser, "test", [context as never], { args: [] }),
       {
         name: "TypeError",
         message: `Context ${String(key)} must declare phase as ` +
@@ -11055,10 +11065,10 @@ describe("branch coverage: facade.ts edge cases", () => {
       getAnnotations() {
         return {};
       },
-    } as unknown as SourceContext;
+    };
 
     await assert.rejects(
-      () => runWith(parser, "test", [context], { args: [] }),
+      () => runWith(parser, "test", [context as never], { args: [] }),
       {
         name: "TypeError",
         message: `Context ${String(key)} must declare phase as ` +
