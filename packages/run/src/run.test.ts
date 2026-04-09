@@ -1561,14 +1561,20 @@ describe("runAsync", () => {
 
     it("preserves positional values that match built-in help commands", () => {
       const parser = object({ value: argument(string()) });
+      let exited = false;
       const result = run(parser, {
         args: ["help"],
         programName: "myapp",
         help: "command",
         stdout: () => {},
         stderr: () => {},
+        onExit: (code) => {
+          exited = true;
+          throw new Error(`UNEXPECTED_EXIT:${code}`);
+        },
       });
       assert.deepEqual(result, { value: "help" });
+      assert.equal(exited, false);
     });
   });
 });
@@ -2188,14 +2194,20 @@ describe("run with contexts", () => {
 describe("runSync with contexts", () => {
   it("preserves parser options that shadow the built-in help option", () => {
     const parser = object({ help: option("--help") });
+    let exited = false;
     const result = runSync(parser, {
       args: ["--help"],
       programName: "myapp",
       help: "option",
       stdout: () => {},
       stderr: () => {},
+      onExit: (code) => {
+        exited = true;
+        throw new Error(`UNEXPECTED_EXIT:${code}`);
+      },
     });
     assert.deepEqual(result, { help: true });
+    assert.equal(exited, false);
   });
 
   it("preserves context-backed parsing for help/version names after --", () => {

@@ -254,8 +254,6 @@ type ParseAttempt<T> =
   | {
     readonly kind: "success";
     readonly value: T;
-    readonly deferred?: true;
-    readonly deferredKeys?: DeferredMap;
   }
   | {
     readonly kind: "failure";
@@ -375,8 +373,6 @@ function attemptParseSync<T>(
     value: shouldUnwrapAnnotatedValue
       ? unwrapInjectedAnnotationWrapper(endResult.value)
       : endResult.value,
-    ...(endResult.deferred ? { deferred: true as const } : {}),
-    ...(endResult.deferredKeys ? { deferredKeys: endResult.deferredKeys } : {}),
   };
 }
 
@@ -455,8 +451,6 @@ async function attemptParseAsync<T>(
     value: shouldUnwrapAnnotatedValue
       ? unwrapInjectedAnnotationWrapper(endResult.value)
       : endResult.value,
-    ...(endResult.deferred ? { deferred: true as const } : {}),
-    ...(endResult.deferredKeys ? { deferredKeys: endResult.deferredKeys } : {}),
   };
 }
 
@@ -888,6 +882,7 @@ type ParsedResult =
     readonly type: "completion";
     readonly source: "command" | "option";
     readonly shell: string;
+    readonly commandPath?: readonly string[];
     readonly args: readonly string[];
   }
   | { readonly type: "error"; readonly error: Message };
@@ -1374,17 +1369,25 @@ function classifyParseFailure(
     completionOptionNames,
   );
 
+  if (!hasConsumedPrefix && versionCommandNames.includes(firstArg)) {
+    const secondArg = failure.remainingArgs[1];
+    if (helpOptionNames.includes(secondArg)) {
+      return { type: "help", commands: [firstArg] };
+    }
+    const isCompletionImmediatelyAfter = completion?.index === 1;
+    if (
+      secondArg == null ||
+      isCompletionImmediatelyAfter ||
+      (lastHelpVersion?.index === 1 && lastHelpVersion.kind === "version")
+    ) {
+      return { type: "version" };
+    }
+    return { type: "error", error: failure.error };
+  }
+
   let commandAction: MetaAction | undefined;
   if (!hasConsumedPrefix && helpCommandNames.includes(firstArg)) {
     commandAction = { index: 0, kind: "help" };
-  } else if (
-    !hasConsumedPrefix &&
-    versionCommandNames.includes(firstArg)
-  ) {
-    const boundaryIndex = completion?.index ?? optionArgs.length;
-    if (boundaryIndex <= 1) {
-      commandAction = { index: 0, kind: "version" };
-    }
   }
 
   const winner = lastHelpVersion == null
@@ -1419,6 +1422,7 @@ function classifyParseFailure(
       type: "completion",
       source: "option",
       shell: completion.shell,
+      commandPath: failure.commandPath,
       args: completion.args,
     };
   }
@@ -2140,7 +2144,11 @@ export function runParser<
           InferValue<TParser>,
           InferValue<TParser>
         >(
-          [classified.shell, ...classified.args],
+          [
+            classified.shell,
+            ...(classified.commandPath ?? []),
+            ...classified.args,
+          ],
           programName,
           parser,
           classified.source === "command"

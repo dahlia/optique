@@ -3588,6 +3588,72 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(completionOutput.includes("function _myapp"));
     });
 
+    it("should preserve matched subcommand context for separated --completion option", () => {
+      const parser = or(
+        command(
+          "build",
+          object({
+            target: option("--target", string()),
+          }),
+        ),
+        command(
+          "test",
+          object({
+            coverage: option("--coverage"),
+          }),
+        ),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["build", "--completion", "bash", "--t"], {
+        completion: {
+          option: true,
+        },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.deepEqual(suggestions, ["--target"]);
+    });
+
+    it("should preserve matched subcommand context for equals-form --completion option", () => {
+      const parser = or(
+        command(
+          "build",
+          object({
+            target: option("--target", string()),
+          }),
+        ),
+        command(
+          "test",
+          object({
+            coverage: option("--coverage"),
+          }),
+        ),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["build", "--completion=bash", "--t"], {
+        completion: {
+          option: true,
+        },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.deepEqual(suggestions, ["--target"]);
+    });
+
     it("should treat --completion in payload as opaque args, not as duplicate meta option", () => {
       const parser = object({
         verbose: option("--verbose"),
@@ -4427,6 +4493,46 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       assert.ok(versionShown, "version callback should be called");
       assert.ok(!completionShown, "completion callback should not be called");
+    });
+
+    it("should report an invalid version command before --completion", () => {
+      const parser = object({});
+
+      let completionShown = false;
+      let stderrOutput = "";
+
+      const result = runParser(
+        parser,
+        "myapp",
+        ["version", "foo", "--completion", "bash"],
+        {
+          version: {
+            command: true,
+            option: true,
+            value: "1.0.0",
+          },
+          completion: {
+            option: true,
+            command: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          onError: () => "error-shown",
+          stdout: () => {},
+          stderr: (text) => {
+            stderrOutput += text;
+          },
+        },
+      );
+
+      assert.equal(result, "error-shown");
+      assert.ok(!completionShown, "completion callback should not be called");
+      assert.ok(
+        stderrOutput.includes("Error:"),
+        "invalid version command should be reported as a parse error",
+      );
     });
 
     it("should treat --help after --completion=bash as completion payload", () => {
@@ -12217,6 +12323,14 @@ describe("branch coverage: facade.ts edge cases", () => {
       { message: "--help" },
     );
     assert.deepEqual(
+      runParser(parser, "myapp", ["--message=--help"], {
+        help: { option: true, onShow: () => "HELP" },
+        stdout: () => {},
+        stderr: () => {},
+      }),
+      { message: "--help" },
+    );
+    assert.deepEqual(
       runParser(parser, "myapp", ["--message", "-h"], {
         help: {
           option: { names: ["-h"] },
@@ -12228,7 +12342,30 @@ describe("branch coverage: facade.ts edge cases", () => {
       { message: "-h" },
     );
     assert.deepEqual(
+      runParser(parser, "myapp", ["--message=-h"], {
+        help: {
+          option: { names: ["-h"] },
+          onShow: () => "HELP",
+        },
+        stdout: () => {},
+        stderr: () => {},
+      }),
+      { message: "-h" },
+    );
+    assert.deepEqual(
       runParser(parser, "myapp", ["--message", "--version"], {
+        version: {
+          option: true,
+          value: "1.0.0",
+          onShow: () => "VER",
+        },
+        stdout: () => {},
+        stderr: () => {},
+      }),
+      { message: "--version" },
+    );
+    assert.deepEqual(
+      runParser(parser, "myapp", ["--message=--version"], {
         version: {
           option: true,
           value: "1.0.0",
@@ -12252,6 +12389,18 @@ describe("branch coverage: facade.ts edge cases", () => {
       { message: "-V" },
     );
     assert.deepEqual(
+      runParser(parser, "myapp", ["--message=-V"], {
+        version: {
+          option: { names: ["-V"] },
+          value: "1.0.0",
+          onShow: () => "VER",
+        },
+        stdout: () => {},
+        stderr: () => {},
+      }),
+      { message: "-V" },
+    );
+    assert.deepEqual(
       runParser(parser, "myapp", ["--message", "--completion"], {
         completion: { option: true, onShow: () => "COMP" },
         onError: () => "ERROR",
@@ -12261,7 +12410,28 @@ describe("branch coverage: facade.ts edge cases", () => {
       { message: "--completion" },
     );
     assert.deepEqual(
+      runParser(parser, "myapp", ["--message=--completion"], {
+        completion: { option: true, onShow: () => "COMP" },
+        onError: () => "ERROR",
+        stdout: () => {},
+        stderr: () => {},
+      }),
+      { message: "--completion" },
+    );
+    assert.deepEqual(
       runParser(parser, "myapp", ["--message", "--completions"], {
+        completion: {
+          option: { names: ["--completions"] },
+          onShow: () => "COMP",
+        },
+        onError: () => "ERROR",
+        stdout: () => {},
+        stderr: () => {},
+      }),
+      { message: "--completions" },
+    );
+    assert.deepEqual(
+      runParser(parser, "myapp", ["--message=--completions"], {
         completion: {
           option: { names: ["--completions"] },
           onShow: () => "COMP",
