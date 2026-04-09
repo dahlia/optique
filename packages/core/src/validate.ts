@@ -151,28 +151,6 @@ export type MetaEntry = readonly [
 ];
 
 /**
- * User parser names extracted at different scopes for collision checking.
- *
- * User-level names are no longer rejected merely for overlapping with
- * built-in meta names.  The runner now resolves those cases at parse time
- * so ordinary parser data can shadow meta handlers when appropriate.
- *
- * @since 1.0.0
- */
-export interface UserParserNames {
-  /** Names (option names, command names) reachable at the first buffer
-   *  position.  A flat set from {@link Parser.leadingNames}. */
-  readonly leadingNames: ReadonlySet<string>;
-  /** All option names at any depth. */
-  readonly allOptions: ReadonlySet<string>;
-  /** All command names at any depth. */
-  readonly allCommands: ReadonlySet<string>;
-  /** All literal values at any depth (e.g., conditional discriminator
-   *  values). */
-  readonly allLiterals: ReadonlySet<string>;
-}
-
-/**
  * Validates that there are no name collisions among active meta features
  * (help, version, completion).
  *
@@ -184,15 +162,11 @@ export interface UserParserNames {
  * because a meta command named `"--help"` and a meta option named
  * `"--help"` both compete for the same token.
  *
- * @param userNames User parser names extracted at different scopes.
- *                  Currently unused, but retained to keep the runtime call
- *                  site stable.
  * @param metaEntries Active meta feature entries annotated with their kind.
  * @throws {TypeError} If any meta/meta collision or duplicate is detected.
  * @since 1.0.0
  */
 export function validateMetaNameCollisions(
-  _userNames: UserParserNames,
   metaEntries: readonly MetaEntry[],
 ): void {
   // 1. Check for duplicates within each meta feature

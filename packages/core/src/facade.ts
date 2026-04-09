@@ -47,9 +47,6 @@ import { createInputTrace } from "./input-trace.ts";
 import { completeOrExtractPhase2Seed } from "./phase2-seed.ts";
 import { argument, command, constant, flag, option } from "./primitives.ts";
 import {
-  extractCommandNames,
-  extractLiteralValues,
-  extractOptionNames,
   formatUsage,
   type HiddenVisibility,
   type OptionName,
@@ -2034,12 +2031,8 @@ export function runParser<
   const completionOptionNames: readonly string[] =
     completionOptionConfig?.names ?? ["--completion"];
 
-  // Validate meta name collisions (meta-vs-user and meta-vs-meta).
-  // The collision scope is position-aware:
-  //   - Meta "command" entries only match at args[0], so they are checked
-  //     against leading user names.
-  //   - Meta "option" entries use lenient scanners that match anywhere in
-  //     argv, so they are checked against all user names at every depth.
+  // Validate only meta/meta collisions. Parser-defined names may now overlap
+  // with meta names; the runner resolves those cases parser-first at runtime.
   const activeMetaEntries: MetaEntry[] = [];
   if (options.help && helpOptionConfig) {
     activeMetaEntries.push(["option", "help option", helpOptionNames]);
@@ -2072,15 +2065,7 @@ export function runParser<
       completionCommandNames,
     ]);
   }
-  validateMetaNameCollisions(
-    {
-      leadingNames: parser.leadingNames,
-      allOptions: extractOptionNames(parser.usage, true),
-      allCommands: extractCommandNames(parser.usage, true),
-      allLiterals: extractLiteralValues(parser.usage),
-    },
-    activeMetaEntries,
-  );
+  validateMetaNameCollisions(activeMetaEntries);
 
   // Get available shells (defaults + user-provided)
   const defaultShells: Record<string, ShellCompletion> = {
