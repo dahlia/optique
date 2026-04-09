@@ -12647,6 +12647,42 @@ describe("branch coverage: facade.ts edge cases", () => {
     );
   });
 
+  it("prefers user command docs over colliding meta command docs", () => {
+    const metaDescriptions = new Map<string, string>([
+      ["help", "Command name to show help for."],
+      ["version", "Show version information."],
+      [
+        "completion",
+        "Generate shell completion script or provide completions.",
+      ],
+    ]);
+
+    for (const name of ["help", "version", "completion"] as const) {
+      const output: string[] = [];
+      const parser = command(name, object({}), {
+        description: message`User ${name} command.`,
+      });
+
+      const result = runParser(parser, "myapp", [name, "--help"], {
+        help: { command: true, option: true, onShow: () => "HELP" },
+        version: {
+          command: true,
+          value: "1.0.0",
+          onShow: () => "VERSION",
+        },
+        completion: { command: true, onShow: () => "COMPLETION" },
+        stdout(text) {
+          output.push(text);
+        },
+        stderr: () => {},
+      });
+
+      assert.equal(result, "HELP");
+      assert.ok(output.join("").includes(`User "${name}" command.`));
+      assert.ok(!output.join("").includes(metaDescriptions.get(name)!));
+    }
+  });
+
   it("preserves ordinary option values that match meta options and aliases", () => {
     const parser = object({
       message: option("--message", string({ metavar: "MESSAGE" })),

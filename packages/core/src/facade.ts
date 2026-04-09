@@ -913,7 +913,11 @@ function createCompletionParser(
  */
 type ParsedResult =
   | { readonly type: "success"; readonly value: unknown }
-  | { readonly type: "help"; readonly commands: readonly string[] }
+  | {
+    readonly type: "help";
+    readonly commands: readonly string[];
+    readonly preferUserCommandDocs?: boolean;
+  }
   | { readonly type: "version" }
   | {
     readonly type: "completion";
@@ -1450,6 +1454,7 @@ function classifyParseFailure(
         failure.remainingArgs,
         winner.index,
       ),
+      preferUserCommandDocs: failure.commandPath.length > 0,
     };
   }
 
@@ -2223,6 +2228,7 @@ export function runParser<
         const requestedCommand = classified.commands[0];
         if (
           requestedCommand != null &&
+          !classified.preferUserCommandDocs &&
           completionCommandNames.includes(requestedCommand) &&
           completionAsCommand &&
           completionParsers.completionCommand
@@ -2231,6 +2237,7 @@ export function runParser<
           helpGeneratorParser = completionParsers.completionCommand;
         } else if (
           requestedCommand != null &&
+          !classified.preferUserCommandDocs &&
           helpCommandNames.includes(requestedCommand) &&
           helpAsCommand &&
           helpParsers.helpCommand
@@ -2239,6 +2246,7 @@ export function runParser<
           helpGeneratorParser = helpParsers.helpCommand;
         } else if (
           requestedCommand != null &&
+          !classified.preferUserCommandDocs &&
           versionCommandNames.includes(requestedCommand) &&
           versionAsCommand &&
           versionParsers.versionCommand
