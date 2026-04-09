@@ -480,7 +480,7 @@ describe("validateMetaNameCollisions", () => {
     validateMetaNameCollisions([["option", "help option", ["--help"]]]);
   });
 
-  it("should not flag prefix match against meta command entries", () => {
+  it("should allow exact matching for meta command entries", () => {
     validateMetaNameCollisions([["command", "completion command", [
       "--completion",
     ]]]);

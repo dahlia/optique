@@ -1574,7 +1574,7 @@ describe("runAsync", () => {
         },
       });
       assert.deepEqual(result, { value: "help" });
-      assert.equal(exited, false);
+      assert.ok(!exited);
     });
   });
 });
@@ -2207,7 +2207,7 @@ describe("runSync with contexts", () => {
       },
     });
     assert.deepEqual(result, { help: true });
-    assert.equal(exited, false);
+    assert.ok(!exited);
   });
 
   it("preserves context-backed parsing for help/version names after --", () => {
