@@ -60,6 +60,7 @@ function mergeChildExec(
     trace: child.trace ?? parent.trace,
     dependencyRuntime: child.dependencyRuntime ?? parent.dependencyRuntime,
     dependencyRegistry: child.dependencyRegistry ?? parent.dependencyRegistry,
+    commandPath: child.commandPath ?? parent.commandPath,
     preCompletedByParser: child.preCompletedByParser ??
       parent.preCompletedByParser,
     excludedSourceFields: child.excludedSourceFields ??
@@ -2444,6 +2445,17 @@ function createCommandState<TState>(
   >;
 }
 
+function appendCommandPath(
+  exec: ExecutionContext | undefined,
+  name: string,
+): ExecutionContext | undefined {
+  if (exec == null) return undefined;
+  return {
+    ...exec,
+    commandPath: [...(exec.commandPath ?? []), name],
+  };
+}
+
 function* suggestCommandSync<T, TState>(
   context: ParserContext<CommandState<TState>>,
   prefix: string,
@@ -2672,6 +2684,11 @@ export function command<M extends Mode, T, TState>(
               context.state,
               ["matched", name] as ["matched", string],
             ),
+            ...(context.exec != null
+              ? {
+                exec: appendCommandPath(context.exec, name),
+              }
+              : {}),
           },
           consumed: context.buffer.slice(0, 1),
         };

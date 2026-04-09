@@ -219,6 +219,14 @@ To be released.
     contribution instead of letting stale data override later contexts.
     [[#231], [#782]]
 
+ -  Fixed `runParser()`, `runWith()`, and `runWithSync()` treating built-in
+    help, version, and completion tokens as globally reserved.  These runner
+    features are now parser-aware: command and option forms only trigger when
+    the user parser leaves them unconsumed, so positional values like `help`
+    and option values like `--help` can be parsed as ordinary data.  Startup
+    validation now also permits user parsers to reuse built-in meta names and
+    aliases.  [[#230]]
+
  -  *Breaking change:* Replaced `SourceContext`'s inferred `mode`
     contract with an explicit required `phase` field whose value must be
     `"single-pass"` or `"two-pass"`.  `SourceContextMode`,
@@ -1361,6 +1369,7 @@ To be released.
 [#227]: https://github.com/dahlia/optique/issues/227
 [#228]: https://github.com/dahlia/optique/issues/228
 [#229]: https://github.com/dahlia/optique/issues/229
+[#230]: https://github.com/dahlia/optique/issues/230
 [#231]: https://github.com/dahlia/optique/issues/231
 [#232]: https://github.com/dahlia/optique/issues/232
 [#233]: https://github.com/dahlia/optique/issues/233
@@ -2150,6 +2159,12 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     wrapping async parsers) at runtime and returning `Promise`s instead of
     throwing.  `runSync()` now validates `parser.$mode` at runtime and throws
     `TypeError` if the parser is not synchronous.  [[#279], [#676]]
+
+ -  Fixed `run()`, `runSync()`, and `runAsync()` to follow the parser-aware
+    help, version, and completion semantics from *@optique/core*.  Built-in
+    meta requests now yield to ordinary parser data, while genuine meta
+    requests still bypass context loading and process handling as before.
+    [[#230]]
 
  -  Fixed `path()` extension validation for dotfiles (e.g., `.env`,
     `.gitignore`) and multi-part extensions (e.g., `.tar.gz`, `.d.ts`).

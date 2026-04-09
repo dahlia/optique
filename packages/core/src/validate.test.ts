@@ -431,24 +431,16 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
-  it("should throw when user option collides with meta option", () => {
-    assert.throws(
-      () =>
-        validateMetaNameCollisions(u(new Set(["--help"])), [
-          ["option", "help option", ["--help"]],
-        ]),
-      { name: "TypeError", message: /user.*"--help".*help option/i },
-    );
+  it("should allow user option shadowing a meta option", () => {
+    validateMetaNameCollisions(u(new Set(["--help"])), [
+      ["option", "help option", ["--help"]],
+    ]);
   });
 
-  it("should throw when user command collides with meta command", () => {
-    assert.throws(
-      () =>
-        validateMetaNameCollisions(u(e, new Set(["help"])), [
-          ["command", "help command", ["help"]],
-        ]),
-      { name: "TypeError", message: /user.*"help".*help command/i },
-    );
+  it("should allow user command shadowing a meta command", () => {
+    validateMetaNameCollisions(u(e, new Set(["help"])), [
+      ["command", "help command", ["help"]],
+    ]);
   });
 
   it("should not throw when meta feature is disabled", () => {
@@ -458,14 +450,10 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
-  it("should detect collision with aliases", () => {
-    assert.throws(
-      () =>
-        validateMetaNameCollisions(u(e, new Set(["aide"])), [
-          ["command", "help command", ["help", "aide"]],
-        ]),
-      { name: "TypeError", message: /user.*"aide".*help command/i },
-    );
+  it("should allow user names shadowing meta aliases", () => {
+    validateMetaNameCollisions(u(e, new Set(["aide"])), [
+      ["command", "help command", ["help", "aide"]],
+    ]);
   });
 
   // Meta-vs-meta prefix collision tests
@@ -526,19 +514,15 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
-  it("should throw when user command collides with meta option (all depth)", () => {
-    assert.throws(
-      () =>
-        validateMetaNameCollisions(
-          {
-            leadingNames: e,
-            allOptions: e,
-            allCommands: new Set(["--help"]),
-            allLiterals: e,
-          },
-          [["option", "help option", ["--help"]]],
-        ),
-      { name: "TypeError", message: /user.*"--help".*help option/i },
+  it("should allow user command shadowing a meta option", () => {
+    validateMetaNameCollisions(
+      {
+        leadingNames: e,
+        allOptions: e,
+        allCommands: new Set(["--help"]),
+        allLiterals: e,
+      },
+      [["option", "help option", ["--help"]]],
     );
   });
 
@@ -567,67 +551,47 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
-  it("should flag leading option against meta command (position-aware)", () => {
-    assert.throws(
-      () =>
-        validateMetaNameCollisions(
-          {
-            leadingNames: new Set(["--version"]),
-            allOptions: new Set(["--version"]),
-            allCommands: e,
-            allLiterals: e,
-          },
-          [["command", "version command", ["--version"]]],
-        ),
+  it("should allow leading option shadowing a meta command", () => {
+    validateMetaNameCollisions(
       {
-        name: "TypeError",
-        message: /user.*option.*"--version".*version command/i,
+        leadingNames: new Set(["--version"]),
+        allOptions: new Set(["--version"]),
+        allCommands: e,
+        allLiterals: e,
       },
+      [["command", "version command", ["--version"]]],
     );
   });
 
-  it("should flag nested option against meta option (scans everywhere)", () => {
-    assert.throws(
-      () =>
-        validateMetaNameCollisions(
-          {
-            leadingNames: e,
-            allOptions: new Set(["--help"]),
-            allCommands: e,
-            allLiterals: e,
-          },
-          [["option", "help option", ["--help"]]],
-        ),
-      { name: "TypeError", message: /user.*"--help".*help option/i },
+  it("should allow nested option shadowing a meta option", () => {
+    validateMetaNameCollisions(
+      {
+        leadingNames: e,
+        allOptions: new Set(["--help"]),
+        allCommands: e,
+        allLiterals: e,
+      },
+      [["option", "help option", ["--help"]]],
     );
   });
 
-  it("should flag nested command against meta option (scans everywhere)", () => {
-    assert.throws(
-      () =>
-        validateMetaNameCollisions(
-          {
-            leadingNames: e,
-            allOptions: e,
-            allCommands: new Set(["--help"]),
-            allLiterals: e,
-          },
-          [["option", "help option", ["--help"]]],
-        ),
-      { name: "TypeError", message: /user.*"--help".*help option/i },
+  it("should allow nested command shadowing a meta option", () => {
+    validateMetaNameCollisions(
+      {
+        leadingNames: e,
+        allOptions: e,
+        allCommands: new Set(["--help"]),
+        allLiterals: e,
+      },
+      [["option", "help option", ["--help"]]],
     );
   });
 
   // Literal value collision tests
-  it("should flag literal value colliding with meta option", () => {
-    // conditional(option("--mode", string()), { "--help": object({}) })
-    assert.throws(
-      () =>
-        validateMetaNameCollisions(
-          u(e, e, new Set(["--help"])),
-          [["option", "help option", ["--help"]]],
-        ),
-      { name: "TypeError", message: /literal.*"--help".*help option/i },
+  it("should allow literal value shadowing a meta option", () => {
+    validateMetaNameCollisions(
+      u(e, e, new Set(["--help"])),
+      [["option", "help option", ["--help"]]],
     );
   });
 
@@ -646,76 +610,47 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
-  it("should flag non-leading literal value colliding with meta option", () => {
-    // Option-form meta entries scan entire argv, so they check allLiterals.
-    assert.throws(
-      () =>
-        validateMetaNameCollisions(
-          {
-            leadingNames: e,
-            allOptions: e,
-            allCommands: e,
-            allLiterals: new Set(["--help"]),
-          },
-          [["option", "help option", ["--help"]]],
-        ),
-      { name: "TypeError", message: /literal.*"--help".*help option/i },
+  it("should allow non-leading literal value shadowing a meta option", () => {
+    validateMetaNameCollisions(
+      {
+        leadingNames: e,
+        allOptions: e,
+        allCommands: e,
+        allLiterals: new Set(["--help"]),
+      },
+      [["option", "help option", ["--help"]]],
     );
   });
 
   // Prefix matching tests (only for entries with prefixMatch: true)
-  it("should flag user option matching prefix when prefixMatch is true", () => {
-    // Put --completion=bash only in allOptions (not leading) to prove
-    // that prefix matching checks the all-depth set.
-    assert.throws(
-      () =>
-        validateMetaNameCollisions(
-          {
-            leadingNames: e,
-            allOptions: new Set(["--completion=bash"]),
-            allCommands: e,
-            allLiterals: e,
-          },
-          [["option", "completion option", ["--completion"], true]],
-        ),
+  it("should allow user option shadowing a prefix-matching meta option", () => {
+    validateMetaNameCollisions(
       {
-        name: "TypeError",
-        message: /user.*"--completion=bash".*completion option/i,
+        leadingNames: e,
+        allOptions: new Set(["--completion=bash"]),
+        allCommands: e,
+        allLiterals: e,
       },
+      [["option", "completion option", ["--completion"], true]],
     );
   });
 
-  it("should flag user command matching prefix when prefixMatch is true", () => {
-    assert.throws(
-      () =>
-        validateMetaNameCollisions(
-          {
-            leadingNames: e,
-            allOptions: e,
-            allCommands: new Set(["--completion=bash"]),
-            allLiterals: e,
-          },
-          [["option", "completion option", ["--completion"], true]],
-        ),
+  it("should allow user command shadowing a prefix-matching meta option", () => {
+    validateMetaNameCollisions(
       {
-        name: "TypeError",
-        message: /user.*"--completion=bash".*completion option/i,
+        leadingNames: e,
+        allOptions: e,
+        allCommands: new Set(["--completion=bash"]),
+        allLiterals: e,
       },
+      [["option", "completion option", ["--completion"], true]],
     );
   });
 
-  it("should flag literal matching prefix when prefixMatch is true", () => {
-    // conditional(option("--mode", string()), { "--completion=bash": ... })
-    assert.throws(
-      () =>
-        validateMetaNameCollisions(
-          u(e, e, new Set(["--completion=bash"])),
-          [["option", "completion option", ["--completion"], true]],
-        ),
-      {
-        name: "TypeError",
-        message: /literal.*"--completion=bash".*completion option/i,
-      },
+  it("should allow literal shadowing a prefix-matching meta option", () => {
+    validateMetaNameCollisions(
+      u(e, e, new Set(["--completion=bash"])),
+      [["option", "completion option", ["--completion"], true]],
     );
   });
 
@@ -734,24 +669,15 @@ describe("validateMetaNameCollisions", () => {
     );
   });
 
-  it("should flag literal matching prefix against meta option", () => {
-    // prefixMatch is only meaningful for option-form meta entries
-    // (facade.ts only sets it for the completion option).
-    assert.throws(
-      () =>
-        validateMetaNameCollisions(
-          {
-            leadingNames: e,
-            allOptions: e,
-            allCommands: e,
-            allLiterals: new Set(["--completion=bash"]),
-          },
-          [["option", "completion option", ["--completion"], true]],
-        ),
+  it("should allow literal shadowing a meta option via prefix form", () => {
+    validateMetaNameCollisions(
       {
-        name: "TypeError",
-        message: /literal.*"--completion=bash".*completion option/i,
+        leadingNames: e,
+        allOptions: e,
+        allCommands: e,
+        allLiterals: new Set(["--completion=bash"]),
       },
+      [["option", "completion option", ["--completion"], true]],
     );
   });
 

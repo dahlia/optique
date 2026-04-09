@@ -536,7 +536,7 @@ describe("run", () => {
 
     it("should handle version as object with custom mode", () => {
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       let output = "";
@@ -1558,6 +1558,18 @@ describe("runAsync", () => {
 
       assert.ok(typeof helpOutput === "string");
     });
+
+    it("preserves positional values that match built-in help commands", () => {
+      const parser = object({ value: argument(string()) });
+      const result = run(parser, {
+        args: ["help"],
+        programName: "myapp",
+        help: "command",
+        stdout: () => {},
+        stderr: () => {},
+      });
+      assert.deepEqual(result, { value: "help" });
+    });
   });
 });
 
@@ -2174,6 +2186,18 @@ describe("run with contexts", () => {
 });
 
 describe("runSync with contexts", () => {
+  it("preserves parser options that shadow the built-in help option", () => {
+    const parser = object({ help: option("--help") });
+    const result = runSync(parser, {
+      args: ["--help"],
+      programName: "myapp",
+      help: "option",
+      stdout: () => {},
+      stderr: () => {},
+    });
+    assert.deepEqual(result, { help: true });
+  });
+
   it("preserves context-backed parsing for help/version names after --", () => {
     assert.deepEqual(runIssue267SyncWith("--help", "help"), {
       file: "--help",

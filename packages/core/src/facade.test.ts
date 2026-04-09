@@ -90,7 +90,7 @@ describe("runParser", () => {
   describe("help functionality", () => {
     it("should show help with --help option when help is enabled", () => {
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       let helpShown = false;
@@ -118,7 +118,7 @@ describe("runParser", () => {
     it("should not provide help when help is not configured (default)", () => {
       // Test that help is disabled by default
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       assert.throws(() => {
@@ -128,7 +128,7 @@ describe("runParser", () => {
 
     it("should only show help option when help mode is 'option'", () => {
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       let helpShown = false;
@@ -180,7 +180,7 @@ describe("runParser", () => {
 
     it("should show examples, author, and bugs for top-level help", () => {
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       let helpOutput = "";
@@ -292,7 +292,7 @@ describe("runParser", () => {
   describe("version functionality", () => {
     it("should show version with --version option when version is enabled", () => {
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       let versionShown = false;
@@ -317,7 +317,7 @@ describe("runParser", () => {
       assert.equal(versionOutput, "1.0.0");
     });
 
-    it("should show version with version command when version mode is 'command'", () => {
+    it("should let ordinary parser data shadow the version command", () => {
       const parser = object({
         name: argument(string()),
       });
@@ -340,12 +340,12 @@ describe("runParser", () => {
         stderr: () => {},
       });
 
-      assert.equal(result, "version-shown");
-      assert.ok(versionShown);
-      assert.equal(versionOutput, "2.1.0");
+      assert.deepEqual(result, { name: "version" });
+      assert.ok(!versionShown);
+      assert.equal(versionOutput, "");
     });
 
-    it("should support both --version and version command when mode is 'both'", () => {
+    it("should still honor --version while letting parser data shadow the version command", () => {
       const parser = object({
         name: argument(string()),
       });
@@ -383,13 +383,13 @@ describe("runParser", () => {
         stderr: () => {},
       });
 
-      assert.equal(result2, "version-shown");
-      assert.equal(versionOutput, "3.0.0");
+      assert.deepEqual(result2, { name: "version" });
+      assert.equal(versionOutput, "");
     });
 
     it("should not provide version when version is not configured (default)", () => {
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       assert.throws(() => {
@@ -399,7 +399,7 @@ describe("runParser", () => {
 
     it("should pass exit code 0 to onShow callback", () => {
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       let receivedExitCode: number | undefined;
@@ -421,7 +421,7 @@ describe("runParser", () => {
 
     it("should follow last-option-wins pattern for conflicting options", () => {
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       // Test --version --help (help should win - last option)
@@ -487,7 +487,7 @@ describe("runParser", () => {
       assert.equal(versionOutput2, "1.0.0");
     });
 
-    it("should handle version command with help option available", () => {
+    it("should keep version command meta behind ordinary parser data when help is also configured", () => {
       const parser = object({
         name: argument(string()),
       });
@@ -515,12 +515,12 @@ describe("runParser", () => {
         stderr: () => {},
       });
 
-      assert.equal(result, "version-shown");
-      assert.ok(versionShown);
-      assert.equal(versionOutput, "2.0.0");
+      assert.deepEqual(result, { name: "version" });
+      assert.ok(!versionShown);
+      assert.equal(versionOutput, "");
     });
 
-    it("should handle help command with version option available", () => {
+    it("should keep help command meta behind ordinary parser data when version is also configured", () => {
       const parser = object({
         name: argument(string()),
       });
@@ -548,14 +548,14 @@ describe("runParser", () => {
         stderr: () => {},
       });
 
-      assert.equal(result, "help-shown");
-      assert.ok(helpShown);
-      assert.ok(helpOutput.includes("Usage: test"));
+      assert.deepEqual(result, { name: "help" });
+      assert.ok(!helpShown);
+      assert.equal(helpOutput, "");
     });
 
     it("should work with onShow callback without exit code parameter", () => {
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       let versionCalled = false;
@@ -1285,39 +1285,27 @@ describe("runParser", () => {
     });
 
     // Meta name collision detection
-    it("should reject user command that collides with help command", () => {
+    it("should allow user command shadowing help command", () => {
       const parser = command("help", object({}));
-      assert.throws(
-        () =>
-          runParser(parser, "test", [], {
-            help: {
-              command: true,
-              onShow: () => "HELP",
-            },
-            stderr: () => {},
-          }),
-        {
-          name: "TypeError",
-          message: /user.*"help".*help command/i,
+      const result = runParser(parser, "test", ["help"], {
+        help: {
+          command: true,
+          onShow: () => "HELP",
         },
-      );
+        stderr: () => {},
+      });
+      assert.deepEqual(result, {});
     });
 
-    it("should reject user option that collides with help option", () => {
+    it("should allow user option shadowing help option", () => {
       const parser = object({ help: flag("--help") });
-      assert.throws(
-        () =>
-          runParser(parser, "test", [], {
-            help: {
-              option: true,
-              onShow: () => "HELP",
-            },
-          }),
-        {
-          name: "TypeError",
-          message: /user.*"--help".*help option/i,
+      const result = runParser(parser, "test", ["--help"], {
+        help: {
+          option: true,
+          onShow: () => "HELP",
         },
-      );
+      });
+      assert.deepEqual(result, { help: true });
     });
 
     it("should allow user command 'help' when help command uses custom name", () => {
@@ -1364,23 +1352,17 @@ describe("runParser", () => {
       );
     });
 
-    it("should reject hidden user option that collides with meta option", () => {
+    it("should allow hidden user option shadowing a meta option", () => {
       const parser = object({
         help: flag("--help", { hidden: true }),
       });
-      assert.throws(
-        () =>
-          runParser(parser, "test", [], {
-            help: {
-              option: true,
-              onShow: () => "HELP",
-            },
-          }),
-        {
-          name: "TypeError",
-          message: /user.*"--help".*help option/i,
+      const result = runParser(parser, "test", ["--help"], {
+        help: {
+          option: true,
+          onShow: () => "HELP",
         },
-      );
+      });
+      assert.deepEqual(result, { help: true });
     });
 
     it("should reject duplicate names within a single meta option", () => {
@@ -1399,38 +1381,27 @@ describe("runParser", () => {
       );
     });
 
-    it("should reject user command that collides with version command", () => {
+    it("should allow user command shadowing version command", () => {
       const parser = command("version", object({}));
-      assert.throws(
-        () =>
-          runParser(parser, "test", [], {
-            version: {
-              command: true,
-              value: "1.0.0",
-            },
-            stderr: () => {},
-          }),
-        {
-          name: "TypeError",
-          message: /user.*"version".*version command/i,
+      const result = runParser(parser, "test", ["version"], {
+        version: {
+          command: true,
+          value: "1.0.0",
         },
-      );
+        stderr: () => {},
+      });
+      assert.deepEqual(result, {});
     });
 
-    it("should reject user command that collides with completion command", () => {
+    it("should allow user command shadowing completion command", () => {
       const parser = command("completion", object({}));
-      assert.throws(
-        () =>
-          runParser(parser, "test", [], {
-            help: { option: true },
-            completion: { command: true },
-            stderr: () => {},
-          }),
-        {
-          name: "TypeError",
-          message: /user.*"completion".*completion command/i,
-        },
-      );
+      const result = runParser(parser, "test", ["completion"], {
+        help: { option: true },
+        completion: { command: true },
+        onError: () => "ERROR",
+        stderr: () => {},
+      });
+      assert.deepEqual(result, {});
     });
 
     // P1: nested subcommands should not trigger false positives
@@ -1493,25 +1464,19 @@ describe("runParser", () => {
     });
 
     // Literal values shadowed by meta option scanners
-    it("should reject conditional discriminator value colliding with meta option", () => {
+    it("should allow conditional discriminator value shadowing a meta option", () => {
       const parser = conditional(
         option("--mode", string()),
         { "--help": object({}) },
       );
-      assert.throws(
-        () =>
-          runParser(parser, "test", [], {
-            help: {
-              option: true,
-              onShow: () => "HELP",
-            },
-            stderr: () => {},
-          }),
-        {
-          name: "TypeError",
-          message: /literal.*"--help".*help option/i,
+      const result = runParser(parser, "test", ["--mode", "--help"], {
+        help: {
+          option: true,
+          onShow: () => "HELP",
         },
-      );
+        stderr: () => {},
+      });
+      assert.deepEqual(result, ["--help", {}]);
     });
 
     it("should not reject conditional(argument()) branch key against meta command", () => {
@@ -1559,22 +1524,16 @@ describe("runParser", () => {
       );
     });
 
-    it("should reject user command('--help') colliding with meta help option", () => {
+    it("should allow user command shadowing a meta help option", () => {
       const parser = command("--help", object({}));
-      assert.throws(
-        () =>
-          runParser(parser, "test", [], {
-            help: {
-              option: true,
-              onShow: () => "HELP",
-            },
-            stderr: () => {},
-          }),
-        {
-          name: "TypeError",
-          message: /user.*"--help".*help option/i,
+      const result = runParser(parser, "test", ["--help"], {
+        help: {
+          option: true,
+          onShow: () => "HELP",
         },
-      );
+        stderr: () => {},
+      });
+      assert.deepEqual(result, {});
     });
 
     // Position-aware scoping: nested options vs meta commands
@@ -1596,10 +1555,7 @@ describe("runParser", () => {
     });
 
     // Position-aware scoping: nested commands vs meta options
-    it("should reject nested command('--help') shadowed by meta help option", () => {
-      // command("tool", command("--help", ...)) + help: { option: true }
-      // The lenient help option scanner intercepts --help ANYWHERE in argv,
-      // so "tool --help" would never reach the nested command.
+    it("should allow nested command shadowing a meta help option", () => {
       const parser = command(
         "tool",
         longestMatch(
@@ -1607,35 +1563,23 @@ describe("runParser", () => {
           command("run", object({})),
         ),
       );
-      assert.throws(
-        () =>
-          runParser(parser, "test", [], {
-            help: {
-              option: true,
-              onShow: () => "HELP",
-            },
-            stderr: () => {},
-          }),
-        {
-          name: "TypeError",
-          message: /user.*"--help".*help option/i,
+      const result = runParser(parser, "test", ["tool", "--help"], {
+        help: {
+          option: true,
+          onShow: () => "HELP",
         },
-      );
+        stderr: () => {},
+      });
+      assert.deepEqual(result, {});
     });
 
-    it("should reject user option colliding with completion prefix form", () => {
+    it("should allow user option shadowing the completion prefix form", () => {
       const parser = object({ bad: flag("--completion=bash") });
-      assert.throws(
-        () =>
-          runParser(parser, "test", [], {
-            completion: { option: true },
-            stderr: () => {},
-          }),
-        {
-          name: "TypeError",
-          message: /user.*"--completion=bash".*completion option/i,
-        },
-      );
+      const result = runParser(parser, "test", ["--completion=bash"], {
+        completion: { option: true },
+        stderr: () => {},
+      });
+      assert.deepEqual(result, { bad: true });
     });
 
     it("should reject completion option aliases that collide via = prefix", () => {
@@ -3511,7 +3455,6 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     it("should generate bash completion script when completion command is used", () => {
       const parser = object({
         verbose: option("--verbose"),
-        name: argument(string()),
       });
 
       let completionOutput = "";
@@ -3540,7 +3483,6 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     it("should generate zsh completion script when completion command is used", () => {
       const parser = object({
         verbose: option("--verbose"),
-        name: argument(string()),
       });
 
       let completionOutput = "";
@@ -3564,7 +3506,6 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       const parser = object({
         verbose: option("--verbose"),
         format: option("--format", string()),
-        name: argument(string()),
       });
 
       let completionOutput = "";
@@ -5868,7 +5809,7 @@ describe("runWith", () => {
       };
 
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       let helpShown = false;
@@ -5900,7 +5841,7 @@ describe("runWith", () => {
       };
 
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       let versionShown = false;
@@ -5933,7 +5874,7 @@ describe("runWith", () => {
       };
 
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       let completionShown = false;
@@ -5965,7 +5906,7 @@ describe("runWith", () => {
       };
 
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       let completionShown = false;
@@ -5997,7 +5938,7 @@ describe("runWith", () => {
       };
 
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       let completionShown = false;
@@ -6029,7 +5970,7 @@ describe("runWith", () => {
       };
 
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       let completionShown = false;
@@ -6405,7 +6346,7 @@ describe("runWith", () => {
       };
 
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       await runWith(parser, "test", [context], {
@@ -7057,7 +6998,7 @@ describe("runWithSync", () => {
       };
 
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       let completionShown = false;
@@ -7294,7 +7235,7 @@ describe("runWithSync", () => {
       };
 
       const parser = object({
-        name: argument(string()),
+        verbose: option("--verbose"),
       });
 
       runWithSync(parser, "test", [context], {
@@ -8269,7 +8210,7 @@ describe("runWithAsync", () => {
   describe("custom names in CommandSubConfig and OptionSubConfig", () => {
     describe("help command custom names", () => {
       it("should trigger help with a single custom command name", () => {
-        const parser = object({ name: argument(string()) });
+        const parser = object({ verbose: option("--verbose") });
 
         let helpShown = false;
         const result = runParser(parser, "test", ["h"], {
@@ -8288,7 +8229,7 @@ describe("runWithAsync", () => {
       });
 
       it("should not respond to default 'help' when custom name is set", () => {
-        const parser = object({ name: argument(string()) });
+        const parser = object({ verbose: option("--verbose") });
 
         let helpShown = false;
         runParser(parser, "test", ["help"], {
@@ -8311,7 +8252,7 @@ describe("runWithAsync", () => {
       });
 
       it("should show custom command name in usage line", () => {
-        const parser = object({ name: argument(string()) });
+        const parser = object({ verbose: option("--verbose") });
 
         let helpOutput = "";
         runParser(parser, "test", ["h"], {
@@ -8335,7 +8276,7 @@ describe("runWithAsync", () => {
       });
 
       it("should support aliases: first name visible, rest hidden but functional", () => {
-        const parser = object({ name: argument(string()) });
+        const parser = object({ verbose: option("--verbose") });
 
         let helpShown = false;
 
@@ -8370,7 +8311,7 @@ describe("runWithAsync", () => {
       });
 
       it("should show only the first name in help output, not hidden aliases", () => {
-        const parser = object({ name: argument(string()) });
+        const parser = object({ verbose: option("--verbose") });
 
         let helpOutput = "";
         runParser(parser, "test", ["help"], {
@@ -8408,7 +8349,7 @@ describe("runWithAsync", () => {
 
     describe("version command custom names", () => {
       it("should trigger version with a custom command name", () => {
-        const parser = object({ name: argument(string()) });
+        const parser = object({ verbose: option("--verbose") });
 
         let versionShown = false;
         const result = runParser(parser, "test", ["ver"], {
@@ -8428,7 +8369,7 @@ describe("runWithAsync", () => {
       });
 
       it("should not respond to default 'version' when custom name is set", () => {
-        const parser = object({ name: argument(string()) });
+        const parser = object({ verbose: option("--verbose") });
 
         let versionShown = false;
         runParser(parser, "test", ["version"], {
@@ -8452,7 +8393,7 @@ describe("runWithAsync", () => {
       });
 
       it("should support version command aliases", () => {
-        const parser = object({ name: argument(string()) });
+        const parser = object({ verbose: option("--verbose") });
 
         // "version" visible, "ver" hidden alias
         const resultViaDisplay = runParser(parser, "test", ["version"], {
@@ -8708,7 +8649,7 @@ describe("runWithAsync", () => {
   describe("hidden visibility in CommandSubConfig and OptionSubConfig", () => {
     describe("command hidden: true", () => {
       it("should hide help command from usage and doc, but still trigger at runtime", () => {
-        const parser = object({ name: argument(string()) });
+        const parser = object({ verbose: option("--verbose") });
 
         // 'help' command is fully hidden but still functional
         let helpShown = false;
@@ -8741,7 +8682,7 @@ describe("runWithAsync", () => {
       });
 
       it("should hide version command from usage and doc, but still trigger at runtime", () => {
-        const parser = object({ name: argument(string()) });
+        const parser = object({ verbose: option("--verbose") });
 
         let versionShown = false;
         const result = runParser(parser, "test", ["version"], {
@@ -8775,7 +8716,7 @@ describe("runWithAsync", () => {
 
     describe('command hidden: "usage"', () => {
       it("should hide help command from usage line but show in help doc", () => {
-        const parser = object({ name: argument(string()) });
+        const parser = object({ verbose: option("--verbose") });
 
         // Should not appear in error usage line
         let errorOutput = "";
@@ -8814,7 +8755,7 @@ describe("runWithAsync", () => {
       });
 
       it("should hide version command from usage line but show in help doc", () => {
-        const parser = object({ name: argument(string()) });
+        const parser = object({ verbose: option("--verbose") });
 
         let errorOutput = "";
         runParser(parser, "test", ["--invalid"], {
@@ -8838,7 +8779,7 @@ describe("runWithAsync", () => {
 
     describe('command hidden: "help"', () => {
       it("should hide help command from usage/doc but keep runtime trigger", () => {
-        const parser = object({ name: argument(string()) });
+        const parser = object({ verbose: option("--verbose") });
 
         let helpShown = false;
         const result = runParser(parser, "test", ["help"], {
@@ -8893,7 +8834,7 @@ describe("runWithAsync", () => {
       });
 
       it("should hide version command from usage/doc but keep runtime trigger", () => {
-        const parser = object({ name: argument(string()) });
+        const parser = object({ verbose: option("--verbose") });
 
         let versionShown = false;
         const result = runParser(parser, "test", ["version"], {
@@ -9420,7 +9361,7 @@ describe("runWithAsync", () => {
 describe("branch coverage: facade.ts edge cases", () => {
   // Lines 101/149: multi-name help/version commands (i > 0 hidden branch)
   it("multi-name help command uses hidden:true for i>0 names", () => {
-    const parser = object({ name: argument(string()) });
+    const parser = object({ verbose: option("--verbose") });
     let helpOutput = "";
     runParser(parser, "test", ["help"], {
       help: { command: { names: ["help", "h"] }, onShow: () => "shown" },
@@ -9432,7 +9373,7 @@ describe("branch coverage: facade.ts edge cases", () => {
   });
 
   it("multi-name version command uses hidden:true for i>0 names", () => {
-    const parser = object({ name: argument(string()) });
+    const parser = object({ verbose: option("--verbose") });
     let versionOutput = "";
     runParser(parser, "test", ["version"], {
       version: {
@@ -11150,18 +11091,12 @@ describe("branch coverage: facade.ts edge cases", () => {
       acceptingAnyToken: false,
       initialState: { value: null },
       parse(context) {
-        const [head, ...rest] = context.buffer;
-        if (head == null) {
-          return Promise.resolve({
-            success: false as const,
-            error: message`Missing argument.`,
-            consumed: 0,
-          });
-        }
         return Promise.resolve({
-          success: true as const,
-          next: { ...context, buffer: rest, state: { value: head } },
-          consumed: [head],
+          success: false as const,
+          error: context.buffer[0] == null
+            ? message`Missing argument.`
+            : message`Unexpected option or argument: ${context.buffer[0]}.`,
+          consumed: 0,
         });
       },
       complete(state) {
@@ -11518,9 +11453,11 @@ describe("branch coverage: facade.ts edge cases", () => {
       initialState: undefined,
       parse(context) {
         return Promise.resolve({
-          success: true as const,
-          next: { ...context, buffer: [], state: undefined },
-          consumed: [...context.buffer],
+          success: false as const,
+          error: context.buffer[0] == null
+            ? message`Missing argument.`
+            : message`Unexpected option or argument: ${context.buffer[0]}.`,
+          consumed: 0,
         });
       },
       complete() {
@@ -11701,7 +11638,7 @@ describe("branch coverage: facade.ts edge cases", () => {
   });
 
   it("supports hidden aliases for help/version commands", () => {
-    const parser = object({ name: argument(string()) });
+    const parser = object({ verbose: option("--verbose") });
     let stdoutOutput = "";
 
     const helpResult = runParser(parser, "myapp", ["assist"], {
@@ -11728,7 +11665,7 @@ describe("branch coverage: facade.ts edge cases", () => {
   });
 
   it("keeps meta-command aliases fully hidden with partial visibility", () => {
-    const parser = object({ name: argument(string()) });
+    const parser = object({ verbose: option("--verbose") });
 
     let helpOutput = "";
     runParser(parser, "myapp", ["--help"], {
@@ -11787,7 +11724,7 @@ describe("branch coverage: facade.ts edge cases", () => {
   });
 
   it("builds multi-name help/version commands with visible primary names", () => {
-    const parser = object({ name: argument(string()) });
+    const parser = object({ verbose: option("--verbose") });
 
     const helpResult = runParser(parser, "myapp", ["assist"], {
       help: {
@@ -11812,7 +11749,7 @@ describe("branch coverage: facade.ts edge cases", () => {
   });
 
   it("shows meta-command help without top-level examples/author/bugs", () => {
-    const parser = object({ name: argument(string()) });
+    const parser = object({ verbose: option("--verbose") });
     let out = "";
 
     const result = runParser(parser, "myapp", ["help", "completion"], {
@@ -12058,6 +11995,149 @@ describe("branch coverage: facade.ts edge cases", () => {
         }),
       /arg-call rejected/,
     );
+  });
+
+  it("preserves ordinary positional values that match meta commands", () => {
+    const parser = object({ value: argument(string()) });
+
+    assert.deepEqual(
+      runParser(parser, "myapp", ["help"], {
+        help: { command: true, onShow: () => "HELP" },
+        stdout: () => {},
+        stderr: () => {},
+      }),
+      { value: "help" },
+    );
+    assert.deepEqual(
+      runParser(parser, "myapp", ["assist"], {
+        help: {
+          command: { names: ["help", "assist"] },
+          onShow: () => "HELP",
+        },
+        stdout: () => {},
+        stderr: () => {},
+      }),
+      { value: "assist" },
+    );
+    assert.deepEqual(
+      runParser(parser, "myapp", ["version"], {
+        version: {
+          command: true,
+          value: "1.0.0",
+          onShow: () => "VER",
+        },
+        stdout: () => {},
+        stderr: () => {},
+      }),
+      { value: "version" },
+    );
+    assert.deepEqual(
+      runParser(parser, "myapp", ["completion"], {
+        completion: { command: true, onShow: () => "COMP" },
+        onError: () => "ERROR",
+        stdout: () => {},
+        stderr: () => {},
+      }),
+      { value: "completion" },
+    );
+  });
+
+  it("preserves ordinary option values that match meta options and aliases", () => {
+    const parser = object({
+      message: option("--message", string({ metavar: "MESSAGE" })),
+    });
+
+    assert.deepEqual(
+      runParser(parser, "myapp", ["--message", "--help"], {
+        help: { option: true, onShow: () => "HELP" },
+        stdout: () => {},
+        stderr: () => {},
+      }),
+      { message: "--help" },
+    );
+    assert.deepEqual(
+      runParser(parser, "myapp", ["--message", "-h"], {
+        help: {
+          option: { names: ["-h"] },
+          onShow: () => "HELP",
+        },
+        stdout: () => {},
+        stderr: () => {},
+      }),
+      { message: "-h" },
+    );
+    assert.deepEqual(
+      runParser(parser, "myapp", ["--message", "--version"], {
+        version: {
+          option: true,
+          value: "1.0.0",
+          onShow: () => "VER",
+        },
+        stdout: () => {},
+        stderr: () => {},
+      }),
+      { message: "--version" },
+    );
+    assert.deepEqual(
+      runParser(parser, "myapp", ["--message", "-V"], {
+        version: {
+          option: { names: ["-V"] },
+          value: "1.0.0",
+          onShow: () => "VER",
+        },
+        stdout: () => {},
+        stderr: () => {},
+      }),
+      { message: "-V" },
+    );
+    assert.deepEqual(
+      runParser(parser, "myapp", ["--message", "--completion"], {
+        completion: { option: true, onShow: () => "COMP" },
+        onError: () => "ERROR",
+        stdout: () => {},
+        stderr: () => {},
+      }),
+      { message: "--completion" },
+    );
+    assert.deepEqual(
+      runParser(parser, "myapp", ["--message", "--completions"], {
+        completion: {
+          option: { names: ["--completions"] },
+          onShow: () => "COMP",
+        },
+        onError: () => "ERROR",
+        stdout: () => {},
+        stderr: () => {},
+      }),
+      { message: "--completions" },
+    );
+  });
+
+  it("runWithSync does not early-exit when completion-like input is ordinary parser data", () => {
+    let annotationsCallCount = 0;
+    const trackingContext: SourceContext = {
+      id: Symbol.for("@test/issue-230/tracking"),
+      phase: "single-pass",
+      getAnnotations() {
+        annotationsCallCount++;
+        return {};
+      },
+    };
+    const parser = object({ value: argument(string()) });
+
+    const result = runWithSync(parser, "myapp", [trackingContext], {
+      args: ["--completion=bash"],
+      completion: {
+        option: true,
+        onShow: () => "COMP",
+      },
+      onError: () => "ERROR",
+      stdout: () => {},
+      stderr: () => {},
+    });
+
+    assert.deepEqual(result, { value: "--completion=bash" });
+    assert.equal(annotationsCallCount, 1);
   });
 });
 

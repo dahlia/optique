@@ -154,6 +154,7 @@ function mergeChildExec(
     trace: child.trace ?? parent.trace,
     dependencyRuntime: child.dependencyRuntime ?? parent.dependencyRuntime,
     dependencyRegistry: child.dependencyRegistry ?? parent.dependencyRegistry,
+    commandPath: child.commandPath ?? parent.commandPath,
     preCompletedByParser: child.preCompletedByParser ??
       parent.preCompletedByParser,
     excludedSourceFields: child.excludedSourceFields ??

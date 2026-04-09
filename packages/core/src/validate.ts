@@ -153,6 +153,10 @@ export type MetaEntry = readonly [
 /**
  * User parser names extracted at different scopes for collision checking.
  *
+ * User-level names are no longer rejected merely for overlapping with
+ * built-in meta names.  The runner now resolves those cases at parse time
+ * so ordinary parser data can shadow meta handlers when appropriate.
+ *
  * @since 1.0.0
  */
 export interface UserParserNames {
@@ -169,28 +173,26 @@ export interface UserParserNames {
 }
 
 /**
- * Validates that there are no name collisions among meta features
- * (help, version, completion) and between meta features and user parsers.
+ * Validates that there are no name collisions among active meta features
+ * (help, version, completion).
  *
- * The collision check is *position-aware*:
- *
- * - Meta **command** entries match at `args[0]` only, so they are checked
- *   against *leading* user names (those reachable before any positional gate).
- * - Meta **option** entries use lenient scanners that match anywhere in
- *   `argv`, so they are checked against *all* user names at every depth,
- *   including literal values from conditional discriminators.
+ * User parser names are accepted even when they overlap with meta names.
+ * Runtime parsing resolves those cases parser-first so ordinary parser data
+ * can shadow built-in meta behavior.
  *
  * Meta-vs-meta collisions are always checked in a unified namespace,
  * because a meta command named `"--help"` and a meta option named
  * `"--help"` both compete for the same token.
  *
  * @param userNames User parser names extracted at different scopes.
+ *                  Currently unused, but retained to keep the runtime call
+ *                  site stable.
  * @param metaEntries Active meta feature entries annotated with their kind.
- * @throws {TypeError} If any collision or duplicate is detected.
+ * @throws {TypeError} If any meta/meta collision or duplicate is detected.
  * @since 1.0.0
  */
 export function validateMetaNameCollisions(
-  userNames: UserParserNames,
+  _userNames: UserParserNames,
   metaEntries: readonly MetaEntry[],
 ): void {
   // 1. Check for duplicates within each meta feature
@@ -237,100 +239,6 @@ export function validateMetaNameCollisions(
             'The prefix form of name "' + name + '" in ' + label +
               ' shadows "' + otherName + '" in ' + otherLabel + ".",
           );
-        }
-      }
-    }
-  }
-
-  // 3. Check for collisions between meta features and user parser.
-  //    The scope depends on the meta feature kind:
-  //    - "command" entries only reach args[0] → check leadingNames +
-  //      allOptions/allCommands for classification
-  //    - "option" entries scan entire argv → check all user names + literals
-  for (const [kind, label, names, prefixMatch] of metaEntries) {
-    for (const name of names) {
-      if (kind === "command") {
-        // Command-form meta entries only match at args[0], so check
-        // the flat leadingNames set.  Classify by cross-referencing
-        // with allOptions/allCommands for accurate error messages.
-        if (userNames.leadingNames.has(name)) {
-          if (userNames.allOptions.has(name)) {
-            throw new TypeError(
-              `User-defined option "${name}" conflicts with the ` +
-                `built-in ${label}.`,
-            );
-          } else if (userNames.allCommands.has(name)) {
-            throw new TypeError(
-              `User-defined command "${name}" conflicts with the ` +
-                `built-in ${label}.`,
-            );
-          } else if (userNames.allLiterals.has(name)) {
-            throw new TypeError(
-              `Literal value "${name}" conflicts with the ` +
-                `built-in ${label}.`,
-            );
-          } else {
-            throw new TypeError(
-              `User-defined name "${name}" conflicts with the ` +
-                `built-in ${label}.`,
-            );
-          }
-        }
-      } else {
-        // Option-form meta entries scan entire argv, so check all
-        // user names at every depth.
-        if (userNames.allOptions.has(name)) {
-          throw new TypeError(
-            `User-defined option "${name}" conflicts with the ` +
-              `built-in ${label}.`,
-          );
-        }
-        if (userNames.allCommands.has(name)) {
-          throw new TypeError(
-            `User-defined command "${name}" conflicts with the ` +
-              `built-in ${label}.`,
-          );
-        }
-        if (userNames.allLiterals.has(name)) {
-          throw new TypeError(
-            `Literal value "${name}" conflicts with the ` +
-              `built-in ${label}.`,
-          );
-        }
-      }
-      if (prefixMatch) {
-        const prefix = name + "=";
-        const checkSets = kind === "command" ? [userNames.leadingNames] : [
-          userNames.allOptions,
-          userNames.allCommands,
-          userNames.allLiterals,
-        ];
-        for (const nameSet of checkSets) {
-          for (const userName of nameSet) {
-            if (!userName.startsWith(prefix)) continue;
-            // Classify the name for the error message
-            if (userNames.allOptions.has(userName)) {
-              throw new TypeError(
-                `User-defined option "${userName}" conflicts with the ` +
-                  `built-in ${label} (prefix "${prefix}").`,
-              );
-            } else if (userNames.allCommands.has(userName)) {
-              throw new TypeError(
-                `User-defined command "${userName}" conflicts with the ` +
-                  `built-in ${label} (prefix "${prefix}").`,
-              );
-            } else if (userNames.allLiterals.has(userName)) {
-              throw new TypeError(
-                `Literal value "${userName}" conflicts with the ` +
-                  `built-in ${label} (prefix "${prefix}").`,
-              );
-            } else {
-              throw new TypeError(
-                `User-defined name "${userName}" conflicts with the ` +
-                  `built-in ${label} (prefix "${prefix}").`,
-              );
-            }
-          }
         }
       }
     }
