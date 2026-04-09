@@ -12,6 +12,7 @@ import type { SourceContext } from "@optique/core/context";
 import type { DocSection } from "@optique/core/doc";
 import {
   defineInheritedAnnotationParser,
+  type ExecutionContext,
   type Parser,
 } from "@optique/core/parser";
 import {
@@ -49,6 +50,15 @@ import { extractPhase2SeedKey } from "./phase2-seed.ts";
 import { bindEnv, createEnvContext } from "../../env/src/index.ts";
 
 type AssertNever<T extends never> = T;
+
+function getRuntimeExtractPhase2SeedKey(): symbol {
+  const parser = command("probe", constant(null));
+  const key = Object.getOwnPropertySymbols(parser).find((symbol) =>
+    symbol.description === "@optique/core/extractPhase2Seed"
+  );
+  assert.ok(key, "expected command() to expose extractPhase2SeedKey");
+  return key;
+}
 
 describe("runParser", () => {
   describe("basic parsing", () => {
@@ -10784,6 +10794,132 @@ describe("branch coverage: facade.ts edge cases", () => {
       config: "optique.json",
       token: "token:optique.json",
     });
+  });
+
+  it("runWithSync: phase two preserves commandPath during seed extraction", () => {
+    const tokenKey = Symbol.for("@test/dyn-phase-two-command-path-sync");
+    const runtimeExtractPhase2SeedKey = getRuntimeExtractPhase2SeedKey();
+
+    const tokenParser: Parser<"sync", string, undefined> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete(state) {
+        const token = getAnnotations(state)?.[tokenKey];
+        return typeof token === "string"
+          ? { success: true as const, value: token }
+          : { success: false as const, error: message`Missing token.` };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineInheritedAnnotationParser(tokenParser);
+    Object.defineProperty(tokenParser, runtimeExtractPhase2SeedKey, {
+      value(_state: undefined, exec?: ExecutionContext) {
+        return { value: { commandPath: exec?.commandPath ?? [] } };
+      },
+      enumerable: true,
+    });
+
+    const dynamicContext: SourceContext = {
+      id: tokenKey,
+      phase: "two-pass",
+      getAnnotations(
+        parsed: { readonly commandPath: readonly string[] } | undefined,
+      ) {
+        if (parsed == null) return {};
+        return parsed.commandPath[0] === "serve"
+          ? { [tokenKey]: "from-phase-two" }
+          : {};
+      },
+    };
+
+    const parser = command("serve", tokenParser);
+
+    const result = runWithSync(parser, "test", [dynamicContext], {
+      args: ["serve"],
+    });
+
+    assert.equal(result, "from-phase-two");
+  });
+
+  it("runWith: phase two preserves commandPath during seed extraction", async () => {
+    const tokenKey = Symbol.for("@test/dyn-phase-two-command-path-async");
+    const runtimeExtractPhase2SeedKey = getRuntimeExtractPhase2SeedKey();
+
+    const tokenParser: Parser<"async", string, undefined> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete(state) {
+        const token = getAnnotations(state)?.[tokenKey];
+        return Promise.resolve(
+          typeof token === "string"
+            ? { success: true as const, value: token }
+            : { success: false as const, error: message`Missing token.` },
+        );
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineInheritedAnnotationParser(tokenParser);
+    Object.defineProperty(tokenParser, runtimeExtractPhase2SeedKey, {
+      value(_state: undefined, exec?: ExecutionContext) {
+        return Promise.resolve({
+          value: { commandPath: exec?.commandPath ?? [] },
+        });
+      },
+      enumerable: true,
+    });
+
+    const dynamicContext: SourceContext = {
+      id: tokenKey,
+      phase: "two-pass",
+      getAnnotations(
+        parsed: { readonly commandPath: readonly string[] } | undefined,
+      ) {
+        if (parsed == null) return {};
+        return parsed.commandPath[0] === "serve"
+          ? { [tokenKey]: "from-phase-two" }
+          : {};
+      },
+    };
+
+    const parser = command("serve", tokenParser);
+
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: ["serve"],
+    });
+
+    assert.equal(result, "from-phase-two");
   });
 
   it("runWithSync: phase two unwraps multiple() item states for seeds", () => {

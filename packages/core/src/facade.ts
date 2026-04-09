@@ -499,6 +499,7 @@ function createPhase2SeedExec(
     usage: parser.usage,
     phase: "parse",
     path: [],
+    commandPath: [],
     trace: createInputTrace(),
   };
   const runtime = createDependencyRuntimeContext();
@@ -507,6 +508,7 @@ function createPhase2SeedExec(
     phase: "complete",
     dependencyRuntime: runtime,
     dependencyRegistry: runtime.registry,
+    commandPath: getCommandPath(context.exec),
     trace: context.exec?.trace ?? context.trace ?? exec.trace,
   };
 }
@@ -519,6 +521,7 @@ function createPhase2SeedContext(
     usage: parser.usage,
     phase: "parse",
     path: [],
+    commandPath: [],
     trace: createInputTrace(),
   };
   return createParserContext(
