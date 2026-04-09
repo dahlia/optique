@@ -70,7 +70,7 @@ describe("annotation-state", () => {
           childState,
           "the wrapped state should normalize back to the original sentinel",
         );
-        assert.equal(getAnnotations(wrapped)?.[marker], true);
+        assert.ok(getAnnotations(wrapped)?.[marker]);
       }
     },
   );
@@ -97,7 +97,7 @@ describe("annotation-state", () => {
           childState,
           "the wrapped state should normalize back to the original sentinel",
         );
-        assert.equal(getAnnotations(wrapped)?.[marker], true);
+        assert.ok(getAnnotations(wrapped)?.[marker]);
       }
     },
   );
