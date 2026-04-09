@@ -892,7 +892,7 @@ const configContext: SourceContext = {
   id: Symbol.for("@myapp/config"),
   phase: "two-pass",
   async getAnnotations(parsed?: unknown) {
-    if (!parsed) return {}; // Return empty on first pass
+    if (parsed === undefined) return {}; // Return empty on first pass
     
     const result = parsed as { config?: string };
     if (!result.config) return {};
@@ -1121,7 +1121,7 @@ export function createConfigContext(): SourceContext {
     id: configKey,
     phase: "two-pass",
     async getAnnotations(parsed?: unknown): Promise<Annotations> {
-      if (!parsed) return {}; // First pass - no config yet
+      if (parsed === undefined) return {}; // First pass - no config yet
       
       const result = parsed as { config?: string };
       if (!result.config) return {}; // No config file specified
@@ -1183,7 +1183,7 @@ export function createConfigContext(): ConfigContext {
     id: configKey,
     phase: "two-pass",
     async getAnnotations(parsed?: unknown): Promise<Annotations> {
-      if (!parsed) return {};
+      if (parsed === undefined) return {};
       
       // Use the injected getConfigPath function
       const configPath = context.getConfigPath?.(parsed);
