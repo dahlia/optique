@@ -884,8 +884,16 @@ Contexts can be either *single-pass* or *two-pass*:
 The difference lies in whether `getAnnotations()` needs the parsed result to
 do its work:
 
-~~~~ typescript
-import type { SourceContext } from "@optique/core/context";
+~~~~ typescript twoslash
+declare const process: {
+  readonly env: Record<string, string | undefined>;
+};
+declare function loadConfigFile(path: string): Promise<unknown>;
+// ---cut-before---
+import type {
+  SourceContext,
+  SourceContextRequest,
+} from "@optique/core/context";
 
 // Single-pass context: data is always available
 const envContext: SourceContext = {
@@ -1132,8 +1140,16 @@ A config file context is two-pass because it needs to know the file path from
 parsed arguments. The `getAnnotations()` method receives the parsed result and
 uses it to load the configuration:
 
-~~~~ typescript
-import type { SourceContext, Annotations } from "@optique/core/context";
+~~~~ typescript twoslash
+declare const Deno: {
+  readTextFile(path: string): Promise<string>;
+};
+// ---cut-before---
+import type {
+  Annotations,
+  SourceContext,
+  SourceContextRequest,
+} from "@optique/core/context";
 
 const configKey = Symbol.for("@myapp/config");
 
@@ -1182,7 +1198,11 @@ The example above hardcodes how to extract the config path from parsed results
 For a more reusable approach, use `ParserValuePlaceholder` to declare that
 the caller must provide a `getConfigPath` function:
 
-~~~~ typescript
+~~~~ typescript twoslash
+declare const Deno: {
+  readTextFile(path: string): Promise<string>;
+};
+// ---cut-before---
 import type {
   Annotations,
   ParserValuePlaceholder,
