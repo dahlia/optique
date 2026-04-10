@@ -31,10 +31,11 @@ import { bindEnv, createEnvContext } from "../../env/src/index.ts";
 const TEST_DIR = join(import.meta.dirname ?? ".", "test-configs");
 
 function isPhase1ContextRequest(request: unknown): boolean {
-  return request != null &&
-    typeof request === "object" &&
-    "phase" in request &&
-    (request as { readonly phase?: unknown }).phase === "phase1";
+  return request === undefined ||
+    (request != null &&
+      typeof request === "object" &&
+      "phase" in request &&
+      (request as { readonly phase?: unknown }).phase === "phase1");
 }
 
 function isPhase2ContextRequest(
@@ -1696,9 +1697,9 @@ describe("run with contexts", () => {
     const context: SourceContext = {
       id: key,
       phase: "two-pass",
-      getAnnotations(_parsed?: unknown, options?: unknown) {
+      getAnnotations(_request?: unknown, options?: unknown) {
         receivedOptions = options;
-        if (isPhase1ContextRequest(_parsed)) return {};
+        if (isPhase1ContextRequest(_request)) return {};
         return { [key]: { value: true } };
       },
     };
@@ -1729,7 +1730,7 @@ describe("run with contexts", () => {
     const context: SourceContext<{ help: string }> = {
       id: key,
       phase: "two-pass",
-      getAnnotations(_parsed?: unknown, options?: unknown) {
+      getAnnotations(_request?: unknown, options?: unknown) {
         receivedOptions = options;
         return {};
       },
@@ -1762,7 +1763,7 @@ describe("run with contexts", () => {
     const context: SourceContext<{ programName: string }> = {
       id: key,
       phase: "two-pass",
-      getAnnotations(_parsed?: unknown, options?: unknown) {
+      getAnnotations(_request?: unknown, options?: unknown) {
         receivedOptions = options;
         return {};
       },

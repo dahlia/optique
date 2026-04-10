@@ -56,10 +56,11 @@ import { bindEnv, createEnvContext } from "../../env/src/index.ts";
 type AssertNever<T extends never> = T;
 
 function isPhase1ContextRequest(request: unknown): boolean {
-  return request != null &&
-    typeof request === "object" &&
-    "phase" in request &&
-    (request as { readonly phase?: unknown }).phase === "phase1";
+  return request === undefined ||
+    (request != null &&
+      typeof request === "object" &&
+      "phase" in request &&
+      (request as { readonly phase?: unknown }).phase === "phase1");
 }
 
 function isPhase2ContextRequest(
@@ -6296,7 +6297,7 @@ describe("runWith", () => {
       const dynamicContext: SourceContext = {
         id: Symbol("dynamic"),
         phase: "two-pass",
-        getAnnotations(_parsed?: unknown) {
+        getAnnotations(_request?: unknown) {
           return Promise.resolve({});
         },
       };
@@ -6941,9 +6942,9 @@ describe("runWith", () => {
       const context: SourceContext = {
         id: passthroughKey,
         phase: "two-pass",
-        getAnnotations(_parsed?: unknown, options?: unknown) {
+        getAnnotations(_request?: unknown, options?: unknown) {
           receivedOptions = options;
-          if (isPhase1ContextRequest(_parsed)) return {};
+          if (isPhase1ContextRequest(_request)) return {};
           return { [passthroughKey]: { value: "loaded" } };
         },
       };
@@ -7002,7 +7003,7 @@ describe("runWith", () => {
       const context: SourceContext<{ args: string[] }> = {
         id: key,
         phase: "two-pass",
-        getAnnotations(_parsed?: unknown, options?: unknown) {
+        getAnnotations(_request?: unknown, options?: unknown) {
           receivedOptions = options;
           return {};
         },
@@ -7032,7 +7033,7 @@ describe("runWith", () => {
       const context: SourceContext<{ help: string; programName: string }> = {
         id: key,
         phase: "two-pass",
-        getAnnotations(_parsed?: unknown, options?: unknown) {
+        getAnnotations(_request?: unknown, options?: unknown) {
           receivedOptions = options;
           return {};
         },
@@ -7085,7 +7086,7 @@ describe("runWith", () => {
       const context: SourceContext<{ profile?: string }> = {
         id: key,
         phase: "two-pass",
-        getAnnotations(_parsed?: unknown, options?: unknown) {
+        getAnnotations(_request?: unknown, options?: unknown) {
           receivedOptions = options;
           return {};
         },
@@ -8043,9 +8044,9 @@ describe("runWithSync", () => {
       const context: SourceContext = {
         id: syncKey,
         phase: "two-pass",
-        getAnnotations(_parsed?: unknown, options?: unknown) {
+        getAnnotations(_request?: unknown, options?: unknown) {
           receivedOptions = options;
-          if (isPhase1ContextRequest(_parsed)) return {};
+          if (isPhase1ContextRequest(_request)) return {};
           return { [syncKey]: { value: "loaded" } };
         },
       };
@@ -8074,7 +8075,7 @@ describe("runWithSync", () => {
       const context: SourceContext<{ help: string; programName: string }> = {
         id: key,
         phase: "two-pass",
-        getAnnotations(_parsed?: unknown, options?: unknown) {
+        getAnnotations(_request?: unknown, options?: unknown) {
           receivedOptions = options;
           return {};
         },
