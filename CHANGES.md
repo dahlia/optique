@@ -1697,8 +1697,8 @@ To be released.
     Calling `configContext.getAnnotations()` manually no longer affects
     later plain parses unless the returned annotations are passed
     explicitly or the parser is run through a context-aware runner.
-    This also fixes stale config values surviving later empty or
-    failing probes.  [[#234], [#785]]
+    This also fixes stale config values and metadata surviving later
+    empty, metadata-less, or failing probes.  [[#234], [#272], [#785]]
 
  -  Fixed `bindConfig()` not re-validating fallback values (values loaded
     from the config file and configured defaults) against the inner CLI
@@ -1841,6 +1841,7 @@ To be released.
 [#236]: https://github.com/dahlia/optique/issues/236
 [#259]: https://github.com/dahlia/optique/issues/259
 [#270]: https://github.com/dahlia/optique/issues/270
+[#272]: https://github.com/dahlia/optique/issues/272
 [#391]: https://github.com/dahlia/optique/issues/391
 [#398]: https://github.com/dahlia/optique/issues/398
 [#400]: https://github.com/dahlia/optique/issues/400

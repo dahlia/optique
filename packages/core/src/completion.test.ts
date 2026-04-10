@@ -1704,7 +1704,9 @@ fi
       ok(!script.includes('_files -g "\\$ext_pattern"'));
     });
 
-    it("should work with actual zsh shell", (t) => {
+    it("should work with actual zsh shell", {
+      timeout: 10000,
+    }, (t) => {
       if (!isShellAvailable("zsh")) {
         t.skip("zsh not available");
         return;
@@ -2382,6 +2384,7 @@ printf '__FILE__:file:::1\\t[file]\\tConfiguration file\\n'
 
     it("should preserve directory prefix in nested file completions", {
       skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+      timeout: 10000,
     }, () => {
       // Bun ignores the skip option, so we need an early return as well:
       if (process.platform === "win32") return;
@@ -2500,6 +2503,7 @@ printf '__FILE__:file::src/:0\\n'
 
     it("should filter files by dot-prefixed extensions in pwsh", {
       skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+      timeout: 10000,
     }, () => {
       // Bun ignores the skip option, so we need an early return as well:
       if (process.platform === "win32") return;

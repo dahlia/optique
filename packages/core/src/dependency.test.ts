@@ -3876,25 +3876,71 @@ describe("Async combinations with dependencies", () => {
 
   test("multiple async derived parsers resolve concurrently", async () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
+    let activeParses = 0;
+    let sawOverlap = false;
+
+    const trackOverlap = async <T>(run: () => Promise<T>): Promise<T> => {
+      activeParses += 1;
+      if (activeParses > 1) {
+        sawOverlap = true;
+      }
+      try {
+        return await run();
+      } finally {
+        activeParses -= 1;
+      }
+    };
 
     // deriveAsync factory returns async ValueParser, not Promise<ValueParser>
-    // Use 50ms delay to test concurrent execution
+    // Each parser delays by 50ms.  The assertion below checks for actual
+    // overlapping execution instead of relying on wall-clock timing, which
+    // can fluctuate under repository-wide test load.
     const logLevelParser = modeParser.deriveAsync({
       metavar: "LEVEL",
       factory: (mode: "dev" | "prod") =>
-        asyncChoice(
-          mode === "dev"
-            ? (["debug", "verbose"] as const)
-            : (["quiet", "silent"] as const),
-          50, // delay for concurrency test
-        ),
+        ({
+          $mode: "async",
+          metavar: "LEVEL" as NonEmptyString,
+          placeholder: (mode === "dev" ? "debug" : "quiet") as
+            | "debug"
+            | "quiet",
+          async parse(input: string) {
+            return await trackOverlap(async () =>
+              await asyncChoice(
+                mode === "dev"
+                  ? (["debug", "verbose"] as const)
+                  : (["quiet", "silent"] as const),
+                50,
+              ).parse(input)
+            );
+          },
+          format(value: "debug" | "verbose" | "quiet" | "silent") {
+            return value;
+          },
+        }) satisfies ValueParser<
+          "async",
+          "debug" | "verbose" | "quiet" | "silent"
+        >,
       defaultValue: () => "dev" as const,
     });
 
     const portParser = modeParser.deriveAsync({
       metavar: "PORT",
       factory: (mode: "dev" | "prod") =>
-        asyncInteger(mode === "dev" ? 3000 : 80, 65535, 50),
+        ({
+          $mode: "async",
+          metavar: "PORT" as NonEmptyString,
+          placeholder: mode === "dev" ? 3000 : 80,
+          async parse(input: string) {
+            return await trackOverlap(async () =>
+              await asyncInteger(mode === "dev" ? 3000 : 80, 65535, 50)
+                .parse(input)
+            );
+          },
+          format(value: number) {
+            return String(value);
+          },
+        }) satisfies ValueParser<"async", number>,
       defaultValue: () => "dev" as const,
     });
 
@@ -3904,7 +3950,6 @@ describe("Async combinations with dependencies", () => {
       port: option("--port", portParser),
     });
 
-    const startTime = Date.now();
     const result = await parseAsync(parser, [
       "--mode",
       "dev",
@@ -3913,15 +3958,11 @@ describe("Async combinations with dependencies", () => {
       "--port",
       "3000",
     ]);
-    const endTime = Date.now();
 
     assert.ok(result.success);
-
-    // Total time should be ~50ms for concurrent execution, not ~100ms+ for sequential
-    // Allow generous slack for CI environments and test execution overhead
     assert.ok(
-      endTime - startTime < 200,
-      `Total time should be ~50ms for concurrent, was ${endTime - startTime}ms`,
+      sawOverlap,
+      "Expected async derived parsers to overlap while parsing.",
     );
   });
 });

@@ -708,7 +708,9 @@ describe("git parsers", () => {
       }
     });
 
-    it("should suggest only unique and parseable commit SHAs", async () => {
+    it("should suggest only unique and parseable commit SHAs", {
+      timeout: 15000,
+    }, async () => {
       const { dir, prefix } = await createTestRepoWithAmbiguousPrefixLength(4);
       try {
         const parser = gitCommit({ dir, suggestionDepth: 5000 });
@@ -743,7 +745,9 @@ describe("git parsers", () => {
       }
     });
 
-    it("should report ambiguous abbreviated commit SHAs", async () => {
+    it("should report ambiguous abbreviated commit SHAs", {
+      timeout: 15000,
+    }, async () => {
       const { dir, prefix } = await createTestRepoWithAmbiguousPrefixLength(4);
       try {
         const parser = gitCommit({ dir });
@@ -1215,7 +1219,9 @@ describe("git parsers", () => {
       }
     });
 
-    it("should suggest only unique and parseable commit SHAs", async () => {
+    it("should suggest only unique and parseable commit SHAs", {
+      timeout: 15000,
+    }, async () => {
       const { dir, prefix } = await createTestRepoWithAmbiguousPrefixLength(4);
       try {
         const parser = gitRef({ dir, suggestionDepth: 5000 });
@@ -1679,7 +1685,9 @@ describe("git parsers", () => {
       }
     });
 
-    it("should report ambiguous short SHA for commit and ref parsers", async () => {
+    it("should report ambiguous short SHA for commit and ref parsers", {
+      timeout: 30000,
+    }, async () => {
       const testRepoDir = await createTestRepo();
       try {
         const author = { name: "Test User", email: "test@example.com" };

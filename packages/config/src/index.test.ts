@@ -817,6 +817,55 @@ describe("bindConfig", () => {
     assert.equal(result.value, "no-meta:./dist");
   });
 
+  test("later load with meta: undefined does not reuse earlier metadata", async () => {
+    const schema = z.object({
+      outDir: z.string(),
+    });
+
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(option("--out-dir", string()), {
+      context,
+      key: (config, meta) => `${meta?.configDir ?? "no-meta"}:${config.outDir}`,
+    });
+
+    const firstAnnotations = await context.getAnnotations(
+      phase2({ cfg: "a" }),
+      {
+        load: () => ({
+          config: { outDir: "one" },
+          meta: {
+            configDir: "/first",
+            configPath: "/first/app.json",
+          } satisfies ConfigMeta,
+        }),
+      },
+    );
+    assert.deepEqual(
+      parse(parser, [], { annotations: firstAnnotations }),
+      { success: true, value: "/first:one" },
+    );
+
+    const secondAnnotations = await context.getAnnotations(
+      phase2({ cfg: "b" }),
+      {
+        load: () => ({
+          config: { outDir: "two" },
+          meta: undefined,
+        }),
+      },
+    );
+    const annotation = secondAnnotations[context.id] as
+      | { readonly data: unknown; readonly meta?: unknown }
+      | undefined;
+    assert.ok(annotation != null);
+    assert.deepEqual(annotation.data, { outDir: "two" });
+    assert.ok(!("meta" in annotation));
+    assert.deepEqual(
+      parse(parser, [], { annotations: secondAnnotations }),
+      { success: true, value: "no-meta:two" },
+    );
+  });
+
   test("ConfigLoadResult allows undefined metadata", () => {
     const loaded: ConfigLoadResult = {
       config: { outDir: "./dist" },
@@ -1850,6 +1899,52 @@ describe("load() return value validation", () => {
       "Missing required configuration value.",
     );
   });
+
+  test(
+    "empty follow-up annotations do not resurrect earlier config data or metadata",
+    () => {
+      const schema = z.object({ outDir: z.string() });
+      const context = createConfigContext({ schema });
+      const parser = bindConfig(option("--out-dir", string()), {
+        context,
+        key: (config, meta) =>
+          `${meta?.configDir ?? "no-meta"}:${config.outDir}`,
+      });
+
+      const firstAnnotations = context.getAnnotations(phase2({ cfg: "a" }), {
+        load: () => ({
+          config: { outDir: "one" },
+          meta: {
+            configDir: "/first",
+            configPath: "/first/app.json",
+          } satisfies ConfigMeta,
+        }),
+      });
+      if (firstAnnotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      assert.deepEqual(
+        parse(parser, [], { annotations: firstAnnotations }),
+        { success: true, value: "/first:one" },
+      );
+
+      const emptyAnnotations = context.getAnnotations(phase2({ cfg: "b" }), {
+        getConfigPath: () => undefined,
+      });
+      if (emptyAnnotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      assert.deepEqual(emptyAnnotations, {});
+
+      const result = parse(parser, [], { annotations: emptyAnnotations });
+      assert.ok(!result.success);
+      if (result.success) return;
+      assert.equal(
+        formatMessage(result.error),
+        "Missing required configuration value.",
+      );
+    },
+  );
 
   test("rejects array return value from load()", () => {
     const context = createNameContext();
