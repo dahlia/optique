@@ -5620,8 +5620,8 @@ describe("runWith", () => {
       const lateDynamicContext: SourceContext = {
         id: Symbol.for("@test/phase-merge-late"),
         phase: "two-pass",
-        getAnnotations(parsed?: unknown) {
-          if (isPhase1ContextRequest(parsed)) {
+        getAnnotations(request?: unknown) {
+          if (isPhase1ContextRequest(request)) {
             return {};
           }
           return { [sharedKey]: "phase2-late" };
@@ -5674,8 +5674,8 @@ describe("runWith", () => {
       const clearingContext: SourceContext = {
         id: Symbol.for("@test/phase-clear-early"),
         phase: "two-pass",
-        getAnnotations(parsed?: unknown) {
-          if (isPhase1ContextRequest(parsed)) {
+        getAnnotations(request?: unknown) {
+          if (isPhase1ContextRequest(request)) {
             return { [sharedKey]: "phase1-early" };
           }
           return {};
@@ -5685,8 +5685,8 @@ describe("runWith", () => {
       const fallbackContext: SourceContext = {
         id: Symbol.for("@test/phase-clear-late"),
         phase: "two-pass",
-        getAnnotations(parsed?: unknown) {
-          if (isPhase1ContextRequest(parsed)) {
+        getAnnotations(request?: unknown) {
+          if (isPhase1ContextRequest(request)) {
             return {};
           }
           return { [sharedKey]: "phase2-late" };
@@ -5796,8 +5796,8 @@ describe("runWith", () => {
       const dynamicContext: SourceContext = {
         id: configKey,
         phase: "two-pass",
-        getAnnotations(parsed?: unknown) {
-          if (isPhase1ContextRequest(parsed)) return {};
+        getAnnotations(request?: unknown) {
+          if (isPhase1ContextRequest(request)) return {};
           phase2Called = true;
           return { [configKey]: { host: "config-host" } };
         },
@@ -6972,9 +6972,9 @@ describe("runWith", () => {
       const context: SourceContext = {
         id: dynamicKey,
         phase: "two-pass",
-        getAnnotations(parsed?: unknown, options?: unknown) {
+        getAnnotations(request?: unknown, options?: unknown) {
           receivedOptionsPerCall.push(options);
-          if (isPhase1ContextRequest(parsed)) return {};
+          if (isPhase1ContextRequest(request)) return {};
           return { [dynamicKey]: { value: "loaded" } };
         },
       };
@@ -7310,8 +7310,8 @@ describe("runWithSync", () => {
     const mixedContext: SourceContext = {
       id: mixedKey,
       phase: "two-pass",
-      getAnnotations(parsed?: unknown) {
-        if (isPhase1ContextRequest(parsed)) return {}; // sync (empty → dynamic)
+      getAnnotations(request?: unknown) {
+        if (isPhase1ContextRequest(request)) return {}; // sync (empty → dynamic)
         return Promise.resolve({ [mixedKey]: { value: "loaded" } });
       },
     };
@@ -7951,8 +7951,8 @@ describe("runWithSync", () => {
       const lateDynamicContext: SourceContext = {
         id: Symbol.for("@test/phase-merge-sync-late"),
         phase: "two-pass",
-        getAnnotations(parsed?: unknown) {
-          if (isPhase1ContextRequest(parsed)) {
+        getAnnotations(request?: unknown) {
+          if (isPhase1ContextRequest(request)) {
             return {};
           }
           return { [sharedKey]: "phase2-late" };
@@ -8005,8 +8005,8 @@ describe("runWithSync", () => {
       const clearingContext: SourceContext = {
         id: Symbol.for("@test/phase-clear-sync-early"),
         phase: "two-pass",
-        getAnnotations(parsed?: unknown) {
-          if (isPhase1ContextRequest(parsed)) {
+        getAnnotations(request?: unknown) {
+          if (isPhase1ContextRequest(request)) {
             return { [sharedKey]: "phase1-early" };
           }
           return {};
@@ -8016,8 +8016,8 @@ describe("runWithSync", () => {
       const fallbackContext: SourceContext = {
         id: Symbol.for("@test/phase-clear-sync-late"),
         phase: "two-pass",
-        getAnnotations(parsed?: unknown) {
-          if (isPhase1ContextRequest(parsed)) {
+        getAnnotations(request?: unknown) {
+          if (isPhase1ContextRequest(request)) {
             return {};
           }
           return { [sharedKey]: "phase2-late" };
@@ -10168,8 +10168,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     const dynamicContext: SourceContext = {
       id: dynKey,
       phase: "two-pass",
-      getAnnotations(parsed?: unknown) {
-        if (isPhase1ContextRequest(parsed)) return {};
+      getAnnotations(request?: unknown) {
+        if (isPhase1ContextRequest(request)) return {};
         phase2Called = true;
         return { [dynKey]: {} };
       },
@@ -10222,8 +10222,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     const context: SourceContext = {
       id: key,
       phase: "two-pass",
-      getAnnotations(parsed?: unknown) {
-        if (isPhase1ContextRequest(parsed)) {
+      getAnnotations(request?: unknown) {
+        if (isPhase1ContextRequest(request)) {
           return { [key]: { phase1: true } };
         }
         phase2Called = true;
@@ -10830,8 +10830,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     const dynamicContext: SourceContext = {
       id: tokenKey,
       phase: "two-pass",
-      getAnnotations(parsed) {
-        if (isPhase1ContextRequest(parsed)) return {};
+      getAnnotations(request) {
+        if (isPhase1ContextRequest(request)) return {};
         phase2Called = true;
         return { [tokenKey]: "from-phase-two" };
       },
@@ -10895,8 +10895,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     const dynamicContext: SourceContext = {
       id: tokenKey,
       phase: "two-pass",
-      getAnnotations(parsed) {
-        if (isPhase1ContextRequest(parsed)) return {};
+      getAnnotations(request) {
+        if (isPhase1ContextRequest(request)) return {};
         phase2Called = true;
         return { [tokenKey]: "from-phase-two" };
       },
@@ -11332,8 +11332,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     const dynamicContext: SourceContext = {
       id: dynKey,
       phase: "two-pass",
-      getAnnotations(parsed?: unknown) {
-        if (isPhase1ContextRequest(parsed)) return {};
+      getAnnotations(request?: unknown) {
+        if (isPhase1ContextRequest(request)) return {};
         return { [dynKey]: {} };
       },
     };
@@ -11355,8 +11355,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     const dynamicContext: SourceContext = {
       id: dynKey,
       phase: "two-pass",
-      getAnnotations(parsed?: unknown) {
-        if (isPhase1ContextRequest(parsed)) return {}; // dynamic (no symbols → hasDynamic = true)
+      getAnnotations(request?: unknown) {
+        if (isPhase1ContextRequest(request)) return {}; // dynamic (no symbols → hasDynamic = true)
         return { [dynKey]: {} };
       },
     };
@@ -11460,8 +11460,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     const dynamicContext: SourceContext = {
       id: dynKey,
       phase: "two-pass",
-      getAnnotations(parsed?: unknown) {
-        if (isPhase1ContextRequest(parsed)) return {}; // dynamic
+      getAnnotations(request?: unknown) {
+        if (isPhase1ContextRequest(request)) return {}; // dynamic
         return { [dynKey]: {} };
       },
     };
@@ -11530,8 +11530,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     const context: SourceContext = {
       id: dynKey,
       phase: "two-pass",
-      getAnnotations(parsed?: unknown) {
-        if (isPhase1ContextRequest(parsed)) {
+      getAnnotations(request?: unknown) {
+        if (isPhase1ContextRequest(request)) {
           phase1Calls++;
           return { [dynKey]: {} };
         }
@@ -11626,8 +11626,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     const context: SourceContext = {
       id: dynKey,
       phase: "two-pass",
-      getAnnotations(parsed?: unknown) {
-        if (isPhase1ContextRequest(parsed)) return {}; // dynamic
+      getAnnotations(request?: unknown) {
+        if (isPhase1ContextRequest(request)) return {}; // dynamic
         return { [dynKey]: {} };
       },
     };
@@ -11651,8 +11651,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     const context: SourceContext = {
       id: dynKey,
       phase: "two-pass",
-      getAnnotations(parsed?: unknown) {
-        if (isPhase1ContextRequest(parsed)) return {};
+      getAnnotations(request?: unknown) {
+        if (isPhase1ContextRequest(request)) return {};
         return { [dynKey]: {} };
       },
     };
@@ -11746,8 +11746,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     const context: SourceContext = {
       id: dynKey,
       phase: "two-pass",
-      getAnnotations(parsed?: unknown) {
-        if (isPhase1ContextRequest(parsed)) return {}; // dynamic
+      getAnnotations(request?: unknown) {
+        if (isPhase1ContextRequest(request)) return {}; // dynamic
         return { [dynKey]: {} };
       },
     };
@@ -11804,8 +11804,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     const context: SourceContext = {
       id: key,
       phase: "two-pass",
-      getAnnotations(parsed?: unknown) {
-        if (isPhase1ContextRequest(parsed)) {
+      getAnnotations(request?: unknown) {
+        if (isPhase1ContextRequest(request)) {
           return { [key]: { phase1: true } };
         }
         phase2Called = true;
@@ -12072,8 +12072,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     const dynamicContext: SourceContext = {
       id: Symbol.for("@test/dyn-throw-in-first-pass"),
       phase: "two-pass",
-      getAnnotations(parsed?: unknown) {
-        if (isPhase1ContextRequest(parsed)) return {};
+      getAnnotations(request?: unknown) {
+        if (isPhase1ContextRequest(request)) return {};
         return { [Symbol.for("@test/dyn-throw-in-first-pass")]: {} };
       },
     };
@@ -12118,8 +12118,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     const dynamicContext: SourceContext = {
       id: Symbol.for("@test/sync-dyn-throw-in-first-pass"),
       phase: "two-pass",
-      getAnnotations(parsed?: unknown) {
-        if (isPhase1ContextRequest(parsed)) return {};
+      getAnnotations(request?: unknown) {
+        if (isPhase1ContextRequest(request)) return {};
         return { [Symbol.for("@test/sync-dyn-throw-in-first-pass")]: {} };
       },
     };
