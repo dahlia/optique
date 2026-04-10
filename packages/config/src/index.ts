@@ -390,10 +390,11 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
       // Runners add the phase-1 unresolved marker through
       // getInternalAnnotations() so prompt(bindConfig(...)) can defer
       // interactive fallback without exposing that marker as user data.
-      if (request == null) {
+      if (request === undefined) {
         return {};
       }
       if (
+        request === null ||
         typeof request !== "object" ||
         !("phase" in request) ||
         (request.phase !== "phase1" && request.phase !== "phase2") ||
