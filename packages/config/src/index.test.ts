@@ -1517,6 +1517,24 @@ describe("createConfigContext input validation", () => {
     assert.ok(result != null);
   });
 
+  test("rejects malformed request object in getAnnotations", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          { any: 1 } as never,
+          { load: () => ({ config: { host: "ok" }, meta: undefined }) },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected getAnnotations() to receive no request or a " +
+          'SourceContextRequest ({ phase: "phase1" } or ' +
+          '{ phase: "phase2", parsed }).',
+      },
+    );
+  });
+
   test("rejects non-string getConfigPath() return value (object)", () => {
     const schema = z.object({ host: z.string() });
     const context = createConfigContext({ schema });

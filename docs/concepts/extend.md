@@ -912,11 +912,11 @@ const configContext: SourceContext = {
   async getAnnotations(request?: SourceContextRequest) {
     if (request == null || request.phase === "phase1") return {};
 
-    const result = request.parsed as { config?: string };
-    if (!result.config) return {};
+    const parsed = request.parsed as { config?: string } | undefined;
+    if (!parsed?.config) return {};
     
     // Load config file asynchronously
-    const data = await loadConfigFile(result.config);
+    const data = await loadConfigFile(parsed.config);
     return {
       [Symbol.for("@myapp/config")]: data
     };
@@ -1166,11 +1166,11 @@ export function createConfigContext(): SourceContext {
     ): Promise<Annotations> {
       if (request == null || request.phase === "phase1") return {};
 
-      const result = request.parsed as { config?: string };
-      if (!result.config) return {}; // No config file specified
+      const parsed = request.parsed as { config?: string } | undefined;
+      if (!parsed?.config) return {}; // No config file specified
       
       try {
-        const content = await Deno.readTextFile(result.config);
+        const content = await Deno.readTextFile(parsed.config);
         const data: ConfigData = JSON.parse(content);
         return { [configKey]: data };
       } catch {
@@ -1234,12 +1234,12 @@ export function createConfigContext(): ConfigContext {
     ): Promise<Annotations> {
       if (request == null || request.phase === "phase1") return {};
 
-      const parsed = request.parsed;
+      const parsed = request.parsed as ParserValuePlaceholder | undefined;
 
       // Use the injected getConfigPath function
-      const configPath = options?.getConfigPath(
-        parsed as ParserValuePlaceholder,
-      );
+      const configPath = parsed == null
+        ? undefined
+        : options?.getConfigPath(parsed);
       if (!configPath) return {};
       
       try {
