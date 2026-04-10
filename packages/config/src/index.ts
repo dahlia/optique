@@ -392,8 +392,10 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
       parsed?: unknown,
       runtimeOptions?: unknown,
     ): Promise<Annotations> | Annotations {
-      // Phase 1 (no parsed result): mark the context as unresolved so
-      // prompt(bindConfig(...)) can defer interactive fallback.
+      // Phase 1 (no parsed result): return no public annotations here.
+      // Runners add the phase-1 unresolved marker through
+      // getInternalAnnotations() so prompt(bindConfig(...)) can defer
+      // interactive fallback without exposing that marker as user data.
       if (parsed === undefined) {
         return {};
       }
