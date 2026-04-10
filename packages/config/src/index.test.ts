@@ -1817,7 +1817,7 @@ describe("load() return value validation", () => {
 
     assert.deepEqual(
       context.getAnnotations(
-        undefined,
+        {},
         { getConfigPath: () => undefined },
       ),
       {},
