@@ -841,7 +841,14 @@ describe("prompt()", () => {
           source: (key) => ({ APP_NAME: "env-name" })[key],
           prefix: "APP_",
         });
-        context.getAnnotations();
+        const annotations = context.getAnnotations();
+        if (annotations instanceof Promise) {
+          throw new TypeError("Expected synchronous annotations.");
+        }
+        assert.ok(
+          Object.getOwnPropertySymbols(annotations).length > 0,
+          "Expected getAnnotations() to capture env-backed annotations.",
+        );
         let promptCalls = 0;
         const parser = object({
           name: prompt(
@@ -1333,7 +1340,7 @@ describe("prompt()", () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
         });
-        await context.getAnnotations(
+        const annotations = await context.getAnnotations(
           { any: true },
           {
             load: () => ({
@@ -1341,6 +1348,10 @@ describe("prompt()", () => {
               meta: undefined,
             }),
           },
+        );
+        assert.ok(
+          Object.getOwnPropertySymbols(annotations).length > 0,
+          "Expected getAnnotations() to capture config-backed annotations.",
         );
         let promptCalls = 0;
         const parser = object({
