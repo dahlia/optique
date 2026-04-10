@@ -5711,8 +5711,8 @@ describe("runWith", () => {
       const dynamicContext: SourceContext = {
         id: configKey,
         phase: "two-pass",
-        getAnnotations(parsed?: unknown) {
-          const result = getPhase2ContextParsed<{ config?: string }>(parsed);
+        getAnnotations(request?: unknown) {
+          const result = getPhase2ContextParsed<{ config?: string }>(request);
           if (result == null) return {};
           phase2Called = true;
           if (!result.config) return {};
@@ -11442,8 +11442,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       const context: SourceContext = {
         id: key,
         phase: "two-pass",
-        getAnnotations(parsed?: unknown) {
-          if (isPhase1ContextRequest(parsed)) return {};
+        getAnnotations(request?: unknown) {
+          if (isPhase1ContextRequest(request)) return {};
           return { [key]: "phase2" };
         },
       };
@@ -11728,8 +11728,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       const context: SourceContext = {
         id: key,
         phase: "two-pass",
-        getAnnotations(parsed?: unknown) {
-          if (isPhase1ContextRequest(parsed)) return {};
+        getAnnotations(request?: unknown) {
+          if (isPhase1ContextRequest(request)) return {};
           return { [key]: "phase2" };
         },
       };

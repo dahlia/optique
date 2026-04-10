@@ -2959,7 +2959,7 @@ async function collectFinalAnnotations(
  * @param contexts Source contexts to collect annotations from.
  * @param options Optional context-required options to pass to each context.
  * @returns Merged annotations, per-context snapshots, and a two-phase hint.
- * @throws Error if any context returns a Promise.
+ * @throws {TypeError} If any context returns a Promise.
  */
 function collectPhase1AnnotationsSync(
   contexts: readonly SourceContext<unknown>[],
@@ -3011,7 +3011,7 @@ function collectPhase1AnnotationsSync(
  * @param parsed Optional parsed result from a previous parse pass.
  * @param options Optional context-required options to pass to each context.
  * @returns Merged annotations.
- * @throws Error if any context returns a Promise.
+ * @throws {TypeError} If any context returns a Promise.
  */
 function collectFinalAnnotationsSync(
   contexts: readonly SourceContext<unknown>[],
