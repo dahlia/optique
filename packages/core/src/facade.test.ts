@@ -68,7 +68,8 @@ function isPhase2ContextRequest(
   return request != null &&
     typeof request === "object" &&
     "phase" in request &&
-    (request as { readonly phase?: unknown }).phase === "phase2";
+    (request as { readonly phase?: unknown }).phase === "phase2" &&
+    "parsed" in request;
 }
 
 function getPhase2ContextParsed<T>(request: unknown): T | undefined {
