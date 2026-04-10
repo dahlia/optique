@@ -319,8 +319,8 @@ function validateWithSchema<T>(
  * *@optique/run* to provide configuration file support.
  * When calling `context.getAnnotations()` manually, pass the returned
  * annotations to low-level APIs such as `parse()`, `parseAsync()`,
- * `suggest()`, or `getDocPage()`. Calling `getAnnotations()` by itself does
- * not affect later parses.
+ * `complete()`, `suggest()`, or `getDocPage()`. Calling `getAnnotations()`
+ * by itself does not affect later parses.
  *
  * @template T The output type of the config schema.
  * @template TConfigMeta The metadata type for config sources.
