@@ -25,14 +25,7 @@ import {
   collectExplicitSourceValues,
   createDependencyRuntimeContext,
 } from "../../core/src/dependency-runtime.ts";
-import {
-  bindConfig,
-  createConfigContext,
-  getActiveConfig,
-  getActiveConfigMeta,
-  setActiveConfig,
-  setActiveConfigMeta,
-} from "./index.ts";
+import { bindConfig, createConfigContext } from "./index.ts";
 import type { ConfigLoadResult, ConfigMeta } from "./index.ts";
 
 type IsExact<T, U> = (<V>() => V extends T ? 1 : 2) extends
@@ -892,7 +885,7 @@ describe("bindConfig", () => {
     assert.equal(defaultResult.value, 3000);
   });
 
-  test("keeps multiple ConfigContext instances isolated in the active registry", async () => {
+  test("keeps multiple ConfigContext instances isolated in merged annotations", async () => {
     const leftContext = createConfigContext({
       schema: z.object({ host: z.string() }),
     });
@@ -909,15 +902,19 @@ describe("bindConfig", () => {
     });
 
     try {
-      await leftContext.getAnnotations(true, {
+      const leftAnnotations = await leftContext.getAnnotations(true, {
         load: () => ({ config: { host: "left.example.com" } }),
       });
-      await rightContext.getAnnotations(true, {
+      const rightAnnotations = await rightContext.getAnnotations(true, {
         load: () => ({ config: { host: "right.example.com" } }),
       });
+      const annotations: Annotations = {
+        ...rightAnnotations,
+        ...leftAnnotations,
+      };
 
-      const leftResult = parse(leftParser, []);
-      const rightResult = parse(rightParser, []);
+      const leftResult = parse(leftParser, [], { annotations });
+      const rightResult = parse(rightParser, [], { annotations });
 
       assert.ok(leftResult.success);
       assert.ok(rightResult.success);
@@ -1718,37 +1715,121 @@ describe("load() return value validation", () => {
     );
   });
 
-  test("no-config load clears stale active registry from prior load", () => {
+  test("later phase-one probes do not leak prior config into plain parse", () => {
     const context = createNameContext();
-    // First call loads real config, populating the active registry
-    context.getAnnotations(
+    const parser = bindConfig(option("--name", string()), {
+      context,
+      key: "name",
+    });
+
+    const annotations = context.getAnnotations(
       {},
-      { load: () => ({ config: { name: "STALE" }, meta: undefined }) },
+      { load: () => ({ config: { name: "configured" }, meta: undefined }) },
     );
-    // Verify the registry is populated
-    assert.deepStrictEqual(getActiveConfig(context.id), { name: "STALE" });
-    // Second call returns no-config; registry must be cleared
-    context.getAnnotations(
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    assert.deepEqual(
+      parse(parser, [], { annotations }),
+      { success: true, value: "configured" },
+    );
+
+    assert.deepEqual(
+      context.getAnnotations(
+        undefined,
+        { load: () => ({ config: { name: "later" }, meta: undefined }) },
+      ),
       {},
-      { load: () => undefined },
     );
-    assert.equal(getActiveConfig(context.id), undefined);
+
+    const result = parse(parser, []);
+    assert.ok(!result.success);
+    if (result.success) return;
+    assert.equal(
+      formatMessage(result.error),
+      "Missing required configuration value.",
+    );
   });
 
-  test("no-config getConfigPath clears stale active registry", () => {
+  test(
+    "validation failures in later probes do not leak prior config into plain parse",
+    () => {
+      const context = createNameContext();
+      const parser = bindConfig(option("--name", string()), {
+        context,
+        key: "name",
+      });
+
+      const annotations = context.getAnnotations(
+        {},
+        { load: () => ({ config: { name: "configured" }, meta: undefined }) },
+      );
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      assert.deepEqual(
+        parse(parser, [], { annotations }),
+        { success: true, value: "configured" },
+      );
+
+      assert.throws(
+        () =>
+          context.getAnnotations(
+            {},
+            {
+              load: () => ({
+                config: { name: 123 },
+                meta: undefined,
+              }),
+            },
+          ),
+        { message: /Config validation failed/ },
+      );
+
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+      if (result.success) return;
+      assert.equal(
+        formatMessage(result.error),
+        "Missing required configuration value.",
+      );
+    },
+  );
+
+  test("no-config phase-two probes do not leak prior config into plain parse", () => {
     const context = createNameContext();
-    // Populate the active registry directly
-    context.getAnnotations(
+    const parser = bindConfig(option("--name", string()), {
+      context,
+      key: "name",
+    });
+
+    const annotations = context.getAnnotations(
       {},
-      { load: () => ({ config: { name: "STALE" }, meta: undefined }) },
+      { load: () => ({ config: { name: "configured" }, meta: undefined }) },
     );
-    assert.deepStrictEqual(getActiveConfig(context.id), { name: "STALE" });
-    // getConfigPath returning undefined must also clear the registry
-    context.getAnnotations(
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    assert.deepEqual(
+      parse(parser, [], { annotations }),
+      { success: true, value: "configured" },
+    );
+
+    assert.deepEqual(
+      context.getAnnotations(
+        {},
+        { getConfigPath: () => undefined },
+      ),
       {},
-      { getConfigPath: () => undefined },
     );
-    assert.equal(getActiveConfig(context.id), undefined);
+
+    const result = parse(parser, []);
+    assert.ok(!result.success);
+    if (result.success) return;
+    assert.equal(
+      formatMessage(result.error),
+      "Missing required configuration value.",
+    );
   });
 
   test("rejects array return value from load()", () => {
@@ -2331,26 +2412,27 @@ describe("createConfigContext error paths", () => {
     );
   });
 
-  test("Symbol.dispose clears active config registry", () => {
+  test("Symbol.dispose does not invalidate returned annotations", () => {
     const schema = z.object({ host: z.string() });
     const context = createConfigContext({ schema });
-
-    // Simulate what happens during context-aware parsing
-    setActiveConfig(context.id, { host: "test-host" });
-    setActiveConfigMeta(context.id, {
-      configDir: "/test",
-      configPath: "/test/config.json",
+    const parser = bindConfig(option("--host", string()), {
+      context,
+      key: "host",
     });
 
-    // Verify it's set
-    assert.ok(getActiveConfig(context.id) !== undefined);
-    assert.ok(getActiveConfigMeta(context.id) !== undefined);
-
-    // Dispose should clear both registries
+    const annotations = context.getAnnotations(
+      {},
+      { load: () => ({ config: { host: "test-host" }, meta: undefined }) },
+    );
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
     context[Symbol.dispose]!();
 
-    assert.equal(getActiveConfig(context.id), undefined);
-    assert.equal(getActiveConfigMeta(context.id), undefined);
+    assert.deepEqual(
+      parse(parser, [], { annotations }),
+      { success: true, value: "test-host" },
+    );
   });
 
   test("load function receives parsed value and returns config", async () => {

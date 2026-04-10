@@ -1443,6 +1443,12 @@ const result = await runAsync(parser, {
 });
 ~~~~
 
+When you preload annotations manually like this, you still need to thread
+them back into parsing explicitly, either by wrapping them in a static
+context as shown here or by passing them directly to low-level APIs such
+as `parse()`, `parseAsync()`, or `parser.complete()`. The
+`getAnnotations()` call itself does not change later parses.
+
 This preserves the priority chain:
 
 CLI argument > environment variable > config file > interactive prompt

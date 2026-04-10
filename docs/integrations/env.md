@@ -465,6 +465,12 @@ Parameters
 Returns
 :   `EnvContext` implementing `SourceContext` and `Disposable`.
 
+> [!IMPORTANT]
+> If you call `envContext.getAnnotations()` manually, pass the returned
+> object to low-level APIs such as `parse()`, `parseAsync()`,
+> `parser.complete()`, `suggest()`, or `getDocPage()`. Calling
+> `getAnnotations()` alone does not affect later parses.
+
 ### `bindEnv(parser, options)`
 
 Binds a parser to environment variables with fallback priority

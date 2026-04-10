@@ -59,19 +59,6 @@ export interface ConfigMeta {
   readonly configPath: string;
 }
 
-/**
- * Internal registry for active config data during config context execution.
- * This is a workaround for the limitation that object() doesn't propagate
- * annotations to child field parsers.
- * @internal
- */
-const activeConfigRegistry: Map<symbol, unknown> = new Map();
-
-/**
- * Internal registry for active config metadata during config context execution.
- * @internal
- */
-const activeConfigMetaRegistry: Map<symbol, unknown> = new Map();
 const phase1ConfigAnnotationMarker = Symbol(
   "@optique/config/phase1Annotation",
 );
@@ -80,54 +67,6 @@ function isPhase2UndefinedParsedValue(value: unknown): boolean {
   return value != null &&
     typeof value === "object" &&
     phase2UndefinedParsedValueKey in value;
-}
-
-/**
- * Sets active config data for a context.
- * @internal
- */
-export function setActiveConfig<T>(contextId: symbol, data: T): void {
-  activeConfigRegistry.set(contextId, data);
-}
-
-/**
- * Gets active config data for a context.
- * @internal
- */
-export function getActiveConfig<T>(contextId: symbol): T | undefined {
-  return activeConfigRegistry.get(contextId) as T | undefined;
-}
-
-/**
- * Clears active config data for a context.
- * @internal
- */
-export function clearActiveConfig(contextId: symbol): void {
-  activeConfigRegistry.delete(contextId);
-}
-
-/**
- * Sets active config metadata for a context.
- * @internal
- */
-export function setActiveConfigMeta<T>(contextId: symbol, meta: T): void {
-  activeConfigMetaRegistry.set(contextId, meta);
-}
-
-/**
- * Gets active config metadata for a context.
- * @internal
- */
-export function getActiveConfigMeta<T>(contextId: symbol): T | undefined {
-  return activeConfigMetaRegistry.get(contextId) as T | undefined;
-}
-
-/**
- * Clears active config metadata for a context.
- * @internal
- */
-export function clearActiveConfigMeta(contextId: symbol): void {
-  activeConfigMetaRegistry.delete(contextId);
 }
 
 /**
@@ -378,6 +317,10 @@ function validateWithSchema<T>(
  * The config context implements the `SourceContext` interface and can be used
  * with `runWith()` from *@optique/core* or `run()`/`runAsync()` from
  * *@optique/run* to provide configuration file support.
+ * When calling `context.getAnnotations()` manually, pass the returned
+ * annotations to low-level APIs such as `parse()`, `parseAsync()`,
+ * `parser.complete()`, `suggest()`, or `getDocPage()`. Calling
+ * `getAnnotations()` by itself does not affect later parses.
  *
  * @template T The output type of the config schema.
  * @template TConfigMeta The metadata type for config sources.
@@ -449,8 +392,10 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
       parsed?: unknown,
       runtimeOptions?: unknown,
     ): Promise<Annotations> | Annotations {
-      // Phase 1 (no parsed result): mark the context as unresolved so
-      // prompt(bindConfig(...)) can defer interactive fallback.
+      // Phase 1 (no parsed result): return no public annotations here.
+      // Runners add the phase-1 unresolved marker through
+      // getInternalAnnotations() so prompt(bindConfig(...)) can defer
+      // interactive fallback without exposing that marker as user data.
       if (parsed === undefined) {
         return {};
       }
@@ -488,11 +433,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         : parsed;
       const parsedPlaceholder = parsedValue as ParserValuePlaceholder;
 
-      const emptyAnnotations = (): Annotations => {
-        clearActiveConfig(contextId);
-        clearActiveConfigMeta(contextId);
-        return {};
-      };
+      const emptyAnnotations = (): Annotations => ({});
 
       const buildAnnotations = (
         configData: T | undefined,
@@ -502,15 +443,12 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
           return emptyAnnotations();
         }
 
-        // Set active config in registry for nested parsers inside object()
-        setActiveConfig(contextId, configData);
         // Use the per-instance contextId as the annotation key so that
         // multiple ConfigContext instances can coexist without overwriting
         // each other during mergeAnnotations().  Data and metadata are
         // stored together under a single key.
         // See: https://github.com/dahlia/optique/issues/136
         if (configMeta !== undefined) {
-          setActiveConfigMeta(contextId, configMeta);
           return {
             [contextId]: { data: configData, meta: configMeta },
           };
@@ -620,8 +558,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
     },
 
     [Symbol.dispose]() {
-      clearActiveConfig(contextId);
-      clearActiveConfigMeta(contextId);
+      // No-op. Config annotations are detached parse-time snapshots.
     },
   };
 
@@ -970,9 +907,7 @@ export function bindConfig<
 
 /**
  * Helper function to get value from config or default.
- * Checks both annotations (for top-level parsers) and the active config
- * registry (for parsers nested inside object() when used with context-aware
- * runners).
+ * Reads only from explicit annotations carried by the current parse state.
  *
  * When `innerParser.validateValue` is available, the returned fallback
  * value is routed through it so that the inner CLI parser's constraints
@@ -1001,7 +936,6 @@ function getConfigOrDefault<
   mode: M,
   innerParser?: Parser<M, TValue, unknown>,
 ): ModeValue<M, Result<TValue>> {
-  // First, try to get config from annotations (works for top-level parsers).
   // Read from the per-instance context id so that the correct config data is
   // selected even when annotations from multiple config contexts are merged.
   // See: https://github.com/dahlia/optique/issues/136
@@ -1010,15 +944,8 @@ function getConfigOrDefault<
   const annotationValue = annotations?.[contextId] as
     | { readonly data: T; readonly meta?: TConfigMeta | undefined }
     | undefined;
-  let configData = annotationValue?.data;
-  let configMeta = annotationValue?.meta;
-
-  // If not found in annotations, check the active config registry
-  // (this handles the case when used inside object() with context-aware runners)
-  if (configData === undefined || configData === null) {
-    configData = getActiveConfig<T>(contextId);
-    configMeta = getActiveConfigMeta<TConfigMeta>(contextId);
-  }
+  const configData = annotationValue?.data;
+  const configMeta = annotationValue?.meta;
 
   let configValue: TValue | undefined;
 
@@ -1092,10 +1019,9 @@ function validateFallbackValue<M extends "sync" | "async", TValue>(
 /**
  * Resolves a config-backed dependency source with fallback priority.
  *
- * This first checks annotations or the active config registry via
- * {@link getConfigOrDefault}. If no config-backed value is available, it falls
- * back to `options.default` and finally delegates to the wrapped parser's
- * source extractor.
+ * This first checks annotations via {@link getConfigOrDefault}. If no
+ * config-backed value is available, it falls back to `options.default` and
+ * finally delegates to the wrapped parser's source extractor.
  *
  * When `innerParser` exposes `validateValue`, the returned fallback is
  * routed through it so that the inner CLI parser's constraints are
@@ -1144,7 +1070,7 @@ function getConfigSourceValue<
   const annotationValue = annotations?.[contextId] as
     | { readonly data: T; readonly meta?: TConfigMeta | undefined }
     | undefined;
-  const configData = annotationValue?.data ?? getActiveConfig<T>(contextId);
+  const configData = annotationValue?.data;
 
   // Runs a successful fallback value through the inner parser's
   // validateValue() hook when available.  May return a Promise if the

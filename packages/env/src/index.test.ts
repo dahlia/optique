@@ -30,12 +30,7 @@ import {
   collectExplicitSourceValues,
   createDependencyRuntimeContext,
 } from "../../core/src/dependency-runtime.ts";
-import {
-  bindEnv,
-  bool,
-  createEnvContext,
-  getActiveEnvSource,
-} from "./index.ts";
+import { bindEnv, bool, createEnvContext } from "./index.ts";
 
 const sourcePath = fileURLToPath(new URL("./index.ts", import.meta.url));
 
@@ -1365,10 +1360,12 @@ describe("bindEnv()", () => {
       parser: string(),
     });
 
-    // Register env source
-    context.getAnnotations();
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
 
-    const result = parse(parser, []);
+    const result = parse(parser, [], { annotations });
     assert.ok(result.success);
     assert.equal(result.value, "from-env");
   });
@@ -1624,12 +1621,10 @@ describe("bindEnv()", () => {
         parser: choice(["dev", "prod"] as const),
       },
     );
-    const state = injectAnnotations(
-      injectAnnotations(parser.initialState, envAnnotations),
-      {
-        [configContext.id]: { data: { mode: "dev" as const } },
-      },
-    );
+    const state = injectAnnotations(parser.initialState, {
+      ...envAnnotations,
+      [configContext.id]: { data: { mode: "dev" as const } },
+    });
     const nodes = parser.getSuggestRuntimeNodes?.(state, ["mode"]);
     assert.ok(nodes != null);
     if (nodes == null) return;
@@ -1675,13 +1670,18 @@ describe("bindEnv()", () => {
       parser: asyncInt,
     });
 
-    // Register the active env source (normally done by the runner).
-    context.getAnnotations();
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
 
     const completeResult = parser.complete(
-      { hasCliValue: false } as unknown as Parameters<
-        typeof parser.complete
-      >[0],
+      injectAnnotations(
+        { hasCliValue: false } as unknown as Parameters<
+          typeof parser.complete
+        >[0],
+        annotations,
+      ),
     );
     assert.ok(
       completeResult instanceof Promise,
@@ -2048,15 +2048,9 @@ describe("bindEnv()", () => {
     }
   });
 
-  it("propagates source errors from the active registry lookup", () => {
-    const sourceError = new Error("Environment access failed.");
+  it("ignores prior context.getAnnotations() calls during plain parse", () => {
     const context = createEnvContext({
-      source: (key) => {
-        if (key === "APP_PORT") {
-          throw sourceError;
-        }
-        return undefined;
-      },
+      source: (key) => ({ APP_PORT: "8080" })[key],
       prefix: "APP_",
     });
     const parser = bindEnv(option("--port", integer()), {
@@ -2066,13 +2060,19 @@ describe("bindEnv()", () => {
       default: 3000,
     });
 
-    context.getAnnotations();
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+
+    assert.deepEqual(
+      parse(parser, [], { annotations }),
+      { success: true, value: 8080 },
+    );
 
     try {
-      assert.throws(
-        () => parse(parser, []),
-        (error) => error === sourceError,
-      );
+      const result = parse(parser, []);
+      assert.deepEqual(result, { success: true, value: 3000 });
     } finally {
       context[Symbol.dispose]?.();
     }
@@ -2130,22 +2130,28 @@ describe("bindEnv()", () => {
 });
 
 describe("createEnvContext defaults", () => {
-  it("removes the active registry entry on dispose", () => {
+  it("dispose does not invalidate returned annotations", () => {
     const context = createEnvContext({
       source: (key) => ({ APP_PORT: "8080" })[key],
       prefix: "APP_",
     });
+    const parser = bindEnv(option("--port", integer()), {
+      context,
+      key: "PORT",
+      parser: integer(),
+    });
 
-    assert.equal(getActiveEnvSource(context.id), undefined);
     const annotations = context.getAnnotations();
     if (annotations instanceof Promise) {
       throw new TypeError("Expected synchronous annotations.");
     }
-    assert.equal(getActiveEnvSource(context.id)?.prefix, "APP_");
 
     context[Symbol.dispose]?.();
 
-    assert.equal(getActiveEnvSource(context.id), undefined);
+    assert.deepEqual(
+      parse(parser, [], { annotations }),
+      { success: true, value: 8080 },
+    );
   });
 
   it("uses Deno.env.get by default when available", () => {
