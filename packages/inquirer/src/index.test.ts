@@ -834,36 +834,39 @@ describe("prompt()", () => {
       assert.equal(result.value.port, 8080);
     });
 
-    it("prompts when prompt(bindEnv(...)) is parsed without annotations", async () => {
-      const context = createEnvContext({
-        source: (key) => ({ APP_NAME: "env-name" })[key],
-        prefix: "APP_",
-      });
-      context.getAnnotations();
-      let promptCalls = 0;
-      const parser = object({
-        name: prompt(
-          bindEnv(option("--name", string()), {
-            context,
-            key: "NAME",
-            parser: string(),
-          }),
-          {
-            type: "input",
-            message: "Enter name:",
-            prompter: () => {
-              promptCalls += 1;
-              return Promise.resolve("prompted-name");
+    it(
+      "prompts when prompt(bindEnv(...)) is parsed after getAnnotations() without passing annotations",
+      async () => {
+        const context = createEnvContext({
+          source: (key) => ({ APP_NAME: "env-name" })[key],
+          prefix: "APP_",
+        });
+        context.getAnnotations();
+        let promptCalls = 0;
+        const parser = object({
+          name: prompt(
+            bindEnv(option("--name", string()), {
+              context,
+              key: "NAME",
+              parser: string(),
+            }),
+            {
+              type: "input",
+              message: "Enter name:",
+              prompter: () => {
+                promptCalls += 1;
+                return Promise.resolve("prompted-name");
+              },
             },
-          },
-        ),
-      });
+          ),
+        });
 
-      const result = await parseAsync(parser, []);
-      assert.ok(result.success);
-      assert.equal(result.value.name, "prompted-name");
-      assert.equal(promptCalls, 1);
-    });
+        const result = await parseAsync(parser, []);
+        assert.ok(result.success);
+        assert.equal(result.value.name, "prompted-name");
+        assert.equal(promptCalls, 1);
+      },
+    );
 
     it("skips prompt for prompt(optional(bindEnv(...))) inside object()", async () => {
       // Regression: optional wraps the inner bindEnv state in an array
@@ -1324,42 +1327,45 @@ describe("prompt()", () => {
       assert.equal(promptCalls, 0);
     });
 
-    it("prompts when prompt(bindConfig(...)) is parsed without annotations", async () => {
-      const context = createConfigContext({
-        schema: createPromptConfigSchema(),
-      });
-      await context.getAnnotations(
-        { any: true },
-        {
-          load: () => ({
-            config: { apiKey: "config-secret" },
-            meta: undefined,
-          }),
-        },
-      );
-      let promptCalls = 0;
-      const parser = object({
-        apiKey: prompt(
-          bindConfig(option("--api-key", string()), {
-            context,
-            key: "apiKey",
-          }),
+    it(
+      "prompts when prompt(bindConfig(...)) is parsed after getAnnotations() without passing annotations",
+      async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        await context.getAnnotations(
+          { any: true },
           {
-            type: "password",
-            message: "API key:",
-            prompter: () => {
-              promptCalls += 1;
-              return Promise.resolve("prompt-secret");
-            },
+            load: () => ({
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            }),
           },
-        ),
-      });
+        );
+        let promptCalls = 0;
+        const parser = object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => {
+                promptCalls += 1;
+                return Promise.resolve("prompt-secret");
+              },
+            },
+          ),
+        });
 
-      const result = await parseAsync(parser, []);
-      assert.ok(result.success);
-      assert.equal(result.value.apiKey, "prompt-secret");
-      assert.equal(promptCalls, 1);
-    });
+        const result = await parseAsync(parser, []);
+        assert.ok(result.success);
+        assert.equal(result.value.apiKey, "prompt-secret");
+        assert.equal(promptCalls, 1);
+      },
+    );
 
     it("prompts when bindEnv() has no value and env var is absent", async () => {
       // prompt(bindEnv(...)) must fall back to the interactive prompt when
