@@ -75,7 +75,9 @@ export type ParserValuePlaceholder = {
  *
  * Contexts may optionally implement `Disposable` or `AsyncDisposable` for
  * cleanup.  When present, `runWith()` and `runWithSync()` call the dispose
- * method in a `finally` block after parsing completes.
+ * method after parsing completes.  In async runners, cleanup waits for the
+ * full `runWith()` Promise to settle, including later asynchronous
+ * `complete()` work.
  *
  * @template TRequiredOptions Additional options that `runWith()` must provide
  *   when this context is used. Use `void` (the default) for contexts that
@@ -207,13 +209,17 @@ export interface SourceContext<TRequiredOptions = void> {
 
   /**
    * Optional synchronous cleanup method.  Called by `runWith()` and
-   * `runWithSync()` in a `finally` block after parsing completes.
+   * `runWithSync()` after parsing completes.  In `runWith()`, this happens
+   * only after the full Promise settles, including any later async
+   * `complete()` work.
    */
   [Symbol.dispose]?(): void;
 
   /**
-   * Optional asynchronous cleanup method.  Called by `runWith()` in a
-   * `finally` block after parsing completes.  Takes precedence over
+   * Optional asynchronous cleanup method.  Called by `runWith()` after
+   * parsing completes.  Cleanup starts only after the full `runWith()`
+   * Promise settles, including any later async `complete()` work.  Takes
+   * precedence over
    * `[Symbol.dispose]` in async runners.  `runWithSync()` also calls this
    * method when `[Symbol.dispose]` is absent, but throws if it returns a
    * Promise.

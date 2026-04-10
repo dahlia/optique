@@ -962,6 +962,11 @@ The function handles all the complexity of collecting annotations from multiple
 sources and injecting them into the parsing process. It also supports the same
 help and version options as `runParser()`.
 
+If a context implements `Symbol.dispose` or `Symbol.asyncDispose`, cleanup does
+not begin until the full `runWith()` operation has settled. For async parsers,
+that includes later asynchronous `complete()` work, so contexts remain live for
+the entire parse/completion lifecycle.
+
 ### Priority handling
 
 When using multiple contexts, *earlier contexts have priority over later ones*.

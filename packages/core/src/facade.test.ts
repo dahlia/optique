@@ -6389,6 +6389,180 @@ describe("runWith", () => {
       assert.deepEqual(disposed, ["async"]);
     });
 
+    describe("async completion ordering", () => {
+      // Regression tests for https://github.com/dahlia/optique/issues/269.
+      // Before 9e898ed4, runWith() returned the pending runParser() Promise
+      // from inside a try/finally, so disposal could start before later async
+      // complete() work had settled.
+      function createIssue269ProbeParser(
+        readDisposed: () => boolean,
+      ): Parser<"sync", boolean, string | null> {
+        return {
+          $mode: "sync",
+          $valueType: [] as readonly boolean[],
+          $stateType: [] as readonly (string | null)[],
+          priority: 0,
+          usage: [{ type: "option", names: ["--probe"], metavar: "TAG" }],
+          leadingNames: new Set(["--probe"]),
+          acceptingAnyToken: false,
+          initialState: null,
+          parse(context) {
+            const tag = context.buffer[1];
+            if (context.buffer[0] !== "--probe" || tag == null) {
+              return {
+                success: false as const,
+                consumed: 0,
+                error: message`missing`,
+              };
+            }
+            return {
+              success: true as const,
+              next: {
+                ...context,
+                buffer: context.buffer.slice(2),
+                state: tag,
+              },
+              consumed: [context.buffer[0], tag],
+            };
+          },
+          complete() {
+            return { success: true as const, value: readDisposed() };
+          },
+          *suggest() {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        };
+      }
+
+      function createIssue269AsyncOptionParser(
+        name: OptionName,
+        completeValue: (state: string) => Promise<string>,
+      ): Parser<"async", string, string | null> {
+        return {
+          $mode: "async",
+          $valueType: [] as readonly string[],
+          $stateType: [] as readonly (string | null)[],
+          priority: 0,
+          usage: [{ type: "option", names: [name], metavar: "VALUE" }],
+          leadingNames: new Set([name]),
+          acceptingAnyToken: false,
+          initialState: null,
+          parse(context) {
+            const value = context.buffer[1];
+            if (context.buffer[0] !== name || value == null) {
+              return Promise.resolve({
+                success: false as const,
+                consumed: 0,
+                error: message`missing`,
+              });
+            }
+            return Promise.resolve({
+              success: true as const,
+              next: {
+                ...context,
+                buffer: context.buffer.slice(2),
+                state: value,
+              },
+              consumed: [context.buffer[0], value],
+            });
+          },
+          async complete(state) {
+            if (state == null) {
+              return {
+                success: false as const,
+                error: message`missing`,
+              };
+            }
+            return {
+              success: true as const,
+              value: await completeValue(state),
+            };
+          },
+          async *suggest() {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        };
+      }
+
+      it("waits for async completion before Symbol.dispose (issue #269)", async () => {
+        let disposed = false;
+        const context: SourceContext = {
+          id: Symbol.for("@test/issue-269-dispose-order"),
+          phase: "single-pass",
+          getAnnotations() {
+            return {};
+          },
+          [Symbol.dispose]() {
+            disposed = true;
+          },
+        };
+
+        const parser = object({
+          slow: createIssue269AsyncOptionParser("--slow", async (value) => {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            return value;
+          }),
+          probe: createIssue269ProbeParser(() => disposed),
+        });
+
+        const pending = runWith(parser, "test", [context], {
+          args: ["--slow", "x", "--probe", "tag"],
+        });
+
+        await Promise.resolve();
+        assert.equal(disposed, false);
+
+        const result = await pending;
+        assert.deepEqual(result, { slow: "x", probe: false });
+        assert.equal(disposed, true);
+      });
+
+      it("waits for async completion failures before Symbol.asyncDispose (issue #269)", async () => {
+        let disposeStarted = false;
+        const lifecycle: string[] = [];
+        const context: SourceContext = {
+          id: Symbol.for("@test/issue-269-async-dispose-order"),
+          phase: "single-pass",
+          getAnnotations() {
+            return {};
+          },
+          async [Symbol.asyncDispose]() {
+            lifecycle.push("dispose-start");
+            disposeStarted = true;
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            lifecycle.push("dispose-end");
+          },
+        };
+
+        const parser = object({
+          slow: createIssue269AsyncOptionParser("--slow", async () => {
+            lifecycle.push("complete-start");
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            lifecycle.push(`complete-saw-dispose:${disposeStarted}`);
+            throw new Error("Delayed completion failed.");
+          }),
+        });
+
+        const pending = runWith(parser, "test", [context], {
+          args: ["--slow", "x"],
+        });
+
+        await Promise.resolve();
+        assert.equal(disposeStarted, false);
+
+        await assert.rejects(() => pending, /Delayed completion failed\./);
+        assert.deepEqual(lifecycle, [
+          "complete-start",
+          "complete-saw-dispose:false",
+          "dispose-start",
+          "dispose-end",
+        ]);
+        assert.equal(disposeStarted, true);
+      });
+    });
+
     it("should dispose multiple contexts in order", async () => {
       const disposed: string[] = [];
 

@@ -154,6 +154,12 @@ To be released.
     this parameter through the call chain.  Existing implementations without
     the parameter continue to work.  [[#750], [#751], [#752], [#756], [#760]]
 
+ -  Documented and regression-tested `runWith()` cleanup ordering for async
+    parser completion.  `Symbol.dispose` / `Symbol.asyncDispose` now
+    explicitly guarantee that cleanup begins only after the full `runWith()`
+    promise settles, including later asynchronous `complete()` work.
+    [[#269]]
+
  -  Added `createParserContext()` factory function for constructing
     `ParserContext` from a `ParseFrame` and an `ExecutionContext`.
     [[#750], [#751], [#752], [#756], [#760]]
@@ -1389,6 +1395,7 @@ To be released.
 [#256]: https://github.com/dahlia/optique/issues/256
 [#262]: https://github.com/dahlia/optique/issues/262
 [#264]: https://github.com/dahlia/optique/issues/264
+[#269]: https://github.com/dahlia/optique/issues/269
 [#275]: https://github.com/dahlia/optique/issues/275
 [#279]: https://github.com/dahlia/optique/issues/279
 [#290]: https://github.com/dahlia/optique/issues/290
