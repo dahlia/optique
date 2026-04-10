@@ -2972,7 +2972,7 @@ function collectPhase1AnnotationsSync(
     const request: SourceContextRequest = { phase: "phase1" };
     const result = context.getAnnotations(request, options);
     if (result instanceof Promise) {
-      throw new Error(
+      throw new TypeError(
         `Context ${String(context.id)} returned a Promise in sync mode. ` +
           "Use runWith() or runWithAsync() for async contexts.",
       );
@@ -3041,7 +3041,7 @@ function collectFinalAnnotationsSync(
     };
     const result = context.getAnnotations(request, options);
     if (result instanceof Promise) {
-      throw new Error(
+      throw new TypeError(
         `Context ${String(context.id)} returned a Promise in sync mode. ` +
           "Use runWith() or runWithAsync() for async contexts.",
       );

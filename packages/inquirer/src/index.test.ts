@@ -10,6 +10,7 @@ import { concat, group, object, or, tuple } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import type {
   SourceContext,
+  SourceContextPhase2Request,
   SourceContextRequest,
 } from "@optique/core/context";
 import type { DocFragments } from "@optique/core/doc";
@@ -36,20 +37,17 @@ const promptFunctionsOverrideSymbol = Symbol.for(
 
 let promptFunctionsOverrideQueue = Promise.resolve();
 
-function isPhase1ContextRequest(request: unknown): boolean {
-  return request == null ||
-    (typeof request === "object" &&
-      "phase" in request &&
-      (request as { readonly phase?: unknown }).phase === "phase1");
+function isPhase2ContextRequest(
+  request: unknown,
+): request is SourceContextPhase2Request {
+  return request != null &&
+    typeof request === "object" &&
+    "phase" in request &&
+    (request as { readonly phase?: unknown }).phase === "phase2";
 }
 
 function getPhase2ContextParsed<T>(request: unknown): T | undefined {
-  if (request != null && typeof request === "object" && "phase" in request) {
-    return (request as { readonly phase?: unknown }).phase === "phase2"
-      ? (request as SourceContextRequest & { readonly parsed: T }).parsed
-      : undefined;
-  }
-  return request as T | undefined;
+  return isPhase2ContextRequest(request) ? request.parsed as T : undefined;
 }
 
 async function withPromptFunctionsOverride<T>(
@@ -1685,7 +1683,7 @@ describe("prompt()", () => {
           id: Symbol.for("@test/top-level-config-prompt-phase-two"),
           phase: "two-pass",
           getAnnotations(parsed?: unknown) {
-            sawUndefined = !isPhase1ContextRequest(parsed) &&
+            sawUndefined = isPhase2ContextRequest(parsed) &&
               getPhase2ContextParsed(parsed) === undefined;
             return {};
           },

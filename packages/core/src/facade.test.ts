@@ -56,19 +56,23 @@ import { bindEnv, createEnvContext } from "../../env/src/index.ts";
 type AssertNever<T extends never> = T;
 
 function isPhase1ContextRequest(request: unknown): boolean {
-  return request == null ||
-    (typeof request === "object" &&
-      "phase" in request &&
-      (request as { readonly phase?: unknown }).phase === "phase1");
+  return request != null &&
+    typeof request === "object" &&
+    "phase" in request &&
+    (request as { readonly phase?: unknown }).phase === "phase1";
+}
+
+function isPhase2ContextRequest(
+  request: unknown,
+): request is SourceContextPhase2Request {
+  return request != null &&
+    typeof request === "object" &&
+    "phase" in request &&
+    (request as { readonly phase?: unknown }).phase === "phase2";
 }
 
 function getPhase2ContextParsed<T>(request: unknown): T | undefined {
-  if (request != null && typeof request === "object" && "phase" in request) {
-    return (request as { readonly phase?: unknown }).phase === "phase2"
-      ? (request as SourceContextPhase2Request).parsed as T
-      : undefined;
-  }
-  return request as T | undefined;
+  return isPhase2ContextRequest(request) ? request.parsed as T : undefined;
 }
 
 function getRuntimeExtractPhase2SeedKey(): symbol {

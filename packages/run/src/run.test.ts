@@ -2,7 +2,7 @@ import { longestMatch, object, or } from "@optique/core/constructs";
 import type {
   ParserValuePlaceholder,
   SourceContext,
-  SourceContextRequest,
+  SourceContextPhase2Request,
 } from "@optique/core/context";
 import { message } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
@@ -31,19 +31,23 @@ import { bindEnv, createEnvContext } from "../../env/src/index.ts";
 const TEST_DIR = join(import.meta.dirname ?? ".", "test-configs");
 
 function isPhase1ContextRequest(request: unknown): boolean {
-  return request == null ||
-    (typeof request === "object" &&
-      "phase" in request &&
-      (request as { readonly phase?: unknown }).phase === "phase1");
+  return request != null &&
+    typeof request === "object" &&
+    "phase" in request &&
+    (request as { readonly phase?: unknown }).phase === "phase1";
+}
+
+function isPhase2ContextRequest(
+  request: unknown,
+): request is SourceContextPhase2Request {
+  return request != null &&
+    typeof request === "object" &&
+    "phase" in request &&
+    (request as { readonly phase?: unknown }).phase === "phase2";
 }
 
 function getPhase2ContextParsed<T>(request: unknown): T | undefined {
-  if (request != null && typeof request === "object" && "phase" in request) {
-    return (request as { readonly phase?: unknown }).phase === "phase2"
-      ? (request as SourceContextRequest & { readonly parsed: T }).parsed
-      : undefined;
-  }
-  return request as T | undefined;
+  return isPhase2ContextRequest(request) ? request.parsed as T : undefined;
 }
 
 function createPassthroughConfigSchema<T>(): Parameters<
