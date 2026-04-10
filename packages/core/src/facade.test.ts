@@ -10,6 +10,7 @@ import {
 import { getAnnotations, inheritAnnotations } from "@optique/core/annotations";
 import type {
   SourceContext,
+  SourceContextPhase2Request,
   SourceContextRequest,
 } from "@optique/core/context";
 import type { DocSection } from "@optique/core/doc";
@@ -64,7 +65,7 @@ function isPhase1ContextRequest(request: unknown): boolean {
 function getPhase2ContextParsed<T>(request: unknown): T | undefined {
   if (request != null && typeof request === "object" && "phase" in request) {
     return (request as { readonly phase?: unknown }).phase === "phase2"
-      ? (request as SourceContextRequest & { readonly parsed: T }).parsed
+      ? (request as SourceContextPhase2Request).parsed as T
       : undefined;
   }
   return request as T | undefined;
@@ -5738,9 +5739,10 @@ describe("runWith", () => {
       const firstContext: SourceContext = {
         id: Symbol.for("@test/phase-two-identity-first"),
         phase: "two-pass",
-        getAnnotations(parsed?: unknown) {
+        getAnnotations(request?: unknown) {
+          const parsed = getPhase2ContextParsed<object>(request);
           if (parsed != null && typeof parsed === "object") {
-            seenParsed.set(parsed as object, true);
+            seenParsed.set(parsed, true);
           }
           return {};
         },
@@ -5749,10 +5751,11 @@ describe("runWith", () => {
       const secondContext: SourceContext = {
         id: Symbol.for("@test/phase-two-identity-second"),
         phase: "two-pass",
-        getAnnotations(parsed?: unknown) {
+        getAnnotations(request?: unknown) {
+          const parsed = getPhase2ContextParsed<object>(request);
           reusedIdentity = parsed != null &&
             typeof parsed === "object" &&
-            seenParsed.has(parsed as object);
+            seenParsed.has(parsed);
           return {};
         },
       };
@@ -10231,6 +10234,55 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.ok(phase2Called, "phase 2 context should be called");
   });
 
+  it("runWith: isolates phase requests across two-pass contexts", async () => {
+    const key = Symbol.for("@test/two-pass-request-isolation-async");
+    let secondContextParsed: { readonly config: string } | undefined;
+
+    const parser = object({
+      config: withDefault(option("--config", string()), "optique.json"),
+    });
+
+    const mutatingContext: SourceContext = {
+      id: Symbol.for("@test/two-pass-request-mutator-async"),
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        const parsed = getPhase2ContextParsed<{ readonly config: string }>(
+          request,
+        );
+        if (parsed == null) return {};
+        (request as SourceContextRequest & { parsed: unknown }).parsed = {
+          config: "mutated.json",
+        };
+        return {};
+      },
+    };
+
+    const readingContext: SourceContext = {
+      id: key,
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        const parsed = getPhase2ContextParsed<{ readonly config: string }>(
+          request,
+        );
+        if (parsed == null) return {};
+        secondContextParsed = parsed;
+        return { [key]: parsed.config };
+      },
+    };
+
+    const result = await runWith(parser, "test", [
+      mutatingContext,
+      readingContext,
+    ], {
+      args: [],
+    });
+
+    assert.deepEqual(secondContextParsed, { config: "optique.json" });
+    assert.deepEqual(result, {
+      config: "optique.json",
+    });
+  });
+
   it("runWith: phase two can recover from first-pass completion failure", async () => {
     const tokenKey = Symbol.for("@test/dyn-phase-two-recovery");
     let phase2Parsed: unknown;
@@ -11762,6 +11814,55 @@ describe("branch coverage: facade.ts edge cases", () => {
 
     assert.deepEqual(result, { phase2: true });
     assert.ok(phase2Called, "phase 2 context should be called");
+  });
+
+  it("runWithSync: isolates phase requests across two-pass contexts", () => {
+    const key = Symbol.for("@test/two-pass-request-isolation-sync");
+    let secondContextParsed: { readonly config: string } | undefined;
+
+    const parser = object({
+      config: withDefault(option("--config", string()), "optique.json"),
+    });
+
+    const mutatingContext: SourceContext = {
+      id: Symbol.for("@test/two-pass-request-mutator-sync"),
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        const parsed = getPhase2ContextParsed<{ readonly config: string }>(
+          request,
+        );
+        if (parsed == null) return {};
+        (request as SourceContextRequest & { parsed: unknown }).parsed = {
+          config: "mutated.json",
+        };
+        return {};
+      },
+    };
+
+    const readingContext: SourceContext = {
+      id: key,
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        const parsed = getPhase2ContextParsed<{ readonly config: string }>(
+          request,
+        );
+        if (parsed == null) return {};
+        secondContextParsed = parsed;
+        return { [key]: parsed.config };
+      },
+    };
+
+    const result = runWithSync(
+      parser,
+      "test",
+      [mutatingContext, readingContext],
+      { args: [] },
+    );
+
+    assert.deepEqual(secondContextParsed, { config: "optique.json" });
+    assert.deepEqual(result, {
+      config: "optique.json",
+    });
   });
 
   it("runWithSync: should reject contexts without explicit phase", () => {

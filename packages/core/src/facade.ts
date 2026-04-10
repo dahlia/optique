@@ -2869,9 +2869,9 @@ async function collectPhase1Annotations(
 ): Promise<CollectedPhase1Annotations> {
   const annotationsList: Annotations[] = [];
   let snapshots: Annotations[] | undefined;
-  const request: SourceContextRequest = { phase: "phase1" };
 
   for (const context of contexts) {
+    const request: SourceContextRequest = { phase: "phase1" };
     const result = context.getAnnotations(request, options);
     const annotations = result instanceof Promise ? await result : result;
     const internalAnnotations = context.getInternalAnnotations?.(
@@ -2923,10 +2923,6 @@ async function collectFinalAnnotations(
     deferred,
     deferredKeys,
   );
-  const request: SourceContextRequest = {
-    phase: "phase2",
-    parsed: preparedParsed,
-  };
 
   for (let index = 0; index < contexts.length; index++) {
     const context = contexts[index];
@@ -2935,6 +2931,10 @@ async function collectFinalAnnotations(
       continue;
     }
 
+    const request: SourceContextRequest = {
+      phase: "phase2",
+      parsed: preparedParsed,
+    };
     const result = context.getAnnotations(request, options);
     const annotations = result instanceof Promise ? await result : result;
     const internalAnnotations = context.getInternalAnnotations?.(
@@ -2967,9 +2967,9 @@ function collectPhase1AnnotationsSync(
 ): CollectedPhase1Annotations {
   const annotationsList: Annotations[] = [];
   let snapshots: Annotations[] | undefined;
-  const request: SourceContextRequest = { phase: "phase1" };
 
   for (const context of contexts) {
+    const request: SourceContextRequest = { phase: "phase1" };
     const result = context.getAnnotations(request, options);
     if (result instanceof Promise) {
       throw new Error(
@@ -3027,10 +3027,6 @@ function collectFinalAnnotationsSync(
     deferred,
     deferredKeys,
   );
-  const request: SourceContextRequest = {
-    phase: "phase2",
-    parsed: preparedParsed,
-  };
 
   for (let index = 0; index < contexts.length; index++) {
     const context = contexts[index];
@@ -3039,6 +3035,10 @@ function collectFinalAnnotationsSync(
       continue;
     }
 
+    const request: SourceContextRequest = {
+      phase: "phase2",
+      parsed: preparedParsed,
+    };
     const result = context.getAnnotations(request, options);
     if (result instanceof Promise) {
       throw new Error(
