@@ -1587,10 +1587,10 @@ describe("prompt()", () => {
       const dynamicContext: SourceContext = {
         id: Symbol.for("@test/prompt-phase-two"),
         phase: "two-pass",
-        getAnnotations(parsed?: unknown) {
+        getAnnotations(request?: SourceContextRequest) {
           const phase2ParsedValue = getPhase2ContextParsed<
             { readonly config: string }
-          >(parsed);
+          >(request);
           if (phase2ParsedValue === undefined) {
             return {};
           }
