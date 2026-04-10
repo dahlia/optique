@@ -739,16 +739,14 @@ API reference
 
 `SourceContextRequest`
 :   Request object passed to `getAnnotations()` and
-    `getInternalAnnotations()`.
+    `getInternalAnnotations()`. A discriminated union based on the
+    `phase` field:
 
-    `phase: "phase1"`
-
-:   Initial annotation collection before the first parse pass.
-
-`phase: "phase2"`
-:   Second annotation collection after a usable first pass. The
-    `parsed` field holds the first-pass value, which may itself be
-    `undefined`.
+     -  `phase: "phase1"` — Initial annotation collection before the
+        first parse pass.
+     -  `phase: "phase2"` — Second annotation collection after a usable
+        first pass. The `parsed` field holds the first-pass value, which
+        may itself be `undefined`.
 
     Use `ParserValuePlaceholder` in `TRequiredOptions` when the options depend
     on the parser's result type.

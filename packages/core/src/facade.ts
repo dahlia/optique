@@ -3619,7 +3619,7 @@ function runWithSyncBody<
  * {@link SourceContext.id}.
  * @throws {TypeError} If any context omits `phase` or declares an invalid
  * phase value.
- * @throws {Error} If any context returns a Promise or if a context's
+ * @throws {TypeError} If any context returns a Promise or if a context's
  * `[Symbol.asyncDispose]` returns a Promise.
  * @throws {SuppressedError} If the runner throws and a context's disposal
  * also throws.  The original error is available via `.suppressed` and the
