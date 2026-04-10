@@ -396,7 +396,8 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
       if (
         typeof request !== "object" ||
         !("phase" in request) ||
-        (request.phase !== "phase1" && request.phase !== "phase2")
+        (request.phase !== "phase1" && request.phase !== "phase2") ||
+        (request.phase === "phase2" && !("parsed" in request))
       ) {
         throw new TypeError(
           "Expected getAnnotations() to receive no request or a " +
