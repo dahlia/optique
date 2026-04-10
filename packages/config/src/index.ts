@@ -403,7 +403,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         throw new TypeError(
           "Expected getAnnotations() to receive no request or a " +
             'SourceContextRequest ({ phase: "phase1" } or ' +
-            '{ phase: "phase2", parsed }).',
+            `{ phase: "phase2", parsed }), but got: ${getTypeName(request)}.`,
         );
       }
       if (request.phase === "phase1") return {};

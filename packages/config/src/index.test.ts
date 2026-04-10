@@ -1530,7 +1530,7 @@ describe("createConfigContext input validation", () => {
         name: "TypeError",
         message: "Expected getAnnotations() to receive no request or a " +
           'SourceContextRequest ({ phase: "phase1" } or ' +
-          '{ phase: "phase2", parsed }).',
+          '{ phase: "phase2", parsed }), but got: object.',
       },
     );
   });
@@ -1548,7 +1548,7 @@ describe("createConfigContext input validation", () => {
         name: "TypeError",
         message: "Expected getAnnotations() to receive no request or a " +
           'SourceContextRequest ({ phase: "phase1" } or ' +
-          '{ phase: "phase2", parsed }).',
+          '{ phase: "phase2", parsed }), but got: object.',
       },
     );
   });
@@ -1566,7 +1566,7 @@ describe("createConfigContext input validation", () => {
         name: "TypeError",
         message: "Expected getAnnotations() to receive no request or a " +
           'SourceContextRequest ({ phase: "phase1" } or ' +
-          '{ phase: "phase2", parsed }).',
+          '{ phase: "phase2", parsed }), but got: null.',
       },
     );
   });
