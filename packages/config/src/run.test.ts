@@ -5,12 +5,15 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { z } from "zod";
 import { object } from "@optique/core/constructs";
-import type { SourceContext } from "@optique/core/context";
+import type {
+  SourceContext,
+  SourceContextRequest,
+} from "@optique/core/context";
 import { message } from "@optique/core/message";
 import { parse, type Parser } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
-import { withDefault } from "@optique/core/modifiers";
+import { optional, withDefault } from "@optique/core/modifiers";
 import { runWith, runWithSync } from "@optique/core/facade";
 import type { OptionName } from "@optique/core/usage";
 import { bindConfig, createConfigContext } from "./index.ts";
@@ -178,7 +181,8 @@ describe("run with config context", { concurrency: false }, () => {
     const identityContext: SourceContext = {
       id: Symbol.for("@test/config-loader-identity"),
       phase: "two-pass",
-      getAnnotations(parsed?: unknown) {
+      getAnnotations(request?: SourceContextRequest) {
+        const parsed = request?.phase === "phase2" ? request.parsed : undefined;
         if (parsed != null && typeof parsed === "object") {
           metadataByParsed.set(parsed as object, "seen");
         }
@@ -725,6 +729,38 @@ describe("run with config context", { concurrency: false }, () => {
       },
     );
   }
+
+  test(
+    "runs phase-two config loading when the top-level parser returns undefined",
+    async () => {
+      const schema = z.object({
+        host: z.string(),
+      });
+      const context = createConfigContext({ schema });
+      const parser = optional(flag("--debug"));
+
+      let loadCalls = 0;
+      let observedParsed: boolean | undefined | null = null;
+
+      const result = await runWith(parser, "test", [context], {
+        contextOptions: {
+          load: (parsed: boolean | undefined) => {
+            loadCalls += 1;
+            observedParsed = parsed;
+            return {
+              config: { host: "config-host" },
+              meta: undefined,
+            };
+          },
+        },
+        args: [],
+      });
+
+      assert.equal(result, undefined);
+      assert.equal(loadCalls, 1);
+      assert.equal(observedParsed, undefined);
+    },
+  );
 
   test("works with nested config values", async () => {
     await mkdir(TEST_DIR, { recursive: true });

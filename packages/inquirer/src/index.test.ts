@@ -8,7 +8,10 @@ import {
 } from "@optique/core/annotations";
 import { concat, group, object, or, tuple } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
-import type { SourceContext } from "@optique/core/context";
+import type {
+  SourceContext,
+  SourceContextRequest,
+} from "@optique/core/context";
 import type { DocFragments } from "@optique/core/doc";
 import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
@@ -32,6 +35,22 @@ const promptFunctionsOverrideSymbol = Symbol.for(
 );
 
 let promptFunctionsOverrideQueue = Promise.resolve();
+
+function isPhase1ContextRequest(request: unknown): boolean {
+  return request == null ||
+    (typeof request === "object" &&
+      "phase" in request &&
+      (request as { readonly phase?: unknown }).phase === "phase1");
+}
+
+function getPhase2ContextParsed<T>(request: unknown): T | undefined {
+  if (request != null && typeof request === "object" && "phase" in request) {
+    return (request as { readonly phase?: unknown }).phase === "phase2"
+      ? (request as SourceContextRequest & { readonly parsed: T }).parsed
+      : undefined;
+  }
+  return request as T | undefined;
+}
 
 async function withPromptFunctionsOverride<T>(
   override: Record<string, unknown>,
@@ -1341,7 +1360,7 @@ describe("prompt()", () => {
           schema: createPromptConfigSchema(),
         });
         const annotations = await context.getAnnotations(
-          { any: true },
+          { phase: "phase2", parsed: { any: true } },
           {
             load: () => ({
               config: { apiKey: "config-secret" },
@@ -1569,10 +1588,13 @@ describe("prompt()", () => {
         id: Symbol.for("@test/prompt-phase-two"),
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (parsed === undefined) {
+          const phase2ParsedValue = getPhase2ContextParsed<
+            { readonly config: string }
+          >(parsed);
+          if (phase2ParsedValue === undefined) {
             return {};
           }
-          phase2Parsed = parsed as { readonly config: string };
+          phase2Parsed = phase2ParsedValue;
           return {};
         },
       };
@@ -1608,12 +1630,13 @@ describe("prompt()", () => {
           id: Symbol.for("@test/config-prompt-phase-two"),
           phase: "two-pass",
           getAnnotations(parsed?: unknown) {
-            if (parsed === undefined) {
+            const phase2ParsedValue = getPhase2ContextParsed<{
+              readonly apiKey?: string | undefined;
+            }>(parsed);
+            if (phase2ParsedValue === undefined) {
               return {};
             }
-            phase2Parsed = parsed as {
-              readonly apiKey?: string | undefined;
-            };
+            phase2Parsed = phase2ParsedValue;
             return {};
           },
         };
@@ -1662,7 +1685,8 @@ describe("prompt()", () => {
           id: Symbol.for("@test/top-level-config-prompt-phase-two"),
           phase: "two-pass",
           getAnnotations(parsed?: unknown) {
-            sawUndefined = parsed === undefined;
+            sawUndefined = !isPhase1ContextRequest(parsed) &&
+              getPhase2ContextParsed(parsed) === undefined;
             return {};
           },
         };
@@ -1714,8 +1738,11 @@ describe("prompt()", () => {
           id: Symbol.for("@test/non-plain-phase-two"),
           phase: "two-pass",
           getAnnotations(parsed?: unknown) {
-            if (parsed !== undefined) {
-              phase2Parsed = parsed as ConfigInput;
+            const phase2ParsedValue = getPhase2ContextParsed<ConfigInput>(
+              parsed,
+            );
+            if (phase2ParsedValue !== undefined) {
+              phase2Parsed = phase2ParsedValue;
             }
             return {};
           },
@@ -1788,12 +1815,13 @@ describe("prompt()", () => {
           id: Symbol.for("@test/private-field-phase-two"),
           phase: "two-pass",
           getAnnotations(parsed?: unknown) {
-            if (parsed !== undefined) {
-              phase2SawSecretHolder = parsed instanceof SecretHolder;
+            const phase2Parsed = getPhase2ContextParsed<SecretHolder>(parsed);
+            if (phase2Parsed !== undefined) {
+              phase2SawSecretHolder = phase2Parsed instanceof SecretHolder;
               try {
                 // Accessing the getter should not throw even though
                 // the class uses private fields.
-                phase2Masked = (parsed as SecretHolder).masked;
+                phase2Masked = phase2Parsed.masked;
               } catch {
                 phase2Threw = true;
               }
@@ -1854,8 +1882,9 @@ describe("prompt()", () => {
         id: Symbol.for("@test/set-phase-two"),
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (parsed instanceof Set) {
-            phase2Values = [...parsed];
+          const phase2Parsed = getPhase2ContextParsed<Set<unknown>>(parsed);
+          if (phase2Parsed instanceof Set) {
+            phase2Values = [...phase2Parsed];
           }
           return {};
         },
@@ -1915,9 +1944,10 @@ describe("prompt()", () => {
           id: Symbol.for("@test/set-own-prop-phase-two"),
           phase: "two-pass",
           getAnnotations(parsed?: unknown) {
-            if (parsed instanceof BoxSet) {
+            const phase2Parsed = getPhase2ContextParsed<BoxSet>(parsed);
+            if (phase2Parsed instanceof BoxSet) {
               phase2WasBoxSet = true;
-              phase2ApiKey = parsed.apiKey;
+              phase2ApiKey = phase2Parsed.apiKey;
             }
             return {};
           },
@@ -1975,8 +2005,11 @@ describe("prompt()", () => {
         id: Symbol.for("@test/nested-clean-collection-phase-two"),
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (parsed != null && typeof parsed === "object") {
-            phase2Set = (parsed as { readonly clean: BoxSet }).clean;
+          const phase2Parsed = getPhase2ContextParsed<{
+            readonly clean: BoxSet;
+          }>(parsed);
+          if (phase2Parsed != null) {
+            phase2Set = phase2Parsed.clean;
           }
           return {};
         },
@@ -2044,8 +2077,11 @@ describe("prompt()", () => {
         id: Symbol.for("@test/nested-clean-non-plain-phase-two"),
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (parsed != null && typeof parsed === "object") {
-            phase2Box = (parsed as { readonly clean: CleanBox }).clean;
+          const phase2Parsed = getPhase2ContextParsed<{
+            readonly clean: CleanBox;
+          }>(parsed);
+          if (phase2Parsed != null) {
+            phase2Box = phase2Parsed.clean;
             phase2Value = phase2Box.getValue();
           }
           return {};
@@ -2106,10 +2142,11 @@ describe("prompt()", () => {
           id: Symbol.for("@test/nested-non-plain-phase-two"),
           phase: "two-pass",
           getAnnotations(parsed?: unknown) {
-            if (parsed != null && typeof parsed === "object") {
-              phase2ApiKey = (
-                parsed as { readonly inner: InnerInput }
-              ).inner.apiKey;
+            const phase2Parsed = getPhase2ContextParsed<{
+              readonly inner: InnerInput;
+            }>(parsed);
+            if (phase2Parsed != null) {
+              phase2ApiKey = phase2Parsed.inner.apiKey;
             }
             return {};
           },
@@ -2233,8 +2270,9 @@ describe("prompt()", () => {
           id: Symbol.for("@test/scrubbed-phase-two-identity"),
           phase: "two-pass",
           getAnnotations(parsed?: unknown) {
-            if (parsed != null && typeof parsed === "object") {
-              metadataByParsed.set(parsed as object, "seen");
+            const phase2Parsed = getPhase2ContextParsed<object>(parsed);
+            if (phase2Parsed != null && typeof phase2Parsed === "object") {
+              metadataByParsed.set(phase2Parsed, "seen");
             }
             return {};
           },
@@ -2385,8 +2423,11 @@ describe("prompt()", () => {
           id: Symbol.for("@test/mapped-placeholder-phase-two"),
           phase: "two-pass",
           getAnnotations(parsed?: unknown) {
-            if (parsed != null && typeof parsed === "object") {
-              phase2Token = (parsed as { readonly token: string }).token;
+            const phase2Parsed = getPhase2ContextParsed<{
+              readonly token: string;
+            }>(parsed);
+            if (phase2Parsed != null) {
+              phase2Token = phase2Parsed.token;
             }
             return {};
           },
@@ -2445,7 +2486,7 @@ describe("prompt()", () => {
           id: Symbol.for("@test/mapped-throw-phase-two"),
           phase: "two-pass",
           getAnnotations(parsed?: unknown) {
-            phase2Parsed = parsed;
+            phase2Parsed = getPhase2ContextParsed(parsed);
             return {};
           },
         };
@@ -2513,8 +2554,9 @@ describe("prompt()", () => {
         id: Symbol("spy"),
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (parsed !== undefined) {
-            phaseOneValues.push(parsed);
+          const phase2Parsed = getPhase2ContextParsed(parsed);
+          if (phase2Parsed !== undefined) {
+            phaseOneValues.push(phase2Parsed);
           }
           return {};
         },
@@ -4999,7 +5041,7 @@ describe("prompt() with dependency sources", () => {
         },
       });
       const annotations = await configContext.getAnnotations(
-        {},
+        { phase: "phase2", parsed: {} },
         {
           load: () => ({
             config: { mode: "prod" as const },
@@ -5208,7 +5250,7 @@ describe("prompt() with dependency sources", () => {
             },
           });
           const annotations = await configContext.getAnnotations(
-            {},
+            { phase: "phase2", parsed: {} },
             {
               load: () => ({
                 config: { mode: "prod" as const },
@@ -5299,7 +5341,7 @@ describe("prompt() with dependency sources", () => {
               },
             });
             const annotations = await configContext.getAnnotations(
-              {},
+              { phase: "phase2", parsed: {} },
               {
                 load: () => ({
                   config: { mode: "prod" as const },

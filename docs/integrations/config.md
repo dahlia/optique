@@ -868,10 +868,12 @@ Returns
 :   `ConfigContext<T, TConfigMeta>` implementing `SourceContext` interface
 
 > [!IMPORTANT]
-> If you call `configContext.getAnnotations()` manually, pass the returned
-> object to low-level APIs such as `parse()`, `parseAsync()`,
-> `parser.complete()`, `suggest()`, or `getDocPage()`. Calling
-> `getAnnotations()` alone does not affect later parses.
+> If you call `configContext.getAnnotations()` manually, omit the request for
+> a phase-1 snapshot or pass `{ phase: "phase2", parsed }` for a phase-two
+> snapshot, then pass the returned object to low-level APIs such as
+> `parse()`, `parseAsync()`, `parser.complete()`, `suggest()`, or
+> `getDocPage()`. Calling `getAnnotations()` alone does not affect later
+> parses.
 
 ### `bindConfig(parser, options)`
 
@@ -925,7 +927,8 @@ per run, so reusing the same `ConfigContext` instance across independent or
 concurrent runs is safe.
 
 When calling `configContext.getAnnotations()` manually, remember that the
-call only returns annotations.  It does not mutate global state or affect
+call only returns annotations.  Use `{ phase: "phase2", parsed }` when you
+need a manual phase-two snapshot.  It does not mutate global state or affect
 later parses by itself.  To use those values with low-level APIs such as
 `parse()` or `suggestSync()`, pass the returned annotations explicitly.
 

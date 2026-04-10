@@ -2,6 +2,7 @@ import { longestMatch, object, or } from "@optique/core/constructs";
 import type {
   ParserValuePlaceholder,
   SourceContext,
+  SourceContextRequest,
 } from "@optique/core/context";
 import { message } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
@@ -28,6 +29,22 @@ import { bindConfig, createConfigContext } from "../../config/src/index.ts";
 import { bindEnv, createEnvContext } from "../../env/src/index.ts";
 
 const TEST_DIR = join(import.meta.dirname ?? ".", "test-configs");
+
+function isPhase1ContextRequest(request: unknown): boolean {
+  return request == null ||
+    (typeof request === "object" &&
+      "phase" in request &&
+      (request as { readonly phase?: unknown }).phase === "phase1");
+}
+
+function getPhase2ContextParsed<T>(request: unknown): T | undefined {
+  if (request != null && typeof request === "object" && "phase" in request) {
+    return (request as { readonly phase?: unknown }).phase === "phase2"
+      ? (request as SourceContextRequest & { readonly parsed: T }).parsed
+      : undefined;
+  }
+  return request as T | undefined;
+}
 
 function createPassthroughConfigSchema<T>(): Parameters<
   typeof createConfigContext<T>
@@ -1676,7 +1693,7 @@ describe("run with contexts", () => {
       phase: "two-pass",
       getAnnotations(_parsed?: unknown, options?: unknown) {
         receivedOptions = options;
-        if (!_parsed) return {};
+        if (isPhase1ContextRequest(_parsed)) return {};
         return { [key]: { value: true } };
       },
     };
@@ -1973,12 +1990,16 @@ describe("run with contexts", () => {
       id: Symbol.for("@test/program-run-dynamic-context-array"),
       phase: "two-pass",
       getAnnotations(parsed, options) {
-        if (parsed && options) {
+        const phase2Parsed = getPhase2ContextParsed<{
+          config: string;
+          host: string;
+        }>(parsed);
+        if (phase2Parsed != null && options) {
           resolvedPath = (
             options as {
               getPath: (parsed: { config: string; host: string }) => string;
             }
-          ).getPath(parsed as { config: string; host: string });
+          ).getPath(phase2Parsed);
         }
         return {};
       },
@@ -2087,12 +2108,16 @@ describe("run with contexts", () => {
       id: Symbol.for("@test/program-run-context"),
       phase: "two-pass",
       getAnnotations(parsed, options) {
-        if (parsed && options) {
+        const phase2Parsed = getPhase2ContextParsed<{
+          config: string;
+          host: string;
+        }>(parsed);
+        if (phase2Parsed != null && options) {
           resolvedPath = (
             options as {
               getPath: (parsed: { config: string; host: string }) => string;
             }
-          ).getPath(parsed as { config: string; host: string });
+          ).getPath(phase2Parsed);
         }
         return {};
       },
@@ -2139,12 +2164,16 @@ describe("run with contexts", () => {
       id: Symbol.for("@test/program-run-dynamic-contexts"),
       phase: "two-pass",
       getAnnotations(parsed, options) {
-        if (parsed && options) {
+        const phase2Parsed = getPhase2ContextParsed<{
+          config: string;
+          host: string;
+        }>(parsed);
+        if (phase2Parsed != null && options) {
           resolvedPath = (
             options as {
               getPath: (parsed: { config: string; host: string }) => string;
             }
-          ).getPath(parsed as { config: string; host: string });
+          ).getPath(phase2Parsed);
         }
         return {};
       },
@@ -2469,12 +2498,16 @@ describe("runSync with contexts", () => {
       id: Symbol.for("@test/program-runsync-context"),
       phase: "two-pass",
       getAnnotations(parsed, options) {
-        if (parsed && options) {
+        const phase2Parsed = getPhase2ContextParsed<{
+          config: string;
+          host: string;
+        }>(parsed);
+        if (phase2Parsed != null && options) {
           resolvedPath = (
             options as {
               getPath: (parsed: { config: string; host: string }) => string;
             }
-          ).getPath(parsed as { config: string; host: string });
+          ).getPath(phase2Parsed);
         }
         return {};
       },
@@ -2692,12 +2725,16 @@ describe("runAsync with contexts", () => {
       id: Symbol.for("@test/program-runasync-context"),
       phase: "two-pass",
       getAnnotations(parsed, options) {
-        if (parsed && options) {
+        const phase2Parsed = getPhase2ContextParsed<{
+          config: string;
+          host: string;
+        }>(parsed);
+        if (phase2Parsed != null && options) {
           resolvedPath = (
             options as {
               getPath: (parsed: { config: string; host: string }) => string;
             }
-          ).getPath(parsed as { config: string; host: string });
+          ).getPath(phase2Parsed);
         }
         return {};
       },

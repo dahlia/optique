@@ -26,6 +26,52 @@ export type { Annotations } from "./annotations.ts";
 export type SourceContextPhase = "single-pass" | "two-pass";
 
 /**
+ * Phase-1 annotation collection request for a {@link SourceContext}.
+ *
+ * @since 1.0.0
+ */
+export interface SourceContextPhase1Request {
+  /**
+   * Indicates that the runner is collecting initial annotations before the
+   * first parse pass.
+   */
+  readonly phase: "phase1";
+}
+
+/**
+ * Phase-2 annotation collection request for a {@link SourceContext}.
+ *
+ * @since 1.0.0
+ */
+export interface SourceContextPhase2Request {
+  /**
+   * Indicates that the runner is recollecting annotations after a usable
+   * first parse pass.
+   */
+  readonly phase: "phase2";
+
+  /**
+   * Parsed result from the first pass, or a best-effort partial value
+   * extracted from parser state when the first pass reached a usable
+   * intermediate state but did not complete successfully.
+   */
+  readonly parsed: unknown;
+}
+
+/**
+ * Request object passed to {@link SourceContext.getAnnotations} and
+ * {@link SourceContext.getInternalAnnotations}.
+ *
+ * This makes phase 1 and phase 2 explicit so successful parser results of
+ * `undefined` are no longer ambiguous.
+ *
+ * @since 1.0.0
+ */
+export type SourceContextRequest =
+  | SourceContextPhase1Request
+  | SourceContextPhase2Request;
+
+/**
  * Brand symbol for ParserValuePlaceholder type.
  * @internal
  */
@@ -146,10 +192,11 @@ export interface SourceContext<TRequiredOptions = void> {
    * This method is called during phase 1 for every context and during phase 2
    * only for `two-pass` contexts:
    *
-   * 1. *Phase 1*: `parsed` is `undefined`.
-   * 2. *Phase 2*: `parsed` contains the first pass result, or a best-effort
-   *    partial value extracted from parser state when the first pass reached a
-   *    usable intermediate state but still did not complete successfully.
+   * 1. *Phase 1*: `request.phase` is `"phase1"`.
+   * 2. *Phase 2*: `request.phase` is `"phase2"` and `request.parsed`
+   *    contains the first pass result, or a best-effort partial value
+   *    extracted from parser state when the first pass reached a usable
+   *    intermediate state but still did not complete successfully.
    *    Deferred or otherwise unresolved fields may be `undefined`. This
    *    second return value is treated as the context's final annotation
    *    snapshot for the second parse pass, replacing that context's phase-one
@@ -157,9 +204,15 @@ export interface SourceContext<TRequiredOptions = void> {
    *    second call is skipped and the original parse failure is reported
    *    instead.
    *
-   * @param parsed Optional parsed result from a previous parse pass.
-   *               `single-pass` contexts can ignore this parameter.
-   *               `two-pass` contexts use this to extract or refine data.
+   * Omitting the request is treated as a manual phase-1 call for
+   * convenience, so `context.getAnnotations()` continues to work for
+   * simple one-shot annotation reads.
+   *
+   * @param request Optional request describing which collection phase the
+   *                runner is performing. `single-pass` contexts can ignore
+   *                this parameter. `two-pass` contexts should branch on
+   *                `request.phase` rather than inferring phases from
+   *                `request.parsed`.
    * @param options Optional context-required options provided by the caller
    *               of `runWith()`. These are the options declared via the
    *               `TRequiredOptions` type parameter.
@@ -169,43 +222,28 @@ export interface SourceContext<TRequiredOptions = void> {
    *          loading config files).
    */
   getAnnotations(
-    parsed?: unknown,
+    request?: SourceContextRequest,
     options?: unknown,
   ): Promise<Annotations> | Annotations;
 
   /**
    * Optional hook to provide additional internal annotations during
    * annotation collection.  Called after {@link getAnnotations} with the
-   * same parsed value and the annotations returned by `getAnnotations()`.
+   * same request object and the annotations returned by `getAnnotations()`.
    *
    * Returns additional annotations to merge, or `undefined` to add nothing.
    * This enables contexts to inject phase-specific markers without
    * exposing them through the primary `getAnnotations()` API.
    *
-   * @param parsed The parsed result from a previous parse pass, or
-   *               `undefined` during the first pass.
+   * @param request The request describing the current collection phase.
    * @param annotations The annotations returned by `getAnnotations()`.
    * @returns Additional annotations to merge, or `undefined`.
    * @since 1.0.0
    */
   getInternalAnnotations?(
-    parsed: unknown,
+    request: SourceContextRequest,
     annotations: Annotations,
   ): Annotations | undefined;
-
-  /**
-   * Optional hook to transform the parsed value before it is passed to
-   * {@link getAnnotations} during phase-2 annotation collection.
-   *
-   * This allows contexts to distinguish between "parsed value was
-   * `undefined`" and "no parse happened yet" by wrapping `undefined`
-   * values with a context-private marker.
-   *
-   * @param parsed The parsed value to finalize.
-   * @returns The finalized parsed value.
-   * @since 1.0.0
-   */
-  finalizeParsed?(parsed: unknown): unknown;
 
   /**
    * Optional synchronous cleanup method.  Called by `runWith()` and

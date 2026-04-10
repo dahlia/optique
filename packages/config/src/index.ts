@@ -15,6 +15,7 @@ import type {
   Annotations,
   ParserValuePlaceholder,
   SourceContext,
+  SourceContextRequest,
 } from "@optique/core/context";
 import type {
   ExecutionContext,
@@ -38,10 +39,6 @@ import { message } from "@optique/core/message";
 import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
 import type { ValueParserResult } from "@optique/core/valueparser";
 
-const phase2UndefinedParsedValueKey = Symbol(
-  "@optique/config/phase2UndefinedParsedValue",
-);
-
 /**
  * Metadata about the loaded config source.
  *
@@ -62,12 +59,6 @@ export interface ConfigMeta {
 const phase1ConfigAnnotationMarker = Symbol(
   "@optique/config/phase1Annotation",
 );
-
-function isPhase2UndefinedParsedValue(value: unknown): boolean {
-  return value != null &&
-    typeof value === "object" &&
-    phase2UndefinedParsedValueKey in value;
-}
 
 /**
  * Options for creating a config context.
@@ -319,11 +310,13 @@ function validateWithSchema<T>(
  * *@optique/run* to provide configuration file support. Each runner call
  * receives its own annotation snapshot, so the same `ConfigContext`
  * instance can be reused safely across independent or concurrent runs.
- * When calling `context.getAnnotations()` manually, pass the returned
- * annotations to low-level APIs such as `parse()`, `parseAsync()`,
- * `parser.complete()`, `suggest()`, or `getDocPage()`. Calling
- * `getAnnotations()` by itself does not affect later parses unless those
- * returned annotations are explicitly threaded into a low-level API call.
+ * When calling `context.getAnnotations()` manually, omit the request for a
+ * phase-1 snapshot or pass `{ phase: "phase2", parsed }` for a phase-two
+ * snapshot, then thread the returned annotations into low-level APIs such
+ * as `parse()`, `parseAsync()`, `parser.complete()`, `suggest()`, or
+ * `getDocPage()`. Calling `getAnnotations()` by itself does not affect
+ * later parses unless those returned annotations are explicitly threaded
+ * into a low-level API call.
  *
  * @template T The output type of the config schema.
  * @template TConfigMeta The metadata type for config sources.
@@ -377,29 +370,27 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
     id: contextId,
     schema: rawSchema,
     phase: "two-pass",
-    getInternalAnnotations(parsed: unknown, annotations: Annotations) {
-      if (parsed === undefined) {
+    getInternalAnnotations(
+      request: SourceContextRequest,
+      annotations: Annotations,
+    ) {
+      if (request.phase === "phase1") {
         return { [contextId]: phase1ConfigAnnotationMarker };
       }
       return Object.getOwnPropertySymbols(annotations).includes(contextId)
         ? undefined
         : { [contextId]: undefined };
     },
-    finalizeParsed(parsed: unknown) {
-      return parsed === undefined
-        ? { [phase2UndefinedParsedValueKey]: true }
-        : parsed;
-    },
 
     getAnnotations(
-      parsed?: unknown,
+      request?: SourceContextRequest,
       runtimeOptions?: unknown,
     ): Promise<Annotations> | Annotations {
       // Phase 1 (no parsed result): return no public annotations here.
       // Runners add the phase-1 unresolved marker through
       // getInternalAnnotations() so prompt(bindConfig(...)) can defer
       // interactive fallback without exposing that marker as user data.
-      if (parsed === undefined) {
+      if (request == null || request.phase === "phase1") {
         return {};
       }
 
@@ -431,10 +422,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
 
       // At runtime, `parsed` is the actual parser value.  The
       // ParserValuePlaceholder brand is compile-time only.
-      const parsedValue: unknown = isPhase2UndefinedParsedValue(parsed)
-        ? undefined
-        : parsed;
-      const parsedPlaceholder = parsedValue as ParserValuePlaceholder;
+      const parsedPlaceholder = request.parsed as ParserValuePlaceholder;
 
       const emptyAnnotations = (): Annotations => ({});
 

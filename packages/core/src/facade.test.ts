@@ -8,7 +8,10 @@ import {
   tuple,
 } from "@optique/core/constructs";
 import { getAnnotations, inheritAnnotations } from "@optique/core/annotations";
-import type { SourceContext } from "@optique/core/context";
+import type {
+  SourceContext,
+  SourceContextRequest,
+} from "@optique/core/context";
 import type { DocSection } from "@optique/core/doc";
 import {
   defineInheritedAnnotationParser,
@@ -50,6 +53,22 @@ import { extractPhase2SeedKey } from "./phase2-seed.ts";
 import { bindEnv, createEnvContext } from "../../env/src/index.ts";
 
 type AssertNever<T extends never> = T;
+
+function isPhase1ContextRequest(request: unknown): boolean {
+  return request == null ||
+    (typeof request === "object" &&
+      "phase" in request &&
+      (request as { readonly phase?: unknown }).phase === "phase1");
+}
+
+function getPhase2ContextParsed<T>(request: unknown): T | undefined {
+  if (request != null && typeof request === "object" && "phase" in request) {
+    return (request as { readonly phase?: unknown }).phase === "phase2"
+      ? (request as SourceContextRequest & { readonly parsed: T }).parsed
+      : undefined;
+  }
+  return request as T | undefined;
+}
 
 function getRuntimeExtractPhase2SeedKey(): symbol {
   const parser = command("probe", constant(null));
@@ -5596,7 +5615,7 @@ describe("runWith", () => {
         id: Symbol.for("@test/phase-merge-late"),
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (parsed == null) {
+          if (isPhase1ContextRequest(parsed)) {
             return {};
           }
           return { [sharedKey]: "phase2-late" };
@@ -5650,7 +5669,7 @@ describe("runWith", () => {
         id: Symbol.for("@test/phase-clear-early"),
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (parsed == null) {
+          if (isPhase1ContextRequest(parsed)) {
             return { [sharedKey]: "phase1-early" };
           }
           return {};
@@ -5661,7 +5680,7 @@ describe("runWith", () => {
         id: Symbol.for("@test/phase-clear-late"),
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (parsed == null) {
+          if (isPhase1ContextRequest(parsed)) {
             return {};
           }
           return { [sharedKey]: "phase2-late" };
@@ -5688,9 +5707,9 @@ describe("runWith", () => {
         id: configKey,
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (parsed === undefined) return {};
+          const result = getPhase2ContextParsed<{ config?: string }>(parsed);
+          if (result == null) return {};
           phase2Called = true;
-          const result = parsed as { config?: string };
           if (!result.config) return {};
           // Simulate loaded config
           return { [configKey]: { host: "dynamic-host" } };
@@ -5770,7 +5789,7 @@ describe("runWith", () => {
         id: configKey,
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (parsed === undefined) return {};
+          if (isPhase1ContextRequest(parsed)) return {};
           phase2Called = true;
           return { [configKey]: { host: "config-host" } };
         },
@@ -6916,7 +6935,7 @@ describe("runWith", () => {
         phase: "two-pass",
         getAnnotations(_parsed?: unknown, options?: unknown) {
           receivedOptions = options;
-          if (!_parsed) return {};
+          if (isPhase1ContextRequest(_parsed)) return {};
           return { [passthroughKey]: { value: "loaded" } };
         },
       };
@@ -6947,7 +6966,7 @@ describe("runWith", () => {
         phase: "two-pass",
         getAnnotations(parsed?: unknown, options?: unknown) {
           receivedOptionsPerCall.push(options);
-          if (parsed === undefined) return {};
+          if (isPhase1ContextRequest(parsed)) return {};
           return { [dynamicKey]: { value: "loaded" } };
         },
       };
@@ -7284,7 +7303,7 @@ describe("runWithSync", () => {
       id: mixedKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (parsed === undefined) return {}; // sync (empty → dynamic)
+        if (isPhase1ContextRequest(parsed)) return {}; // sync (empty → dynamic)
         return Promise.resolve({ [mixedKey]: { value: "loaded" } });
       },
     };
@@ -7925,7 +7944,7 @@ describe("runWithSync", () => {
         id: Symbol.for("@test/phase-merge-sync-late"),
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (parsed == null) {
+          if (isPhase1ContextRequest(parsed)) {
             return {};
           }
           return { [sharedKey]: "phase2-late" };
@@ -7979,7 +7998,7 @@ describe("runWithSync", () => {
         id: Symbol.for("@test/phase-clear-sync-early"),
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (parsed == null) {
+          if (isPhase1ContextRequest(parsed)) {
             return { [sharedKey]: "phase1-early" };
           }
           return {};
@@ -7990,7 +8009,7 @@ describe("runWithSync", () => {
         id: Symbol.for("@test/phase-clear-sync-late"),
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          if (parsed == null) {
+          if (isPhase1ContextRequest(parsed)) {
             return {};
           }
           return { [sharedKey]: "phase2-late" };
@@ -8018,7 +8037,7 @@ describe("runWithSync", () => {
         phase: "two-pass",
         getAnnotations(_parsed?: unknown, options?: unknown) {
           receivedOptions = options;
-          if (!_parsed) return {};
+          if (isPhase1ContextRequest(_parsed)) return {};
           return { [syncKey]: { value: "loaded" } };
         },
       };
@@ -10142,7 +10161,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: dynKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (parsed === undefined) return {};
+        if (isPhase1ContextRequest(parsed)) return {};
         phase2Called = true;
         return { [dynKey]: {} };
       },
@@ -10196,7 +10215,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: key,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (parsed === undefined) {
+        if (isPhase1ContextRequest(parsed)) {
           return { [key]: { phase1: true } };
         }
         phase2Called = true;
@@ -10254,16 +10273,19 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(
-        parsed: { readonly config: string } | undefined,
+        request: SourceContextRequest | undefined,
         options?: {
           readonly getConfigPath: (
             parsed: { readonly config: string },
           ) => string | undefined;
         },
       ) {
-        if (parsed === undefined) return {};
-        phase2Parsed = parsed;
-        const configPath = options?.getConfigPath(parsed);
+        const phase2ParsedValue = getPhase2ContextParsed<
+          { readonly config: string }
+        >(request);
+        if (phase2ParsedValue === undefined) return {};
+        phase2Parsed = phase2ParsedValue;
+        const configPath = options?.getConfigPath(phase2ParsedValue);
         return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
       },
     };
@@ -10330,16 +10352,19 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(
-        parsed: { readonly config: string } | undefined,
+        request: SourceContextRequest | undefined,
         options?: {
           readonly getConfigPath: (
             parsed: { readonly config: string },
           ) => string | undefined;
         },
       ) {
-        if (parsed === undefined) return {};
+        const phase2ParsedValue = getPhase2ContextParsed<
+          { readonly config: string }
+        >(request);
+        if (phase2ParsedValue === undefined) return {};
         phase2Called = true;
-        const configPath = options?.getConfigPath(parsed);
+        const configPath = options?.getConfigPath(phase2ParsedValue);
         return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
       },
     };
@@ -10411,16 +10436,19 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(
-        parsed: { readonly config: string } | undefined,
+        request: SourceContextRequest | undefined,
         options?: {
           readonly getConfigPath: (
             parsed: { readonly config: string },
           ) => string | undefined;
         },
       ) {
-        if (parsed === undefined) return {};
+        const phase2ParsedValue = getPhase2ContextParsed<
+          { readonly config: string }
+        >(request);
+        if (phase2ParsedValue === undefined) return {};
         phase2Called = true;
-        const configPath = options?.getConfigPath(parsed);
+        const configPath = options?.getConfigPath(phase2ParsedValue);
         return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
       },
     };
@@ -10537,16 +10565,19 @@ describe("branch coverage: facade.ts edge cases", () => {
         id: tokenKey,
         phase: "two-pass",
         getAnnotations(
-          parsed: { readonly config: string } | undefined,
+          request: SourceContextRequest | undefined,
           options?: {
             readonly getConfigPath: (
               parsed: { readonly config: string },
             ) => string | undefined;
           },
         ) {
-          if (parsed === undefined) return {};
+          const phase2ParsedValue = getPhase2ContextParsed<
+            { readonly config: string }
+          >(request);
+          if (phase2ParsedValue === undefined) return {};
           phase2Called = true;
-          const configPath = options?.getConfigPath(parsed);
+          const configPath = options?.getConfigPath(phase2ParsedValue);
           return configPath == null
             ? {}
             : { [tokenKey]: `token:${configPath}` };
@@ -10663,16 +10694,19 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(
-        parsed: { readonly config: string } | undefined,
+        request: SourceContextRequest | undefined,
         options?: {
           readonly getConfigPath: (
             parsed: { readonly config: string },
           ) => string | undefined;
         },
       ) {
-        if (parsed == null) return {};
+        const phase2ParsedValue = getPhase2ContextParsed<
+          { readonly config: string }
+        >(request);
+        if (phase2ParsedValue == null) return {};
         phase2Called = true;
-        const configPath = options?.getConfigPath(parsed);
+        const configPath = options?.getConfigPath(phase2ParsedValue);
         return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
       },
     };
@@ -10740,7 +10774,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(parsed) {
-        if (parsed == null) return {};
+        if (isPhase1ContextRequest(parsed)) return {};
         phase2Called = true;
         return { [tokenKey]: "from-phase-two" };
       },
@@ -10805,7 +10839,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(parsed) {
-        if (parsed == null) return {};
+        if (isPhase1ContextRequest(parsed)) return {};
         phase2Called = true;
         return { [tokenKey]: "from-phase-two" };
       },
@@ -10862,15 +10896,18 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(
-        parsed: { readonly config: string } | undefined,
+        request: SourceContextRequest | undefined,
         options?: {
           readonly getConfigPath: (
             parsed: { readonly config: string },
           ) => string | undefined;
         },
       ) {
-        if (parsed == null) return {};
-        const configPath = options?.getConfigPath(parsed);
+        const phase2ParsedValue = getPhase2ContextParsed<
+          { readonly config: string }
+        >(request);
+        if (phase2ParsedValue == null) return {};
+        const configPath = options?.getConfigPath(phase2ParsedValue);
         return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
       },
     };
@@ -10937,15 +10974,18 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(
-        parsed: { readonly config: string } | undefined,
+        request: SourceContextRequest | undefined,
         options?: {
           readonly getConfigPath: (
             parsed: { readonly config: string },
           ) => string | undefined;
         },
       ) {
-        if (parsed == null) return {};
-        const configPath = options?.getConfigPath(parsed);
+        const phase2ParsedValue = getPhase2ContextParsed<
+          { readonly config: string }
+        >(request);
+        if (phase2ParsedValue == null) return {};
+        const configPath = options?.getConfigPath(phase2ParsedValue);
         return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
       },
     };
@@ -11013,10 +11053,13 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(
-        parsed: { readonly commandPath: readonly string[] } | undefined,
+        request: SourceContextRequest | undefined,
       ) {
-        if (parsed == null) return {};
-        return parsed.commandPath[0] === "serve"
+        const phase2ParsedValue = getPhase2ContextParsed<
+          { readonly commandPath: readonly string[] }
+        >(request);
+        if (phase2ParsedValue == null) return {};
+        return phase2ParsedValue.commandPath[0] === "serve"
           ? { [tokenKey]: "from-phase-two" }
           : {};
       },
@@ -11078,10 +11121,13 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(
-        parsed: { readonly commandPath: readonly string[] } | undefined,
+        request: SourceContextRequest | undefined,
       ) {
-        if (parsed == null) return {};
-        return parsed.commandPath[0] === "serve"
+        const phase2ParsedValue = getPhase2ContextParsed<
+          { readonly commandPath: readonly string[] }
+        >(request);
+        if (phase2ParsedValue == null) return {};
+        return phase2ParsedValue.commandPath[0] === "serve"
           ? { [tokenKey]: "from-phase-two" }
           : {};
       },
@@ -11185,15 +11231,18 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(
-        parsed: { readonly configs: readonly string[] } | undefined,
+        request: SourceContextRequest | undefined,
         options?: {
           readonly getConfigPath: (
             parsed: { readonly configs: readonly string[] },
           ) => string | undefined;
         },
       ) {
-        if (parsed == null) return {};
-        const configPath = options?.getConfigPath(parsed);
+        const phase2ParsedValue = getPhase2ContextParsed<
+          { readonly configs: readonly string[] }
+        >(request);
+        if (phase2ParsedValue == null) return {};
+        const configPath = options?.getConfigPath(phase2ParsedValue);
         return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
       },
     };
@@ -11227,7 +11276,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: dynKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (parsed === undefined) return {};
+        if (isPhase1ContextRequest(parsed)) return {};
         return { [dynKey]: {} };
       },
     };
@@ -11250,7 +11299,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: dynKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (parsed === undefined) return {}; // dynamic (no symbols → hasDynamic = true)
+        if (isPhase1ContextRequest(parsed)) return {}; // dynamic (no symbols → hasDynamic = true)
         return { [dynKey]: {} };
       },
     };
@@ -11303,13 +11352,59 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(result, "world");
   });
 
+  it(
+    "runWith: two-pass context still refines a successful undefined first-pass value",
+    async () => {
+      const key = Symbol.for("@test/two-pass-undefined-first-pass-async");
+      const parser: Parser<"sync", string | undefined, null> = {
+        $mode: "sync",
+        $valueType: [] as readonly (string | undefined)[],
+        $stateType: [] as readonly null[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: null,
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        },
+        complete(state) {
+          return {
+            success: true as const,
+            value: getAnnotations(state)?.[key] as string | undefined,
+          };
+        },
+        *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      const context: SourceContext = {
+        id: key,
+        phase: "two-pass",
+        getAnnotations(parsed?: unknown) {
+          if (isPhase1ContextRequest(parsed)) return {};
+          return { [key]: "phase2" };
+        },
+      };
+
+      const result = await runWith(parser, "test", [context], { args: [] });
+
+      assert.equal(result, "phase2");
+    },
+  );
+
   it("runWith: async parser + hasDynamic + first-pass fails", async () => {
     const dynKey = Symbol.for("@test/dyn-async-fail2");
     const dynamicContext: SourceContext = {
       id: dynKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (parsed === undefined) return {}; // dynamic
+        if (isPhase1ContextRequest(parsed)) return {}; // dynamic
         return { [dynKey]: {} };
       },
     };
@@ -11379,7 +11474,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: dynKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (parsed === undefined) {
+        if (isPhase1ContextRequest(parsed)) {
           phase1Calls++;
           return { [dynKey]: {} };
         }
@@ -11475,7 +11570,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: dynKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (parsed === undefined) return {}; // dynamic
+        if (isPhase1ContextRequest(parsed)) return {}; // dynamic
         return { [dynKey]: {} };
       },
     };
@@ -11500,7 +11595,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: dynKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (parsed === undefined) return {};
+        if (isPhase1ContextRequest(parsed)) return {};
         return { [dynKey]: {} };
       },
     };
@@ -11543,13 +11638,59 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(staleParserReused, false);
   });
 
+  it(
+    "runWithSync: two-pass context still refines a successful undefined first-pass value",
+    () => {
+      const key = Symbol.for("@test/two-pass-undefined-first-pass-sync");
+      const parser: Parser<"sync", string | undefined, null> = {
+        $mode: "sync",
+        $valueType: [] as readonly (string | undefined)[],
+        $stateType: [] as readonly null[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: null,
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        },
+        complete(state) {
+          return {
+            success: true as const,
+            value: getAnnotations(state)?.[key] as string | undefined,
+          };
+        },
+        *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      const context: SourceContext = {
+        id: key,
+        phase: "two-pass",
+        getAnnotations(parsed?: unknown) {
+          if (isPhase1ContextRequest(parsed)) return {};
+          return { [key]: "phase2" };
+        },
+      };
+
+      const result = runWithSync(parser, "test", [context], { args: [] });
+
+      assert.equal(result, "phase2");
+    },
+  );
+
   it("runWithSync: two-phase, first pass throws → handled via runParser", () => {
     const dynKey = Symbol.for("@test/sync-two-phase-throw");
     const context: SourceContext = {
       id: dynKey,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (parsed === undefined) return {}; // dynamic
+        if (isPhase1ContextRequest(parsed)) return {}; // dynamic
         return { [dynKey]: {} };
       },
     };
@@ -11607,7 +11748,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: key,
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (parsed === undefined) {
+        if (isPhase1ContextRequest(parsed)) {
           return { [key]: { phase1: true } };
         }
         phase2Called = true;
@@ -11826,7 +11967,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: Symbol.for("@test/dyn-throw-in-first-pass"),
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (parsed === undefined) return {};
+        if (isPhase1ContextRequest(parsed)) return {};
         return { [Symbol.for("@test/dyn-throw-in-first-pass")]: {} };
       },
     };
@@ -11872,7 +12013,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       id: Symbol.for("@test/sync-dyn-throw-in-first-pass"),
       phase: "two-pass",
       getAnnotations(parsed?: unknown) {
-        if (parsed === undefined) return {};
+        if (isPhase1ContextRequest(parsed)) return {};
         return { [Symbol.for("@test/sync-dyn-throw-in-first-pass")]: {} };
       },
     };

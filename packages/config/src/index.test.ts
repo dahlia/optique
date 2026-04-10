@@ -12,6 +12,7 @@ import {
   tuple,
 } from "@optique/core/constructs";
 import { getAnnotations, injectAnnotations } from "@optique/core/annotations";
+import type { SourceContextRequest } from "@optique/core/context";
 import { dependency } from "@optique/core/dependency";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { constant, fail, flag, option } from "@optique/core/primitives";
@@ -41,6 +42,10 @@ function requireValue<T>(value: T | undefined, message: string): T {
   }
 
   return value;
+}
+
+function phase2<T>(parsed: T): SourceContextRequest {
+  return { phase: "phase2", parsed };
 }
 
 describe("createConfigContext", () => {
@@ -102,21 +107,18 @@ describe("createConfigContext", () => {
         const context = createConfigContext({ schema });
         let receivedParsed: unknown;
 
-        const annotations = await context.getAnnotations(
-          parsed,
-          {
-            load: (value: unknown) => {
-              receivedParsed = value;
-              return {
-                config: { host: expectedHost },
-                meta: {
-                  configDir: "/app",
-                  configPath: "/app/config.json",
-                } satisfies ConfigMeta,
-              };
-            },
+        const annotations = await context.getAnnotations(phase2(parsed), {
+          load: (value: unknown) => {
+            receivedParsed = value;
+            return {
+              config: { host: expectedHost },
+              meta: {
+                configDir: "/app",
+                configPath: "/app/config.json",
+              } satisfies ConfigMeta,
+            };
           },
-        );
+        });
 
         assert.equal(receivedParsed, parsed);
         const contextAnnotation = annotations[context.id] as
@@ -221,7 +223,7 @@ describe("bindConfig", () => {
         key: (async (config: { name: string }) =>
           config.name.toUpperCase()) as never,
       });
-      const annotations = await context.getAnnotations({} as never, {
+      const annotations = await context.getAnnotations(phase2({}), {
         load: () => ({ config: { name: "alice" }, meta: undefined }),
       });
       assert.throws(
@@ -244,7 +246,7 @@ describe("bindConfig", () => {
         context,
         key: (() => thenable) as never,
       });
-      const annotations = await context.getAnnotations({} as never, {
+      const annotations = await context.getAnnotations(phase2({}), {
         load: () => ({ config: { name: "alice" }, meta: undefined }),
       });
       assert.throws(
@@ -268,7 +270,7 @@ describe("bindConfig", () => {
         context,
         key: (() => callableThenable) as never,
       });
-      const annotations = await context.getAnnotations({} as never, {
+      const annotations = await context.getAnnotations(phase2({}), {
         load: () => ({ config: { name: "alice" }, meta: undefined }),
       });
       assert.throws(
@@ -902,10 +904,10 @@ describe("bindConfig", () => {
     });
 
     try {
-      const leftAnnotations = await leftContext.getAnnotations(true, {
+      const leftAnnotations = await leftContext.getAnnotations(phase2(true), {
         load: () => ({ config: { host: "left.example.com" } }),
       });
-      const rightAnnotations = await rightContext.getAnnotations(true, {
+      const rightAnnotations = await rightContext.getAnnotations(phase2(true), {
         load: () => ({ config: { host: "right.example.com" } }),
       });
       const annotations: Annotations = {
@@ -1478,10 +1480,7 @@ describe("createConfigContext input validation", () => {
     const context = createConfigContext({ schema });
     assert.throws(
       () =>
-        context.getAnnotations(
-          { any: 1 },
-          { load: "nope" as never },
-        ),
+        context.getAnnotations(phase2({ any: 1 }), { load: "nope" as never }),
       {
         name: "TypeError",
         message: "Expected load to be a function, but got: string.",
@@ -1494,10 +1493,9 @@ describe("createConfigContext input validation", () => {
     const context = createConfigContext({ schema });
     assert.throws(
       () =>
-        context.getAnnotations(
-          { any: 1 },
-          { getConfigPath: "nope" as never },
-        ),
+        context.getAnnotations(phase2({ any: 1 }), {
+          getConfigPath: "nope" as never,
+        }),
       {
         name: "TypeError",
         message: "Expected getConfigPath to be a function, but got: string.",
@@ -1509,16 +1507,13 @@ describe("createConfigContext input validation", () => {
     const schema = z.object({ host: z.string() });
     const context = createConfigContext({ schema });
     // load takes precedence; getConfigPath should not be validated
-    const result = context.getAnnotations(
-      { any: 1 },
-      {
-        load: () => ({
-          config: { host: "ok" },
-          meta: undefined,
-        }),
-        getConfigPath: "nope" as never,
-      },
-    );
+    const result = context.getAnnotations(phase2({ any: 1 }), {
+      load: () => ({
+        config: { host: "ok" },
+        meta: undefined,
+      }),
+      getConfigPath: "nope" as never,
+    });
     assert.ok(result != null);
   });
 
@@ -1527,10 +1522,9 @@ describe("createConfigContext input validation", () => {
     const context = createConfigContext({ schema });
     assert.throws(
       () =>
-        context.getAnnotations(
-          {},
-          { getConfigPath: (() => ({ path: "./foo.json" })) as never },
-        ),
+        context.getAnnotations(phase2({}), {
+          getConfigPath: (() => ({ path: "./foo.json" })) as never,
+        }),
       {
         name: "TypeError",
         message:
@@ -1544,12 +1538,9 @@ describe("createConfigContext input validation", () => {
     const context = createConfigContext({ schema });
     assert.throws(
       () =>
-        context.getAnnotations(
-          {},
-          {
-            getConfigPath: (() => Promise.resolve("./foo.json")) as never,
-          },
-        ),
+        context.getAnnotations(phase2({}), {
+          getConfigPath: (() => Promise.resolve("./foo.json")) as never,
+        }),
       {
         name: "TypeError",
         message:
@@ -1563,10 +1554,9 @@ describe("createConfigContext input validation", () => {
     const context = createConfigContext({ schema });
     assert.throws(
       () =>
-        context.getAnnotations(
-          {},
-          { getConfigPath: (() => null) as never },
-        ),
+        context.getAnnotations(phase2({}), {
+          getConfigPath: (() => null) as never,
+        }),
       {
         name: "TypeError",
         message:
@@ -1580,10 +1570,9 @@ describe("createConfigContext input validation", () => {
     const context = createConfigContext({ schema });
     assert.throws(
       () =>
-        context.getAnnotations(
-          {},
-          { getConfigPath: (() => 123) as never },
-        ),
+        context.getAnnotations(phase2({}), {
+          getConfigPath: (() => 123) as never,
+        }),
       {
         name: "TypeError",
         message:
@@ -1602,11 +1591,7 @@ describe("load() return value validation", () => {
   test("rejects non-object return value from load()", () => {
     const context = createNameContext();
     assert.throws(
-      () =>
-        context.getAnnotations(
-          {},
-          { load: (() => 123) as never },
-        ),
+      () => context.getAnnotations(phase2({}), { load: (() => 123) as never }),
       {
         name: "TypeError",
         message: "Expected load() to return an object, but got: number.",
@@ -1616,19 +1601,17 @@ describe("load() return value validation", () => {
 
   test("returns empty annotations when load() returns null", () => {
     const context = createNameContext();
-    const annotations = context.getAnnotations(
-      {},
-      { load: () => null },
-    );
+    const annotations = context.getAnnotations(phase2({}), {
+      load: () => null,
+    });
     assert.deepStrictEqual(annotations, {});
   });
 
   test("returns empty annotations when load() returns undefined", () => {
     const context = createNameContext();
-    const annotations = context.getAnnotations(
-      {},
-      { load: () => undefined },
-    );
+    const annotations = context.getAnnotations(phase2({}), {
+      load: () => undefined,
+    });
     assert.deepStrictEqual(annotations, {});
   });
 
@@ -1636,10 +1619,9 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     assert.throws(
       () =>
-        context.getAnnotations(
-          {},
-          { load: () => ({ config: undefined, meta: undefined }) },
-        ),
+        context.getAnnotations(phase2({}), {
+          load: () => ({ config: undefined, meta: undefined }),
+        }),
       { message: /Config validation failed/ },
     );
   });
@@ -1648,10 +1630,9 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     assert.throws(
       () =>
-        context.getAnnotations(
-          {},
-          { load: () => ({ config: null, meta: undefined }) },
-        ),
+        context.getAnnotations(phase2({}), {
+          load: () => ({ config: null, meta: undefined }),
+        }),
       { message: /Config validation failed/ },
     );
   });
@@ -1659,10 +1640,9 @@ describe("load() return value validation", () => {
   test("permissive schema can transform { config: undefined }", () => {
     const schema = z.undefined().transform(() => ({ name: "from-schema" }));
     const context = createConfigContext({ schema });
-    const annotations = context.getAnnotations(
-      {},
-      { load: () => ({ config: undefined, meta: undefined }) },
-    );
+    const annotations = context.getAnnotations(phase2({}), {
+      load: () => ({ config: undefined, meta: undefined }),
+    });
     const symbols = Object.getOwnPropertySymbols(annotations);
     assert.equal(symbols.length, 1);
     const value = (annotations as Record<symbol, unknown>)[symbols[0]] as {
@@ -1673,19 +1653,17 @@ describe("load() return value validation", () => {
 
   test("returns empty annotations when async load() resolves undefined", async () => {
     const context = createNameContext();
-    const annotations = await context.getAnnotations(
-      {},
-      { load: () => Promise.resolve(undefined) },
-    );
+    const annotations = await context.getAnnotations(phase2({}), {
+      load: () => Promise.resolve(undefined),
+    });
     assert.deepStrictEqual(annotations, {});
   });
 
   test("returns empty annotations when async load() resolves null", async () => {
     const context = createNameContext();
-    const annotations = await context.getAnnotations(
-      {},
-      { load: () => Promise.resolve(null) },
-    );
+    const annotations = await context.getAnnotations(phase2({}), {
+      load: () => Promise.resolve(null),
+    });
     assert.deepStrictEqual(annotations, {});
   });
 
@@ -1693,12 +1671,9 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     await assert.rejects(
       async () =>
-        await context.getAnnotations(
-          {},
-          {
-            load: () => Promise.resolve({ config: undefined, meta: undefined }),
-          },
-        ),
+        await context.getAnnotations(phase2({}), {
+          load: () => Promise.resolve({ config: undefined, meta: undefined }),
+        }),
       { message: /Config validation failed/ },
     );
   });
@@ -1707,10 +1682,9 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     await assert.rejects(
       async () =>
-        await context.getAnnotations(
-          {},
-          { load: () => Promise.resolve({ config: null, meta: undefined }) },
-        ),
+        await context.getAnnotations(phase2({}), {
+          load: () => Promise.resolve({ config: null, meta: undefined }),
+        }),
       { message: /Config validation failed/ },
     );
   });
@@ -1722,10 +1696,9 @@ describe("load() return value validation", () => {
       key: "name",
     });
 
-    const annotations = context.getAnnotations(
-      {},
-      { load: () => ({ config: { name: "configured" }, meta: undefined }) },
-    );
+    const annotations = context.getAnnotations(phase2({}), {
+      load: () => ({ config: { name: "configured" }, meta: undefined }),
+    });
     if (annotations instanceof Promise) {
       throw new TypeError("Expected synchronous annotations.");
     }
@@ -1760,10 +1733,9 @@ describe("load() return value validation", () => {
         key: "name",
       });
 
-      const annotations = context.getAnnotations(
-        {},
-        { load: () => ({ config: { name: "configured" }, meta: undefined }) },
-      );
+      const annotations = context.getAnnotations(phase2({}), {
+        load: () => ({ config: { name: "configured" }, meta: undefined }),
+      });
       if (annotations instanceof Promise) {
         throw new TypeError("Expected synchronous annotations.");
       }
@@ -1774,15 +1746,12 @@ describe("load() return value validation", () => {
 
       assert.throws(
         () =>
-          context.getAnnotations(
-            {},
-            {
-              load: () => ({
-                config: { name: 123 },
-                meta: undefined,
-              }),
-            },
-          ),
+          context.getAnnotations(phase2({}), {
+            load: () => ({
+              config: { name: 123 },
+              meta: undefined,
+            }),
+          }),
         { message: /Config validation failed/ },
       );
 
@@ -1803,10 +1772,9 @@ describe("load() return value validation", () => {
       key: "name",
     });
 
-    const annotations = context.getAnnotations(
-      {},
-      { load: () => ({ config: { name: "configured" }, meta: undefined }) },
-    );
+    const annotations = context.getAnnotations(phase2({}), {
+      load: () => ({ config: { name: "configured" }, meta: undefined }),
+    });
     if (annotations instanceof Promise) {
       throw new TypeError("Expected synchronous annotations.");
     }
@@ -1816,10 +1784,7 @@ describe("load() return value validation", () => {
     );
 
     assert.deepEqual(
-      context.getAnnotations(
-        {},
-        { getConfigPath: () => undefined },
-      ),
+      context.getAnnotations(phase2({}), { getConfigPath: () => undefined }),
       {},
     );
 
@@ -1835,11 +1800,7 @@ describe("load() return value validation", () => {
   test("rejects array return value from load()", () => {
     const context = createNameContext();
     assert.throws(
-      () =>
-        context.getAnnotations(
-          {},
-          { load: (() => []) as never },
-        ),
+      () => context.getAnnotations(phase2({}), { load: (() => []) as never }),
       {
         name: "TypeError",
         message: "Expected load() to return an object, but got: array.",
@@ -1851,10 +1812,9 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     assert.throws(
       () =>
-        context.getAnnotations(
-          {},
-          { load: (() => ({ meta: { source: "x" } })) as never },
-        ),
+        context.getAnnotations(phase2({}), {
+          load: (() => ({ meta: { source: "x" } })) as never,
+        }),
       {
         name: "TypeError",
         message: "Expected load() result to have a config property.",
@@ -1866,15 +1826,12 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     assert.throws(
       () =>
-        context.getAnnotations(
-          {},
-          {
-            load: (() => ({
-              then: (resolve: (value: unknown) => void) =>
-                resolve({ config: { name: "ALICE" }, meta: undefined }),
-            })) as never,
-          },
-        ),
+        context.getAnnotations(phase2({}), {
+          load: (() => ({
+            then: (resolve: (value: unknown) => void) =>
+              resolve({ config: { name: "ALICE" }, meta: undefined }),
+          })) as never,
+        }),
       {
         name: "TypeError",
         message: "Expected load() to return a plain object or Promise, " +
@@ -1895,10 +1852,9 @@ describe("load() return value validation", () => {
         resolve({ config: { name: "ALICE" }, meta: undefined });
       },
     };
-    const annotations = await context.getAnnotations(
-      {},
-      { load: (() => crossRealmPromise) as never },
-    );
+    const annotations = await context.getAnnotations(phase2({}), {
+      load: (() => crossRealmPromise) as never,
+    });
     assert.ok(annotations != null);
     const symbols = Object.getOwnPropertySymbols(annotations);
     assert.equal(symbols.length, 1);
@@ -1913,14 +1869,11 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     assert.throws(
       () =>
-        context.getAnnotations(
-          {},
-          {
-            load: (() => ({
-              then: (resolve: (value: unknown) => void) => resolve(123),
-            })) as never,
-          },
-        ),
+        context.getAnnotations(phase2({}), {
+          load: (() => ({
+            then: (resolve: (value: unknown) => void) => resolve(123),
+          })) as never,
+        }),
       {
         name: "TypeError",
         message: "Expected load() to return a plain object or Promise, " +
@@ -1933,15 +1886,12 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     assert.throws(
       () =>
-        context.getAnnotations(
-          {},
-          {
-            load: (() => ({
-              config: Promise.resolve({ name: "ALICE" }) as never,
-              meta: undefined,
-            })) as never,
-          },
-        ),
+        context.getAnnotations(phase2({}), {
+          load: (() => ({
+            config: Promise.resolve({ name: "ALICE" }) as never,
+            meta: undefined,
+          })) as never,
+        }),
       {
         name: "TypeError",
         message: "Expected config in load() result to not be a Promise. " +
@@ -1954,18 +1904,15 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     assert.throws(
       () =>
-        context.getAnnotations(
-          {},
-          {
-            load: (() => ({
-              config: { name: "ALICE" },
-              meta: Promise.resolve({
-                configPath: "x",
-                configDir: ".",
-              }) as never,
-            })) as never,
-          },
-        ),
+        context.getAnnotations(phase2({}), {
+          load: (() => ({
+            config: { name: "ALICE" },
+            meta: Promise.resolve({
+              configPath: "x",
+              configDir: ".",
+            }) as never,
+          })) as never,
+        }),
       {
         name: "TypeError",
         message: "Expected meta in load() result to not be a Promise. " +
@@ -1980,15 +1927,12 @@ describe("load() return value validation", () => {
       then: z.function(),
     });
     const context = createConfigContext({ schema });
-    const annotations = context.getAnnotations(
-      {},
-      {
-        load: (() => ({
-          config: { name: "ALICE", then: () => "domain method" },
-          meta: undefined,
-        })) as never,
-      },
-    );
+    const annotations = context.getAnnotations(phase2({}), {
+      load: (() => ({
+        config: { name: "ALICE", then: () => "domain method" },
+        meta: undefined,
+      })) as never,
+    });
     assert.ok(annotations != null);
     const symbols = Object.getOwnPropertySymbols(annotations);
     assert.equal(symbols.length, 1);
@@ -2007,19 +1951,16 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     assert.throws(
       () =>
-        context.getAnnotations(
-          {},
-          {
-            load: (() => ({
-              config: {
-                [Symbol.toStringTag]: "Promise",
-                then: (resolve: (v: unknown) => void) =>
-                  resolve({ name: "ALICE" }),
-              },
-              meta: undefined,
-            })) as never,
-          },
-        ),
+        context.getAnnotations(phase2({}), {
+          load: (() => ({
+            config: {
+              [Symbol.toStringTag]: "Promise",
+              then: (resolve: (v: unknown) => void) =>
+                resolve({ name: "ALICE" }),
+            },
+            meta: undefined,
+          })) as never,
+        }),
       {
         name: "TypeError",
         message: "Expected config in load() result to not be a Promise. " +
@@ -2032,19 +1973,16 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     assert.throws(
       () =>
-        context.getAnnotations(
-          {},
-          {
-            load: (() => ({
-              config: { name: "ALICE" },
-              meta: {
-                [Symbol.toStringTag]: "Promise",
-                then: (resolve: (v: unknown) => void) =>
-                  resolve({ configPath: "x", configDir: "." }),
-              },
-            })) as never,
-          },
-        ),
+        context.getAnnotations(phase2({}), {
+          load: (() => ({
+            config: { name: "ALICE" },
+            meta: {
+              [Symbol.toStringTag]: "Promise",
+              then: (resolve: (v: unknown) => void) =>
+                resolve({ configPath: "x", configDir: "." }),
+            },
+          })) as never,
+        }),
       {
         name: "TypeError",
         message: "Expected meta in load() result to not be a Promise. " +
@@ -2057,10 +1995,9 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     await assert.rejects(
       () =>
-        context.getAnnotations(
-          {},
-          { load: (() => Promise.resolve(123)) as never },
-        ) as Promise<unknown>,
+        context.getAnnotations(phase2({}), {
+          load: (() => Promise.resolve(123)) as never,
+        }) as Promise<unknown>,
       {
         name: "TypeError",
         message: "Expected load() to return an object, but got: number.",
@@ -2072,12 +2009,9 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     await assert.rejects(
       () =>
-        context.getAnnotations(
-          {},
-          {
-            load: (() => Promise.resolve({ meta: undefined })) as never,
-          },
-        ) as Promise<unknown>,
+        context.getAnnotations(phase2({}), {
+          load: (() => Promise.resolve({ meta: undefined })) as never,
+        }) as Promise<unknown>,
       {
         name: "TypeError",
         message: "Expected load() result to have a config property.",
@@ -2089,16 +2023,13 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     await assert.rejects(
       () =>
-        context.getAnnotations(
-          {},
-          {
-            load: (() =>
-              Promise.resolve({
-                config: Promise.resolve({ name: "ALICE" }),
-                meta: undefined,
-              })) as never,
-          },
-        ) as Promise<unknown>,
+        context.getAnnotations(phase2({}), {
+          load: (() =>
+            Promise.resolve({
+              config: Promise.resolve({ name: "ALICE" }),
+              meta: undefined,
+            })) as never,
+        }) as Promise<unknown>,
       {
         name: "TypeError",
         message: "Expected config in load() result to not be a Promise. " +
@@ -2111,16 +2042,13 @@ describe("load() return value validation", () => {
     const context = createNameContext();
     await assert.rejects(
       () =>
-        context.getAnnotations(
-          {},
-          {
-            load: (() =>
-              Promise.resolve({
-                config: { name: "ALICE" },
-                meta: Promise.resolve({ configPath: "x", configDir: "." }),
-              })) as never,
-          },
-        ) as Promise<unknown>,
+        context.getAnnotations(phase2({}), {
+          load: (() =>
+            Promise.resolve({
+              config: { name: "ALICE" },
+              meta: Promise.resolve({ configPath: "x", configDir: "." }),
+            })) as never,
+        }) as Promise<unknown>,
       {
         name: "TypeError",
         message: "Expected meta in load() result to not be a Promise. " +
@@ -2142,7 +2070,7 @@ describe("createConfigContext error paths", () => {
     const context = createConfigContext({ schema: asyncSchema });
 
     const annotations = await context.getAnnotations(
-      { configPath: "/app/config.json" },
+      phase2({ configPath: "/app/config.json" }),
       {
         load: () => ({
           config: { host: "async-host", port: 443 },
@@ -2166,7 +2094,7 @@ describe("createConfigContext error paths", () => {
     const context = createConfigContext({ schema });
 
     const annotations = await context.getAnnotations(
-      { configPath: "/app/config.json" },
+      phase2({ configPath: "/app/config.json" }),
       {
         load: () => ({
           config: { host: "meta-less" },
@@ -2199,7 +2127,7 @@ describe("createConfigContext error paths", () => {
     await assert.rejects(
       async () =>
         await context.getAnnotations(
-          { configPath: "/app/config.json" },
+          phase2({ configPath: "/app/config.json" }),
           {
             load: () => ({
               config: { host: "x" },
@@ -2221,7 +2149,10 @@ describe("createConfigContext error paths", () => {
     // Phase 2 call (parsed is truthy) without required options
     await assert.rejects(
       async () =>
-        await context.getAnnotations({ config: "test.json" }, undefined),
+        await context.getAnnotations(
+          phase2({ config: "test.json" }),
+          undefined,
+        ),
       TypeError,
     );
   });
@@ -2231,7 +2162,8 @@ describe("createConfigContext error paths", () => {
     const context = createConfigContext({ schema });
 
     await assert.rejects(
-      async () => await context.getAnnotations({ config: "test.json" }, {}),
+      async () =>
+        await context.getAnnotations(phase2({ config: "test.json" }), {}),
       TypeError,
     );
   });
@@ -2250,7 +2182,7 @@ describe("createConfigContext error paths", () => {
     const context = createConfigContext({ schema });
 
     const annotations = await context.getAnnotations(
-      { config: undefined },
+      phase2({ config: undefined }),
       { getConfigPath: () => undefined },
     );
 
@@ -2264,7 +2196,7 @@ describe("createConfigContext error paths", () => {
 
     // ENOENT should be handled gracefully (optional config file)
     const annotations = await context.getAnnotations(
-      { config: "/nonexistent/path/config.json" },
+      phase2({ config: "/nonexistent/path/config.json" }),
       {
         getConfigPath: () => "/nonexistent/path/does-not-exist.json",
       },
@@ -2291,10 +2223,9 @@ describe("createConfigContext error paths", () => {
     try {
       await assert.rejects(
         async () =>
-          await context.getAnnotations(
-            { config: tmpFile },
-            { getConfigPath: () => tmpFile },
-          ),
+          await context.getAnnotations(phase2({ config: tmpFile }), {
+            getConfigPath: () => tmpFile,
+          }),
         RangeError,
       );
     } finally {
@@ -2319,10 +2250,9 @@ describe("createConfigContext error paths", () => {
     try {
       await assert.rejects(
         async () =>
-          await context.getAnnotations(
-            { config: tmpFile },
-            { getConfigPath: () => tmpFile },
-          ),
+          await context.getAnnotations(phase2({ config: tmpFile }), {
+            getConfigPath: () => tmpFile,
+          }),
         (error: Error) => {
           assert.ok(error.message.includes("Failed to parse config file"));
           return true;
@@ -2348,10 +2278,9 @@ describe("createConfigContext error paths", () => {
     try {
       await assert.rejects(
         async () =>
-          await context.getAnnotations(
-            { config: tmpFile },
-            { getConfigPath: () => tmpFile },
-          ),
+          await context.getAnnotations(phase2({ config: tmpFile }), {
+            getConfigPath: () => tmpFile,
+          }),
         (error: Error) => {
           assert.ok(error.message.includes("Config validation failed"));
           return true;
@@ -2420,10 +2349,9 @@ describe("createConfigContext error paths", () => {
       key: "host",
     });
 
-    const annotations = context.getAnnotations(
-      {},
-      { load: () => ({ config: { host: "test-host" }, meta: undefined }) },
-    );
+    const annotations = context.getAnnotations(phase2({}), {
+      load: () => ({ config: { host: "test-host" }, meta: undefined }),
+    });
     if (annotations instanceof Promise) {
       throw new TypeError("Expected synchronous annotations.");
     }
@@ -2441,7 +2369,7 @@ describe("createConfigContext error paths", () => {
 
     let receivedParsed: unknown;
     const annotations = await context.getAnnotations(
-      { configPath: "/app/config.json" },
+      phase2({ configPath: "/app/config.json" }),
       {
         load: (parsed: unknown) => {
           receivedParsed = parsed;
@@ -2478,14 +2406,11 @@ describe("createConfigContext error paths", () => {
 
     await assert.rejects(
       async () =>
-        await context.getAnnotations(
-          { config: "test" },
-          {
-            load: () => {
-              throw new Error("Load failed.");
-            },
+        await context.getAnnotations(phase2({ config: "test" }), {
+          load: () => {
+            throw new Error("Load failed.");
           },
-        ),
+        }),
       (error: Error) => {
         assert.equal(error.message, "Load failed.");
         return true;
@@ -2499,14 +2424,11 @@ describe("createConfigContext error paths", () => {
 
     await assert.rejects(
       async () =>
-        await context.getAnnotations(
-          { config: "test" },
-          {
-            load: () => ({
-              config: { host: 123, port: "not-a-number" }, // invalid types
-            }),
-          },
-        ),
+        await context.getAnnotations(phase2({ config: "test" }), {
+          load: () => ({
+            config: { host: 123, port: "not-a-number" }, // invalid types
+          }),
+        }),
       (error: Error) => {
         assert.ok(error.message.includes("Config validation failed"));
         return true;

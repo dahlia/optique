@@ -102,8 +102,9 @@ function defaultEnvSource(key: string): string | undefined {
  *
  * When calling `context.getAnnotations()` manually, pass the returned
  * annotations to low-level APIs such as `parse()`, `parseAsync()`,
- * `parser.complete()`, `suggest()`, or `getDocPage()`. Calling
- * `getAnnotations()` by itself does not affect later parses.
+ * `parser.complete()`, `suggest()`, or `getDocPage()`. Since environment
+ * contexts are single-pass, `getAnnotations()` can still be called without
+ * a phase request. Calling it by itself does not affect later parses.
  *
  * @param options Environment context options.
  * @returns A context that provides environment source annotations.

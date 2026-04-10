@@ -49,7 +49,10 @@ const args = Deno.args;
 // Preload config annotations once and expose them through a single-pass context so
 // prompt() remains the final fallback after CLI/env/config values.
 const configAnnotations = await configContext.getAnnotations(
-  { config: getConfigPathFromArgs(args) },
+  {
+    phase: "phase2",
+    parsed: { config: getConfigPathFromArgs(args) },
+  },
   { getConfigPath: (parsed: { readonly config?: string }) => parsed.config },
 );
 
