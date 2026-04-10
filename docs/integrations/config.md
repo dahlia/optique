@@ -920,13 +920,14 @@ options:
 
 At least one of `getConfigPath` or `load` must be provided.
 
-### `configKey`
+Each `run()`, `runAsync()`, or `runWith()` call snapshots config annotations
+per run, so reusing the same `ConfigContext` instance across independent or
+concurrent runs is safe.
 
-Symbol key used to store config data in annotations.
-
-### `configMetaKey`
-
-Symbol key used to store config metadata in annotations.
+When calling `configContext.getAnnotations()` manually, remember that the
+call only returns annotations.  It does not mutate global state or affect
+later parses by itself.  To use those values with low-level APIs such as
+`parse()` or `suggestSync()`, pass the returned annotations explicitly.
 
 ### `ConfigMeta`
 

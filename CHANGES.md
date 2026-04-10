@@ -1673,6 +1673,15 @@ To be released.
 
 ### @optique/config
 
+ -  Regression-tested and documented concurrent reuse of a shared
+    `ConfigContext` instance.  `run()`, `runAsync()`, and `runWith()`
+    now explicitly guarantee run-scoped annotation snapshots, so one
+    run's phase-two config load cannot overwrite another run's loaded
+    config even when both reuse the same context concurrently.  The
+    config integration docs also now spell out that manual
+    `getAnnotations()` calls affect low-level parsing only when their
+    returned annotations are passed back explicitly.  [[#270]]
+
  -  Removed the hidden process-global fallback from `bindConfig()`.
     Calling `configContext.getAnnotations()` manually no longer affects
     later plain parses unless the returned annotations are passed
@@ -1820,6 +1829,7 @@ To be released.
 [#234]: https://github.com/dahlia/optique/issues/234
 [#236]: https://github.com/dahlia/optique/issues/236
 [#259]: https://github.com/dahlia/optique/issues/259
+[#270]: https://github.com/dahlia/optique/issues/270
 [#391]: https://github.com/dahlia/optique/issues/391
 [#398]: https://github.com/dahlia/optique/issues/398
 [#400]: https://github.com/dahlia/optique/issues/400

@@ -34,7 +34,8 @@
       "*.yaml",
       "**/*.yaml",
       "*.yml",
-      "**/*.yml"
+      "**/*.yml",
+      "packages/config/src/test-configs/*.json"
     ]
   },
   "tasks": {

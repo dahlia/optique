@@ -316,11 +316,14 @@ function validateWithSchema<T>(
  *
  * The config context implements the `SourceContext` interface and can be used
  * with `runWith()` from *@optique/core* or `run()`/`runAsync()` from
- * *@optique/run* to provide configuration file support.
+ * *@optique/run* to provide configuration file support. Each runner call
+ * receives its own annotation snapshot, so the same `ConfigContext`
+ * instance can be reused safely across independent or concurrent runs.
  * When calling `context.getAnnotations()` manually, pass the returned
  * annotations to low-level APIs such as `parse()`, `parseAsync()`,
  * `parser.complete()`, `suggest()`, or `getDocPage()`. Calling
- * `getAnnotations()` by itself does not affect later parses.
+ * `getAnnotations()` by itself does not affect later parses unless those
+ * returned annotations are explicitly threaded into a low-level API call.
  *
  * @template T The output type of the config schema.
  * @template TConfigMeta The metadata type for config sources.

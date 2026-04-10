@@ -6,11 +6,13 @@ import { join, relative, resolve } from "node:path";
 import { z } from "zod";
 import { object } from "@optique/core/constructs";
 import type { SourceContext } from "@optique/core/context";
-import { parse } from "@optique/core/parser";
+import { message } from "@optique/core/message";
+import { parse, type Parser } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { withDefault } from "@optique/core/modifiers";
 import { runWith, runWithSync } from "@optique/core/facade";
+import type { OptionName } from "@optique/core/usage";
 import { bindConfig, createConfigContext } from "./index.ts";
 import type { ConfigMeta } from "./index.ts";
 
@@ -22,6 +24,55 @@ function requireValue<T>(value: T | undefined, message: string): T {
   }
 
   return value;
+}
+
+function createDelayedAsyncOptionParser(
+  name: OptionName,
+  getDelay: (value: string) => number,
+): Parser<"async", string, string | null> {
+  return {
+    $mode: "async",
+    $valueType: [] as readonly string[],
+    $stateType: [] as readonly (string | null)[],
+    priority: 0,
+    usage: [{ type: "option", names: [name], metavar: "VALUE" }],
+    leadingNames: new Set([name]),
+    acceptingAnyToken: false,
+    initialState: null,
+    parse(context) {
+      const value = context.buffer[1];
+      if (context.buffer[0] !== name || value == null) {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`missing`,
+        });
+      }
+      return Promise.resolve({
+        success: true as const,
+        next: {
+          ...context,
+          buffer: context.buffer.slice(2),
+          state: value,
+        },
+        consumed: [context.buffer[0], value],
+      });
+    },
+    async complete(state) {
+      if (state == null) {
+        return {
+          success: false as const,
+          error: message`missing`,
+        };
+      }
+      await new Promise((resolve) => setTimeout(resolve, getDelay(state)));
+      return { success: true as const, value: state };
+    },
+    async *suggest() {},
+    getDocFragments() {
+      return { fragments: [] };
+    },
+  };
 }
 
 describe("run with config context", { concurrency: false }, () => {
@@ -1323,6 +1374,114 @@ describe("run with config context", { concurrency: false }, () => {
     // Must read from context2's validated config, not context1's.
     assert.equal(result, 8080);
   });
+
+  test(
+    "shared ConfigContext stays isolated across concurrent load() runs",
+    async () => {
+      // Regression test for https://github.com/dahlia/optique/issues/270.
+      // A shared ConfigContext must snapshot phase-two annotations per run,
+      // even when another run loads a different config later while async
+      // completion keeps the first run alive.
+      const schema = z.object({ host: z.string() });
+      const context = createConfigContext({ schema });
+      const parser = object({
+        slow: createDelayedAsyncOptionParser(
+          "--slow",
+          (value) => value === "long" ? 200 : 10,
+        ),
+        host: bindConfig(option("--host", string()), {
+          context,
+          key: "host",
+          default: "localhost",
+        }),
+      });
+
+      const [slowResult, fastResult] = await Promise.all([
+        runWith(parser, "test", [context], {
+          args: ["--slow", "long"],
+          contextOptions: {
+            load: async () => {
+              await new Promise((resolve) => setTimeout(resolve, 10));
+              return { config: { host: "A" }, meta: undefined };
+            },
+          },
+        }),
+        runWith(parser, "test", [context], {
+          args: ["--slow", "short"],
+          contextOptions: {
+            load: async () => {
+              await new Promise((resolve) => setTimeout(resolve, 50));
+              return { config: { host: "B" }, meta: undefined };
+            },
+          },
+        }),
+      ]);
+
+      assert.deepEqual(slowResult, { slow: "long", host: "A" });
+      assert.deepEqual(fastResult, { slow: "short", host: "B" });
+    },
+  );
+
+  test(
+    "shared ConfigContext stays isolated across concurrent getConfigPath() runs",
+    async () => {
+      // Regression test for https://github.com/dahlia/optique/issues/270.
+      // Reusing one ConfigContext across concurrent file-backed runs must not
+      // let one run's config file overwrite the other's annotation snapshot.
+      await mkdir(TEST_DIR, { recursive: true });
+      const configPathA = join(TEST_DIR, "test-config-issue-270-a.json");
+      const configPathB = join(TEST_DIR, "test-config-issue-270-b.json");
+
+      await writeFile(configPathA, JSON.stringify({ host: "A" }));
+      await writeFile(configPathB, JSON.stringify({ host: "B" }));
+
+      try {
+        const schema = z.object({ host: z.string() });
+        const context = createConfigContext({ schema });
+        const parser = object({
+          config: option("--config", string()),
+          slow: createDelayedAsyncOptionParser(
+            "--slow",
+            (value) => value === "long" ? 200 : 10,
+          ),
+          host: bindConfig(option("--host", string()), {
+            context,
+            key: "host",
+            default: "localhost",
+          }),
+        });
+
+        const [slowResult, fastResult] = await Promise.all([
+          runWith(parser, "test", [context], {
+            args: ["--config", configPathA, "--slow", "long"],
+            contextOptions: {
+              getConfigPath: (parsed: { config: string }) => parsed.config,
+            },
+          }),
+          runWith(parser, "test", [context], {
+            args: ["--config", configPathB, "--slow", "short"],
+            contextOptions: {
+              getConfigPath: (parsed: { config: string }) => parsed.config,
+            },
+          }),
+        ]);
+
+        assert.deepEqual(slowResult, {
+          config: configPathA,
+          slow: "long",
+          host: "A",
+        });
+        assert.deepEqual(fastResult, {
+          config: configPathB,
+          slow: "short",
+          host: "B",
+        });
+      } finally {
+        await rm(configPathA, { force: true });
+        await rm(configPathB, { force: true });
+      }
+    },
+  );
 
   test("supports runWithSync() with config file fallbacks", async () => {
     await mkdir(TEST_DIR, { recursive: true });
