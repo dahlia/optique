@@ -3,6 +3,7 @@ import type {
   Annotations,
   ParserValuePlaceholder,
   SourceContext,
+  SourceContextRequest,
 } from "@optique/core/context";
 import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
@@ -41,21 +42,23 @@ interface ConfigContextOptions {
   getConfigPath: (parsed: ParserValuePlaceholder) => string | undefined;
 }
 
-// The context type extends SourceContext with our required options
-interface ConfigContext extends SourceContext<ConfigContextOptions> {
-  getConfigPath?: (parsed: unknown) => string | undefined;
-}
+type ConfigContext = SourceContext<ConfigContextOptions>;
 
 // Factory function to create the config context
 function createConfigContext(): ConfigContext {
-  const context: ConfigContext = {
+  return {
     id: configKey,
     phase: "two-pass",
-    async getAnnotations(parsed?: unknown): Promise<Annotations> {
-      if (parsed === undefined) return {}; // First pass - no config yet
+    async getAnnotations(
+      request?: SourceContextRequest,
+      options?: ConfigContextOptions,
+    ): Promise<Annotations> {
+      if (request == null || request.phase === "phase1") return {};
 
       // Use the injected getConfigPath function
-      const configPath = context.getConfigPath?.(parsed);
+      const configPath = options?.getConfigPath(
+        request.parsed as ParserValuePlaceholder,
+      );
       if (!configPath) return {}; // No config file specified
 
       try {
@@ -80,7 +83,6 @@ function createConfigContext(): ConfigContext {
       }
     },
   };
-  return context;
 }
 
 // Define the CLI parser
