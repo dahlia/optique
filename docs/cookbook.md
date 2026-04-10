@@ -1397,7 +1397,10 @@ const configContext = createConfigContext({ schema: configSchema });
 const args = ["--config", "./config.json"] as const;
 
 const configAnnotations = await configContext.getAnnotations(
-  { config: getConfigPathFromArgs(args) },
+  {
+    phase: "phase2",
+    parsed: { config: getConfigPathFromArgs(args) },
+  },
   { getConfigPath: (parsed: { readonly config?: string }) => parsed.config },
 );
 

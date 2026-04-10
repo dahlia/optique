@@ -468,8 +468,9 @@ Returns
 > [!IMPORTANT]
 > If you call `envContext.getAnnotations()` manually, pass the returned
 > object to low-level APIs such as `parse()`, `parseAsync()`,
-> `parser.complete()`, `suggest()`, or `getDocPage()`. Calling
-> `getAnnotations()` alone does not affect later parses.
+> `parser.complete()`, `suggest()`, or `getDocPage()`. Environment contexts
+> are single-pass, so calling `getAnnotations()` without a request still
+> reads the final snapshot. Calling it alone does not affect later parses.
 
 ### `bindEnv(parser, options)`
 

@@ -730,16 +730,23 @@ API reference
      -  `id: symbol` — Unique identifier for the context
      -  `phase: SourceContextPhase` — Required policy declaring whether this
         context is `"single-pass"` or `"two-pass"`
-     -  `getAnnotations(parsed?, options?): Promise<Annotations> | Annotations`
+     -  `getAnnotations(request?, options?): Promise<Annotations> | Annotations`
         — Returns annotations to inject into parsing
-     -  `getInternalAnnotations?(parsed, annotations): Annotations | undefined`
+     -  `getInternalAnnotations?(request, annotations): Annotations | undefined`
         — Optional hook called after `getAnnotations()` to inject additional
         internal annotations (e.g., phase-specific markers).  Returns
         additional annotations to merge, or `undefined` to add nothing.
-     -  `finalizeParsed?(parsed): unknown` — Optional hook to transform the
-        parsed value before it is passed to `getAnnotations()` during phase-2
-        annotation collection.  This allows contexts to distinguish between
-        “parsed value was `undefined`” and “no parse happened yet.”
+
+`SourceContextRequest`
+:   Request object passed to `getAnnotations()` and
+    `getInternalAnnotations()`. A discriminated union based on the
+    `phase` field:
+
+     -  `phase: "phase1"` — Initial annotation collection before the
+        first parse pass.
+     -  `phase: "phase2"` — Second annotation collection after a usable
+        first pass. The `parsed` field holds the first-pass value, which
+        may itself be `undefined`.
 
     Use `ParserValuePlaceholder` in `TRequiredOptions` when the options depend
     on the parser's result type.
@@ -835,7 +842,10 @@ providing annotations to parsers. Each context has:
 Here's a simple context that provides environment variables to parsers:
 
 ~~~~ typescript
-import type { SourceContext } from "@optique/core/context";
+import type {
+  SourceContext,
+  SourceContextRequest,
+} from "@optique/core/context";
 
 const envContext: SourceContext = {
   id: Symbol.for("@myapp/env"),
@@ -872,8 +882,16 @@ Contexts can be either *single-pass* or *two-pass*:
 The difference lies in whether `getAnnotations()` needs the parsed result to
 do its work:
 
-~~~~ typescript
-import type { SourceContext } from "@optique/core/context";
+~~~~ typescript twoslash
+declare const process: {
+  readonly env: Record<string, string | undefined>;
+};
+declare function loadConfigFile(path: string): Promise<unknown>;
+// ---cut-before---
+import type {
+  SourceContext,
+  SourceContextRequest,
+} from "@optique/core/context";
 
 // Single-pass context: data is always available
 const envContext: SourceContext = {
@@ -891,14 +909,14 @@ const envContext: SourceContext = {
 const configContext: SourceContext = {
   id: Symbol.for("@myapp/config"),
   phase: "two-pass",
-  async getAnnotations(parsed?: unknown) {
-    if (parsed === undefined) return {}; // Return empty on first pass
-    
-    const result = parsed as { config?: string };
-    if (!result.config) return {};
+  async getAnnotations(request?: SourceContextRequest) {
+    if (request == null || request.phase === "phase1") return {};
+
+    const parsed = request.parsed as { config?: string } | undefined;
+    if (!parsed?.config) return {};
     
     // Load config file asynchronously
-    const data = await loadConfigFile(result.config);
+    const data = await loadConfigFile(parsed.config);
     return {
       [Symbol.for("@myapp/config")]: data
     };
@@ -909,9 +927,8 @@ const configContext: SourceContext = {
 The single-pass `envContext` reads environment variables directly and doesn't
 need any parsed values. The two-pass `configContext`, however, needs to know
 the config file path from the parsed `--config` option before it can load the
-file. When `parsed` is `undefined` (phase 1), it can return empty data or a
-provisional snapshot; phase 2 still runs because the context explicitly opted
-into `"two-pass"`.
+file. Phase 1 and phase 2 are explicit through `request.phase`, so a real
+phase-two parsed value of `undefined` is no longer ambiguous.
 
 
 Using `runWith()`
@@ -989,13 +1006,15 @@ When two-pass contexts are present, `runWith()` automatically performs
 two-phase parsing:
 
 1.  *Phase 1*: Parse with phase-1 annotations from all contexts
-2.  *Phase 2*: Call `getAnnotations(parsed)` on two-pass contexts with the
-    parsed result, then parse again with the merged final annotations
+2.  *Phase 2*: Call `getAnnotations({ phase: "phase2", parsed })` on
+    two-pass contexts with the parsed result, then parse again with the
+    merged final annotations
 
 For each two-pass context, the phase-2 return value replaces that context's
 phase-1 annotation set for the final parse.  This means returning an empty
-object from `getAnnotations(parsed)` clears any annotations the same context
-contributed during phase 1. Single-pass contexts keep their phase-1 snapshot.
+object from phase-two `getAnnotations()` clears any annotations the same
+context contributed during phase 1. Single-pass contexts keep their phase-1
+snapshot.
 
 This ensures that:
 
@@ -1076,7 +1095,11 @@ accepts a prefix. This pattern allows different applications to use their own
 environment variable naming conventions:
 
 ~~~~ typescript
-import type { SourceContext, Annotations } from "@optique/core/context";
+import type {
+  Annotations,
+  SourceContext,
+  SourceContextRequest,
+} from "@optique/core/context";
 
 const envKey = Symbol.for("@myapp/env");
 
@@ -1115,8 +1138,16 @@ A config file context is two-pass because it needs to know the file path from
 parsed arguments. The `getAnnotations()` method receives the parsed result and
 uses it to load the configuration:
 
-~~~~ typescript
-import type { SourceContext, Annotations } from "@optique/core/context";
+~~~~ typescript twoslash
+declare const Deno: {
+  readTextFile(path: string): Promise<string>;
+};
+// ---cut-before---
+import type {
+  Annotations,
+  SourceContext,
+  SourceContextRequest,
+} from "@optique/core/context";
 
 const configKey = Symbol.for("@myapp/config");
 
@@ -1130,14 +1161,16 @@ export function createConfigContext(): SourceContext {
   return {
     id: configKey,
     phase: "two-pass",
-    async getAnnotations(parsed?: unknown): Promise<Annotations> {
-      if (parsed === undefined) return {}; // First pass - no config yet
-      
-      const result = parsed as { config?: string };
-      if (!result.config) return {}; // No config file specified
+    async getAnnotations(
+      request?: SourceContextRequest,
+    ): Promise<Annotations> {
+      if (request == null || request.phase === "phase1") return {};
+
+      const parsed = request.parsed as { config?: string } | undefined;
+      if (!parsed?.config) return {}; // No config file specified
       
       try {
-        const content = await Deno.readTextFile(result.config);
+        const content = await Deno.readTextFile(parsed.config);
         const data: ConfigData = JSON.parse(content);
         return { [configKey]: data };
       } catch {
@@ -1151,10 +1184,10 @@ export function createConfigContext(): SourceContext {
 const configContext = createConfigContext();
 ~~~~
 
-Note the defensive checks: when `parsed` is `undefined` (first pass), return
-empty. When the user didn't specify `--config`, return empty. When the file
-can't be read or parsed, return empty. This ensures the context never throws
-and gracefully degrades when config isn't available.
+Note the defensive checks: when `request.phase` is `"phase1"`, return empty.
+When the user didn't specify `--config`, return empty. When the file can't be
+read or parsed, return empty. This ensures the context never throws and
+gracefully degrades when config isn't available.
 
 ### Creating a type-safe config context
 
@@ -1163,11 +1196,16 @@ The example above hardcodes how to extract the config path from parsed results
 For a more reusable approach, use `ParserValuePlaceholder` to declare that
 the caller must provide a `getConfigPath` function:
 
-~~~~ typescript
+~~~~ typescript twoslash
+declare const Deno: {
+  readTextFile(path: string): Promise<string>;
+};
+// ---cut-before---
 import type {
-  SourceContext,
   Annotations,
   ParserValuePlaceholder,
+  SourceContext,
+  SourceContextRequest,
 } from "@optique/core/context";
 
 const configKey = Symbol.for("@myapp/config");
@@ -1184,19 +1222,24 @@ interface ConfigContextOptions {
 }
 
 // The context type includes required options
-interface ConfigContext extends SourceContext<ConfigContextOptions> {
-  getConfigPath?: (parsed: unknown) => string | undefined;
-}
+type ConfigContext = SourceContext<ConfigContextOptions>;
 
 export function createConfigContext(): ConfigContext {
-  const context: ConfigContext = {
+  return {
     id: configKey,
     phase: "two-pass",
-    async getAnnotations(parsed?: unknown): Promise<Annotations> {
-      if (parsed === undefined) return {};
-      
+    async getAnnotations(
+      request?: SourceContextRequest,
+      options?: ConfigContextOptions,
+    ): Promise<Annotations> {
+      if (request == null || request.phase === "phase1") return {};
+
+      const parsed = request.parsed as ParserValuePlaceholder | undefined;
+
       // Use the injected getConfigPath function
-      const configPath = context.getConfigPath?.(parsed);
+      const configPath = parsed == null
+        ? undefined
+        : options?.getConfigPath(parsed);
       if (!configPath) return {};
       
       try {
@@ -1208,7 +1251,6 @@ export function createConfigContext(): ConfigContext {
       }
     }
   };
-  return context;
 }
 ~~~~
 

@@ -67,9 +67,13 @@ import {
   validateOptionNames,
   validateProgramName,
 } from "./validate.ts";
-import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
+import type {
+  ParserValuePlaceholder,
+  SourceContext,
+  SourceContextRequest,
+} from "./context.ts";
 
-export type { ParserValuePlaceholder, SourceContext };
+export type { ParserValuePlaceholder, SourceContext, SourceContextRequest };
 
 type SuppressedErrorConstructor = new (
   error: unknown,
@@ -92,15 +96,6 @@ const SuppressedErrorCtor: SuppressedErrorConstructor =
     }
     return SuppressedErrorPolyfill;
   })();
-
-function finalizeParsedForContext(
-  context: SourceContext<unknown>,
-  parsed: unknown,
-): unknown {
-  return context.finalizeParsed != null
-    ? context.finalizeParsed(parsed)
-    : parsed;
-}
 
 function isPlainObject(value: object): boolean {
   const proto = Object.getPrototypeOf(value);
@@ -229,14 +224,6 @@ function prepareParsedForContexts(
   // the output shape.  Placeholder values may be visible to phase-two
   // contexts in this path; the final parse always resolves them correctly.
   return parsed;
-}
-
-function withPreparedParsedForContext<T>(
-  context: SourceContext<unknown>,
-  preparedParsed: unknown,
-  run: (prepared: unknown) => T,
-): T {
-  return run(finalizeParsedForContext(context, preparedParsed));
 }
 
 function isBufferUnchanged(
@@ -2884,10 +2871,11 @@ async function collectPhase1Annotations(
   let snapshots: Annotations[] | undefined;
 
   for (const context of contexts) {
-    const result = context.getAnnotations(undefined, options);
+    const request: SourceContextRequest = { phase: "phase1" };
+    const result = context.getAnnotations(request, options);
     const annotations = result instanceof Promise ? await result : result;
     const internalAnnotations = context.getInternalAnnotations?.(
-      undefined,
+      request,
       annotations,
     );
     const snapshot = internalAnnotations == null
@@ -2943,21 +2931,19 @@ async function collectFinalAnnotations(
       continue;
     }
 
-    const mergedAnnotations = await withPreparedParsedForContext(
-      context,
-      preparedParsed,
-      async (contextParsed) => {
-        const result = context.getAnnotations(contextParsed, options);
-        const annotations = result instanceof Promise ? await result : result;
-        const internalAnnotations = context.getInternalAnnotations?.(
-          contextParsed,
-          annotations,
-        );
-        return internalAnnotations == null
-          ? annotations
-          : mergeAnnotations([annotations, internalAnnotations]);
-      },
+    const request: SourceContextRequest = {
+      phase: "phase2",
+      parsed: preparedParsed,
+    };
+    const result = context.getAnnotations(request, options);
+    const annotations = result instanceof Promise ? await result : result;
+    const internalAnnotations = context.getInternalAnnotations?.(
+      request,
+      annotations,
     );
+    const mergedAnnotations = internalAnnotations == null
+      ? annotations
+      : mergeAnnotations([annotations, internalAnnotations]);
     annotationsList.push(mergedAnnotations);
   }
 
@@ -2973,7 +2959,7 @@ async function collectFinalAnnotations(
  * @param contexts Source contexts to collect annotations from.
  * @param options Optional context-required options to pass to each context.
  * @returns Merged annotations, per-context snapshots, and a two-phase hint.
- * @throws Error if any context returns a Promise.
+ * @throws {TypeError} If any context returns a Promise.
  */
 function collectPhase1AnnotationsSync(
   contexts: readonly SourceContext<unknown>[],
@@ -2983,15 +2969,16 @@ function collectPhase1AnnotationsSync(
   let snapshots: Annotations[] | undefined;
 
   for (const context of contexts) {
-    const result = context.getAnnotations(undefined, options);
+    const request: SourceContextRequest = { phase: "phase1" };
+    const result = context.getAnnotations(request, options);
     if (result instanceof Promise) {
-      throw new Error(
+      throw new TypeError(
         `Context ${String(context.id)} returned a Promise in sync mode. ` +
           "Use runWith() or runWithAsync() for async contexts.",
       );
     }
     const internalAnnotations = context.getInternalAnnotations?.(
-      undefined,
+      request,
       result,
     );
     const snapshot = internalAnnotations == null
@@ -3024,7 +3011,7 @@ function collectPhase1AnnotationsSync(
  * @param parsed Optional parsed result from a previous parse pass.
  * @param options Optional context-required options to pass to each context.
  * @returns Merged annotations.
- * @throws Error if any context returns a Promise.
+ * @throws {TypeError} If any context returns a Promise.
  */
 function collectFinalAnnotationsSync(
   contexts: readonly SourceContext<unknown>[],
@@ -3048,26 +3035,24 @@ function collectFinalAnnotationsSync(
       continue;
     }
 
-    const mergedAnnotations = withPreparedParsedForContext(
-      context,
-      preparedParsed,
-      (contextParsed) => {
-        const result = context.getAnnotations(contextParsed, options);
-        if (result instanceof Promise) {
-          throw new Error(
-            `Context ${String(context.id)} returned a Promise in sync mode. ` +
-              "Use runWith() or runWithAsync() for async contexts.",
-          );
-        }
-        const internalAnnotations = context.getInternalAnnotations?.(
-          contextParsed,
-          result,
-        );
-        return internalAnnotations == null
-          ? result
-          : mergeAnnotations([result, internalAnnotations]);
-      },
+    const request: SourceContextRequest = {
+      phase: "phase2",
+      parsed: preparedParsed,
+    };
+    const result = context.getAnnotations(request, options);
+    if (result instanceof Promise) {
+      throw new TypeError(
+        `Context ${String(context.id)} returned a Promise in sync mode. ` +
+          "Use runWith() or runWithAsync() for async contexts.",
+      );
+    }
+    const internalAnnotations = context.getInternalAnnotations?.(
+      request,
+      result,
     );
+    const mergedAnnotations = internalAnnotations == null
+      ? result
+      : mergeAnnotations([result, internalAnnotations]);
     annotationsList.push(mergedAnnotations);
   }
 
@@ -3423,9 +3408,10 @@ async function runWithBody<
  *    reaches a usable intermediate state but still does not complete
  *    successfully, the runner extracts a best-effort seed from that state
  *    instead.
- * 3. *Phase 2*: Call `getAnnotations(parsed)` on all two-pass contexts with
- *    the first pass value. Deferred or otherwise unresolved fields in
- *    `parsed` may be `undefined`. Each two-pass context's phase-two return
+ * 3. *Phase 2*: Call `getAnnotations({ phase: "phase2", parsed })` on all
+ *    two-pass contexts with the first pass value. Deferred or otherwise
+ *    unresolved fields in `parsed` may be `undefined`. Each two-pass
+ *    context's phase-two return
  *    value replaces its own phase-one contribution for the final parse, so
  *    returning `{}` clears any annotations that context provided during
  *    phase 1. Single-pass contexts reuse their phase-one snapshot.
@@ -3633,7 +3619,7 @@ function runWithSyncBody<
  * {@link SourceContext.id}.
  * @throws {TypeError} If any context omits `phase` or declares an invalid
  * phase value.
- * @throws {Error} If any context returns a Promise or if a context's
+ * @throws {TypeError} If any context returns a Promise or if a context's
  * `[Symbol.asyncDispose]` returns a Promise.
  * @throws {SuppressedError} If the runner throws and a context's disposal
  * also throws.  The original error is available via `.suppressed` and the

@@ -1,7 +1,16 @@
 import type { Annotations } from "@optique/core/annotations";
-import type { SourceContext } from "@optique/core/context";
+import type {
+  SourceContext,
+  SourceContextRequest,
+} from "@optique/core/context";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+
+function getPhase2Parsed<T>(
+  request?: SourceContextRequest,
+): T | undefined {
+  return request?.phase === "phase2" ? request.parsed as T : undefined;
+}
 
 describe("SourceContext", () => {
   describe("interface implementation", () => {
@@ -32,12 +41,12 @@ describe("SourceContext", () => {
       const context: SourceContext = {
         id: configKey,
         phase: "two-pass",
-        getAnnotations(parsed?: unknown) {
-          if (parsed === undefined) {
+        getAnnotations(request?: SourceContextRequest) {
+          const parsed = getPhase2Parsed<{ config?: string }>(request);
+          if (request == null || request.phase === "phase1") {
             return { [configKey]: { phase1: true } };
           }
-          const result = parsed as { config?: string };
-          if (!result.config) return {};
+          if (!parsed?.config) return {};
           return Promise.resolve({
             [configKey]: { host: "example.com", port: 8080 },
           });
@@ -52,7 +61,8 @@ describe("SourceContext", () => {
       assert.deepEqual(firstPass[configKey], { phase1: true });
 
       const secondPass = await context.getAnnotations({
-        config: "config.json",
+        phase: "phase2",
+        parsed: { config: "config.json" },
       });
       assert.deepEqual(secondPass[configKey], {
         host: "example.com",
@@ -94,15 +104,16 @@ describe("SourceContext", () => {
       const configContext: SourceContext = {
         id: configKey,
         phase: "two-pass",
-        getAnnotations(parsed?: unknown) {
-          if (parsed === undefined) return {};
+        getAnnotations(request?: SourceContextRequest) {
+          if (request == null || request.phase === "phase1") return {};
           return { [configKey]: { host: "config-host" } };
         },
       };
 
       const envAnnotations = envContext.getAnnotations();
       const configAnnotations = configContext.getAnnotations({
-        config: "test.json",
+        phase: "phase2",
+        parsed: { config: "test.json" },
       });
 
       assert.ok(!(envAnnotations instanceof Promise));
@@ -154,13 +165,16 @@ describe("SourceContext", () => {
         getAnnotations() {
           return { [key]: { value: "primary" } };
         },
-        getInternalAnnotations(_parsed, _annotations) {
+        getInternalAnnotations(_request, _annotations) {
           return { [internalKey]: { value: "internal" } };
         },
       };
 
       const annotations = context.getAnnotations() as Annotations;
-      const internal = context.getInternalAnnotations?.(undefined, annotations);
+      const internal = context.getInternalAnnotations?.(
+        { phase: "phase1" },
+        annotations,
+      );
       assert.ok(internal != null);
       assert.deepEqual(internal[internalKey], { value: "internal" });
     });
@@ -179,39 +193,15 @@ describe("SourceContext", () => {
     });
   });
 
-  describe("finalizeParsed", () => {
-    it("should allow a context to transform parsed values", () => {
-      const key = Symbol("@test/finalize");
-      const marker = Symbol("undefined-marker");
-      const context: SourceContext = {
-        id: key,
-        phase: "two-pass",
-        getAnnotations() {
-          return {};
-        },
-        finalizeParsed(parsed) {
-          return parsed === undefined ? { [marker]: true } : parsed;
-        },
+  describe("request contract", () => {
+    it("should make phase 2 explicit even when parsed is undefined", () => {
+      const request: SourceContextRequest = {
+        phase: "phase2",
+        parsed: undefined,
       };
 
-      assert.deepEqual(
-        context.finalizeParsed?.(undefined),
-        { [marker]: true },
-      );
-      assert.equal(context.finalizeParsed?.("hello"), "hello");
-    });
-
-    it("should be optional on SourceContext", () => {
-      const key = Symbol("@test/no-finalize");
-      const context: SourceContext = {
-        id: key,
-        phase: "single-pass",
-        getAnnotations() {
-          return {};
-        },
-      };
-
-      assert.equal(context.finalizeParsed, undefined);
+      assert.equal(request.phase, "phase2");
+      assert.equal(request.parsed, undefined);
     });
   });
 });

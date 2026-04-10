@@ -1268,7 +1268,7 @@ describe("bindEnv()", () => {
       },
     });
     const annotations = configContext.getAnnotations(
-      {},
+      { phase: "phase2", parsed: {} },
       {
         load: () => ({
           config: { mode: "prod" as const },
@@ -2722,7 +2722,7 @@ describe("bindEnv() with dependency sources", () => {
       parser: string(),
     });
     const annotations = configContext.getAnnotations(
-      {},
+      { phase: "phase2", parsed: {} },
       {
         load: () => ({
           config: { mode: "prod" as const },

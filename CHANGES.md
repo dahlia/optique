@@ -10,6 +10,14 @@ To be released.
 
 ### @optique/core
 
+ -  Replaced the sentinel-based two-pass `SourceContext` contract with an
+    explicit `SourceContextRequest` object. `getAnnotations()` and
+    `getInternalAnnotations()` now receive `phase: "phase1"` / `"phase2"`
+    requests, so successful first-pass values of `undefined` are no longer
+    ambiguous. This removes the need for context-local `undefined` wrapping
+    workarounds and fixes custom two-pass contexts that previously could not
+    distinguish phase 1 from a real `undefined` parse result. [[#271], [#786]]
+
  -  Added the optional `Parser.validateValue()` method, which lets a
     parser check whether an arbitrary value satisfies its underlying
     `ValueParser`'s constraints (e.g., regex patterns, numeric bounds,
@@ -171,8 +179,9 @@ To be released.
 
      -  `SourceContext.getInternalAnnotations()`: optional method for contexts
         to inject additional annotations during collection
-     -  `SourceContext.finalizeParsed()`: optional method for contexts to
-        transform parsed values before phase-2 annotation collection
+     -  `SourceContextRequest`: explicit phase-1 / phase-2 request object for
+        `SourceContext.getAnnotations()` and
+        `SourceContext.getInternalAnnotations()`
      -  `Parser.shouldDeferCompletion()`: optional method that combinators
         (`optional()`, `withDefault()`, `group()`) forward from inner parsers
 
@@ -221,7 +230,7 @@ To be released.
     same context returned an empty annotation object in phase 2.  In two-phase
     runs, each context's phase-2 annotation set is now treated as that
     context's final snapshot for the second parse pass.  Returning `{}` from
-    `getAnnotations(parsed)` now clears that context's earlier phase-1
+    phase-two `getAnnotations()` now clears that context's earlier phase-1
     contribution instead of letting stale data override later contexts.
     [[#231], [#782]]
 
@@ -1396,6 +1405,7 @@ To be released.
 [#262]: https://github.com/dahlia/optique/issues/262
 [#264]: https://github.com/dahlia/optique/issues/264
 [#269]: https://github.com/dahlia/optique/issues/269
+[#271]: https://github.com/dahlia/optique/issues/271
 [#275]: https://github.com/dahlia/optique/issues/275
 [#279]: https://github.com/dahlia/optique/issues/279
 [#290]: https://github.com/dahlia/optique/issues/290
@@ -1670,6 +1680,7 @@ To be released.
 [#782]: https://github.com/dahlia/optique/pull/782
 [#783]: https://github.com/dahlia/optique/pull/783
 [#784]: https://github.com/dahlia/optique/pull/784
+[#786]: https://github.com/dahlia/optique/pull/786
 
 ### @optique/config
 

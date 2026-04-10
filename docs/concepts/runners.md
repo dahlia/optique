@@ -1259,9 +1259,10 @@ When `contexts` is provided, the runner delegates to `runWith()` (or
 single-pass and two-pass contexts automatically and performs two-phase parsing
 only when needed.  In two-phase runs, each two-pass context's phase-two
 annotations replace that same context's phase-one contribution for the final
-parse, so returning an empty object from `getAnnotations(parsed)` clears that
-context's earlier annotations.  Context-specific options like `getConfigPath`
-are passed through to the contexts via the `contextOptions` property.
+parse, so returning an empty object from
+`getAnnotations({ phase: "phase2", parsed })` clears that context's earlier
+annotations.  Context-specific options like `getConfigPath` are passed
+through to the contexts via the `contextOptions` property.
 
 For more details on config file integration, see the
 [config file integration guide](../integrations/config.md).
