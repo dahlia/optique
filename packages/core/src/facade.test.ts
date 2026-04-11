@@ -10349,7 +10349,10 @@ describe("branch coverage: facade.ts edge cases", () => {
           [context],
           { args: [] },
         ),
-      { name: "TypeError" },
+      {
+        name: "TypeError",
+        message: "Cannot mutate read-only annotation data.",
+      },
     );
     assert.equal(shared.value, 1);
   });
@@ -11962,7 +11965,10 @@ describe("branch coverage: facade.ts edge cases", () => {
           [context],
           { args: [] },
         ),
-      { name: "TypeError" },
+      {
+        name: "TypeError",
+        message: "Cannot mutate read-only annotation data.",
+      },
     );
     assert.equal(shared.value, 1);
   });
