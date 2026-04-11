@@ -59,6 +59,476 @@ const annotationWrapperKeys: ReadonlySet<PropertyKey> = new Set<
 ]);
 
 const injectedAnnotationWrappers = new WeakSet<object>();
+const protectedAnnotationTargets = new WeakMap<object, object>();
+const annotationProtectionCache = new WeakMap<object, object>();
+
+function throwReadonlyAnnotationMutation(): never {
+  throw new TypeError("Cannot mutate read-only annotation data.");
+}
+
+function registerProtectedAnnotationView<T extends object>(
+  target: T,
+  view: T,
+): T {
+  annotationProtectionCache.set(target, view);
+  protectedAnnotationTargets.set(view, target);
+  return view;
+}
+
+function isProtectedAnnotationView(value: unknown): value is object {
+  return value != null &&
+    typeof value === "object" &&
+    protectedAnnotationTargets.has(value);
+}
+
+function unwrapProtectedAnnotationTarget<T>(value: T): T {
+  if (value == null || typeof value !== "object") {
+    return value;
+  }
+  return (protectedAnnotationTargets.get(value) as T | undefined) ?? value;
+}
+
+function cacheProtectedMethod<T>(
+  cache: Map<PropertyKey, unknown>,
+  key: PropertyKey,
+  factory: () => T,
+): T {
+  const cached = cache.get(key);
+  if (cached !== undefined) {
+    return cached as T;
+  }
+  const created = factory();
+  cache.set(key, created);
+  return created;
+}
+
+function protectDescriptor(
+  descriptor: PropertyDescriptor | undefined,
+): PropertyDescriptor | undefined {
+  if (descriptor == null || !("value" in descriptor)) {
+    return descriptor;
+  }
+  return {
+    ...descriptor,
+    value: protectAnnotationValue(descriptor.value),
+  };
+}
+
+function createProtectedObjectView<T extends object>(target: T): T {
+  const view = new Proxy(target, {
+    get(target, key, receiver) {
+      return protectAnnotationValue(Reflect.get(target, key, receiver));
+    },
+    set() {
+      throwReadonlyAnnotationMutation();
+    },
+    defineProperty() {
+      throwReadonlyAnnotationMutation();
+    },
+    deleteProperty() {
+      throwReadonlyAnnotationMutation();
+    },
+    setPrototypeOf() {
+      throwReadonlyAnnotationMutation();
+    },
+    preventExtensions() {
+      throwReadonlyAnnotationMutation();
+    },
+    getOwnPropertyDescriptor(target, key) {
+      return protectDescriptor(Reflect.getOwnPropertyDescriptor(target, key));
+    },
+  });
+  return registerProtectedAnnotationView(target, view);
+}
+
+function createProtectedMapView(
+  target: Map<unknown, unknown>,
+): Map<unknown, unknown> {
+  const methodCache = new Map<PropertyKey, unknown>();
+  const view = new Proxy(target, {
+    get(target, key) {
+      if (key === "size") {
+        return target.size;
+      }
+      if (key === "set" || key === "delete" || key === "clear") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
+        );
+      }
+      if (key === "get") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () => (lookup: unknown) =>
+            protectAnnotationValue(
+              target.get(unwrapProtectedAnnotationTarget(lookup)),
+            ),
+        );
+      }
+      if (key === "has") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () => (lookup: unknown) =>
+            target.has(unwrapProtectedAnnotationTarget(lookup)),
+        );
+      }
+      if (key === "forEach") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () =>
+          (
+            callback: (
+              value: unknown,
+              key: unknown,
+              map: Map<unknown, unknown>,
+            ) => void,
+            thisArg?: unknown,
+          ) =>
+            target.forEach((value, mapKey) => {
+              callback.call(
+                thisArg,
+                protectAnnotationValue(value),
+                protectAnnotationValue(mapKey),
+                view,
+              );
+            }),
+        );
+      }
+      if (key === "keys") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () =>
+            function* (): IterableIterator<unknown> {
+              for (const value of target.keys()) {
+                yield protectAnnotationValue(value);
+              }
+            },
+        );
+      }
+      if (key === "values") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () =>
+            function* (): IterableIterator<unknown> {
+              for (const value of target.values()) {
+                yield protectAnnotationValue(value);
+              }
+            },
+        );
+      }
+      if (key === "entries" || key === Symbol.iterator) {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () =>
+            function* (): IterableIterator<readonly [unknown, unknown]> {
+              for (const [entryKey, entryValue] of target.entries()) {
+                yield [
+                  protectAnnotationValue(entryKey),
+                  protectAnnotationValue(entryValue),
+                ] as const;
+              }
+            },
+        );
+      }
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+    set() {
+      throwReadonlyAnnotationMutation();
+    },
+    defineProperty() {
+      throwReadonlyAnnotationMutation();
+    },
+    deleteProperty() {
+      throwReadonlyAnnotationMutation();
+    },
+    setPrototypeOf() {
+      throwReadonlyAnnotationMutation();
+    },
+    preventExtensions() {
+      throwReadonlyAnnotationMutation();
+    },
+  });
+  return registerProtectedAnnotationView(target, view);
+}
+
+function createProtectedSetView(
+  target: Set<unknown>,
+): Set<unknown> {
+  const methodCache = new Map<PropertyKey, unknown>();
+  const view = new Proxy(target, {
+    get(target, key) {
+      if (key === "size") {
+        return target.size;
+      }
+      if (key === "add" || key === "delete" || key === "clear") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
+        );
+      }
+      if (key === "has") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () => (lookup: unknown) =>
+            target.has(unwrapProtectedAnnotationTarget(lookup)),
+        );
+      }
+      if (key === "forEach") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () =>
+          (
+            callback: (
+              value: unknown,
+              key: unknown,
+              set: Set<unknown>,
+            ) => void,
+            thisArg?: unknown,
+          ) =>
+            target.forEach((value) => {
+              const protectedValue = protectAnnotationValue(value);
+              callback.call(thisArg, protectedValue, protectedValue, view);
+            }),
+        );
+      }
+      if (
+        key === "keys" ||
+        key === "values" ||
+        key === Symbol.iterator
+      ) {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () =>
+            function* (): IterableIterator<unknown> {
+              for (const value of target.values()) {
+                yield protectAnnotationValue(value);
+              }
+            },
+        );
+      }
+      if (key === "entries") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () =>
+            function* (): IterableIterator<readonly [unknown, unknown]> {
+              for (const value of target.values()) {
+                const protectedValue = protectAnnotationValue(value);
+                yield [protectedValue, protectedValue] as const;
+              }
+            },
+        );
+      }
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+    set() {
+      throwReadonlyAnnotationMutation();
+    },
+    defineProperty() {
+      throwReadonlyAnnotationMutation();
+    },
+    deleteProperty() {
+      throwReadonlyAnnotationMutation();
+    },
+    setPrototypeOf() {
+      throwReadonlyAnnotationMutation();
+    },
+    preventExtensions() {
+      throwReadonlyAnnotationMutation();
+    },
+  });
+  return registerProtectedAnnotationView(target, view);
+}
+
+function createProtectedDateView(target: Date): Date {
+  const methodCache = new Map<PropertyKey, unknown>();
+  const view = new Proxy(target, {
+    get(target, key) {
+      const value = Reflect.get(target, key, target);
+      if (typeof key === "string" && key.startsWith("set")) {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
+        );
+      }
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+    set() {
+      throwReadonlyAnnotationMutation();
+    },
+    defineProperty() {
+      throwReadonlyAnnotationMutation();
+    },
+    deleteProperty() {
+      throwReadonlyAnnotationMutation();
+    },
+    setPrototypeOf() {
+      throwReadonlyAnnotationMutation();
+    },
+    preventExtensions() {
+      throwReadonlyAnnotationMutation();
+    },
+  });
+  return registerProtectedAnnotationView(target, view);
+}
+
+function createProtectedRegExpView(target: RegExp): RegExp {
+  const methodCache = new Map<PropertyKey, unknown>();
+  const view = new Proxy(target, {
+    get(target, key) {
+      const value = Reflect.get(target, key, target);
+      if (key === "compile") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
+        );
+      }
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+    set() {
+      throwReadonlyAnnotationMutation();
+    },
+    defineProperty() {
+      throwReadonlyAnnotationMutation();
+    },
+    deleteProperty() {
+      throwReadonlyAnnotationMutation();
+    },
+    setPrototypeOf() {
+      throwReadonlyAnnotationMutation();
+    },
+    preventExtensions() {
+      throwReadonlyAnnotationMutation();
+    },
+  });
+  return registerProtectedAnnotationView(target, view);
+}
+
+function createProtectedURLSearchParamsView(
+  target: URLSearchParams,
+): URLSearchParams {
+  const methodCache = new Map<PropertyKey, unknown>();
+  const view = new Proxy(target, {
+    get(target, key) {
+      if (
+        key === "append" ||
+        key === "delete" ||
+        key === "set" ||
+        key === "sort"
+      ) {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
+        );
+      }
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+    set() {
+      throwReadonlyAnnotationMutation();
+    },
+    defineProperty() {
+      throwReadonlyAnnotationMutation();
+    },
+    deleteProperty() {
+      throwReadonlyAnnotationMutation();
+    },
+    setPrototypeOf() {
+      throwReadonlyAnnotationMutation();
+    },
+    preventExtensions() {
+      throwReadonlyAnnotationMutation();
+    },
+  });
+  return registerProtectedAnnotationView(target, view);
+}
+
+function createProtectedURLView(target: URL): URL {
+  const view = new Proxy(target, {
+    get(target, key) {
+      if (key === "searchParams") {
+        return protectAnnotationValue(target.searchParams);
+      }
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+    set() {
+      throwReadonlyAnnotationMutation();
+    },
+    defineProperty() {
+      throwReadonlyAnnotationMutation();
+    },
+    deleteProperty() {
+      throwReadonlyAnnotationMutation();
+    },
+    setPrototypeOf() {
+      throwReadonlyAnnotationMutation();
+    },
+    preventExtensions() {
+      throwReadonlyAnnotationMutation();
+    },
+  });
+  return registerProtectedAnnotationView(target, view);
+}
+
+function protectAnnotationValue<T>(value: T): T {
+  if (value == null || typeof value !== "object") {
+    return value;
+  }
+  const target = value as object;
+  if (isProtectedAnnotationView(value)) {
+    return value;
+  }
+  const cached = annotationProtectionCache.get(target);
+  if (cached !== undefined) {
+    return cached as T;
+  }
+  if (target instanceof Map) {
+    return createProtectedMapView(target) as T;
+  }
+  if (target instanceof Set) {
+    return createProtectedSetView(target) as T;
+  }
+  if (target instanceof Date) {
+    return createProtectedDateView(target) as T;
+  }
+  if (target instanceof RegExp) {
+    return createProtectedRegExpView(target) as T;
+  }
+  if (
+    typeof URLSearchParams === "function" &&
+    target instanceof URLSearchParams
+  ) {
+    return createProtectedURLSearchParamsView(target) as T;
+  }
+  if (typeof URL === "function" && target instanceof URL) {
+    return createProtectedURLView(target) as T;
+  }
+  if (Array.isArray(target)) {
+    return createProtectedObjectView(target) as T;
+  }
+  const proto = Object.getPrototypeOf(target);
+  if (proto === Object.prototype || proto === null) {
+    return createProtectedObjectView(target) as T;
+  }
+  return value;
+}
 
 /**
  * Annotations that can be passed to parsers during execution.
@@ -79,6 +549,21 @@ const injectedAnnotationWrappers = new WeakSet<object>();
 export type Annotations = Record<symbol, unknown>;
 
 /**
+ * Read-only annotation view returned from parser state.
+ *
+ * Top-level annotation records are exposed as read-only objects, and supported
+ * nested container values (plain objects, arrays, `Map`, `Set`, `Date`,
+ * `RegExp`, `URL`, and `URLSearchParams`) are surfaced through protected
+ * views that throw on ordinary mutation attempts.
+ *
+ * Opaque live objects and functions remain reference-preserving.
+ *
+ * @since 1.0.0
+ */
+export type ReadonlyAnnotations = Readonly<Annotations>;
+type AnnotationInput = Annotations | ReadonlyAnnotations;
+
+/**
  * Options for parse functions.
  * @since 0.10.0
  */
@@ -86,6 +571,9 @@ export interface ParseOptions {
   /**
    * Annotations to attach to the parsing session.
    * Parsers can access these annotations via getAnnotations(state).
+   *
+   * Optique treats these values as immutable input and exposes them back to
+   * parsers only through protected read-only views.
    */
   annotations?: Annotations;
 }
@@ -94,8 +582,11 @@ export interface ParseOptions {
  * Extracts annotations from parser state.
  *
  * @param state Parser state that may contain annotations
- * @returns Annotations object or undefined if no annotations are present
+ * @returns Read-only annotations view or undefined if no annotations are
+ *          present
  * @since 0.10.0
+ * @since 1.0.0 Returns protected read-only annotation views instead of
+ *              caller-owned objects.
  *
  * @example
  * ```typescript
@@ -103,14 +594,16 @@ export interface ParseOptions {
  * const myData = annotations?.[myDataKey];
  * ```
  */
-export function getAnnotations(state: unknown): Annotations | undefined {
+export function getAnnotations(
+  state: unknown,
+): ReadonlyAnnotations | undefined {
   if (state == null || typeof state !== "object") {
     return undefined;
   }
   const stateObj = state as Record<symbol, unknown>;
   const annotations = stateObj[annotationKey];
   if (annotations != null && typeof annotations === "object") {
-    return annotations as Annotations;
+    return protectAnnotationValue(annotations as AnnotationInput);
   }
   return undefined;
 }
@@ -226,8 +719,8 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
  * @internal
  */
 export function hasMeaningfulAnnotations(
-  annotations: Annotations | null | undefined,
-): annotations is Annotations {
+  annotations: AnnotationInput | null | undefined,
+): annotations is AnnotationInput {
   return annotations != null &&
     Object.getOwnPropertySymbols(annotations).length > 0;
 }
@@ -250,16 +743,17 @@ export function hasMeaningfulAnnotations(
  */
 export function injectAnnotations<TState>(
   state: TState,
-  annotations: Annotations,
+  annotations: AnnotationInput,
 ): TState {
   if (!hasMeaningfulAnnotations(annotations)) {
     return state;
   }
+  const protectedAnnotations = protectAnnotationValue(annotations);
   if (state == null || typeof state !== "object") {
     const wrapper: Record<PropertyKey, unknown> = {};
     Object.defineProperties(wrapper, {
       [annotationKey]: {
-        value: annotations,
+        value: protectedAnnotations,
         enumerable: true,
         writable: true,
         configurable: true,
@@ -285,7 +779,7 @@ export function injectAnnotations<TState>(
     const cloned = [...state];
     (cloned as typeof cloned & { [annotationKey]?: Annotations })[
       annotationKey
-    ] = annotations;
+    ] = protectedAnnotations;
     return cloned as TState;
   }
   if (isInjectedAnnotationWrapper(state)) {
@@ -293,49 +787,49 @@ export function injectAnnotations<TState>(
       state as TState & {
         [annotationKey]?: Annotations;
       }
-    )[annotationKey] = annotations;
+    )[annotationKey] = protectedAnnotations;
     return state;
   }
   if (state instanceof Date) {
     const cloned = new Date(state.getTime()) as Date & {
       [annotationKey]?: Annotations;
     };
-    cloned[annotationKey] = annotations;
+    cloned[annotationKey] = protectedAnnotations;
     return cloned as TState;
   }
   if (state instanceof Map) {
     const cloned = new Map(state) as Map<unknown, unknown> & {
       [annotationKey]?: Annotations;
     };
-    cloned[annotationKey] = annotations;
+    cloned[annotationKey] = protectedAnnotations;
     return cloned as TState;
   }
   if (state instanceof Set) {
     const cloned = new Set(state) as Set<unknown> & {
       [annotationKey]?: Annotations;
     };
-    cloned[annotationKey] = annotations;
+    cloned[annotationKey] = protectedAnnotations;
     return cloned as TState;
   }
   if (state instanceof RegExp) {
     const cloned = new RegExp(state) as RegExp & {
       [annotationKey]?: Annotations;
     };
-    cloned[annotationKey] = annotations;
+    cloned[annotationKey] = protectedAnnotations;
     return cloned as TState;
   }
   const proto = Object.getPrototypeOf(state);
   if (proto === Object.prototype || proto === null) {
     return {
       ...(state as Record<PropertyKey, unknown>),
-      [annotationKey]: annotations,
+      [annotationKey]: protectedAnnotations,
     } as TState;
   }
   const cloned = Object.create(
     proto,
     Object.getOwnPropertyDescriptors(state as Record<PropertyKey, unknown>),
   ) as TState & { [annotationKey]?: Annotations };
-  cloned[annotationKey] = annotations;
+  cloned[annotationKey] = protectedAnnotations;
   return cloned;
 }
 

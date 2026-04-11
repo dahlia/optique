@@ -86,6 +86,40 @@ function getRuntimeExtractPhase2SeedKey(): symbol {
   return key;
 }
 
+function createMutatingAnnotationRunnerParser(
+  marker: symbol,
+): Parser<"sync", number, undefined> {
+  return {
+    $mode: "sync",
+    $valueType: [] as const,
+    $stateType: [] as const,
+    priority: 0,
+    usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse(context) {
+      return {
+        success: true as const,
+        next: context,
+        consumed: [],
+      };
+    },
+    complete(state) {
+      const payload = getAnnotations(state)?.[marker] as
+        | { value: number }
+        | undefined;
+      assert.ok(payload != null);
+      payload.value = 2;
+      return { success: true as const, value: payload.value };
+    },
+    *suggest() {},
+    getDocFragments() {
+      return { fragments: [] };
+    },
+  };
+}
+
 describe("runParser", () => {
   describe("basic parsing", () => {
     it("should parse simple arguments", () => {
@@ -10236,7 +10270,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       args: [],
     });
 
-    assert.deepEqual(result, { phase2: true });
+    assert.equal((result as { readonly phase2?: boolean }).phase2, true);
     assert.ok(phase2Called, "phase 2 context should be called");
   });
 
@@ -10287,6 +10321,30 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.deepEqual(result, {
       config: "optique.json",
     });
+  });
+
+  it("runWith should not let parsers mutate context-owned annotations", async () => {
+    const marker = Symbol.for("@test/issue-491/run-with");
+    const shared = { value: 1 };
+    const context: SourceContext = {
+      id: marker,
+      phase: "single-pass",
+      getAnnotations() {
+        return { [marker]: shared };
+      },
+    };
+
+    await assert.rejects(
+      () =>
+        runWith(
+          createMutatingAnnotationRunnerParser(marker),
+          "test",
+          [context],
+          { args: [] },
+        ),
+      { name: "TypeError" },
+    );
+    assert.equal(shared.value, 1);
   });
 
   it("runWith: phase two can recover from first-pass completion failure", async () => {
@@ -11818,7 +11876,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       args: [],
     });
 
-    assert.deepEqual(result, { phase2: true });
+    assert.equal((result as { readonly phase2?: boolean }).phase2, true);
     assert.ok(phase2Called, "phase 2 context should be called");
   });
 
@@ -11869,6 +11927,30 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.deepEqual(result, {
       config: "optique.json",
     });
+  });
+
+  it("runWithSync should not let parsers mutate context-owned annotations", () => {
+    const marker = Symbol.for("@test/issue-491/run-with-sync");
+    const shared = { value: 1 };
+    const context: SourceContext = {
+      id: marker,
+      phase: "single-pass",
+      getAnnotations() {
+        return { [marker]: shared };
+      },
+    };
+
+    assert.throws(
+      () =>
+        runWithSync(
+          createMutatingAnnotationRunnerParser(marker),
+          "test",
+          [context],
+          { args: [] },
+        ),
+      { name: "TypeError" },
+    );
+    assert.equal(shared.value, 1);
   });
 
   it("runWithSync: should reject contexts without explicit phase", () => {

@@ -10,6 +10,16 @@ To be released.
 
 ### @optique/core
 
+ -  Fixed annotation isolation across the public parser entrypoints and
+    runner-driven context injection. `parse()`, `parseSync()`, `parseAsync()`,
+    `suggest()`, `suggestSync()`, `suggestAsync()`, `getDocPage()`,
+    `getDocPageSync()`, `getDocPageAsync()`, `runWith()`, and `runWithSync()`
+    now expose annotations through protected read-only views instead of
+    leaking caller- or context-owned objects by reference. Custom parsers can
+    still read live annotation data, but ordinary mutation attempts against
+    supported container types now fail fast with `TypeError` and no longer
+    mutate the original annotation payload. [[#491], [#787]]
+
  -  Replaced the sentinel-based two-pass `SourceContext` contract with an
     explicit `SourceContextRequest` object. `getAnnotations()` and
     `getInternalAnnotations()` now receive `phase: "phase1"` / `"phase2"`
@@ -1491,6 +1501,7 @@ To be released.
 [#485]: https://github.com/dahlia/optique/issues/485
 [#488]: https://github.com/dahlia/optique/issues/488
 [#490]: https://github.com/dahlia/optique/pull/490
+[#491]: https://github.com/dahlia/optique/issues/491
 [#492]: https://github.com/dahlia/optique/issues/492
 [#493]: https://github.com/dahlia/optique/issues/493
 [#494]: https://github.com/dahlia/optique/issues/494
@@ -1681,6 +1692,7 @@ To be released.
 [#783]: https://github.com/dahlia/optique/pull/783
 [#784]: https://github.com/dahlia/optique/pull/784
 [#786]: https://github.com/dahlia/optique/pull/786
+[#787]: https://github.com/dahlia/optique/pull/787
 
 ### @optique/config
 

@@ -12,7 +12,7 @@
 
 import type { Annotations } from "./annotations.ts";
 
-export type { Annotations } from "./annotations.ts";
+export type { Annotations, ReadonlyAnnotations } from "./annotations.ts";
 
 /**
  * Declares whether a {@link SourceContext} participates only in the initial

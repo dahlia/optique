@@ -3,6 +3,7 @@ export {
   type Annotations,
   getAnnotations,
   type ParseOptions,
+  type ReadonlyAnnotations,
 } from "./annotations.ts";
 export * from "./completion.ts";
 export * from "./dependency.ts";

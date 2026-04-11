@@ -42,7 +42,12 @@ run = "deno task test:bun"
 
 [tasks.test]
 description = "Run the test suite across all environments"
-depends = ["check", "test:*"]
+run = '''
+mise run check
+mise run test:deno
+mise run test:node
+mise run test:bun
+'''
 
 [tasks.build]
 description = "Build all packages for npm publishing"

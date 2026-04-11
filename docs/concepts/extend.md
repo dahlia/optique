@@ -133,6 +133,8 @@ function myCustomComplete(state: unknown) {
 The function returns `undefined` if no annotations were provided, so always
 use optional chaining (`?.`) when accessing annotation data. Since annotations
 are typed as `unknown`, you need to cast them to your expected type.
+The returned record is a read-only view owned by the current parse run, not
+the caller's original annotations object.
 
 
 Creating custom parsers with annotations
@@ -702,16 +704,23 @@ API reference
 ### Types and symbols from `@optique/core/annotations`
 
 `annotationKey`
-:   Unique symbol for storing annotations in parser state. Use this symbol to
-    access the raw annotations object from state if needed.
+:   Unique symbol for storing annotations in parser state. Values injected by
+    Optique are exposed through protected read-only views rather than
+    caller-owned mutable objects.
 
 `Annotations`
 :   Type alias for `Record<symbol, unknown>`. Represents the annotation data
     structure where each key is a symbol and each value can be any type.
 
+`ReadonlyAnnotations`
+:   Read-only annotation view returned by `getAnnotations()`. Supported
+    nested container values are also exposed through protected read-only
+    views.
+
 `ParseOptions`
 :   Interface containing options for parse functions. Currently has one field:
-    `annotations?: Annotations`.
+    `annotations?: Annotations`. Optique treats these annotations as
+    immutable input.
 
 ### Types from `@optique/core/context`
 
@@ -770,9 +779,10 @@ API reference
 
 ### Functions from `@optique/core/annotations`
 
-`getAnnotations(state: unknown): Annotations | undefined`
+`getAnnotations(state: unknown): ReadonlyAnnotations | undefined`
 :   Extracts annotations from parser state. Returns `undefined` if the state
     does not contain annotations or if the state is not an object.
+    Returned annotations are protected read-only views.
 
     ~~~~ typescript twoslash
     import { getAnnotations } from "@optique/core/annotations";
@@ -1322,19 +1332,26 @@ advanced parsers. For high-level usage, use the SourceContext system with
 ### State immutability
 
 Annotations are injected into the initial state and should be treated as
-read-only. Do not modify annotation data during parsing:
+read-only. Optique now exposes supported annotation values through protected
+read-only views, so ordinary mutation attempts fail fast with `TypeError`
+instead of mutating the caller's original object:
 
 ~~~~ typescript
 // Good: read-only access
 const annotations = getAnnotations(state);
 const value = annotations?.[myKey];
 
-// Bad: modifying annotations (undefined behavior)
+// Bad: modifying annotations
 const annotations = getAnnotations(state);
 if (annotations) {
-  annotations[myKey] = newValue; // Don't do this
+  Reflect.set(annotations, myKey, newValue); // Throws TypeError
 }
 ~~~~
+
+Opaque live objects and functions are still passed by reference. If you store
+an API client, callback, or other non-plain object in annotations, Optique
+does not virtualize its internal behavior; any intentional side effects
+through that object's own methods remain your responsibility.
 
 ### Performance considerations
 

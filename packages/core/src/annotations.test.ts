@@ -3,7 +3,6 @@ import { describe, it } from "node:test";
 import * as fc from "fast-check";
 import {
   annotationKey,
-  type Annotations,
   annotationStateValueKey,
   annotationWrapperKey,
   getAnnotations,
@@ -73,7 +72,8 @@ describe("getAnnotations", () => {
             if (
               annotationValue != null && typeof annotationValue === "object"
             ) {
-              assert.equal(result, annotationValue as Annotations);
+              assert.ok(result !== undefined);
+              assert.equal(typeof result, "object");
             } else {
               assert.equal(result, undefined);
             }
@@ -81,6 +81,127 @@ describe("getAnnotations", () => {
         ),
         propertyParameters,
       );
+    });
+  });
+
+  describe("protected views (issue #491)", () => {
+    it("should return a stable protected view instead of the caller object", () => {
+      const marker = Symbol.for("@test/issue-491/stable-view");
+      const rawAnnotations = { [marker]: { value: 1 } };
+      const state = injectAnnotations(undefined, rawAnnotations);
+
+      const first = getAnnotations(state);
+      const second = getAnnotations(state);
+
+      assert.ok(first !== undefined);
+      assert.ok(second !== undefined);
+      assert.equal(first, second);
+      assert.notEqual(first, rawAnnotations);
+      assert.equal(first[marker], second[marker]);
+      assert.notEqual(first[marker], rawAnnotations[marker]);
+    });
+
+    it("should throw when mutating nested plain objects", () => {
+      const marker = Symbol.for("@test/issue-491/nested-object");
+      const rawValue = { value: 1 };
+      const state = injectAnnotations(undefined, { [marker]: rawValue });
+
+      const annotations = getAnnotations(state);
+      assert.ok(annotations !== undefined);
+      const nested = annotations[marker] as Record<PropertyKey, unknown>;
+
+      assert.throws(
+        () => Reflect.set(nested, "value", 2),
+        { name: "TypeError" },
+      );
+      assert.equal(rawValue.value, 1);
+    });
+
+    it("should throw when mutating Map annotations", () => {
+      const marker = Symbol.for("@test/issue-491/map");
+      const rawEntry = { value: 1 };
+      const rawMap = new Map<string, { value: number }>([["a", rawEntry]]);
+      const state = injectAnnotations(undefined, { [marker]: rawMap });
+
+      const annotations = getAnnotations(state);
+      assert.ok(annotations !== undefined);
+      const received = annotations[marker] as Map<string, { value: number }>;
+
+      assert.throws(
+        () => received.set("b", { value: 2 }),
+        { name: "TypeError" },
+      );
+      assert.throws(
+        () => Reflect.set(received.get("a") as object, "value", 2),
+        { name: "TypeError" },
+      );
+      assert.equal(rawMap.size, 1);
+      assert.equal(rawEntry.value, 1);
+    });
+
+    it("should throw when mutating Set annotations", () => {
+      const marker = Symbol.for("@test/issue-491/set");
+      const rawSet = new Set(["a"]);
+      const state = injectAnnotations(undefined, { [marker]: rawSet });
+
+      const annotations = getAnnotations(state);
+      assert.ok(annotations !== undefined);
+      const received = annotations[marker] as Set<string>;
+
+      assert.throws(
+        () => received.add("b"),
+        { name: "TypeError" },
+      );
+      assert.deepEqual([...rawSet], ["a"]);
+    });
+
+    it("should throw when mutating Date and RegExp annotations", () => {
+      const dateMarker = Symbol.for("@test/issue-491/date");
+      const regexMarker = Symbol.for("@test/issue-491/regexp");
+      const rawDate = new Date("2026-03-08T00:00:00.000Z");
+      const rawRegExp = /ab+/g;
+      const state = injectAnnotations(undefined, {
+        [dateMarker]: rawDate,
+        [regexMarker]: rawRegExp,
+      });
+
+      const annotations = getAnnotations(state);
+      assert.ok(annotations !== undefined);
+
+      const receivedDate = annotations[dateMarker] as Date;
+      const receivedRegExp = annotations[regexMarker] as RegExp;
+
+      assert.throws(
+        () => receivedDate.setUTCFullYear(2030),
+        { name: "TypeError" },
+      );
+      assert.throws(
+        () => Reflect.set(receivedRegExp, "lastIndex", 3),
+        { name: "TypeError" },
+      );
+      assert.equal(rawDate.toISOString(), "2026-03-08T00:00:00.000Z");
+      assert.equal(rawRegExp.lastIndex, 0);
+    });
+
+    it("should throw when mutating URL-like annotations", () => {
+      const marker = Symbol.for("@test/issue-491/url");
+      const rawUrl = new URL("https://example.com/a?x=1");
+      const state = injectAnnotations(undefined, { [marker]: rawUrl });
+
+      const annotations = getAnnotations(state);
+      assert.ok(annotations !== undefined);
+      const received = annotations[marker] as URL;
+
+      assert.throws(
+        () => Reflect.set(received, "pathname", "/b"),
+        { name: "TypeError" },
+      );
+      assert.throws(
+        () => received.searchParams.set("x", "2"),
+        { name: "TypeError" },
+      );
+      assert.equal(rawUrl.pathname, "/a");
+      assert.equal(rawUrl.searchParams.get("x"), "1");
     });
   });
 });

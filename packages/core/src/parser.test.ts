@@ -2505,7 +2505,9 @@ describe("Annotations system", () => {
 
     const annotations = getAnnotations(capturedState);
     assert.ok(annotations !== undefined);
-    assert.deepEqual(annotations[testKey], testData);
+    const injected = annotations[testKey] as { value: number } | undefined;
+    assert.ok(injected !== undefined);
+    assert.equal(injected.value, testData.value);
   });
 
   it("should extract annotations using getAnnotations()", async () => {
@@ -2519,7 +2521,9 @@ describe("Annotations system", () => {
     };
     const annotations1 = getAnnotations(stateWithAnnotations);
     assert.ok(annotations1 !== undefined);
-    assert.deepEqual(annotations1[testKey], testData);
+    const injected = annotations1[testKey] as { foo: string } | undefined;
+    assert.ok(injected !== undefined);
+    assert.equal(injected.foo, testData.foo);
 
     // Test with state without annotations (returns undefined)
     const stateWithoutAnnotations = { someField: "value" };
@@ -2593,9 +2597,18 @@ describe("Annotations system", () => {
     assert.ok(result.success);
     const annotations = getAnnotations(capturedState);
     assert.ok(annotations !== undefined);
-    assert.deepEqual(annotations[key1], data1);
-    assert.deepEqual(annotations[key2], data2);
-    assert.deepEqual(annotations[key3], data3);
+    assert.equal(
+      (annotations[key1] as { pkg1: string } | undefined)?.pkg1,
+      data1.pkg1,
+    );
+    assert.equal(
+      (annotations[key2] as { pkg2: string } | undefined)?.pkg2,
+      data2.pkg2,
+    );
+    assert.equal(
+      (annotations[key3] as { pkg3: string } | undefined)?.pkg3,
+      data3.pkg3,
+    );
   });
 
   it("should support annotations in parseSync()", async () => {
@@ -2658,6 +2671,316 @@ describe("Annotations system", () => {
     const annotations = getAnnotations(capturedState);
     assert.ok(annotations !== undefined);
     assert.equal(annotations[testKey], testData);
+  });
+
+  describe("annotation mutation isolation (issue #491)", () => {
+    function mutateAnnotationPayload(state: unknown, marker: symbol): number {
+      const payload = getAnnotations(state)?.[marker] as
+        | { value: number }
+        | undefined;
+      assert.ok(payload != null);
+      payload.value = 2;
+      return payload.value;
+    }
+
+    function createCompleteMutationSyncParser(
+      marker: symbol,
+    ): Parser<"sync", number, undefined> {
+      return {
+        $mode: "sync",
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return {
+            success: true as const,
+            next: { ...context, buffer: [] },
+            consumed: [],
+          };
+        },
+        complete(state) {
+          return {
+            success: true as const,
+            value: mutateAnnotationPayload(state, marker),
+          };
+        },
+        *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+    }
+
+    function createCompleteMutationAsyncParser(
+      marker: symbol,
+    ): Parser<"async", number, undefined> {
+      return {
+        $mode: "async",
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return Promise.resolve({
+            success: true as const,
+            next: { ...context, buffer: [] },
+            consumed: [],
+          });
+        },
+        complete(state) {
+          return Promise.resolve({
+            success: true as const,
+            value: mutateAnnotationPayload(state, marker),
+          });
+        },
+        async *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+    }
+
+    function createSuggestMutationSyncParser(
+      marker: symbol,
+    ): Parser<"sync", number, undefined> {
+      return {
+        $mode: "sync",
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return {
+            success: true as const,
+            next: { ...context, buffer: [] },
+            consumed: [],
+          };
+        },
+        complete() {
+          return { success: true as const, value: 1 };
+        },
+        *suggest(context) {
+          mutateAnnotationPayload(context.state, marker);
+          yield { kind: "literal" as const, text: "ok" };
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+    }
+
+    function createSuggestMutationAsyncParser(
+      marker: symbol,
+    ): Parser<"async", number, undefined> {
+      return {
+        $mode: "async",
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return Promise.resolve({
+            success: true as const,
+            next: { ...context, buffer: [] },
+            consumed: [],
+          });
+        },
+        complete() {
+          return Promise.resolve({ success: true as const, value: 1 });
+        },
+        async *suggest(context) {
+          mutateAnnotationPayload(context.state, marker);
+          yield { kind: "literal" as const, text: "ok" };
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+    }
+
+    function createDocMutationSyncParser(
+      marker: symbol,
+    ): Parser<"sync", number, undefined> {
+      return {
+        $mode: "sync",
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return {
+            success: true as const,
+            next: { ...context, buffer: [] },
+            consumed: [],
+          };
+        },
+        complete() {
+          return { success: true as const, value: 1 };
+        },
+        *suggest() {},
+        getDocFragments(state) {
+          if (state.kind === "available") {
+            mutateAnnotationPayload(state.state, marker);
+          }
+          return { fragments: [] };
+        },
+      };
+    }
+
+    function createDocMutationAsyncParser(
+      marker: symbol,
+    ): Parser<"async", number, undefined> {
+      return {
+        $mode: "async",
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return Promise.resolve({
+            success: true as const,
+            next: { ...context, buffer: [] },
+            consumed: [],
+          });
+        },
+        complete() {
+          return Promise.resolve({ success: true as const, value: 1 });
+        },
+        async *suggest() {},
+        getDocFragments(state) {
+          if (state.kind === "available") {
+            mutateAnnotationPayload(state.state, marker);
+          }
+          return { fragments: [] };
+        },
+      };
+    }
+
+    it("parse() should not let custom parsers mutate caller annotations", () => {
+      const marker = Symbol.for("@test/issue-491/parse");
+      const annotations = { [marker]: { value: 1 } };
+
+      assert.throws(
+        () =>
+          parse(createCompleteMutationSyncParser(marker), [], {
+            annotations,
+          }),
+        { name: "TypeError" },
+      );
+      assert.equal(annotations[marker].value, 1);
+    });
+
+    it("parseSync() should not let custom parsers mutate caller annotations", () => {
+      const marker = Symbol.for("@test/issue-491/parse-sync");
+      const annotations = { [marker]: { value: 1 } };
+
+      assert.throws(
+        () =>
+          parseSync(createCompleteMutationSyncParser(marker), [], {
+            annotations,
+          }),
+        { name: "TypeError" },
+      );
+      assert.equal(annotations[marker].value, 1);
+    });
+
+    it("parseAsync() should not let custom parsers mutate caller annotations", async () => {
+      const marker = Symbol.for("@test/issue-491/parse-async");
+      const annotations = { [marker]: { value: 1 } };
+
+      await assert.rejects(
+        () =>
+          parseAsync(createCompleteMutationAsyncParser(marker), [], {
+            annotations,
+          }),
+        { name: "TypeError" },
+      );
+      assert.equal(annotations[marker].value, 1);
+    });
+
+    it("suggestSync() should not let custom parsers mutate caller annotations", () => {
+      const marker = Symbol.for("@test/issue-491/suggest-sync");
+      const annotations = { [marker]: { value: 1 } };
+
+      assert.throws(
+        () =>
+          suggestSync(createSuggestMutationSyncParser(marker), [""], {
+            annotations,
+          }),
+        { name: "TypeError" },
+      );
+      assert.equal(annotations[marker].value, 1);
+    });
+
+    it("suggestAsync() should not let custom parsers mutate caller annotations", async () => {
+      const marker = Symbol.for("@test/issue-491/suggest-async");
+      const annotations = { [marker]: { value: 1 } };
+
+      await assert.rejects(
+        () =>
+          suggestAsync(createSuggestMutationAsyncParser(marker), [""], {
+            annotations,
+          }),
+        { name: "TypeError" },
+      );
+      assert.equal(annotations[marker].value, 1);
+    });
+
+    it("getDocPage() should not let custom parsers mutate caller annotations", () => {
+      const marker = Symbol.for("@test/issue-491/doc");
+      const annotations = { [marker]: { value: 1 } };
+
+      assert.throws(
+        () => getDocPage(createDocMutationSyncParser(marker), { annotations }),
+        { name: "TypeError" },
+      );
+      assert.equal(annotations[marker].value, 1);
+    });
+
+    it("getDocPageSync() should not let custom parsers mutate caller annotations", () => {
+      const marker = Symbol.for("@test/issue-491/doc-sync");
+      const annotations = { [marker]: { value: 1 } };
+
+      assert.throws(
+        () =>
+          getDocPageSync(createDocMutationSyncParser(marker), { annotations }),
+        { name: "TypeError" },
+      );
+      assert.equal(annotations[marker].value, 1);
+    });
+
+    it("getDocPageAsync() should not let custom parsers mutate caller annotations", async () => {
+      const marker = Symbol.for("@test/issue-491/doc-async");
+      const annotations = { [marker]: { value: 1 } };
+
+      await assert.rejects(
+        () =>
+          getDocPageAsync(createDocMutationAsyncParser(marker), {
+            annotations,
+          }),
+        { name: "TypeError" },
+      );
+      assert.equal(annotations[marker].value, 1);
+    });
   });
 
   it("should parseAsync or() with annotations on the initial state", async () => {
@@ -2753,7 +3076,13 @@ describe("Annotations system", () => {
 
     assert.ok(result.success);
     if (result.success) {
-      assert.deepEqual(result.value, value);
+      const actual = result.value as typeof value;
+      assert.ok(actual.ok);
+      assert.equal(actual[annotationStateValueKey], "not-wrapper");
+      assert.equal(
+        (actual[annotationKey] as Record<symbol, unknown>)[testKey],
+        "value",
+      );
     }
   });
 
@@ -2776,7 +3105,14 @@ describe("Annotations system", () => {
 
     assert.ok(result.success);
     if (result.success) {
-      assert.deepEqual(result.value, value);
+      const actual = result.value as typeof value;
+      assert.ok(actual.ok);
+      assert.equal(actual[annotationStateValueKey], "not-wrapper");
+      assert.equal(actual[annotationWrapperKey], false);
+      assert.equal(
+        (actual[annotationKey] as Record<symbol, unknown>)[testKey],
+        "value",
+      );
     }
   });
 
@@ -2799,7 +3135,14 @@ describe("Annotations system", () => {
 
     assert.ok(result.success);
     if (result.success) {
-      assert.deepEqual(result.value, value);
+      const actual = result.value as typeof value;
+      assert.ok(actual.ok);
+      assert.equal(actual[annotationStateValueKey], "not-injected");
+      assert.equal(actual[annotationWrapperKey], true);
+      assert.equal(
+        (actual[annotationKey] as Record<symbol, unknown>)[testKey],
+        "value",
+      );
     }
   });
 

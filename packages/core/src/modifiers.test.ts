@@ -7516,7 +7516,8 @@ describe("branch coverage: modifiers edge cases", () => {
     parser.getSuggestRuntimeNodes?.(state as [unknown], ["root"]);
 
     assert.ok(seenState != null && typeof seenState === "object");
-    assert.deepEqual(getAnnotations(seenState), annotations);
+    const marker = Object.getOwnPropertySymbols(annotations)[0];
+    assert.equal(getAnnotations(seenState)?.[marker], true);
     assert.equal((seenState as { readonly kind: "value" }).kind, "value");
   });
 
@@ -7554,7 +7555,8 @@ describe("branch coverage: modifiers edge cases", () => {
     );
 
     assert.equal(seenState, wrappedState);
-    assert.deepEqual(getAnnotations(seenState), annotations);
+    const marker = Object.getOwnPropertySymbols(annotations)[0];
+    assert.equal(getAnnotations(seenState)?.[marker], true);
   });
 
   it("withDefault: transformed complete(undefined) catches callback errors", async () => {
@@ -7742,9 +7744,9 @@ describe("shouldDeferCompletion forwarding", () => {
       assert.equal(inner.receivedStates.length, 1);
       const received = inner.receivedStates[0];
       assert.ok(received != null && typeof received === "object");
-      assert.deepEqual(
-        getAnnotations(received as Record<PropertyKey, unknown>),
-        annotations,
+      assert.equal(
+        getAnnotations(received as Record<PropertyKey, unknown>)?.[testCtxKey],
+        "phase1",
       );
     });
 
@@ -7823,9 +7825,9 @@ describe("shouldDeferCompletion forwarding", () => {
       assert.equal(inner.receivedStates.length, 1);
       const received = inner.receivedStates[0];
       assert.ok(received != null && typeof received === "object");
-      assert.deepEqual(
-        getAnnotations(received as Record<PropertyKey, unknown>),
-        annotations,
+      assert.equal(
+        getAnnotations(received as Record<PropertyKey, unknown>)?.[testCtxKey],
+        "phase1",
       );
     });
 

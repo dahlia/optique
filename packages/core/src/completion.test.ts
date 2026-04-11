@@ -77,6 +77,45 @@ function isShellAvailable(shell: string): boolean {
   }
 }
 
+let pwshCompletionUsable: boolean | undefined;
+
+function isPwshCompletionUsable(): boolean {
+  if (pwshCompletionUsable !== undefined) {
+    return pwshCompletionUsable;
+  }
+  if (!isShellAvailable("pwsh")) {
+    pwshCompletionUsable = false;
+    return false;
+  }
+
+  const tempDir = mkdtempSync(join(tmpdir(), "pwsh-availability-"));
+
+  try {
+    const scriptPath = join(tempDir, "completion.ps1");
+    writeFileSync(scriptPath, pwsh.generateScript("availability-probe"));
+
+    const pathSep = process.platform === "win32" ? ";" : ":";
+    const testScript = `
+$env:PATH = "${tempDir}${pathSep}$env:PATH"
+. "${scriptPath}"
+Write-Output "loaded"
+`;
+
+    const result = runCommand(
+      "pwsh",
+      ["-NoProfile", "-NonInteractive", "-Command", testScript],
+      { cwd: tempDir },
+    );
+    pwshCompletionUsable = result.trim().includes("loaded");
+    return pwshCompletionUsable;
+  } catch {
+    pwshCompletionUsable = false;
+    return false;
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
 function createTestCli(tempDir: string): string {
   const cliScript = `#!/bin/bash
 case "$1" in
@@ -2092,11 +2131,10 @@ _nohidden_cli 2>/dev/null
       );
     });
 
-    it("should work with actual pwsh shell", (t) => {
-      if (!isShellAvailable("pwsh")) {
-        t.skip("pwsh not available");
-        return;
-      }
+    it("should work with actual pwsh shell", {
+      skip: !isPwshCompletionUsable(),
+    }, () => {
+      if (!isPwshCompletionUsable()) return;
 
       const tempDir = mkdtempSync(join(tmpdir(), "pwsh-completion-"));
 
@@ -2333,11 +2371,10 @@ _nohidden_cli 2>/dev/null
       ok(fileBlock.includes('-split "`t"'));
     });
 
-    it("should parse hidden field correctly with tab-delimited metadata", (t) => {
-      if (!isShellAvailable("pwsh")) {
-        t.skip("pwsh not available");
-        return;
-      }
+    it("should parse hidden field correctly with tab-delimited metadata", {
+      skip: !isPwshCompletionUsable(),
+    }, () => {
+      if (!isPwshCompletionUsable()) return;
 
       const tempDir = mkdtempSync(
         join(tmpdir(), "pwsh-hidden-completion-"),
@@ -2383,12 +2420,12 @@ printf '__FILE__:file:::1\\t[file]\\tConfiguration file\\n'
     });
 
     it("should preserve directory prefix in nested file completions", {
-      skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+      skip: process.platform === "win32" || !isPwshCompletionUsable(),
       timeout: 10000,
     }, () => {
       // Bun ignores the skip option, so we need an early return as well:
       if (process.platform === "win32") return;
-      if (!isShellAvailable("pwsh")) return;
+      if (!isPwshCompletionUsable()) return;
 
       const tempDir = mkdtempSync(
         join(tmpdir(), "pwsh-nested-dir-"),
@@ -2444,11 +2481,11 @@ printf '__FILE__:file::src/:0\\n'
     });
 
     it("should preserve backslash directory prefix on Windows", {
-      skip: process.platform !== "win32" || !isShellAvailable("pwsh"),
+      skip: process.platform !== "win32" || !isPwshCompletionUsable(),
     }, () => {
       // Bun ignores the skip option, so we need an early return as well:
       if (process.platform !== "win32") return;
-      if (!isShellAvailable("pwsh")) return;
+      if (!isPwshCompletionUsable()) return;
 
       const tempDir = mkdtempSync(
         join(tmpdir(), "pwsh-nested-backslash-"),
@@ -2502,12 +2539,12 @@ printf '__FILE__:file::src/:0\\n'
     });
 
     it("should filter files by dot-prefixed extensions in pwsh", {
-      skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+      skip: process.platform === "win32" || !isPwshCompletionUsable(),
       timeout: 10000,
     }, () => {
       // Bun ignores the skip option, so we need an early return as well:
       if (process.platform === "win32") return;
-      if (!isShellAvailable("pwsh")) return;
+      if (!isPwshCompletionUsable()) return;
 
       const tempDir = mkdtempSync(
         join(tmpdir(), "pwsh-ext-dot-filter-"),
