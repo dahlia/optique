@@ -10,7 +10,7 @@
  * @since 0.10.0
  */
 
-import type { Annotations } from "./annotations.ts";
+import type { Annotations, ReadonlyAnnotations } from "./annotations.ts";
 
 export type { Annotations, ReadonlyAnnotations } from "./annotations.ts";
 
@@ -224,7 +224,10 @@ export interface SourceContext<TRequiredOptions = void> {
   getAnnotations(
     request?: SourceContextRequest,
     options?: unknown,
-  ): Promise<Annotations> | Annotations;
+  ):
+    | Promise<Annotations | ReadonlyAnnotations>
+    | Annotations
+    | ReadonlyAnnotations;
 
   /**
    * Optional hook to provide additional internal annotations during
@@ -242,8 +245,8 @@ export interface SourceContext<TRequiredOptions = void> {
    */
   getInternalAnnotations?(
     request: SourceContextRequest,
-    annotations: Annotations,
-  ): Annotations | undefined;
+    annotations: Annotations | ReadonlyAnnotations,
+  ): Annotations | ReadonlyAnnotations | undefined;
 
   /**
    * Optional synchronous cleanup method.  Called by `runWith()` and

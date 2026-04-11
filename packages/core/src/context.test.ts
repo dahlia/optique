@@ -1,4 +1,8 @@
-import type { Annotations } from "@optique/core/annotations";
+import {
+  type Annotations,
+  getAnnotations,
+  injectAnnotations,
+} from "@optique/core/annotations";
 import type {
   SourceContext,
   SourceContextRequest,
@@ -190,6 +194,35 @@ describe("SourceContext", () => {
       };
 
       assert.equal(context.getInternalAnnotations, undefined);
+    });
+
+    it("should allow read-only annotation views through context hooks", () => {
+      const key = Symbol("@test/readonly-context");
+      const seedState = injectAnnotations(undefined, {
+        [key]: { value: 1 },
+      });
+      const readonlyAnnotations = getAnnotations(seedState);
+
+      assert.ok(readonlyAnnotations !== undefined);
+
+      const context: SourceContext = {
+        id: key,
+        phase: "single-pass",
+        getAnnotations() {
+          return readonlyAnnotations;
+        },
+        getInternalAnnotations(_request, annotations) {
+          return annotations;
+        },
+      };
+
+      const annotations = context.getAnnotations();
+
+      assert.equal(annotations, readonlyAnnotations);
+      assert.equal(
+        context.getInternalAnnotations?.({ phase: "phase1" }, annotations),
+        readonlyAnnotations,
+      );
     });
   });
 

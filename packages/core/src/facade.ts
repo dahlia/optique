@@ -57,6 +57,7 @@ import {
   type Annotations,
   injectFreshRunAnnotations,
   isInjectedAnnotationWrapper,
+  type ReadonlyAnnotations,
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
 import {
@@ -2821,7 +2822,7 @@ async function needsEarlyExitAsync<THelp, TError>(
  * @returns Merged annotations object.
  */
 function mergeAnnotations(
-  annotationsList: readonly Annotations[],
+  annotationsList: readonly (Annotations | ReadonlyAnnotations)[],
 ): Annotations {
   const result: Record<symbol, unknown> = {};
   // Process in reverse order so earlier contexts override later ones
@@ -2837,7 +2838,7 @@ function mergeAnnotations(
 type CollectedPhase1Annotations = {
   readonly annotations: Annotations;
   readonly needsTwoPhase: boolean;
-  readonly snapshots: readonly Annotations[];
+  readonly snapshots: readonly (Annotations | ReadonlyAnnotations)[];
 };
 
 function validateContextPhases(
@@ -2867,8 +2868,8 @@ async function collectPhase1Annotations(
   contexts: readonly SourceContext<unknown>[],
   options?: unknown,
 ): Promise<CollectedPhase1Annotations> {
-  const annotationsList: Annotations[] = [];
-  let snapshots: Annotations[] | undefined;
+  const annotationsList: (Annotations | ReadonlyAnnotations)[] = [];
+  let snapshots: (Annotations | ReadonlyAnnotations)[] | undefined;
 
   for (const context of contexts) {
     const request: SourceContextRequest = { phase: "phase1" };
@@ -2911,13 +2912,13 @@ async function collectPhase1Annotations(
  */
 async function collectFinalAnnotations(
   contexts: readonly SourceContext<unknown>[],
-  phase1Snapshots: readonly Annotations[],
+  phase1Snapshots: readonly (Annotations | ReadonlyAnnotations)[],
   parsed?: unknown,
   options?: unknown,
   deferred?: true,
   deferredKeys?: DeferredMap,
 ): Promise<{ readonly annotations: Annotations }> {
-  const annotationsList: Annotations[] = [];
+  const annotationsList: (Annotations | ReadonlyAnnotations)[] = [];
   const preparedParsed = prepareParsedForContexts(
     parsed,
     deferred,
@@ -2965,8 +2966,8 @@ function collectPhase1AnnotationsSync(
   contexts: readonly SourceContext<unknown>[],
   options?: unknown,
 ): CollectedPhase1Annotations {
-  const annotationsList: Annotations[] = [];
-  let snapshots: Annotations[] | undefined;
+  const annotationsList: (Annotations | ReadonlyAnnotations)[] = [];
+  let snapshots: (Annotations | ReadonlyAnnotations)[] | undefined;
 
   for (const context of contexts) {
     const request: SourceContextRequest = { phase: "phase1" };
@@ -3015,13 +3016,13 @@ function collectPhase1AnnotationsSync(
  */
 function collectFinalAnnotationsSync(
   contexts: readonly SourceContext<unknown>[],
-  phase1Snapshots: readonly Annotations[],
+  phase1Snapshots: readonly (Annotations | ReadonlyAnnotations)[],
   parsed?: unknown,
   options?: unknown,
   deferred?: true,
   deferredKeys?: DeferredMap,
 ): { readonly annotations: Annotations } {
-  const annotationsList: Annotations[] = [];
+  const annotationsList: (Annotations | ReadonlyAnnotations)[] = [];
   const preparedParsed = prepareParsedForContexts(
     parsed,
     deferred,
@@ -3733,7 +3734,7 @@ function injectAnnotationsIntoParser<
   TState,
 >(
   parser: Parser<M, TValue, TState>,
-  annotations: Annotations,
+  annotations: Annotations | ReadonlyAnnotations,
 ): Parser<M, TValue, TState> {
   const newInitialState = injectFreshRunAnnotations(
     parser.initialState,
