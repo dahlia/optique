@@ -7486,7 +7486,8 @@ describe("branch coverage: modifiers edge cases", () => {
   });
 
   it("optional: getSuggestRuntimeNodes preserves outer annotations", () => {
-    const annotations = { [Symbol("annotation")]: true };
+    const marker = Symbol("annotation");
+    const annotations = { [marker]: true };
     let seenState: unknown;
     const inner = {
       $mode: "sync" as const,
@@ -7516,13 +7517,13 @@ describe("branch coverage: modifiers edge cases", () => {
     parser.getSuggestRuntimeNodes?.(state as [unknown], ["root"]);
 
     assert.ok(seenState != null && typeof seenState === "object");
-    const marker = Object.getOwnPropertySymbols(annotations)[0];
     assert.ok(getAnnotations(seenState)?.[marker] === true);
     assert.equal((seenState as { readonly kind: "value" }).kind, "value");
   });
 
   it("withDefault: getSuggestRuntimeNodes preserves object wrapper state", () => {
-    const annotations = { [Symbol("annotation")]: true };
+    const marker = Symbol("annotation");
+    const annotations = { [marker]: true };
     const wrappedState = injectAnnotations(undefined, annotations);
     let seenState: unknown;
     const inner = {
@@ -7555,7 +7556,6 @@ describe("branch coverage: modifiers edge cases", () => {
     );
 
     assert.equal(seenState, wrappedState);
-    const marker = Object.getOwnPropertySymbols(annotations)[0];
     assert.ok(getAnnotations(seenState)?.[marker] === true);
   });
 
