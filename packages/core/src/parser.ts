@@ -19,6 +19,7 @@ import {
   hasMeaningfulAnnotations,
   injectAnnotations,
   isInjectedAnnotationWrapper,
+  normalizeRunAnnotationInput,
   type ParseOptions,
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
@@ -838,7 +839,7 @@ function injectAnnotationsIntoState<TState>(
   if (!hasMeaningfulAnnotations(annotations)) {
     return state;
   }
-  return injectAnnotations(state, annotations);
+  return injectAnnotations(state, normalizeRunAnnotationInput(annotations));
 }
 
 /**

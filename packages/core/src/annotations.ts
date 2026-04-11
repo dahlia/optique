@@ -705,6 +705,25 @@ export type ReadonlyAnnotations = Readonly<Annotations>;
 type AnnotationInput = Annotations | ReadonlyAnnotations;
 
 /**
+ * Normalizes annotation input for a fresh parse run.
+ *
+ * When callers feed a protected annotation view returned by `getAnnotations()`
+ * back into a new parse entrypoint, Optique unwraps it to the caller-owned
+ * record first so the new run gets its own protected views.
+ *
+ * @param annotations The caller-supplied annotations input.
+ * @returns The raw annotation record to inject for the new run.
+ * @internal
+ */
+export function normalizeRunAnnotationInput(
+  annotations: AnnotationInput,
+): AnnotationInput {
+  return isProtectedAnnotationView(annotations)
+    ? unwrapProtectedAnnotationTarget(annotations)
+    : annotations;
+}
+
+/**
  * Options for parse functions.
  * @since 0.10.0
  */

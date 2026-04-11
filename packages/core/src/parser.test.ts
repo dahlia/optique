@@ -2579,6 +2579,50 @@ describe("Annotations system", () => {
     assert.ok(result.success);
   });
 
+  it("should isolate reused read-only annotations across parse runs", () => {
+    const marker = Symbol.for("@test/readonly-parse-options-isolation");
+    const seedState = injectAnnotations(undefined, { [marker]: /ab+/g });
+    const annotations = getAnnotations(seedState);
+
+    assert.ok(annotations !== undefined);
+
+    const parser: Parser<"sync", number, undefined> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: { ...context, buffer: [] },
+          consumed: [],
+        };
+      },
+      complete(state) {
+        const regex = getAnnotations(state)?.[marker] as RegExp | undefined;
+        assert.ok(regex !== undefined);
+        assert.ok(regex.test("ab ab"));
+        return { success: true as const, value: regex.lastIndex };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const first = parse(parser, [], { annotations });
+    const second = parse(parser, [], { annotations });
+
+    assert.ok(first.success);
+    assert.ok(second.success);
+    assert.equal(first.value, 2);
+    assert.equal(second.value, 2);
+  });
+
   it("should support multiple annotation keys", async () => {
     const key1 = Symbol.for("@package1/data");
     const key2 = Symbol.for("@package2/data");

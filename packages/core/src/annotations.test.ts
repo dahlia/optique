@@ -9,6 +9,7 @@ import {
   inheritAnnotations,
   injectAnnotations,
   isInjectedAnnotationWrapper,
+  normalizeRunAnnotationInput,
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
 
@@ -262,6 +263,37 @@ describe("getAnnotations", () => {
       assert.equal(firstRegExp.lastIndex, 2);
       assert.equal(secondRegExp.lastIndex, 0);
       assert.equal((sharedAnnotations[marker] as RegExp).lastIndex, 0);
+    });
+
+    it("should normalize protected annotation inputs for a fresh run", () => {
+      const marker = Symbol.for("@test/issue-491/protected-input-rerun");
+      const seedState = injectAnnotations(undefined, { [marker]: /ab+/g });
+      const protectedAnnotations = getAnnotations(seedState);
+
+      assert.ok(protectedAnnotations !== undefined);
+
+      const firstState = injectAnnotations(
+        undefined,
+        normalizeRunAnnotationInput(protectedAnnotations),
+      );
+      const secondState = injectAnnotations(
+        undefined,
+        normalizeRunAnnotationInput(protectedAnnotations),
+      );
+      const firstAnnotations = getAnnotations(firstState);
+      const secondAnnotations = getAnnotations(secondState);
+
+      assert.ok(firstAnnotations !== undefined);
+      assert.ok(secondAnnotations !== undefined);
+
+      const firstRegExp = firstAnnotations[marker] as RegExp;
+      const secondRegExp = secondAnnotations[marker] as RegExp;
+
+      assert.notEqual(firstAnnotations, secondAnnotations);
+      assert.notEqual(firstRegExp, secondRegExp);
+      assert.ok(firstRegExp.test("ab ab"));
+      assert.equal(firstRegExp.lastIndex, 2);
+      assert.equal(secondRegExp.lastIndex, 0);
     });
 
     it("should throw when mutating URL-like annotations", () => {
