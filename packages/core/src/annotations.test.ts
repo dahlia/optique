@@ -414,6 +414,61 @@ describe("getAnnotations", () => {
       }
     });
 
+    it("should preserve Map key identity for fresh-run protected inputs", () => {
+      const keyMarker = Symbol.for("@test/issue-491/map-protected-key");
+      const mapMarker = Symbol.for("@test/issue-491/map-protected-key-wrapper");
+      const seedState = injectAnnotations(undefined, {
+        [keyMarker]: { value: 1 },
+      });
+      const protectedAnnotations = getAnnotations(seedState);
+
+      assert.ok(protectedAnnotations !== undefined);
+
+      const rebuiltAnnotations = {
+        [mapMarker]: new Map([[protectedAnnotations[keyMarker], "ok"]]),
+      };
+
+      const state = injectFreshRunAnnotations(undefined, rebuiltAnnotations);
+      const annotations = getAnnotations(state);
+
+      assert.ok(annotations !== undefined);
+
+      const map = annotations[mapMarker] as Map<object, string>;
+      const iteratedKey = [...map.keys()][0];
+
+      assert.ok(iteratedKey !== undefined);
+      assert.ok(map.has(iteratedKey));
+      assert.equal(map.get(iteratedKey), "ok");
+    });
+
+    it("should preserve Set membership for fresh-run protected inputs", () => {
+      const valueMarker = Symbol.for("@test/issue-491/set-protected-value");
+      const setMarker = Symbol.for(
+        "@test/issue-491/set-protected-value-wrapper",
+      );
+      const seedState = injectAnnotations(undefined, {
+        [valueMarker]: { value: 1 },
+      });
+      const protectedAnnotations = getAnnotations(seedState);
+
+      assert.ok(protectedAnnotations !== undefined);
+
+      const rebuiltAnnotations = {
+        [setMarker]: new Set([protectedAnnotations[valueMarker]]),
+      };
+
+      const state = injectFreshRunAnnotations(undefined, rebuiltAnnotations);
+      const annotations = getAnnotations(state);
+
+      assert.ok(annotations !== undefined);
+
+      const set = annotations[setMarker] as Set<object>;
+      const iteratedValue = [...set.values()][0];
+
+      assert.ok(iteratedValue !== undefined);
+      assert.ok(set.has(iteratedValue));
+    });
+
     it("should throw when mutating URL-like annotations", () => {
       const marker = Symbol.for("@test/issue-491/url");
       const rawUrl = new URL("https://example.com/a?x=1");

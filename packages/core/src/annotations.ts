@@ -165,6 +165,15 @@ function copyOwnProperties(
   }
 }
 
+function normalizeProtectedCollectionItem<T>(
+  value: T,
+  context: AnnotationProtectionContext,
+): T {
+  return context.rewrapProtectedViews && isProtectedAnnotationView(value)
+    ? unwrapProtectedAnnotationTarget(value)
+    : value;
+}
+
 const regExpExcludedKeys = new Set<PropertyKey>(["lastIndex"]);
 
 function copyRegExpMetadata(
@@ -241,7 +250,13 @@ function createProtectedMapView(
   context: AnnotationProtectionContext,
 ): Map<unknown, unknown> {
   const methodCache = new Map<PropertyKey, unknown>();
-  const cloned = new Map(target);
+  const cloned = new Map<unknown, unknown>();
+  for (const [entryKey, entryValue] of target.entries()) {
+    cloned.set(
+      normalizeProtectedCollectionItem(entryKey, context),
+      normalizeProtectedCollectionItem(entryValue, context),
+    );
+  }
   const view = new Proxy(cloned, {
     get(clonedTarget, key) {
       if (key === "size") {
@@ -371,7 +386,10 @@ function createProtectedSetView(
   context: AnnotationProtectionContext,
 ): Set<unknown> {
   const methodCache = new Map<PropertyKey, unknown>();
-  const cloned = new Set(target);
+  const cloned = new Set<unknown>();
+  for (const value of target.values()) {
+    cloned.add(normalizeProtectedCollectionItem(value, context));
+  }
   const view = new Proxy(cloned, {
     get(clonedTarget, key) {
       if (key === "size") {
@@ -907,7 +925,7 @@ export interface ParseOptions {
    * Optique treats these values as immutable input and exposes them back to
    * parsers only through protected read-only views.
    */
-  annotations?: Annotations | ReadonlyAnnotations;
+  readonly annotations?: Annotations | ReadonlyAnnotations;
 }
 
 /**
