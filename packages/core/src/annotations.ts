@@ -801,6 +801,7 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
     const cloned = new RegExp(target) as RegExp & {
       [annotationKey]?: Annotations;
     };
+    cloned.lastIndex = target.lastIndex;
     cloned[annotationKey] = annotations;
     return cloned as T;
   }
@@ -932,6 +933,7 @@ export function injectAnnotations<TState>(
     const cloned = new RegExp(state) as RegExp & {
       [annotationKey]?: Annotations;
     };
+    cloned.lastIndex = state.lastIndex;
     cloned[annotationKey] = protectedAnnotations;
     return cloned as TState;
   }

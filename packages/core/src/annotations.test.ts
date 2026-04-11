@@ -359,12 +359,14 @@ describe("injectAnnotations", () => {
   it("should preserve RegExp state shape", () => {
     const marker = Symbol.for("@test/inject-regexp");
     const source = /ab+/gi;
+    source.lastIndex = 3;
     const result = injectAnnotations(source, { [marker]: "ok" });
 
     assert.ok(result instanceof RegExp);
     assert.notEqual(result, source);
     assert.equal(result.source, "ab+");
     assert.equal(result.flags, "gi");
+    assert.equal(result.lastIndex, 3);
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 
@@ -540,12 +542,14 @@ describe("inheritAnnotations", () => {
     const marker = Symbol.for("@test/inherit-regexp");
     const source = { [annotationKey]: { [marker]: "ok" } };
     const target = /ab+/gi;
+    target.lastIndex = 4;
     const result = inheritAnnotations(source, target);
 
     assert.ok(result instanceof RegExp);
     assert.notEqual(result, target);
     assert.equal(result.source, "ab+");
     assert.equal(result.flags, "gi");
+    assert.equal(result.lastIndex, 4);
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 
