@@ -102,43 +102,61 @@ function cacheProtectedMethod<T>(
   return created;
 }
 
-function protectDescriptor(
-  descriptor: PropertyDescriptor | undefined,
-): PropertyDescriptor | undefined {
-  if (descriptor == null || !("value" in descriptor)) {
-    return descriptor;
-  }
-  return {
-    ...descriptor,
-    value: protectAnnotationValue(descriptor.value),
-  };
+function defineProtectedDataProperty(
+  target: object,
+  key: PropertyKey,
+  descriptor: PropertyDescriptor,
+): void {
+  const value = protectAnnotationValue(descriptor.value);
+  Object.defineProperty(target, key, {
+    configurable: descriptor.configurable,
+    enumerable: descriptor.enumerable,
+    get: () => value,
+    set: () => throwReadonlyAnnotationMutation(),
+  });
 }
 
 function createProtectedObjectView<T extends object>(target: T): T {
-  const view = new Proxy(target, {
-    get(target, key, receiver) {
-      return protectAnnotationValue(Reflect.get(target, key, receiver));
-    },
-    set() {
-      throwReadonlyAnnotationMutation();
-    },
-    defineProperty() {
-      throwReadonlyAnnotationMutation();
-    },
-    deleteProperty() {
-      throwReadonlyAnnotationMutation();
-    },
-    setPrototypeOf() {
-      throwReadonlyAnnotationMutation();
-    },
-    preventExtensions() {
-      throwReadonlyAnnotationMutation();
-    },
-    getOwnPropertyDescriptor(target, key) {
-      return protectDescriptor(Reflect.getOwnPropertyDescriptor(target, key));
-    },
-  });
-  return registerProtectedAnnotationView(target, view);
+  if (Array.isArray(target)) {
+    const view = new Array(target.length) as unknown as T;
+    for (const key of Reflect.ownKeys(target)) {
+      if (key === "length") continue;
+      const descriptor = Object.getOwnPropertyDescriptor(target, key);
+      if (descriptor == null) continue;
+      if ("value" in descriptor) {
+        defineProtectedDataProperty(view, key, descriptor);
+        continue;
+      }
+      Object.defineProperty(view, key, {
+        configurable: descriptor.configurable,
+        enumerable: descriptor.enumerable,
+        get: descriptor.get == null
+          ? undefined
+          : () => protectAnnotationValue(descriptor.get!.call(target)),
+        set: () => throwReadonlyAnnotationMutation(),
+      });
+    }
+    return registerProtectedAnnotationView(target, Object.freeze(view));
+  }
+
+  const view = Object.create(Object.getPrototypeOf(target)) as T;
+  for (const key of Reflect.ownKeys(target)) {
+    const descriptor = Object.getOwnPropertyDescriptor(target, key);
+    if (descriptor == null) continue;
+    if ("value" in descriptor) {
+      defineProtectedDataProperty(view, key, descriptor);
+      continue;
+    }
+    Object.defineProperty(view, key, {
+      configurable: descriptor.configurable,
+      enumerable: descriptor.enumerable,
+      get: descriptor.get == null
+        ? undefined
+        : () => protectAnnotationValue(descriptor.get!.call(target)),
+      set: () => throwReadonlyAnnotationMutation(),
+    });
+  }
+  return registerProtectedAnnotationView(target, Object.freeze(view));
 }
 
 function createProtectedMapView(
@@ -435,6 +453,49 @@ function createProtectedURLSearchParamsView(
           methodCache,
           key,
           () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
+        );
+      }
+      if (key === "forEach") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () =>
+          (
+            callback: (
+              value: string,
+              key: string,
+              searchParams: URLSearchParams,
+            ) => void,
+            thisArg?: unknown,
+          ) =>
+            target.forEach((value, name) => {
+              callback.call(thisArg, value, name, view);
+            }),
+        );
+      }
+      if (key === "keys" || key === "values") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () =>
+            function* (): IterableIterator<string> {
+              const iterator = key === "keys" ? target.keys() : target.values();
+              for (const value of iterator) {
+                yield value;
+              }
+            },
+        );
+      }
+      if (key === "entries" || key === Symbol.iterator) {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () =>
+            function* (): IterableIterator<readonly [string, string]> {
+              for (const entry of target.entries()) {
+                yield entry;
+              }
+            },
         );
       }
       const value = Reflect.get(target, key, target);

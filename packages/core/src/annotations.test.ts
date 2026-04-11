@@ -203,6 +203,50 @@ describe("getAnnotations", () => {
       assert.equal(rawUrl.pathname, "/a");
       assert.equal(rawUrl.searchParams.get("x"), "1");
     });
+
+    it("should keep frozen annotation inputs readable without proxy invariant violations", () => {
+      const marker = Symbol.for("@test/issue-491/frozen");
+      const rawValue = { value: 1 };
+      const rawAnnotations = Object.freeze({ [marker]: rawValue });
+      const state = injectAnnotations(undefined, rawAnnotations);
+
+      const annotations = getAnnotations(state);
+      assert.ok(annotations !== undefined);
+      assert.doesNotThrow(() => Object.getOwnPropertySymbols(annotations));
+      const protectedValue = annotations[marker] as { value: number };
+      assert.equal(protectedValue.value, 1);
+      assert.throws(
+        () => Reflect.set(protectedValue, "value", 2),
+        { name: "TypeError" },
+      );
+      assert.equal(rawValue.value, 1);
+    });
+
+    it("should keep URLSearchParams callbacks on the protected view", () => {
+      const marker = Symbol.for("@test/issue-491/url-search-params");
+      const raw = new URLSearchParams("alpha=1&beta=2");
+      const state = injectAnnotations(undefined, { [marker]: raw });
+
+      const annotations = getAnnotations(state);
+      assert.ok(annotations !== undefined);
+      const params = annotations[marker] as URLSearchParams;
+      let owner: URLSearchParams | undefined;
+
+      params.forEach((_value, _key, searchParams) => {
+        owner = searchParams;
+      });
+
+      assert.equal(owner, params);
+      assert.deepEqual([...params.entries()], [
+        ["alpha", "1"],
+        ["beta", "2"],
+      ]);
+      assert.throws(
+        () => owner?.set("alpha", "3"),
+        { name: "TypeError" },
+      );
+      assert.equal(raw.get("alpha"), "1");
+    });
   });
 });
 
