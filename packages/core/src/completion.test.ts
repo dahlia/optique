@@ -87,10 +87,10 @@ function isPwshCompletionUsable(): boolean {
     pwshCompletionUsable = false;
     return false;
   }
-
-  const tempDir = mkdtempSync(join(tmpdir(), "pwsh-availability-"));
+  let tempDir: string | undefined;
 
   try {
+    tempDir = mkdtempSync(join(tmpdir(), "pwsh-availability-"));
     const scriptPath = join(tempDir, "completion.ps1");
     writeFileSync(scriptPath, pwsh.generateScript("availability-probe"));
 
@@ -112,7 +112,9 @@ Write-Output "loaded"
     pwshCompletionUsable = false;
     return false;
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    if (tempDir !== undefined) {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   }
 }
 
