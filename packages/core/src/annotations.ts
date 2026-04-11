@@ -125,6 +125,22 @@ function cacheProtectedMethod<T>(
   return created;
 }
 
+function getProtectedClonePropertyValue(
+  cache: Map<PropertyKey, unknown>,
+  target: object,
+  key: PropertyKey,
+  value: unknown,
+  context: AnnotationProtectionContext,
+): unknown {
+  if (typeof value !== "function") {
+    return protectAnnotationValue(value, context);
+  }
+  if (key === "constructor") {
+    return value;
+  }
+  return cacheProtectedMethod(cache, key, () => value.bind(target));
+}
+
 function defineProtectedDataProperty(
   context: AnnotationProtectionContext,
   target: object,
@@ -202,13 +218,22 @@ function tryCloneMapSubclass(
   source: Map<unknown, unknown>,
   entries: Iterable<readonly [unknown, unknown]>,
 ): Map<unknown, unknown> | undefined {
+  const entriesArray = [...entries];
   const cloneConstructor = resolveCloneConstructor(source);
   if (cloneConstructor == null) {
     return undefined;
   }
   try {
-    const cloned = new cloneConstructor(entries);
-    return cloned instanceof Map ? cloned : undefined;
+    const cloned = new cloneConstructor(entriesArray);
+    if (!(cloned instanceof Map) || cloned.size !== entriesArray.length) {
+      return undefined;
+    }
+    for (const [key, value] of entriesArray) {
+      if (!cloned.has(key) || !Object.is(cloned.get(key), value)) {
+        return undefined;
+      }
+    }
+    return cloned;
   } catch {
     return undefined;
   }
@@ -218,13 +243,22 @@ function tryCloneSetSubclass(
   source: Set<unknown>,
   values: Iterable<unknown>,
 ): Set<unknown> | undefined {
+  const valuesArray = [...values];
   const cloneConstructor = resolveCloneConstructor(source);
   if (cloneConstructor == null) {
     return undefined;
   }
   try {
-    const cloned = new cloneConstructor(values);
-    return cloned instanceof Set ? cloned : undefined;
+    const cloned = new cloneConstructor(valuesArray);
+    if (!(cloned instanceof Set) || cloned.size !== valuesArray.length) {
+      return undefined;
+    }
+    for (const value of valuesArray) {
+      if (!cloned.has(value)) {
+        return undefined;
+      }
+    }
+    return cloned;
   } catch {
     return undefined;
   }
@@ -237,7 +271,9 @@ function tryCloneDateSubclass(source: Date): Date | undefined {
   }
   try {
     const cloned = new cloneConstructor(source.getTime());
-    return cloned instanceof Date ? cloned : undefined;
+    return cloned instanceof Date && cloned.getTime() === source.getTime()
+      ? cloned
+      : undefined;
   } catch {
     return undefined;
   }
@@ -250,7 +286,11 @@ function tryCloneRegExpSubclass(source: RegExp): RegExp | undefined {
   }
   try {
     const cloned = new cloneConstructor(source.source, source.flags);
-    return cloned instanceof RegExp ? cloned : undefined;
+    return cloned instanceof RegExp &&
+        cloned.source === source.source &&
+        cloned.flags === source.flags
+      ? cloned
+      : undefined;
   } catch {
     return undefined;
   }
@@ -259,13 +299,18 @@ function tryCloneRegExpSubclass(source: RegExp): RegExp | undefined {
 function tryCloneArraySubclass<T>(
   source: readonly T[],
 ): readonly T[] | undefined {
+  const entries = [...source];
   const cloneConstructor = resolveCloneConstructor(source as object);
   if (cloneConstructor == null) {
     return undefined;
   }
   try {
-    const cloned = Reflect.apply(Array.from, cloneConstructor, [source]);
-    return Array.isArray(cloned) ? cloned as readonly T[] : undefined;
+    const cloned = Reflect.apply(Array.from, cloneConstructor, [entries]);
+    return Array.isArray(cloned) &&
+        cloned.length === entries.length &&
+        entries.every((value, index) => Object.is(cloned[index], value))
+      ? cloned as readonly T[]
+      : undefined;
   } catch {
     return undefined;
   }
@@ -280,7 +325,10 @@ function tryCloneURLSearchParamsSubclass(
   }
   try {
     const cloned = new cloneConstructor(source);
-    return cloned instanceof URLSearchParams ? cloned : undefined;
+    return cloned instanceof URLSearchParams &&
+        cloned.toString() === source.toString()
+      ? cloned
+      : undefined;
   } catch {
     return undefined;
   }
@@ -293,7 +341,9 @@ function tryCloneURLSubclass(source: URL): URL | undefined {
   }
   try {
     const cloned = new cloneConstructor(source.href);
-    return cloned instanceof URL ? cloned : undefined;
+    return cloned instanceof URL && cloned.href === source.href
+      ? cloned
+      : undefined;
   } catch {
     return undefined;
   }
@@ -570,9 +620,13 @@ function createProtectedMapView(
         );
       }
       const value = Reflect.get(clonedTarget, key, clonedTarget);
-      return typeof value === "function"
-        ? value.bind(clonedTarget)
-        : protectAnnotationValue(value, context);
+      return getProtectedClonePropertyValue(
+        methodCache,
+        clonedTarget,
+        key,
+        value,
+        context,
+      );
     },
     set() {
       throwReadonlyAnnotationMutation();
@@ -692,9 +746,13 @@ function createProtectedSetView(
         );
       }
       const value = Reflect.get(clonedTarget, key, clonedTarget);
-      return typeof value === "function"
-        ? value.bind(clonedTarget)
-        : protectAnnotationValue(value, context);
+      return getProtectedClonePropertyValue(
+        methodCache,
+        clonedTarget,
+        key,
+        value,
+        context,
+      );
     },
     set() {
       throwReadonlyAnnotationMutation();
@@ -745,7 +803,13 @@ function createProtectedDateView(
         );
       }
       return typeof value === "function"
-        ? value.bind(clonedTarget)
+        ? getProtectedClonePropertyValue(
+          methodCache,
+          clonedTarget,
+          key,
+          value,
+          context,
+        )
         : protectAnnotationValue(value, context);
     },
     set() {
@@ -807,9 +871,13 @@ function createProtectedRegExpView(
         return ownDescriptor.value;
       }
       const value = Reflect.get(clonedTarget, key, clonedTarget);
-      return typeof value === "function"
-        ? value.bind(clonedTarget)
-        : protectAnnotationValue(value, context);
+      return getProtectedClonePropertyValue(
+        methodCache,
+        clonedTarget,
+        key,
+        value,
+        context,
+      );
     },
     set() {
       throwReadonlyAnnotationMutation();
@@ -917,9 +985,13 @@ function createProtectedURLSearchParamsView(
         );
       }
       const value = Reflect.get(clonedTarget, key, clonedTarget);
-      return typeof value === "function"
-        ? value.bind(clonedTarget)
-        : protectAnnotationValue(value, context);
+      return getProtectedClonePropertyValue(
+        methodCache,
+        clonedTarget,
+        key,
+        value,
+        context,
+      );
     },
     set() {
       throwReadonlyAnnotationMutation();

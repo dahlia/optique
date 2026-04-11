@@ -442,6 +442,22 @@ describe("getAnnotations", () => {
       }
     });
 
+    it("should keep clone-backed built-in method identity stable", () => {
+      const marker = Symbol.for("@test/issue-491/clone-method-identity");
+      const state = injectAnnotations(undefined, {
+        [marker]: new Map<string, number>([["a", 1]]),
+      });
+      const annotations = getAnnotations(state);
+
+      assert.ok(annotations !== undefined);
+
+      const received = annotations[marker] as Map<string, number>;
+
+      assert.equal(received.toString, received.toString);
+      assert.equal(received.constructor, Map);
+      assert.equal(received.toString(), "[object Map]");
+    });
+
     it("should preserve built-in subclass methods with private fields", () => {
       const marker = Symbol.for("@test/issue-491/map-subclass-private-field");
 
@@ -475,6 +491,53 @@ describe("getAnnotations", () => {
         { name: "TypeError" },
       );
       assert.equal(rawMap.has("c"), false);
+    });
+
+    it("should fall back when Map subclass cloning drops entries", () => {
+      const marker = Symbol.for("@test/issue-491/map-subclass-clone-parity");
+
+      class SparseMap<K, V> extends Map<K, V> {
+        constructor(_entries?: Iterable<readonly [K, V]>) {
+          super();
+        }
+      }
+
+      const rawMap = new SparseMap<string, number>();
+      rawMap.set("a", 1);
+
+      const state = injectAnnotations(undefined, { [marker]: rawMap });
+      const annotations = getAnnotations(state);
+
+      assert.ok(annotations !== undefined);
+
+      const received = annotations[marker] as Map<string, number>;
+
+      assert.ok(!(received instanceof SparseMap));
+      assert.equal(received.get("a"), 1);
+      assert.equal(received.size, 1);
+    });
+
+    it("should fall back when Date subclass cloning changes time", () => {
+      const marker = Symbol.for("@test/issue-491/date-subclass-clone-parity");
+
+      class FrozenDate extends Date {
+        constructor(_time?: string | number | Date) {
+          super(0);
+        }
+      }
+
+      const rawDate = new FrozenDate();
+      rawDate.setTime(123456789);
+
+      const state = injectAnnotations(undefined, { [marker]: rawDate });
+      const annotations = getAnnotations(state);
+
+      assert.ok(annotations !== undefined);
+
+      const received = annotations[marker] as Date;
+
+      assert.ok(!(received instanceof FrozenDate));
+      assert.equal(received.getTime(), 123456789);
     });
 
     it("should preserve URL subclass methods with private fields", () => {
