@@ -765,18 +765,29 @@ describe("getAnnotations", () => {
 
 describe("injectAnnotations", () => {
   it("should preserve wrapper markers when reinjecting injected wrappers", () => {
-    const first = injectAnnotations(undefined, { [Symbol.for("@test/a")]: 1 });
+    const firstKey = Symbol.for("@test/a");
+    const secondKey = Symbol.for("@test/b");
+    const first = injectAnnotations(undefined, { [firstKey]: 1 });
     assert.ok(isInjectedAnnotationWrapper(first));
 
-    const second = injectAnnotations(first, { [Symbol.for("@test/b")]: 2 });
-    assert.equal(second, first);
+    const second = injectAnnotations(first, { [secondKey]: 2 });
+    assert.notEqual(second, first);
     assert.ok(isInjectedAnnotationWrapper(second));
 
-    const wrapper = second as unknown as Record<PropertyKey, unknown>;
-    assert.ok(Object.hasOwn(wrapper, annotationStateValueKey));
-    assert.ok(Object.hasOwn(wrapper, annotationWrapperKey));
-    assert.equal(wrapper[annotationWrapperKey], true);
-    assert.equal(wrapper[annotationStateValueKey], undefined);
+    const firstWrapper = first as unknown as Record<PropertyKey, unknown>;
+    const secondWrapper = second as unknown as Record<PropertyKey, unknown>;
+
+    assert.ok(Object.hasOwn(firstWrapper, annotationStateValueKey));
+    assert.ok(Object.hasOwn(firstWrapper, annotationWrapperKey));
+    assert.equal(firstWrapper[annotationWrapperKey], true);
+    assert.equal(firstWrapper[annotationStateValueKey], undefined);
+    assert.equal(getAnnotations(first)?.[firstKey], 1);
+
+    assert.ok(Object.hasOwn(secondWrapper, annotationStateValueKey));
+    assert.ok(Object.hasOwn(secondWrapper, annotationWrapperKey));
+    assert.equal(secondWrapper[annotationWrapperKey], true);
+    assert.equal(secondWrapper[annotationStateValueKey], undefined);
+    assert.equal(getAnnotations(second)?.[secondKey], 2);
   });
 
   it("should preserve Date state shape", () => {
@@ -787,6 +798,25 @@ describe("injectAnnotations", () => {
     assert.ok(result instanceof Date);
     assert.notEqual(result, source);
     assert.equal(result.toISOString(), "2026-03-08T00:00:00.000Z");
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
+
+  it("should preserve Date subclass methods with private fields", () => {
+    const marker = Symbol.for("@test/inject-date-private-field");
+
+    class TaggedDate extends Date {
+      readonly #label = "tagged";
+
+      label(): string {
+        return this.#label;
+      }
+    }
+
+    const source = new TaggedDate("2026-03-08T00:00:00.000Z");
+    const result = injectAnnotations(source, { [marker]: "ok" });
+
+    assert.ok(result instanceof TaggedDate);
+    assert.equal(result.label(), "tagged");
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 
@@ -801,6 +831,26 @@ describe("injectAnnotations", () => {
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 
+  it("should preserve Map subclass methods with private fields", () => {
+    const marker = Symbol.for("@test/inject-map-private-field");
+
+    class TaggedMap<K, V> extends Map<K, V> {
+      readonly #label = "tagged";
+
+      label(): string {
+        return this.#label;
+      }
+    }
+
+    const source = new TaggedMap<string, number>([["a", 1]]);
+    const result = injectAnnotations(source, { [marker]: "ok" });
+
+    assert.ok(result instanceof TaggedMap);
+    assert.equal(result.label(), "tagged");
+    assert.equal(result.get("a"), 1);
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
+
   it("should preserve Set state shape", () => {
     const marker = Symbol.for("@test/inject-set");
     const source = new Set(["a", "b"]);
@@ -808,6 +858,26 @@ describe("injectAnnotations", () => {
 
     assert.ok(result instanceof Set);
     assert.notEqual(result, source);
+    assert.deepEqual([...result], ["a", "b"]);
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
+
+  it("should preserve Set subclass methods with private fields", () => {
+    const marker = Symbol.for("@test/inject-set-private-field");
+
+    class TaggedSet<T> extends Set<T> {
+      readonly #label = "tagged";
+
+      label(): string {
+        return this.#label;
+      }
+    }
+
+    const source = new TaggedSet(["a", "b"]);
+    const result = injectAnnotations(source, { [marker]: "ok" });
+
+    assert.ok(result instanceof TaggedSet);
+    assert.equal(result.label(), "tagged");
     assert.deepEqual([...result], ["a", "b"]);
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
@@ -998,6 +1068,26 @@ describe("inheritAnnotations", () => {
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 
+  it("should preserve Date subclass methods with private fields", () => {
+    const marker = Symbol.for("@test/inherit-date-private-field");
+    const source = { [annotationKey]: { [marker]: "ok" } };
+
+    class TaggedDate extends Date {
+      readonly #label = "tagged";
+
+      label(): string {
+        return this.#label;
+      }
+    }
+
+    const target = new TaggedDate("2026-03-08T00:00:00.000Z");
+    const result = inheritAnnotations(source, target);
+
+    assert.ok(result instanceof TaggedDate);
+    assert.equal(result.label(), "tagged");
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
+
   it("should preserve Map state shape", () => {
     const marker = Symbol.for("@test/inherit-map");
     const source = { [annotationKey]: { [marker]: "ok" } };
@@ -1010,6 +1100,27 @@ describe("inheritAnnotations", () => {
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 
+  it("should preserve Map subclass methods with private fields", () => {
+    const marker = Symbol.for("@test/inherit-map-private-field");
+    const source = { [annotationKey]: { [marker]: "ok" } };
+
+    class TaggedMap<K, V> extends Map<K, V> {
+      readonly #label = "tagged";
+
+      label(): string {
+        return this.#label;
+      }
+    }
+
+    const target = new TaggedMap<string, number>([["a", 1]]);
+    const result = inheritAnnotations(source, target);
+
+    assert.ok(result instanceof TaggedMap);
+    assert.equal(result.label(), "tagged");
+    assert.equal(result.get("a"), 1);
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
+
   it("should preserve Set state shape", () => {
     const marker = Symbol.for("@test/inherit-set");
     const source = { [annotationKey]: { [marker]: "ok" } };
@@ -1018,6 +1129,27 @@ describe("inheritAnnotations", () => {
 
     assert.ok(result instanceof Set);
     assert.notEqual(result, target);
+    assert.deepEqual([...result], ["a", "b"]);
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
+
+  it("should preserve Set subclass methods with private fields", () => {
+    const marker = Symbol.for("@test/inherit-set-private-field");
+    const source = { [annotationKey]: { [marker]: "ok" } };
+
+    class TaggedSet<T> extends Set<T> {
+      readonly #label = "tagged";
+
+      label(): string {
+        return this.#label;
+      }
+    }
+
+    const target = new TaggedSet(["a", "b"]);
+    const result = inheritAnnotations(source, target);
+
+    assert.ok(result instanceof TaggedSet);
+    assert.equal(result.label(), "tagged");
     assert.deepEqual([...result], ["a", "b"]);
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });

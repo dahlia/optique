@@ -7,7 +7,11 @@ import {
   or,
   tuple,
 } from "@optique/core/constructs";
-import { getAnnotations, inheritAnnotations } from "@optique/core/annotations";
+import {
+  getAnnotations,
+  inheritAnnotations,
+  injectAnnotations,
+} from "@optique/core/annotations";
 import type {
   SourceContext,
   SourceContextPhase2Request,
@@ -10357,6 +10361,57 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(shared.value, 1);
   });
 
+  it("runWith should isolate reused read-only annotations across runs", async () => {
+    const marker = Symbol.for("@test/issue-491/run-with-readonly-reuse");
+    const seedState = injectAnnotations(undefined, { [marker]: /ab+/g });
+    const annotations = getAnnotations(seedState);
+
+    assert.ok(annotations !== undefined);
+
+    const parser: Parser<"sync", number, undefined> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: { ...context, buffer: [] },
+          consumed: [],
+        };
+      },
+      complete(state) {
+        const regex = getAnnotations(state)?.[marker] as RegExp | undefined;
+
+        assert.ok(regex !== undefined);
+        assert.ok(regex.test("ab ab"));
+        return { success: true as const, value: regex.lastIndex };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const context: SourceContext = {
+      id: marker,
+      phase: "single-pass",
+      getAnnotations() {
+        return annotations;
+      },
+    };
+
+    const first = await runWith(parser, "test", [context], { args: [] });
+    const second = await runWith(parser, "test", [context], { args: [] });
+
+    assert.equal(first, 2);
+    assert.equal(second, 2);
+  });
+
   it("runWith: phase two can recover from first-pass completion failure", async () => {
     const tokenKey = Symbol.for("@test/dyn-phase-two-recovery");
     let phase2Parsed: unknown;
@@ -11971,6 +12026,57 @@ describe("branch coverage: facade.ts edge cases", () => {
       },
     );
     assert.equal(shared.value, 1);
+  });
+
+  it("runWithSync should isolate reused read-only annotations across runs", () => {
+    const marker = Symbol.for("@test/issue-491/run-with-sync-readonly-reuse");
+    const seedState = injectAnnotations(undefined, { [marker]: /ab+/g });
+    const annotations = getAnnotations(seedState);
+
+    assert.ok(annotations !== undefined);
+
+    const parser: Parser<"sync", number, undefined> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: { ...context, buffer: [] },
+          consumed: [],
+        };
+      },
+      complete(state) {
+        const regex = getAnnotations(state)?.[marker] as RegExp | undefined;
+
+        assert.ok(regex !== undefined);
+        assert.ok(regex.test("ab ab"));
+        return { success: true as const, value: regex.lastIndex };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const context: SourceContext = {
+      id: marker,
+      phase: "single-pass",
+      getAnnotations() {
+        return annotations;
+      },
+    };
+
+    const first = runWithSync(parser, "test", [context], { args: [] });
+    const second = runWithSync(parser, "test", [context], { args: [] });
+
+    assert.equal(first, 2);
+    assert.equal(second, 2);
   });
 
   it("runWithSync: should reject contexts without explicit phase", () => {

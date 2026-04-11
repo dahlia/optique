@@ -1129,31 +1129,35 @@ function injectAnnotationsWithContext<TState>(
     return cloned as TState;
   }
   if (isInjectedAnnotationWrapper(state)) {
-    (
-      state as TState & {
-        [annotationKey]?: ReadonlyAnnotations;
-      }
-    )[annotationKey] = protectedAnnotations;
-    return state;
+    const cloned = Object.create(
+      Object.getPrototypeOf(state),
+      Object.getOwnPropertyDescriptors(state as Record<PropertyKey, unknown>),
+    ) as TState & { [annotationKey]?: ReadonlyAnnotations };
+    cloned[annotationKey] = protectedAnnotations;
+    injectedAnnotationWrappers.add(cloned as object);
+    return cloned;
   }
   if (state instanceof Date) {
-    const cloned = new Date(state.getTime()) as Date & {
-      [annotationKey]?: ReadonlyAnnotations;
-    };
+    const cloned = (tryCloneDateSubclass(state) ??
+      new Date(state.getTime())) as Date & {
+        [annotationKey]?: ReadonlyAnnotations;
+      };
     cloned[annotationKey] = protectedAnnotations;
     return cloned as TState;
   }
   if (state instanceof Map) {
-    const cloned = new Map(state) as Map<unknown, unknown> & {
-      [annotationKey]?: ReadonlyAnnotations;
-    };
+    const cloned = (tryCloneMapSubclass(state, state) ??
+      new Map(state)) as Map<unknown, unknown> & {
+        [annotationKey]?: ReadonlyAnnotations;
+      };
     cloned[annotationKey] = protectedAnnotations;
     return cloned as TState;
   }
   if (state instanceof Set) {
-    const cloned = new Set(state) as Set<unknown> & {
-      [annotationKey]?: ReadonlyAnnotations;
-    };
+    const cloned = (tryCloneSetSubclass(state, state) ??
+      new Set(state)) as Set<unknown> & {
+        [annotationKey]?: ReadonlyAnnotations;
+      };
     cloned[annotationKey] = protectedAnnotations;
     return cloned as TState;
   }
@@ -1296,23 +1300,26 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
     return cloned as T;
   }
   if (target instanceof Date) {
-    const cloned = new Date(target.getTime()) as Date & {
-      [annotationKey]?: ReadonlyAnnotations;
-    };
+    const cloned = (tryCloneDateSubclass(target) ??
+      new Date(target.getTime())) as Date & {
+        [annotationKey]?: ReadonlyAnnotations;
+      };
     cloned[annotationKey] = annotations;
     return cloned as T;
   }
   if (target instanceof Map) {
-    const cloned = new Map(target) as Map<unknown, unknown> & {
-      [annotationKey]?: ReadonlyAnnotations;
-    };
+    const cloned = (tryCloneMapSubclass(target, target) ??
+      new Map(target)) as Map<unknown, unknown> & {
+        [annotationKey]?: ReadonlyAnnotations;
+      };
     cloned[annotationKey] = annotations;
     return cloned as T;
   }
   if (target instanceof Set) {
-    const cloned = new Set(target) as Set<unknown> & {
-      [annotationKey]?: ReadonlyAnnotations;
-    };
+    const cloned = (tryCloneSetSubclass(target, target) ??
+      new Set(target)) as Set<unknown> & {
+        [annotationKey]?: ReadonlyAnnotations;
+      };
     cloned[annotationKey] = annotations;
     return cloned as T;
   }

@@ -55,7 +55,7 @@ import {
 import { type DeferredMap, string } from "./valueparser.ts";
 import {
   type Annotations,
-  injectAnnotations,
+  injectFreshRunAnnotations,
   isInjectedAnnotationWrapper,
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
@@ -3735,7 +3735,7 @@ function injectAnnotationsIntoParser<
   parser: Parser<M, TValue, TState>,
   annotations: Annotations,
 ): Parser<M, TValue, TState> {
-  const newInitialState = injectAnnotations(
+  const newInitialState = injectFreshRunAnnotations(
     parser.initialState,
     annotations,
   ) as TState;
