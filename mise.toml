@@ -45,8 +45,9 @@ description = "Run the test suite across all environments"
 run = '''
 mise run check
 mise run test:deno
-mise run test:node
-mise run test:bun
+mise run build
+deno task test:node
+deno task test:bun
 '''
 
 [tasks.build]
