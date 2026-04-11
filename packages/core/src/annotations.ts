@@ -1030,6 +1030,7 @@ function createProtectedURLView(
   context: AnnotationProtectionContext,
 ): URL {
   const syncPrototype = !hasBuiltInSubclassPrototype(target, URL.prototype);
+  const methodCache = new Map<PropertyKey, unknown>();
   const cloned = syncPrototype
     ? new URL(target.href)
     : tryCloneURLSubclass(target) ?? new URL(target.href);
@@ -1042,9 +1043,13 @@ function createProtectedURLView(
         return protectAnnotationValue(clonedTarget.searchParams, context);
       }
       const value = Reflect.get(clonedTarget, key, clonedTarget);
-      return typeof value === "function"
-        ? value.bind(clonedTarget)
-        : protectAnnotationValue(value, context);
+      return getProtectedClonePropertyValue(
+        methodCache,
+        clonedTarget,
+        key,
+        value,
+        context,
+      );
     },
     set() {
       throwReadonlyAnnotationMutation();

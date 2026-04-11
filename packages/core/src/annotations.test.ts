@@ -458,6 +458,22 @@ describe("getAnnotations", () => {
       assert.equal(received.toString(), "[object Map]");
     });
 
+    it("should keep clone-backed URL method identity stable", () => {
+      const marker = Symbol.for("@test/issue-491/url-method-identity");
+      const state = injectAnnotations(undefined, {
+        [marker]: new URL("https://example.com/a?x=1"),
+      });
+      const annotations = getAnnotations(state);
+
+      assert.ok(annotations !== undefined);
+
+      const received = annotations[marker] as URL;
+
+      assert.equal(received.toString, received.toString);
+      assert.equal(received.constructor, URL);
+      assert.equal(received.toString(), "https://example.com/a?x=1");
+    });
+
     it("should preserve built-in subclass methods with private fields", () => {
       const marker = Symbol.for("@test/issue-491/map-subclass-private-field");
 

@@ -4,6 +4,7 @@ import {
   getAnnotations,
   inheritAnnotations,
   injectAnnotations,
+  type ReadonlyAnnotations,
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
 import {
@@ -48,7 +49,7 @@ export function unwrapAnnotationView<T>(value: T): T {
  */
 export function withAnnotationView<T extends object>(
   state: T,
-  annotations: Annotations,
+  annotations: Annotations | ReadonlyAnnotations,
 ): T {
   const target = unwrapAnnotationView(state) as T;
   const view = new Proxy(target, {
