@@ -256,6 +256,21 @@ function tryCloneRegExpSubclass(source: RegExp): RegExp | undefined {
   }
 }
 
+function tryCloneArraySubclass<T>(
+  source: readonly T[],
+): readonly T[] | undefined {
+  const cloneConstructor = resolveCloneConstructor(source as object);
+  if (cloneConstructor == null) {
+    return undefined;
+  }
+  try {
+    const cloned = Reflect.apply(Array.from, cloneConstructor, [source]);
+    return Array.isArray(cloned) ? cloned as readonly T[] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function tryCloneURLSearchParamsSubclass(
   source: URLSearchParams,
 ): URLSearchParams | undefined {
@@ -384,10 +399,10 @@ function createProtectedObjectView<T extends object>(
   context: AnnotationProtectionContext,
 ): T {
   if (Array.isArray(target)) {
-    const view = Object.setPrototypeOf(
-      [],
-      Object.getPrototypeOf(target),
-    ) as unknown[];
+    const targetPrototype = Object.getPrototypeOf(target);
+    const view = targetPrototype === Array.prototype || targetPrototype === null
+      ? Object.setPrototypeOf([], targetPrototype) as unknown[]
+      : tryCloneArraySubclass(target) as unknown[] ?? [];
     view.length = target.length;
     registerProtectedAnnotationView(context, target, view);
     for (const key of Reflect.ownKeys(target)) {

@@ -371,6 +371,34 @@ describe("getAnnotations", () => {
       assert.equal(rawArray.first()?.value, 1);
     });
 
+    it("should preserve array subclass methods with private fields", () => {
+      const marker = Symbol.for(
+        "@test/issue-491/array-subclass-private-field",
+      );
+
+      class TaggedArray<T> extends Array<T> {
+        readonly #label = "tagged";
+
+        label(): string {
+          return this.#label;
+        }
+      }
+
+      const rawArray = TaggedArray.from([{ value: 1 }]) as TaggedArray<
+        { value: number }
+      >;
+      const state = injectAnnotations(undefined, { [marker]: rawArray });
+      const annotations = getAnnotations(state);
+
+      assert.ok(annotations !== undefined);
+
+      const received = annotations[marker] as TaggedArray<{ value: number }>;
+
+      assert.ok(received instanceof TaggedArray);
+      assert.equal(received.label(), "tagged");
+      assert.equal(received[0]?.value, 1);
+    });
+
     it("should protect custom properties on built-in annotation views", () => {
       const marker = Symbol.for("@test/issue-491/builtin-custom-property");
 
