@@ -192,12 +192,35 @@ describe("getAnnotations", () => {
       assert.ok(annotations !== undefined);
       const protectedRegExp = annotations[marker] as RegExp;
 
-      assert.equal(protectedRegExp.test("ab ab"), true);
+      assert.ok(protectedRegExp.test("ab ab"));
       assert.equal(protectedRegExp.lastIndex, 2);
       assert.equal(rawRegExp.lastIndex, 0);
 
       assert.equal(protectedRegExp.exec("ab ab")?.[0], "ab");
       assert.equal(rawRegExp.lastIndex, 0);
+    });
+
+    it("should not reuse protected views across separate injectAnnotations() calls", () => {
+      const marker = Symbol.for("@test/issue-491/per-run-cache");
+      const sharedAnnotations = { [marker]: /ab+/g };
+
+      const firstState = injectAnnotations(undefined, sharedAnnotations);
+      const secondState = injectAnnotations(undefined, sharedAnnotations);
+
+      const firstAnnotations = getAnnotations(firstState);
+      const secondAnnotations = getAnnotations(secondState);
+
+      assert.ok(firstAnnotations !== undefined);
+      assert.ok(secondAnnotations !== undefined);
+
+      const firstRegExp = firstAnnotations[marker] as RegExp;
+      const secondRegExp = secondAnnotations[marker] as RegExp;
+
+      assert.notEqual(firstRegExp, secondRegExp);
+      assert.ok(firstRegExp.test("ab ab"));
+      assert.equal(firstRegExp.lastIndex, 2);
+      assert.equal(secondRegExp.lastIndex, 0);
+      assert.equal((sharedAnnotations[marker] as RegExp).lastIndex, 0);
     });
 
     it("should throw when mutating URL-like annotations", () => {
@@ -237,6 +260,23 @@ describe("getAnnotations", () => {
         { name: "TypeError" },
       );
       assert.equal(rawValue.value, 1);
+    });
+
+    it("should preserve self-referential plain annotation objects", () => {
+      const marker = Symbol.for("@test/issue-491/cycle");
+      const rawValue: { self?: unknown; readonly value: number } = { value: 1 };
+      rawValue.self = rawValue;
+
+      const state = injectAnnotations(undefined, { [marker]: rawValue });
+      const annotations = getAnnotations(state);
+
+      assert.ok(annotations !== undefined);
+      const protectedValue = annotations[marker] as {
+        readonly self?: unknown;
+        readonly value: number;
+      };
+      assert.equal(protectedValue.value, 1);
+      assert.equal(protectedValue.self, protectedValue);
     });
 
     it("should keep URLSearchParams callbacks on the protected view", () => {
