@@ -441,6 +441,35 @@ describe("getAnnotations", () => {
       assert.equal(map.get(iteratedKey), "ok");
     });
 
+    it("should preserve Map key identity for directly injected protected inputs", () => {
+      const keyMarker = Symbol.for("@test/issue-491/map-protected-key-direct");
+      const mapMarker = Symbol.for(
+        "@test/issue-491/map-protected-key-direct-wrapper",
+      );
+      const seedState = injectAnnotations(undefined, {
+        [keyMarker]: { value: 1 },
+      });
+      const protectedAnnotations = getAnnotations(seedState);
+
+      assert.ok(protectedAnnotations !== undefined);
+
+      const directAnnotations = {
+        [mapMarker]: new Map([[protectedAnnotations[keyMarker], "ok"]]),
+      };
+
+      const state = injectAnnotations(undefined, directAnnotations);
+      const annotations = getAnnotations(state);
+
+      assert.ok(annotations !== undefined);
+
+      const map = annotations[mapMarker] as Map<object, string>;
+      const iteratedKey = [...map.keys()][0];
+
+      assert.ok(iteratedKey !== undefined);
+      assert.ok(map.has(iteratedKey));
+      assert.equal(map.get(iteratedKey), "ok");
+    });
+
     it("should preserve Set membership for fresh-run protected inputs", () => {
       const valueMarker = Symbol.for("@test/issue-491/set-protected-value");
       const setMarker = Symbol.for(
@@ -467,6 +496,91 @@ describe("getAnnotations", () => {
 
       assert.ok(iteratedValue !== undefined);
       assert.ok(set.has(iteratedValue));
+    });
+
+    it("should preserve Set membership for directly injected protected inputs", () => {
+      const valueMarker = Symbol.for(
+        "@test/issue-491/set-protected-value-direct",
+      );
+      const setMarker = Symbol.for(
+        "@test/issue-491/set-protected-value-direct-wrapper",
+      );
+      const seedState = injectAnnotations(undefined, {
+        [valueMarker]: { value: 1 },
+      });
+      const protectedAnnotations = getAnnotations(seedState);
+
+      assert.ok(protectedAnnotations !== undefined);
+
+      const directAnnotations = {
+        [setMarker]: new Set([protectedAnnotations[valueMarker]]),
+      };
+
+      const state = injectAnnotations(undefined, directAnnotations);
+      const annotations = getAnnotations(state);
+
+      assert.ok(annotations !== undefined);
+
+      const set = annotations[setMarker] as Set<object>;
+      const iteratedValue = [...set.values()][0];
+
+      assert.ok(iteratedValue !== undefined);
+      assert.ok(set.has(iteratedValue));
+    });
+
+    it("should not expose mutable clone-backed built-ins through valueOf", () => {
+      const marker = Symbol.for("@test/issue-491/value-of");
+      const map = new Map<string, { value: number }>([["k", { value: 1 }]]);
+      const set = new Set([{ value: 1 }]);
+      const regex = /ab+/g;
+      const url = new URL("https://example.com/a?x=1");
+      const params = new URLSearchParams("x=1");
+
+      const state = injectAnnotations(undefined, {
+        [marker]: { map, set, regex, url, params },
+      });
+      const annotations = getAnnotations(state);
+
+      assert.ok(annotations !== undefined);
+
+      const value = annotations[marker] as {
+        map: Map<string, { value: number }>;
+        set: Set<{ value: number }>;
+        regex: RegExp;
+        url: URL;
+        params: URLSearchParams;
+      };
+
+      assert.equal(value.map.valueOf(), value.map);
+      assert.equal(value.set.valueOf(), value.set);
+      assert.equal(value.regex.valueOf(), value.regex);
+      assert.equal(value.url.valueOf(), value.url);
+      assert.equal(value.params.valueOf(), value.params);
+
+      assert.throws(() =>
+        (value.map.valueOf() as typeof value.map).set("x", {
+          value: 2,
+        }), {
+        name: "TypeError",
+      });
+      assert.throws(() =>
+        (value.set.valueOf() as typeof value.set).add({
+          value: 2,
+        }), {
+        name: "TypeError",
+      });
+      assert.throws(() => Reflect.set(value.regex.valueOf(), "lastIndex", 3), {
+        name: "TypeError",
+      });
+      assert.throws(() => Reflect.set(value.url.valueOf(), "pathname", "/b"), {
+        name: "TypeError",
+      });
+      assert.throws(
+        () => (value.params.valueOf() as typeof value.params).set("x", "2"),
+        {
+          name: "TypeError",
+        },
+      );
     });
 
     it("should throw when mutating URL-like annotations", () => {

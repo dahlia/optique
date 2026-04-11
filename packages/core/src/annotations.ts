@@ -262,6 +262,13 @@ function createProtectedMapView(
       if (key === "size") {
         return clonedTarget.size;
       }
+      if (key === "valueOf") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () => () => view,
+        );
+      }
       if (key === "set" || key === "delete" || key === "clear") {
         return cacheProtectedMethod(
           methodCache,
@@ -273,11 +280,15 @@ function createProtectedMapView(
         return cacheProtectedMethod(
           methodCache,
           key,
-          () => (lookup: unknown) =>
-            protectAnnotationValue(
+          () => (lookup: unknown) => {
+            if (clonedTarget.has(lookup)) {
+              return protectAnnotationValue(clonedTarget.get(lookup), context);
+            }
+            return protectAnnotationValue(
               clonedTarget.get(unwrapProtectedAnnotationTarget(lookup)),
               context,
-            ),
+            );
+          },
         );
       }
       if (key === "has") {
@@ -285,6 +296,7 @@ function createProtectedMapView(
           methodCache,
           key,
           () => (lookup: unknown) =>
+            clonedTarget.has(lookup) ||
             clonedTarget.has(unwrapProtectedAnnotationTarget(lookup)),
         );
       }
@@ -395,6 +407,13 @@ function createProtectedSetView(
       if (key === "size") {
         return clonedTarget.size;
       }
+      if (key === "valueOf") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () => () => view,
+        );
+      }
       if (key === "add" || key === "delete" || key === "clear") {
         return cacheProtectedMethod(
           methodCache,
@@ -407,6 +426,7 @@ function createProtectedSetView(
           methodCache,
           key,
           () => (lookup: unknown) =>
+            clonedTarget.has(lookup) ||
             clonedTarget.has(unwrapProtectedAnnotationTarget(lookup)),
         );
       }
@@ -550,6 +570,13 @@ function createProtectedRegExpView(
           () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
         );
       }
+      if (key === "valueOf") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () => () => view,
+        );
+      }
       const ownDescriptor = Object.getOwnPropertyDescriptor(clonedTarget, key);
       if (ownDescriptor != null && "value" in ownDescriptor) {
         return ownDescriptor.value;
@@ -603,6 +630,13 @@ function createProtectedURLSearchParamsView(
           methodCache,
           key,
           () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
+        );
+      }
+      if (key === "valueOf") {
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () => () => view,
         );
       }
       if (key === "forEach") {
@@ -688,6 +722,9 @@ function createProtectedURLView(
   const cloned = new URL(target.href);
   const view = new Proxy(cloned, {
     get(clonedTarget, key) {
+      if (key === "valueOf") {
+        return () => view;
+      }
       if (key === "searchParams") {
         return protectAnnotationValue(clonedTarget.searchParams, context);
       }
