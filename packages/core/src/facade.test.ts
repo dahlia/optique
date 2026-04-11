@@ -10270,7 +10270,14 @@ describe("branch coverage: facade.ts edge cases", () => {
       args: [],
     });
 
-    assert.equal((result as { readonly phase2?: boolean }).phase2, true);
+    assert.ok(
+      (result as { readonly phase2?: boolean; readonly phase1?: boolean })
+        .phase2 === true,
+    );
+    assert.ok(
+      !("phase1" in
+        (result as { readonly phase2?: boolean; readonly phase1?: boolean })),
+    );
     assert.ok(phase2Called, "phase 2 context should be called");
   });
 
@@ -11876,7 +11883,14 @@ describe("branch coverage: facade.ts edge cases", () => {
       args: [],
     });
 
-    assert.equal((result as { readonly phase2?: boolean }).phase2, true);
+    assert.ok(
+      (result as { readonly phase2?: boolean; readonly phase1?: boolean })
+        .phase2 === true,
+    );
+    assert.ok(
+      !("phase1" in
+        (result as { readonly phase2?: boolean; readonly phase1?: boolean })),
+    );
     assert.ok(phase2Called, "phase 2 context should be called");
   });
 

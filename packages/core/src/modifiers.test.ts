@@ -7517,7 +7517,7 @@ describe("branch coverage: modifiers edge cases", () => {
 
     assert.ok(seenState != null && typeof seenState === "object");
     const marker = Object.getOwnPropertySymbols(annotations)[0];
-    assert.equal(getAnnotations(seenState)?.[marker], true);
+    assert.ok(getAnnotations(seenState)?.[marker] === true);
     assert.equal((seenState as { readonly kind: "value" }).kind, "value");
   });
 
@@ -7556,7 +7556,7 @@ describe("branch coverage: modifiers edge cases", () => {
 
     assert.equal(seenState, wrappedState);
     const marker = Object.getOwnPropertySymbols(annotations)[0];
-    assert.equal(getAnnotations(seenState)?.[marker], true);
+    assert.ok(getAnnotations(seenState)?.[marker] === true);
   });
 
   it("withDefault: transformed complete(undefined) catches callback errors", async () => {
