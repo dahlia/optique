@@ -719,8 +719,8 @@ API reference
 
 `ParseOptions`
 :   Interface containing options for parse functions. Currently has one field:
-    `annotations?: Annotations`. Optique treats these annotations as
-    immutable input.
+    `annotations?: Annotations | ReadonlyAnnotations`. Optique treats these
+    annotations as immutable input.
 
 ### Types from `@optique/core/context`
 
