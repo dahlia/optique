@@ -1037,7 +1037,11 @@ function createProtectedURLView(
   const view = new Proxy(cloned, {
     get(clonedTarget, key) {
       if (key === "valueOf") {
-        return () => view;
+        return cacheProtectedMethod(
+          methodCache,
+          key,
+          () => () => view,
+        );
       }
       if (key === "searchParams") {
         return protectAnnotationValue(clonedTarget.searchParams, context);

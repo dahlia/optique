@@ -470,6 +470,7 @@ describe("getAnnotations", () => {
       const received = annotations[marker] as URL;
 
       assert.equal(received.toString, received.toString);
+      assert.equal(received.valueOf, received.valueOf);
       assert.equal(received.constructor, URL);
       assert.equal(received.toString(), "https://example.com/a?x=1");
     });
