@@ -423,6 +423,10 @@ describe("getAnnotations", () => {
         label(): string {
           return this.#label;
         }
+
+        bump(key: K, value: V): void {
+          this.set(key, value);
+        }
       }
 
       const rawMap = new TaggedMap<string, string>([["a", "b"]]);
@@ -436,6 +440,13 @@ describe("getAnnotations", () => {
       assert.ok(received instanceof TaggedMap);
       assert.equal(received.get("a"), "b");
       assert.equal(received.label(), "tagged");
+      assert.throws(
+        () => {
+          received.bump("c", "d");
+        },
+        { name: "TypeError" },
+      );
+      assert.equal(rawMap.has("c"), false);
     });
 
     it("should preserve URL subclass methods with private fields", () => {
@@ -446,6 +457,10 @@ describe("getAnnotations", () => {
 
         label(): string {
           return this.#label;
+        }
+
+        retag(value: string): void {
+          this.searchParams.set("name", value);
         }
       }
 
@@ -460,6 +475,39 @@ describe("getAnnotations", () => {
       assert.ok(received instanceof TaggedUrl);
       assert.equal(received.href, "https://example.com/hello?name=world");
       assert.equal(received.label(), "tagged");
+      assert.throws(
+        () => {
+          received.retag("reader");
+        },
+        { name: "TypeError" },
+      );
+      assert.equal(rawUrl.searchParams.get("name"), "world");
+    });
+
+    it("should preserve RegExp subclass methods with private fields", () => {
+      const marker = Symbol.for(
+        "@test/issue-491/regexp-subclass-private-field",
+      );
+
+      class TaggedRegExp extends RegExp {
+        readonly #label = "tagged";
+
+        label(): string {
+          return this.#label;
+        }
+      }
+
+      const raw = new TaggedRegExp("hello", "g");
+      const state = injectAnnotations(undefined, { [marker]: raw });
+      const annotations = getAnnotations(state);
+
+      assert.ok(annotations !== undefined);
+
+      const received = annotations[marker] as TaggedRegExp;
+
+      assert.ok(received instanceof TaggedRegExp);
+      assert.equal(received.label(), "tagged");
+      assert.equal(received.test("hello world"), true);
     });
 
     it("should preserve Map key identity for fresh-run protected inputs", () => {
@@ -787,6 +835,25 @@ describe("injectAnnotations", () => {
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 
+  it("should preserve RegExp subclass methods with private fields", () => {
+    const marker = Symbol.for("@test/inject-regexp-private-field");
+
+    class TaggedRegExp extends RegExp {
+      readonly #label = "tagged";
+
+      label(): string {
+        return this.#label;
+      }
+    }
+
+    const source = new TaggedRegExp("ab+", "gi");
+    const result = injectAnnotations(source, { [marker]: "ok" });
+
+    assert.ok(result instanceof TaggedRegExp);
+    assert.equal(result.label(), "tagged");
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
+
   it("should clone non-plain object states without mutation", () => {
     const marker = Symbol.for("@test/inject-nonplain");
     class CustomState {
@@ -976,6 +1043,26 @@ describe("inheritAnnotations", () => {
     assert.equal(result.lastIndex, 4);
     assert.equal(result.label, "tagged");
     assert.equal(result[extraKey], target[extraKey]);
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
+
+  it("should preserve RegExp subclass methods with private fields", () => {
+    const marker = Symbol.for("@test/inherit-regexp-private-field");
+    const source = { [annotationKey]: { [marker]: "ok" } };
+
+    class TaggedRegExp extends RegExp {
+      readonly #label = "tagged";
+
+      label(): string {
+        return this.#label;
+      }
+    }
+
+    const target = new TaggedRegExp("ab+", "gi");
+    const result = inheritAnnotations(source, target);
+
+    assert.ok(result instanceof TaggedRegExp);
+    assert.equal(result.label(), "tagged");
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 

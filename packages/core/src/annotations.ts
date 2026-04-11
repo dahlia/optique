@@ -145,9 +145,10 @@ function copyOwnProperties(
   target: object,
   transformValue?: (value: unknown) => unknown,
   excludedKeys?: ReadonlySet<PropertyKey>,
+  syncPrototype = true,
 ): void {
   const sourcePrototype = Object.getPrototypeOf(source);
-  if (Object.getPrototypeOf(target) !== sourcePrototype) {
+  if (syncPrototype && Object.getPrototypeOf(target) !== sourcePrototype) {
     Object.setPrototypeOf(target, sourcePrototype);
   }
   for (const key of Reflect.ownKeys(source)) {
@@ -174,107 +175,207 @@ function normalizeProtectedCollectionItem<T>(
     : value;
 }
 
-function getProtectedProxyFallbackValue(
-  target: object,
-  key: PropertyKey,
-  context: AnnotationProtectionContext,
-): unknown {
-  const ownDescriptor = Reflect.getOwnPropertyDescriptor(target, key);
-  if (ownDescriptor != null && "value" in ownDescriptor) {
-    if (
-      ownDescriptor.configurable === false && ownDescriptor.writable === false
-    ) {
-      return ownDescriptor.value;
-    }
-    const value = ownDescriptor.value;
-    return typeof value === "function"
-      ? value.bind(target)
-      : protectAnnotationValue(value, context);
+type DynamicCloneConstructor = new (...args: readonly unknown[]) => object;
+
+function resolveCloneConstructor(
+  source: object,
+): DynamicCloneConstructor | undefined {
+  const constructorValue = source.constructor;
+  if (typeof constructorValue !== "function") {
+    return undefined;
   }
-  const value = Reflect.get(target, key, target);
-  return typeof value === "function"
-    ? value.bind(target)
-    : protectAnnotationValue(value, context);
+  const species = Reflect.get(constructorValue, Symbol.species);
+  const cloneConstructor = species == null ? constructorValue : species;
+  return typeof cloneConstructor === "function"
+    ? cloneConstructor as DynamicCloneConstructor
+    : undefined;
 }
 
-function getProtectedProxyOwnPropertyDescriptor(
-  target: object,
-  key: PropertyKey,
-  context: AnnotationProtectionContext,
-): PropertyDescriptor | undefined {
-  const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
-  if (descriptor == null || !("value" in descriptor)) {
-    return descriptor;
-  }
-  if (descriptor.configurable === false && descriptor.writable === false) {
-    return descriptor;
-  }
-  const value = protectAnnotationValue(descriptor.value, context);
-  return value === descriptor.value ? descriptor : { ...descriptor, value };
-}
-
-function resolveProtectedMapLookup(
-  target: ReadonlyMap<unknown, unknown>,
-  lookup: unknown,
-): { readonly found: false } | {
-  readonly found: true;
-  readonly value: unknown;
-} {
-  if (target.has(lookup)) {
-    return { found: true, value: target.get(lookup) };
-  }
-  const rawLookup = unwrapProtectedAnnotationTarget(lookup);
-  if (rawLookup !== lookup && target.has(rawLookup)) {
-    return { found: true, value: target.get(rawLookup) };
-  }
-  for (const [entryKey, entryValue] of target.entries()) {
-    if (unwrapProtectedAnnotationTarget(entryKey) === rawLookup) {
-      return { found: true, value: entryValue };
-    }
-  }
-  return { found: false };
-}
-
-function hasProtectedSetLookup(
-  target: ReadonlySet<unknown>,
-  lookup: unknown,
-): boolean {
-  if (target.has(lookup)) {
-    return true;
-  }
-  const rawLookup = unwrapProtectedAnnotationTarget(lookup);
-  if (rawLookup !== lookup && target.has(rawLookup)) {
-    return true;
-  }
-  for (const value of target.values()) {
-    if (unwrapProtectedAnnotationTarget(value) === rawLookup) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function usesSubclassProxyFallback(
+function hasBuiltInSubclassPrototype(
   target: object,
   basePrototype: object,
 ): boolean {
   return Object.getPrototypeOf(target) !== basePrototype;
 }
 
+function tryCloneMapSubclass(
+  source: Map<unknown, unknown>,
+  entries: Iterable<readonly [unknown, unknown]>,
+): Map<unknown, unknown> | undefined {
+  const cloneConstructor = resolveCloneConstructor(source);
+  if (cloneConstructor == null) {
+    return undefined;
+  }
+  try {
+    const cloned = new cloneConstructor(entries);
+    return cloned instanceof Map ? cloned : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function tryCloneSetSubclass(
+  source: Set<unknown>,
+  values: Iterable<unknown>,
+): Set<unknown> | undefined {
+  const cloneConstructor = resolveCloneConstructor(source);
+  if (cloneConstructor == null) {
+    return undefined;
+  }
+  try {
+    const cloned = new cloneConstructor(values);
+    return cloned instanceof Set ? cloned : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function tryCloneDateSubclass(source: Date): Date | undefined {
+  const cloneConstructor = resolveCloneConstructor(source);
+  if (cloneConstructor == null) {
+    return undefined;
+  }
+  try {
+    const cloned = new cloneConstructor(source.getTime());
+    return cloned instanceof Date ? cloned : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function tryCloneRegExpSubclass(source: RegExp): RegExp | undefined {
+  const cloneConstructor = resolveCloneConstructor(source);
+  if (cloneConstructor == null) {
+    return undefined;
+  }
+  try {
+    const cloned = new cloneConstructor(source.source, source.flags);
+    return cloned instanceof RegExp ? cloned : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function tryCloneURLSearchParamsSubclass(
+  source: URLSearchParams,
+): URLSearchParams | undefined {
+  const cloneConstructor = resolveCloneConstructor(source);
+  if (cloneConstructor == null) {
+    return undefined;
+  }
+  try {
+    const cloned = new cloneConstructor(source);
+    return cloned instanceof URLSearchParams ? cloned : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function tryCloneURLSubclass(source: URL): URL | undefined {
+  const cloneConstructor = resolveCloneConstructor(source);
+  if (cloneConstructor == null) {
+    return undefined;
+  }
+  try {
+    const cloned = new cloneConstructor(source.href);
+    return cloned instanceof URL ? cloned : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const regExpExcludedKeys = new Set<PropertyKey>(["lastIndex"]);
+const mapMutationMethodKeys = ["set", "delete", "clear"] as const;
+const setMutationMethodKeys = ["add", "delete", "clear"] as const;
+const urlSearchParamsMutationMethodKeys = [
+  "append",
+  "delete",
+  "set",
+  "sort",
+] as const;
+const urlMutationPropertyKeys = [
+  "hash",
+  "host",
+  "hostname",
+  "href",
+  "password",
+  "pathname",
+  "port",
+  "protocol",
+  "search",
+  "username",
+] as const;
+const dateMutationMethodKeys = Object.getOwnPropertyNames(Date.prototype)
+  .filter((key) => key.startsWith("set"));
+
+function installReadonlyMutationMethodGuards(
+  target: object,
+  keys: readonly string[],
+): void {
+  for (const key of keys) {
+    const descriptor = Object.getOwnPropertyDescriptor(target, key);
+    if (descriptor?.configurable === false) continue;
+    Object.defineProperty(target, key, {
+      configurable: true,
+      enumerable: false,
+      writable: true,
+      value: (..._args: readonly unknown[]) =>
+        throwReadonlyAnnotationMutation(),
+    });
+  }
+}
+
+function installReadonlyURLGuards(
+  target: URL,
+  context: AnnotationProtectionContext,
+): void {
+  const searchParams = target.searchParams;
+  const searchParamsDescriptor = Object.getOwnPropertyDescriptor(
+    target,
+    "searchParams",
+  );
+  if (searchParamsDescriptor?.configurable !== false) {
+    Object.defineProperty(target, "searchParams", {
+      configurable: true,
+      enumerable: false,
+      get: () => protectAnnotationValue(searchParams, context),
+      set: () => throwReadonlyAnnotationMutation(),
+    });
+  }
+  for (const key of urlMutationPropertyKeys) {
+    const descriptor = Object.getOwnPropertyDescriptor(target, key);
+    if (descriptor?.configurable === false) continue;
+    Object.defineProperty(target, key, {
+      configurable: true,
+      enumerable: false,
+      get: () => Reflect.get(URL.prototype, key, target),
+      set: () => throwReadonlyAnnotationMutation(),
+    });
+  }
+}
 
 function copyRegExpMetadata(
   source: RegExp,
   target: RegExp,
   transformValue?: (value: unknown) => unknown,
+  syncPrototype = true,
 ): void {
-  copyOwnProperties(source, target, transformValue, regExpExcludedKeys);
+  copyOwnProperties(
+    source,
+    target,
+    transformValue,
+    regExpExcludedKeys,
+    syncPrototype,
+  );
   target.lastIndex = source.lastIndex;
 }
 
-function cloneRegExpShape<T extends RegExp>(source: T): T {
-  const cloned = new RegExp(source) as T;
-  copyRegExpMetadata(source, cloned);
+function cloneRegExpShape(source: RegExp): RegExp {
+  const syncPrototype = !hasBuiltInSubclassPrototype(source, RegExp.prototype);
+  const cloned = syncPrototype
+    ? new RegExp(source)
+    : tryCloneRegExpSubclass(source) ?? new RegExp(source);
+  copyRegExpMetadata(source, cloned, undefined, syncPrototype);
   return cloned;
 }
 
@@ -336,137 +437,18 @@ function createProtectedMapView(
   target: Map<unknown, unknown>,
   context: AnnotationProtectionContext,
 ): Map<unknown, unknown> {
-  if (usesSubclassProxyFallback(target, Map.prototype)) {
-    const methodCache = new Map<PropertyKey, unknown>();
-    const view = new Proxy(target, {
-      get(target, key) {
-        if (key === "size") {
-          return target.size;
-        }
-        if (key === "valueOf") {
-          return cacheProtectedMethod(methodCache, key, () => () => view);
-        }
-        if (key === "set" || key === "delete" || key === "clear") {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
-          );
-        }
-        if (key === "get") {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () => (lookup: unknown) => {
-              const resolved = resolveProtectedMapLookup(target, lookup);
-              return resolved.found
-                ? protectAnnotationValue(resolved.value, context)
-                : undefined;
-            },
-          );
-        }
-        if (key === "has") {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () => (lookup: unknown) =>
-              resolveProtectedMapLookup(target, lookup).found,
-          );
-        }
-        if (key === "forEach") {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () =>
-            (
-              callback: (
-                value: unknown,
-                key: unknown,
-                map: Map<unknown, unknown>,
-              ) => void,
-              thisArg?: unknown,
-            ) =>
-              target.forEach((value, mapKey) => {
-                callback.call(
-                  thisArg,
-                  protectAnnotationValue(value, context),
-                  protectAnnotationValue(mapKey, context),
-                  view,
-                );
-              }),
-          );
-        }
-        if (key === "keys") {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () =>
-              function* (): IterableIterator<unknown> {
-                for (const value of target.keys()) {
-                  yield protectAnnotationValue(value, context);
-                }
-              },
-          );
-        }
-        if (key === "values") {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () =>
-              function* (): IterableIterator<unknown> {
-                for (const value of target.values()) {
-                  yield protectAnnotationValue(value, context);
-                }
-              },
-          );
-        }
-        if (key === "entries" || key === Symbol.iterator) {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () =>
-              function* (): IterableIterator<readonly [unknown, unknown]> {
-                for (const [entryKey, entryValue] of target.entries()) {
-                  yield [
-                    protectAnnotationValue(entryKey, context),
-                    protectAnnotationValue(entryValue, context),
-                  ] as const;
-                }
-              },
-          );
-        }
-        return getProtectedProxyFallbackValue(target, key, context);
-      },
-      getOwnPropertyDescriptor(target, key) {
-        return getProtectedProxyOwnPropertyDescriptor(target, key, context);
-      },
-      set() {
-        throwReadonlyAnnotationMutation();
-      },
-      defineProperty() {
-        throwReadonlyAnnotationMutation();
-      },
-      deleteProperty() {
-        throwReadonlyAnnotationMutation();
-      },
-      setPrototypeOf() {
-        throwReadonlyAnnotationMutation();
-      },
-      preventExtensions() {
-        throwReadonlyAnnotationMutation();
-      },
-    });
-    return registerProtectedAnnotationView(context, target, view);
-  }
-
-  const methodCache = new Map<PropertyKey, unknown>();
-  const cloned = new Map<unknown, unknown>();
-  for (const [entryKey, entryValue] of target.entries()) {
-    cloned.set(
+  const syncPrototype = !hasBuiltInSubclassPrototype(target, Map.prototype);
+  const entries = [...target.entries()].map(([entryKey, entryValue]) =>
+    [
       normalizeProtectedCollectionItem(entryKey, context),
       normalizeProtectedCollectionItem(entryValue, context),
-    );
-  }
+    ] as const
+  );
+  const methodCache = new Map<PropertyKey, unknown>();
+  const cloned = syncPrototype
+    ? new Map<unknown, unknown>(entries)
+    : tryCloneMapSubclass(target, entries) ??
+      new Map<unknown, unknown>(entries);
   const view = new Proxy(cloned, {
     get(clonedTarget, key) {
       if (key === "size") {
@@ -599,7 +581,10 @@ function createProtectedMapView(
     target,
     cloned,
     (value) => protectAnnotationValue(value, context),
+    undefined,
+    syncPrototype,
   );
+  installReadonlyMutationMethodGuards(cloned, mapMutationMethodKeys);
   return view;
 }
 
@@ -607,107 +592,14 @@ function createProtectedSetView(
   target: Set<unknown>,
   context: AnnotationProtectionContext,
 ): Set<unknown> {
-  if (usesSubclassProxyFallback(target, Set.prototype)) {
-    const methodCache = new Map<PropertyKey, unknown>();
-    const view = new Proxy(target, {
-      get(target, key) {
-        if (key === "size") {
-          return target.size;
-        }
-        if (key === "valueOf") {
-          return cacheProtectedMethod(methodCache, key, () => () => view);
-        }
-        if (key === "add" || key === "delete" || key === "clear") {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
-          );
-        }
-        if (key === "has") {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () => (lookup: unknown) => hasProtectedSetLookup(target, lookup),
-          );
-        }
-        if (key === "forEach") {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () =>
-            (
-              callback: (
-                value: unknown,
-                key: unknown,
-                set: Set<unknown>,
-              ) => void,
-              thisArg?: unknown,
-            ) =>
-              target.forEach((value) => {
-                const protectedValue = protectAnnotationValue(value, context);
-                callback.call(thisArg, protectedValue, protectedValue, view);
-              }),
-          );
-        }
-        if (
-          key === "keys" ||
-          key === "values" ||
-          key === Symbol.iterator
-        ) {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () =>
-              function* (): IterableIterator<unknown> {
-                for (const value of target.values()) {
-                  yield protectAnnotationValue(value, context);
-                }
-              },
-          );
-        }
-        if (key === "entries") {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () =>
-              function* (): IterableIterator<readonly [unknown, unknown]> {
-                for (const value of target.values()) {
-                  const protectedValue = protectAnnotationValue(value, context);
-                  yield [protectedValue, protectedValue] as const;
-                }
-              },
-          );
-        }
-        return getProtectedProxyFallbackValue(target, key, context);
-      },
-      getOwnPropertyDescriptor(target, key) {
-        return getProtectedProxyOwnPropertyDescriptor(target, key, context);
-      },
-      set() {
-        throwReadonlyAnnotationMutation();
-      },
-      defineProperty() {
-        throwReadonlyAnnotationMutation();
-      },
-      deleteProperty() {
-        throwReadonlyAnnotationMutation();
-      },
-      setPrototypeOf() {
-        throwReadonlyAnnotationMutation();
-      },
-      preventExtensions() {
-        throwReadonlyAnnotationMutation();
-      },
-    });
-    return registerProtectedAnnotationView(context, target, view);
-  }
-
+  const syncPrototype = !hasBuiltInSubclassPrototype(target, Set.prototype);
+  const values = [...target.values()].map((value) =>
+    normalizeProtectedCollectionItem(value, context)
+  );
   const methodCache = new Map<PropertyKey, unknown>();
-  const cloned = new Set<unknown>();
-  for (const value of target.values()) {
-    cloned.add(normalizeProtectedCollectionItem(value, context));
-  }
+  const cloned = syncPrototype
+    ? new Set<unknown>(values)
+    : tryCloneSetSubclass(target, values) ?? new Set<unknown>(values);
   const view = new Proxy(cloned, {
     get(clonedTarget, key) {
       if (key === "size") {
@@ -811,7 +703,10 @@ function createProtectedSetView(
     target,
     cloned,
     (value) => protectAnnotationValue(value, context),
+    undefined,
+    syncPrototype,
   );
+  installReadonlyMutationMethodGuards(cloned, setMutationMethodKeys);
   return view;
 }
 
@@ -819,43 +714,11 @@ function createProtectedDateView(
   target: Date,
   context: AnnotationProtectionContext,
 ): Date {
-  if (usesSubclassProxyFallback(target, Date.prototype)) {
-    const methodCache = new Map<PropertyKey, unknown>();
-    const view = new Proxy(target, {
-      get(target, key) {
-        if (typeof key === "string" && key.startsWith("set")) {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
-          );
-        }
-        return getProtectedProxyFallbackValue(target, key, context);
-      },
-      getOwnPropertyDescriptor(target, key) {
-        return getProtectedProxyOwnPropertyDescriptor(target, key, context);
-      },
-      set() {
-        throwReadonlyAnnotationMutation();
-      },
-      defineProperty() {
-        throwReadonlyAnnotationMutation();
-      },
-      deleteProperty() {
-        throwReadonlyAnnotationMutation();
-      },
-      setPrototypeOf() {
-        throwReadonlyAnnotationMutation();
-      },
-      preventExtensions() {
-        throwReadonlyAnnotationMutation();
-      },
-    });
-    return registerProtectedAnnotationView(context, target, view);
-  }
-
+  const syncPrototype = !hasBuiltInSubclassPrototype(target, Date.prototype);
   const methodCache = new Map<PropertyKey, unknown>();
-  const cloned = new Date(target.getTime());
+  const cloned = syncPrototype
+    ? new Date(target.getTime())
+    : tryCloneDateSubclass(target) ?? new Date(target.getTime());
   const view = new Proxy(cloned, {
     get(clonedTarget, key) {
       const value = Reflect.get(clonedTarget, key, clonedTarget);
@@ -892,7 +755,10 @@ function createProtectedDateView(
     target,
     cloned,
     (value) => protectAnnotationValue(value, context),
+    undefined,
+    syncPrototype,
   );
+  installReadonlyMutationMethodGuards(cloned, dateMutationMethodKeys);
   return view;
 }
 
@@ -900,8 +766,11 @@ function createProtectedRegExpView(
   target: RegExp,
   context: AnnotationProtectionContext,
 ): RegExp {
+  const syncPrototype = !hasBuiltInSubclassPrototype(target, RegExp.prototype);
   const methodCache = new Map<PropertyKey, unknown>();
-  const cloned = new RegExp(target) as RegExp;
+  const cloned = syncPrototype
+    ? new RegExp(target)
+    : tryCloneRegExpSubclass(target) ?? new RegExp(target);
   const view = new Proxy(cloned, {
     get(clonedTarget, key) {
       if (key === "compile") {
@@ -949,6 +818,7 @@ function createProtectedRegExpView(
     target,
     cloned,
     (value) => protectAnnotationValue(value, context),
+    syncPrototype,
   );
   return view;
 }
@@ -957,96 +827,14 @@ function createProtectedURLSearchParamsView(
   target: URLSearchParams,
   context: AnnotationProtectionContext,
 ): URLSearchParams {
-  if (usesSubclassProxyFallback(target, URLSearchParams.prototype)) {
-    const methodCache = new Map<PropertyKey, unknown>();
-    const view = new Proxy(target, {
-      get(target, key) {
-        if (
-          key === "append" ||
-          key === "delete" ||
-          key === "set" ||
-          key === "sort"
-        ) {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
-          );
-        }
-        if (key === "valueOf") {
-          return cacheProtectedMethod(methodCache, key, () => () => view);
-        }
-        if (key === "forEach") {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () =>
-            (
-              callback: (
-                value: string,
-                key: string,
-                searchParams: URLSearchParams,
-              ) => void,
-              thisArg?: unknown,
-            ) =>
-              target.forEach((value, name) => {
-                callback.call(thisArg, value, name, view);
-              }),
-          );
-        }
-        if (key === "keys" || key === "values") {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () =>
-              function* (): IterableIterator<string> {
-                const iterator = key === "keys"
-                  ? target.keys()
-                  : target.values();
-                for (const value of iterator) {
-                  yield value;
-                }
-              },
-          );
-        }
-        if (key === "entries" || key === Symbol.iterator) {
-          return cacheProtectedMethod(
-            methodCache,
-            key,
-            () =>
-              function* (): IterableIterator<readonly [string, string]> {
-                for (const entry of target.entries()) {
-                  yield entry;
-                }
-              },
-          );
-        }
-        return getProtectedProxyFallbackValue(target, key, context);
-      },
-      getOwnPropertyDescriptor(target, key) {
-        return getProtectedProxyOwnPropertyDescriptor(target, key, context);
-      },
-      set() {
-        throwReadonlyAnnotationMutation();
-      },
-      defineProperty() {
-        throwReadonlyAnnotationMutation();
-      },
-      deleteProperty() {
-        throwReadonlyAnnotationMutation();
-      },
-      setPrototypeOf() {
-        throwReadonlyAnnotationMutation();
-      },
-      preventExtensions() {
-        throwReadonlyAnnotationMutation();
-      },
-    });
-    return registerProtectedAnnotationView(context, target, view);
-  }
-
+  const syncPrototype = !hasBuiltInSubclassPrototype(
+    target,
+    URLSearchParams.prototype,
+  );
   const methodCache = new Map<PropertyKey, unknown>();
-  const cloned = new URLSearchParams(target);
+  const cloned = syncPrototype
+    ? new URLSearchParams(target)
+    : tryCloneURLSearchParamsSubclass(target) ?? new URLSearchParams(target);
   const view = new Proxy(cloned, {
     get(clonedTarget, key) {
       if (
@@ -1140,6 +928,12 @@ function createProtectedURLSearchParamsView(
     target,
     cloned,
     (value) => protectAnnotationValue(value, context),
+    undefined,
+    syncPrototype,
+  );
+  installReadonlyMutationMethodGuards(
+    cloned,
+    urlSearchParamsMutationMethodKeys,
   );
   return view;
 }
@@ -1148,41 +942,10 @@ function createProtectedURLView(
   target: URL,
   context: AnnotationProtectionContext,
 ): URL {
-  if (usesSubclassProxyFallback(target, URL.prototype)) {
-    const methodCache = new Map<PropertyKey, unknown>();
-    const view = new Proxy(target, {
-      get(target, key) {
-        if (key === "valueOf") {
-          return cacheProtectedMethod(methodCache, key, () => () => view);
-        }
-        if (key === "searchParams") {
-          return protectAnnotationValue(target.searchParams, context);
-        }
-        return getProtectedProxyFallbackValue(target, key, context);
-      },
-      getOwnPropertyDescriptor(target, key) {
-        return getProtectedProxyOwnPropertyDescriptor(target, key, context);
-      },
-      set() {
-        throwReadonlyAnnotationMutation();
-      },
-      defineProperty() {
-        throwReadonlyAnnotationMutation();
-      },
-      deleteProperty() {
-        throwReadonlyAnnotationMutation();
-      },
-      setPrototypeOf() {
-        throwReadonlyAnnotationMutation();
-      },
-      preventExtensions() {
-        throwReadonlyAnnotationMutation();
-      },
-    });
-    return registerProtectedAnnotationView(context, target, view);
-  }
-
-  const cloned = new URL(target.href);
+  const syncPrototype = !hasBuiltInSubclassPrototype(target, URL.prototype);
+  const cloned = syncPrototype
+    ? new URL(target.href)
+    : tryCloneURLSubclass(target) ?? new URL(target.href);
   const view = new Proxy(cloned, {
     get(clonedTarget, key) {
       if (key === "valueOf") {
@@ -1218,7 +981,10 @@ function createProtectedURLView(
     target,
     cloned,
     (value) => protectAnnotationValue(value, context),
+    undefined,
+    syncPrototype,
   );
+  installReadonlyURLGuards(cloned, context);
   return view;
 }
 
