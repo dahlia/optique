@@ -174,6 +174,93 @@ function normalizeProtectedCollectionItem<T>(
     : value;
 }
 
+function getProtectedProxyFallbackValue(
+  target: object,
+  key: PropertyKey,
+  context: AnnotationProtectionContext,
+): unknown {
+  const ownDescriptor = Reflect.getOwnPropertyDescriptor(target, key);
+  if (ownDescriptor != null && "value" in ownDescriptor) {
+    if (
+      ownDescriptor.configurable === false && ownDescriptor.writable === false
+    ) {
+      return ownDescriptor.value;
+    }
+    const value = ownDescriptor.value;
+    return typeof value === "function"
+      ? value.bind(target)
+      : protectAnnotationValue(value, context);
+  }
+  const value = Reflect.get(target, key, target);
+  return typeof value === "function"
+    ? value.bind(target)
+    : protectAnnotationValue(value, context);
+}
+
+function getProtectedProxyOwnPropertyDescriptor(
+  target: object,
+  key: PropertyKey,
+  context: AnnotationProtectionContext,
+): PropertyDescriptor | undefined {
+  const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
+  if (descriptor == null || !("value" in descriptor)) {
+    return descriptor;
+  }
+  if (descriptor.configurable === false && descriptor.writable === false) {
+    return descriptor;
+  }
+  const value = protectAnnotationValue(descriptor.value, context);
+  return value === descriptor.value ? descriptor : { ...descriptor, value };
+}
+
+function resolveProtectedMapLookup(
+  target: ReadonlyMap<unknown, unknown>,
+  lookup: unknown,
+): { readonly found: false } | {
+  readonly found: true;
+  readonly value: unknown;
+} {
+  if (target.has(lookup)) {
+    return { found: true, value: target.get(lookup) };
+  }
+  const rawLookup = unwrapProtectedAnnotationTarget(lookup);
+  if (rawLookup !== lookup && target.has(rawLookup)) {
+    return { found: true, value: target.get(rawLookup) };
+  }
+  for (const [entryKey, entryValue] of target.entries()) {
+    if (unwrapProtectedAnnotationTarget(entryKey) === rawLookup) {
+      return { found: true, value: entryValue };
+    }
+  }
+  return { found: false };
+}
+
+function hasProtectedSetLookup(
+  target: ReadonlySet<unknown>,
+  lookup: unknown,
+): boolean {
+  if (target.has(lookup)) {
+    return true;
+  }
+  const rawLookup = unwrapProtectedAnnotationTarget(lookup);
+  if (rawLookup !== lookup && target.has(rawLookup)) {
+    return true;
+  }
+  for (const value of target.values()) {
+    if (unwrapProtectedAnnotationTarget(value) === rawLookup) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function usesSubclassProxyFallback(
+  target: object,
+  basePrototype: object,
+): boolean {
+  return Object.getPrototypeOf(target) !== basePrototype;
+}
+
 const regExpExcludedKeys = new Set<PropertyKey>(["lastIndex"]);
 
 function copyRegExpMetadata(
@@ -249,6 +336,129 @@ function createProtectedMapView(
   target: Map<unknown, unknown>,
   context: AnnotationProtectionContext,
 ): Map<unknown, unknown> {
+  if (usesSubclassProxyFallback(target, Map.prototype)) {
+    const methodCache = new Map<PropertyKey, unknown>();
+    const view = new Proxy(target, {
+      get(target, key) {
+        if (key === "size") {
+          return target.size;
+        }
+        if (key === "valueOf") {
+          return cacheProtectedMethod(methodCache, key, () => () => view);
+        }
+        if (key === "set" || key === "delete" || key === "clear") {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
+          );
+        }
+        if (key === "get") {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () => (lookup: unknown) => {
+              const resolved = resolveProtectedMapLookup(target, lookup);
+              return resolved.found
+                ? protectAnnotationValue(resolved.value, context)
+                : undefined;
+            },
+          );
+        }
+        if (key === "has") {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () => (lookup: unknown) =>
+              resolveProtectedMapLookup(target, lookup).found,
+          );
+        }
+        if (key === "forEach") {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () =>
+            (
+              callback: (
+                value: unknown,
+                key: unknown,
+                map: Map<unknown, unknown>,
+              ) => void,
+              thisArg?: unknown,
+            ) =>
+              target.forEach((value, mapKey) => {
+                callback.call(
+                  thisArg,
+                  protectAnnotationValue(value, context),
+                  protectAnnotationValue(mapKey, context),
+                  view,
+                );
+              }),
+          );
+        }
+        if (key === "keys") {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () =>
+              function* (): IterableIterator<unknown> {
+                for (const value of target.keys()) {
+                  yield protectAnnotationValue(value, context);
+                }
+              },
+          );
+        }
+        if (key === "values") {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () =>
+              function* (): IterableIterator<unknown> {
+                for (const value of target.values()) {
+                  yield protectAnnotationValue(value, context);
+                }
+              },
+          );
+        }
+        if (key === "entries" || key === Symbol.iterator) {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () =>
+              function* (): IterableIterator<readonly [unknown, unknown]> {
+                for (const [entryKey, entryValue] of target.entries()) {
+                  yield [
+                    protectAnnotationValue(entryKey, context),
+                    protectAnnotationValue(entryValue, context),
+                  ] as const;
+                }
+              },
+          );
+        }
+        return getProtectedProxyFallbackValue(target, key, context);
+      },
+      getOwnPropertyDescriptor(target, key) {
+        return getProtectedProxyOwnPropertyDescriptor(target, key, context);
+      },
+      set() {
+        throwReadonlyAnnotationMutation();
+      },
+      defineProperty() {
+        throwReadonlyAnnotationMutation();
+      },
+      deleteProperty() {
+        throwReadonlyAnnotationMutation();
+      },
+      setPrototypeOf() {
+        throwReadonlyAnnotationMutation();
+      },
+      preventExtensions() {
+        throwReadonlyAnnotationMutation();
+      },
+    });
+    return registerProtectedAnnotationView(context, target, view);
+  }
+
   const methodCache = new Map<PropertyKey, unknown>();
   const cloned = new Map<unknown, unknown>();
   for (const [entryKey, entryValue] of target.entries()) {
@@ -397,6 +607,102 @@ function createProtectedSetView(
   target: Set<unknown>,
   context: AnnotationProtectionContext,
 ): Set<unknown> {
+  if (usesSubclassProxyFallback(target, Set.prototype)) {
+    const methodCache = new Map<PropertyKey, unknown>();
+    const view = new Proxy(target, {
+      get(target, key) {
+        if (key === "size") {
+          return target.size;
+        }
+        if (key === "valueOf") {
+          return cacheProtectedMethod(methodCache, key, () => () => view);
+        }
+        if (key === "add" || key === "delete" || key === "clear") {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
+          );
+        }
+        if (key === "has") {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () => (lookup: unknown) => hasProtectedSetLookup(target, lookup),
+          );
+        }
+        if (key === "forEach") {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () =>
+            (
+              callback: (
+                value: unknown,
+                key: unknown,
+                set: Set<unknown>,
+              ) => void,
+              thisArg?: unknown,
+            ) =>
+              target.forEach((value) => {
+                const protectedValue = protectAnnotationValue(value, context);
+                callback.call(thisArg, protectedValue, protectedValue, view);
+              }),
+          );
+        }
+        if (
+          key === "keys" ||
+          key === "values" ||
+          key === Symbol.iterator
+        ) {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () =>
+              function* (): IterableIterator<unknown> {
+                for (const value of target.values()) {
+                  yield protectAnnotationValue(value, context);
+                }
+              },
+          );
+        }
+        if (key === "entries") {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () =>
+              function* (): IterableIterator<readonly [unknown, unknown]> {
+                for (const value of target.values()) {
+                  const protectedValue = protectAnnotationValue(value, context);
+                  yield [protectedValue, protectedValue] as const;
+                }
+              },
+          );
+        }
+        return getProtectedProxyFallbackValue(target, key, context);
+      },
+      getOwnPropertyDescriptor(target, key) {
+        return getProtectedProxyOwnPropertyDescriptor(target, key, context);
+      },
+      set() {
+        throwReadonlyAnnotationMutation();
+      },
+      defineProperty() {
+        throwReadonlyAnnotationMutation();
+      },
+      deleteProperty() {
+        throwReadonlyAnnotationMutation();
+      },
+      setPrototypeOf() {
+        throwReadonlyAnnotationMutation();
+      },
+      preventExtensions() {
+        throwReadonlyAnnotationMutation();
+      },
+    });
+    return registerProtectedAnnotationView(context, target, view);
+  }
+
   const methodCache = new Map<PropertyKey, unknown>();
   const cloned = new Set<unknown>();
   for (const value of target.values()) {
@@ -513,6 +819,41 @@ function createProtectedDateView(
   target: Date,
   context: AnnotationProtectionContext,
 ): Date {
+  if (usesSubclassProxyFallback(target, Date.prototype)) {
+    const methodCache = new Map<PropertyKey, unknown>();
+    const view = new Proxy(target, {
+      get(target, key) {
+        if (typeof key === "string" && key.startsWith("set")) {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
+          );
+        }
+        return getProtectedProxyFallbackValue(target, key, context);
+      },
+      getOwnPropertyDescriptor(target, key) {
+        return getProtectedProxyOwnPropertyDescriptor(target, key, context);
+      },
+      set() {
+        throwReadonlyAnnotationMutation();
+      },
+      defineProperty() {
+        throwReadonlyAnnotationMutation();
+      },
+      deleteProperty() {
+        throwReadonlyAnnotationMutation();
+      },
+      setPrototypeOf() {
+        throwReadonlyAnnotationMutation();
+      },
+      preventExtensions() {
+        throwReadonlyAnnotationMutation();
+      },
+    });
+    return registerProtectedAnnotationView(context, target, view);
+  }
+
   const methodCache = new Map<PropertyKey, unknown>();
   const cloned = new Date(target.getTime());
   const view = new Proxy(cloned, {
@@ -616,6 +957,94 @@ function createProtectedURLSearchParamsView(
   target: URLSearchParams,
   context: AnnotationProtectionContext,
 ): URLSearchParams {
+  if (usesSubclassProxyFallback(target, URLSearchParams.prototype)) {
+    const methodCache = new Map<PropertyKey, unknown>();
+    const view = new Proxy(target, {
+      get(target, key) {
+        if (
+          key === "append" ||
+          key === "delete" ||
+          key === "set" ||
+          key === "sort"
+        ) {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
+          );
+        }
+        if (key === "valueOf") {
+          return cacheProtectedMethod(methodCache, key, () => () => view);
+        }
+        if (key === "forEach") {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () =>
+            (
+              callback: (
+                value: string,
+                key: string,
+                searchParams: URLSearchParams,
+              ) => void,
+              thisArg?: unknown,
+            ) =>
+              target.forEach((value, name) => {
+                callback.call(thisArg, value, name, view);
+              }),
+          );
+        }
+        if (key === "keys" || key === "values") {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () =>
+              function* (): IterableIterator<string> {
+                const iterator = key === "keys"
+                  ? target.keys()
+                  : target.values();
+                for (const value of iterator) {
+                  yield value;
+                }
+              },
+          );
+        }
+        if (key === "entries" || key === Symbol.iterator) {
+          return cacheProtectedMethod(
+            methodCache,
+            key,
+            () =>
+              function* (): IterableIterator<readonly [string, string]> {
+                for (const entry of target.entries()) {
+                  yield entry;
+                }
+              },
+          );
+        }
+        return getProtectedProxyFallbackValue(target, key, context);
+      },
+      getOwnPropertyDescriptor(target, key) {
+        return getProtectedProxyOwnPropertyDescriptor(target, key, context);
+      },
+      set() {
+        throwReadonlyAnnotationMutation();
+      },
+      defineProperty() {
+        throwReadonlyAnnotationMutation();
+      },
+      deleteProperty() {
+        throwReadonlyAnnotationMutation();
+      },
+      setPrototypeOf() {
+        throwReadonlyAnnotationMutation();
+      },
+      preventExtensions() {
+        throwReadonlyAnnotationMutation();
+      },
+    });
+    return registerProtectedAnnotationView(context, target, view);
+  }
+
   const methodCache = new Map<PropertyKey, unknown>();
   const cloned = new URLSearchParams(target);
   const view = new Proxy(cloned, {
@@ -719,6 +1148,40 @@ function createProtectedURLView(
   target: URL,
   context: AnnotationProtectionContext,
 ): URL {
+  if (usesSubclassProxyFallback(target, URL.prototype)) {
+    const methodCache = new Map<PropertyKey, unknown>();
+    const view = new Proxy(target, {
+      get(target, key) {
+        if (key === "valueOf") {
+          return cacheProtectedMethod(methodCache, key, () => () => view);
+        }
+        if (key === "searchParams") {
+          return protectAnnotationValue(target.searchParams, context);
+        }
+        return getProtectedProxyFallbackValue(target, key, context);
+      },
+      getOwnPropertyDescriptor(target, key) {
+        return getProtectedProxyOwnPropertyDescriptor(target, key, context);
+      },
+      set() {
+        throwReadonlyAnnotationMutation();
+      },
+      defineProperty() {
+        throwReadonlyAnnotationMutation();
+      },
+      deleteProperty() {
+        throwReadonlyAnnotationMutation();
+      },
+      setPrototypeOf() {
+        throwReadonlyAnnotationMutation();
+      },
+      preventExtensions() {
+        throwReadonlyAnnotationMutation();
+      },
+    });
+    return registerProtectedAnnotationView(context, target, view);
+  }
+
   const cloned = new URL(target.href);
   const view = new Proxy(cloned, {
     get(clonedTarget, key) {

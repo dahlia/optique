@@ -414,6 +414,54 @@ describe("getAnnotations", () => {
       }
     });
 
+    it("should preserve built-in subclass methods with private fields", () => {
+      const marker = Symbol.for("@test/issue-491/map-subclass-private-field");
+
+      class TaggedMap<K, V> extends Map<K, V> {
+        readonly #label = "tagged";
+
+        label(): string {
+          return this.#label;
+        }
+      }
+
+      const rawMap = new TaggedMap<string, string>([["a", "b"]]);
+      const state = injectAnnotations(undefined, { [marker]: rawMap });
+      const annotations = getAnnotations(state);
+
+      assert.ok(annotations !== undefined);
+
+      const received = annotations[marker] as TaggedMap<string, string>;
+
+      assert.ok(received instanceof TaggedMap);
+      assert.equal(received.get("a"), "b");
+      assert.equal(received.label(), "tagged");
+    });
+
+    it("should preserve URL subclass methods with private fields", () => {
+      const marker = Symbol.for("@test/issue-491/url-subclass-private-field");
+
+      class TaggedUrl extends URL {
+        readonly #label = "tagged";
+
+        label(): string {
+          return this.#label;
+        }
+      }
+
+      const rawUrl = new TaggedUrl("https://example.com/hello?name=world");
+      const state = injectAnnotations(undefined, { [marker]: rawUrl });
+      const annotations = getAnnotations(state);
+
+      assert.ok(annotations !== undefined);
+
+      const received = annotations[marker] as TaggedUrl;
+
+      assert.ok(received instanceof TaggedUrl);
+      assert.equal(received.href, "https://example.com/hello?name=world");
+      assert.equal(received.label(), "tagged");
+    });
+
     it("should preserve Map key identity for fresh-run protected inputs", () => {
       const keyMarker = Symbol.for("@test/issue-491/map-protected-key");
       const mapMarker = Symbol.for("@test/issue-491/map-protected-key-wrapper");
