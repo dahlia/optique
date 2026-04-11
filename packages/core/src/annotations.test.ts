@@ -8,8 +8,8 @@ import {
   getAnnotations,
   inheritAnnotations,
   injectAnnotations,
+  injectFreshRunAnnotations,
   isInjectedAnnotationWrapper,
-  normalizeRunAnnotationInput,
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
 
@@ -272,13 +272,13 @@ describe("getAnnotations", () => {
 
       assert.ok(protectedAnnotations !== undefined);
 
-      const firstState = injectAnnotations(
+      const firstState = injectFreshRunAnnotations(
         undefined,
-        normalizeRunAnnotationInput(protectedAnnotations),
+        protectedAnnotations,
       );
-      const secondState = injectAnnotations(
+      const secondState = injectFreshRunAnnotations(
         undefined,
-        normalizeRunAnnotationInput(protectedAnnotations),
+        protectedAnnotations,
       );
       const firstAnnotations = getAnnotations(firstState);
       const secondAnnotations = getAnnotations(secondState);
@@ -294,6 +294,124 @@ describe("getAnnotations", () => {
       assert.ok(firstRegExp.test("ab ab"));
       assert.equal(firstRegExp.lastIndex, 2);
       assert.equal(secondRegExp.lastIndex, 0);
+    });
+
+    it("should normalize nested protected annotation values for a fresh run", () => {
+      const innerMarker = Symbol.for("@test/issue-491/nested-protected-input");
+      const outerMarker = Symbol.for(
+        "@test/issue-491/nested-protected-input-wrapper",
+      );
+      const seedState = injectAnnotations(undefined, { [innerMarker]: /ab+/g });
+      const protectedAnnotations = getAnnotations(seedState);
+
+      assert.ok(protectedAnnotations !== undefined);
+
+      const rebuiltAnnotations = {
+        [outerMarker]: {
+          regex: protectedAnnotations[innerMarker],
+        },
+      };
+
+      const firstState = injectFreshRunAnnotations(
+        undefined,
+        rebuiltAnnotations,
+      );
+      const secondState = injectFreshRunAnnotations(
+        undefined,
+        rebuiltAnnotations,
+      );
+      const firstAnnotations = getAnnotations(firstState);
+      const secondAnnotations = getAnnotations(secondState);
+
+      assert.ok(firstAnnotations !== undefined);
+      assert.ok(secondAnnotations !== undefined);
+
+      const firstRegExp = (
+        firstAnnotations[outerMarker] as { regex: RegExp }
+      ).regex;
+      const secondRegExp = (
+        secondAnnotations[outerMarker] as { regex: RegExp }
+      ).regex;
+
+      assert.notEqual(firstRegExp, secondRegExp);
+      assert.ok(firstRegExp.test("ab ab"));
+      assert.equal(firstRegExp.lastIndex, 2);
+      assert.equal(secondRegExp.lastIndex, 0);
+    });
+
+    it("should preserve array subclass prototypes on protected views", () => {
+      const marker = Symbol.for("@test/issue-491/array-subclass");
+
+      class TaggedArray<T> extends Array<T> {
+        first(): T | undefined {
+          return this[0];
+        }
+      }
+
+      const rawArray = TaggedArray.from([{ value: 1 }]) as TaggedArray<
+        { value: number }
+      >;
+      const state = injectAnnotations(undefined, { [marker]: rawArray });
+      const annotations = getAnnotations(state);
+
+      assert.ok(annotations !== undefined);
+
+      const received = annotations[marker] as TaggedArray<{ value: number }>;
+
+      assert.ok(received instanceof TaggedArray);
+      assert.equal(received.first()?.value, 1);
+      assert.throws(
+        () => {
+          const first = received.first();
+          assert.ok(first !== undefined);
+          first.value = 2;
+        },
+        { name: "TypeError" },
+      );
+      assert.equal(rawArray.first()?.value, 1);
+    });
+
+    it("should protect custom properties on built-in annotation views", () => {
+      const marker = Symbol.for("@test/issue-491/builtin-custom-property");
+
+      const cases = [
+        new Map<string, string>(),
+        new Set(["a"]),
+        new Date("2026-03-08T00:00:00.000Z"),
+        new URL("https://example.com/a?x=1"),
+        new URLSearchParams("x=1"),
+      ] as const;
+
+      for (const rawValue of cases) {
+        const withCustomProperty = rawValue as (typeof rawValue) & {
+          extra: { value: number };
+        };
+        withCustomProperty.extra = { value: 1 };
+
+        const state = injectAnnotations(undefined, {
+          [marker]: withCustomProperty,
+        });
+        const annotations = getAnnotations(state);
+
+        assert.ok(annotations !== undefined);
+
+        const received = annotations[marker] as (typeof rawValue) & {
+          extra: { value: number };
+        };
+        const descriptor = Object.getOwnPropertyDescriptor(received, "extra");
+
+        assert.notEqual(received.extra, withCustomProperty.extra);
+        assert.equal(received.extra.value, 1);
+        assert.ok(descriptor != null && "value" in descriptor);
+        assert.notEqual(descriptor.value, withCustomProperty.extra);
+        assert.throws(
+          () => {
+            received.extra.value = 2;
+          },
+          { name: "TypeError" },
+        );
+        assert.equal(withCustomProperty.extra.value, 1);
+      }
     });
 
     it("should throw when mutating URL-like annotations", () => {

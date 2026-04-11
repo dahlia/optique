@@ -17,9 +17,8 @@ import {
 import type { DeferredMap, ValueParserResult } from "./valueparser.ts";
 import {
   hasMeaningfulAnnotations,
-  injectAnnotations,
+  injectFreshRunAnnotations,
   isInjectedAnnotationWrapper,
-  normalizeRunAnnotationInput,
   type ParseOptions,
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
@@ -839,7 +838,7 @@ function injectAnnotationsIntoState<TState>(
   if (!hasMeaningfulAnnotations(annotations)) {
     return state;
   }
-  return injectAnnotations(state, normalizeRunAnnotationInput(annotations));
+  return injectFreshRunAnnotations(state, annotations);
 }
 
 /**
