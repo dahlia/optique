@@ -406,9 +406,11 @@ function createProtectedDateView(target: Date): Date {
 
 function createProtectedRegExpView(target: RegExp): RegExp {
   const methodCache = new Map<PropertyKey, unknown>();
-  const view = new Proxy(target, {
-    get(target, key) {
-      const value = Reflect.get(target, key, target);
+  const cloned = new RegExp(target) as RegExp;
+  cloned.lastIndex = target.lastIndex;
+  const view = new Proxy(cloned, {
+    get(clonedTarget, key) {
+      const value = Reflect.get(clonedTarget, key, clonedTarget);
       if (key === "compile") {
         return cacheProtectedMethod(
           methodCache,
@@ -416,7 +418,7 @@ function createProtectedRegExpView(target: RegExp): RegExp {
           () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
         );
       }
-      return typeof value === "function" ? value.bind(target) : value;
+      return typeof value === "function" ? value.bind(clonedTarget) : value;
     },
     set() {
       throwReadonlyAnnotationMutation();

@@ -183,6 +183,23 @@ describe("getAnnotations", () => {
       assert.equal(rawRegExp.lastIndex, 0);
     });
 
+    it("should not leak RegExp lastIndex mutations back to the caller object", () => {
+      const marker = Symbol.for("@test/issue-491/regexp-last-index");
+      const rawRegExp = /ab+/g;
+      const state = injectAnnotations(undefined, { [marker]: rawRegExp });
+
+      const annotations = getAnnotations(state);
+      assert.ok(annotations !== undefined);
+      const protectedRegExp = annotations[marker] as RegExp;
+
+      assert.equal(protectedRegExp.test("ab ab"), true);
+      assert.equal(protectedRegExp.lastIndex, 2);
+      assert.equal(rawRegExp.lastIndex, 0);
+
+      assert.equal(protectedRegExp.exec("ab ab")?.[0], "ab");
+      assert.equal(rawRegExp.lastIndex, 0);
+    });
+
     it("should throw when mutating URL-like annotations", () => {
       const marker = Symbol.for("@test/issue-491/url");
       const rawUrl = new URL("https://example.com/a?x=1");
