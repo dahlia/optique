@@ -10276,7 +10276,7 @@ describe("branch coverage: facade.ts edge cases", () => {
 
     assert.ok(
       (result as { readonly phase2?: boolean; readonly phase1?: boolean })
-        .phase2 === true,
+        .phase2,
     );
     assert.ok(
       !("phase1" in
