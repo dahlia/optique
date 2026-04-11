@@ -442,6 +442,33 @@ describe("getAnnotations", () => {
       }
     });
 
+    it("should keep frozen function properties readable on clone-backed views", () => {
+      const marker = Symbol.for("@test/issue-491/frozen-function");
+      const source = new Map<string, string>();
+      const fn = function thisIsReadonly(): string {
+        return "ok";
+      };
+
+      Object.defineProperty(source, "extraFn", {
+        value: fn,
+        enumerable: true,
+        configurable: false,
+        writable: false,
+      });
+
+      const state = injectAnnotations(undefined, { [marker]: source });
+      const annotations = getAnnotations(state);
+
+      assert.ok(annotations !== undefined);
+
+      const received = annotations[marker] as Map<string, string> & {
+        extraFn: () => string;
+      };
+
+      assert.equal(received.extraFn, fn);
+      assert.equal(received.extraFn(), "ok");
+    });
+
     it("should keep clone-backed built-in method identity stable", () => {
       const marker = Symbol.for("@test/issue-491/clone-method-identity");
       const state = injectAnnotations(undefined, {

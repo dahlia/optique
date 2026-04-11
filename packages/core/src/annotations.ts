@@ -132,6 +132,15 @@ function getProtectedClonePropertyValue(
   value: unknown,
   context: AnnotationProtectionContext,
 ): unknown {
+  const ownDescriptor = Reflect.getOwnPropertyDescriptor(target, key);
+  if (
+    ownDescriptor != null &&
+    "value" in ownDescriptor &&
+    ownDescriptor.configurable === false &&
+    ownDescriptor.writable === false
+  ) {
+    return ownDescriptor.value;
+  }
   if (typeof value !== "function") {
     return protectAnnotationValue(value, context);
   }
