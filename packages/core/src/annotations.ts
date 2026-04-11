@@ -129,6 +129,37 @@ function defineProtectedDataProperty(
   });
 }
 
+function copyRegExpMetadata(
+  source: RegExp,
+  target: RegExp,
+  transformValue?: (value: unknown) => unknown,
+): void {
+  const sourcePrototype = Object.getPrototypeOf(source);
+  if (Object.getPrototypeOf(target) !== sourcePrototype) {
+    Object.setPrototypeOf(target, sourcePrototype);
+  }
+  for (const key of Reflect.ownKeys(source)) {
+    if (key === "lastIndex") continue;
+    const descriptor = Object.getOwnPropertyDescriptor(source, key);
+    if (descriptor == null) continue;
+    if ("value" in descriptor && transformValue != null) {
+      Object.defineProperty(target, key, {
+        ...descriptor,
+        value: transformValue(descriptor.value),
+      });
+      continue;
+    }
+    Object.defineProperty(target, key, descriptor);
+  }
+  target.lastIndex = source.lastIndex;
+}
+
+function cloneRegExpShape<T extends RegExp>(source: T): T {
+  const cloned = new RegExp(source) as T;
+  copyRegExpMetadata(source, cloned);
+  return cloned;
+}
+
 function createProtectedObjectView<T extends object>(
   target: T,
   context: AnnotationProtectionContext,
@@ -436,10 +467,8 @@ function createProtectedRegExpView(
 ): RegExp {
   const methodCache = new Map<PropertyKey, unknown>();
   const cloned = new RegExp(target) as RegExp;
-  cloned.lastIndex = target.lastIndex;
   const view = new Proxy(cloned, {
     get(clonedTarget, key) {
-      const value = Reflect.get(clonedTarget, key, clonedTarget);
       if (key === "compile") {
         return cacheProtectedMethod(
           methodCache,
@@ -447,7 +476,14 @@ function createProtectedRegExpView(
           () => (..._args: unknown[]) => throwReadonlyAnnotationMutation(),
         );
       }
-      return typeof value === "function" ? value.bind(clonedTarget) : value;
+      const ownDescriptor = Object.getOwnPropertyDescriptor(clonedTarget, key);
+      if (ownDescriptor != null && "value" in ownDescriptor) {
+        return ownDescriptor.value;
+      }
+      const value = Reflect.get(clonedTarget, key, clonedTarget);
+      return typeof value === "function"
+        ? value.bind(clonedTarget)
+        : protectAnnotationValue(value, context);
     },
     set() {
       throwReadonlyAnnotationMutation();
@@ -465,7 +501,13 @@ function createProtectedRegExpView(
       throwReadonlyAnnotationMutation();
     },
   });
-  return registerProtectedAnnotationView(context, target, view);
+  registerProtectedAnnotationView(context, target, view);
+  copyRegExpMetadata(
+    target,
+    cloned,
+    (value) => protectAnnotationValue(value, context),
+  );
+  return view;
 }
 
 function createProtectedURLSearchParamsView(
@@ -674,7 +716,7 @@ export interface ParseOptions {
    * Optique treats these values as immutable input and exposes them back to
    * parsers only through protected read-only views.
    */
-  annotations?: Annotations;
+  annotations?: Annotations | ReadonlyAnnotations;
 }
 
 /**
@@ -741,7 +783,9 @@ export function annotateFreshArray<T>(
   if (annotations === undefined) {
     return target;
   }
-  const annotated = target as readonly T[] & { [annotationKey]?: Annotations };
+  const annotated = target as readonly T[] & {
+    [annotationKey]?: ReadonlyAnnotations;
+  };
   annotated[annotationKey] = annotations;
   return annotated as readonly T[];
 }
@@ -771,37 +815,36 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
   }
   if (Array.isArray(target)) {
     const cloned = [...target];
-    (cloned as typeof cloned & { [annotationKey]?: Annotations })[
+    (cloned as typeof cloned & { [annotationKey]?: ReadonlyAnnotations })[
       annotationKey
     ] = annotations;
     return cloned as T;
   }
   if (target instanceof Date) {
     const cloned = new Date(target.getTime()) as Date & {
-      [annotationKey]?: Annotations;
+      [annotationKey]?: ReadonlyAnnotations;
     };
     cloned[annotationKey] = annotations;
     return cloned as T;
   }
   if (target instanceof Map) {
     const cloned = new Map(target) as Map<unknown, unknown> & {
-      [annotationKey]?: Annotations;
+      [annotationKey]?: ReadonlyAnnotations;
     };
     cloned[annotationKey] = annotations;
     return cloned as T;
   }
   if (target instanceof Set) {
     const cloned = new Set(target) as Set<unknown> & {
-      [annotationKey]?: Annotations;
+      [annotationKey]?: ReadonlyAnnotations;
     };
     cloned[annotationKey] = annotations;
     return cloned as T;
   }
   if (target instanceof RegExp) {
-    const cloned = new RegExp(target) as RegExp & {
-      [annotationKey]?: Annotations;
+    const cloned = cloneRegExpShape(target) as RegExp & {
+      [annotationKey]?: ReadonlyAnnotations;
     };
-    cloned.lastIndex = target.lastIndex;
     cloned[annotationKey] = annotations;
     return cloned as T;
   }
@@ -816,7 +859,7 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
   const cloned = Object.create(
     Object.getPrototypeOf(target),
     Object.getOwnPropertyDescriptors(target),
-  ) as T & { [annotationKey]?: Annotations };
+  ) as T & { [annotationKey]?: ReadonlyAnnotations };
   cloned[annotationKey] = annotations;
   return cloned;
 }
@@ -895,7 +938,7 @@ export function injectAnnotations<TState>(
   }
   if (Array.isArray(state)) {
     const cloned = [...state];
-    (cloned as typeof cloned & { [annotationKey]?: Annotations })[
+    (cloned as typeof cloned & { [annotationKey]?: ReadonlyAnnotations })[
       annotationKey
     ] = protectedAnnotations;
     return cloned as TState;
@@ -903,37 +946,36 @@ export function injectAnnotations<TState>(
   if (isInjectedAnnotationWrapper(state)) {
     (
       state as TState & {
-        [annotationKey]?: Annotations;
+        [annotationKey]?: ReadonlyAnnotations;
       }
     )[annotationKey] = protectedAnnotations;
     return state;
   }
   if (state instanceof Date) {
     const cloned = new Date(state.getTime()) as Date & {
-      [annotationKey]?: Annotations;
+      [annotationKey]?: ReadonlyAnnotations;
     };
     cloned[annotationKey] = protectedAnnotations;
     return cloned as TState;
   }
   if (state instanceof Map) {
     const cloned = new Map(state) as Map<unknown, unknown> & {
-      [annotationKey]?: Annotations;
+      [annotationKey]?: ReadonlyAnnotations;
     };
     cloned[annotationKey] = protectedAnnotations;
     return cloned as TState;
   }
   if (state instanceof Set) {
     const cloned = new Set(state) as Set<unknown> & {
-      [annotationKey]?: Annotations;
+      [annotationKey]?: ReadonlyAnnotations;
     };
     cloned[annotationKey] = protectedAnnotations;
     return cloned as TState;
   }
   if (state instanceof RegExp) {
-    const cloned = new RegExp(state) as RegExp & {
-      [annotationKey]?: Annotations;
+    const cloned = cloneRegExpShape(state) as RegExp & {
+      [annotationKey]?: ReadonlyAnnotations;
     };
-    cloned.lastIndex = state.lastIndex;
     cloned[annotationKey] = protectedAnnotations;
     return cloned as TState;
   }
@@ -947,7 +989,7 @@ export function injectAnnotations<TState>(
   const cloned = Object.create(
     proto,
     Object.getOwnPropertyDescriptors(state as Record<PropertyKey, unknown>),
-  ) as TState & { [annotationKey]?: Annotations };
+  ) as TState & { [annotationKey]?: ReadonlyAnnotations };
   cloned[annotationKey] = protectedAnnotations;
   return cloned;
 }

@@ -34,6 +34,7 @@ import {
 import { dependency, deriveFromSync } from "@optique/core/dependency";
 import {
   getAnnotations,
+  injectAnnotations,
   isInjectedAnnotationWrapper,
   type ParseOptions,
 } from "@optique/core/annotations";
@@ -2564,6 +2565,18 @@ describe("Annotations system", () => {
     if (result.success) {
       assert.equal(result.value, true);
     }
+  });
+
+  it("should accept read-only annotations from getAnnotations() in ParseOptions", () => {
+    const marker = Symbol.for("@test/readonly-parse-options");
+    const injectedState = injectAnnotations(undefined, {
+      [marker]: { value: 1 },
+    });
+    const annotations = getAnnotations(injectedState);
+
+    assert.ok(annotations !== undefined);
+    const result = parse(constant("ok"), [], { annotations });
+    assert.ok(result.success);
   });
 
   it("should support multiple annotation keys", async () => {

@@ -200,6 +200,47 @@ describe("getAnnotations", () => {
       assert.equal(rawRegExp.lastIndex, 0);
     });
 
+    it("should preserve RegExp metadata on protected views", () => {
+      const marker = Symbol.for("@test/issue-491/regexp-metadata");
+      const extraKey = Symbol.for("@test/issue-491/regexp-extra");
+
+      class TaggedRegExp extends RegExp {
+        readonly label = "tagged";
+
+        matches(input: string): boolean {
+          return this.test(input);
+        }
+      }
+
+      const rawRegExp = new TaggedRegExp("ab+", "gi") as TaggedRegExp & {
+        [extraKey]: { value: number };
+      };
+      rawRegExp.lastIndex = 2;
+      rawRegExp[extraKey] = { value: 1 };
+
+      const state = injectAnnotations(undefined, { [marker]: rawRegExp });
+      const annotations = getAnnotations(state);
+      assert.ok(annotations !== undefined);
+
+      const protectedRegExp = annotations[marker] as TaggedRegExp & {
+        [extraKey]: { value: number };
+      };
+
+      assert.ok(protectedRegExp instanceof TaggedRegExp);
+      assert.equal(protectedRegExp.label, "tagged");
+      assert.equal(protectedRegExp.lastIndex, 2);
+      assert.ok(protectedRegExp.matches("zzabbb"));
+      assert.notEqual(protectedRegExp[extraKey], rawRegExp[extraKey]);
+      assert.equal(protectedRegExp[extraKey].value, 1);
+      assert.throws(
+        () => {
+          protectedRegExp[extraKey].value = 2;
+        },
+        { name: "TypeError" },
+      );
+      assert.equal(rawRegExp[extraKey].value, 1);
+    });
+
     it("should not reuse protected views across separate injectAnnotations() calls", () => {
       const marker = Symbol.for("@test/issue-491/per-run-cache");
       const sharedAnnotations = { [marker]: /ab+/g };
@@ -358,15 +399,24 @@ describe("injectAnnotations", () => {
 
   it("should preserve RegExp state shape", () => {
     const marker = Symbol.for("@test/inject-regexp");
-    const source = /ab+/gi;
+    class TaggedRegExp extends RegExp {
+      readonly label = "tagged";
+    }
+    const extraKey = Symbol.for("@test/inject-regexp-extra");
+    const source = new TaggedRegExp("ab+", "gi") as TaggedRegExp & {
+      [extraKey]: { value: number };
+    };
+    source[extraKey] = { value: 1 };
     source.lastIndex = 3;
     const result = injectAnnotations(source, { [marker]: "ok" });
 
-    assert.ok(result instanceof RegExp);
+    assert.ok(result instanceof TaggedRegExp);
     assert.notEqual(result, source);
     assert.equal(result.source, "ab+");
     assert.equal(result.flags, "gi");
     assert.equal(result.lastIndex, 3);
+    assert.equal(result.label, "tagged");
+    assert.equal(result[extraKey], source[extraKey]);
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 
@@ -541,15 +591,24 @@ describe("inheritAnnotations", () => {
   it("should preserve RegExp state shape", () => {
     const marker = Symbol.for("@test/inherit-regexp");
     const source = { [annotationKey]: { [marker]: "ok" } };
-    const target = /ab+/gi;
+    class TaggedRegExp extends RegExp {
+      readonly label = "tagged";
+    }
+    const extraKey = Symbol.for("@test/inherit-regexp-extra");
+    const target = new TaggedRegExp("ab+", "gi") as TaggedRegExp & {
+      [extraKey]: { value: number };
+    };
+    target[extraKey] = { value: 1 };
     target.lastIndex = 4;
     const result = inheritAnnotations(source, target);
 
-    assert.ok(result instanceof RegExp);
+    assert.ok(result instanceof TaggedRegExp);
     assert.notEqual(result, target);
     assert.equal(result.source, "ab+");
     assert.equal(result.flags, "gi");
     assert.equal(result.lastIndex, 4);
+    assert.equal(result.label, "tagged");
+    assert.equal(result[extraKey], target[extraKey]);
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 
