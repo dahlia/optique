@@ -1,6 +1,7 @@
 import {
   getDelegatedAnnotationState,
   hasDelegatedAnnotationCarrier,
+  isAnnotationWrappedInitialState,
   normalizeDelegatedAnnotationState,
   normalizeNestedDelegatedAnnotationState,
 } from "./annotation-state.ts";
@@ -190,16 +191,20 @@ function completeOptionalLikeSync<TValue, TState>(
   exec?: ExecutionContext,
 ): ValueParserResult<TValue> {
   const hasCarrier = hasDelegatedAnnotationCarrier(state);
+  const shouldRetryFalseResult = isAnnotationWrappedInitialState(state);
+  const run = (candidate: TState) =>
+    normalizeOptionalLikeCompleteResult(parser.complete(candidate, exec));
   try {
-    return normalizeOptionalLikeCompleteResult(parser.complete(state, exec));
+    const result = run(state);
+    if (!result.success && shouldRetryFalseResult) {
+      return run(normalizeDelegatedAnnotationState(state));
+    }
+    return result;
   } catch (error) {
     if (!hasCarrier) {
       throw error;
     }
-    const fallbackState = normalizeDelegatedAnnotationState(state);
-    return normalizeOptionalLikeCompleteResult(
-      parser.complete(fallbackState, exec),
-    );
+    return run(normalizeDelegatedAnnotationState(state));
   }
 }
 
@@ -209,18 +214,20 @@ async function completeOptionalLikeAsync<TValue, TState>(
   exec?: ExecutionContext,
 ): Promise<ValueParserResult<TValue>> {
   const hasCarrier = hasDelegatedAnnotationCarrier(state);
+  const shouldRetryFalseResult = isAnnotationWrappedInitialState(state);
+  const run = async (candidate: TState) =>
+    normalizeOptionalLikeCompleteResult(await parser.complete(candidate, exec));
   try {
-    return normalizeOptionalLikeCompleteResult(
-      await parser.complete(state, exec),
-    );
+    const result = await run(state);
+    if (!result.success && shouldRetryFalseResult) {
+      return await run(normalizeDelegatedAnnotationState(state));
+    }
+    return result;
   } catch (error) {
     if (!hasCarrier) {
       throw error;
     }
-    const fallbackState = normalizeDelegatedAnnotationState(state);
-    return normalizeOptionalLikeCompleteResult(
-      await parser.complete(fallbackState, exec),
-    );
+    return await run(normalizeDelegatedAnnotationState(state));
   }
 }
 
@@ -528,10 +535,20 @@ function adaptShouldDeferCompletion<TState>(
         parser.initialState,
         parser,
       );
+      const hasCarrier = hasDelegatedAnnotationCarrier(innerState);
+      const shouldRetryFalseResult = hasCarrier &&
+        isAnnotationWrappedInitialState(innerState);
       try {
-        return innerCheck(innerState, exec);
+        const result = innerCheck(innerState, exec);
+        if (!result && shouldRetryFalseResult) {
+          return innerCheck(
+            normalizeDelegatedAnnotationState(innerState),
+            exec,
+          );
+        }
+        return result;
       } catch (error) {
-        if (!hasDelegatedAnnotationCarrier(innerState)) {
+        if (!hasCarrier) {
           throw error;
         }
         return innerCheck(normalizeDelegatedAnnotationState(innerState), exec);

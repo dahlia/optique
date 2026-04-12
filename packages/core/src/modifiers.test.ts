@@ -8264,6 +8264,147 @@ describe(
         assert.equal(getAnnotations(state), undefined);
       });
 
+      it(`${name} complete() retries wrapped initial-state failures`, () => {
+        const seenStates: unknown[] = [];
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context: ParserContext<unknown>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: unknown) {
+            seenStates.push(state);
+            return state === undefined
+              ? { success: true as const, value: "resolved" }
+              : { success: false as const, error: message`Wrapped failure.` };
+          },
+          shouldDeferCompletion(state: unknown) {
+            return state === undefined;
+          },
+          suggest: function* () {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotationsLocal(undefined, {
+          [Symbol.for(`@test/issue-594/${name}/wrapped-initial-complete`)]:
+            true,
+        });
+
+        const result = parser.complete(
+          outerState as unknown as [unknown] | undefined,
+        );
+
+        assert.deepEqual(result, {
+          success: true,
+          value: "resolved",
+        });
+        assert.deepEqual(seenStates, [outerState, undefined]);
+      });
+
+      it(`${name} async complete() retries wrapped initial-state failures`, async () => {
+        const seenStates: unknown[] = [];
+        const parser = wrap({
+          $mode: "async" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context: ParserContext<unknown>) {
+            return Promise.resolve({
+              success: true as const,
+              next: context,
+              consumed: [],
+            });
+          },
+          complete(state: unknown) {
+            seenStates.push(state);
+            return Promise.resolve(
+              state === undefined
+                ? { success: true as const, value: "resolved" }
+                : {
+                  success: false as const,
+                  error: message`Wrapped async failure.`,
+                },
+            );
+          },
+          shouldDeferCompletion(state: unknown) {
+            return state === undefined;
+          },
+          suggest: async function* () {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotationsLocal(undefined, {
+          [
+            Symbol.for(`@test/issue-594/${name}/wrapped-initial-async-complete`)
+          ]: true,
+        });
+
+        const result = await parser.complete(
+          outerState as unknown as [unknown] | undefined,
+        );
+
+        assert.deepEqual(result, {
+          success: true,
+          value: "resolved",
+        });
+        assert.deepEqual(seenStates, [outerState, undefined]);
+      });
+
+      it(
+        `${name} shouldDeferCompletion() retries wrapped initial-state false results`,
+        () => {
+          const seenStates: unknown[] = [];
+          const parser = wrap({
+            $mode: "sync" as const,
+            $valueType: [] as const,
+            $stateType: [] as const,
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: undefined,
+            parse(context: ParserContext<unknown>) {
+              return { success: true as const, next: context, consumed: [] };
+            },
+            complete() {
+              return { success: true as const, value: "unused" };
+            },
+            shouldDeferCompletion(state: unknown) {
+              seenStates.push(state);
+              return state === undefined;
+            },
+            suggest: function* () {},
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          });
+          const outerState = injectAnnotationsLocal(undefined, {
+            [
+              Symbol.for(`@test/issue-594/${name}/wrapped-initial-defer`)
+            ]: true,
+          });
+
+          assert.ok(
+            parser.shouldDeferCompletion?.(
+              outerState as unknown as [unknown] | undefined,
+            ),
+          );
+          assert.deepEqual(seenStates, [outerState, undefined]);
+        },
+      );
+
       it(
         `${name} complete() preserves delegated completion failures without retrying`,
         () => {
