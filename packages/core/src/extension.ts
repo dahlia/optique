@@ -86,6 +86,7 @@ const emptyTraits: Readonly<ParserTraits> = Object.freeze({});
  *
  * @param parser The parser object to annotate.
  * @param traits Traits to enable.
+ * @returns Nothing.
  * @since 1.0.0
  */
 export function defineTraits(parser: object, traits: ParserTraits): void {
