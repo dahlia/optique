@@ -439,11 +439,14 @@ function deriveOptionalInnerParseState<TState>(
     // `object()`'s `getAnnotatedChildState()` when the previous parse
     // iteration's wrapped state is re-committed to the parent object
     // (the parent stamps the array wrapper, not the inner element).
-    // Mirror `normalizeOptionalLikeInnerState()`'s array handling so
-    // that source-binding wrappers under `optional()` / `withDefault()`
-    // see the same annotations on parse-time re-entry that they see in
+    // Mirror the object-state part of
+    // `normalizeOptionalLikeInnerState()`'s array handling so that
+    // source-binding wrappers under `optional()` / `withDefault()` see
+    // the same annotations on parse-time re-entry that they see in
     // complete-time, instead of dropping them on the way back into the
-    // inner parser.
+    // inner parser. Primitive inner states still pass through verbatim
+    // here so parse-time re-entry does not reintroduce injected wrapper
+    // objects into echo-style parsers.
     if (
       getAnnotations(outerState) != null &&
       innerState != null &&
