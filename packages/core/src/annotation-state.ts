@@ -156,10 +156,18 @@ export function hasDelegatedAnnotationCarrier(state: unknown): boolean {
 }
 
 interface NestedNormalizationEntry {
-  clone: object;
+  clone: object | undefined;
+  createClone: () => object;
   finalized: boolean;
   result: object;
   preferCloneOnRead: boolean;
+}
+
+function getOrCreateNestedNormalizationClone(
+  entry: NestedNormalizationEntry,
+): object {
+  entry.clone ??= entry.createClone();
+  return entry.clone;
 }
 
 function getPendingNestedNormalizationEntry(
@@ -171,23 +179,47 @@ function getPendingNestedNormalizationEntry(
     return undefined;
   }
   const entry = seen.get(originalValue as object);
-  return entry != null && entry.clone === normalizedValue &&
+  return entry != null && entry.clone != null &&
+      entry.clone === normalizedValue &&
       (!entry.finalized || entry.preferCloneOnRead)
     ? entry
     : undefined;
 }
 
 function createPendingNestedNormalizationClone(source: object): object {
-  return Array.isArray(source)
-    ? []
-    : Object.create(Object.getPrototypeOf(source));
+  if (!Array.isArray(source)) {
+    return Object.create(Object.getPrototypeOf(source));
+  }
+  if (Object.getPrototypeOf(source) === Array.prototype) {
+    return [];
+  }
+  try {
+    return source.slice(0, 0);
+  } catch {
+    return [];
+  }
 }
 
 function createPendingNestedNormalizationCollectionClone<
   T extends Map<unknown, unknown> | Set<unknown>,
 >(source: T): T {
-  const Constructor = source.constructor as new () => T;
-  return new Constructor();
+  const proto = Object.getPrototypeOf(source);
+  if (source instanceof Map && proto === Map.prototype) {
+    return new Map<unknown, unknown>() as T;
+  }
+  if (source instanceof Set && proto === Set.prototype) {
+    return new Set<unknown>() as T;
+  }
+  const Constructor = source.constructor as (new () => T) | undefined;
+  if (typeof Constructor === "function") {
+    try {
+      return new Constructor();
+    } catch {
+      // Fall through to a base collection when the subclass constructor
+      // requires arguments or performs unsupported construction.
+    }
+  }
+  return (source instanceof Map ? new Map() : new Set()) as T;
 }
 
 function normalizeNestedDelegatedStructuredState<T extends object>(
@@ -195,11 +227,11 @@ function normalizeNestedDelegatedStructuredState<T extends object>(
   seen: WeakMap<object, NestedNormalizationEntry>,
   preferPendingClone: boolean,
 ): T {
-  const clone = createPendingNestedNormalizationClone(source);
   const entry: NestedNormalizationEntry = {
-    clone,
+    clone: undefined,
+    createClone: () => createPendingNestedNormalizationClone(source),
     finalized: false,
-    result: clone,
+    result: source,
     preferCloneOnRead: false,
   };
   seen.set(source, entry);
@@ -249,6 +281,7 @@ function normalizeNestedDelegatedStructuredState<T extends object>(
     descriptors[key] = { ...descriptor, value: nextValue };
   }
 
+  const clone = getOrCreateNestedNormalizationClone(entry);
   Object.defineProperties(clone, descriptors);
   entry.finalized = true;
   entry.preferCloneOnRead = !changed && hasPendingAliasOverride;
@@ -261,11 +294,11 @@ function normalizeNestedDelegatedMapState<T extends Map<unknown, unknown>>(
   seen: WeakMap<object, NestedNormalizationEntry>,
   preferPendingClone: boolean,
 ): T {
-  const clone = createPendingNestedNormalizationCollectionClone(source);
   const entry: NestedNormalizationEntry = {
-    clone,
+    clone: undefined,
+    createClone: () => createPendingNestedNormalizationCollectionClone(source),
     finalized: false,
-    result: clone,
+    result: source,
     preferCloneOnRead: false,
   };
   seen.set(source, entry);
@@ -331,6 +364,7 @@ function normalizeNestedDelegatedMapState<T extends Map<unknown, unknown>>(
     return source;
   }
 
+  const clone = getOrCreateNestedNormalizationClone(entry) as T;
   for (const [key, value] of normalizedEntries) {
     clone.set(key, value);
   }
@@ -359,11 +393,11 @@ function normalizeNestedDelegatedSetState<T extends Set<unknown>>(
   seen: WeakMap<object, NestedNormalizationEntry>,
   preferPendingClone: boolean,
 ): T {
-  const clone = createPendingNestedNormalizationCollectionClone(source);
   const entry: NestedNormalizationEntry = {
-    clone,
+    clone: undefined,
+    createClone: () => createPendingNestedNormalizationCollectionClone(source),
     finalized: false,
-    result: clone,
+    result: source,
     preferCloneOnRead: false,
   };
   seen.set(source, entry);
@@ -420,6 +454,7 @@ function normalizeNestedDelegatedSetState<T extends Set<unknown>>(
     return source;
   }
 
+  const clone = getOrCreateNestedNormalizationClone(entry) as T;
   for (const value of normalizedValues) {
     clone.add(value);
   }
@@ -472,11 +507,11 @@ export function normalizeNestedDelegatedAnnotationState<T>(
   const existing = seen.get(source);
   if (existing != null) {
     if (!existing.finalized) {
-      return existing.clone as T;
+      return getOrCreateNestedNormalizationClone(existing) as T;
     }
     return (
       preferPendingClone && existing.preferCloneOnRead
-        ? existing.clone
+        ? getOrCreateNestedNormalizationClone(existing)
         : existing.result
     ) as T;
   }

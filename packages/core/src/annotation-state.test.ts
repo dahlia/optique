@@ -307,6 +307,42 @@ describe("annotation-state", () => {
   );
 
   it(
+    "normalizeNestedDelegatedAnnotationState() preserves Array subclasses while unwrapping entries",
+    () => {
+      class StatefulArray<T> extends Array<T> {
+        #secret = "private-value";
+
+        read(): string {
+          return this.#secret;
+        }
+      }
+
+      const delegatedParent = injectAnnotations(undefined, {
+        [
+          Symbol.for(
+            "@test/normalizeNestedDelegatedAnnotationState-array-subclass-parent",
+          )
+        ]: true,
+      });
+      const state = new StatefulArray<unknown>();
+      state.push(
+        getDelegatedAnnotationState(delegatedParent, "seed"),
+        { inner: getDelegatedAnnotationState(delegatedParent, "value") },
+      );
+
+      const normalized = normalizeNestedDelegatedAnnotationState(state);
+
+      assert.notStrictEqual(normalized, state);
+      assert.ok(normalized instanceof StatefulArray);
+      assert.equal(normalized.read(), "private-value");
+      assert.deepEqual([...normalized], [
+        "seed",
+        { inner: "value" },
+      ]);
+    },
+  );
+
+  it(
     "normalizeNestedDelegatedAnnotationState() preserves array metadata and normalizes nested custom properties",
     () => {
       const arrayMarker = Symbol.for(
@@ -469,6 +505,76 @@ describe("annotation-state", () => {
   );
 
   it(
+    "normalizeNestedDelegatedAnnotationState() skips Map subclass clone construction when nothing changes",
+    () => {
+      class RequiredArgMap extends Map<string, string> {
+        readonly label: string;
+
+        constructor(
+          label: string,
+          entries?: Iterable<readonly [string, string]>,
+        ) {
+          if (label.length === 0) {
+            throw new TypeError("label must not be empty.");
+          }
+          super(entries);
+          this.label = label;
+        }
+      }
+
+      const state = new RequiredArgMap("required", [["key", "value"]]);
+
+      const normalized = normalizeNestedDelegatedAnnotationState(state);
+
+      assert.strictEqual(normalized, state);
+      assert.equal(normalized.label, "required");
+      assert.equal(normalized.get("key"), "value");
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() falls back when Map subclass clone construction requires args",
+    () => {
+      class RequiredArgMap extends Map<string, unknown> {
+        readonly label: string;
+
+        constructor(
+          label: string,
+          entries?: Iterable<readonly [string, unknown]>,
+        ) {
+          if (label.length === 0) {
+            throw new TypeError("label must not be empty.");
+          }
+          super(entries);
+          this.label = label;
+        }
+      }
+
+      const delegatedParent = injectAnnotations(undefined, {
+        [
+          Symbol.for(
+            "@test/normalizeNestedDelegatedAnnotationState-map-required-arg-parent",
+          )
+        ]: true,
+      });
+      const state = new RequiredArgMap("required", [[
+        "key",
+        getDelegatedAnnotationState(delegatedParent, "value"),
+      ]]);
+
+      const normalized: unknown = normalizeNestedDelegatedAnnotationState(
+        state,
+      );
+
+      assert.notStrictEqual(normalized, state);
+      assert.ok(normalized instanceof Map);
+      assert.ok(!(normalized instanceof RequiredArgMap));
+      assert.equal(Reflect.get(normalized, "label"), "required");
+      assert.equal(normalized.get("key"), "value");
+    },
+  );
+
+  it(
     "normalizeNestedDelegatedAnnotationState() unwraps nested carriers in Set entries",
     () => {
       class StatefulObject {
@@ -539,6 +645,31 @@ describe("annotation-state", () => {
       assert.ok(normalized instanceof StatefulSet);
       assert.equal(normalized.read(), "private-value");
       assert.ok(normalized.has("seed"));
+      assert.ok(normalized.has("value"));
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() skips Set subclass clone construction when nothing changes",
+    () => {
+      class RequiredArgSet extends Set<string> {
+        readonly label: string;
+
+        constructor(label: string, values?: Iterable<string>) {
+          if (label.length === 0) {
+            throw new TypeError("label must not be empty.");
+          }
+          super(values);
+          this.label = label;
+        }
+      }
+
+      const state = new RequiredArgSet("required", ["value"]);
+
+      const normalized = normalizeNestedDelegatedAnnotationState(state);
+
+      assert.strictEqual(normalized, state);
+      assert.equal(normalized.label, "required");
       assert.ok(normalized.has("value"));
     },
   );
