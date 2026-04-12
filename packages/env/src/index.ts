@@ -2,9 +2,16 @@ import {
   annotationKey,
   getAnnotations,
   injectAnnotations,
-  isInjectedAnnotationWrapper,
+  isInjectedAnnotationState,
 } from "@optique/core/annotations";
 import type { Annotations, SourceContext } from "@optique/core/context";
+import {
+  defineTraits,
+  delegateSuggestNodes,
+  getTraits,
+  mapSourceMetadata,
+  type ParserSourceMetadata,
+} from "@optique/core/extension";
 import { envVar, type Message, message, valueSet } from "@optique/core/message";
 import {
   dispatchByMode,
@@ -18,13 +25,6 @@ import type {
   Parser,
   ParserResult,
   Result,
-} from "@optique/core/parser";
-import {
-  composeWrappedSourceMetadata,
-  defineInheritedAnnotationParser,
-  getDelegatingSuggestRuntimeNodes,
-  inheritParentAnnotationsKey,
-  unmatchedNonCliDependencySourceStateMarker,
 } from "@optique/core/parser";
 import {
   ensureNonEmptyString,
@@ -280,7 +280,6 @@ export function bindEnv<
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
-    [unmatchedNonCliDependencySourceStateMarker]: true,
     usage: options.default !== undefined
       ? [{ type: "optional", terms: parser.usage }]
       : parser.usage,
@@ -293,7 +292,7 @@ export function bindEnv<
           ? parser.initialState
           : state.cliState as TState)
         : state;
-      return getDelegatingSuggestRuntimeNodes(
+      return delegateSuggestNodes(
         parser,
         boundParser,
         state,
@@ -382,7 +381,7 @@ export function bindEnv<
         parser,
         isEnvBindState(state)
           ? state.cliState
-          : isInjectedAnnotationWrapper(state)
+          : isInjectedAnnotationState(state)
           ? undefined
           : state,
         exec,
@@ -403,7 +402,10 @@ export function bindEnv<
       return parser.getDocFragments(state, defaultValue);
     },
   };
-  defineInheritedAnnotationParser(boundParser);
+  defineTraits(boundParser, {
+    inheritsAnnotations: true,
+    completesFromSource: true,
+  });
   // Lazily forward placeholder from inner parser to avoid eagerly
   // evaluating derived value parser factories at construction time.
   if ("placeholder" in parser) {
@@ -435,22 +437,9 @@ export function bindEnv<
       enumerable: false,
     });
   }
-  const dependencyMetadata = composeWrappedSourceMetadata(
-    (
-      parser as Parser<M, TValue, TState> & {
-        readonly dependencyMetadata?: {
-          readonly source?: {
-            readonly extractSourceValue: (
-              state: unknown,
-            ) =>
-              | ValueParserResult<unknown>
-              | Promise<ValueParserResult<unknown> | undefined>
-              | undefined;
-          };
-        };
-      }
-    ).dependencyMetadata,
-    (sourceMetadata) => ({
+  const dependencyMetadata = mapSourceMetadata(
+    parser,
+    (sourceMetadata: ParserSourceMetadata<M, TValue, TState>) => ({
       ...sourceMetadata,
       extractSourceValue: (state: unknown) => {
         if (!isEnvBindState(state)) {
@@ -635,7 +624,7 @@ function getEnvOrDefault<M extends Mode, TValue>(
     const completeState = innerState ??
       (annotations != null &&
           innerParser.initialState == null &&
-          Reflect.get(innerParser, inheritParentAnnotationsKey) === true
+          getTraits(innerParser).inheritsAnnotations === true
         ? injectAnnotations(innerParser.initialState, annotations)
         : innerParser.initialState);
     return wrapForMode(mode, innerParser.complete(completeState, exec));

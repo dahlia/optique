@@ -9,6 +9,7 @@ export default defineConfig({
     "src/constructs.ts",
     "src/dependency.ts",
     "src/doc.ts",
+    "src/extension.ts",
     "src/facade.ts",
     "src/message.ts",
     "src/mode-dispatch.ts",

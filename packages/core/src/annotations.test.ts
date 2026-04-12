@@ -9,7 +9,9 @@ import {
   getAnnotations,
   inheritAnnotations,
   injectAnnotations,
+  isInjectedAnnotationState,
   isInjectedAnnotationWrapper,
+  unwrapInjectedAnnotationState,
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
 
@@ -369,5 +371,27 @@ describe("unwrapInjectedAnnotationWrapper", () => {
     const value = { plain: true };
 
     assert.equal(unwrapInjectedAnnotationWrapper(value), value);
+  });
+});
+
+describe("public annotation-state aliases", () => {
+  it("isInjectedAnnotationState() matches the wrapper predicate", () => {
+    const wrapped = injectAnnotations(undefined, {
+      [Symbol.for("@test/a")]: 1,
+    });
+
+    assert.equal(
+      isInjectedAnnotationState(wrapped),
+      isInjectedAnnotationWrapper(wrapped),
+    );
+  });
+
+  it("unwrapInjectedAnnotationState() matches the wrapper unwrapping helper", () => {
+    const wrapped = injectAnnotations("value", { [Symbol.for("@test/a")]: 1 });
+
+    assert.equal(
+      unwrapInjectedAnnotationState(wrapped),
+      unwrapInjectedAnnotationWrapper(wrapped),
+    );
   });
 });

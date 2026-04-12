@@ -22,21 +22,21 @@ import {
   getAnnotations,
   inheritAnnotations,
   injectAnnotations,
-  unwrapInjectedAnnotationWrapper,
+  unwrapInjectedAnnotationState,
 } from "@optique/core/annotations";
+import {
+  defineTraits,
+  delegateSuggestNodes,
+  getTraits,
+  mapSourceMetadata,
+  type ParserSourceMetadata,
+} from "@optique/core/extension";
 import type {
   ExecutionContext,
   Mode,
   ModeValue,
   Parser,
   ParserResult,
-} from "@optique/core/parser";
-import {
-  annotationWrapperRequiresSourceBindingKey,
-  composeWrappedSourceMetadata,
-  defineInheritedAnnotationParser,
-  getDelegatingSuggestRuntimeNodes,
-  inheritParentAnnotationsKey,
 } from "@optique/core/parser";
 import { message } from "@optique/core/message";
 import type { ValueParserResult } from "@optique/core/valueparser";
@@ -745,9 +745,9 @@ export function prompt<M extends Mode, TValue, TState>(
   ): boolean {
     const cliStateIsInjectedAnnotationWrapper = cliState != null &&
       typeof cliState === "object" &&
-      unwrapInjectedAnnotationWrapper(cliState) !== cliState;
+      unwrapInjectedAnnotationState(cliState) !== cliState;
     const requiresSourceBindingForAnnotationWrapper =
-      Reflect.get(parser, annotationWrapperRequiresSourceBindingKey) === true;
+      getTraits(parser).requiresSourceBinding === true;
     const hasNestedSourceBinding = hasSourceBindingMarker(cliState) ||
       (Array.isArray(cliState) &&
         cliState.length === 1 &&
@@ -939,14 +939,11 @@ export function prompt<M extends Mode, TValue, TState>(
     return validatePromptedValue(result);
   }
 
-  const promptedParser: Parser<"async", TValue, TState> & {
-    readonly [inheritParentAnnotationsKey]: true;
-  } = {
+  const promptedParser: Parser<"async", TValue, TState> = {
     $mode: "async",
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
-    [inheritParentAnnotationsKey]: true,
     // prompt() makes the CLI argument optional because missing values are
     // handled interactively.  If the inner parser is already optional
     // (e.g., wrapped in optional() or withDefault()), reuse its usage
@@ -962,7 +959,7 @@ export function prompt<M extends Mode, TValue, TState>(
           ? parser.initialState
           : state.cliState as TState)
         : state;
-      return getDelegatingSuggestRuntimeNodes(
+      return delegateSuggestNodes(
         parser,
         promptedParser,
         state,
@@ -998,7 +995,7 @@ export function prompt<M extends Mode, TValue, TState>(
         : context;
       const effectiveInnerState = annotations != null &&
           innerState == null &&
-          Reflect.get(parser, inheritParentAnnotationsKey) === true
+          getTraits(parser).inheritsAnnotations === true
         ? injectAnnotations(innerState, annotations)
         : innerState;
       // Propagate annotations into the inner context state so that source-
@@ -1216,7 +1213,7 @@ export function prompt<M extends Mode, TValue, TState>(
           : undefined;
         const cliStateIsInjected = cliState != null &&
           typeof cliState === "object" &&
-          unwrapInjectedAnnotationWrapper(cliState) !== cliState;
+          unwrapInjectedAnnotationState(cliState) !== cliState;
         const isSourceBinding = shouldCompleteFromSourceBinding(
           cliState,
           state,
@@ -1338,7 +1335,7 @@ export function prompt<M extends Mode, TValue, TState>(
       return parser.getDocFragments(state, defaultValue as TValue);
     },
   };
-  defineInheritedAnnotationParser(promptedParser);
+  defineTraits(promptedParser, { inheritsAnnotations: true });
 
   // Lazily forward placeholder from inner parser so that outer wrappers
   // (withDefault, group, etc.) can see it without triggering eager
@@ -1365,22 +1362,9 @@ export function prompt<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
-  const dependencyMetadata = composeWrappedSourceMetadata(
-    (
-      parser as Parser<M, TValue, TState> & {
-        readonly dependencyMetadata?: {
-          readonly source?: {
-            readonly extractSourceValue: (
-              state: unknown,
-            ) =>
-              | ValueParserResult<unknown>
-              | Promise<ValueParserResult<unknown> | undefined>
-              | undefined;
-          };
-        };
-      }
-    ).dependencyMetadata,
-    (source) => ({
+  const dependencyMetadata = mapSourceMetadata(
+    parser,
+    (source: ParserSourceMetadata<M, TValue, TState>) => ({
       ...source,
       extractSourceValue: (state: unknown) => {
         if (!isPromptBindState(state)) {

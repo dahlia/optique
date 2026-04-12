@@ -149,7 +149,7 @@ export function annotateFreshArray<T>(
  * @param source The original state that may carry annotations.
  * @param target The new state to receive annotations.
  * @returns The target state, with annotations copied when available.
- * @internal
+ * @since 1.0.0
  */
 export function inheritAnnotations<T>(source: unknown, target: T): T {
   const annotations = getAnnotations(source);
@@ -246,7 +246,7 @@ export function hasMeaningfulAnnotations(
  * @param state The parser state to annotate.
  * @param annotations The annotations to inject.
  * @returns Annotated state.
- * @internal
+ * @since 1.0.0
  */
 export function injectAnnotations<TState>(
   state: TState,
@@ -378,4 +378,34 @@ export function isInjectedAnnotationWrapper(value: unknown): boolean {
   return value != null &&
     typeof value === "object" &&
     injectedAnnotationWrappers.has(value);
+}
+
+/**
+ * Returns whether the given value is an injected annotation state wrapper.
+ *
+ * This is the public name for Optique's primitive-state annotation wrapper
+ * predicate.  Use it when custom parsers need to detect whether annotations
+ * were attached by wrapping a primitive or nullish state value.
+ *
+ * @param value Value to check.
+ * @returns `true` if the value is an injected annotation state wrapper.
+ * @since 1.0.0
+ */
+export function isInjectedAnnotationState(value: unknown): boolean {
+  return isInjectedAnnotationWrapper(value);
+}
+
+/**
+ * Unwraps an injected annotation state wrapper when present.
+ *
+ * This is the public name for Optique's primitive-state annotation unwrapping
+ * helper.  It returns the original value unchanged for non-wrapper inputs.
+ *
+ * @param value Value to potentially unwrap.
+ * @returns The unwrapped primitive value when the input is an injected
+ *          annotation state wrapper; otherwise the original value.
+ * @since 1.0.0
+ */
+export function unwrapInjectedAnnotationState<T>(value: T): T {
+  return unwrapInjectedAnnotationWrapper(value);
 }
