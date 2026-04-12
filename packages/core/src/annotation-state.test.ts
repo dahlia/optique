@@ -2,12 +2,9 @@ import {
   type Annotations,
   getAnnotations,
   injectAnnotations,
-} from "@optique/core/annotations";
-import { message } from "@optique/core/message";
-import {
-  defineInheritedAnnotationParser,
-  type Parser,
-} from "@optique/core/parser";
+} from "./annotations.ts";
+import { message } from "./message.ts";
+import { defineInheritedAnnotationParser, type Parser } from "./parser.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {

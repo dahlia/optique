@@ -29,7 +29,12 @@ import {
   withDefault,
   WithDefaultError,
 } from "@optique/core/modifiers";
-import { map as mapLocal, multiple as multipleLocal } from "./modifiers.ts";
+import {
+  map as mapLocal,
+  multiple as multipleLocal,
+  optional as optionalLocal,
+  withDefault as withDefaultLocal,
+} from "./modifiers.ts";
 import {
   completeOrExtractPhase2Seed,
   extractPhase2SeedKey,
@@ -8012,7 +8017,7 @@ describe(
         wrap<TMode extends "sync" | "async", TValue, TState>(
           parser: Parser<TMode, TValue, TState>,
         ) {
-          return optional(parser);
+          return optionalLocal(parser);
         },
       },
       {
@@ -8020,7 +8025,7 @@ describe(
         wrap<TMode extends "sync" | "async", TValue, TState>(
           parser: Parser<TMode, TValue, TState>,
         ) {
-          return withDefault(parser, "fallback");
+          return withDefaultLocal(parser, "fallback");
         },
       },
     ] as const;
