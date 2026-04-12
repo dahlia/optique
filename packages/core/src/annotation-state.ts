@@ -183,6 +183,13 @@ function createPendingNestedNormalizationClone(source: object): object {
     : Object.create(Object.getPrototypeOf(source));
 }
 
+function createPendingNestedNormalizationCollectionClone<
+  T extends Map<unknown, unknown> | Set<unknown>,
+>(source: T): T {
+  const Constructor = source.constructor as new () => T;
+  return new Constructor();
+}
+
 function normalizeNestedDelegatedStructuredState<T extends object>(
   source: T,
   seen: WeakMap<object, NestedNormalizationEntry>,
@@ -254,7 +261,7 @@ function normalizeNestedDelegatedMapState<T extends Map<unknown, unknown>>(
   seen: WeakMap<object, NestedNormalizationEntry>,
   preferPendingClone: boolean,
 ): T {
-  const clone = new Map<unknown, unknown>();
+  const clone = createPendingNestedNormalizationCollectionClone(source);
   const entry: NestedNormalizationEntry = {
     clone,
     finalized: false,
@@ -352,7 +359,7 @@ function normalizeNestedDelegatedSetState<T extends Set<unknown>>(
   seen: WeakMap<object, NestedNormalizationEntry>,
   preferPendingClone: boolean,
 ): T {
-  const clone = new Set<unknown>();
+  const clone = createPendingNestedNormalizationCollectionClone(source);
   const entry: NestedNormalizationEntry = {
     clone,
     finalized: false,

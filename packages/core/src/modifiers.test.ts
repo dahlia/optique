@@ -8220,6 +8220,65 @@ describe(
         }
       });
 
+      it(`${name} complete() preserves Map subclass results while unwrapping entries`, () => {
+        const marker = Symbol.for(
+          `@test/issue-594/${name}/map-subclass-result`,
+        );
+
+        class StatefulMap extends Map<string, unknown> {
+          #secret = "private-value";
+
+          read(): string {
+            return this.#secret;
+          }
+        }
+
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: new StatefulMap([["seed", "value"]]),
+          parse(context: ParserContext<StatefulMap>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(innerState: StatefulMap) {
+            return {
+              success: true as const,
+              value: new StatefulMap([
+                ["annotated", getAnnotations(innerState)?.[marker] === "ok"],
+                ["inner", innerState],
+              ]),
+            };
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(
+          [new StatefulMap([["live", "value"]])] as [StatefulMap],
+          { [marker]: "ok" },
+        );
+
+        const result = parser.complete(outerState);
+
+        assert.ok(result.success);
+        if (!result.success) return;
+        assert.ok(result.value instanceof StatefulMap);
+        assert.equal(result.value.read(), "private-value");
+        assert.equal(result.value.get("annotated"), true);
+        const inner = result.value.get("inner");
+        assert.ok(inner instanceof StatefulMap);
+        assert.equal(inner.read(), "private-value");
+        assert.equal(getAnnotations(inner), undefined);
+      });
+
       it(`${name} parse() strips annotations from plain-object initial states`, () => {
         const marker = Symbol.for(
           `@test/issue-594/${name}/parse-plain-object`,

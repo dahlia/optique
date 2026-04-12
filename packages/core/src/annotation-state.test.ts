@@ -436,6 +436,39 @@ describe("annotation-state", () => {
   );
 
   it(
+    "normalizeNestedDelegatedAnnotationState() preserves Map subclasses while unwrapping entries",
+    () => {
+      class StatefulMap extends Map<string, unknown> {
+        #secret = "private-value";
+
+        read(): string {
+          return this.#secret;
+        }
+      }
+
+      const delegatedParent = injectAnnotations(undefined, {
+        [
+          Symbol.for(
+            "@test/normalizeNestedDelegatedAnnotationState-map-subclass-parent",
+          )
+        ]: true,
+      });
+      const state = new StatefulMap([
+        ["plain", getDelegatedAnnotationState(delegatedParent, "value")],
+        ["self", getDelegatedAnnotationState(delegatedParent, "seed")],
+      ]);
+
+      const normalized = normalizeNestedDelegatedAnnotationState(state);
+
+      assert.notStrictEqual(normalized, state);
+      assert.ok(normalized instanceof StatefulMap);
+      assert.equal(normalized.read(), "private-value");
+      assert.equal(normalized.get("plain"), "value");
+      assert.equal(normalized.get("self"), "seed");
+    },
+  );
+
+  it(
     "normalizeNestedDelegatedAnnotationState() unwraps nested carriers in Set entries",
     () => {
       class StatefulObject {
@@ -474,6 +507,39 @@ describe("annotation-state", () => {
       assert.ok(normalized.has("seed"));
       const objectEntry = [...normalized].find((value) => value === state);
       assert.strictEqual(objectEntry, state);
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() preserves Set subclasses while unwrapping entries",
+    () => {
+      class StatefulSet extends Set<unknown> {
+        #secret = "private-value";
+
+        read(): string {
+          return this.#secret;
+        }
+      }
+
+      const delegatedParent = injectAnnotations(undefined, {
+        [
+          Symbol.for(
+            "@test/normalizeNestedDelegatedAnnotationState-set-subclass-parent",
+          )
+        ]: true,
+      });
+      const state = new StatefulSet([
+        getDelegatedAnnotationState(delegatedParent, "seed"),
+        getDelegatedAnnotationState(delegatedParent, "value"),
+      ]);
+
+      const normalized = normalizeNestedDelegatedAnnotationState(state);
+
+      assert.notStrictEqual(normalized, state);
+      assert.ok(normalized instanceof StatefulSet);
+      assert.equal(normalized.read(), "private-value");
+      assert.ok(normalized.has("seed"));
+      assert.ok(normalized.has("value"));
     },
   );
 
