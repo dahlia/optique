@@ -1899,7 +1899,9 @@ Duplicate option detection
 
 Optique automatically detects and prevents duplicate option names within parser
 combinators to avoid ambiguous behavior. When the same option name appears in
-multiple fields or parsers, an error is raised at parse time.
+multiple fields or parsers, parser construction throws an error before parsing
+begins. This check includes `hidden: true` options because hidden options still
+consume the same command-line syntax.
 
 ### Detected duplicates
 
@@ -1908,24 +1910,19 @@ are unique across their child parsers:
 
 ~~~~ typescript twoslash
 import { object, option } from "@optique/core";
-import { parse } from "@optique/core/parser";
 // ---cut-before---
-// ❌ This will error - duplicate "-v" option
+// ❌ This throws while constructing the parser
 const parser = object({
   verbose: option("-v", "--verbose"),
   version: option("-v", "--version"),  // Duplicate: -v
 });
-
-const result = parse(parser, ["-v"]);
-// Error: Duplicate option name `-v` found in fields: "verbose" "version".
-//        Each option name must be unique within a parser combinator.
+// Throws DuplicateOptionError because both fields use -v.
 ~~~~
 
 This applies to nested structures as well:
 
 ~~~~ typescript twoslash
 import { object, option } from "@optique/core";
-import { parse } from "@optique/core/parser";
 // ---cut-before---
 // ❌ Nested duplicate detected
 const parser = object({
@@ -1936,6 +1933,20 @@ const parser = object({
     version: option("-v"),  // Duplicate across nested objects
   }),
 });
+~~~~
+
+Hidden options are checked the same way:
+
+~~~~ typescript twoslash
+import { object, option } from "@optique/core";
+import { string } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = object({
+  legacy: option("--output", string(), { hidden: true }),
+  current: option("--output", string()),
+});
+// Throws DuplicateOptionError because both fields use --output.
+// Hidden options still participate in parsing.
 ~~~~
 
 ### Allowed duplicates in `or()`

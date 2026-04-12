@@ -10,6 +10,12 @@ To be released.
 
 ### @optique/core
 
+ -  Fixed duplicate option-name validation to include `hidden: true`
+    options in `object()`, `tuple()`, `merge()`, and wrapped `group()`
+    parsers. Hidden options still consume CLI syntax, so hidden-visible
+    and hidden-hidden collisions now throw `DuplicateOptionError` during
+    parser construction by default. [[#510], [#788]]
+
  -  Replaced the sentinel-based two-pass `SourceContext` contract with an
     explicit `SourceContextRequest` object. `getAnnotations()` and
     `getInternalAnnotations()` now receive `phase: "phase1"` / `"phase2"`
@@ -1503,6 +1509,7 @@ To be released.
 [#507]: https://github.com/dahlia/optique/issues/507
 [#508]: https://github.com/dahlia/optique/issues/508
 [#509]: https://github.com/dahlia/optique/issues/509
+[#510]: https://github.com/dahlia/optique/issues/510
 [#512]: https://github.com/dahlia/optique/pull/512
 [#513]: https://github.com/dahlia/optique/issues/513
 [#516]: https://github.com/dahlia/optique/issues/516
@@ -1681,6 +1688,7 @@ To be released.
 [#783]: https://github.com/dahlia/optique/pull/783
 [#784]: https://github.com/dahlia/optique/pull/784
 [#786]: https://github.com/dahlia/optique/pull/786
+[#788]: https://github.com/dahlia/optique/pull/788
 
 ### @optique/config
 
