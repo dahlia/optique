@@ -18,6 +18,11 @@ import {
   replayDerivedParser,
   replayDerivedParserAsync,
 } from "./dependency-runtime.ts";
+import {
+  mergeChildExec,
+  withChildContext,
+  withChildExecPath,
+} from "./execution-context.ts";
 import type { DocFragment } from "./doc.ts";
 import {
   dispatchByMode,
@@ -37,60 +42,6 @@ import { validateCommandNames, validateOptionNames } from "./validate.ts";
  * do not match any specific name at the first buffer position.
  */
 const EMPTY_LEADING_NAMES: ReadonlySet<string> = new Set();
-
-function withChildExecPath(
-  exec: ExecutionContext | undefined,
-  segment: PropertyKey,
-): ExecutionContext | undefined {
-  if (exec == null) return undefined;
-  return {
-    ...exec,
-    path: [...(exec.path ?? []), segment],
-  };
-}
-
-function mergeChildExec(
-  parent: ExecutionContext | undefined,
-  child: ExecutionContext | undefined,
-): ExecutionContext | undefined {
-  if (parent == null) return child;
-  if (child == null) return parent;
-  return {
-    ...parent,
-    trace: child.trace ?? parent.trace,
-    dependencyRuntime: child.dependencyRuntime ?? parent.dependencyRuntime,
-    dependencyRegistry: child.dependencyRegistry ?? parent.dependencyRegistry,
-    commandPath: child.commandPath ?? parent.commandPath,
-    preCompletedByParser: child.preCompletedByParser ??
-      parent.preCompletedByParser,
-    excludedSourceFields: child.excludedSourceFields ??
-      parent.excludedSourceFields,
-  };
-}
-
-function withChildContext<TState>(
-  context: ParserContext<unknown>,
-  segment: PropertyKey,
-  state: TState,
-  usage?: Usage,
-): ParserContext<TState> {
-  const exec = withChildExecPath(context.exec, segment);
-  const dependencyRegistry = context.dependencyRegistry ??
-    exec?.dependencyRegistry;
-  return {
-    ...context,
-    state,
-    ...(usage != null ? { usage } : {}),
-    ...(exec != null
-      ? {
-        exec: dependencyRegistry === exec.dependencyRegistry
-          ? exec
-          : { ...exec, dependencyRegistry },
-        dependencyRegistry,
-      }
-      : {}),
-  };
-}
 
 /** @internal */
 export type OptionState<T> = ValueParserResult<T> | undefined;

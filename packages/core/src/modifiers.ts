@@ -16,6 +16,11 @@ import {
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
 import {
+  mergeChildExec,
+  withChildContext,
+  withChildExecPath,
+} from "./execution-context.ts";
+import {
   dispatchByMode,
   dispatchIterableByMode,
   mapModeValue,
@@ -44,58 +49,6 @@ import type {
   Suggestion,
 } from "./parser.ts";
 import type { DeferredMap, ValueParserResult } from "./valueparser.ts";
-
-function withChildExecPath(
-  exec: ExecutionContext | undefined,
-  segment: PropertyKey,
-): ExecutionContext | undefined {
-  if (exec == null) return undefined;
-  return {
-    ...exec,
-    path: [...(exec.path ?? []), segment],
-  };
-}
-
-function mergeChildExec(
-  parent: ExecutionContext | undefined,
-  child: ExecutionContext | undefined,
-): ExecutionContext | undefined {
-  if (parent == null) return child;
-  if (child == null) return parent;
-  return {
-    ...parent,
-    trace: child.trace ?? parent.trace,
-    dependencyRuntime: child.dependencyRuntime ?? parent.dependencyRuntime,
-    dependencyRegistry: child.dependencyRegistry ?? parent.dependencyRegistry,
-    commandPath: child.commandPath ?? parent.commandPath,
-    preCompletedByParser: child.preCompletedByParser ??
-      parent.preCompletedByParser,
-    excludedSourceFields: child.excludedSourceFields ??
-      parent.excludedSourceFields,
-  };
-}
-
-function withChildContext<TState>(
-  context: ParserContext<unknown>,
-  segment: PropertyKey,
-  state: TState,
-): ParserContext<TState> {
-  const exec = withChildExecPath(context.exec, segment);
-  const dependencyRegistry = context.dependencyRegistry ??
-    exec?.dependencyRegistry;
-  return {
-    ...context,
-    state,
-    ...(exec != null
-      ? {
-        exec: dependencyRegistry === exec.dependencyRegistry
-          ? exec
-          : { ...exec, dependencyRegistry },
-        dependencyRegistry,
-      }
-      : {}),
-  };
-}
 
 function isTerminalMultipleItemState(state: unknown): boolean {
   const unwrapped = unwrapMultipleItemState(state).value;

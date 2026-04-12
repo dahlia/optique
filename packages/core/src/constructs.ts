@@ -31,6 +31,11 @@ import {
   getAnnotations,
   inheritAnnotations,
 } from "./annotations.ts";
+import {
+  mergeChildExec,
+  withChildContext as withSharedChildContext,
+  withChildExecPath,
+} from "./execution-context.ts";
 import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
 import {
   completeOrExtractPhase2Seed,
@@ -110,17 +115,6 @@ function isNonCliBoundSourceState(
     (state as { readonly hasCliValue?: unknown }).hasCliValue === false;
 }
 
-function withChildExecPath(
-  exec: ExecutionContext | undefined,
-  segment: PropertyKey,
-): ExecutionContext | undefined {
-  if (exec == null) return undefined;
-  return {
-    ...exec,
-    path: [...(exec.path ?? []), segment],
-  };
-}
-
 function withDependencyRuntimeExec(
   usage: ExecutionContext["usage"],
   exec: ExecutionContext | undefined,
@@ -143,25 +137,6 @@ function withDependencyRuntimeExec(
   };
 }
 
-function mergeChildExec(
-  parent: ExecutionContext | undefined,
-  child: ExecutionContext | undefined,
-): ExecutionContext | undefined {
-  if (parent == null) return child;
-  if (child == null) return parent;
-  return {
-    ...parent,
-    trace: child.trace ?? parent.trace,
-    dependencyRuntime: child.dependencyRuntime ?? parent.dependencyRuntime,
-    dependencyRegistry: child.dependencyRegistry ?? parent.dependencyRegistry,
-    commandPath: child.commandPath ?? parent.commandPath,
-    preCompletedByParser: child.preCompletedByParser ??
-      parent.preCompletedByParser,
-    excludedSourceFields: child.excludedSourceFields ??
-      parent.excludedSourceFields,
-  };
-}
-
 function withChildContext<TState>(
   context: ParserContext<unknown>,
   segment: PropertyKey,
@@ -169,25 +144,10 @@ function withChildContext<TState>(
   parser?: Parser<Mode, unknown, unknown>,
   usage?: Usage,
 ): ParserContext<TState> {
-  const exec = withChildExecPath(context.exec, segment);
-  const dependencyRegistry = context.dependencyRegistry ??
-    exec?.dependencyRegistry;
   const childState = parser == null
     ? state
     : getParseChildState(context.state, state, parser) as TState;
-  return {
-    ...context,
-    state: childState,
-    ...(usage != null ? { usage } : {}),
-    ...(exec != null
-      ? {
-        exec: dependencyRegistry === exec.dependencyRegistry
-          ? exec
-          : { ...exec, dependencyRegistry },
-        dependencyRegistry,
-      }
-      : {}),
-  };
+  return withSharedChildContext(context, segment, childState, usage);
 }
 
 function isUnmatchedDependencyState(
