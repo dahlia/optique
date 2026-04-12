@@ -176,8 +176,9 @@ function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
 
 function normalizeOptionalLikeCompleteResult<T>(
   result: ValueParserResult<T>,
+  shouldNormalize: boolean,
 ): ValueParserResult<T> {
-  return result.success
+  return result.success && shouldNormalize
     ? {
       ...result,
       value: normalizeNestedDelegatedAnnotationState(result.value),
@@ -191,20 +192,24 @@ function completeOptionalLikeSync<TValue, TState>(
   exec?: ExecutionContext,
 ): ValueParserResult<TValue> {
   const hasCarrier = hasDelegatedAnnotationCarrier(state);
-  const shouldRetryFalseResult = isAnnotationWrappedInitialState(state);
-  const run = (candidate: TState) =>
-    normalizeOptionalLikeCompleteResult(parser.complete(candidate, exec));
+  const shouldRetryFalseResult = hasCarrier &&
+    isAnnotationWrappedInitialState(state);
+  const run = (candidate: TState, shouldNormalize: boolean) =>
+    normalizeOptionalLikeCompleteResult(
+      parser.complete(candidate, exec),
+      shouldNormalize,
+    );
   try {
-    const result = run(state);
+    const result = run(state, hasCarrier);
     if (!result.success && shouldRetryFalseResult) {
-      return run(normalizeDelegatedAnnotationState(state));
+      return run(normalizeDelegatedAnnotationState(state), false);
     }
     return result;
   } catch (error) {
     if (!hasCarrier) {
       throw error;
     }
-    return run(normalizeDelegatedAnnotationState(state));
+    return run(normalizeDelegatedAnnotationState(state), false);
   }
 }
 
@@ -214,30 +219,37 @@ async function completeOptionalLikeAsync<TValue, TState>(
   exec?: ExecutionContext,
 ): Promise<ValueParserResult<TValue>> {
   const hasCarrier = hasDelegatedAnnotationCarrier(state);
-  const shouldRetryFalseResult = isAnnotationWrappedInitialState(state);
-  const run = async (candidate: TState) =>
-    normalizeOptionalLikeCompleteResult(await parser.complete(candidate, exec));
+  const shouldRetryFalseResult = hasCarrier &&
+    isAnnotationWrappedInitialState(state);
+  const run = async (candidate: TState, shouldNormalize: boolean) =>
+    normalizeOptionalLikeCompleteResult(
+      await parser.complete(candidate, exec),
+      shouldNormalize,
+    );
   try {
-    const result = await run(state);
+    const result = await run(state, hasCarrier);
     if (!result.success && shouldRetryFalseResult) {
-      return await run(normalizeDelegatedAnnotationState(state));
+      return await run(normalizeDelegatedAnnotationState(state), false);
     }
     return result;
   } catch (error) {
     if (!hasCarrier) {
       throw error;
     }
-    return await run(normalizeDelegatedAnnotationState(state));
+    return await run(normalizeDelegatedAnnotationState(state), false);
   }
 }
 
 function normalizeOptionalLikePhase2Seed<T>(
   seed: Phase2Seed<T> | null,
+  shouldNormalize: boolean,
 ): Phase2Seed<T> | null {
-  return seed == null ? null : {
-    ...seed,
-    value: normalizeNestedDelegatedAnnotationState(seed.value),
-  };
+  return seed == null ? null : shouldNormalize
+    ? {
+      ...seed,
+      value: normalizeNestedDelegatedAnnotationState(seed.value),
+    }
+    : seed;
 }
 
 function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
@@ -257,6 +269,8 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
     parser,
   );
   const hasCarrier = hasDelegatedAnnotationCarrier(innerState);
+  const shouldRetryFalseResult = hasCarrier &&
+    isAnnotationWrappedInitialState(innerState);
   return dispatchByMode(
     parser.$mode,
     () => {
@@ -268,7 +282,20 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
         if (result.success) {
           return normalizeOptionalLikePhase2Seed(
             phase2SeedFromValueResult(result),
+            hasCarrier,
           );
+        }
+        if (shouldRetryFalseResult) {
+          const fallbackState = normalizeDelegatedAnnotationState(innerState);
+          const fallbackResult = (
+            parser as Parser<"sync", TValue, TState>
+          ).complete(fallbackState, exec);
+          if (fallbackResult.success) {
+            return normalizeOptionalLikePhase2Seed(
+              phase2SeedFromValueResult(fallbackResult),
+              false,
+            );
+          }
         }
         const seed = extractPhase2Seed(
           parser as Parser<"sync", TValue, TState>,
@@ -283,9 +310,10 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
               fallbackState,
               exec,
             ),
+            false,
           );
         }
-        return normalizeOptionalLikePhase2Seed(seed);
+        return normalizeOptionalLikePhase2Seed(seed, hasCarrier);
       } catch (error) {
         if (!hasCarrier) {
           throw error;
@@ -298,6 +326,7 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
         if (result.success) {
           return normalizeOptionalLikePhase2Seed(
             phase2SeedFromValueResult(result),
+            false,
           );
         }
         return normalizeOptionalLikePhase2Seed(
@@ -306,6 +335,7 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
             fallbackState,
             exec,
           ),
+          false,
         );
       }
     },
@@ -317,7 +347,20 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
         if (result.success) {
           return normalizeOptionalLikePhase2Seed(
             phase2SeedFromValueResult(result),
+            hasCarrier,
           );
+        }
+        if (shouldRetryFalseResult) {
+          const fallbackState = normalizeDelegatedAnnotationState(innerState);
+          const fallbackResult = await (
+            parser as Parser<"async", TValue, TState>
+          ).complete(fallbackState, exec);
+          if (fallbackResult.success) {
+            return normalizeOptionalLikePhase2Seed(
+              phase2SeedFromValueResult(fallbackResult),
+              false,
+            );
+          }
         }
         const seed = await extractPhase2Seed(
           parser as Parser<"async", TValue, TState>,
@@ -332,9 +375,10 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
               fallbackState,
               exec,
             ),
+            false,
           );
         }
-        return normalizeOptionalLikePhase2Seed(seed);
+        return normalizeOptionalLikePhase2Seed(seed, hasCarrier);
       } catch (error) {
         if (!hasCarrier) {
           throw error;
@@ -346,6 +390,7 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
         if (result.success) {
           return normalizeOptionalLikePhase2Seed(
             phase2SeedFromValueResult(result),
+            false,
           );
         }
         return normalizeOptionalLikePhase2Seed(
@@ -354,6 +399,7 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
             fallbackState,
             exec,
           ),
+          false,
         );
       }
     },
@@ -363,10 +409,10 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
 /**
  * Computes the inner state to pass through to the wrapped parser inside
  * {@link optional} / {@link withDefault}.  When the outer state is an
- * array, the inner state is `state[0]`.  Otherwise — including the
+ * array, the inner state is `state[0]`.  Otherwise, including the
  * common case where `optional()` sits at top level and the outer state
  * is either `undefined` or an annotation wrapper from `parseOptionalLike`
- * / `parse({ annotations })` — we use the wrapped parser's
+ * / `parse({ annotations })`, we use the wrapped parser's
  * `initialState`, propagating annotations from the outer state so that
  * source-binding wrappers under `optional()` / `withDefault()` (e.g.,
  * `bindEnv()` / `bindConfig()`) can resolve their fallbacks.
@@ -402,7 +448,7 @@ function deriveOptionalInnerParseState<TState>(
   // like `bindEnv()` / `bindConfig()` placed under
   // `optional()` / `withDefault()` can resolve from annotations at top
   // level.  Non-nullish primitive initial states (e.g. `constant("v")`
-  // whose `initialState` IS `"v"`) are returned verbatim: otherwise
+  // whose `initialState` is `"v"`) are returned verbatim: otherwise
   // `inheritAnnotations()` would wrap the primitive into an opaque
   // `injectAnnotations` wrapper object, and echo-semantics parsers
   // like `constant()` would return that wrapper from `complete()`
@@ -423,8 +469,8 @@ function deriveOptionalInnerParseState<TState>(
  * Internal helper for optional-style parsing logic shared by optional()
  * and withDefault(). Handles the common pattern of:
  * - Unwrapping optional state to inner parser state
- * - Detecting if inner parser actually matched (state changed or no consumption)
- * - Returning success with undefined state when inner parser fails without consuming
+ * - Detecting if the inner parser actually matched (state changed or no consumption)
+ * - Returning success with undefined state when the inner parser fails without consuming
  * @internal
  */
 function parseOptionalStyleSync<TState>(
@@ -469,8 +515,8 @@ function processOptionalStyleResult<TState>(
   context: ParserContext<[TState] | undefined>,
 ): ParserResult<[TState] | undefined> {
   if (result.success) {
-    // Check if inner parser actually matched something (state changed)
-    // or if it consumed nothing (e.g., constant parser)
+    // Check if the inner parser actually matched something (state changed)
+    // or if it consumed nothing (e.g. constant parser).
     if (
       result.next.state !== innerState || result.consumed.length === 0
     ) {
@@ -487,9 +533,9 @@ function processOptionalStyleResult<TState>(
         consumed: result.consumed,
       };
     }
-    // Inner parser returned success but state unchanged while consuming input
-    // (e.g., only consumed "--"). Treat as "not matched" but propagate side
-    // effects (optionsTerminated, buffer)
+    // The inner parser returned success but state unchanged while consuming input
+    // (e.g. only consumed "--"). Treat as "not matched" but propagate side
+    // effects (optionsTerminated, buffer).
     return {
       success: true,
       ...(result.provisional ? { provisional: true as const } : {}),
@@ -500,8 +546,8 @@ function processOptionalStyleResult<TState>(
       consumed: result.consumed,
     };
   }
-  // If inner parser failed without consuming input, return success
-  // with undefined state so complete() can provide the fallback value
+  // If the inner parser failed without consuming input, return success
+  // with undefined state so complete() can provide the fallback value.
   if (result.consumed === 0) {
     return {
       success: true,
@@ -518,7 +564,7 @@ function processOptionalStyleResult<TState>(
  * {@link withDefault} before delegating to the inner parser's hook.
  *
  * When state is an array, the adapter unwraps `state[0]` and propagates
- * annotations from the outer array.  Non-array objects (e.g., PromptBindState
+ * annotations from the outer array.  Non-array objects (e.g. PromptBindState
  * from `prompt()`) are passed through directly.  `undefined` returns `false`
  * without calling the inner hook.
  *

@@ -37,6 +37,7 @@ import {
 } from "./modifiers.ts";
 import {
   completeOrExtractPhase2Seed,
+  extractPhase2Seed,
   extractPhase2SeedKey,
 } from "./phase2-seed.ts";
 import { createDependencyRuntimeContext } from "./dependency-runtime.ts";
@@ -8362,6 +8363,140 @@ describe(
         assert.deepEqual(seenStates, [outerState, undefined]);
       });
 
+      it(`${name} complete() does not retry plain undefined failures`, () => {
+        let callCount = 0;
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context: ParserContext<unknown>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete() {
+            callCount++;
+            return {
+              success: false as const,
+              error: message`Plain undefined failure.`,
+            };
+          },
+          shouldDeferCompletion(state: unknown) {
+            return state === undefined;
+          },
+          suggest: function* () {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+
+        const result = parser.complete([undefined] as unknown as [unknown]);
+
+        assert.equal(callCount, 1);
+        assert.deepEqual(result, {
+          success: false,
+          error: message`Plain undefined failure.`,
+        });
+      });
+
+      it(`${name} async complete() does not retry plain undefined failures`, async () => {
+        let callCount = 0;
+        const parser = wrap({
+          $mode: "async" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context: ParserContext<unknown>) {
+            return Promise.resolve({
+              success: true as const,
+              next: context,
+              consumed: [],
+            });
+          },
+          complete() {
+            callCount++;
+            return Promise.resolve({
+              success: false as const,
+              error: message`Plain async undefined failure.`,
+            });
+          },
+          shouldDeferCompletion(state: unknown) {
+            return state === undefined;
+          },
+          suggest: async function* () {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+
+        const result = await parser.complete(
+          [undefined] as unknown as [unknown],
+        );
+
+        assert.equal(callCount, 1);
+        assert.deepEqual(result, {
+          success: false,
+          error: message`Plain async undefined failure.`,
+        });
+      });
+
+      it(
+        `${name} complete() skips nested normalization when no delegated carrier is present`,
+        () => {
+          let ownKeysCalls = 0;
+          let descriptorCalls = 0;
+          const value = new Proxy(
+            { nested: { value: "ok" } },
+            {
+              ownKeys(target) {
+                ownKeysCalls++;
+                return Reflect.ownKeys(target);
+              },
+              getOwnPropertyDescriptor(target, key) {
+                descriptorCalls++;
+                return Reflect.getOwnPropertyDescriptor(target, key);
+              },
+            },
+          );
+          const parser = wrap({
+            $mode: "sync" as const,
+            $valueType: [] as const,
+            $stateType: [] as const,
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context: ParserContext<string>) {
+              return { success: true as const, next: context, consumed: [] };
+            },
+            complete() {
+              return { success: true as const, value };
+            },
+            suggest: function* () {},
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          });
+
+          const result = parser.complete(["live"] as [string]);
+
+          assert.deepEqual(result, {
+            success: true,
+            value,
+          });
+          assert.equal(ownKeysCalls, 0);
+          assert.equal(descriptorCalls, 0);
+        },
+      );
+
       it(
         `${name} shouldDeferCompletion() retries wrapped initial-state false results`,
         () => {
@@ -8566,6 +8701,180 @@ describe(
           assert.deepEqual(seed, {
             value: { inner: "live" },
           });
+        },
+      );
+      it(
+        `${name} phase-two seed extraction retries wrapped initial-state failures before the extractor`,
+        () => {
+          let completeCalls = 0;
+          let extractCalls = 0;
+          const inner: Parser<"sync", string, undefined> = {
+            $mode: "sync",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly undefined[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: undefined,
+            parse(context) {
+              return {
+                success: true as const,
+                next: context,
+                consumed: [],
+              };
+            },
+            complete(state) {
+              completeCalls++;
+              return state === undefined
+                ? { success: true as const, value: "resolved" }
+                : {
+                  success: false as const,
+                  error: message`Wrapped phase-two failure.`,
+                };
+            },
+            suggest() {
+              return [];
+            },
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          Object.defineProperty(inner, extractPhase2SeedKey, {
+            value() {
+              extractCalls++;
+              return null;
+            },
+          });
+          const parser = wrap(inner);
+          const outerState = injectAnnotations([undefined] as [undefined], {
+            [Symbol.for(`@test/issue-594/${name}/wrapped-phase2`)]: true,
+          });
+
+          const seed = extractPhase2Seed(parser, outerState);
+
+          assert.deepEqual(seed, {
+            value: "resolved",
+          });
+          assert.equal(completeCalls, 2);
+          assert.equal(extractCalls, 0);
+        },
+      );
+
+      it(
+        `${name} async phase-two seed extraction retries wrapped initial-state failures before the extractor`,
+        async () => {
+          let completeCalls = 0;
+          let extractCalls = 0;
+          const inner: Parser<"async", string, undefined> = {
+            $mode: "async",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly undefined[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: undefined,
+            parse(context) {
+              return Promise.resolve({
+                success: true as const,
+                next: context,
+                consumed: [],
+              });
+            },
+            complete(state) {
+              completeCalls++;
+              return Promise.resolve(
+                state === undefined
+                  ? { success: true as const, value: "resolved" }
+                  : {
+                    success: false as const,
+                    error: message`Wrapped async phase-two failure.`,
+                  },
+              );
+            },
+            suggest: async function* () {},
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          Object.defineProperty(inner, extractPhase2SeedKey, {
+            value() {
+              extractCalls++;
+              return Promise.resolve(null);
+            },
+          });
+          const parser = wrap(inner);
+          const outerState = injectAnnotations([undefined] as [undefined], {
+            [Symbol.for(`@test/issue-594/${name}/wrapped-async-phase2`)]: true,
+          });
+
+          const seed = await extractPhase2Seed(parser, outerState);
+
+          assert.deepEqual(seed, {
+            value: "resolved",
+          });
+          assert.equal(completeCalls, 2);
+          assert.equal(extractCalls, 0);
+        },
+      );
+
+      it(
+        `${name} phase-two seed extraction skips nested normalization when no delegated carrier is present`,
+        () => {
+          let ownKeysCalls = 0;
+          let descriptorCalls = 0;
+          const value = new Proxy(
+            { nested: { value: "ok" } },
+            {
+              ownKeys(target) {
+                ownKeysCalls++;
+                return Reflect.ownKeys(target);
+              },
+              getOwnPropertyDescriptor(target, key) {
+                descriptorCalls++;
+                return Reflect.getOwnPropertyDescriptor(target, key);
+              },
+            },
+          );
+          const inner: Parser<"sync", typeof value, string> = {
+            $mode: "sync",
+            $valueType: [] as readonly (typeof value)[],
+            $stateType: [] as readonly string[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context) {
+              return {
+                success: true as const,
+                next: context,
+                consumed: [],
+              };
+            },
+            complete() {
+              return {
+                success: true as const,
+                value,
+              };
+            },
+            suggest() {
+              return [];
+            },
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          const parser = wrap(inner);
+
+          const seed = extractPhase2Seed(parser, ["live"]);
+
+          assert.deepEqual(seed, {
+            value,
+          });
+          assert.equal(ownKeysCalls, 0);
+          assert.equal(descriptorCalls, 0);
         },
       );
     }
