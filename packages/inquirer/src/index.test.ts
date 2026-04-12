@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import {
-  annotationKey,
-  type Annotations,
-  getAnnotations,
-  injectAnnotations,
-} from "../../core/src/internal/annotations.ts";
+import { type Annotations, getAnnotations } from "@optique/core/annotations";
+import { injectAnnotations } from "@optique/core/extension";
 import { concat, group, object, or, tuple } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import type {
@@ -34,6 +30,7 @@ import { runAsync } from "../../run/src/run.ts";
 const promptFunctionsOverrideSymbol = Symbol.for(
   "@optique/inquirer/prompt-functions",
 );
+const annotationKey = Symbol.for("@optique/core/parser/annotation");
 
 let promptFunctionsOverrideQueue = Promise.resolve();
 
@@ -3297,9 +3294,7 @@ describe("prompt()", () => {
 
       const first = await parser.parse({
         buffer: [],
-        state: { [annotationKey]: {} } as unknown as {
-          readonly token?: string;
-        },
+        state: { [annotationKey]: {} } as { readonly token?: string },
         optionsTerminated: false,
         usage: parser.usage,
       });
@@ -3506,11 +3501,11 @@ describe("prompt()", () => {
       const inner: Parser<
         "async",
         string,
-        { readonly [annotationKey]?: unknown }
+        Record<PropertyKey, unknown>
       > = {
         $mode: "async",
         $valueType: [] as readonly string[],
-        $stateType: [] as readonly { [annotationKey]?: unknown }[],
+        $stateType: [] as readonly Record<PropertyKey, unknown>[],
         priority: 5,
         usage: [],
         leadingNames: new Set(),
@@ -4112,10 +4107,11 @@ describe("prompt()", () => {
           assert.ok(parsed.success);
           if (!parsed.success) return;
 
-          const parsedState = parsed.next.state as {
-            readonly [annotationKey]?: unknown;
-            readonly hasCliValue?: boolean;
-          };
+          const parsedState = parsed.next.state as
+            & Record<PropertyKey, unknown>
+            & {
+              readonly hasCliValue?: boolean;
+            };
           assert.equal(parsedState.hasCliValue, false);
           assert.ok(parsedState[annotationKey] != null);
 

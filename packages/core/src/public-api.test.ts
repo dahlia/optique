@@ -13,6 +13,16 @@ function readJson(relativePath: string): Record<string, unknown> {
   ) as Record<string, unknown>;
 }
 
+function readTsdownEntries(): string[] {
+  const config = readFileSync(
+    new URL("../tsdown.config.ts", import.meta.url),
+    "utf8",
+  );
+  return [...config.matchAll(/"(src\/[^"]+\.ts)"/g)]
+    .map((match) => match[1])
+    .sort();
+}
+
 test("package manifests expose only supported public subpaths", () => {
   const packageJson = readJson("../package.json");
   const denoJson = readJson("../deno.json");
@@ -22,6 +32,7 @@ test("package manifests expose only supported public subpaths", () => {
   const denoExports = Object.keys(
     denoJson.exports as Record<string, unknown>,
   ).sort();
+  const tsdownEntries = readTsdownEntries();
   const expected = [
     ".",
     "./annotations",
@@ -44,6 +55,25 @@ test("package manifests expose only supported public subpaths", () => {
 
   assert.deepEqual(packageExports, expected);
   assert.deepEqual(denoExports, expected);
+  assert.deepEqual(tsdownEntries, [
+    "src/annotations.ts",
+    "src/completion.ts",
+    "src/constructs.ts",
+    "src/context.ts",
+    "src/dependency.ts",
+    "src/doc.ts",
+    "src/extension.ts",
+    "src/facade.ts",
+    "src/index.ts",
+    "src/message.ts",
+    "src/modifiers.ts",
+    "src/nonempty.ts",
+    "src/parser.ts",
+    "src/primitives.ts",
+    "src/program.ts",
+    "src/usage.ts",
+    "src/valueparser.ts",
+  ]);
   assert.ok(!packageExports.includes("./mode-dispatch"));
   assert.ok(!denoExports.includes("./mode-dispatch"));
 });

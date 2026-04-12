@@ -809,8 +809,8 @@ API reference
     const myKey = Symbol.for("@myapp/data");
     declare const state: unknown;
     // ---cut-before---
-     const annotations = getAnnotations(state);
-     const myData = annotations?.[myKey];
+    const annotations = getAnnotations(state);
+    const myData = annotations?.[myKey];
     ~~~~
 
     The raw storage protocol for annotations is internal.  Custom parsers
@@ -848,6 +848,22 @@ API reference
 
 `wrapForMode(mode, value)`
 :   Wraps a plain value or Promise so it matches the parser's execution mode.
+
+`defineTraits(parser, traits)`
+:   Declares stable extension traits on a parser so wrappers can opt into
+    annotation inheritance, source-backed completion, or source-binding-only
+    primitive wrappers without reaching into parser internals.
+
+`getTraits(parser)`
+:   Reads those stable extension traits back from a parser.
+
+`delegateSuggestNodes(innerParser, outerParser, state, path, innerState, position?)`
+:   Reuses the wrapped parser's suggest-time runtime nodes while keeping the
+    outer parser's own source metadata node in the final list.
+
+`mapSourceMetadata(parser, mapSource)`
+:   Rewrites only the source capability inside dependency metadata while
+    leaving derived and transform capabilities unchanged.
 
 ### Functions from `@optique/core/facade`
 
