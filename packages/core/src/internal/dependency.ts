@@ -315,11 +315,20 @@ export type CombinedDependencyMode<T extends readonly unknown[]> =
     : "sync";
 
 /**
- * Represents any dependency source, used in type constraints.
+ * Minimal structural supertype for dependency-source tuple constraints.
+ *
+ * TypeScript cannot express an existential type like
+ * `DependencySource<Mode, some T>`, and `DependencySource<Mode, unknown>` is
+ * too strict because dependency sources are invariant in their value type.
+ * This structural view preserves assignability without resorting to `any`.
+ *
  * @since 0.10.0
  */
-// deno-lint-ignore no-explicit-any
-export type AnyDependencySource = DependencySource<Mode, any>;
+export interface AnyDependencySource<M extends Mode = Mode> {
+  readonly [dependencySourceMarker]: true;
+  readonly [dependencyId]: symbol;
+  readonly $mode: M;
+}
 
 /**
  * Options for creating a derived value parser from multiple dependencies.
@@ -1600,9 +1609,12 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
       return derivedParser.format(value);
     },
 
-    // normalize() is intentionally omitted for async-factory variants
-    // because options.factory() returns a Promise, which cannot be
-    // awaited in the synchronous normalize() method.
+    normalize(value: T): T {
+      return normalizeWithDerivedParser(
+        value,
+        () => options.factory(options.defaultValue()),
+      );
+    },
 
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
       let derivedParser;

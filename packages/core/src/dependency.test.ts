@@ -1878,6 +1878,36 @@ describe("deriveFrom() with async factory", () => {
     }
     assert.equal(suggestions.length, 0);
   });
+
+  test("normalize() delegates to async-factory derived parsers", () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = deriveFromAsync({
+      metavar: "VALUE",
+      dependencies: [dirParser, modeParser] as const,
+      factory: () => ({
+        $mode: "async" as const,
+        metavar: "VALUE" as NonEmptyString,
+        placeholder: "" as string,
+        parse(input: string): Promise<ValueParserResult<string>> {
+          return Promise.resolve({
+            success: true,
+            value: input.trim().toLowerCase(),
+          });
+        },
+        format(value: string): string {
+          return value;
+        },
+        normalize(value: string): string {
+          return value.trim().toLowerCase();
+        },
+      }),
+      defaultValues: () => ["/config", "dev"] as const,
+    });
+
+    assert.equal(derived.normalize?.("  VERBOSE  "), "verbose");
+  });
 });
 
 describe("deriveFromSync()", () => {
