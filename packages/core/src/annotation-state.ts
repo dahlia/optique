@@ -126,6 +126,86 @@ export function hasDelegatedAnnotationCarrier(state: unknown): boolean {
 }
 
 /**
+ * Recursively removes delegated annotation carriers from plain-object and array
+ * structures.
+ *
+ * Nested plain objects and arrays are shallow-cloned only when a delegated
+ * carrier is found below them. Non-plain objects are unwrapped at the top
+ * level and then preserved as-is to avoid mutating or reconstructing class
+ * instances.
+ *
+ * @param value The candidate value to normalize.
+ * @param seen Tracks already-normalized objects so cyclic values keep their
+ *             shape.
+ * @returns The original value when no delegated carriers are present, or a
+ *          normalized clone with delegated carriers removed.
+ * @internal
+ */
+export function normalizeNestedDelegatedAnnotationState<T>(
+  value: T,
+  seen = new WeakMap<object, unknown>(),
+): T {
+  const normalized = normalizeDelegatedAnnotationState(value);
+  if (normalized == null || typeof normalized !== "object") {
+    return normalized;
+  }
+  const source = normalized as object;
+  if (seen.has(source)) {
+    return seen.get(source) as T;
+  }
+  if (Array.isArray(source)) {
+    let changed = false;
+    const clone = [...source];
+    seen.set(source, clone);
+    for (let i = 0; i < source.length; i++) {
+      const nextValue = normalizeNestedDelegatedAnnotationState(
+        source[i],
+        seen,
+      );
+      if (nextValue !== source[i]) {
+        clone[i] = nextValue;
+        changed = true;
+      }
+    }
+    if (!changed) {
+      seen.set(source, source);
+      return source as T;
+    }
+    return clone as T;
+  }
+  const proto = Object.getPrototypeOf(source);
+  if (proto !== Object.prototype && proto !== null) {
+    return normalized;
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(source) as Record<
+    PropertyKey,
+    PropertyDescriptor
+  >;
+  let changed = false;
+  const clone = Object.create(proto);
+  seen.set(source, clone);
+  for (const key of Reflect.ownKeys(descriptors)) {
+    const descriptor = descriptors[key];
+    if (descriptor != null && "value" in descriptor) {
+      const nextValue = normalizeNestedDelegatedAnnotationState(
+        descriptor.value,
+        seen,
+      );
+      if (nextValue !== descriptor.value) {
+        descriptors[key] = { ...descriptor, value: nextValue };
+        changed = true;
+      }
+    }
+  }
+  if (!changed) {
+    seen.set(source, source);
+    return source as T;
+  }
+  Object.defineProperties(clone, descriptors);
+  return clone as T;
+}
+
+/**
  * Creates a short-lived delegated state that exposes the parent's annotations
  * regardless of the child state's runtime shape.
  *
@@ -151,7 +231,10 @@ export function getDelegatedAnnotationState<TState>(
     return injectAnnotations(childState, annotations);
   }
   if (isInjectedAnnotationWrapper(childState)) {
-    return injectAnnotations(childState, annotations);
+    return injectAnnotations(
+      normalizeInjectedAnnotationState(childState),
+      annotations,
+    );
   }
   if (isNonPlainDelegatedObject(childState)) {
     return withAnnotationView(childState, annotations) as TState;

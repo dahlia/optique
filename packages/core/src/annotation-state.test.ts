@@ -17,6 +17,7 @@ import {
   hasDelegatedAnnotationCarrier,
   normalizeDelegatedAnnotationState,
   normalizeInjectedAnnotationState,
+  normalizeNestedDelegatedAnnotationState,
 } from "./annotation-state.ts";
 
 function createInheritedTestParser(): Parser<"sync", unknown, unknown> {
@@ -117,6 +118,31 @@ describe("annotation-state", () => {
   });
 
   it(
+    "getDelegatedAnnotationState() creates a fresh wrapper from wrapped primitives",
+    () => {
+      const parentMarker = Symbol.for(
+        "@test/getDelegatedAnnotationState-parent-primitive",
+      );
+      const childMarker = Symbol.for(
+        "@test/getDelegatedAnnotationState-child-primitive",
+      );
+      const childState = injectAnnotations("seed", {
+        [childMarker]: true,
+      });
+      const parentState = injectAnnotations(undefined, {
+        [parentMarker]: true,
+      });
+
+      const delegated = getDelegatedAnnotationState(parentState, childState);
+
+      assert.notStrictEqual(delegated, childState);
+      assert.ok(getAnnotations(childState)?.[childMarker]);
+      assert.ok(getAnnotations(delegated)?.[parentMarker]);
+      assert.equal(normalizeDelegatedAnnotationState(delegated), "seed");
+    },
+  );
+
+  it(
     "getDelegatedAnnotationState() preserves class instances via annotation views",
     () => {
       class StatefulObject {
@@ -138,6 +164,41 @@ describe("annotation-state", () => {
       assert.equal(delegated.read(), "private-value");
       assert.equal(getAnnotations(state), undefined);
       assert.equal(normalizeDelegatedAnnotationState(delegated), state);
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() unwraps nested carriers in arrays and plain objects",
+    () => {
+      class StatefulObject {
+        #secret = "private-value";
+
+        read(): string {
+          return this.#secret;
+        }
+      }
+
+      const marker = Symbol.for(
+        "@test/normalizeNestedDelegatedAnnotationState",
+      );
+      const parentState = injectAnnotations(undefined, {
+        [marker]: true,
+      });
+      const state = new StatefulObject();
+      const nested = {
+        primitive: getDelegatedAnnotationState(parentState, "seed"),
+        object: {
+          inner: getDelegatedAnnotationState(parentState, state),
+        },
+      };
+
+      const normalized = normalizeNestedDelegatedAnnotationState(nested);
+
+      assert.notStrictEqual(normalized, nested);
+      assert.deepEqual(normalized, {
+        primitive: "seed",
+        object: { inner: state },
+      });
     },
   );
 });

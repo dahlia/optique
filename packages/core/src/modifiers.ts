@@ -2,6 +2,7 @@ import {
   getDelegatedAnnotationState,
   hasDelegatedAnnotationCarrier,
   normalizeDelegatedAnnotationState,
+  normalizeNestedDelegatedAnnotationState,
 } from "./annotation-state.ts";
 import { composeDependencyMetadata } from "./dependency-metadata.ts";
 import { formatMessage, type Message, message, text } from "./message.ts";
@@ -23,6 +24,7 @@ import {
   completeOrExtractPhase2Seed,
   extractPhase2Seed,
   extractPhase2SeedKey,
+  phase2SeedFromValueResult,
 } from "./phase2-seed.ts";
 import {
   defineInheritedAnnotationParser,
@@ -176,7 +178,7 @@ function normalizeOptionalLikeCompleteResult<T>(
   return result.success
     ? {
       ...result,
-      value: normalizeDelegatedAnnotationState(result.value),
+      value: normalizeNestedDelegatedAnnotationState(result.value),
     }
     : result;
 }
@@ -186,19 +188,14 @@ function completeOptionalLikeSync<TValue, TState>(
   state: TState,
   exec?: ExecutionContext,
 ): ValueParserResult<TValue> {
-  const fallbackState = normalizeDelegatedAnnotationState(state);
+  const hasCarrier = hasDelegatedAnnotationCarrier(state);
   try {
-    const result = parser.complete(state, exec);
-    if (!result.success && hasDelegatedAnnotationCarrier(state)) {
-      return normalizeOptionalLikeCompleteResult(
-        parser.complete(fallbackState, exec),
-      );
-    }
-    return normalizeOptionalLikeCompleteResult(result);
+    return normalizeOptionalLikeCompleteResult(parser.complete(state, exec));
   } catch (error) {
-    if (!hasDelegatedAnnotationCarrier(state)) {
+    if (!hasCarrier) {
       throw error;
     }
+    const fallbackState = normalizeDelegatedAnnotationState(state);
     return normalizeOptionalLikeCompleteResult(
       parser.complete(fallbackState, exec),
     );
@@ -210,19 +207,16 @@ async function completeOptionalLikeAsync<TValue, TState>(
   state: TState,
   exec?: ExecutionContext,
 ): Promise<ValueParserResult<TValue>> {
-  const fallbackState = normalizeDelegatedAnnotationState(state);
+  const hasCarrier = hasDelegatedAnnotationCarrier(state);
   try {
-    const result = await parser.complete(state, exec);
-    if (!result.success && hasDelegatedAnnotationCarrier(state)) {
-      return normalizeOptionalLikeCompleteResult(
-        await parser.complete(fallbackState, exec),
-      );
-    }
-    return normalizeOptionalLikeCompleteResult(result);
+    return normalizeOptionalLikeCompleteResult(
+      await parser.complete(state, exec),
+    );
   } catch (error) {
-    if (!hasDelegatedAnnotationCarrier(state)) {
+    if (!hasCarrier) {
       throw error;
     }
+    const fallbackState = normalizeDelegatedAnnotationState(state);
     return normalizeOptionalLikeCompleteResult(
       await parser.complete(fallbackState, exec),
     );
@@ -234,7 +228,7 @@ function normalizeOptionalLikePhase2Seed<T>(
 ): import("./phase2-seed.ts").Phase2Seed<T> | null {
   return seed == null ? null : {
     ...seed,
-    value: normalizeDelegatedAnnotationState(seed.value),
+    value: normalizeNestedDelegatedAnnotationState(seed.value),
   };
 }
 
@@ -254,19 +248,29 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
     parser.initialState,
     parser,
   );
-  const fallbackState = normalizeDelegatedAnnotationState(innerState);
+  const hasCarrier = hasDelegatedAnnotationCarrier(innerState);
   return dispatchByMode(
     parser.$mode,
     () => {
       try {
-        const seed = completeOrExtractPhase2Seed(
+        const result = (parser as Parser<"sync", TValue, TState>).complete(
+          innerState,
+          exec,
+        );
+        if (result.success) {
+          return normalizeOptionalLikePhase2Seed(
+            phase2SeedFromValueResult(result),
+          );
+        }
+        const seed = extractPhase2Seed(
           parser as Parser<"sync", TValue, TState>,
           innerState,
           exec,
         );
-        if (seed == null && hasDelegatedAnnotationCarrier(innerState)) {
+        if (seed == null && hasCarrier) {
+          const fallbackState = normalizeDelegatedAnnotationState(innerState);
           return normalizeOptionalLikePhase2Seed(
-            completeOrExtractPhase2Seed(
+            extractPhase2Seed(
               parser as Parser<"sync", TValue, TState>,
               fallbackState,
               exec,
@@ -275,11 +279,21 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
         }
         return normalizeOptionalLikePhase2Seed(seed);
       } catch (error) {
-        if (!hasDelegatedAnnotationCarrier(innerState)) {
+        if (!hasCarrier) {
           throw error;
         }
+        const fallbackState = normalizeDelegatedAnnotationState(innerState);
+        const result = (parser as Parser<"sync", TValue, TState>).complete(
+          fallbackState,
+          exec,
+        );
+        if (result.success) {
+          return normalizeOptionalLikePhase2Seed(
+            phase2SeedFromValueResult(result),
+          );
+        }
         return normalizeOptionalLikePhase2Seed(
-          completeOrExtractPhase2Seed(
+          extractPhase2Seed(
             parser as Parser<"sync", TValue, TState>,
             fallbackState,
             exec,
@@ -289,14 +303,23 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
     },
     async () => {
       try {
-        const seed = await completeOrExtractPhase2Seed(
+        const result = await (
+          parser as Parser<"async", TValue, TState>
+        ).complete(innerState, exec);
+        if (result.success) {
+          return normalizeOptionalLikePhase2Seed(
+            phase2SeedFromValueResult(result),
+          );
+        }
+        const seed = await extractPhase2Seed(
           parser as Parser<"async", TValue, TState>,
           innerState,
           exec,
         );
-        if (seed == null && hasDelegatedAnnotationCarrier(innerState)) {
+        if (seed == null && hasCarrier) {
+          const fallbackState = normalizeDelegatedAnnotationState(innerState);
           return normalizeOptionalLikePhase2Seed(
-            await completeOrExtractPhase2Seed(
+            await extractPhase2Seed(
               parser as Parser<"async", TValue, TState>,
               fallbackState,
               exec,
@@ -305,11 +328,20 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
         }
         return normalizeOptionalLikePhase2Seed(seed);
       } catch (error) {
-        if (!hasDelegatedAnnotationCarrier(innerState)) {
+        if (!hasCarrier) {
           throw error;
         }
+        const fallbackState = normalizeDelegatedAnnotationState(innerState);
+        const result = await (
+          parser as Parser<"async", TValue, TState>
+        ).complete(fallbackState, exec);
+        if (result.success) {
+          return normalizeOptionalLikePhase2Seed(
+            phase2SeedFromValueResult(result),
+          );
+        }
         return normalizeOptionalLikePhase2Seed(
-          await completeOrExtractPhase2Seed(
+          await extractPhase2Seed(
             parser as Parser<"async", TValue, TState>,
             fallbackState,
             exec,
