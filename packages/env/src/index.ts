@@ -441,6 +441,19 @@ export function bindEnv<
     parser,
     (sourceMetadata: ParserSourceMetadata<M, TValue, TState>) => ({
       ...sourceMetadata,
+      getMissingSourceValue: sourceMetadata.preservesSourceValue !== false &&
+          options.default !== undefined
+        ? () => {
+          // Route the default through the inner parser's validateValue so that
+          // CLI constraints cannot be bypassed via bindEnv defaults (#414).
+          if (typeof parser.validateValue === "function") {
+            return parser.validateValue(options.default!) as
+              | ValueParserResult<unknown>
+              | Promise<ValueParserResult<unknown>>;
+          }
+          return { success: true as const, value: options.default };
+        }
+        : undefined,
       extractSourceValue: (state: unknown) => {
         if (!isEnvBindState(state)) {
           if (sourceMetadata.preservesSourceValue) {

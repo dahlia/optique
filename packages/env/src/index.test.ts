@@ -828,10 +828,12 @@ describe("bindEnv()", () => {
         usage: portParser.usage,
       });
       assert.ok(parseResult.success);
-      const extracted = portParser.dependencyMetadata?.source
-        ?.extractSourceValue(parseResult.next.state);
-      assert.ok(extracted != null && !(extracted instanceof Promise));
-      assert.ok(!extracted.success);
+      const getMissing = portParser.dependencyMetadata?.source
+        ?.getMissingSourceValue;
+      assert.ok(typeof getMissing === "function");
+      const missing = getMissing!();
+      assert.ok(missing != null && !(missing instanceof Promise));
+      assert.ok(!missing.success);
     });
 
     it("bindEnv fallback errors carry the option-name prefix", () => {
