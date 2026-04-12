@@ -33,7 +33,7 @@ To be released.
     `defineTraits()`, `getTraits()`, `delegateSuggestNodes()`, and
     `mapSourceMetadata()` for parser traits and source-aware wrapper
     composition. First-party integration packages now use these public helpers
-    instead of reaching into `@optique/core/parser` internals. [[#790]]
+    instead of reaching into `@optique/core/parser` internals. [[#790], [#793]]
 
  -  Added the optional `Parser.validateValue()` method, which lets a
     parser check whether an arbitrary value satisfies its underlying
@@ -1712,6 +1712,7 @@ To be released.
 [#788]: https://github.com/dahlia/optique/pull/788
 [#789]: https://github.com/dahlia/optique/pull/789
 [#790]: https://github.com/dahlia/optique/issues/790
+[#793]: https://github.com/dahlia/optique/pull/793
 
 ### @optique/config
 
