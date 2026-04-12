@@ -4,6 +4,7 @@ import {
   getAnnotations,
   inheritAnnotations,
   injectAnnotations,
+  isInjectedAnnotationWrapper,
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
 import {
@@ -77,6 +78,85 @@ export function withAnnotationView<T extends object>(
  */
 export function normalizeInjectedAnnotationState<T>(state: T): T {
   return unwrapInjectedAnnotationWrapper(state);
+}
+
+function isNonPlainDelegatedObject(state: object): boolean {
+  if (
+    Array.isArray(state) ||
+    state instanceof Date ||
+    state instanceof Map ||
+    state instanceof Set ||
+    state instanceof RegExp
+  ) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(state);
+  return proto !== Object.prototype && proto !== null;
+}
+
+/**
+ * Removes Optique's internal annotation carriers from a delegated state.
+ *
+ * This unwraps both primitive-state annotation wrappers and annotation-view
+ * proxies used for non-plain object states.
+ *
+ * @param state The delegated state to normalize.
+ * @returns The original underlying state value.
+ * @internal
+ */
+export function normalizeDelegatedAnnotationState<T>(state: T): T {
+  return normalizeInjectedAnnotationState(unwrapAnnotationView(state));
+}
+
+/**
+ * Returns whether the given state uses an internal delegated annotation carrier.
+ *
+ * @param state The candidate state to inspect.
+ * @returns `true` when the state is an injected primitive wrapper or an
+ *          annotation-view proxy.
+ * @internal
+ */
+export function hasDelegatedAnnotationCarrier(state: unknown): boolean {
+  return state != null &&
+    typeof state === "object" &&
+    (
+      isInjectedAnnotationWrapper(state) ||
+      annotationViewTargets.has(state as object)
+    );
+}
+
+/**
+ * Creates a short-lived delegated state that exposes the parent's annotations
+ * regardless of the child state's runtime shape.
+ *
+ * Primitive and nullish states use `injectAnnotations()`, plain objects and
+ * built-ins use `inheritAnnotations()`, and non-plain objects use an
+ * annotation-view proxy so class invariants such as private fields remain
+ * intact.
+ *
+ * @param parentState The state carrying the annotations to delegate.
+ * @param childState The child state that should observe those annotations.
+ * @returns A delegated child state that exposes the parent's annotations.
+ * @internal
+ */
+export function getDelegatedAnnotationState<TState>(
+  parentState: unknown,
+  childState: TState,
+): TState {
+  const annotations = getAnnotations(parentState);
+  if (annotations === undefined || getAnnotations(childState) === annotations) {
+    return childState;
+  }
+  if (childState == null || typeof childState !== "object") {
+    return injectAnnotations(childState, annotations);
+  }
+  if (isInjectedAnnotationWrapper(childState)) {
+    return injectAnnotations(childState, annotations);
+  }
+  if (isNonPlainDelegatedObject(childState)) {
+    return withAnnotationView(childState, annotations) as TState;
+  }
+  return inheritAnnotations(parentState, childState);
 }
 
 /**

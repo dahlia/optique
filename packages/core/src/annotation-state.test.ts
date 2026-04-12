@@ -11,8 +11,11 @@ import {
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  getDelegatedAnnotationState,
   getWrappedChildParseState,
   getWrappedChildState,
+  hasDelegatedAnnotationCarrier,
+  normalizeDelegatedAnnotationState,
   normalizeInjectedAnnotationState,
 } from "./annotation-state.ts";
 
@@ -99,6 +102,42 @@ describe("annotation-state", () => {
         );
         assert.ok(getAnnotations(wrapped)?.[marker]);
       }
+    },
+  );
+
+  it("getDelegatedAnnotationState() preserves primitive sentinels", () => {
+    const marker = Symbol.for("@test/getDelegatedAnnotationState-primitive");
+    const annotations = { [marker]: true } satisfies Annotations;
+    const parentState = injectAnnotations(undefined, annotations);
+    const delegated = getDelegatedAnnotationState(parentState, "seed");
+
+    assert.ok(hasDelegatedAnnotationCarrier(delegated));
+    assert.ok(getAnnotations(delegated)?.[marker]);
+    assert.equal(normalizeDelegatedAnnotationState(delegated), "seed");
+  });
+
+  it(
+    "getDelegatedAnnotationState() preserves class instances via annotation views",
+    () => {
+      class StatefulObject {
+        #secret = "private-value";
+
+        read(): string {
+          return this.#secret;
+        }
+      }
+
+      const marker = Symbol.for("@test/getDelegatedAnnotationState-class");
+      const annotations = { [marker]: true } satisfies Annotations;
+      const parentState = injectAnnotations(undefined, annotations);
+      const state = new StatefulObject();
+      const delegated = getDelegatedAnnotationState(parentState, state);
+
+      assert.ok(hasDelegatedAnnotationCarrier(delegated));
+      assert.ok(getAnnotations(delegated)?.[marker]);
+      assert.equal(delegated.read(), "private-value");
+      assert.equal(getAnnotations(state), undefined);
+      assert.equal(normalizeDelegatedAnnotationState(delegated), state);
     },
   );
 });

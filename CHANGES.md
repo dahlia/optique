@@ -995,6 +995,15 @@ To be released.
     `bindConfig()` from resolving config values through wrapper combinators.
     [[#385], [#535]]
 
+ -  Fixed `optional()` and `withDefault()` still dropping outer annotations
+    for primitive and non-plain object inner states during `complete()` and
+    `shouldDeferCompletion()`. Primitive inner states now use the same
+    internal annotation carrier path as other annotation-enabled flows, and
+    non-plain objects now receive short-lived annotation views that preserve
+    class methods and private fields. This lets annotation-aware parsers and
+    `prompt(optional(...))` / `prompt(withDefault(...))` compositions observe
+    outer annotations consistently across all state shapes. [[#594]]
+
  -  Fixed proxy-based sanitization of deferred prompt values breaking class
     methods that access private fields.  Methods on non-plain objects are now
     invoked with temporarily sanitized own properties on the original instance,

@@ -7867,6 +7867,223 @@ describe("shouldDeferCompletion forwarding", () => {
   });
 });
 
+describe(
+  "optional-like delegated annotation propagation (issue #594)",
+  () => {
+    class DeferredClassState {
+      #secret = "private-value";
+
+      read(): string {
+        return this.#secret;
+      }
+    }
+
+    function createPrimitiveCompletionParser(
+      marker: symbol,
+    ): Parser<"sync", string, string> {
+      return {
+        $mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state) {
+          return {
+            success: true as const,
+            value: getAnnotations(state)?.[marker] === "ok"
+              ? "annotated"
+              : "missing-annotations",
+          };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+    }
+
+    function createClassCompletionParser(
+      marker: symbol,
+    ): Parser<"sync", string, DeferredClassState> {
+      return {
+        $mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly DeferredClassState[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: new DeferredClassState(),
+        parse(context) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state) {
+          return {
+            success: true as const,
+            value: getAnnotations(state)?.[marker] === "ok"
+              ? state.read()
+              : "missing-annotations",
+          };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+    }
+
+    function createPrimitiveDeferralParser(
+      marker: symbol,
+    ): Parser<"sync", string, string> {
+      return {
+        $mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state) {
+          return {
+            success: true as const,
+            value: typeof state === "string" ? state : "wrapped",
+          };
+        },
+        shouldDeferCompletion(state) {
+          return getAnnotations(state)?.[marker] === "ok";
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+    }
+
+    function createClassDeferralParser(
+      marker: symbol,
+    ): Parser<"sync", string, DeferredClassState> {
+      return {
+        $mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly DeferredClassState[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: new DeferredClassState(),
+        parse(context) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state) {
+          return { success: true as const, value: state.read() };
+        },
+        shouldDeferCompletion(state) {
+          return state.read() === "private-value" &&
+            getAnnotations(state)?.[marker] === "ok";
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+    }
+
+    const wrappers = [
+      {
+        name: "optional()",
+        wrap<TState>(parser: Parser<"sync", string, TState>) {
+          return optional(parser);
+        },
+      },
+      {
+        name: "withDefault()",
+        wrap<TState>(parser: Parser<"sync", string, TState>) {
+          return withDefault(parser, "fallback");
+        },
+      },
+    ] as const;
+
+    for (const { name, wrap } of wrappers) {
+      it(`${name} complete() preserves annotations on primitive inner states`, () => {
+        const marker = Symbol.for(`@test/issue-594/${name}/complete-primitive`);
+        const parser = wrap(createPrimitiveCompletionParser(marker));
+        const outerState = injectAnnotations(["live"] as [string], {
+          [marker]: "ok",
+        });
+
+        const result = parser.complete(outerState);
+
+        assert.deepEqual(result, {
+          success: true,
+          value: "annotated",
+        });
+      });
+
+      it(`${name} complete() preserves annotations on class inner states`, () => {
+        const marker = Symbol.for(`@test/issue-594/${name}/complete-class`);
+        const parser = wrap(createClassCompletionParser(marker));
+        const state = new DeferredClassState();
+        const outerState = injectAnnotations([state] as [DeferredClassState], {
+          [marker]: "ok",
+        });
+
+        const result = parser.complete(outerState);
+
+        assert.deepEqual(result, {
+          success: true,
+          value: "private-value",
+        });
+        assert.equal(getAnnotations(state), undefined);
+      });
+
+      it(
+        `${name} shouldDeferCompletion() preserves annotations on primitive inner states`,
+        () => {
+          const marker = Symbol.for(
+            `@test/issue-594/${name}/defer-primitive`,
+          );
+          const parser = wrap(createPrimitiveDeferralParser(marker));
+          const outerState = injectAnnotations(["live"] as [string], {
+            [marker]: "ok",
+          });
+
+          assert.ok(parser.shouldDeferCompletion?.(outerState));
+        },
+      );
+
+      it(`${name} shouldDeferCompletion() preserves annotations on class inner states`, () => {
+        const marker = Symbol.for(`@test/issue-594/${name}/defer-class`);
+        const parser = wrap(createClassDeferralParser(marker));
+        const state = new DeferredClassState();
+        const outerState = injectAnnotations([state] as [DeferredClassState], {
+          [marker]: "ok",
+        });
+
+        assert.ok(parser.shouldDeferCompletion?.(outerState));
+        assert.equal(getAnnotations(state), undefined);
+      });
+    }
+  },
+);
+
 describe("leadingNames", () => {
   it("should forward from inner parser for optional()", () => {
     const inner = flag("--verbose");
