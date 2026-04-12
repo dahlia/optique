@@ -1,5 +1,4 @@
 import {
-  annotateFreshArray,
   annotationKey,
   type Annotations,
   getAnnotations,
@@ -144,6 +143,68 @@ function isPendingNestedNormalizationAlias(
   return entry != null && !entry.finalized && entry.clone === normalizedValue;
 }
 
+function createPendingNestedNormalizationClone(source: object): object {
+  return Array.isArray(source)
+    ? []
+    : Object.create(Object.getPrototypeOf(source));
+}
+
+function normalizeNestedDelegatedStructuredState<T extends object>(
+  source: T,
+  seen: WeakMap<object, NestedNormalizationEntry>,
+): T {
+  const clone = createPendingNestedNormalizationClone(source);
+  const entry: NestedNormalizationEntry = {
+    clone,
+    finalized: false,
+    result: clone,
+  };
+  seen.set(source, entry);
+
+  const overrides = new Map<PropertyKey, unknown>();
+  let changed = false;
+  for (const key of Reflect.ownKeys(source)) {
+    const descriptor = Object.getOwnPropertyDescriptor(source, key);
+    if (descriptor == null || !("value" in descriptor)) {
+      continue;
+    }
+    const nextValue = normalizeNestedDelegatedAnnotationState(
+      descriptor.value,
+      seen,
+    );
+    if (nextValue === descriptor.value) {
+      continue;
+    }
+    overrides.set(key, nextValue);
+    if (!isPendingNestedNormalizationAlias(descriptor.value, nextValue, seen)) {
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    entry.finalized = true;
+    entry.result = source;
+    return source;
+  }
+
+  const descriptors = Object.getOwnPropertyDescriptors(source) as Record<
+    PropertyKey,
+    PropertyDescriptor
+  >;
+  for (const [key, nextValue] of overrides) {
+    const descriptor = descriptors[key];
+    if (descriptor == null || !("value" in descriptor)) {
+      continue;
+    }
+    descriptors[key] = { ...descriptor, value: nextValue };
+  }
+
+  Object.defineProperties(clone, descriptors);
+  entry.finalized = true;
+  entry.result = clone;
+  return clone as T;
+}
+
 /**
  * Recursively removes delegated annotation carriers from plain-object and array
  * structures.
@@ -174,70 +235,13 @@ export function normalizeNestedDelegatedAnnotationState<T>(
     return (existing.finalized ? existing.result : existing.clone) as T;
   }
   if (Array.isArray(source)) {
-    let changed = false;
-    const clone = annotateFreshArray(source, source.slice()) as unknown[];
-    const entry: NestedNormalizationEntry = {
-      clone: clone as object,
-      finalized: false,
-      result: clone as object,
-    };
-    seen.set(source, entry);
-    for (let i = 0; i < source.length; i++) {
-      const nextValue = normalizeNestedDelegatedAnnotationState(
-        source[i],
-        seen,
-      );
-      if (nextValue !== source[i]) {
-        clone[i] = nextValue;
-        if (!isPendingNestedNormalizationAlias(source[i], nextValue, seen)) {
-          changed = true;
-        }
-      }
-    }
-    entry.finalized = true;
-    entry.result = changed ? clone as object : source;
-    return (changed ? clone : source) as T;
+    return normalizeNestedDelegatedStructuredState(source, seen) as T;
   }
   const proto = Object.getPrototypeOf(source);
   if (proto !== Object.prototype && proto !== null) {
     return normalized;
   }
-  const descriptors = Object.getOwnPropertyDescriptors(source) as Record<
-    PropertyKey,
-    PropertyDescriptor
-  >;
-  let changed = false;
-  const clone = Object.create(proto);
-  const entry: NestedNormalizationEntry = {
-    clone,
-    finalized: false,
-    result: clone,
-  };
-  seen.set(source, entry);
-  for (const key of Reflect.ownKeys(descriptors)) {
-    const descriptor = descriptors[key];
-    if (descriptor != null && "value" in descriptor) {
-      const nextValue = normalizeNestedDelegatedAnnotationState(
-        descriptor.value,
-        seen,
-      );
-      if (nextValue !== descriptor.value) {
-        descriptors[key] = { ...descriptor, value: nextValue };
-        if (
-          !isPendingNestedNormalizationAlias(descriptor.value, nextValue, seen)
-        ) {
-          changed = true;
-        }
-      }
-    }
-  }
-  entry.finalized = true;
-  entry.result = changed ? clone : source;
-  if (!changed) {
-    return source as T;
-  }
-  Object.defineProperties(clone, descriptors);
-  return clone as T;
+  return normalizeNestedDelegatedStructuredState(source, seen) as T;
 }
 
 /**

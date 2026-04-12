@@ -250,6 +250,77 @@ describe("annotation-state", () => {
   );
 
   it(
+    "normalizeNestedDelegatedAnnotationState() preserves array metadata and normalizes nested custom properties",
+    () => {
+      const arrayMarker = Symbol.for(
+        "@test/normalizeNestedDelegatedAnnotationState-array-metadata",
+      );
+      const extraKey = "extra";
+      const symbolKey = Symbol.for(
+        "@test/normalizeNestedDelegatedAnnotationState-array-symbol",
+      );
+      const delegatedParent = injectAnnotations(undefined, {
+        [
+          Symbol.for(
+            "@test/normalizeNestedDelegatedAnnotationState-array-metadata-parent",
+          )
+        ]: true,
+      });
+      const array = injectAnnotations([
+        getDelegatedAnnotationState(delegatedParent, "seed"),
+      ], {
+        [arrayMarker]: true,
+      });
+      Object.defineProperty(array, extraKey, {
+        value: {
+          inner: getDelegatedAnnotationState(delegatedParent, "extra"),
+        },
+        enumerable: false,
+        writable: false,
+        configurable: true,
+      });
+      Object.defineProperty(array, symbolKey, {
+        value: {
+          inner: getDelegatedAnnotationState(delegatedParent, "symbol"),
+        },
+        enumerable: false,
+        writable: true,
+        configurable: false,
+      });
+
+      const normalized = normalizeNestedDelegatedAnnotationState(array);
+
+      assert.notStrictEqual(normalized, array);
+      assert.equal(normalized[0], "seed");
+      assert.ok(getAnnotations(normalized)?.[arrayMarker]);
+      assert.deepEqual(Reflect.get(normalized, extraKey), {
+        inner: "extra",
+      });
+      assert.deepEqual(
+        Object.getOwnPropertyDescriptor(normalized, extraKey),
+        {
+          value: { inner: "extra" },
+          enumerable: false,
+          writable: false,
+          configurable: true,
+        },
+      );
+      assert.deepEqual(Reflect.get(normalized, symbolKey), {
+        inner: "symbol",
+      });
+      assert.deepEqual(
+        Object.getOwnPropertyDescriptor(normalized, symbolKey),
+        {
+          value: { inner: "symbol" },
+          enumerable: false,
+          writable: true,
+          configurable: false,
+        },
+      );
+    },
+  );
+
+  it(
     "normalizeNestedDelegatedAnnotationState() preserves identity for cyclic values without carriers",
     () => {
       const cyclic: { self?: unknown } = {};
