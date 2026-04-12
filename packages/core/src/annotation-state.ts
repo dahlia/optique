@@ -81,16 +81,16 @@ export function normalizeInjectedAnnotationState<T>(state: T): T {
 }
 
 function isNonPlainDelegatedObject(state: object): boolean {
+  const proto = Object.getPrototypeOf(state);
   if (
     Array.isArray(state) ||
-    state instanceof Date ||
-    state instanceof Map ||
-    state instanceof Set ||
-    state instanceof RegExp
+    proto === Date.prototype ||
+    proto === Map.prototype ||
+    proto === Set.prototype ||
+    proto === RegExp.prototype
   ) {
     return false;
   }
-  const proto = Object.getPrototypeOf(state);
   return proto !== Object.prototype && proto !== null;
 }
 

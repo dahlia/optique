@@ -183,6 +183,34 @@ describe("annotation-state", () => {
   );
 
   it(
+    "getDelegatedAnnotationState() preserves built-in subclasses via annotation views",
+    () => {
+      class StatefulMap extends Map<string, string> {
+        #secret = "private-value";
+
+        read(): string {
+          return this.#secret;
+        }
+      }
+
+      const marker = Symbol.for(
+        "@test/getDelegatedAnnotationState-map-subclass",
+      );
+      const annotations = { [marker]: true } satisfies Annotations;
+      const parentState = injectAnnotations(undefined, annotations);
+      const state = new StatefulMap([["key", "value"]]);
+      const delegated = getDelegatedAnnotationState(parentState, state);
+
+      assert.ok(hasDelegatedAnnotationCarrier(delegated));
+      assert.ok(getAnnotations(delegated)?.[marker]);
+      assert.equal(delegated.get("key"), "value");
+      assert.equal(delegated.read(), "private-value");
+      assert.equal(getAnnotations(state), undefined);
+      assert.equal(normalizeDelegatedAnnotationState(delegated), state);
+    },
+  );
+
+  it(
     "normalizeNestedDelegatedAnnotationState() unwraps nested carriers in arrays and plain objects",
     () => {
       class StatefulObject {
