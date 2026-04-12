@@ -584,6 +584,20 @@ function normalizeOptionalLikeInnerState<TState>(
   return initialState;
 }
 
+function normalizeOptionalLikeSuggestState<TState>(
+  state: [TState] | TState | undefined,
+  initialState: TState,
+  parser?: Parser<Mode, unknown, TState>,
+): TState {
+  if (Array.isArray(state)) {
+    const innerState = state[0];
+    return innerState != null && typeof innerState === "object"
+      ? getDelegatedAnnotationState(state, innerState)
+      : innerState;
+  }
+  return normalizeOptionalLikeInnerState(state, initialState, parser);
+}
+
 /**
  * Creates a parser that makes another parser optional, allowing it to succeed
  * without consuming input if the wrapped parser fails to match.
@@ -607,7 +621,7 @@ export function optional<M extends Mode, TValue, TState>(
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): Generator<Suggestion> {
-    const innerState = normalizeOptionalLikeInnerState(
+    const innerState = normalizeOptionalLikeSuggestState(
       context.state,
       syncParser.initialState,
       parser,
@@ -620,7 +634,7 @@ export function optional<M extends Mode, TValue, TState>(
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): AsyncGenerator<Suggestion> {
-    const innerState = normalizeOptionalLikeInnerState(
+    const innerState = normalizeOptionalLikeSuggestState(
       context.state,
       syncParser.initialState,
       parser,
@@ -673,7 +687,7 @@ export function optional<M extends Mode, TValue, TState>(
       if (optionalParser.dependencyMetadata?.source != null) {
         return [{ path, parser: optionalParser, state }];
       }
-      const innerState = normalizeOptionalLikeInnerState(
+      const innerState = normalizeOptionalLikeSuggestState(
         state,
         parser.initialState,
         parser,
@@ -1030,7 +1044,7 @@ export function withDefault<
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): Generator<Suggestion> {
-    const innerState = normalizeOptionalLikeInnerState(
+    const innerState = normalizeOptionalLikeSuggestState(
       context.state,
       syncParser.initialState,
       parser,
@@ -1043,7 +1057,7 @@ export function withDefault<
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): AsyncGenerator<Suggestion> {
-    const innerState = normalizeOptionalLikeInnerState(
+    const innerState = normalizeOptionalLikeSuggestState(
       context.state,
       syncParser.initialState,
       parser,
@@ -1091,7 +1105,7 @@ export function withDefault<
       if (withDefaultParser.dependencyMetadata?.source != null) {
         return [{ path, parser: withDefaultParser, state }];
       }
-      const innerState = normalizeOptionalLikeInnerState(
+      const innerState = normalizeOptionalLikeSuggestState(
         state,
         parser.initialState,
         parser,

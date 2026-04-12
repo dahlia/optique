@@ -8162,6 +8162,81 @@ describe(
         }
       });
 
+      it(`${name} suggest() keeps primitive inner states unwrapped`, () => {
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          parse(context: ParserContext<string>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: string) {
+            return { success: true as const, value: state };
+          },
+          *suggest(context: ParserContext<string>) {
+            if (typeof context.state !== "string") {
+              throw new TypeError("Expected primitive suggest state.");
+            }
+            yield { kind: "literal" as const, text: context.state };
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [Symbol.for(`@test/issue-594/${name}/suggest-primitive`)]: true,
+        });
+
+        const suggestions = [...parser.suggest({
+          buffer: [],
+          state: outerState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        }, "")];
+
+        assert.deepEqual(suggestions, [{ kind: "literal", text: "live" }]);
+      });
+
+      it(`${name} getSuggestRuntimeNodes() keeps primitive inner states unwrapped`, () => {
+        let seenState: unknown;
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          getSuggestRuntimeNodes(state: unknown) {
+            seenState = state;
+            return [];
+          },
+          parse(context: ParserContext<string>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: string) {
+            return { success: true as const, value: state };
+          },
+          suggest: function* () {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [Symbol.for(`@test/issue-594/${name}/runtime-nodes-primitive`)]: true,
+        });
+
+        parser.getSuggestRuntimeNodes?.(outerState, ["root"]);
+
+        assert.equal(seenState, "live");
+      });
+
       it(
         `${name} shouldDeferCompletion() preserves annotations on primitive inner states`,
         () => {
