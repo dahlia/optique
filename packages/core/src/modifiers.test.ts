@@ -8566,6 +8566,118 @@ describe(
         assert.equal(getAnnotations(state), undefined);
       });
 
+      it(`${name} complete() preserves Array subclass inner states`, () => {
+        const marker = Symbol.for(`@test/issue-594/${name}/complete-array`);
+
+        class DeferredArrayState extends Array<string> {
+          #secret = "private-value";
+
+          read(): string {
+            return this.#secret;
+          }
+        }
+
+        const state = new DeferredArrayState("live");
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: new DeferredArrayState("seed"),
+          parse(context: ParserContext<DeferredArrayState>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(innerState: DeferredArrayState) {
+            return {
+              success: true as const,
+              value: {
+                annotated: getAnnotations(innerState)?.[marker] === "ok",
+                secret: innerState.read(),
+                inner: innerState,
+              },
+            };
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations([state] as [DeferredArrayState], {
+          [marker]: "ok",
+        });
+
+        const result = parser.complete(outerState);
+
+        assert.deepEqual(result, {
+          success: true,
+          value: {
+            annotated: true,
+            secret: "private-value",
+            inner: state,
+          },
+        });
+        if (
+          result.success &&
+          result.value != null &&
+          typeof result.value === "object" &&
+          "inner" in result.value
+        ) {
+          assert.strictEqual(result.value.inner, state);
+          assert.equal(getAnnotations(result.value.inner), undefined);
+        }
+      });
+
+      it(`${name} shouldDeferCompletion() preserves Array subclass inner states`, () => {
+        const marker = Symbol.for(`@test/issue-594/${name}/defer-array`);
+
+        class DeferredArrayState extends Array<string> {
+          #secret = "private-value";
+
+          read(): string {
+            return this.#secret;
+          }
+        }
+
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: new DeferredArrayState("seed"),
+          parse(context: ParserContext<DeferredArrayState>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: DeferredArrayState) {
+            return { success: true as const, value: state.read() };
+          },
+          shouldDeferCompletion(state: DeferredArrayState) {
+            return getAnnotations(state)?.[marker] === "ok" &&
+              state.read() === "private-value";
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const state = new DeferredArrayState("live");
+        const outerState = injectAnnotations([state] as [DeferredArrayState], {
+          [marker]: "ok",
+        });
+
+        assert.ok(parser.shouldDeferCompletion?.(outerState));
+        assert.equal(getAnnotations(state), undefined);
+      });
+
       it(`${name} complete() preserves annotation-aware exceptions`, () => {
         const marker = Symbol.for(`@test/issue-594/${name}/complete-throw`);
         let callCount = 0;

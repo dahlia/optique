@@ -211,6 +211,35 @@ describe("annotation-state", () => {
   );
 
   it(
+    "getDelegatedAnnotationState() preserves Array subclasses via annotation views",
+    () => {
+      class StatefulArray<T> extends Array<T> {
+        #secret = "private-value";
+
+        read(): string {
+          return this.#secret;
+        }
+      }
+
+      const marker = Symbol.for(
+        "@test/getDelegatedAnnotationState-array-subclass",
+      );
+      const annotations = { [marker]: true } satisfies Annotations;
+      const parentState = injectAnnotations(undefined, annotations);
+      const state = new StatefulArray<string>("value");
+      const delegated = getDelegatedAnnotationState(parentState, state);
+
+      assert.ok(hasDelegatedAnnotationCarrier(delegated));
+      assert.ok(getAnnotations(delegated)?.[marker]);
+      assert.ok(delegated instanceof StatefulArray);
+      assert.equal(delegated[0], "value");
+      assert.equal(delegated.read(), "private-value");
+      assert.equal(getAnnotations(state), undefined);
+      assert.equal(normalizeDelegatedAnnotationState(delegated), state);
+    },
+  );
+
+  it(
     "getDelegatedAnnotationState() tracks delegated plain-object clones",
     () => {
       const marker = Symbol.for(

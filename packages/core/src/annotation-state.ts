@@ -95,7 +95,7 @@ export function normalizeInjectedAnnotationState<T>(state: T): T {
 function isNonPlainDelegatedObject(state: object): boolean {
   const proto = Object.getPrototypeOf(state);
   if (
-    Array.isArray(state) ||
+    proto === Array.prototype ||
     proto === Date.prototype ||
     proto === Map.prototype ||
     proto === Set.prototype ||
