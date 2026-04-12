@@ -141,6 +141,26 @@ describe("extension", () => {
       assert.equal(nodes[0].parser, outerParser);
       assert.equal(nodes[1].parser, innerParser);
     });
+
+    it("returns only inner nodes when outer parser has no source metadata", () => {
+      const innerParser = createTestParser({
+        source: createSourceMetadata(Symbol("inner-source")),
+      });
+      const outerParser = createTestParser();
+
+      const nodes = delegateSuggestNodes(
+        innerParser,
+        outerParser,
+        "outer-state",
+        ["field"],
+        "inner-state",
+      );
+
+      assert.equal(nodes.length, 1);
+      assert.equal(nodes[0].parser, innerParser);
+      assert.equal(nodes[0].state, "inner-state");
+      assert.deepEqual(nodes[0].path, ["field"]);
+    });
   });
 
   describe("mapSourceMetadata()", () => {
@@ -166,7 +186,8 @@ describe("extension", () => {
       );
 
       assert.ok(mapped != null);
-      assert.ok(!mapped.source?.preservesSourceValue);
+      assert.ok(mapped.source != null);
+      assert.ok(!mapped.source.preservesSourceValue);
       assert.equal(mapped.derived, derived);
       assert.equal(mapped.transform, transform);
     });
