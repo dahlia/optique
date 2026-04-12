@@ -140,6 +140,24 @@ describe("annotation-state", () => {
   );
 
   it(
+    "getDelegatedAnnotationState() rewraps injected primitives even with identical annotations",
+    () => {
+      const marker = Symbol.for(
+        "@test/getDelegatedAnnotationState-shared-primitive",
+      );
+      const annotations = { [marker]: true } satisfies Annotations;
+      const parentState = injectAnnotations(undefined, annotations);
+      const childState = injectAnnotations("seed", annotations);
+
+      const delegated = getDelegatedAnnotationState(parentState, childState);
+
+      assert.notStrictEqual(delegated, childState);
+      assert.ok(getAnnotations(delegated)?.[marker]);
+      assert.equal(normalizeDelegatedAnnotationState(delegated), "seed");
+    },
+  );
+
+  it(
     "getDelegatedAnnotationState() preserves class instances via annotation views",
     () => {
       class StatefulObject {
@@ -187,6 +205,10 @@ describe("annotation-state", () => {
         object: {
           inner: getDelegatedAnnotationState(parentState, state),
         },
+        array: [
+          getDelegatedAnnotationState(parentState, "seed-array"),
+          { inner: getDelegatedAnnotationState(parentState, state) },
+        ],
       };
 
       const normalized = normalizeNestedDelegatedAnnotationState(nested);
@@ -195,7 +217,48 @@ describe("annotation-state", () => {
       assert.deepEqual(normalized, {
         primitive: "seed",
         object: { inner: state },
+        array: ["seed-array", { inner: state }],
       });
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() preserves top-level array annotations",
+    () => {
+      const arrayMarker = Symbol.for(
+        "@test/normalizeNestedDelegatedAnnotationState-array",
+      );
+      const delegatedParent = injectAnnotations(undefined, {
+        [Symbol.for("@test/normalizeNestedDelegatedAnnotationState-delegated")]:
+          true,
+      });
+      const annotatedArray = injectAnnotations([
+        getDelegatedAnnotationState(delegatedParent, "seed"),
+      ], {
+        [arrayMarker]: true,
+      });
+
+      const normalized = normalizeNestedDelegatedAnnotationState(
+        annotatedArray,
+      );
+
+      assert.notStrictEqual(normalized, annotatedArray);
+      assert.equal(normalized.length, 1);
+      assert.equal(normalized[0], "seed");
+      assert.ok(getAnnotations(normalized)?.[arrayMarker]);
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() preserves identity for cyclic values without carriers",
+    () => {
+      const cyclic: { self?: unknown } = {};
+      cyclic.self = cyclic;
+
+      const normalized = normalizeNestedDelegatedAnnotationState(cyclic);
+
+      assert.strictEqual(normalized, cyclic);
+      assert.strictEqual(normalized.self, cyclic);
     },
   );
 });

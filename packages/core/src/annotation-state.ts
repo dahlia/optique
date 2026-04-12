@@ -1,4 +1,5 @@
 import {
+  annotateFreshArray,
   annotationKey,
   type Annotations,
   getAnnotations,
@@ -125,6 +126,24 @@ export function hasDelegatedAnnotationCarrier(state: unknown): boolean {
     );
 }
 
+interface NestedNormalizationEntry {
+  clone: object;
+  finalized: boolean;
+  result: object;
+}
+
+function isPendingNestedNormalizationAlias(
+  originalValue: unknown,
+  normalizedValue: unknown,
+  seen: WeakMap<object, NestedNormalizationEntry>,
+): boolean {
+  if (originalValue == null || typeof originalValue !== "object") {
+    return false;
+  }
+  const entry = seen.get(originalValue as object);
+  return entry != null && !entry.finalized && entry.clone === normalizedValue;
+}
+
 /**
  * Recursively removes delegated annotation carriers from plain-object and array
  * structures.
@@ -143,20 +162,26 @@ export function hasDelegatedAnnotationCarrier(state: unknown): boolean {
  */
 export function normalizeNestedDelegatedAnnotationState<T>(
   value: T,
-  seen = new WeakMap<object, unknown>(),
+  seen = new WeakMap<object, NestedNormalizationEntry>(),
 ): T {
   const normalized = normalizeDelegatedAnnotationState(value);
   if (normalized == null || typeof normalized !== "object") {
     return normalized;
   }
   const source = normalized as object;
-  if (seen.has(source)) {
-    return seen.get(source) as T;
+  const existing = seen.get(source);
+  if (existing != null) {
+    return (existing.finalized ? existing.result : existing.clone) as T;
   }
   if (Array.isArray(source)) {
     let changed = false;
-    const clone = [...source];
-    seen.set(source, clone);
+    const clone = annotateFreshArray(source, source.slice()) as unknown[];
+    const entry: NestedNormalizationEntry = {
+      clone: clone as object,
+      finalized: false,
+      result: clone as object,
+    };
+    seen.set(source, entry);
     for (let i = 0; i < source.length; i++) {
       const nextValue = normalizeNestedDelegatedAnnotationState(
         source[i],
@@ -164,14 +189,14 @@ export function normalizeNestedDelegatedAnnotationState<T>(
       );
       if (nextValue !== source[i]) {
         clone[i] = nextValue;
-        changed = true;
+        if (!isPendingNestedNormalizationAlias(source[i], nextValue, seen)) {
+          changed = true;
+        }
       }
     }
-    if (!changed) {
-      seen.set(source, source);
-      return source as T;
-    }
-    return clone as T;
+    entry.finalized = true;
+    entry.result = changed ? clone as object : source;
+    return (changed ? clone : source) as T;
   }
   const proto = Object.getPrototypeOf(source);
   if (proto !== Object.prototype && proto !== null) {
@@ -183,7 +208,12 @@ export function normalizeNestedDelegatedAnnotationState<T>(
   >;
   let changed = false;
   const clone = Object.create(proto);
-  seen.set(source, clone);
+  const entry: NestedNormalizationEntry = {
+    clone,
+    finalized: false,
+    result: clone,
+  };
+  seen.set(source, entry);
   for (const key of Reflect.ownKeys(descriptors)) {
     const descriptor = descriptors[key];
     if (descriptor != null && "value" in descriptor) {
@@ -193,12 +223,17 @@ export function normalizeNestedDelegatedAnnotationState<T>(
       );
       if (nextValue !== descriptor.value) {
         descriptors[key] = { ...descriptor, value: nextValue };
-        changed = true;
+        if (
+          !isPendingNestedNormalizationAlias(descriptor.value, nextValue, seen)
+        ) {
+          changed = true;
+        }
       }
     }
   }
+  entry.finalized = true;
+  entry.result = changed ? clone : source;
   if (!changed) {
-    seen.set(source, source);
     return source as T;
   }
   Object.defineProperties(clone, descriptors);
@@ -224,17 +259,20 @@ export function getDelegatedAnnotationState<TState>(
   childState: TState,
 ): TState {
   const annotations = getAnnotations(parentState);
-  if (annotations === undefined || getAnnotations(childState) === annotations) {
+  if (annotations === undefined) {
     return childState;
-  }
-  if (childState == null || typeof childState !== "object") {
-    return injectAnnotations(childState, annotations);
   }
   if (isInjectedAnnotationWrapper(childState)) {
     return injectAnnotations(
       normalizeInjectedAnnotationState(childState),
       annotations,
     );
+  }
+  if (getAnnotations(childState) === annotations) {
+    return childState;
+  }
+  if (childState == null || typeof childState !== "object") {
+    return injectAnnotations(childState, annotations);
   }
   if (isNonPlainDelegatedObject(childState)) {
     return withAnnotationView(childState, annotations) as TState;

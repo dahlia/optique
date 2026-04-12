@@ -8152,6 +8152,14 @@ describe(
             inner: state,
           },
         });
+        if (
+          result.success &&
+          result.value != null &&
+          typeof result.value === "object" &&
+          "inner" in result.value
+        ) {
+          assert.strictEqual(result.value.inner, state);
+        }
       });
 
       it(
