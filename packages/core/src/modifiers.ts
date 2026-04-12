@@ -530,8 +530,9 @@ function hasOptionalLikeParseStateChanged<TState>(
   previousState: TState,
   nextState: TState,
 ): boolean {
-  return normalizeDelegatedAnnotationState(previousState) !==
-    normalizeDelegatedAnnotationState(nextState);
+  return previousState !== nextState &&
+    normalizeDelegatedAnnotationState(previousState) !==
+      normalizeDelegatedAnnotationState(nextState);
 }
 
 function processOptionalStyleResult<TState>(
