@@ -746,17 +746,11 @@ export function bindConfig<
           // as "CLI provided" would skip the config fallback and break
           // composition with bindEnv.
           const cliConsumed = result.consumed.length > 0;
-          const newState = annotations != null
-            ? injectAnnotations({
-              [configBindStateKey]: true as const,
-              hasCliValue: cliConsumed,
-              cliState: result.next.state,
-            }, annotations)
-            : {
-              [configBindStateKey]: true as const,
-              hasCliValue: cliConsumed,
-              cliState: result.next.state,
-            };
+          const newState = injectAnnotations({
+            [configBindStateKey]: true as const,
+            hasCliValue: cliConsumed,
+            cliState: result.next.state,
+          }, annotations);
           return {
             success: true,
             ...(result.provisional ? { provisional: true as const } : {}),
@@ -773,15 +767,10 @@ export function bindConfig<
           return result;
         }
 
-        const newState = annotations != null
-          ? injectAnnotations({
-            [configBindStateKey]: true as const,
-            hasCliValue: false,
-          }, annotations)
-          : {
-            [configBindStateKey]: true as const,
-            hasCliValue: false,
-          };
+        const newState = injectAnnotations({
+          [configBindStateKey]: true as const,
+          hasCliValue: false,
+        }, annotations);
         return {
           success: true,
           next: { ...innerContext, state: newState as TState },

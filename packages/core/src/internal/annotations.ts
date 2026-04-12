@@ -234,6 +234,7 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
     const cloned = new RegExp(target) as RegExp & {
       [annotationKey]?: Annotations;
     };
+    cloned.lastIndex = target.lastIndex;
     cloned[annotationKey] = annotations;
     return cloned as T;
   }
@@ -280,8 +281,8 @@ export function hasMeaningfulAnnotations(
  * - Plain object states are shallow-cloned with annotations attached.
  * - Built-in object states (Date/Map/Set/RegExp) are cloned by constructor.
  * - Other non-plain object states are cloned via prototype/descriptors.
- * - If the `annotations` record has no own symbol keys, the state is
- *   returned unchanged; an empty annotations object is a no-op.
+ * - If the `annotations` record is nullish or has no own symbol keys, the
+ *   state is returned unchanged.
  *
  * @param state The parser state to annotate.
  * @param annotations The annotations to inject.
@@ -290,7 +291,7 @@ export function hasMeaningfulAnnotations(
  */
 export function injectAnnotations<TState>(
   state: TState,
-  annotations: Annotations,
+  annotations: Annotations | null | undefined,
 ): TState {
   if (!hasMeaningfulAnnotations(annotations)) {
     return state;
@@ -329,12 +330,10 @@ export function injectAnnotations<TState>(
     return cloned as TState;
   }
   if (isInjectedAnnotationWrapper(state)) {
-    (
-      state as TState & {
-        [annotationKey]?: Annotations;
-      }
-    )[annotationKey] = annotations;
-    return state;
+    return injectAnnotations(
+      unwrapInjectedAnnotationWrapper(state),
+      annotations,
+    );
   }
   if (state instanceof Date) {
     const cloned = new Date(state.getTime()) as Date & {
@@ -361,6 +360,7 @@ export function injectAnnotations<TState>(
     const cloned = new RegExp(state) as RegExp & {
       [annotationKey]?: Annotations;
     };
+    cloned.lastIndex = state.lastIndex;
     cloned[annotationKey] = annotations;
     return cloned as TState;
   }

@@ -88,19 +88,28 @@ describe("getAnnotations", () => {
 });
 
 describe("injectAnnotations", () => {
-  it("should preserve wrapper markers when reinjecting injected wrappers", () => {
+  it("should preserve wrapper markers without mutating reinjected wrappers", () => {
     const first = injectAnnotations(undefined, { [Symbol.for("@test/a")]: 1 });
     assert.ok(isInjectedAnnotationWrapper(first));
 
     const second = injectAnnotations(first, { [Symbol.for("@test/b")]: 2 });
-    assert.equal(second, first);
+    assert.notEqual(second, first);
     assert.ok(isInjectedAnnotationWrapper(second));
+    assert.deepEqual(getAnnotations(first), { [Symbol.for("@test/a")]: 1 });
+    assert.deepEqual(getAnnotations(second), { [Symbol.for("@test/b")]: 2 });
 
     const wrapper = second as unknown as Record<PropertyKey, unknown>;
     assert.ok(Object.hasOwn(wrapper, annotationStateValueKey));
     assert.ok(Object.hasOwn(wrapper, annotationWrapperKey));
     assert.equal(wrapper[annotationWrapperKey], true);
     assert.equal(wrapper[annotationStateValueKey], undefined);
+  });
+
+  it("should treat nullish annotations as a no-op", () => {
+    assert.equal(injectAnnotations(undefined, undefined), undefined);
+    assert.equal(injectAnnotations("state", null), "state");
+    const objectState = { value: 1 };
+    assert.equal(injectAnnotations(objectState, undefined), objectState);
   });
 
   it("should preserve Date state shape", () => {
@@ -139,12 +148,14 @@ describe("injectAnnotations", () => {
   it("should preserve RegExp state shape", () => {
     const marker = Symbol.for("@test/inject-regexp");
     const source = /ab+/gi;
+    source.lastIndex = 2;
     const result = injectAnnotations(source, { [marker]: "ok" });
 
     assert.ok(result instanceof RegExp);
     assert.notEqual(result, source);
     assert.equal(result.source, "ab+");
     assert.equal(result.flags, "gi");
+    assert.equal(result.lastIndex, 2);
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 
@@ -320,12 +331,14 @@ describe("inheritAnnotations", () => {
     const marker = Symbol.for("@test/inherit-regexp");
     const source = { [annotationKey]: { [marker]: "ok" } };
     const target = /ab+/gi;
+    target.lastIndex = 2;
     const result = inheritAnnotations(source, target);
 
     assert.ok(result instanceof RegExp);
     assert.notEqual(result, target);
     assert.equal(result.source, "ab+");
     assert.equal(result.flags, "gi");
+    assert.equal(result.lastIndex, 2);
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 

@@ -989,17 +989,11 @@ export function prompt<M extends Mode, TValue, TState>(
           // input tokens.  Wrappers that return success with consumed: []
           // (e.g., withDefault, bindConfig) should NOT suppress the prompt.
           const cliConsumed = result.consumed.length > 0;
-          const nextState = annotations != null
-            ? injectAnnotations({
-              [promptBindStateKey]: true as const,
-              hasCliValue: cliConsumed,
-              cliState,
-            }, annotations)
-            : {
-              [promptBindStateKey]: true as const,
-              hasCliValue: cliConsumed,
-              cliState,
-            };
+          const nextState = injectAnnotations({
+            [promptBindStateKey]: true as const,
+            hasCliValue: cliConsumed,
+            cliState,
+          }, annotations);
           return {
             success: true,
             ...(result.provisional ? { provisional: true as const } : {}),
@@ -1015,15 +1009,10 @@ export function prompt<M extends Mode, TValue, TState>(
           return result;
         }
 
-        const nextState = annotations != null
-          ? injectAnnotations({
-            [promptBindStateKey]: true as const,
-            hasCliValue: false,
-          }, annotations)
-          : {
-            [promptBindStateKey]: true as const,
-            hasCliValue: false,
-          };
+        const nextState = injectAnnotations({
+          [promptBindStateKey]: true as const,
+          hasCliValue: false,
+        }, annotations);
         return {
           success: true,
           next: { ...baseInnerContext, state: nextState as TState },

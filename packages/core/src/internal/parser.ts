@@ -834,11 +834,7 @@ function injectAnnotationsIntoState<TState>(
   state: TState,
   options?: ParseOptions,
 ): TState {
-  const annotations = options?.annotations;
-  if (!hasMeaningfulAnnotations(annotations)) {
-    return state;
-  }
-  return injectAnnotations(state, annotations);
+  return injectAnnotations(state, options?.annotations);
 }
 
 /**

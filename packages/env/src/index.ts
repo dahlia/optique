@@ -323,17 +323,11 @@ export function bindEnv<
           // absent; treating those as "CLI provided" would skip the env
           // fallback and break composition.
           const cliConsumed = result.consumed.length > 0;
-          const nextState = annotations != null
-            ? injectAnnotations({
-              [envBindStateKey]: true as const,
-              hasCliValue: cliConsumed,
-              cliState: result.next.state,
-            }, annotations)
-            : {
-              [envBindStateKey]: true as const,
-              hasCliValue: cliConsumed,
-              cliState: result.next.state,
-            };
+          const nextState = injectAnnotations({
+            [envBindStateKey]: true as const,
+            hasCliValue: cliConsumed,
+            cliState: result.next.state,
+          }, annotations);
           return {
             success: true,
             ...(result.provisional ? { provisional: true as const } : {}),
@@ -350,15 +344,10 @@ export function bindEnv<
           return result;
         }
 
-        const nextState = annotations != null
-          ? injectAnnotations({
-            [envBindStateKey]: true as const,
-            hasCliValue: false,
-          }, annotations)
-          : {
-            [envBindStateKey]: true as const,
-            hasCliValue: false,
-          };
+        const nextState = injectAnnotations({
+          [envBindStateKey]: true as const,
+          hasCliValue: false,
+        }, annotations);
         return {
           success: true,
           next: { ...innerContext, state: nextState as TState },
