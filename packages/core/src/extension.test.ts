@@ -166,7 +166,7 @@ describe("extension", () => {
       );
 
       assert.ok(mapped != null);
-      assert.equal(mapped.source?.preservesSourceValue, false);
+      assert.ok(!mapped.source?.preservesSourceValue);
       assert.equal(mapped.derived, derived);
       assert.equal(mapped.transform, transform);
     });
