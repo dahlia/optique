@@ -24,6 +24,17 @@ To be released.
     workarounds and fixes custom two-pass contexts that previously could not
     distinguish phase 1 from a real `undefined` parse result. [[#271], [#786]]
 
+ -  Added a stable parser-extension surface for low-level integration authors.
+    `@optique/core/annotations` now documents and supports
+    `injectAnnotations()`, `inheritAnnotations()`,
+    `isInjectedAnnotationState()`, and `unwrapInjectedAnnotationState()` as
+    public helpers; `@optique/core/mode-dispatch` remains the public mode
+    helper module; and the new `@optique/core/extension` subpath exposes
+    `defineTraits()`, `getTraits()`, `delegateSuggestNodes()`, and
+    `mapSourceMetadata()` for parser traits and source-aware wrapper
+    composition. First-party integration packages now use these public helpers
+    instead of reaching into `@optique/core/parser` internals. [[#790], [#793]]
+
  -  Added the optional `Parser.validateValue()` method, which lets a
     parser check whether an arbitrary value satisfies its underlying
     `ValueParser`'s constraints (e.g., regex patterns, numeric bounds,
@@ -1700,6 +1711,8 @@ To be released.
 [#786]: https://github.com/dahlia/optique/pull/786
 [#788]: https://github.com/dahlia/optique/pull/788
 [#789]: https://github.com/dahlia/optique/pull/789
+[#790]: https://github.com/dahlia/optique/issues/790
+[#793]: https://github.com/dahlia/optique/pull/793
 
 ### @optique/config
 

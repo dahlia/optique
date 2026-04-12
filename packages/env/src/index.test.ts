@@ -828,10 +828,12 @@ describe("bindEnv()", () => {
         usage: portParser.usage,
       });
       assert.ok(parseResult.success);
-      const extracted = portParser.dependencyMetadata?.source
-        ?.extractSourceValue(parseResult.next.state);
-      assert.ok(extracted != null && !(extracted instanceof Promise));
-      assert.ok(!extracted.success);
+      const getMissing = portParser.dependencyMetadata?.source
+        ?.getMissingSourceValue;
+      assert.ok(typeof getMissing === "function");
+      const missing = getMissing!();
+      assert.ok(missing != null && !(missing instanceof Promise));
+      assert.ok(!missing.success);
     });
 
     it("bindEnv fallback errors carry the option-name prefix", () => {
@@ -2453,6 +2455,29 @@ describe("bindEnv() with dependency sources", () => {
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value, "prod");
+    }
+  });
+
+  it("optional(map(bindEnv(...))) preserves env fallback via annotations", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = optional(
+      map(
+        bindEnv(option("--mode", choice(["dev", "prod"] as const)), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+        (value) => value.toUpperCase() as Uppercase<typeof value>,
+      ),
+    );
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "PROD");
     }
   });
 

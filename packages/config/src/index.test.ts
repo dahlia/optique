@@ -3217,6 +3217,28 @@ describe("bindConfig() with dependency sources", () => {
     }
   });
 
+  test("withDefault(map(bindConfig(...))) preserves config fallback", () => {
+    const context = createConfigContext({ schema });
+    const annotations: Annotations = {
+      [context.id]: { data: { mode: "prod" as const } },
+    };
+    const parser = withDefault(
+      map(
+        bindConfig(option("--mode", choice(["dev", "prod"] as const)), {
+          context,
+          key: "mode",
+        }),
+        (value) => value.toUpperCase() as Uppercase<typeof value>,
+      ),
+      "FALLBACK",
+    );
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "PROD");
+    }
+  });
+
   test(
     "optional(bindConfig(flag)) at top level uses config via annotations",
     () => {

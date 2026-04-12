@@ -228,6 +228,39 @@ composition semantics:
     for positional (non-option) tokens.
     Most custom parsers should set this to `false`.
 
+### Helper modules for custom parsers
+
+Optique exposes a few low-level helper modules for custom parser authors:
+
+ -  `@optique/core/context`: Implement `SourceContext` when runtime data should
+    be collected outside the parser itself and injected through `runWith()`.
+ -  `@optique/core/annotations`: Read and propagate annotation-bearing parser
+    state with `getAnnotations()`, `injectAnnotations()`,
+    `inheritAnnotations()`, `isInjectedAnnotationState()`, and
+    `unwrapInjectedAnnotationState()`.
+ -  `@optique/core/mode-dispatch`: Preserve sync/async mode semantics with
+    `dispatchByMode()`, `mapModeValue()`, and `wrapForMode()`.
+ -  `@optique/core/extension`: Coordinate parser traits and source-aware
+    wrapper behavior with `defineTraits()`, `getTraits()`,
+    `delegateSuggestNodes()`, and `mapSourceMetadata()`.
+
+Most custom parsers only need `annotations` and `context`.  The
+`extension` helpers are intended for parser wrappers that need to preserve
+annotation state or participate in source-backed completion and suggestion
+flows.
+
+`inheritsAnnotations`
+:   Use this trait when your parser rebuilds child state and needs parent
+    annotations injected into that rebuilt state.
+
+`completesFromSource`
+:   Use this trait when your parser can still produce a completion result from
+    a non-CLI source value even when it consumed no CLI input.
+
+`requiresSourceBinding`
+:   Use this trait when annotation-only primitive states should count as
+    completable only when they came from a nested source-bound parser.
+
 ### Provisional results
 
 When a custom parser succeeds in `parse()` without consuming any input

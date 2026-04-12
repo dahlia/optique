@@ -99,6 +99,14 @@
       "import": "./dist/doc.js",
       "require": "./dist/doc.cjs"
     },
+    "./extension": {
+      "types": {
+        "import": "./dist/extension.d.ts",
+        "require": "./dist/extension.d.cts"
+      },
+      "import": "./dist/extension.js",
+      "require": "./dist/extension.cjs"
+    },
     "./facade": {
       "types": {
         "import": "./dist/facade.d.ts",

@@ -25,11 +25,11 @@ import type {
   Result,
 } from "@optique/core/parser";
 import {
-  composeWrappedSourceMetadata,
-  defineInheritedAnnotationParser,
-  getDelegatingSuggestRuntimeNodes,
-  unmatchedNonCliDependencySourceStateMarker,
-} from "@optique/core/parser";
+  defineTraits,
+  delegateSuggestNodes,
+  mapSourceMetadata,
+  type ParserSourceMetadata,
+} from "@optique/core/extension";
 import {
   annotationKey,
   getAnnotations,
@@ -702,7 +702,6 @@ export function bindConfig<
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
-    [unmatchedNonCliDependencySourceStateMarker]: true,
     usage: options.default !== undefined
       ? [{ type: "optional", terms: parser.usage }]
       : parser.usage,
@@ -711,7 +710,7 @@ export function bindConfig<
     initialState: parser.initialState,
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
       const innerState = getSuggestInnerState(state);
-      return getDelegatingSuggestRuntimeNodes(
+      return delegateSuggestNodes(
         parser,
         boundParser,
         state,
@@ -815,6 +814,10 @@ export function bindConfig<
       return parser.getDocFragments(state, defaultValue);
     },
   };
+  defineTraits(boundParser, {
+    inheritsAnnotations: true,
+    completesFromSource: true,
+  });
 
   // Lazily forward placeholder from inner parser to avoid eagerly
   // evaluating derived value parser factories at construction time.
@@ -847,10 +850,9 @@ export function bindConfig<
       enumerable: false,
     });
   }
-  defineInheritedAnnotationParser(boundParser);
-  const dependencyMetadata = composeWrappedSourceMetadata(
-    parser.dependencyMetadata,
-    (sourceMetadata) => ({
+  const dependencyMetadata = mapSourceMetadata(
+    parser,
+    (sourceMetadata: ParserSourceMetadata<M, TValue, TState>) => ({
       ...sourceMetadata,
       getMissingSourceValue: sourceMetadata.preservesSourceValue !== false &&
           options.default !== undefined
