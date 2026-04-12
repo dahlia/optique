@@ -96,7 +96,9 @@ export function defineTraits(parser: object, traits: ParserTraits): void {
     Object.defineProperty(parser, unmatchedNonCliDependencySourceStateMarker, {
       value: true,
       configurable: true,
-      enumerable: false,
+      // Keep this trait enumerable so wrappers cloned with object spread, such
+      // as map(), preserve source-backed completion behavior.
+      enumerable: true,
     });
   }
   if (traits.requiresSourceBinding === true) {

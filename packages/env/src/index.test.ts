@@ -2456,6 +2456,29 @@ describe("bindEnv() with dependency sources", () => {
     }
   });
 
+  it("optional(map(bindEnv(...))) preserves env fallback via annotations", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = optional(
+      map(
+        bindEnv(option("--mode", choice(["dev", "prod"] as const)), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+        (value) => value.toUpperCase() as Uppercase<typeof value>,
+      ),
+    );
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "PROD");
+    }
+  });
+
   it("optional(bindEnv(..., default)) uses bindEnv default when env absent", () => {
     const envContext = createEnvContext({
       prefix: "APP_",

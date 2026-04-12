@@ -81,6 +81,16 @@ describe("extension", () => {
         requiresSourceBinding: true,
       });
     });
+
+    it("preserves completesFromSource across parser spreads", () => {
+      const parser = createTestParser();
+
+      defineTraits(parser, { completesFromSource: true });
+
+      const clone = { ...parser };
+
+      assert.deepEqual(getTraits(clone), { completesFromSource: true });
+    });
   });
 
   describe("delegateSuggestNodes()", () => {
