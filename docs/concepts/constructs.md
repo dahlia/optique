@@ -1916,8 +1916,7 @@ const parser = object({
   verbose: option("-v", "--verbose"),
   version: option("-v", "--version"),  // Duplicate: -v
 });
-// Error: Duplicate option name `-v` found in fields: "verbose", "version".
-// Each option name must be unique within a parser combinator.
+// Throws DuplicateOptionError because both fields use -v.
 ~~~~
 
 This applies to nested structures as well:
@@ -1946,8 +1945,8 @@ const parser = object({
   legacy: option("--output", string(), { hidden: true }),
   current: option("--output", string()),
 });
-// Error: Duplicate option name `--output` found in fields: "legacy",
-// "current". Hidden options still participate in parsing.
+// Throws DuplicateOptionError because both fields use --output.
+// Hidden options still participate in parsing.
 ~~~~
 
 ### Allowed duplicates in `or()`
