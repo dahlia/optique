@@ -26,6 +26,7 @@ import {
   extractPhase2SeedKey,
   phase2SeedFromValueResult,
 } from "./phase2-seed.ts";
+import type { Phase2Seed } from "./phase2-seed.ts";
 import {
   defineInheritedAnnotationParser,
   defineSourceBindingOnlyAnnotationCompletionParser,
@@ -224,8 +225,8 @@ async function completeOptionalLikeAsync<TValue, TState>(
 }
 
 function normalizeOptionalLikePhase2Seed<T>(
-  seed: import("./phase2-seed.ts").Phase2Seed<T> | null,
-): import("./phase2-seed.ts").Phase2Seed<T> | null {
+  seed: Phase2Seed<T> | null,
+): Phase2Seed<T> | null {
   return seed == null ? null : {
     ...seed,
     value: normalizeNestedDelegatedAnnotationState(seed.value),
@@ -236,7 +237,7 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   state: [TState] | TState | undefined,
   exec?: ExecutionContext,
-): ModeValue<M, import("./phase2-seed.ts").Phase2Seed<TValue> | null> {
+): ModeValue<M, Phase2Seed<TValue> | null> {
   if (
     !Array.isArray(state) &&
     !(state != null && typeof state === "object")
