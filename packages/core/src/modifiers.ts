@@ -526,6 +526,14 @@ async function parseOptionalStyleAsync<TState>(
  * Internal helper to process optional-style parse results.
  * @internal
  */
+function hasOptionalLikeParseStateChanged<TState>(
+  previousState: TState,
+  nextState: TState,
+): boolean {
+  return normalizeDelegatedAnnotationState(previousState) !==
+    normalizeDelegatedAnnotationState(nextState);
+}
+
 function processOptionalStyleResult<TState>(
   result: ParserResult<TState>,
   innerState: TState,
@@ -533,9 +541,11 @@ function processOptionalStyleResult<TState>(
 ): ParserResult<[TState] | undefined> {
   if (result.success) {
     // Check if the inner parser actually matched something (state changed)
-    // or if it consumed nothing (e.g. constant parser).
+    // or if it consumed nothing (e.g. constant parser). Internal delegated
+    // annotation carriers do not count as real state changes here.
     if (
-      result.next.state !== innerState || result.consumed.length === 0
+      hasOptionalLikeParseStateChanged(innerState, result.next.state) ||
+      result.consumed.length === 0
     ) {
       return {
         success: true,

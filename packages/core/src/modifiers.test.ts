@@ -6118,6 +6118,93 @@ describe("state management edge cases", () => {
       assert.ok(second.success);
       assert.equal(lastSeenAnnotation, "reentry");
     });
+
+    class StatefulReentryState {
+      #secret = "private-value";
+
+      self(): StatefulReentryState {
+        return this;
+      }
+
+      read(): string {
+        return this.#secret;
+      }
+    }
+
+    for (
+      const [
+        name,
+        wrap,
+      ] of [
+        [
+          "optional",
+          (parser: Parser<"sync", string, StatefulReentryState>) =>
+            optional(parser),
+        ],
+        [
+          "withDefault",
+          (parser: Parser<"sync", string, StatefulReentryState>) =>
+            withDefault(parser, "fallback"),
+        ],
+      ] as const
+    ) {
+      it(`${name}() re-entry preserves unchanged class-state identity`, () => {
+        const marker = Symbol.for(`@test/issue-233/${name}/class-reentry`);
+        let seenAnnotation: string | undefined;
+        const inner: Parser<"sync", string, StatefulReentryState> = {
+          $valueType: [] as readonly string[],
+          $stateType: [] as readonly StatefulReentryState[],
+          $mode: "sync",
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: new StatefulReentryState(),
+          parse(context) {
+            seenAnnotation = getAnnotations(context.state)?.[marker] as
+              | string
+              | undefined;
+            return {
+              success: true,
+              next: {
+                ...context,
+                state: context.state.self(),
+              },
+              consumed: ["token"],
+            };
+          },
+          complete(state) {
+            return { success: true, value: state.read() };
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        };
+
+        const parser = wrap(inner);
+        const innerState = new StatefulReentryState();
+        const reentryState = injectAnnotations([innerState], {
+          [marker]: "reentry",
+        }) as [StatefulReentryState];
+
+        const result = parser.parse({
+          buffer: ["token"],
+          state: reentryState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        });
+
+        assert.ok(result.success);
+        if (!result.success) return;
+        assert.equal(seenAnnotation, "reentry");
+        assert.strictEqual(result.next.state, reentryState);
+        assert.strictEqual(result.next.state[0], innerState);
+        assert.deepEqual(result.consumed, ["token"]);
+      });
+    }
   });
 });
 
