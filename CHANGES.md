@@ -1509,6 +1509,7 @@ To be released.
 [#507]: https://github.com/dahlia/optique/issues/507
 [#508]: https://github.com/dahlia/optique/issues/508
 [#509]: https://github.com/dahlia/optique/issues/509
+[#510]: https://github.com/dahlia/optique/issues/510
 [#512]: https://github.com/dahlia/optique/pull/512
 [#513]: https://github.com/dahlia/optique/issues/513
 [#516]: https://github.com/dahlia/optique/issues/516
