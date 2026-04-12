@@ -325,7 +325,7 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
         }
         return normalizeOptionalLikePhase2Seed(seed, hasCarrier);
       } catch (error) {
-        if (!hasCarrier) {
+        if (!shouldRetryOptionalLikeCompatibilityError(error, innerState)) {
           throw error;
         }
         const fallbackState = normalizeDelegatedAnnotationState(innerState);
@@ -390,7 +390,7 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
         }
         return normalizeOptionalLikePhase2Seed(seed, hasCarrier);
       } catch (error) {
-        if (!hasCarrier) {
+        if (!shouldRetryOptionalLikeCompatibilityError(error, innerState)) {
           throw error;
         }
         const fallbackState = normalizeDelegatedAnnotationState(innerState);

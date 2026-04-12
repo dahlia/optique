@@ -8906,6 +8906,241 @@ describe(
       );
 
       it(
+        `${name} phase-two seed extraction preserves annotation-aware completion exceptions`,
+        () => {
+          const marker = Symbol.for(`@test/issue-594/${name}/phase2-throw`);
+          let completeCalls = 0;
+          let extractCalls = 0;
+          const inner: Parser<"sync", string, string> = {
+            $mode: "sync",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly string[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context) {
+              return {
+                success: true as const,
+                next: context,
+                consumed: [],
+              };
+            },
+            complete(state) {
+              completeCalls++;
+              if (getAnnotations(state)?.[marker] === "ok") {
+                throw new Error("Annotated phase-two completion failure.");
+              }
+              return {
+                success: false as const,
+                error: message`Missing value.`,
+              };
+            },
+            suggest() {
+              return [];
+            },
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          Object.defineProperty(inner, extractPhase2SeedKey, {
+            value(state: string | object) {
+              extractCalls++;
+              return typeof state === "string"
+                ? { value: { inner: state } }
+                : null;
+            },
+          });
+          const parser = wrap(inner);
+          const outerState = injectAnnotations(["live"] as [string], {
+            [marker]: "ok",
+          });
+
+          assert.throws(
+            () => extractPhase2Seed(parser, outerState),
+            /Annotated phase-two completion failure\./,
+          );
+          assert.equal(completeCalls, 1);
+          assert.equal(extractCalls, 0);
+        },
+      );
+
+      it(
+        `${name} async phase-two seed extraction preserves annotation-aware completion exceptions`,
+        async () => {
+          const marker = Symbol.for(
+            `@test/issue-594/${name}/async-phase2-throw`,
+          );
+          let completeCalls = 0;
+          let extractCalls = 0;
+          const inner: Parser<"async", string, string> = {
+            $mode: "async",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly string[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context) {
+              return Promise.resolve({
+                success: true as const,
+                next: context,
+                consumed: [],
+              });
+            },
+            complete(state) {
+              completeCalls++;
+              if (getAnnotations(state)?.[marker] === "ok") {
+                throw new Error(
+                  "Annotated async phase-two completion failure.",
+                );
+              }
+              return Promise.resolve({
+                success: false as const,
+                error: message`Missing value.`,
+              });
+            },
+            suggest: async function* () {},
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          Object.defineProperty(inner, extractPhase2SeedKey, {
+            value(state: string | object) {
+              extractCalls++;
+              return Promise.resolve(
+                typeof state === "string" ? { value: { inner: state } } : null,
+              );
+            },
+          });
+          const parser = wrap(inner);
+          const outerState = injectAnnotations(["live"] as [string], {
+            [marker]: "ok",
+          });
+
+          await assert.rejects(
+            () => extractPhase2Seed(parser, outerState),
+            /Annotated async phase-two completion failure\./,
+          );
+          assert.equal(completeCalls, 1);
+          assert.equal(extractCalls, 0);
+        },
+      );
+
+      it(
+        `${name} phase-two seed extraction retries primitive-wrapper extractor TypeErrors`,
+        () => {
+          let completeCalls = 0;
+          let extractCalls = 0;
+          const inner: Parser<"sync", string, string> = {
+            $mode: "sync",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly string[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context) {
+              return {
+                success: true as const,
+                next: context,
+                consumed: [],
+              };
+            },
+            complete() {
+              completeCalls++;
+              return {
+                success: false as const,
+                error: message`Missing value.`,
+              };
+            },
+            suggest() {
+              return [];
+            },
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          Object.defineProperty(inner, extractPhase2SeedKey, {
+            value(state: string) {
+              extractCalls++;
+              return { value: state.toUpperCase() };
+            },
+          });
+          const parser = wrap(inner);
+          const outerState = injectAnnotations(["live"] as [string], {
+            [Symbol.for(`@test/issue-594/${name}/phase2-extractor-typeerror`)]:
+              true,
+          });
+
+          const seed = extractPhase2Seed(parser, outerState);
+
+          assert.deepEqual(seed, { value: "LIVE" });
+          assert.equal(completeCalls, 2);
+          assert.equal(extractCalls, 2);
+        },
+      );
+
+      it(
+        `${name} async phase-two seed extraction retries primitive-wrapper extractor TypeErrors`,
+        async () => {
+          let completeCalls = 0;
+          let extractCalls = 0;
+          const inner: Parser<"async", string, string> = {
+            $mode: "async",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly string[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context) {
+              return Promise.resolve({
+                success: true as const,
+                next: context,
+                consumed: [],
+              });
+            },
+            complete() {
+              completeCalls++;
+              return Promise.resolve({
+                success: false as const,
+                error: message`Missing value.`,
+              });
+            },
+            suggest: async function* () {},
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          Object.defineProperty(inner, extractPhase2SeedKey, {
+            value(state: string) {
+              extractCalls++;
+              return Promise.resolve({ value: state.toUpperCase() });
+            },
+          });
+          const parser = wrap(inner);
+          const outerState = injectAnnotations(["live"] as [string], {
+            [
+              Symbol.for(
+                `@test/issue-594/${name}/async-phase2-extractor-typeerror`,
+              )
+            ]: true,
+          });
+
+          const seed = await extractPhase2Seed(parser, outerState);
+
+          assert.deepEqual(seed, { value: "LIVE" });
+          assert.equal(completeCalls, 2);
+          assert.equal(extractCalls, 2);
+        },
+      );
+
+      it(
         `${name} phase-two seed extraction retries the extractor without retrying failed completion`,
         () => {
           let completeCalls = 0;
