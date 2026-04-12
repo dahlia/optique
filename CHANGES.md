@@ -995,6 +995,15 @@ To be released.
     `bindConfig()` from resolving config values through wrapper combinators.
     [[#385], [#535]]
 
+ -  Fixed `optional()` and `withDefault()` still dropping outer annotations
+    for primitive and non-plain object inner states during `complete()` and
+    `shouldDeferCompletion()`. Primitive inner states now use the same
+    internal annotation carrier path as other annotation-enabled flows, and
+    non-plain objects now receive short-lived annotation views that preserve
+    class methods and private fields. This lets annotation-aware parsers and
+    `prompt(optional(...))` / `prompt(withDefault(...))` compositions observe
+    outer annotations consistently across all state shapes. [[#594], [#789]]
+
  -  Fixed proxy-based sanitization of deferred prompt values breaking class
     methods that access private fields.  Methods on non-plain objects are now
     invoked with temporarily sanitized own properties on the original instance,
@@ -1551,6 +1560,7 @@ To be released.
 [#589]: https://github.com/dahlia/optique/pull/589
 [#590]: https://github.com/dahlia/optique/issues/590
 [#592]: https://github.com/dahlia/optique/pull/592
+[#594]: https://github.com/dahlia/optique/issues/594
 [#595]: https://github.com/dahlia/optique/pull/595
 [#599]: https://github.com/dahlia/optique/pull/599
 [#606]: https://github.com/dahlia/optique/pull/606
@@ -1689,6 +1699,7 @@ To be released.
 [#784]: https://github.com/dahlia/optique/pull/784
 [#786]: https://github.com/dahlia/optique/pull/786
 [#788]: https://github.com/dahlia/optique/pull/788
+[#789]: https://github.com/dahlia/optique/pull/789
 
 ### @optique/config
 

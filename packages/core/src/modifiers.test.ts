@@ -29,9 +29,15 @@ import {
   withDefault,
   WithDefaultError,
 } from "@optique/core/modifiers";
-import { map as mapLocal, multiple as multipleLocal } from "./modifiers.ts";
+import {
+  map as mapLocal,
+  multiple as multipleLocal,
+  optional as optionalLocal,
+  withDefault as withDefaultLocal,
+} from "./modifiers.ts";
 import {
   completeOrExtractPhase2Seed,
+  extractPhase2Seed,
   extractPhase2SeedKey,
 } from "./phase2-seed.ts";
 import { createDependencyRuntimeContext } from "./dependency-runtime.ts";
@@ -6112,6 +6118,93 @@ describe("state management edge cases", () => {
       assert.ok(second.success);
       assert.equal(lastSeenAnnotation, "reentry");
     });
+
+    class StatefulReentryState {
+      #secret = "private-value";
+
+      self(): StatefulReentryState {
+        return this;
+      }
+
+      read(): string {
+        return this.#secret;
+      }
+    }
+
+    for (
+      const [
+        name,
+        wrap,
+      ] of [
+        [
+          "optional",
+          (parser: Parser<"sync", string, StatefulReentryState>) =>
+            optional(parser),
+        ],
+        [
+          "withDefault",
+          (parser: Parser<"sync", string, StatefulReentryState>) =>
+            withDefault(parser, "fallback"),
+        ],
+      ] as const
+    ) {
+      it(`${name}() re-entry preserves unchanged class-state identity`, () => {
+        const marker = Symbol.for(`@test/issue-233/${name}/class-reentry`);
+        let seenAnnotation: string | undefined;
+        const inner: Parser<"sync", string, StatefulReentryState> = {
+          $valueType: [] as readonly string[],
+          $stateType: [] as readonly StatefulReentryState[],
+          $mode: "sync",
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: new StatefulReentryState(),
+          parse(context) {
+            seenAnnotation = getAnnotations(context.state)?.[marker] as
+              | string
+              | undefined;
+            return {
+              success: true,
+              next: {
+                ...context,
+                state: context.state.self(),
+              },
+              consumed: ["token"],
+            };
+          },
+          complete(state) {
+            return { success: true, value: state.read() };
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        };
+
+        const parser = wrap(inner);
+        const innerState = new StatefulReentryState();
+        const reentryState = injectAnnotations([innerState], {
+          [marker]: "reentry",
+        }) as [StatefulReentryState];
+
+        const result = parser.parse({
+          buffer: ["token"],
+          state: reentryState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        });
+
+        assert.ok(result.success);
+        if (!result.success) return;
+        assert.equal(seenAnnotation, "reentry");
+        assert.strictEqual(result.next.state, reentryState);
+        assert.strictEqual(result.next.state[0], innerState);
+        assert.deepEqual(result.consumed, ["token"]);
+      });
+    }
   });
 });
 
@@ -7866,6 +7959,1834 @@ describe("shouldDeferCompletion forwarding", () => {
     });
   });
 });
+
+describe(
+  "optional-like delegated annotation propagation (issue #594)",
+  () => {
+    class DeferredClassState {
+      #secret = "private-value";
+
+      read(): string {
+        return this.#secret;
+      }
+    }
+
+    function createPrimitiveCompletionParser(
+      marker: symbol,
+    ): Parser<"sync", string, string> {
+      return {
+        $mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state) {
+          return {
+            success: true as const,
+            value: getAnnotations(state)?.[marker] === "ok"
+              ? "annotated"
+              : "missing-annotations",
+          };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+    }
+
+    function createClassCompletionParser(
+      marker: symbol,
+    ): Parser<"sync", string, DeferredClassState> {
+      return {
+        $mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly DeferredClassState[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: new DeferredClassState(),
+        parse(context) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state) {
+          return {
+            success: true as const,
+            value: getAnnotations(state)?.[marker] === "ok"
+              ? state.read()
+              : "missing-annotations",
+          };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+    }
+
+    function createPrimitiveDeferralParser(
+      marker: symbol,
+    ): Parser<"sync", string, string> {
+      return {
+        $mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state) {
+          return {
+            success: true as const,
+            value: typeof state === "string" ? state : "wrapped",
+          };
+        },
+        shouldDeferCompletion(state) {
+          return getAnnotations(state)?.[marker] === "ok";
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+    }
+
+    function createClassDeferralParser(
+      marker: symbol,
+    ): Parser<"sync", string, DeferredClassState> {
+      return {
+        $mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly DeferredClassState[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: new DeferredClassState(),
+        parse(context) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state) {
+          return { success: true as const, value: state.read() };
+        },
+        shouldDeferCompletion(state) {
+          return state.read() === "private-value" &&
+            getAnnotations(state)?.[marker] === "ok";
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+    }
+
+    const wrappers = [
+      {
+        name: "optional()",
+        wrap<TMode extends "sync" | "async", TValue, TState>(
+          parser: Parser<TMode, TValue, TState>,
+        ) {
+          return optionalLocal(parser);
+        },
+      },
+      {
+        name: "withDefault()",
+        wrap<TMode extends "sync" | "async", TValue, TState>(
+          parser: Parser<TMode, TValue, TState>,
+        ) {
+          return withDefaultLocal(parser, "fallback");
+        },
+      },
+    ] as const;
+
+    for (const { name, wrap } of wrappers) {
+      it(`${name} complete() preserves annotations on primitive inner states`, () => {
+        const marker = Symbol.for(`@test/issue-594/${name}/complete-primitive`);
+        const parser = wrap(createPrimitiveCompletionParser(marker));
+        const outerState = injectAnnotations(["live"] as [string], {
+          [marker]: "ok",
+        });
+
+        const result = parser.complete(outerState);
+
+        assert.deepEqual(result, {
+          success: true,
+          value: "annotated",
+        });
+      });
+
+      it(`${name} complete() preserves annotations on class inner states`, () => {
+        const marker = Symbol.for(`@test/issue-594/${name}/complete-class`);
+        const parser = wrap(createClassCompletionParser(marker));
+        const state = new DeferredClassState();
+        const outerState = injectAnnotations([state] as [DeferredClassState], {
+          [marker]: "ok",
+        });
+
+        const result = parser.complete(outerState);
+
+        assert.deepEqual(result, {
+          success: true,
+          value: "private-value",
+        });
+        assert.equal(getAnnotations(state), undefined);
+      });
+
+      it(`${name} complete() deep-normalizes nested delegated primitive values`, () => {
+        const marker = Symbol.for(`@test/issue-594/${name}/nested-primitive`);
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          parse(context: ParserContext<string>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: string) {
+            return {
+              success: true as const,
+              value: {
+                annotated: getAnnotations(state)?.[marker] === "ok",
+                inner: state,
+              },
+            };
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [marker]: "ok",
+        });
+
+        const result = parser.complete(outerState);
+
+        assert.deepEqual(result, {
+          success: true,
+          value: {
+            annotated: true,
+            inner: "live",
+          },
+        });
+      });
+
+      it(`${name} complete() deep-normalizes nested delegated class values`, () => {
+        const marker = Symbol.for(`@test/issue-594/${name}/nested-class`);
+        const state = new DeferredClassState();
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: new DeferredClassState(),
+          parse(context: ParserContext<DeferredClassState>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(innerState: DeferredClassState) {
+            return {
+              success: true as const,
+              value: {
+                annotated: getAnnotations(innerState)?.[marker] === "ok",
+                inner: innerState,
+              },
+            };
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations([state] as [DeferredClassState], {
+          [marker]: "ok",
+        });
+
+        const result = parser.complete(outerState);
+
+        assert.deepEqual(result, {
+          success: true,
+          value: {
+            annotated: true,
+            inner: state,
+          },
+        });
+        if (
+          result.success &&
+          result.value != null &&
+          typeof result.value === "object" &&
+          "inner" in result.value
+        ) {
+          assert.strictEqual(result.value.inner, state);
+        }
+      });
+
+      it(`${name} complete() deep-normalizes nested delegated plain-object values`, () => {
+        const marker = Symbol.for(
+          `@test/issue-594/${name}/nested-plain-object`,
+        );
+        const state = { value: "live" };
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: { value: "seed" },
+          parse(context: ParserContext<{ value: string }>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(innerState: { value: string }) {
+            return {
+              success: true as const,
+              value: {
+                annotated: getAnnotations(innerState)?.[marker] === "ok",
+                inner: innerState,
+              },
+            };
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations([state] as [{ value: string }], {
+          [marker]: "ok",
+        });
+
+        const result = parser.complete(outerState);
+
+        assert.deepEqual(result, {
+          success: true,
+          value: {
+            annotated: true,
+            inner: state,
+          },
+        });
+        if (
+          result.success &&
+          result.value != null &&
+          typeof result.value === "object" &&
+          "inner" in result.value
+        ) {
+          assert.strictEqual(result.value.inner, state);
+          assert.equal(getAnnotations(result.value.inner), undefined);
+        }
+      });
+
+      it(`${name} complete() preserves Map subclass results while unwrapping entries`, () => {
+        const marker = Symbol.for(
+          `@test/issue-594/${name}/map-subclass-result`,
+        );
+
+        class StatefulMap extends Map<string, unknown> {
+          #secret = "private-value";
+
+          read(): string {
+            return this.#secret;
+          }
+        }
+
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: new StatefulMap([["seed", "value"]]),
+          parse(context: ParserContext<StatefulMap>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(innerState: StatefulMap) {
+            return {
+              success: true as const,
+              value: new StatefulMap([
+                ["annotated", getAnnotations(innerState)?.[marker] === "ok"],
+                ["inner", innerState],
+              ]),
+            };
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(
+          [new StatefulMap([["live", "value"]])] as [StatefulMap],
+          { [marker]: "ok" },
+        );
+
+        const result = parser.complete(outerState);
+
+        assert.ok(result.success);
+        if (!result.success) return;
+        assert.ok(result.value instanceof StatefulMap);
+        assert.equal(result.value.read(), "private-value");
+        assert.equal(result.value.get("annotated"), true);
+        const inner = result.value.get("inner");
+        assert.ok(inner instanceof StatefulMap);
+        assert.equal(inner.read(), "private-value");
+        assert.equal(getAnnotations(inner), undefined);
+      });
+
+      it(`${name} parse() strips annotations from plain-object initial states`, () => {
+        const marker = Symbol.for(
+          `@test/issue-594/${name}/parse-plain-object`,
+        );
+        const initialState = { value: "seed" };
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState,
+          parse(context: ParserContext<{ value: string }>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: { value: string }) {
+            return {
+              success: true as const,
+              value: {
+                annotated: getAnnotations(state)?.[marker] === "ok",
+                inner: state,
+              },
+            };
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+
+        const result = parse(parser, [], {
+          annotations: { [marker]: "ok" },
+        });
+
+        assert.ok(result.success);
+        if (!result.success) return;
+        assert.deepEqual(result.value, {
+          annotated: true,
+          inner: initialState,
+        });
+        assert.strictEqual(result.value.inner, initialState);
+        assert.equal(getAnnotations(result.value.inner), undefined);
+      });
+
+      it(`${name} parseAsync() strips annotations from plain-object initial states`, async () => {
+        const marker = Symbol.for(
+          `@test/issue-594/${name}/parse-plain-object-async`,
+        );
+        const initialState = { value: "seed" };
+        const parser = wrap({
+          $mode: "async" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState,
+          parse(context: ParserContext<{ value: string }>) {
+            return Promise.resolve({
+              success: true as const,
+              next: context,
+              consumed: [],
+            });
+          },
+          complete(state: { value: string }) {
+            return Promise.resolve({
+              success: true as const,
+              value: {
+                annotated: getAnnotations(state)?.[marker] === "ok",
+                inner: state,
+              },
+            });
+          },
+          suggest: async function* () {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+
+        const result = await parseAsync(parser, [], {
+          annotations: { [marker]: "ok" },
+        });
+
+        assert.ok(result.success);
+        if (!result.success) return;
+        assert.deepEqual(result.value, {
+          annotated: true,
+          inner: initialState,
+        });
+        assert.strictEqual(result.value.inner, initialState);
+        assert.equal(getAnnotations(result.value.inner), undefined);
+      });
+
+      it(`${name} suggest() keeps primitive inner states unwrapped`, () => {
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          parse(context: ParserContext<string>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: string) {
+            return { success: true as const, value: state };
+          },
+          *suggest(context: ParserContext<string>) {
+            if (typeof context.state !== "string") {
+              throw new TypeError("Expected primitive suggest state.");
+            }
+            yield { kind: "literal" as const, text: context.state };
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [Symbol.for(`@test/issue-594/${name}/suggest-primitive`)]: true,
+        });
+
+        const suggestions = [...parser.suggest({
+          buffer: [],
+          state: outerState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        }, "")];
+
+        assert.deepEqual(suggestions, [{ kind: "literal", text: "live" }]);
+      });
+
+      it(`${name} getSuggestRuntimeNodes() keeps primitive inner states unwrapped`, () => {
+        let seenState: unknown;
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          getSuggestRuntimeNodes(state: unknown) {
+            seenState = state;
+            return [];
+          },
+          parse(context: ParserContext<string>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: string) {
+            return { success: true as const, value: state };
+          },
+          suggest: function* () {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [Symbol.for(`@test/issue-594/${name}/runtime-nodes-primitive`)]: true,
+        });
+
+        parser.getSuggestRuntimeNodes?.(outerState, ["root"]);
+
+        assert.equal(seenState, "live");
+      });
+
+      it(
+        `${name} shouldDeferCompletion() preserves annotations on primitive inner states`,
+        () => {
+          const marker = Symbol.for(
+            `@test/issue-594/${name}/defer-primitive`,
+          );
+          const parser = wrap(createPrimitiveDeferralParser(marker));
+          const outerState = injectAnnotations(["live"] as [string], {
+            [marker]: "ok",
+          });
+
+          assert.ok(parser.shouldDeferCompletion?.(outerState));
+        },
+      );
+
+      it(`${name} shouldDeferCompletion() preserves annotations on class inner states`, () => {
+        const marker = Symbol.for(`@test/issue-594/${name}/defer-class`);
+        const parser = wrap(createClassDeferralParser(marker));
+        const state = new DeferredClassState();
+        const outerState = injectAnnotations([state] as [DeferredClassState], {
+          [marker]: "ok",
+        });
+
+        assert.ok(parser.shouldDeferCompletion?.(outerState));
+        assert.equal(getAnnotations(state), undefined);
+      });
+
+      it(`${name} complete() preserves Array subclass inner states`, () => {
+        const marker = Symbol.for(`@test/issue-594/${name}/complete-array`);
+
+        class DeferredArrayState extends Array<string> {
+          #secret = "private-value";
+
+          read(): string {
+            return this.#secret;
+          }
+        }
+
+        const state = new DeferredArrayState("live");
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: new DeferredArrayState("seed"),
+          parse(context: ParserContext<DeferredArrayState>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(innerState: DeferredArrayState) {
+            return {
+              success: true as const,
+              value: {
+                annotated: getAnnotations(innerState)?.[marker] === "ok",
+                secret: innerState.read(),
+                inner: innerState,
+              },
+            };
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations([state] as [DeferredArrayState], {
+          [marker]: "ok",
+        });
+
+        const result = parser.complete(outerState);
+
+        assert.deepEqual(result, {
+          success: true,
+          value: {
+            annotated: true,
+            secret: "private-value",
+            inner: state,
+          },
+        });
+        if (
+          result.success &&
+          result.value != null &&
+          typeof result.value === "object" &&
+          "inner" in result.value
+        ) {
+          assert.strictEqual(result.value.inner, state);
+          assert.equal(getAnnotations(result.value.inner), undefined);
+        }
+      });
+
+      it(`${name} shouldDeferCompletion() preserves Array subclass inner states`, () => {
+        const marker = Symbol.for(`@test/issue-594/${name}/defer-array`);
+
+        class DeferredArrayState extends Array<string> {
+          #secret = "private-value";
+
+          read(): string {
+            return this.#secret;
+          }
+        }
+
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: new DeferredArrayState("seed"),
+          parse(context: ParserContext<DeferredArrayState>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: DeferredArrayState) {
+            return { success: true as const, value: state.read() };
+          },
+          shouldDeferCompletion(state: DeferredArrayState) {
+            return getAnnotations(state)?.[marker] === "ok" &&
+              state.read() === "private-value";
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const state = new DeferredArrayState("live");
+        const outerState = injectAnnotations([state] as [DeferredArrayState], {
+          [marker]: "ok",
+        });
+
+        assert.ok(parser.shouldDeferCompletion?.(outerState));
+        assert.equal(getAnnotations(state), undefined);
+      });
+
+      it(`${name} complete() preserves annotation-aware exceptions`, () => {
+        const marker = Symbol.for(`@test/issue-594/${name}/complete-throw`);
+        let callCount = 0;
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          parse(context: ParserContext<string>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: string) {
+            callCount++;
+            if (getAnnotations(state)?.[marker] === "ok") {
+              throw new Error("Annotated complete failure.");
+            }
+            return { success: true as const, value: "fallback-success" };
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [marker]: "ok",
+        });
+
+        assert.throws(
+          () => parser.complete(outerState),
+          /Annotated complete failure\./,
+        );
+        assert.equal(callCount, 1);
+      });
+
+      it(`${name} async complete() preserves annotation-aware exceptions`, async () => {
+        const marker = Symbol.for(
+          `@test/issue-594/${name}/async-complete-throw`,
+        );
+        let callCount = 0;
+        const parser = wrap({
+          $mode: "async" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          parse(context: ParserContext<string>) {
+            return Promise.resolve({
+              success: true as const,
+              next: context,
+              consumed: [],
+            });
+          },
+          complete(state: string) {
+            callCount++;
+            if (getAnnotations(state)?.[marker] === "ok") {
+              throw new Error("Annotated async complete failure.");
+            }
+            return Promise.resolve({
+              success: true as const,
+              value: "fallback-success",
+            });
+          },
+          suggest: async function* () {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [marker]: "ok",
+        });
+
+        await assert.rejects(
+          () => parser.complete(outerState),
+          /Annotated async complete failure\./,
+        );
+        assert.equal(callCount, 1);
+      });
+
+      it(`${name} complete() retries primitive wrapper TypeErrors`, () => {
+        const marker = Symbol.for(
+          `@test/issue-594/${name}/complete-primitive-typeerror`,
+        );
+        let callCount = 0;
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          parse(context: ParserContext<string>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: string) {
+            callCount++;
+            return {
+              success: true as const,
+              value: state.toUpperCase(),
+            };
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [marker]: true,
+        });
+
+        const result = parser.complete(outerState);
+
+        assert.deepEqual(result, {
+          success: true,
+          value: "LIVE",
+        });
+        assert.equal(callCount, 2);
+      });
+
+      it(`${name} async complete() retries primitive wrapper TypeErrors`, async () => {
+        const marker = Symbol.for(
+          `@test/issue-594/${name}/async-complete-primitive-typeerror`,
+        );
+        let callCount = 0;
+        const parser = wrap({
+          $mode: "async" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          parse(context: ParserContext<string>) {
+            return Promise.resolve({
+              success: true as const,
+              next: context,
+              consumed: [],
+            });
+          },
+          complete(state: string) {
+            callCount++;
+            return Promise.resolve({
+              success: true as const,
+              value: state.toUpperCase(),
+            });
+          },
+          suggest: async function* () {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [marker]: true,
+        });
+
+        const result = await parser.complete(outerState);
+
+        assert.deepEqual(result, {
+          success: true,
+          value: "LIVE",
+        });
+        assert.equal(callCount, 2);
+      });
+
+      it(`${name} shouldDeferCompletion() preserves annotation-aware exceptions`, () => {
+        const marker = Symbol.for(`@test/issue-594/${name}/defer-throw`);
+        let callCount = 0;
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          parse(context: ParserContext<string>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: string) {
+            return { success: true as const, value: state };
+          },
+          shouldDeferCompletion(state: string) {
+            callCount++;
+            if (getAnnotations(state)?.[marker] === "ok") {
+              throw new Error("Annotated defer failure.");
+            }
+            return false;
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [marker]: "ok",
+        });
+
+        assert.throws(
+          () => parser.shouldDeferCompletion?.(outerState),
+          /Annotated defer failure\./,
+        );
+        assert.equal(callCount, 1);
+      });
+
+      it(`${name} shouldDeferCompletion() retries primitive wrapper TypeErrors`, () => {
+        const marker = Symbol.for(
+          `@test/issue-594/${name}/defer-primitive-typeerror`,
+        );
+        let callCount = 0;
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          parse(context: ParserContext<string>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: string) {
+            return { success: true as const, value: state };
+          },
+          shouldDeferCompletion(state: string) {
+            callCount++;
+            return state.toUpperCase() === "LIVE";
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [marker]: true,
+        });
+
+        assert.ok(parser.shouldDeferCompletion?.(outerState));
+        assert.equal(callCount, 2);
+      });
+
+      it(`${name} complete() retries wrapped initial-state failures`, () => {
+        const seenStates: unknown[] = [];
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context: ParserContext<unknown>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: unknown) {
+            seenStates.push(state);
+            return state === undefined
+              ? { success: true as const, value: "resolved" }
+              : { success: false as const, error: message`Wrapped failure.` };
+          },
+          shouldDeferCompletion(state: unknown) {
+            return state === undefined;
+          },
+          suggest: function* () {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotationsLocal(undefined, {
+          [Symbol.for(`@test/issue-594/${name}/wrapped-initial-complete`)]:
+            true,
+        });
+
+        const result = parser.complete(
+          outerState as unknown as [unknown] | undefined,
+        );
+
+        assert.deepEqual(result, {
+          success: true,
+          value: "resolved",
+        });
+        assert.deepEqual(seenStates, [outerState, undefined]);
+      });
+
+      it(`${name} async complete() retries wrapped initial-state failures`, async () => {
+        const seenStates: unknown[] = [];
+        const parser = wrap({
+          $mode: "async" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context: ParserContext<unknown>) {
+            return Promise.resolve({
+              success: true as const,
+              next: context,
+              consumed: [],
+            });
+          },
+          complete(state: unknown) {
+            seenStates.push(state);
+            return Promise.resolve(
+              state === undefined
+                ? { success: true as const, value: "resolved" }
+                : {
+                  success: false as const,
+                  error: message`Wrapped async failure.`,
+                },
+            );
+          },
+          shouldDeferCompletion(state: unknown) {
+            return state === undefined;
+          },
+          suggest: async function* () {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotationsLocal(undefined, {
+          [
+            Symbol.for(`@test/issue-594/${name}/wrapped-initial-async-complete`)
+          ]: true,
+        });
+
+        const result = await parser.complete(
+          outerState as unknown as [unknown] | undefined,
+        );
+
+        assert.deepEqual(result, {
+          success: true,
+          value: "resolved",
+        });
+        assert.deepEqual(seenStates, [outerState, undefined]);
+      });
+
+      it(`${name} complete() does not retry plain undefined failures`, () => {
+        let callCount = 0;
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context: ParserContext<unknown>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete() {
+            callCount++;
+            return {
+              success: false as const,
+              error: message`Plain undefined failure.`,
+            };
+          },
+          shouldDeferCompletion(state: unknown) {
+            return state === undefined;
+          },
+          suggest: function* () {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+
+        const result = parser.complete([undefined] as unknown as [unknown]);
+
+        assert.equal(callCount, 1);
+        assert.deepEqual(result, {
+          success: false,
+          error: message`Plain undefined failure.`,
+        });
+      });
+
+      it(`${name} async complete() does not retry plain undefined failures`, async () => {
+        let callCount = 0;
+        const parser = wrap({
+          $mode: "async" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context: ParserContext<unknown>) {
+            return Promise.resolve({
+              success: true as const,
+              next: context,
+              consumed: [],
+            });
+          },
+          complete() {
+            callCount++;
+            return Promise.resolve({
+              success: false as const,
+              error: message`Plain async undefined failure.`,
+            });
+          },
+          shouldDeferCompletion(state: unknown) {
+            return state === undefined;
+          },
+          suggest: async function* () {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+
+        const result = await parser.complete(
+          [undefined] as unknown as [unknown],
+        );
+
+        assert.equal(callCount, 1);
+        assert.deepEqual(result, {
+          success: false,
+          error: message`Plain async undefined failure.`,
+        });
+      });
+
+      it(
+        `${name} complete() skips nested normalization when no delegated carrier is present`,
+        () => {
+          let ownKeysCalls = 0;
+          let descriptorCalls = 0;
+          const value = new Proxy(
+            { nested: { value: "ok" } },
+            {
+              ownKeys(target) {
+                ownKeysCalls++;
+                return Reflect.ownKeys(target);
+              },
+              getOwnPropertyDescriptor(target, key) {
+                descriptorCalls++;
+                return Reflect.getOwnPropertyDescriptor(target, key);
+              },
+            },
+          );
+          const parser = wrap({
+            $mode: "sync" as const,
+            $valueType: [] as const,
+            $stateType: [] as const,
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context: ParserContext<string>) {
+              return { success: true as const, next: context, consumed: [] };
+            },
+            complete() {
+              return { success: true as const, value };
+            },
+            suggest: function* () {},
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          });
+
+          const result = parser.complete(["live"] as [string]);
+
+          assert.deepEqual(result, {
+            success: true,
+            value,
+          });
+          assert.equal(ownKeysCalls, 0);
+          assert.equal(descriptorCalls, 0);
+        },
+      );
+
+      it(
+        `${name} shouldDeferCompletion() retries wrapped initial-state false results`,
+        () => {
+          const seenStates: unknown[] = [];
+          const parser = wrap({
+            $mode: "sync" as const,
+            $valueType: [] as const,
+            $stateType: [] as const,
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: undefined,
+            parse(context: ParserContext<unknown>) {
+              return { success: true as const, next: context, consumed: [] };
+            },
+            complete() {
+              return { success: true as const, value: "unused" };
+            },
+            shouldDeferCompletion(state: unknown) {
+              seenStates.push(state);
+              return state === undefined;
+            },
+            suggest: function* () {},
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          });
+          const outerState = injectAnnotationsLocal(undefined, {
+            [
+              Symbol.for(`@test/issue-594/${name}/wrapped-initial-defer`)
+            ]: true,
+          });
+
+          assert.ok(
+            parser.shouldDeferCompletion?.(
+              outerState as unknown as [unknown] | undefined,
+            ),
+          );
+          assert.deepEqual(seenStates, [outerState, undefined]);
+        },
+      );
+
+      it(
+        `${name} complete() preserves delegated completion failures without retrying`,
+        () => {
+          const marker = Symbol.for(`@test/issue-594/${name}/preserve-failure`);
+          let callCount = 0;
+          const parser = wrap({
+            $mode: "sync" as const,
+            $valueType: [] as const,
+            $stateType: [] as const,
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context: ParserContext<string>) {
+              return { success: true as const, next: context, consumed: [] };
+            },
+            complete(state: string) {
+              callCount++;
+              return getAnnotations(state)?.[marker] === "ok"
+                ? {
+                  success: false as const,
+                  error: message`Annotated failure.`,
+                }
+                : {
+                  success: true as const,
+                  value: "fallback-success",
+                };
+            },
+            suggest() {
+              return [];
+            },
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          });
+          const outerState = injectAnnotations(["live"] as [string], {
+            [marker]: "ok",
+          });
+
+          const result = parser.complete(outerState);
+
+          assert.equal(callCount, 1);
+          assert.deepEqual(result, {
+            success: false,
+            error: message`Annotated failure.`,
+          });
+        },
+      );
+
+      it(
+        `${name} async complete() preserves delegated completion failures without retrying`,
+        async () => {
+          const marker = Symbol.for(
+            `@test/issue-594/${name}/async-preserve-failure`,
+          );
+          let callCount = 0;
+          const parser = wrap({
+            $mode: "async" as const,
+            $valueType: [] as const,
+            $stateType: [] as const,
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context: ParserContext<string>) {
+              return Promise.resolve({
+                success: true as const,
+                next: context,
+                consumed: [],
+              });
+            },
+            complete(state: string) {
+              callCount++;
+              return Promise.resolve(
+                getAnnotations(state)?.[marker] === "ok"
+                  ? {
+                    success: false as const,
+                    error: message`Annotated async failure.`,
+                  }
+                  : {
+                    success: true as const,
+                    value: "fallback-success",
+                  },
+              );
+            },
+            suggest: async function* () {},
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          });
+          const outerState = injectAnnotations(["live"] as [string], {
+            [marker]: "ok",
+          });
+
+          const result = await parser.complete(outerState);
+
+          assert.equal(callCount, 1);
+          assert.deepEqual(result, {
+            success: false,
+            error: message`Annotated async failure.`,
+          });
+        },
+      );
+
+      it(
+        `${name} phase-two seed extraction preserves annotation-aware completion exceptions`,
+        () => {
+          const marker = Symbol.for(`@test/issue-594/${name}/phase2-throw`);
+          let completeCalls = 0;
+          let extractCalls = 0;
+          const inner: Parser<"sync", string, string> = {
+            $mode: "sync",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly string[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context) {
+              return {
+                success: true as const,
+                next: context,
+                consumed: [],
+              };
+            },
+            complete(state) {
+              completeCalls++;
+              if (getAnnotations(state)?.[marker] === "ok") {
+                throw new Error("Annotated phase-two completion failure.");
+              }
+              return {
+                success: false as const,
+                error: message`Missing value.`,
+              };
+            },
+            suggest() {
+              return [];
+            },
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          Object.defineProperty(inner, extractPhase2SeedKey, {
+            value(state: string | object) {
+              extractCalls++;
+              return typeof state === "string"
+                ? { value: { inner: state } }
+                : null;
+            },
+          });
+          const parser = wrap(inner);
+          const outerState = injectAnnotations(["live"] as [string], {
+            [marker]: "ok",
+          });
+
+          assert.throws(
+            () => extractPhase2Seed(parser, outerState),
+            /Annotated phase-two completion failure\./,
+          );
+          assert.equal(completeCalls, 1);
+          assert.equal(extractCalls, 0);
+        },
+      );
+
+      it(
+        `${name} async phase-two seed extraction preserves annotation-aware completion exceptions`,
+        async () => {
+          const marker = Symbol.for(
+            `@test/issue-594/${name}/async-phase2-throw`,
+          );
+          let completeCalls = 0;
+          let extractCalls = 0;
+          const inner: Parser<"async", string, string> = {
+            $mode: "async",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly string[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context) {
+              return Promise.resolve({
+                success: true as const,
+                next: context,
+                consumed: [],
+              });
+            },
+            complete(state) {
+              completeCalls++;
+              if (getAnnotations(state)?.[marker] === "ok") {
+                throw new Error(
+                  "Annotated async phase-two completion failure.",
+                );
+              }
+              return Promise.resolve({
+                success: false as const,
+                error: message`Missing value.`,
+              });
+            },
+            suggest: async function* () {},
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          Object.defineProperty(inner, extractPhase2SeedKey, {
+            value(state: string | object) {
+              extractCalls++;
+              return Promise.resolve(
+                typeof state === "string" ? { value: { inner: state } } : null,
+              );
+            },
+          });
+          const parser = wrap(inner);
+          const outerState = injectAnnotations(["live"] as [string], {
+            [marker]: "ok",
+          });
+
+          await assert.rejects(
+            () => extractPhase2Seed(parser, outerState),
+            /Annotated async phase-two completion failure\./,
+          );
+          assert.equal(completeCalls, 1);
+          assert.equal(extractCalls, 0);
+        },
+      );
+
+      it(
+        `${name} phase-two seed extraction retries primitive-wrapper extractor TypeErrors`,
+        () => {
+          let completeCalls = 0;
+          let extractCalls = 0;
+          const inner: Parser<"sync", string, string> = {
+            $mode: "sync",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly string[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context) {
+              return {
+                success: true as const,
+                next: context,
+                consumed: [],
+              };
+            },
+            complete() {
+              completeCalls++;
+              return {
+                success: false as const,
+                error: message`Missing value.`,
+              };
+            },
+            suggest() {
+              return [];
+            },
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          Object.defineProperty(inner, extractPhase2SeedKey, {
+            value(state: string) {
+              extractCalls++;
+              return { value: state.toUpperCase() };
+            },
+          });
+          const parser = wrap(inner);
+          const outerState = injectAnnotations(["live"] as [string], {
+            [Symbol.for(`@test/issue-594/${name}/phase2-extractor-typeerror`)]:
+              true,
+          });
+
+          const seed = extractPhase2Seed(parser, outerState);
+
+          assert.deepEqual(seed, { value: "LIVE" });
+          assert.equal(completeCalls, 2);
+          assert.equal(extractCalls, 2);
+        },
+      );
+
+      it(
+        `${name} async phase-two seed extraction retries primitive-wrapper extractor TypeErrors`,
+        async () => {
+          let completeCalls = 0;
+          let extractCalls = 0;
+          const inner: Parser<"async", string, string> = {
+            $mode: "async",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly string[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context) {
+              return Promise.resolve({
+                success: true as const,
+                next: context,
+                consumed: [],
+              });
+            },
+            complete() {
+              completeCalls++;
+              return Promise.resolve({
+                success: false as const,
+                error: message`Missing value.`,
+              });
+            },
+            suggest: async function* () {},
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          Object.defineProperty(inner, extractPhase2SeedKey, {
+            value(state: string) {
+              extractCalls++;
+              return Promise.resolve({ value: state.toUpperCase() });
+            },
+          });
+          const parser = wrap(inner);
+          const outerState = injectAnnotations(["live"] as [string], {
+            [
+              Symbol.for(
+                `@test/issue-594/${name}/async-phase2-extractor-typeerror`,
+              )
+            ]: true,
+          });
+
+          const seed = await extractPhase2Seed(parser, outerState);
+
+          assert.deepEqual(seed, { value: "LIVE" });
+          assert.equal(completeCalls, 2);
+          assert.equal(extractCalls, 2);
+        },
+      );
+
+      it(
+        `${name} phase-two seed extraction retries the extractor without retrying failed completion`,
+        () => {
+          let completeCalls = 0;
+          let extractCalls = 0;
+          const inner: Parser<"sync", string, string> = {
+            $mode: "sync",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly string[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context) {
+              return {
+                success: true as const,
+                next: context,
+                consumed: [],
+              };
+            },
+            complete() {
+              completeCalls++;
+              return {
+                success: false as const,
+                error: message`Missing value.`,
+              };
+            },
+            suggest() {
+              return [];
+            },
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          Object.defineProperty(inner, extractPhase2SeedKey, {
+            value(state: string | object) {
+              extractCalls++;
+              return typeof state === "string"
+                ? { value: { inner: state } }
+                : null;
+            },
+          });
+          const parser = wrap(inner);
+          const outerState = injectAnnotations(["live"] as [string], {
+            [Symbol.for(`@test/issue-594/${name}/phase2`)]: true,
+          });
+
+          const seed = completeOrExtractPhase2Seed(parser, outerState);
+
+          assert.equal(completeCalls, 2);
+          assert.equal(extractCalls, 2);
+          assert.deepEqual(seed, {
+            value: { inner: "live" },
+          });
+        },
+      );
+      it(
+        `${name} phase-two seed extraction retries wrapped initial-state failures before the extractor`,
+        () => {
+          let completeCalls = 0;
+          let extractCalls = 0;
+          const inner: Parser<"sync", string, undefined> = {
+            $mode: "sync",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly undefined[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: undefined,
+            parse(context) {
+              return {
+                success: true as const,
+                next: context,
+                consumed: [],
+              };
+            },
+            complete(state) {
+              completeCalls++;
+              return state === undefined
+                ? { success: true as const, value: "resolved" }
+                : {
+                  success: false as const,
+                  error: message`Wrapped phase-two failure.`,
+                };
+            },
+            suggest() {
+              return [];
+            },
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          Object.defineProperty(inner, extractPhase2SeedKey, {
+            value() {
+              extractCalls++;
+              return null;
+            },
+          });
+          const parser = wrap(inner);
+          const outerState = injectAnnotations([undefined] as [undefined], {
+            [Symbol.for(`@test/issue-594/${name}/wrapped-phase2`)]: true,
+          });
+
+          const seed = extractPhase2Seed(parser, outerState);
+
+          assert.deepEqual(seed, {
+            value: "resolved",
+          });
+          assert.equal(completeCalls, 2);
+          assert.equal(extractCalls, 0);
+        },
+      );
+
+      it(
+        `${name} async phase-two seed extraction retries wrapped initial-state failures before the extractor`,
+        async () => {
+          let completeCalls = 0;
+          let extractCalls = 0;
+          const inner: Parser<"async", string, undefined> = {
+            $mode: "async",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly undefined[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: undefined,
+            parse(context) {
+              return Promise.resolve({
+                success: true as const,
+                next: context,
+                consumed: [],
+              });
+            },
+            complete(state) {
+              completeCalls++;
+              return Promise.resolve(
+                state === undefined
+                  ? { success: true as const, value: "resolved" }
+                  : {
+                    success: false as const,
+                    error: message`Wrapped async phase-two failure.`,
+                  },
+              );
+            },
+            suggest: async function* () {},
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          Object.defineProperty(inner, extractPhase2SeedKey, {
+            value() {
+              extractCalls++;
+              return Promise.resolve(null);
+            },
+          });
+          const parser = wrap(inner);
+          const outerState = injectAnnotations([undefined] as [undefined], {
+            [Symbol.for(`@test/issue-594/${name}/wrapped-async-phase2`)]: true,
+          });
+
+          const seed = await extractPhase2Seed(parser, outerState);
+
+          assert.deepEqual(seed, {
+            value: "resolved",
+          });
+          assert.equal(completeCalls, 2);
+          assert.equal(extractCalls, 0);
+        },
+      );
+
+      it(
+        `${name} phase-two seed extraction skips nested normalization when no delegated carrier is present`,
+        () => {
+          let ownKeysCalls = 0;
+          let descriptorCalls = 0;
+          const value = new Proxy(
+            { nested: { value: "ok" } },
+            {
+              ownKeys(target) {
+                ownKeysCalls++;
+                return Reflect.ownKeys(target);
+              },
+              getOwnPropertyDescriptor(target, key) {
+                descriptorCalls++;
+                return Reflect.getOwnPropertyDescriptor(target, key);
+              },
+            },
+          );
+          const inner: Parser<"sync", typeof value, string> = {
+            $mode: "sync",
+            $valueType: [] as readonly (typeof value)[],
+            $stateType: [] as readonly string[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context) {
+              return {
+                success: true as const,
+                next: context,
+                consumed: [],
+              };
+            },
+            complete() {
+              return {
+                success: true as const,
+                value,
+              };
+            },
+            suggest() {
+              return [];
+            },
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          const parser = wrap(inner);
+
+          const seed = extractPhase2Seed(parser, ["live"]);
+
+          assert.deepEqual(seed, {
+            value,
+          });
+          assert.equal(ownKeysCalls, 0);
+          assert.equal(descriptorCalls, 0);
+        },
+      );
+    }
+  },
+);
 
 describe("leadingNames", () => {
   it("should forward from inner parser for optional()", () => {

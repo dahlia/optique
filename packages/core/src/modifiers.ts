@@ -1,3 +1,10 @@
+import {
+  getDelegatedAnnotationState,
+  hasDelegatedAnnotationCarrier,
+  isAnnotationWrappedInitialState,
+  normalizeDelegatedAnnotationState,
+  normalizeNestedDelegatedAnnotationState,
+} from "./annotation-state.ts";
 import { composeDependencyMetadata } from "./dependency-metadata.ts";
 import { formatMessage, type Message, message, text } from "./message.ts";
 import {
@@ -18,7 +25,9 @@ import {
   completeOrExtractPhase2Seed,
   extractPhase2Seed,
   extractPhase2SeedKey,
+  phase2SeedFromValueResult,
 } from "./phase2-seed.ts";
+import type { Phase2Seed } from "./phase2-seed.ts";
 import {
   defineInheritedAnnotationParser,
   defineSourceBindingOnlyAnnotationCompletionParser,
@@ -165,35 +174,255 @@ function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
     typeof (value as Record<string, unknown>).then === "function";
 }
 
+function normalizeOptionalLikeCompleteResult<T>(
+  result: ValueParserResult<T>,
+  shouldNormalize: boolean,
+): ValueParserResult<T> {
+  return result.success && shouldNormalize
+    ? {
+      ...result,
+      value: normalizeNestedDelegatedAnnotationState(result.value),
+    }
+    : result;
+}
+
+function shouldRetryOptionalLikeCompatibilityError(
+  error: unknown,
+  state: unknown,
+): boolean {
+  return error instanceof TypeError &&
+    state != null &&
+    typeof state === "object" &&
+    isInjectedAnnotationWrapper(state);
+}
+
+function completeOptionalLikeSync<TValue, TState>(
+  parser: Parser<"sync", TValue, TState>,
+  state: TState,
+  exec?: ExecutionContext,
+): ValueParserResult<TValue> {
+  const hasCarrier = hasDelegatedAnnotationCarrier(state);
+  const shouldRetryFalseResult = hasCarrier &&
+    isAnnotationWrappedInitialState(state);
+  const run = (candidate: TState, shouldNormalize: boolean) =>
+    normalizeOptionalLikeCompleteResult(
+      parser.complete(candidate, exec),
+      shouldNormalize,
+    );
+  try {
+    const result = run(state, hasCarrier);
+    if (!result.success && shouldRetryFalseResult) {
+      return run(normalizeDelegatedAnnotationState(state), false);
+    }
+    return result;
+  } catch (error) {
+    if (!shouldRetryOptionalLikeCompatibilityError(error, state)) {
+      throw error;
+    }
+    return run(normalizeDelegatedAnnotationState(state), false);
+  }
+}
+
+async function completeOptionalLikeAsync<TValue, TState>(
+  parser: Parser<Mode, TValue, TState>,
+  state: TState,
+  exec?: ExecutionContext,
+): Promise<ValueParserResult<TValue>> {
+  const hasCarrier = hasDelegatedAnnotationCarrier(state);
+  const shouldRetryFalseResult = hasCarrier &&
+    isAnnotationWrappedInitialState(state);
+  const run = async (candidate: TState, shouldNormalize: boolean) =>
+    normalizeOptionalLikeCompleteResult(
+      await parser.complete(candidate, exec),
+      shouldNormalize,
+    );
+  try {
+    const result = await run(state, hasCarrier);
+    if (!result.success && shouldRetryFalseResult) {
+      return await run(normalizeDelegatedAnnotationState(state), false);
+    }
+    return result;
+  } catch (error) {
+    if (!shouldRetryOptionalLikeCompatibilityError(error, state)) {
+      throw error;
+    }
+    return await run(normalizeDelegatedAnnotationState(state), false);
+  }
+}
+
+function normalizeOptionalLikePhase2Seed<T>(
+  seed: Phase2Seed<T> | null,
+  shouldNormalize: boolean,
+): Phase2Seed<T> | null {
+  return seed == null ? null : shouldNormalize
+    ? {
+      ...seed,
+      value: normalizeNestedDelegatedAnnotationState(seed.value),
+    }
+    : seed;
+}
+
 function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   state: [TState] | TState | undefined,
   exec?: ExecutionContext,
-): ModeValue<M, import("./phase2-seed.ts").Phase2Seed<TValue> | null> {
+): ModeValue<M, Phase2Seed<TValue> | null> {
   if (
     !Array.isArray(state) &&
     !(state != null && typeof state === "object")
   ) {
     return wrapForMode(parser.$mode, null);
   }
-  return completeOrExtractPhase2Seed(
+  const innerState = normalizeOptionalLikeInnerState(
+    state,
+    parser.initialState,
     parser,
-    normalizeOptionalLikeInnerState(
-      state,
-      parser.initialState,
-      parser,
-    ),
-    exec,
+  );
+  const hasCarrier = hasDelegatedAnnotationCarrier(innerState);
+  const shouldRetryFalseResult = hasCarrier &&
+    isAnnotationWrappedInitialState(innerState);
+  return dispatchByMode(
+    parser.$mode,
+    () => {
+      try {
+        const result = (parser as Parser<"sync", TValue, TState>).complete(
+          innerState,
+          exec,
+        );
+        if (result.success) {
+          return normalizeOptionalLikePhase2Seed(
+            phase2SeedFromValueResult(result),
+            hasCarrier,
+          );
+        }
+        if (shouldRetryFalseResult) {
+          const fallbackState = normalizeDelegatedAnnotationState(innerState);
+          const fallbackResult = (
+            parser as Parser<"sync", TValue, TState>
+          ).complete(fallbackState, exec);
+          if (fallbackResult.success) {
+            return normalizeOptionalLikePhase2Seed(
+              phase2SeedFromValueResult(fallbackResult),
+              false,
+            );
+          }
+        }
+        const seed = extractPhase2Seed(
+          parser as Parser<"sync", TValue, TState>,
+          innerState,
+          exec,
+        );
+        if (seed == null && hasCarrier) {
+          const fallbackState = normalizeDelegatedAnnotationState(innerState);
+          return normalizeOptionalLikePhase2Seed(
+            extractPhase2Seed(
+              parser as Parser<"sync", TValue, TState>,
+              fallbackState,
+              exec,
+            ),
+            false,
+          );
+        }
+        return normalizeOptionalLikePhase2Seed(seed, hasCarrier);
+      } catch (error) {
+        if (!shouldRetryOptionalLikeCompatibilityError(error, innerState)) {
+          throw error;
+        }
+        const fallbackState = normalizeDelegatedAnnotationState(innerState);
+        const result = (parser as Parser<"sync", TValue, TState>).complete(
+          fallbackState,
+          exec,
+        );
+        if (result.success) {
+          return normalizeOptionalLikePhase2Seed(
+            phase2SeedFromValueResult(result),
+            false,
+          );
+        }
+        return normalizeOptionalLikePhase2Seed(
+          extractPhase2Seed(
+            parser as Parser<"sync", TValue, TState>,
+            fallbackState,
+            exec,
+          ),
+          false,
+        );
+      }
+    },
+    async () => {
+      try {
+        const result = await (
+          parser as Parser<"async", TValue, TState>
+        ).complete(innerState, exec);
+        if (result.success) {
+          return normalizeOptionalLikePhase2Seed(
+            phase2SeedFromValueResult(result),
+            hasCarrier,
+          );
+        }
+        if (shouldRetryFalseResult) {
+          const fallbackState = normalizeDelegatedAnnotationState(innerState);
+          const fallbackResult = await (
+            parser as Parser<"async", TValue, TState>
+          ).complete(fallbackState, exec);
+          if (fallbackResult.success) {
+            return normalizeOptionalLikePhase2Seed(
+              phase2SeedFromValueResult(fallbackResult),
+              false,
+            );
+          }
+        }
+        const seed = await extractPhase2Seed(
+          parser as Parser<"async", TValue, TState>,
+          innerState,
+          exec,
+        );
+        if (seed == null && hasCarrier) {
+          const fallbackState = normalizeDelegatedAnnotationState(innerState);
+          return normalizeOptionalLikePhase2Seed(
+            await extractPhase2Seed(
+              parser as Parser<"async", TValue, TState>,
+              fallbackState,
+              exec,
+            ),
+            false,
+          );
+        }
+        return normalizeOptionalLikePhase2Seed(seed, hasCarrier);
+      } catch (error) {
+        if (!shouldRetryOptionalLikeCompatibilityError(error, innerState)) {
+          throw error;
+        }
+        const fallbackState = normalizeDelegatedAnnotationState(innerState);
+        const result = await (
+          parser as Parser<"async", TValue, TState>
+        ).complete(fallbackState, exec);
+        if (result.success) {
+          return normalizeOptionalLikePhase2Seed(
+            phase2SeedFromValueResult(result),
+            false,
+          );
+        }
+        return normalizeOptionalLikePhase2Seed(
+          await extractPhase2Seed(
+            parser as Parser<"async", TValue, TState>,
+            fallbackState,
+            exec,
+          ),
+          false,
+        );
+      }
+    },
   );
 }
 
 /**
  * Computes the inner state to pass through to the wrapped parser inside
  * {@link optional} / {@link withDefault}.  When the outer state is an
- * array, the inner state is `state[0]`.  Otherwise — including the
+ * array, the inner state is `state[0]`.  Otherwise, including the
  * common case where `optional()` sits at top level and the outer state
  * is either `undefined` or an annotation wrapper from `parseOptionalLike`
- * / `parse({ annotations })` — we use the wrapped parser's
+ * / `parse({ annotations })`, we use the wrapped parser's
  * `initialState`, propagating annotations from the outer state so that
  * source-binding wrappers under `optional()` / `withDefault()` (e.g.,
  * `bindEnv()` / `bindConfig()`) can resolve their fallbacks.
@@ -210,17 +439,20 @@ function deriveOptionalInnerParseState<TState>(
     // `object()`'s `getAnnotatedChildState()` when the previous parse
     // iteration's wrapped state is re-committed to the parent object
     // (the parent stamps the array wrapper, not the inner element).
-    // Mirror `normalizeOptionalLikeInnerState()`'s array handling so
-    // that source-binding wrappers under `optional()` / `withDefault()`
-    // see the same annotations on parse-time re-entry that they see in
+    // Mirror the object-state part of
+    // `normalizeOptionalLikeInnerState()`'s array handling so that
+    // source-binding wrappers under `optional()` / `withDefault()` see
+    // the same annotations on parse-time re-entry that they see in
     // complete-time, instead of dropping them on the way back into the
-    // inner parser.
+    // inner parser. Primitive inner states still pass through verbatim
+    // here so parse-time re-entry does not reintroduce injected wrapper
+    // objects into echo-style parsers.
     if (
       getAnnotations(outerState) != null &&
       innerState != null &&
       typeof innerState === "object"
     ) {
-      return inheritAnnotations(outerState, innerState) as TState;
+      return getDelegatedAnnotationState(outerState, innerState) as TState;
     }
     return innerState;
   }
@@ -229,7 +461,7 @@ function deriveOptionalInnerParseState<TState>(
   // like `bindEnv()` / `bindConfig()` placed under
   // `optional()` / `withDefault()` can resolve from annotations at top
   // level.  Non-nullish primitive initial states (e.g. `constant("v")`
-  // whose `initialState` IS `"v"`) are returned verbatim: otherwise
+  // whose `initialState` is `"v"`) are returned verbatim: otherwise
   // `inheritAnnotations()` would wrap the primitive into an opaque
   // `injectAnnotations` wrapper object, and echo-semantics parsers
   // like `constant()` would return that wrapper from `complete()`
@@ -238,20 +470,24 @@ function deriveOptionalInnerParseState<TState>(
   // (`undefined` / `null`, the "no state yet" signal used by
   // `option()` / `argument()` / `bindEnv()` / `bindConfig()`) still go
   // through `inheritAnnotations()` so source-binding wrappers can read
-  // the propagated annotations from their `parse()` context.
+  // the propagated annotations from their `parse()` context. Object-shaped
+  // initial states go through delegated annotation state tracking so any
+  // temporary clone can be normalized back out of completed values.
   const initial = parser.initialState;
   if (initial != null && typeof initial !== "object") {
     return initial;
   }
-  return inheritAnnotations(outerState, initial) as TState;
+  return initial != null && typeof initial === "object"
+    ? getDelegatedAnnotationState(outerState, initial) as TState
+    : inheritAnnotations(outerState, initial) as TState;
 }
 
 /**
  * Internal helper for optional-style parsing logic shared by optional()
  * and withDefault(). Handles the common pattern of:
  * - Unwrapping optional state to inner parser state
- * - Detecting if inner parser actually matched (state changed or no consumption)
- * - Returning success with undefined state when inner parser fails without consuming
+ * - Detecting if the inner parser actually matched (state changed or no consumption)
+ * - Returning success with undefined state when the inner parser fails without consuming
  * @internal
  */
 function parseOptionalStyleSync<TState>(
@@ -290,16 +526,27 @@ async function parseOptionalStyleAsync<TState>(
  * Internal helper to process optional-style parse results.
  * @internal
  */
+function hasOptionalLikeParseStateChanged<TState>(
+  previousState: TState,
+  nextState: TState,
+): boolean {
+  return previousState !== nextState &&
+    normalizeDelegatedAnnotationState(previousState) !==
+      normalizeDelegatedAnnotationState(nextState);
+}
+
 function processOptionalStyleResult<TState>(
   result: ParserResult<TState>,
   innerState: TState,
   context: ParserContext<[TState] | undefined>,
 ): ParserResult<[TState] | undefined> {
   if (result.success) {
-    // Check if inner parser actually matched something (state changed)
-    // or if it consumed nothing (e.g., constant parser)
+    // Check if the inner parser actually matched something (state changed)
+    // or if it consumed nothing (e.g. constant parser). Internal delegated
+    // annotation carriers do not count as real state changes here.
     if (
-      result.next.state !== innerState || result.consumed.length === 0
+      hasOptionalLikeParseStateChanged(innerState, result.next.state) ||
+      result.consumed.length === 0
     ) {
       return {
         success: true,
@@ -314,9 +561,9 @@ function processOptionalStyleResult<TState>(
         consumed: result.consumed,
       };
     }
-    // Inner parser returned success but state unchanged while consuming input
-    // (e.g., only consumed "--"). Treat as "not matched" but propagate side
-    // effects (optionsTerminated, buffer)
+    // The inner parser returned success but state unchanged while consuming input
+    // (e.g. only consumed "--"). Treat as "not matched" but propagate side
+    // effects (optionsTerminated, buffer).
     return {
       success: true,
       ...(result.provisional ? { provisional: true as const } : {}),
@@ -327,8 +574,8 @@ function processOptionalStyleResult<TState>(
       consumed: result.consumed,
     };
   }
-  // If inner parser failed without consuming input, return success
-  // with undefined state so complete() can provide the fallback value
+  // If the inner parser failed without consuming input, return success
+  // with undefined state so complete() can provide the fallback value.
   if (result.consumed === 0) {
     return {
       success: true,
@@ -345,7 +592,7 @@ function processOptionalStyleResult<TState>(
  * {@link withDefault} before delegating to the inner parser's hook.
  *
  * When state is an array, the adapter unwraps `state[0]` and propagates
- * annotations from the outer array.  Non-array objects (e.g., PromptBindState
+ * annotations from the outer array.  Non-array objects (e.g. PromptBindState
  * from `prompt()`) are passed through directly.  `undefined` returns `false`
  * without calling the inner hook.
  *
@@ -357,14 +604,29 @@ function adaptShouldDeferCompletion<TState>(
 ): (state: [TState] | undefined, exec?: ExecutionContext) => boolean {
   return (state: [TState] | undefined, exec?: ExecutionContext): boolean => {
     if (Array.isArray(state) || (state != null && typeof state === "object")) {
-      return innerCheck(
-        normalizeOptionalLikeInnerState(
-          state,
-          parser.initialState,
-          parser,
-        ),
-        exec,
+      const innerState = normalizeOptionalLikeInnerState(
+        state,
+        parser.initialState,
+        parser,
       );
+      const hasCarrier = hasDelegatedAnnotationCarrier(innerState);
+      const shouldRetryFalseResult = hasCarrier &&
+        isAnnotationWrappedInitialState(innerState);
+      try {
+        const result = innerCheck(innerState, exec);
+        if (!result && shouldRetryFalseResult) {
+          return innerCheck(
+            normalizeDelegatedAnnotationState(innerState),
+            exec,
+          );
+        }
+        return result;
+      } catch (error) {
+        if (!shouldRetryOptionalLikeCompatibilityError(error, innerState)) {
+          throw error;
+        }
+        return innerCheck(normalizeDelegatedAnnotationState(innerState), exec);
+      }
     }
     return false;
   };
@@ -393,11 +655,7 @@ function normalizeOptionalLikeInnerState<TState>(
   parser?: Parser<Mode, unknown, TState>,
 ): TState {
   if (Array.isArray(state)) {
-    return getAnnotations(state) != null &&
-        state[0] != null &&
-        typeof state[0] === "object"
-      ? inheritAnnotations(state, state[0]) as TState
-      : state[0];
+    return getDelegatedAnnotationState(state, state[0]);
   }
   if (isAnnotationOnlyObjectState(state)) {
     if (
@@ -407,7 +665,7 @@ function normalizeOptionalLikeInnerState<TState>(
         typeof parser.shouldDeferCompletion === "function"
       )
     ) {
-      return inheritAnnotations(state, initialState);
+      return getDelegatedAnnotationState(state, initialState);
     }
     return initialState;
   }
@@ -415,6 +673,20 @@ function normalizeOptionalLikeInnerState<TState>(
     return state;
   }
   return initialState;
+}
+
+function normalizeOptionalLikeSuggestState<TState>(
+  state: [TState] | TState | undefined,
+  initialState: TState,
+  parser?: Parser<Mode, unknown, TState>,
+): TState {
+  if (Array.isArray(state)) {
+    const innerState = state[0];
+    return innerState != null && typeof innerState === "object"
+      ? getDelegatedAnnotationState(state, innerState)
+      : innerState;
+  }
+  return normalizeOptionalLikeInnerState(state, initialState, parser);
 }
 
 /**
@@ -440,7 +712,7 @@ export function optional<M extends Mode, TValue, TState>(
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): Generator<Suggestion> {
-    const innerState = normalizeOptionalLikeInnerState(
+    const innerState = normalizeOptionalLikeSuggestState(
       context.state,
       syncParser.initialState,
       parser,
@@ -453,7 +725,7 @@ export function optional<M extends Mode, TValue, TState>(
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): AsyncGenerator<Suggestion> {
-    const innerState = normalizeOptionalLikeInnerState(
+    const innerState = normalizeOptionalLikeSuggestState(
       context.state,
       syncParser.initialState,
       parser,
@@ -506,7 +778,7 @@ export function optional<M extends Mode, TValue, TState>(
       if (optionalParser.dependencyMetadata?.source != null) {
         return [{ path, parser: optionalParser, state }];
       }
-      const innerState = normalizeOptionalLikeInnerState(
+      const innerState = normalizeOptionalLikeSuggestState(
         state,
         parser.initialState,
         parser,
@@ -540,12 +812,14 @@ export function optional<M extends Mode, TValue, TState>(
         ): ModeValue<M, ValueParserResult<TValue | undefined>> => {
           const innerResult = dispatchByMode(
             parser.$mode,
-            () => syncParser.complete(resolvedInnerState, exec),
+            () =>
+              completeOptionalLikeSync(syncParser, resolvedInnerState, exec),
             async () =>
-              (await parser.complete(
+              await completeOptionalLikeAsync(
+                parser,
                 resolvedInnerState,
                 exec,
-              )) as ValueParserResult<TValue | undefined>,
+              ) as ValueParserResult<TValue | undefined>,
           );
           return mapModeValue(
             parser.$mode,
@@ -585,12 +859,13 @@ export function optional<M extends Mode, TValue, TState>(
           );
           return dispatchByMode(
             parser.$mode,
-            () => syncParser.complete(delegatedState, exec),
+            () => completeOptionalLikeSync(syncParser, delegatedState, exec),
             async () =>
-              (await parser.complete(
+              await completeOptionalLikeAsync(
+                parser,
                 delegatedState,
                 exec,
-              )) as ValueParserResult<TValue | undefined>,
+              ) as ValueParserResult<TValue | undefined>,
           );
         }
         // When the inner parser is a non-CLI source binding (bindEnv,
@@ -620,11 +895,6 @@ export function optional<M extends Mode, TValue, TState>(
         }
         return { success: true, value: undefined };
       }
-      // Propagate annotations from the outer array state into the inner
-      // element so that source-binding wrappers like bindConfig can read
-      // them during phase-two resolution.  Only propagate when the inner
-      // element is an object; primitive states cannot carry annotations
-      // without changing their shape, which would break inner parsers.
       const innerElement = normalizeOptionalLikeInnerState(
         state,
         parser.initialState,
@@ -632,12 +902,14 @@ export function optional<M extends Mode, TValue, TState>(
       );
       return dispatchByMode(
         parser.$mode,
-        () => syncParser.complete(innerElement as TState, exec),
+        () =>
+          completeOptionalLikeSync(syncParser, innerElement as TState, exec),
         async () =>
-          (await parser.complete(
+          await completeOptionalLikeAsync(
+            parser,
             innerElement as TState,
             exec,
-          )) as ValueParserResult<TValue | undefined>,
+          ) as ValueParserResult<TValue | undefined>,
       );
     },
     suggest(
@@ -863,7 +1135,7 @@ export function withDefault<
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): Generator<Suggestion> {
-    const innerState = normalizeOptionalLikeInnerState(
+    const innerState = normalizeOptionalLikeSuggestState(
       context.state,
       syncParser.initialState,
       parser,
@@ -876,7 +1148,7 @@ export function withDefault<
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): AsyncGenerator<Suggestion> {
-    const innerState = normalizeOptionalLikeInnerState(
+    const innerState = normalizeOptionalLikeSuggestState(
       context.state,
       syncParser.initialState,
       parser,
@@ -924,7 +1196,7 @@ export function withDefault<
       if (withDefaultParser.dependencyMetadata?.source != null) {
         return [{ path, parser: withDefaultParser, state }];
       }
-      const innerState = normalizeOptionalLikeInnerState(
+      const innerState = normalizeOptionalLikeSuggestState(
         state,
         parser.initialState,
         parser,
@@ -984,12 +1256,13 @@ export function withDefault<
           );
           const innerResult = dispatchByMode(
             parser.$mode,
-            () => syncParser.complete(innerState, exec),
+            () => completeOptionalLikeSync(syncParser, innerState, exec),
             async () =>
-              (await parser.complete(
+              await completeOptionalLikeAsync(
+                parser,
                 innerState,
                 exec,
-              )) as ValueParserResult<TValue>,
+              ) as ValueParserResult<TValue>,
           );
           // Propagate the inner result as-is.  When wrapping
           // bindConfig(), success means config resolved; failure means
@@ -1023,12 +1296,13 @@ export function withDefault<
           );
           const innerResult = dispatchByMode(
             parser.$mode,
-            () => syncParser.complete(innerState, exec),
+            () => completeOptionalLikeSync(syncParser, innerState, exec),
             async () =>
-              (await parser.complete(
+              await completeOptionalLikeAsync(
+                parser,
                 innerState,
                 exec,
-              )) as ValueParserResult<TValue>,
+              ) as ValueParserResult<TValue>,
           );
           const handleInnerResult = (
             result: ValueParserResult<TValue>,
@@ -1074,11 +1348,6 @@ export function withDefault<
           };
         }
       }
-      // Propagate annotations from the outer array state into the inner
-      // element so that source-binding wrappers like bindConfig can read
-      // them during phase-two resolution.  Only propagate when the inner
-      // element is an object; primitive states cannot carry annotations
-      // without changing their shape, which would break inner parsers.
       const innerElement = normalizeOptionalLikeInnerState(
         state,
         parser.initialState,
@@ -1086,12 +1355,14 @@ export function withDefault<
       );
       return dispatchByMode(
         parser.$mode,
-        () => syncParser.complete(innerElement as TState, exec),
+        () =>
+          completeOptionalLikeSync(syncParser, innerElement as TState, exec),
         async () =>
-          (await parser.complete(
+          await completeOptionalLikeAsync(
+            parser,
             innerElement as TState,
             exec,
-          )) as ValueParserResult<TValue | TDefault>,
+          ) as ValueParserResult<TValue | TDefault>,
       );
     },
     suggest(
