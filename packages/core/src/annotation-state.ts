@@ -6,12 +6,12 @@ import {
   injectAnnotations,
   isInjectedAnnotationWrapper,
   unwrapInjectedAnnotationWrapper,
-} from "./annotations.ts";
+} from "./internal/annotations.ts";
 import {
   inheritParentAnnotationsKey,
   type Mode,
   type Parser,
-} from "./parser.ts";
+} from "./internal/parser.ts";
 
 /**
  * Shared targets for annotation-view proxies.

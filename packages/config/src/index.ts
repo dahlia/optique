@@ -24,19 +24,18 @@ import type {
   ParserResult,
   Result,
 } from "@optique/core/parser";
+import { getAnnotations } from "@optique/core/annotations";
 import {
   defineTraits,
   delegateSuggestNodes,
+  inheritAnnotations,
+  injectAnnotations,
+  mapModeValue,
   mapSourceMetadata,
   type ParserSourceMetadata,
+  wrapForMode,
 } from "@optique/core/extension";
-import {
-  annotationKey,
-  getAnnotations,
-  inheritAnnotations,
-} from "@optique/core/annotations";
 import { message } from "@optique/core/message";
-import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
 import type { ValueParserResult } from "@optique/core/valueparser";
 
 /**
@@ -747,16 +746,21 @@ export function bindConfig<
           // as "CLI provided" would skip the config fallback and break
           // composition with bindEnv.
           const cliConsumed = result.consumed.length > 0;
-          const newState = {
-            [configBindStateKey]: true as const,
-            hasCliValue: cliConsumed,
-            cliState: result.next.state,
-            ...(annotations && { [annotationKey]: annotations }),
-          } as unknown as TState;
+          const newState = annotations != null
+            ? injectAnnotations({
+              [configBindStateKey]: true as const,
+              hasCliValue: cliConsumed,
+              cliState: result.next.state,
+            }, annotations)
+            : {
+              [configBindStateKey]: true as const,
+              hasCliValue: cliConsumed,
+              cliState: result.next.state,
+            };
           return {
             success: true,
             ...(result.provisional ? { provisional: true as const } : {}),
-            next: { ...result.next, state: newState },
+            next: { ...result.next, state: newState as TState },
             consumed: result.consumed,
           };
         }
@@ -769,14 +773,18 @@ export function bindConfig<
           return result;
         }
 
-        const newState = {
-          [configBindStateKey]: true as const,
-          hasCliValue: false,
-          ...(annotations && { [annotationKey]: annotations }),
-        } as unknown as TState;
+        const newState = annotations != null
+          ? injectAnnotations({
+            [configBindStateKey]: true as const,
+            hasCliValue: false,
+          }, annotations)
+          : {
+            [configBindStateKey]: true as const,
+            hasCliValue: false,
+          };
         return {
           success: true,
-          next: { ...innerContext, state: newState },
+          next: { ...innerContext, state: newState as TState },
           consumed: [],
         };
       };

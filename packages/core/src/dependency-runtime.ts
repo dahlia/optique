@@ -17,9 +17,9 @@ import {
   isDependencySourceState,
   isPendingDependencySourceState,
   parseWithDependency,
-} from "./dependency.ts";
+} from "./internal/dependency.ts";
 import { message } from "./message.ts";
-import { unmatchedNonCliDependencySourceStateMarker } from "./parser.ts";
+import { unmatchedNonCliDependencySourceStateMarker } from "./internal/parser.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";

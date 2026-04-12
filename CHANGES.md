@@ -24,16 +24,19 @@ To be released.
     workarounds and fixes custom two-pass contexts that previously could not
     distinguish phase 1 from a real `undefined` parse result. [[#271], [#786]]
 
- -  Added a stable parser-extension surface for low-level integration authors.
-    `@optique/core/annotations` now documents and supports
-    `injectAnnotations()`, `inheritAnnotations()`,
-    `isInjectedAnnotationState()`, and `unwrapInjectedAnnotationState()` as
-    public helpers; `@optique/core/mode-dispatch` remains the public mode
-    helper module; and the new `@optique/core/extension` subpath exposes
-    `defineTraits()`, `getTraits()`, `delegateSuggestNodes()`, and
-    `mapSourceMetadata()` for parser traits and source-aware wrapper
-    composition. First-party integration packages now use these public helpers
-    instead of reaching into `@optique/core/parser` internals. [[#790], [#793]]
+ -  *Breaking change:* Narrowed *@optique/core*'s public extension surface to
+    the APIs Optique actually intends to support.  Internal dependency replay
+    state, parser markers, annotation transport details, and the old
+    `@optique/core/mode-dispatch` subpath are no longer public entry points.
+    The supported low-level surface now splits cleanly between
+    `@optique/core/annotations` for read-only annotation access
+    (`getAnnotations()`) and `@optique/core/extension` for wrapper helpers
+    such as `injectAnnotations()`, `inheritAnnotations()`,
+    `withAnnotationView()`, `dispatchByMode()`, `mapModeValue()`,
+    `wrapForMode()`, `defineTraits()`, `getTraits()`,
+    `delegateSuggestNodes()`, and `mapSourceMetadata()`.  This intentionally
+    removes previously leaked entry points so parser-internal refactors stop
+    being semver-sensitive.  [[#790], [#792], [#793], [#794]]
 
  -  Added the optional `Parser.validateValue()` method, which lets a
     parser check whether an arbitrary value satisfies its underlying
@@ -427,10 +430,6 @@ To be released.
     `@optique/core/context`.  These were part of the sentinel-based
     deferred prompt mechanism that has been replaced by the
     `ValueParser.placeholder` approach.  [[#407], [#727]]
-
- -  Added the `@optique/core/mode-dispatch` subpath export so sibling
-    packages can share internal sync/async dispatch helpers without
-    duplicating them.  [[#157]]
 
  -  Changed `formatMessage()` to render double newlines (`\n\n`) in `text()`
     terms as double newlines in the output, instead of collapsing them to
@@ -1388,7 +1387,6 @@ To be released.
 [#152]: https://github.com/dahlia/optique/issues/152
 [#153]: https://github.com/dahlia/optique/issues/153
 [#154]: https://github.com/dahlia/optique/issues/154
-[#157]: https://github.com/dahlia/optique/issues/157
 [#177]: https://github.com/dahlia/optique/issues/177
 [#178]: https://github.com/dahlia/optique/issues/178
 [#180]: https://github.com/dahlia/optique/issues/180
@@ -1712,7 +1710,9 @@ To be released.
 [#788]: https://github.com/dahlia/optique/pull/788
 [#789]: https://github.com/dahlia/optique/pull/789
 [#790]: https://github.com/dahlia/optique/issues/790
+[#792]: https://github.com/dahlia/optique/issues/792
 [#793]: https://github.com/dahlia/optique/pull/793
+[#794]: https://github.com/dahlia/optique/pull/794
 
 ### @optique/config
 

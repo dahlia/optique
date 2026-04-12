@@ -37,8 +37,8 @@ import {
   DependencyRegistry,
   deriveFromAsync,
   deriveFromSync,
-} from "@optique/core/dependency";
-import { annotationKey } from "@optique/core/annotations";
+} from "./internal/dependency.ts";
+import { annotationKey } from "./internal/annotations.ts";
 import { extractDependencyMetadata } from "./dependency-metadata.ts";
 import {
   type InferValue,

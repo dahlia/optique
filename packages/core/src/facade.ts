@@ -41,7 +41,7 @@ import {
   suggest,
   suggestAsync,
 } from "./parser.ts";
-import { dispatchByMode } from "./mode-dispatch.ts";
+import { dispatchByMode } from "./internal/mode-dispatch.ts";
 import { createDependencyRuntimeContext } from "./dependency-runtime.ts";
 import { createInputTrace } from "./input-trace.ts";
 import { completeOrExtractPhase2Seed } from "./phase2-seed.ts";
@@ -58,7 +58,7 @@ import {
   injectAnnotations,
   isInjectedAnnotationWrapper,
   unwrapInjectedAnnotationWrapper,
-} from "./annotations.ts";
+} from "./internal/annotations.ts";
 import {
   type MetaEntry,
   validateCommandNames,

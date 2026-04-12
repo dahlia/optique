@@ -1,4 +1,4 @@
-import { DependencyRegistry } from "@optique/core/dependency";
+import { DependencyRegistry } from "./internal/dependency.ts";
 import type { ExecutionContext, ParserContext } from "@optique/core/parser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";

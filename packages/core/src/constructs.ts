@@ -12,7 +12,7 @@ import {
   isPendingDependencySourceState,
   isWrappedDependencySource,
   wrappedDependencySourceMarker,
-} from "./dependency.ts";
+} from "./internal/dependency.ts";
 import {
   buildRuntimeNodesFromArray,
   buildRuntimeNodesFromPairs,
@@ -30,13 +30,16 @@ import {
   annotateFreshArray,
   getAnnotations,
   inheritAnnotations,
-} from "./annotations.ts";
+} from "./internal/annotations.ts";
 import {
   mergeChildExec,
   withChildContext as withSharedChildContext,
   withChildExecPath,
 } from "./execution-context.ts";
-import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
+import {
+  dispatchByMode,
+  dispatchIterableByMode,
+} from "./internal/mode-dispatch.ts";
 import {
   completeOrExtractPhase2Seed,
   extractPhase2Seed,
@@ -74,7 +77,7 @@ import {
   defineInheritedAnnotationParser,
   getParserSuggestRuntimeNodes,
   unmatchedNonCliDependencySourceStateMarker,
-} from "./parser.ts";
+} from "./internal/parser.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
 
 /**
@@ -4995,7 +4998,7 @@ function completeDependencySourceDefaults(
 function wrapAsDependencySourceState(
   completed: unknown,
   parser: Parser<Mode, unknown, unknown>,
-): import("./dependency.ts").DependencySourceState | undefined {
+): import("./internal/dependency.ts").DependencySourceState | undefined {
   if (isDependencySourceState(completed)) return completed;
   const metadataSource = parser.dependencyMetadata?.source;
   if (metadataSource?.preservesSourceValue === false) {

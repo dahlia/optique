@@ -4,7 +4,7 @@
  */
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
-import { dependency, deriveFrom } from "./dependency.ts";
+import { dependency, deriveFrom } from "./internal/dependency.ts";
 import {
   getDocPage,
   parseAsync,
@@ -4190,7 +4190,7 @@ import {
   transformsDependencyValue,
   transformsDependencyValueMarker,
   wrappedDependencySourceMarker,
-} from "./dependency.ts";
+} from "./internal/dependency.ts";
 
 describe("Internal type guards and factory functions", () => {
   describe("isDependencySourceState()", () => {

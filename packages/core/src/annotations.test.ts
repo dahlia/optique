@@ -13,11 +13,11 @@ import {
   isInjectedAnnotationWrapper,
   unwrapInjectedAnnotationState,
   unwrapInjectedAnnotationWrapper,
-} from "./annotations.ts";
+} from "./internal/annotations.ts";
 
 describe("getAnnotations", () => {
   it("should not expose internal wrapper key set", async () => {
-    const annotationsModule = await import("./annotations.ts");
+    const annotationsModule = await import("./internal/annotations.ts");
 
     assert.ok(!Object.hasOwn(annotationsModule, "annotationWrapperKeys"));
   });
@@ -352,6 +352,23 @@ describe("unwrapInjectedAnnotationWrapper", () => {
     });
 
     assert.equal(unwrapInjectedAnnotationWrapper(wrapped), 42);
+  });
+
+  it("should unwrap wrapper-shaped copies from another module instance", () => {
+    const wrapped = injectAnnotations("active", {
+      [Symbol.for("@test/unwrap-copy")]: "ok",
+    });
+    const wrappedObject = (() => {
+      assert.ok(wrapped != null && typeof wrapped === "object");
+      return wrapped;
+    })();
+    const copied = Object.create(
+      Object.getPrototypeOf(wrappedObject),
+      Object.getOwnPropertyDescriptors(wrappedObject),
+    );
+
+    assert.ok(isInjectedAnnotationWrapper(copied));
+    assert.equal(unwrapInjectedAnnotationWrapper(copied), "active");
   });
 
   it("should not unwrap wrappers with additional own keys", () => {

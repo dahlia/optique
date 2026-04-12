@@ -1,10 +1,10 @@
 export {
-  annotationKey,
   type Annotations,
   getAnnotations,
   type ParseOptions,
 } from "./annotations.ts";
 export * from "./completion.ts";
+export * from "./constructs.ts";
 export * from "./dependency.ts";
 export * from "./doc.ts";
 export * from "./facade.ts";
@@ -29,6 +29,8 @@ export {
   valueSet,
   type ValueSetOptions,
 } from "./message.ts";
+export * from "./modifiers.ts";
 export * from "./parser.ts";
+export * from "./primitives.ts";
 export * from "./usage.ts";
 export * from "./valueparser.ts";

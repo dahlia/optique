@@ -234,15 +234,15 @@ Optique exposes a few low-level helper modules for custom parser authors:
 
  -  `@optique/core/context`: Implement `SourceContext` when runtime data should
     be collected outside the parser itself and injected through `runWith()`.
- -  `@optique/core/annotations`: Read and propagate annotation-bearing parser
-    state with `getAnnotations()`, `injectAnnotations()`,
-    `inheritAnnotations()`, `isInjectedAnnotationState()`, and
-    `unwrapInjectedAnnotationState()`.
- -  `@optique/core/mode-dispatch`: Preserve sync/async mode semantics with
-    `dispatchByMode()`, `mapModeValue()`, and `wrapForMode()`.
+ -  `@optique/core/annotations`: Read annotation-bearing parser state with
+    `getAnnotations()`.
  -  `@optique/core/extension`: Coordinate parser traits and source-aware
     wrapper behavior with `defineTraits()`, `getTraits()`,
-    `delegateSuggestNodes()`, and `mapSourceMetadata()`.
+    `injectAnnotations()`, `inheritAnnotations()`,
+    `isInjectedAnnotationState()`, `unwrapInjectedAnnotationState()`,
+    `withAnnotationView()`, `dispatchByMode()`, `mapModeValue()`,
+    `wrapForMode()`, `delegateSuggestNodes()`, and
+    `mapSourceMetadata()`.
 
 Most custom parsers only need `annotations` and `context`.  The
 `extension` helpers are intended for parser wrappers that need to preserve
@@ -732,11 +732,7 @@ interfering with others.
 API reference
 -------------
 
-### Types and symbols from `@optique/core/annotations`
-
-`annotationKey`
-:   Unique symbol for storing annotations in parser state. Use this symbol to
-    access the raw annotations object from state if needed.
+### Types from `@optique/core/annotations`
 
 `Annotations`
 :   Type alias for `Record<symbol, unknown>`. Represents the annotation data
@@ -813,9 +809,45 @@ API reference
     const myKey = Symbol.for("@myapp/data");
     declare const state: unknown;
     // ---cut-before---
-    const annotations = getAnnotations(state);
-    const myData = annotations?.[myKey];
+     const annotations = getAnnotations(state);
+     const myData = annotations?.[myKey];
     ~~~~
+
+    The raw storage protocol for annotations is internal.  Custom parsers
+    should read annotations through `getAnnotations()` instead of relying on
+    symbol-keyed state properties directly.
+
+### Functions from `@optique/core/extension`
+
+`injectAnnotations(state, annotations)`
+:   Attaches annotations to parser state while preserving Optique's supported
+    state-shape semantics for primitives, arrays, plain objects, and common
+    built-in objects.
+
+`inheritAnnotations(source, target)`
+:   Propagates annotations from an existing state into a replacement state.
+    Useful for wrappers that rebuild child state during `parse()` or
+    `complete()`.
+
+`isInjectedAnnotationState(value)`
+:   Returns whether a value is Optique's injected primitive-state annotation
+    wrapper.
+
+`unwrapInjectedAnnotationState(value)`
+:   Removes that primitive-state wrapper when present.
+
+`withAnnotationView(state, annotations)`
+:   Creates an annotation-aware proxy for non-plain objects whose identity or
+    internal slots should be preserved instead of cloning them.
+
+`dispatchByMode(mode, syncFn, asyncFn)`
+:   Runs sync or async implementations while preserving Optique's mode typing.
+
+`mapModeValue(mode, value, mapFn)`
+:   Maps a mode-wrapped value without changing whether it stays sync or async.
+
+`wrapForMode(mode, value)`
+:   Wraps a plain value or Promise so it matches the parser's execution mode.
 
 ### Functions from `@optique/core/facade`
 

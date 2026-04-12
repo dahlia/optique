@@ -3,8 +3,8 @@ import {
   annotationStateValueKey,
   getAnnotations,
   injectAnnotations,
-} from "@optique/core/annotations";
-import { injectAnnotations as injectAnnotationsLocal } from "./annotations.ts";
+} from "./internal/annotations.ts";
+import { injectAnnotations as injectAnnotationsLocal } from "./internal/annotations.ts";
 import {
   createDependencySourceState,
   createPendingDependencySourceState,
@@ -12,7 +12,7 @@ import {
   isDependencySourceState,
   transformsDependencyValueMarker,
   wrappedDependencySourceMarker,
-} from "@optique/core/dependency";
+} from "./internal/dependency.ts";
 import {
   envVar,
   formatMessage,

@@ -14,7 +14,7 @@ import {
   inheritAnnotations,
   isInjectedAnnotationWrapper,
   unwrapInjectedAnnotationWrapper,
-} from "./annotations.ts";
+} from "./internal/annotations.ts";
 import {
   mergeChildExec,
   withChildContext,
@@ -25,7 +25,7 @@ import {
   dispatchIterableByMode,
   mapModeValue,
   wrapForMode,
-} from "./mode-dispatch.ts";
+} from "./internal/mode-dispatch.ts";
 import {
   completeOrExtractPhase2Seed,
   extractPhase2Seed,
@@ -37,7 +37,7 @@ import {
   defineInheritedAnnotationParser,
   defineSourceBindingOnlyAnnotationCompletionParser,
   unmatchedNonCliDependencySourceStateMarker,
-} from "./parser.ts";
+} from "./internal/parser.ts";
 import type {
   DocState,
   ExecutionContext,

@@ -5,7 +5,7 @@ import {
   type Annotations,
   getAnnotations,
   injectAnnotations,
-} from "@optique/core/annotations";
+} from "../../core/src/internal/annotations.ts";
 import { concat, group, object, or, tuple } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import type {

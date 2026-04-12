@@ -123,14 +123,6 @@
       "import": "./dist/message.js",
       "require": "./dist/message.cjs"
     },
-    "./mode-dispatch": {
-      "types": {
-        "import": "./dist/mode-dispatch.d.ts",
-        "require": "./dist/mode-dispatch.d.cts"
-      },
-      "import": "./dist/mode-dispatch.js",
-      "require": "./dist/mode-dispatch.cjs"
-    },
     "./modifiers": {
       "types": {
         "import": "./dist/modifiers.d.ts",

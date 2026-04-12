@@ -19,7 +19,7 @@ import {
   parseWithDependency,
   snapshotDefaultDependencyValues,
   suggestWithDependency,
-} from "./dependency.ts";
+} from "./internal/dependency.ts";
 import { message } from "./message.ts";
 import type { NonEmptyString } from "./nonempty.ts";
 import {
@@ -28,7 +28,7 @@ import {
   suggestAsync,
   type Suggestion,
   suggestSync,
-} from "./parser.ts";
+} from "./internal/parser.ts";
 import {
   choice,
   integer,

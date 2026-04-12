@@ -36,7 +36,7 @@ import {
   getAnnotations,
   isInjectedAnnotationWrapper,
   type ParseOptions,
-} from "@optique/core/annotations";
+} from "./internal/annotations.ts";
 import type { Usage } from "@optique/core/usage";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { type DocEntry, formatDocPage } from "@optique/core/doc";
@@ -2483,7 +2483,7 @@ describe("Annotations system", () => {
   it("should pass annotations to parser via ParseOptions", async () => {
     const testKey = Symbol.for("@test/data");
     const testData = { value: 42 };
-    const { getAnnotations } = await import("./annotations.ts");
+    const { getAnnotations } = await import("./internal/annotations.ts");
     let capturedState: unknown;
 
     // Use constant parser and wrap complete() to capture state
@@ -2509,7 +2509,9 @@ describe("Annotations system", () => {
   });
 
   it("should extract annotations using getAnnotations()", async () => {
-    const { getAnnotations, annotationKey } = await import("./annotations.ts");
+    const { getAnnotations, annotationKey } = await import(
+      "./internal/annotations.ts"
+    );
     const testKey = Symbol.for("@test/key");
     const testData = { foo: "bar" };
 
@@ -2570,7 +2572,7 @@ describe("Annotations system", () => {
     const data2 = { pkg2: "value2" };
     const data3 = { pkg3: "value3" };
 
-    const { getAnnotations } = await import("./annotations.ts");
+    const { getAnnotations } = await import("./internal/annotations.ts");
     let capturedState: unknown;
 
     const baseParser = constant("test");
@@ -2601,7 +2603,7 @@ describe("Annotations system", () => {
   it("should support annotations in parseSync()", async () => {
     const testKey = Symbol.for("@test/sync");
     const testData = "sync-data";
-    const { getAnnotations } = await import("./annotations.ts");
+    const { getAnnotations } = await import("./internal/annotations.ts");
     const { parseSync } = await import("./parser.ts");
     let capturedState: unknown;
 
@@ -2632,7 +2634,7 @@ describe("Annotations system", () => {
   it("should support annotations in parseAsync()", async () => {
     const testKey = Symbol.for("@test/async-func");
     const testData = "async-data";
-    const { getAnnotations } = await import("./annotations.ts");
+    const { getAnnotations } = await import("./internal/annotations.ts");
     const { parseAsync } = await import("./parser.ts");
     let capturedState: unknown;
 
@@ -2699,7 +2701,7 @@ describe("Annotations system", () => {
 
   it("should preserve array state annotations across state transitions", async () => {
     const testKey = Symbol.for("@test/array-state");
-    const { getAnnotations } = await import("./annotations.ts");
+    const { getAnnotations } = await import("./internal/annotations.ts");
     const baseParser = multiple(argument(string()));
     let capturedState: unknown;
     const parser = {
@@ -2723,7 +2725,9 @@ describe("Annotations system", () => {
   });
 
   it("should not unwrap regular objects that contain only internal value key", async () => {
-    const { annotationStateValueKey } = await import("./annotations.ts");
+    const { annotationStateValueKey } = await import(
+      "./internal/annotations.ts"
+    );
     const value = {
       ok: true,
       [annotationStateValueKey]: "not-wrapper",
@@ -2741,7 +2745,7 @@ describe("Annotations system", () => {
     const {
       annotationKey,
       annotationStateValueKey,
-    } = await import("./annotations.ts");
+    } = await import("./internal/annotations.ts");
     const value = {
       ok: true,
       [annotationKey]: { [testKey]: "value" },
@@ -2763,7 +2767,7 @@ describe("Annotations system", () => {
       annotationKey,
       annotationStateValueKey,
       annotationWrapperKey,
-    } = await import("./annotations.ts");
+    } = await import("./internal/annotations.ts");
     const value = {
       ok: true,
       [annotationKey]: { [testKey]: "value" },
@@ -2786,7 +2790,7 @@ describe("Annotations system", () => {
       annotationKey,
       annotationStateValueKey,
       annotationWrapperKey,
-    } = await import("./annotations.ts");
+    } = await import("./internal/annotations.ts");
     const value = {
       ok: true,
       [annotationKey]: { [testKey]: "value" },
@@ -2808,7 +2812,7 @@ describe("Annotations system", () => {
       annotationKey,
       annotationStateValueKey,
       annotationWrapperKey,
-    } = await import("./annotations.ts");
+    } = await import("./internal/annotations.ts");
     const value = {
       ok: true,
       [annotationKey]: {},
@@ -2873,7 +2877,7 @@ describe("Annotations system", () => {
     const {
       annotationWrapperKey,
       annotationStateValueKey,
-    } = await import("./annotations.ts");
+    } = await import("./internal/annotations.ts");
     const parser: Parser<"sync", unknown, unknown> = {
       $mode: "sync",
       $stateType: [] as const,

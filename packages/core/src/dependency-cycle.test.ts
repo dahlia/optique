@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
-import { dependency } from "./dependency.ts";
-import { parseSync } from "./parser.ts";
+import { dependency } from "./internal/dependency.ts";
+import { parseSync } from "./internal/parser.ts";
 import {
   choice,
   type ValueParser,

@@ -10,7 +10,7 @@
  * @since 0.10.0
  */
 
-import type { Mode, ModeIterable, ModeValue } from "./parser.ts";
+import type { Mode, ModeIterable, ModeValue } from "../parser.ts";
 
 /**
  * Dispatches to sync or async implementation based on mode.

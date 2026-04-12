@@ -15,7 +15,7 @@ import {
   type Annotations,
   getAnnotations,
   injectAnnotations,
-} from "@optique/core/annotations";
+} from "./internal/annotations.ts";
 import {
   createDependencySourceState,
   createPendingDependencySourceState,
@@ -24,7 +24,7 @@ import {
   DependencyRegistry,
   isPendingDependencySourceState,
   wrappedDependencySourceMarker,
-} from "@optique/core/dependency";
+} from "./internal/dependency.ts";
 import {
   formatMessage,
   type Message,
@@ -33,8 +33,8 @@ import {
   valueSet,
 } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
+import { defineInheritedAnnotationParser } from "./internal/parser.ts";
 import {
-  defineInheritedAnnotationParser,
   type ExecutionContext,
   getDocPage,
   type InferValue,
@@ -75,7 +75,7 @@ import {
   or as orLocal,
   tuple as tupleLocal,
 } from "./constructs.ts";
-import { dependency as dependencyLocal } from "./dependency.ts";
+import { dependency as dependencyLocal } from "./internal/dependency.ts";
 import { withDefault as withDefaultLocal } from "./modifiers.ts";
 import {
   extractPhase2SeedKey,
