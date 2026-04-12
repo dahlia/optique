@@ -429,6 +429,42 @@ describe("annotation-state", () => {
   );
 
   it(
+    "normalizeNestedDelegatedAnnotationState() clones cyclic back-references when an ancestor changes",
+    () => {
+      const parentState = injectAnnotations(undefined, {
+        [
+          Symbol.for(
+            "@test/normalizeNestedDelegatedAnnotationState-cyclic-parent",
+          )
+        ]: true,
+      });
+      const cyclic: {
+        child?: { parent: unknown };
+        value?: unknown;
+      } = {};
+      const child = { parent: cyclic };
+      cyclic.child = child;
+      cyclic.value = getDelegatedAnnotationState(parentState, "seed");
+
+      const normalized = normalizeNestedDelegatedAnnotationState(cyclic);
+
+      assert.notStrictEqual(normalized, cyclic);
+      if (
+        normalized.child == null ||
+        typeof normalized.child !== "object" ||
+        !("parent" in normalized.child)
+      ) {
+        assert.fail(
+          "Expected normalized child to preserve the cyclic parent link.",
+        );
+      }
+      assert.notStrictEqual(normalized.child, child);
+      assert.strictEqual(normalized.child.parent, normalized);
+      assert.equal(normalized.value, "seed");
+    },
+  );
+
+  it(
     "normalizeNestedDelegatedAnnotationState() preserves identity for cyclic values without carriers",
     () => {
       const cyclic: { self?: unknown } = {};

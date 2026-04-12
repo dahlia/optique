@@ -129,18 +129,22 @@ interface NestedNormalizationEntry {
   clone: object;
   finalized: boolean;
   result: object;
+  preferCloneOnRead: boolean;
 }
 
-function isPendingNestedNormalizationAlias(
+function getPendingNestedNormalizationEntry(
   originalValue: unknown,
   normalizedValue: unknown,
   seen: WeakMap<object, NestedNormalizationEntry>,
-): boolean {
+): NestedNormalizationEntry | undefined {
   if (originalValue == null || typeof originalValue !== "object") {
-    return false;
+    return undefined;
   }
   const entry = seen.get(originalValue as object);
-  return entry != null && !entry.finalized && entry.clone === normalizedValue;
+  return entry != null && entry.clone === normalizedValue &&
+      (!entry.finalized || entry.preferCloneOnRead)
+    ? entry
+    : undefined;
 }
 
 function createPendingNestedNormalizationClone(source: object): object {
@@ -152,17 +156,20 @@ function createPendingNestedNormalizationClone(source: object): object {
 function normalizeNestedDelegatedStructuredState<T extends object>(
   source: T,
   seen: WeakMap<object, NestedNormalizationEntry>,
+  preferPendingClone: boolean,
 ): T {
   const clone = createPendingNestedNormalizationClone(source);
   const entry: NestedNormalizationEntry = {
     clone,
     finalized: false,
     result: clone,
+    preferCloneOnRead: false,
   };
   seen.set(source, entry);
 
   const overrides = new Map<PropertyKey, unknown>();
   let changed = false;
+  let hasPendingAliasOverride = false;
   for (const key of Reflect.ownKeys(source)) {
     const descriptor = Object.getOwnPropertyDescriptor(source, key);
     if (descriptor == null || !("value" in descriptor)) {
@@ -171,17 +178,23 @@ function normalizeNestedDelegatedStructuredState<T extends object>(
     const nextValue = normalizeNestedDelegatedAnnotationState(
       descriptor.value,
       seen,
+      true,
     );
     if (nextValue === descriptor.value) {
       continue;
     }
     overrides.set(key, nextValue);
-    if (!isPendingNestedNormalizationAlias(descriptor.value, nextValue, seen)) {
+    if (
+      getPendingNestedNormalizationEntry(descriptor.value, nextValue, seen) ==
+        null
+    ) {
       changed = true;
+    } else {
+      hasPendingAliasOverride = true;
     }
   }
 
-  if (!changed) {
+  if (!changed && !hasPendingAliasOverride) {
     entry.finalized = true;
     entry.result = source;
     return source;
@@ -201,37 +214,53 @@ function normalizeNestedDelegatedStructuredState<T extends object>(
 
   Object.defineProperties(clone, descriptors);
   entry.finalized = true;
-  entry.result = clone;
-  return clone as T;
+  entry.preferCloneOnRead = !changed && hasPendingAliasOverride;
+  entry.result = changed ? clone : source;
+  return (changed || preferPendingClone ? clone : source) as T;
 }
 
 function normalizeNestedDelegatedMapState<T extends Map<unknown, unknown>>(
   source: T,
   seen: WeakMap<object, NestedNormalizationEntry>,
+  preferPendingClone: boolean,
 ): T {
   const clone = new Map<unknown, unknown>();
   const entry: NestedNormalizationEntry = {
     clone,
     finalized: false,
     result: clone,
+    preferCloneOnRead: false,
   };
   seen.set(source, entry);
 
   const normalizedEntries: Array<readonly [unknown, unknown]> = [];
   const overrides = new Map<PropertyKey, unknown>();
   let changed = false;
+  let hasPendingAliasOverride = false;
 
   for (const [key, value] of source) {
-    const nextKey = normalizeNestedDelegatedAnnotationState(key, seen);
-    const nextValue = normalizeNestedDelegatedAnnotationState(value, seen);
+    const nextKey = normalizeNestedDelegatedAnnotationState(key, seen, true);
+    const nextValue = normalizeNestedDelegatedAnnotationState(
+      value,
+      seen,
+      true,
+    );
     normalizedEntries.push([nextKey, nextValue]);
-    if (
-      (!isPendingNestedNormalizationAlias(key, nextKey, seen) &&
-        nextKey !== key) ||
-      (!isPendingNestedNormalizationAlias(value, nextValue, seen) &&
-        nextValue !== value)
-    ) {
-      changed = true;
+    if (nextKey !== key) {
+      if (getPendingNestedNormalizationEntry(key, nextKey, seen) == null) {
+        changed = true;
+      } else {
+        hasPendingAliasOverride = true;
+      }
+    }
+    if (nextValue !== value) {
+      if (
+        getPendingNestedNormalizationEntry(value, nextValue, seen) == null
+      ) {
+        changed = true;
+      } else {
+        hasPendingAliasOverride = true;
+      }
     }
   }
 
@@ -243,17 +272,23 @@ function normalizeNestedDelegatedMapState<T extends Map<unknown, unknown>>(
     const nextValue = normalizeNestedDelegatedAnnotationState(
       descriptor.value,
       seen,
+      true,
     );
     if (nextValue === descriptor.value) {
       continue;
     }
     overrides.set(key, nextValue);
-    if (!isPendingNestedNormalizationAlias(descriptor.value, nextValue, seen)) {
+    if (
+      getPendingNestedNormalizationEntry(descriptor.value, nextValue, seen) ==
+        null
+    ) {
       changed = true;
+    } else {
+      hasPendingAliasOverride = true;
     }
   }
 
-  if (!changed) {
+  if (!changed && !hasPendingAliasOverride) {
     entry.finalized = true;
     entry.result = source;
     return source;
@@ -277,34 +312,44 @@ function normalizeNestedDelegatedMapState<T extends Map<unknown, unknown>>(
 
   Object.defineProperties(clone, descriptors);
   entry.finalized = true;
-  entry.result = clone;
-  return clone as T;
+  entry.preferCloneOnRead = !changed && hasPendingAliasOverride;
+  entry.result = changed ? clone : source;
+  return (changed || preferPendingClone ? clone : source) as T;
 }
 
 function normalizeNestedDelegatedSetState<T extends Set<unknown>>(
   source: T,
   seen: WeakMap<object, NestedNormalizationEntry>,
+  preferPendingClone: boolean,
 ): T {
   const clone = new Set<unknown>();
   const entry: NestedNormalizationEntry = {
     clone,
     finalized: false,
     result: clone,
+    preferCloneOnRead: false,
   };
   seen.set(source, entry);
 
   const normalizedValues: unknown[] = [];
   const overrides = new Map<PropertyKey, unknown>();
   let changed = false;
+  let hasPendingAliasOverride = false;
 
   for (const value of source) {
-    const nextValue = normalizeNestedDelegatedAnnotationState(value, seen);
+    const nextValue = normalizeNestedDelegatedAnnotationState(
+      value,
+      seen,
+      true,
+    );
     normalizedValues.push(nextValue);
-    if (
-      nextValue !== value &&
-      !isPendingNestedNormalizationAlias(value, nextValue, seen)
-    ) {
+    if (nextValue === value) {
+      continue;
+    }
+    if (getPendingNestedNormalizationEntry(value, nextValue, seen) == null) {
       changed = true;
+    } else {
+      hasPendingAliasOverride = true;
     }
   }
 
@@ -316,17 +361,23 @@ function normalizeNestedDelegatedSetState<T extends Set<unknown>>(
     const nextValue = normalizeNestedDelegatedAnnotationState(
       descriptor.value,
       seen,
+      true,
     );
     if (nextValue === descriptor.value) {
       continue;
     }
     overrides.set(key, nextValue);
-    if (!isPendingNestedNormalizationAlias(descriptor.value, nextValue, seen)) {
+    if (
+      getPendingNestedNormalizationEntry(descriptor.value, nextValue, seen) ==
+        null
+    ) {
       changed = true;
+    } else {
+      hasPendingAliasOverride = true;
     }
   }
 
-  if (!changed) {
+  if (!changed && !hasPendingAliasOverride) {
     entry.finalized = true;
     entry.result = source;
     return source;
@@ -350,8 +401,9 @@ function normalizeNestedDelegatedSetState<T extends Set<unknown>>(
 
   Object.defineProperties(clone, descriptors);
   entry.finalized = true;
-  entry.result = clone;
-  return clone as T;
+  entry.preferCloneOnRead = !changed && hasPendingAliasOverride;
+  entry.result = changed ? clone : source;
+  return (changed || preferPendingClone ? clone : source) as T;
 }
 
 /**
@@ -373,6 +425,7 @@ function normalizeNestedDelegatedSetState<T extends Set<unknown>>(
 export function normalizeNestedDelegatedAnnotationState<T>(
   value: T,
   seen = new WeakMap<object, NestedNormalizationEntry>(),
+  preferPendingClone = false,
 ): T {
   const normalized = normalizeDelegatedAnnotationState(value);
   if (normalized == null || typeof normalized !== "object") {
@@ -381,22 +434,45 @@ export function normalizeNestedDelegatedAnnotationState<T>(
   const source = normalized as object;
   const existing = seen.get(source);
   if (existing != null) {
-    return (existing.finalized ? existing.result : existing.clone) as T;
+    if (!existing.finalized) {
+      return existing.clone as T;
+    }
+    return (
+      preferPendingClone && existing.preferCloneOnRead
+        ? existing.clone
+        : existing.result
+    ) as T;
   }
   if (Array.isArray(source)) {
-    return normalizeNestedDelegatedStructuredState(source, seen) as T;
+    return normalizeNestedDelegatedStructuredState(
+      source,
+      seen,
+      preferPendingClone,
+    ) as T;
   }
   if (source instanceof Map) {
-    return normalizeNestedDelegatedMapState(source, seen) as T;
+    return normalizeNestedDelegatedMapState(
+      source,
+      seen,
+      preferPendingClone,
+    ) as T;
   }
   if (source instanceof Set) {
-    return normalizeNestedDelegatedSetState(source, seen) as T;
+    return normalizeNestedDelegatedSetState(
+      source,
+      seen,
+      preferPendingClone,
+    ) as T;
   }
   const proto = Object.getPrototypeOf(source);
   if (proto !== Object.prototype && proto !== null) {
     return normalized;
   }
-  return normalizeNestedDelegatedStructuredState(source, seen) as T;
+  return normalizeNestedDelegatedStructuredState(
+    source,
+    seen,
+    preferPendingClone,
+  ) as T;
 }
 
 /**
