@@ -219,6 +219,14 @@ describe("annotation-state", () => {
         object: { inner: state },
         array: ["seed-array", { inner: state }],
       });
+      assert.strictEqual(normalized.object.inner, state);
+      const arrayEntry = normalized.array[1];
+      assert.ok(
+        arrayEntry != null &&
+          typeof arrayEntry === "object" &&
+          "inner" in arrayEntry,
+      );
+      assert.strictEqual(arrayEntry.inner, state);
     },
   );
 
