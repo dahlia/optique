@@ -14,7 +14,7 @@ To be released.
     options in `object()`, `tuple()`, `merge()`, and wrapped `group()`
     parsers. Hidden options still consume CLI syntax, so hidden-visible
     and hidden-hidden collisions now throw `DuplicateOptionError` during
-    parser construction by default. [[#510]]
+    parser construction by default. [[#510], [#788]]
 
  -  Replaced the sentinel-based two-pass `SourceContext` contract with an
     explicit `SourceContextRequest` object. `getAnnotations()` and
@@ -1688,6 +1688,7 @@ To be released.
 [#783]: https://github.com/dahlia/optique/pull/783
 [#784]: https://github.com/dahlia/optique/pull/784
 [#786]: https://github.com/dahlia/optique/pull/786
+[#788]: https://github.com/dahlia/optique/pull/788
 
 ### @optique/config
 
