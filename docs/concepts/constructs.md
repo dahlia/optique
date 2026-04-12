@@ -1924,7 +1924,6 @@ This applies to nested structures as well:
 
 ~~~~ typescript twoslash
 import { object, option } from "@optique/core";
-import { parse } from "@optique/core/parser";
 // ---cut-before---
 // ❌ Nested duplicate detected
 const parser = object({
