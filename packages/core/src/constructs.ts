@@ -1041,7 +1041,7 @@ function checkDuplicateOptionNames(
   const optionNameSources = new Map<string, (string | symbol)[]>();
 
   for (const [source, usage] of parserSources) {
-    const names = extractOptionNames(usage);
+    const names = extractParsableOptionNames(usage);
     for (const name of names) {
       if (!optionNameSources.has(name)) {
         optionNameSources.set(name, []);
@@ -1056,6 +1056,17 @@ function checkDuplicateOptionNames(
       throw new DuplicateOptionError(name, sources);
     }
   }
+}
+
+/**
+ * Extracts option names that participate in CLI syntax.
+ *
+ * Constructor-time collision checks must include fully hidden options because
+ * `hidden: true` only removes user-facing visibility. It does not remove the
+ * option from the accepted input grammar.
+ */
+function extractParsableOptionNames(usage: Usage): Set<string> {
+  return extractOptionNames(usage, true);
 }
 
 /**
@@ -4559,7 +4570,8 @@ export interface ObjectOptions {
 
   /**
    * When `true`, allows duplicate option names across different fields.
-   * By default (`false`), duplicate option names will cause a parse error.
+   * By default (`false`), duplicate option names cause a construction-time
+   * error.
    *
    * @default `false`
    * @since 0.7.0
@@ -6753,7 +6765,8 @@ export function object<
 export interface TupleOptions {
   /**
    * When `true`, allows duplicate option names across different parsers.
-   * By default (`false`), duplicate option names will cause a parse error.
+   * By default (`false`), duplicate option names cause a construction-time
+   * error.
    *
    * @default `false`
    * @since 0.7.0
@@ -8132,7 +8145,8 @@ type ExtractObjectTypes<P> = P extends Parser<Mode, infer V, unknown>
 export interface MergeOptions {
   /**
    * When `true`, allows duplicate option names across merged parsers.
-   * By default (`false`), duplicate option names will cause a parse error.
+   * By default (`false`), duplicate option names cause a construction-time
+   * error.
    *
    * @default `false`
    * @since 0.7.0

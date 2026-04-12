@@ -10,6 +10,12 @@ To be released.
 
 ### @optique/core
 
+ -  Fixed duplicate option-name validation to include `hidden: true`
+    options in `object()`, `tuple()`, `merge()`, and wrapped `group()`
+    parsers. Hidden options still consume CLI syntax, so hidden-visible
+    and hidden-hidden collisions now throw `DuplicateOptionError` during
+    parser construction by default. [[#510]]
+
  -  Replaced the sentinel-based two-pass `SourceContext` contract with an
     explicit `SourceContextRequest` object. `getAnnotations()` and
     `getInternalAnnotations()` now receive `phase: "phase1"` / `"phase2"`

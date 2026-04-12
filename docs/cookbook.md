@@ -1885,7 +1885,9 @@ Hidden and deprecated options
 As CLIs evolve, you may need to deprecate old options while maintaining
 backward compatibility, or add internal debugging options that shouldn't
 appear in user-facing documentation. The `hidden` option lets you keep
-parsers functional while controlling visibility:
+parsers functional while controlling visibility. Hidden options still consume
+input normally, so they also still participate in duplicate option-name
+validation:
 
  -  `hidden: true`: hide from usage, help entries, completions, and
     “Did you mean?” suggestions
@@ -1920,6 +1922,10 @@ const parser = object({
 
 This approach ensures existing scripts using `--out` continue to work
 while new users learn the preferred `--output` form.
+
+If you keep a hidden legacy option, it still reserves that option name inside
+the same combinator. A visible parser using the same name is still treated as a
+duplicate unless you explicitly opt out with `allowDuplicates: true`.
 
 ### Internal debugging options
 
