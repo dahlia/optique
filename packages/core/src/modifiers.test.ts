@@ -8163,6 +8163,161 @@ describe(
         }
       });
 
+      it(`${name} complete() deep-normalizes nested delegated plain-object values`, () => {
+        const marker = Symbol.for(
+          `@test/issue-594/${name}/nested-plain-object`,
+        );
+        const state = { value: "live" };
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: { value: "seed" },
+          parse(context: ParserContext<{ value: string }>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(innerState: { value: string }) {
+            return {
+              success: true as const,
+              value: {
+                annotated: getAnnotations(innerState)?.[marker] === "ok",
+                inner: innerState,
+              },
+            };
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations([state] as [{ value: string }], {
+          [marker]: "ok",
+        });
+
+        const result = parser.complete(outerState);
+
+        assert.deepEqual(result, {
+          success: true,
+          value: {
+            annotated: true,
+            inner: state,
+          },
+        });
+        if (
+          result.success &&
+          result.value != null &&
+          typeof result.value === "object" &&
+          "inner" in result.value
+        ) {
+          assert.strictEqual(result.value.inner, state);
+          assert.equal(getAnnotations(result.value.inner), undefined);
+        }
+      });
+
+      it(`${name} parse() strips annotations from plain-object initial states`, () => {
+        const marker = Symbol.for(
+          `@test/issue-594/${name}/parse-plain-object`,
+        );
+        const initialState = { value: "seed" };
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState,
+          parse(context: ParserContext<{ value: string }>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: { value: string }) {
+            return {
+              success: true as const,
+              value: {
+                annotated: getAnnotations(state)?.[marker] === "ok",
+                inner: state,
+              },
+            };
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+
+        const result = parse(parser, [], {
+          annotations: { [marker]: "ok" },
+        });
+
+        assert.ok(result.success);
+        if (!result.success) return;
+        assert.deepEqual(result.value, {
+          annotated: true,
+          inner: initialState,
+        });
+        assert.strictEqual(result.value.inner, initialState);
+        assert.equal(getAnnotations(result.value.inner), undefined);
+      });
+
+      it(`${name} parseAsync() strips annotations from plain-object initial states`, async () => {
+        const marker = Symbol.for(
+          `@test/issue-594/${name}/parse-plain-object-async`,
+        );
+        const initialState = { value: "seed" };
+        const parser = wrap({
+          $mode: "async" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState,
+          parse(context: ParserContext<{ value: string }>) {
+            return Promise.resolve({
+              success: true as const,
+              next: context,
+              consumed: [],
+            });
+          },
+          complete(state: { value: string }) {
+            return Promise.resolve({
+              success: true as const,
+              value: {
+                annotated: getAnnotations(state)?.[marker] === "ok",
+                inner: state,
+              },
+            });
+          },
+          suggest: async function* () {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+
+        const result = await parseAsync(parser, [], {
+          annotations: { [marker]: "ok" },
+        });
+
+        assert.ok(result.success);
+        if (!result.success) return;
+        assert.deepEqual(result.value, {
+          annotated: true,
+          inner: initialState,
+        });
+        assert.strictEqual(result.value.inner, initialState);
+        assert.equal(getAnnotations(result.value.inner), undefined);
+      });
+
       it(`${name} suggest() keeps primitive inner states unwrapped`, () => {
         const parser = wrap({
           $mode: "sync" as const,

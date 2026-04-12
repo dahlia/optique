@@ -23,6 +23,8 @@ import {
  */
 export const annotationViewTargets = new WeakMap<object, object>();
 
+const delegatedAnnotationCloneTargets = new WeakMap<object, object>();
+
 /**
  * Unwraps an annotation-view proxy to its original target object.
  *
@@ -36,6 +38,16 @@ export function unwrapAnnotationView<T>(value: T): T {
     return value;
   }
   return (annotationViewTargets.get(value as object) as T | undefined) ?? value;
+}
+
+function unwrapDelegatedAnnotationClone<T>(value: T): T {
+  if (value == null || typeof value !== "object") {
+    return value;
+  }
+  return (delegatedAnnotationCloneTargets.get(value as object) as
+    | T
+    | undefined) ??
+    value;
 }
 
 /**
@@ -94,26 +106,43 @@ function isNonPlainDelegatedObject(state: object): boolean {
   return proto !== Object.prototype && proto !== null;
 }
 
+function inheritDelegatedAnnotations<TState extends object>(
+  parentState: unknown,
+  childState: TState,
+): TState {
+  const target = normalizeDelegatedAnnotationState(childState);
+  const delegatedState = inheritAnnotations(parentState, target);
+  if (delegatedState !== target) {
+    delegatedAnnotationCloneTargets.set(
+      delegatedState as object,
+      target as object,
+    );
+  }
+  return delegatedState as TState;
+}
+
 /**
  * Removes Optique's internal annotation carriers from a delegated state.
  *
- * This unwraps both primitive-state annotation wrappers and annotation-view
- * proxies used for non-plain object states.
+ * This unwraps primitive-state annotation wrappers, tracked delegated clones,
+ * and annotation-view proxies used for object states.
  *
  * @param state The delegated state to normalize.
  * @returns The original underlying state value.
  * @internal
  */
 export function normalizeDelegatedAnnotationState<T>(state: T): T {
-  return normalizeInjectedAnnotationState(unwrapAnnotationView(state));
+  return normalizeInjectedAnnotationState(
+    unwrapDelegatedAnnotationClone(unwrapAnnotationView(state)),
+  );
 }
 
 /**
  * Returns whether the given state uses an internal delegated annotation carrier.
  *
  * @param state The candidate state to inspect.
- * @returns `true` when the state is an injected primitive wrapper or an
- *          annotation-view proxy.
+ * @returns `true` when the state is an injected primitive wrapper, a tracked
+ *          delegated clone, or an annotation-view proxy.
  * @internal
  */
 export function hasDelegatedAnnotationCarrier(state: unknown): boolean {
@@ -121,6 +150,7 @@ export function hasDelegatedAnnotationCarrier(state: unknown): boolean {
     typeof state === "object" &&
     (
       isInjectedAnnotationWrapper(state) ||
+      delegatedAnnotationCloneTargets.has(state as object) ||
       annotationViewTargets.has(state as object)
     );
 }
@@ -479,10 +509,10 @@ export function normalizeNestedDelegatedAnnotationState<T>(
  * Creates a short-lived delegated state that exposes the parent's annotations
  * regardless of the child state's runtime shape.
  *
- * Primitive and nullish states use `injectAnnotations()`, plain objects and
- * built-ins use `inheritAnnotations()`, and non-plain objects use an
- * annotation-view proxy so class invariants such as private fields remain
- * intact.
+ * Primitive and nullish states use `injectAnnotations()`, clone-based object
+ * delegation is tracked so it can be normalized back out later, and non-plain
+ * objects use an annotation-view proxy so class invariants such as private
+ * fields remain intact.
  *
  * @param parentState The state carrying the annotations to delegate.
  * @param childState The child state that should observe those annotations.
@@ -503,16 +533,22 @@ export function getDelegatedAnnotationState<TState>(
       annotations,
     );
   }
-  if (getAnnotations(childState) === annotations) {
-    return childState;
-  }
   if (childState == null || typeof childState !== "object") {
     return injectAnnotations(childState, annotations);
+  }
+  if (
+    getAnnotations(childState) === annotations &&
+    (
+      delegatedAnnotationCloneTargets.has(childState as object) ||
+      annotationViewTargets.has(childState as object)
+    )
+  ) {
+    return childState;
   }
   if (isNonPlainDelegatedObject(childState)) {
     return withAnnotationView(childState, annotations) as TState;
   }
-  return inheritAnnotations(parentState, childState);
+  return inheritDelegatedAnnotations(parentState, childState);
 }
 
 /**

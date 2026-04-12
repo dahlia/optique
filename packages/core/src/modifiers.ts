@@ -449,7 +449,7 @@ function deriveOptionalInnerParseState<TState>(
       innerState != null &&
       typeof innerState === "object"
     ) {
-      return inheritAnnotations(outerState, innerState) as TState;
+      return getDelegatedAnnotationState(outerState, innerState) as TState;
     }
     return innerState;
   }
@@ -467,12 +467,16 @@ function deriveOptionalInnerParseState<TState>(
   // (`undefined` / `null`, the "no state yet" signal used by
   // `option()` / `argument()` / `bindEnv()` / `bindConfig()`) still go
   // through `inheritAnnotations()` so source-binding wrappers can read
-  // the propagated annotations from their `parse()` context.
+  // the propagated annotations from their `parse()` context. Object-shaped
+  // initial states go through delegated annotation state tracking so any
+  // temporary clone can be normalized back out of completed values.
   const initial = parser.initialState;
   if (initial != null && typeof initial !== "object") {
     return initial;
   }
-  return inheritAnnotations(outerState, initial) as TState;
+  return initial != null && typeof initial === "object"
+    ? getDelegatedAnnotationState(outerState, initial) as TState
+    : inheritAnnotations(outerState, initial) as TState;
 }
 
 /**
