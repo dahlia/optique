@@ -186,6 +186,16 @@ function normalizeOptionalLikeCompleteResult<T>(
     : result;
 }
 
+function shouldRetryOptionalLikeCompatibilityError(
+  error: unknown,
+  state: unknown,
+): boolean {
+  return error instanceof TypeError &&
+    state != null &&
+    typeof state === "object" &&
+    isInjectedAnnotationWrapper(state);
+}
+
 function completeOptionalLikeSync<TValue, TState>(
   parser: Parser<"sync", TValue, TState>,
   state: TState,
@@ -206,7 +216,7 @@ function completeOptionalLikeSync<TValue, TState>(
     }
     return result;
   } catch (error) {
-    if (!hasCarrier) {
+    if (!shouldRetryOptionalLikeCompatibilityError(error, state)) {
       throw error;
     }
     return run(normalizeDelegatedAnnotationState(state), false);
@@ -233,7 +243,7 @@ async function completeOptionalLikeAsync<TValue, TState>(
     }
     return result;
   } catch (error) {
-    if (!hasCarrier) {
+    if (!shouldRetryOptionalLikeCompatibilityError(error, state)) {
       throw error;
     }
     return await run(normalizeDelegatedAnnotationState(state), false);
@@ -594,7 +604,7 @@ function adaptShouldDeferCompletion<TState>(
         }
         return result;
       } catch (error) {
-        if (!hasCarrier) {
+        if (!shouldRetryOptionalLikeCompatibilityError(error, innerState)) {
           throw error;
         }
         return innerCheck(normalizeDelegatedAnnotationState(innerState), exec);

@@ -8265,6 +8265,265 @@ describe(
         assert.equal(getAnnotations(state), undefined);
       });
 
+      it(`${name} complete() preserves annotation-aware exceptions`, () => {
+        const marker = Symbol.for(`@test/issue-594/${name}/complete-throw`);
+        let callCount = 0;
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          parse(context: ParserContext<string>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: string) {
+            callCount++;
+            if (getAnnotations(state)?.[marker] === "ok") {
+              throw new Error("Annotated complete failure.");
+            }
+            return { success: true as const, value: "fallback-success" };
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [marker]: "ok",
+        });
+
+        assert.throws(
+          () => parser.complete(outerState),
+          /Annotated complete failure\./,
+        );
+        assert.equal(callCount, 1);
+      });
+
+      it(`${name} async complete() preserves annotation-aware exceptions`, async () => {
+        const marker = Symbol.for(
+          `@test/issue-594/${name}/async-complete-throw`,
+        );
+        let callCount = 0;
+        const parser = wrap({
+          $mode: "async" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          parse(context: ParserContext<string>) {
+            return Promise.resolve({
+              success: true as const,
+              next: context,
+              consumed: [],
+            });
+          },
+          complete(state: string) {
+            callCount++;
+            if (getAnnotations(state)?.[marker] === "ok") {
+              throw new Error("Annotated async complete failure.");
+            }
+            return Promise.resolve({
+              success: true as const,
+              value: "fallback-success",
+            });
+          },
+          suggest: async function* () {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [marker]: "ok",
+        });
+
+        await assert.rejects(
+          () => parser.complete(outerState),
+          /Annotated async complete failure\./,
+        );
+        assert.equal(callCount, 1);
+      });
+
+      it(`${name} complete() retries primitive wrapper TypeErrors`, () => {
+        const marker = Symbol.for(
+          `@test/issue-594/${name}/complete-primitive-typeerror`,
+        );
+        let callCount = 0;
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          parse(context: ParserContext<string>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: string) {
+            callCount++;
+            return {
+              success: true as const,
+              value: state.toUpperCase(),
+            };
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [marker]: true,
+        });
+
+        const result = parser.complete(outerState);
+
+        assert.deepEqual(result, {
+          success: true,
+          value: "LIVE",
+        });
+        assert.equal(callCount, 2);
+      });
+
+      it(`${name} async complete() retries primitive wrapper TypeErrors`, async () => {
+        const marker = Symbol.for(
+          `@test/issue-594/${name}/async-complete-primitive-typeerror`,
+        );
+        let callCount = 0;
+        const parser = wrap({
+          $mode: "async" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          parse(context: ParserContext<string>) {
+            return Promise.resolve({
+              success: true as const,
+              next: context,
+              consumed: [],
+            });
+          },
+          complete(state: string) {
+            callCount++;
+            return Promise.resolve({
+              success: true as const,
+              value: state.toUpperCase(),
+            });
+          },
+          suggest: async function* () {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [marker]: true,
+        });
+
+        const result = await parser.complete(outerState);
+
+        assert.deepEqual(result, {
+          success: true,
+          value: "LIVE",
+        });
+        assert.equal(callCount, 2);
+      });
+
+      it(`${name} shouldDeferCompletion() preserves annotation-aware exceptions`, () => {
+        const marker = Symbol.for(`@test/issue-594/${name}/defer-throw`);
+        let callCount = 0;
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          parse(context: ParserContext<string>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: string) {
+            return { success: true as const, value: state };
+          },
+          shouldDeferCompletion(state: string) {
+            callCount++;
+            if (getAnnotations(state)?.[marker] === "ok") {
+              throw new Error("Annotated defer failure.");
+            }
+            return false;
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [marker]: "ok",
+        });
+
+        assert.throws(
+          () => parser.shouldDeferCompletion?.(outerState),
+          /Annotated defer failure\./,
+        );
+        assert.equal(callCount, 1);
+      });
+
+      it(`${name} shouldDeferCompletion() retries primitive wrapper TypeErrors`, () => {
+        const marker = Symbol.for(
+          `@test/issue-594/${name}/defer-primitive-typeerror`,
+        );
+        let callCount = 0;
+        const parser = wrap({
+          $mode: "sync" as const,
+          $valueType: [] as const,
+          $stateType: [] as const,
+          priority: 0,
+          usage: [],
+          leadingNames: new Set<string>(),
+          acceptingAnyToken: false,
+          initialState: "seed",
+          parse(context: ParserContext<string>) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete(state: string) {
+            return { success: true as const, value: state };
+          },
+          shouldDeferCompletion(state: string) {
+            callCount++;
+            return state.toUpperCase() === "LIVE";
+          },
+          suggest() {
+            return [];
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        });
+        const outerState = injectAnnotations(["live"] as [string], {
+          [marker]: true,
+        });
+
+        assert.ok(parser.shouldDeferCompletion?.(outerState));
+        assert.equal(callCount, 2);
+      });
+
       it(`${name} complete() retries wrapped initial-state failures`, () => {
         const seenStates: unknown[] = [];
         const parser = wrap({
