@@ -64,6 +64,7 @@ describe("extension", () => {
       const parser = createTestParser();
 
       assert.deepEqual(getTraits(parser), {});
+      assert.ok(Object.isFrozen(getTraits(parser)));
     });
 
     it("defines and reads parser traits", () => {

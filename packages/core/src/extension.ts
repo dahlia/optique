@@ -79,7 +79,7 @@ export type ParserSourceMetadata<
   NonNullable<Parser<M, TValue, TState>["dependencyMetadata"]>["source"]
 >;
 
-const emptyTraits = {} as const satisfies ParserTraits;
+const emptyTraits: Readonly<ParserTraits> = Object.freeze({});
 
 /**
  * Defines stable extension traits on a parser object.
@@ -169,8 +169,9 @@ export function delegateSuggestNodes<TInnerState>(
  *
  * @param parser The parser whose source metadata should be transformed.
  * @param mapSource Function that transforms the source capability.
- * @returns The composed dependency metadata, or `undefined` if no source
- *          capability exists.
+ * @returns The dependency metadata with its source capability transformed when
+ *          present; otherwise the original dependency metadata, or
+ *          `undefined` when the parser has no dependency metadata.
  * @since 1.0.0
  */
 export function mapSourceMetadata<M extends Mode, TValue, TState>(

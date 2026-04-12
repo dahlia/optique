@@ -144,11 +144,17 @@ export function annotateFreshArray<T>(
  *
  * This is mainly used by parsers that rebuild array states with spread syntax.
  * Array spread copies elements but drops custom symbol properties, so we need
- * to reattach annotations explicitly when present.
+ * to reattach annotations explicitly when present. `inheritAnnotations()`
+ * supports primitive and nullish targets via wrapper injection, plus arrays,
+ * plain objects, and built-in container/value types that Optique clones
+ * explicitly (`Date`, `Map`, `Set`, and `RegExp`). Non-plain custom objects
+ * are returned unchanged to avoid mutating shared parser state.
  *
  * @param source The original state that may carry annotations.
- * @param target The new state to receive annotations.
- * @returns The target state, with annotations copied when available.
+ * @param target The new state to receive annotations when it is a supported
+ *               target shape.
+ * @returns A cloned or wrapped target with annotations copied when available,
+ *          or the original unsupported non-plain target unchanged.
  * @since 1.0.0
  */
 export function inheritAnnotations<T>(source: unknown, target: T): T {
