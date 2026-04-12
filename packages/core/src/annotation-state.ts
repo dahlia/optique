@@ -205,14 +205,163 @@ function normalizeNestedDelegatedStructuredState<T extends object>(
   return clone as T;
 }
 
+function normalizeNestedDelegatedMapState<T extends Map<unknown, unknown>>(
+  source: T,
+  seen: WeakMap<object, NestedNormalizationEntry>,
+): T {
+  const clone = new Map<unknown, unknown>();
+  const entry: NestedNormalizationEntry = {
+    clone,
+    finalized: false,
+    result: clone,
+  };
+  seen.set(source, entry);
+
+  const normalizedEntries: Array<readonly [unknown, unknown]> = [];
+  const overrides = new Map<PropertyKey, unknown>();
+  let changed = false;
+
+  for (const [key, value] of source) {
+    const nextKey = normalizeNestedDelegatedAnnotationState(key, seen);
+    const nextValue = normalizeNestedDelegatedAnnotationState(value, seen);
+    normalizedEntries.push([nextKey, nextValue]);
+    if (
+      (!isPendingNestedNormalizationAlias(key, nextKey, seen) &&
+        nextKey !== key) ||
+      (!isPendingNestedNormalizationAlias(value, nextValue, seen) &&
+        nextValue !== value)
+    ) {
+      changed = true;
+    }
+  }
+
+  for (const key of Reflect.ownKeys(source)) {
+    const descriptor = Object.getOwnPropertyDescriptor(source, key);
+    if (descriptor == null || !("value" in descriptor)) {
+      continue;
+    }
+    const nextValue = normalizeNestedDelegatedAnnotationState(
+      descriptor.value,
+      seen,
+    );
+    if (nextValue === descriptor.value) {
+      continue;
+    }
+    overrides.set(key, nextValue);
+    if (!isPendingNestedNormalizationAlias(descriptor.value, nextValue, seen)) {
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    entry.finalized = true;
+    entry.result = source;
+    return source;
+  }
+
+  for (const [key, value] of normalizedEntries) {
+    clone.set(key, value);
+  }
+
+  const descriptors = Object.getOwnPropertyDescriptors(source) as Record<
+    PropertyKey,
+    PropertyDescriptor
+  >;
+  for (const [key, nextValue] of overrides) {
+    const descriptor = descriptors[key];
+    if (descriptor == null || !("value" in descriptor)) {
+      continue;
+    }
+    descriptors[key] = { ...descriptor, value: nextValue };
+  }
+
+  Object.defineProperties(clone, descriptors);
+  entry.finalized = true;
+  entry.result = clone;
+  return clone as T;
+}
+
+function normalizeNestedDelegatedSetState<T extends Set<unknown>>(
+  source: T,
+  seen: WeakMap<object, NestedNormalizationEntry>,
+): T {
+  const clone = new Set<unknown>();
+  const entry: NestedNormalizationEntry = {
+    clone,
+    finalized: false,
+    result: clone,
+  };
+  seen.set(source, entry);
+
+  const normalizedValues: unknown[] = [];
+  const overrides = new Map<PropertyKey, unknown>();
+  let changed = false;
+
+  for (const value of source) {
+    const nextValue = normalizeNestedDelegatedAnnotationState(value, seen);
+    normalizedValues.push(nextValue);
+    if (
+      nextValue !== value &&
+      !isPendingNestedNormalizationAlias(value, nextValue, seen)
+    ) {
+      changed = true;
+    }
+  }
+
+  for (const key of Reflect.ownKeys(source)) {
+    const descriptor = Object.getOwnPropertyDescriptor(source, key);
+    if (descriptor == null || !("value" in descriptor)) {
+      continue;
+    }
+    const nextValue = normalizeNestedDelegatedAnnotationState(
+      descriptor.value,
+      seen,
+    );
+    if (nextValue === descriptor.value) {
+      continue;
+    }
+    overrides.set(key, nextValue);
+    if (!isPendingNestedNormalizationAlias(descriptor.value, nextValue, seen)) {
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    entry.finalized = true;
+    entry.result = source;
+    return source;
+  }
+
+  for (const value of normalizedValues) {
+    clone.add(value);
+  }
+
+  const descriptors = Object.getOwnPropertyDescriptors(source) as Record<
+    PropertyKey,
+    PropertyDescriptor
+  >;
+  for (const [key, nextValue] of overrides) {
+    const descriptor = descriptors[key];
+    if (descriptor == null || !("value" in descriptor)) {
+      continue;
+    }
+    descriptors[key] = { ...descriptor, value: nextValue };
+  }
+
+  Object.defineProperties(clone, descriptors);
+  entry.finalized = true;
+  entry.result = clone;
+  return clone as T;
+}
+
 /**
- * Recursively removes delegated annotation carriers from plain-object and array
- * structures.
+ * Recursively removes delegated annotation carriers from plain-object, array,
+ * and built-in collection structures.
  *
- * Nested plain objects and arrays are shallow-cloned only when a delegated
- * carrier is found below them. Non-plain objects are unwrapped at the top
- * level and then preserved as-is to avoid mutating or reconstructing class
- * instances.
+ * Nested plain objects, arrays, Maps, and Sets are shallow-cloned only when a
+ * delegated carrier is found below them. Other non-plain objects are unwrapped
+ * at the top level and then preserved as-is to avoid mutating or reconstructing
+ * class instances.
  *
  * @param value The candidate value to normalize.
  * @param seen Tracks already-normalized objects so cyclic values keep their
@@ -236,6 +385,12 @@ export function normalizeNestedDelegatedAnnotationState<T>(
   }
   if (Array.isArray(source)) {
     return normalizeNestedDelegatedStructuredState(source, seen) as T;
+  }
+  if (source instanceof Map) {
+    return normalizeNestedDelegatedMapState(source, seen) as T;
+  }
+  if (source instanceof Set) {
+    return normalizeNestedDelegatedSetState(source, seen) as T;
   }
   const proto = Object.getPrototypeOf(source);
   if (proto !== Object.prototype && proto !== null) {

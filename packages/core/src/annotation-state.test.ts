@@ -329,6 +329,106 @@ describe("annotation-state", () => {
   );
 
   it(
+    "normalizeNestedDelegatedAnnotationState() unwraps nested carriers in Map entries",
+    () => {
+      class StatefulObject {
+        #secret = "private-value";
+
+        read(): string {
+          return this.#secret;
+        }
+      }
+
+      const mapMarker = Symbol.for(
+        "@test/normalizeNestedDelegatedAnnotationState-map",
+      );
+      const delegatedParent = injectAnnotations(undefined, {
+        [
+          Symbol.for(
+            "@test/normalizeNestedDelegatedAnnotationState-map-parent",
+          )
+        ]: true,
+      });
+      const state = new StatefulObject();
+      const map = injectAnnotations(
+        new Map<
+          string,
+          string | { inner: StatefulObject }
+        >([
+          ["plain", getDelegatedAnnotationState(delegatedParent, "value")],
+          [
+            getDelegatedAnnotationState(delegatedParent, "wrapped-key"),
+            { inner: getDelegatedAnnotationState(delegatedParent, state) },
+          ],
+        ]),
+        {
+          [mapMarker]: true,
+        },
+      );
+
+      const normalized = normalizeNestedDelegatedAnnotationState(map);
+
+      assert.notStrictEqual(normalized, map);
+      assert.ok(getAnnotations(normalized)?.[mapMarker]);
+      assert.equal(normalized.get("plain"), "value");
+      const wrappedEntry = normalized.get("wrapped-key");
+      assert.deepEqual(wrappedEntry, { inner: state });
+      if (
+        wrappedEntry == null ||
+        typeof wrappedEntry !== "object" ||
+        !("inner" in wrappedEntry)
+      ) {
+        assert.fail(
+          "Expected normalized map entry to preserve the class state.",
+        );
+      }
+      assert.strictEqual(wrappedEntry.inner, state);
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() unwraps nested carriers in Set entries",
+    () => {
+      class StatefulObject {
+        #secret = "private-value";
+
+        read(): string {
+          return this.#secret;
+        }
+      }
+
+      const setMarker = Symbol.for(
+        "@test/normalizeNestedDelegatedAnnotationState-set",
+      );
+      const delegatedParent = injectAnnotations(undefined, {
+        [
+          Symbol.for(
+            "@test/normalizeNestedDelegatedAnnotationState-set-parent",
+          )
+        ]: true,
+      });
+      const state = new StatefulObject();
+      const set = injectAnnotations(
+        new Set([
+          getDelegatedAnnotationState(delegatedParent, "seed"),
+          getDelegatedAnnotationState(delegatedParent, state),
+        ]),
+        {
+          [setMarker]: true,
+        },
+      );
+
+      const normalized = normalizeNestedDelegatedAnnotationState(set);
+
+      assert.notStrictEqual(normalized, set);
+      assert.ok(getAnnotations(normalized)?.[setMarker]);
+      assert.ok(normalized.has("seed"));
+      const objectEntry = [...normalized].find((value) => value === state);
+      assert.strictEqual(objectEntry, state);
+    },
+  );
+
+  it(
     "normalizeNestedDelegatedAnnotationState() preserves identity for cyclic values without carriers",
     () => {
       const cyclic: { self?: unknown } = {};
