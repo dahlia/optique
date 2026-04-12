@@ -3499,6 +3499,23 @@ describe("object() - duplicate option detection", () => {
     );
   });
 
+  it("should throw at construction time for group-hidden collisions", () => {
+    assert.throws(
+      () =>
+        object({
+          legacy: group("Legacy", option("--dup", string()), { hidden: true }),
+          current: option("--dup", string()),
+        }),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "--dup");
+        assert.ok(error.sources.includes("legacy"));
+        assert.ok(error.sources.includes("current"));
+        return true;
+      },
+    );
+  });
+
   it("should throw at construction time for duplicates in nested objects", () => {
     assert.throws(
       () =>
@@ -4516,6 +4533,40 @@ describe("tuple() - duplicate option detection", () => {
       () =>
         tuple([
           option("--dup", string(), { hidden: true }),
+          option("--dup", string()),
+        ]),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "--dup");
+        assert.ok(error.sources.includes("0"));
+        assert.ok(error.sources.includes("1"));
+        return true;
+      },
+    );
+  });
+
+  it("should throw at construction time for fully hidden duplicates", () => {
+    assert.throws(
+      () =>
+        tuple([
+          option("--dup", string(), { hidden: true }),
+          option("--dup", string(), { hidden: true }),
+        ]),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "--dup");
+        assert.ok(error.sources.includes("0"));
+        assert.ok(error.sources.includes("1"));
+        return true;
+      },
+    );
+  });
+
+  it("should throw at construction time for group-hidden collisions", () => {
+    assert.throws(
+      () =>
+        tuple([
+          group("Legacy", option("--dup", string()), { hidden: true }),
           option("--dup", string()),
         ]),
       (error: DuplicateOptionError) => {
@@ -6522,6 +6573,52 @@ describe("merge() - duplicate option detection", () => {
       (error: DuplicateOptionError) => {
         assert.ok(error instanceof DuplicateOptionError);
         assert.equal(error.optionName, "--dup");
+        assert.ok(error.sources.includes("0"));
+        assert.ok(error.sources.includes("1"));
+        return true;
+      },
+    );
+  });
+
+  it("should throw at construction time for fully hidden duplicates", () => {
+    const parser1 = object({
+      alpha: option("--dup", string(), { hidden: true }),
+    });
+    const parser2 = object({
+      beta: option("--dup", string(), { hidden: true }),
+    });
+
+    assert.throws(
+      () => merge(parser1, parser2),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "--dup");
+        assert.ok(error.sources.includes("0"));
+        assert.ok(error.sources.includes("1"));
+        return true;
+      },
+    );
+  });
+
+  it("should throw at construction time for group-hidden collisions", () => {
+    const parser1 = group(
+      "Legacy",
+      object({
+        legacy: option("--dup", string()),
+      }),
+      { hidden: true },
+    );
+    const parser2 = object({
+      current: option("--dup", string()),
+    });
+
+    assert.throws(
+      () => merge(parser1, parser2),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "--dup");
+        assert.ok(error.sources.includes("0"));
+        assert.ok(error.sources.includes("1"));
         return true;
       },
     );
