@@ -530,30 +530,41 @@ export function getStatus(repo: Repository): FileStatus[] {
       // No HEAD exists (unborn repository)
     }
 
-    // Staged changes: compare HEAD tree (or empty) to the index
+    // Staged changes: compare HEAD tree (or empty) to the index.
+    // index.writeTree() fails when the index contains unresolved merge
+    // conflicts (unmerged entries).  In that case we skip the staged diff
+    // entirely rather than crashing — the unstaged diff below will still
+    // show the conflicted files.
     const index = repo.index();
-    const indexTreeOid = index.writeTree();
-    const indexTree = repo.getTree(indexTreeOid);
+    let indexTreeOid: string | null = null;
+    try {
+      indexTreeOid = index.writeTree();
+    } catch {
+      // Unmerged entries prevent writing the tree; skip staged diff
+    }
 
-    const stagedDiff = repo.diffTreeToTree(
-      headTree ?? undefined,
-      indexTree,
-    );
-    stagedDiff.findSimilar();
-    for (const delta of stagedDiff.deltas()) {
-      // Deleted deltas have no newFile path; use oldFile path instead.
-      const status = delta.status() as FileStatus["status"];
-      const path = delta.newFile().path() ?? delta.oldFile().path();
-      if (path === null) continue;
+    if (indexTreeOid !== null) {
+      const indexTree = repo.getTree(indexTreeOid);
+      const stagedDiff = repo.diffTreeToTree(
+        headTree ?? undefined,
+        indexTree,
+      );
+      stagedDiff.findSimilar();
+      for (const delta of stagedDiff.deltas()) {
+        // Deleted deltas have no newFile path; use oldFile path instead.
+        const status = delta.status() as FileStatus["status"];
+        const path = delta.newFile().path() ?? delta.oldFile().path();
+        if (path === null) continue;
 
-      results.push({
-        path,
-        status,
-        oldPath: (status === "Renamed" || status === "Copied")
-          ? (delta.oldFile().path() ?? undefined)
-          : undefined,
-        staged: true,
-      });
+        results.push({
+          path,
+          status,
+          oldPath: (status === "Renamed" || status === "Copied")
+            ? (delta.oldFile().path() ?? undefined)
+            : undefined,
+          staged: true,
+        });
+      }
     }
 
     // Unstaged changes: compare index to working directory.
@@ -669,7 +680,9 @@ export function getDiff(
         // Peel through annotated tags to get the actual commit tree.
         const baseOid = repo.revparseSingle(options.commit);
         const baseObj = repo.findObject(baseOid);
-        if (!baseObj) throw new Error(`Object not found: ${baseOid}`);
+        if (!baseObj) {
+          throw new Error(`Object not found for '${options.commit}'.`);
+        }
         baseTree = baseObj.peelToCommit().tree();
       } else {
         try {
@@ -689,8 +702,8 @@ export function getDiff(
       const oid2 = repo.revparseSingle(options.commit2);
       const obj1 = repo.findObject(oid1);
       const obj2 = repo.findObject(oid2);
-      if (!obj1) throw new Error(`Object not found: ${oid1}`);
-      if (!obj2) throw new Error(`Object not found: ${oid2}`);
+      if (!obj1) throw new Error(`Object not found for '${options.commit}'.`);
+      if (!obj2) throw new Error(`Object not found for '${options.commit2}'.`);
       const tree1 = obj1.peelToCommit().tree();
       const tree2 = obj2.peelToCommit().tree();
       diff = repo.diffTreeToTree(tree1, tree2, esDiffOptions);
@@ -698,7 +711,7 @@ export function getDiff(
       // Compare with specific commit; peel through annotated tags.
       const oid = repo.revparseSingle(options.commit);
       const obj = repo.findObject(oid);
-      if (!obj) throw new Error(`Object not found: ${oid}`);
+      if (!obj) throw new Error(`Object not found for '${options.commit}'.`);
       const commitTree = obj.peelToCommit().tree();
       diff = repo.diffTreeToWorkdirWithIndex(commitTree, esDiffOptions);
     } else {
