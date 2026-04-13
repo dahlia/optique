@@ -159,46 +159,6 @@ export function formatStatusLong(
 }
 
 /**
- * Formats a file status line for status command output (short format)
- */
-export function formatStatusShort(
-  path: string,
-  status: string,
-  staged: boolean,
-  oldPath?: string,
-): string {
-  const indicator = statusIndicators[status] || "?";
-  const stagedCol = staged ? indicator : " ";
-  const unstagedCol = staged ? " " : indicator;
-  const stagedColor = staged ? colors.green : "";
-  const unstagedColor = staged ? "" : colors.red;
-
-  if (oldPath) {
-    return `${stagedColor}${stagedCol}${colors.reset}${unstagedColor}${unstagedCol}${colors.reset} ${oldPath} -> ${path}`;
-  }
-  return `${stagedColor}${stagedCol}${colors.reset}${unstagedColor}${unstagedCol}${colors.reset} ${path}`;
-}
-
-/**
- * Formats a file status line for status command output (porcelain format)
- */
-export function formatStatusPorcelain(
-  path: string,
-  status: string,
-  staged: boolean,
-  oldPath?: string,
-): string {
-  const indicator = statusIndicators[status] || "?";
-  const stagedCol = staged ? indicator : " ";
-  const unstagedCol = staged ? " " : indicator;
-
-  if (oldPath) {
-    return `${stagedCol}${unstagedCol} ${oldPath} -> ${path}`;
-  }
-  return `${stagedCol}${unstagedCol} ${path}`;
-}
-
-/**
  * Formats diff statistics summary
  */
 export function formatDiffStats(
