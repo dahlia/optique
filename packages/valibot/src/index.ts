@@ -674,7 +674,7 @@ export function valibot<T>(
   const metavar = options.metavar ?? inferMetavar(schema);
   ensureNonEmptyString(metavar);
   const parser: ValueParser<"sync", T> = {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: options.placeholder,
     ...(choices != null && choices.length > 0

@@ -19,7 +19,7 @@ import { run } from "@optique/run";
  */
 function keyValue(separator = "="): ValueParser<"sync", [string, string]> {
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar: `KEY${separator}VALUE`,
     placeholder: ["", ""] as [string, string],
     parse(input: string): ValueParserResult<[string, string]> {

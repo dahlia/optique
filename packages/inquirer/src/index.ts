@@ -609,7 +609,7 @@ type BasePromptConfig<T> = T extends boolean ? ConfirmConfig
  * that value is used directly. When no CLI value is found, an interactive
  * prompt is shown to the user.
  *
- * The returned parser always has `$mode: "async"` because Inquirer.js prompts
+ * The returned parser always has `mode: "async"` because Inquirer.js prompts
  * are inherently asynchronous.
  *
  * Example:
@@ -912,7 +912,7 @@ export function prompt<M extends Mode, TValue, TState>(
   }
 
   const promptedParser: Parser<"async", TValue, TState> = {
-    $mode: "async",
+    mode: "async",
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,

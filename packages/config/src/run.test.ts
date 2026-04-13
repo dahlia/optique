@@ -34,7 +34,7 @@ function createDelayedAsyncOptionParser(
   getDelay: (value: string) => number,
 ): Parser<"async", string, string | null> {
   return {
-    $mode: "async",
+    mode: "async",
     $valueType: [] as readonly string[],
     $stateType: [] as readonly (string | null)[],
     priority: 0,

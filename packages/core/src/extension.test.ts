@@ -14,7 +14,7 @@ function createTestParser(
   dependencyMetadata?: Parser<"sync", unknown, unknown>["dependencyMetadata"],
 ): Parser<"sync", unknown, unknown> {
   return {
-    $mode: "sync",
+    mode: "sync",
     $valueType: [] as const,
     $stateType: [] as const,
     priority: 0,

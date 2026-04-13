@@ -697,7 +697,7 @@ export function bindConfig<
       : state;
 
   const boundParser: Parser<M, TValue, TState> = {
-    $mode: parser.$mode,
+    mode: parser.mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
@@ -779,7 +779,7 @@ export function bindConfig<
       };
 
       return mapModeValue(
-        parser.$mode,
+        parser.mode,
         parser.parse(innerContext),
         processResult,
       );
@@ -795,7 +795,7 @@ export function bindConfig<
       // No CLI value, check config.  Thread the inner parser through so
       // that fallback values are re-validated against its constraints
       // (see issue #414).
-      return getConfigOrDefault(state, options, parser.$mode, parser);
+      return getConfigOrDefault(state, options, parser.mode, parser);
     },
 
     suggest: (context, prefix) => {

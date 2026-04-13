@@ -61,7 +61,7 @@ function assertErrorIncludes(error: Message, text: string): void {
 
 function fileSuggestingParser(): ValueParser<"sync", string> {
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar: "FILE",
     placeholder: "",
     parse(input: string): ValueParserResult<string> {
@@ -78,7 +78,7 @@ function fileSuggestingParser(): ValueParser<"sync", string> {
 
 function asyncFileSuggestingParser(): ValueParser<"async", string> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "FILE",
     placeholder: "",
     parse(input: string): Promise<ValueParserResult<string>> {
@@ -99,7 +99,7 @@ function asyncFileSuggestingParser(): ValueParser<"async", string> {
 
 function noSuggestParser(): ValueParser<"sync", string> {
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar: "TEXT",
     placeholder: "",
     parse(input: string): ValueParserResult<string> {
@@ -753,7 +753,7 @@ describe("option", () => {
 
     it("should not suggest async option names while completing a value", async () => {
       const asyncModeParser: ValueParser<"async", string> = {
-        $mode: "async",
+        mode: "async",
         metavar: "MODE",
         placeholder: "",
         parse(input: string): Promise<ValueParserResult<string>> {
@@ -2042,7 +2042,7 @@ describe("argument", () => {
 describe("primitives additional branch coverage", () => {
   it("option parse covers async separated value path", async () => {
     const asyncInt: ValueParser<"async", number> = {
-      $mode: "async",
+      mode: "async",
       metavar: "INT",
       placeholder: 0,
       parse(input) {
@@ -2101,7 +2101,7 @@ describe("primitives additional branch coverage", () => {
 
   it("option parse rejects instead of throwing when async value parsing throws synchronously", async () => {
     const throwingParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VALUE",
       placeholder: "",
       parse() {
@@ -2130,7 +2130,7 @@ describe("primitives additional branch coverage", () => {
 
   it("argument parse rejects instead of throwing when async value parsing throws synchronously", async () => {
     const throwingParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VALUE",
       placeholder: "",
       parse() {
@@ -2159,7 +2159,7 @@ describe("primitives additional branch coverage", () => {
 
   it("command parse rejects instead of throwing when async child parsing throws synchronously", async () => {
     const inner = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -2197,7 +2197,7 @@ describe("primitives additional branch coverage", () => {
 
   it("command complete rejects instead of throwing when async child completion throws synchronously", async () => {
     const inner = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
@@ -3220,7 +3220,7 @@ describe("command", () => {
     const staleRegistry = createRegistry();
     const freshRegistry = createRegistry([[dependencyId, "fresh"]]);
     const inner = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -3277,7 +3277,7 @@ describe("command", () => {
     const staleRegistry = createRegistry();
     const freshRegistry = createRegistry([[dependencyId, "fresh"]]);
     const inner = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -3330,7 +3330,7 @@ describe("command", () => {
     const freshRegistry = createRegistry([[dependencyId, "fresh"]]);
     let completeExec: ParserContext<undefined>["exec"];
     const inner = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -3386,7 +3386,7 @@ describe("command", () => {
     const freshRegistry = createRegistry([[dependencyId, "fresh"]]);
     let completeExec: ParserContext<undefined>["exec"];
     const inner = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -5866,7 +5866,7 @@ describe("branch coverage: primitives edge cases", () => {
       "deploy",
       option("--f", asyncFileSuggestingParser()),
     );
-    assert.equal(asyncCmd.$mode, "async");
+    assert.equal(asyncCmd.mode, "async");
     const suggestions: Suggestion[] = [];
     for await (
       const s of asyncCmd.suggest({
@@ -5885,7 +5885,7 @@ describe("branch coverage: primitives edge cases", () => {
   it("command suggest async: 'parsing' state delegates to inner parser", async () => {
     const inner = option("--f", asyncFileSuggestingParser());
     const asyncCmd = command("deploy", inner);
-    assert.equal(asyncCmd.$mode, "async");
+    assert.equal(asyncCmd.mode, "async");
     const suggestions: Suggestion[] = [];
     for await (
       const s of asyncCmd.suggest({
@@ -5910,7 +5910,7 @@ describe("branch coverage: primitives edge cases", () => {
     const asyncInner: Parser<"async", string, null> = {
       $valueType: [] as readonly string[],
       $stateType: [] as readonly null[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -5939,7 +5939,7 @@ describe("branch coverage: primitives edge cases", () => {
     };
 
     const asyncCmd = command("run", asyncInner);
-    assert.equal(asyncCmd.$mode, "async");
+    assert.equal(asyncCmd.mode, "async");
     const state: ["matched", string] = ["matched", "run"];
     const result = await (asyncCmd.complete(state) as Promise<
       { success: boolean; value?: string }
@@ -6042,7 +6042,7 @@ describe("branch coverage: primitives edge cases", () => {
     };
     let suggestAccess = 0;
     const parserWithFlakySuggest: ValueParser<"sync", string> = {
-      $mode: "sync",
+      mode: "sync",
       metavar: "TEXT",
       placeholder: "",
       parse(input: string): ValueParserResult<string> {
@@ -6076,7 +6076,7 @@ describe("branch coverage: primitives edge cases", () => {
     });
     let suggestAccess = 0;
     const parserWithFlakySuggest: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "TEXT",
       placeholder: "",
       parse(input: string): Promise<ValueParserResult<string>> {
@@ -6131,7 +6131,7 @@ describe("branch coverage: primitives edge cases", () => {
       dependencies: [modeDep, envDep] as const,
       defaultValues: () => ["dev", "local"] as const,
       factory: (_mode: string, _env: string) => ({
-        $mode: "async" as const,
+        mode: "async" as const,
         metavar: "TARGET",
         placeholder: "",
         parse(input: string): Promise<ValueParserResult<string>> {
@@ -6175,7 +6175,7 @@ describe("branch coverage: primitives edge cases", () => {
       dependencies: [modeDep] as const,
       defaultValues: () => ["dev"] as const,
       factory: (mode: string) => ({
-        $mode: "async" as const,
+        mode: "async" as const,
         metavar: "OUTPUT",
         placeholder: "",
         parse(input: string): Promise<ValueParserResult<string>> {
@@ -6443,7 +6443,7 @@ describe("branch coverage: primitives edge cases", () => {
     const asyncInner: Parser<"async", string, null> = {
       $valueType: [] as readonly string[],
       $stateType: [] as readonly null[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -6570,7 +6570,7 @@ describe("branch coverage: primitives edge cases", () => {
 
   it("option suggest: covers sync/async file fallback branches", async () => {
     const syncFileNoPattern: ValueParser<"sync", string> = {
-      $mode: "sync",
+      mode: "sync",
       metavar: "FILE",
       placeholder: "",
       parse(input: string): ValueParserResult<string> {
@@ -6614,7 +6614,7 @@ describe("branch coverage: primitives edge cases", () => {
     assert.ok(Array.isArray(syncFallbackSuggestions));
 
     const asyncFileNoPattern: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "FILE",
       placeholder: "",
       parse(input: string): Promise<ValueParserResult<string>> {
@@ -6769,7 +6769,7 @@ describe("branch coverage: primitives edge cases", () => {
       dependencies: [dep] as const,
       defaultValues: () => [] as unknown as readonly [string],
       factory: (_mode: string) => ({
-        $mode: "async" as const,
+        mode: "async" as const,
         metavar: "TARGET",
         placeholder: "",
         parse(input: string): Promise<ValueParserResult<string>> {
@@ -6812,7 +6812,7 @@ describe("branch coverage: primitives edge cases", () => {
         dependencies: [dep] as const,
         defaultValues: () => ["dev"] as const,
         factory: (_mode: string) => ({
-          $mode: "async" as const,
+          mode: "async" as const,
           metavar: "NAME",
           placeholder: "",
           parse(input: string): Promise<ValueParserResult<string>> {

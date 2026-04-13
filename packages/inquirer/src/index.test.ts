@@ -101,7 +101,7 @@ describe("prompt()", () => {
         prompter: () => Promise.resolve("Alice"),
       });
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("returns async even when inner parser is sync", () => {
@@ -111,7 +111,7 @@ describe("prompt()", () => {
         prompter: () => Promise.resolve(true),
       });
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
   });
 
@@ -965,7 +965,7 @@ describe("prompt()", () => {
       // this matches the top-level behavior where prompt() only suppresses
       // the prompt when consumed.length > 0.
       const alwaysCompletes: Parser<"sync", string, null> = {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [],
         $stateType: [],
         priority: 0,
@@ -1104,7 +1104,7 @@ describe("prompt()", () => {
 
     it("preserves zero-consumption cliState in getSuggestRuntimeNodes", async () => {
       const inner: Parser<"async", string, string> = {
-        $mode: "async",
+        mode: "async",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly string[],
         priority: 0,
@@ -1164,7 +1164,7 @@ describe("prompt()", () => {
     it("preserves delegated suggest nodes for source wrappers", async () => {
       const sourceId = Symbol("prompt-multiple-source");
       const item = {
-        $mode: "async" as const,
+        mode: "async" as const,
         $valueType: [] as readonly string[],
         $stateType: [] as readonly string[],
         priority: 0,
@@ -3244,7 +3244,7 @@ describe("prompt()", () => {
     it("covers async parse/suggest/complete branches with wrapped states", async () => {
       let docDefault: unknown;
       const inner: Parser<"async", string, { readonly token?: string }> = {
-        $mode: "async",
+        mode: "async",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly { token?: string }[],
         priority: 5,
@@ -3357,7 +3357,7 @@ describe("prompt()", () => {
         // at most once per field in the real phase.
         let promptCalls = 0;
         const inner: Parser<"async", string, undefined> = {
-          $mode: "async",
+          mode: "async",
           $valueType: [] as readonly string[],
           $stateType: [] as readonly undefined[],
           priority: 5,
@@ -3503,7 +3503,7 @@ describe("prompt()", () => {
         string,
         Record<PropertyKey, unknown>
       > = {
-        $mode: "async",
+        mode: "async",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly Record<PropertyKey, unknown>[],
         priority: 5,
@@ -3567,7 +3567,7 @@ describe("prompt()", () => {
         const annotations = { [Symbol("annotation")]: true };
         const seenStates: unknown[] = [];
         const inner: Parser<"async", string, undefined> = {
-          $mode: "async",
+          mode: "async",
           $valueType: [] as readonly string[],
           $stateType: [] as readonly undefined[],
           priority: 5,
@@ -3924,7 +3924,7 @@ describe("prompt()", () => {
     it("covers suggest() state unwrapping branches", async () => {
       const seen: unknown[] = [];
       const inner: Parser<"async", string, { readonly tag: string }> = {
-        $mode: "async",
+        mode: "async",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly { tag: string }[],
         priority: 1,
@@ -4045,7 +4045,7 @@ describe("prompt()", () => {
           assert.ok(!numberFallbackResult.success);
 
           const inner: Parser<"async", string, unknown> = {
-            $mode: "async",
+            mode: "async",
             $valueType: [] as readonly string[],
             $stateType: [] as readonly unknown[],
             priority: 1,
@@ -4170,7 +4170,7 @@ describe("prompt()", () => {
       const seenStates: unknown[] = [];
       const annotations = { source: "test" };
       const inner: Parser<"async", string, number> = {
-        $mode: "async",
+        mode: "async",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly number[],
         priority: 1,
@@ -4239,7 +4239,7 @@ describe("prompt()", () => {
       let promptCalls = 0;
 
       const inner: Parser<"async", string, string | undefined> = {
-        $mode: "async",
+        mode: "async",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly (string | undefined)[],
         priority: 1,
@@ -4310,7 +4310,7 @@ describe("prompt()", () => {
         let promptCalls = 0;
 
         const inner: Parser<"async", string, string | undefined> = {
-          $mode: "async",
+          mode: "async",
           $valueType: [] as readonly string[],
           $stateType: [] as readonly (string | undefined)[],
           priority: 1,
@@ -4381,7 +4381,7 @@ describe("prompt()", () => {
       }
 
       const inner: Parser<"async", string, AnnotatedState> = {
-        $mode: "async",
+        mode: "async",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly AnnotatedState[],
         priority: 1,
@@ -4544,7 +4544,7 @@ describe("prompt()", () => {
       });
 
       const inner: Parser<"async", string, SharedState> = {
-        $mode: "async",
+        mode: "async",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly SharedState[],
         priority: 1,
@@ -4624,7 +4624,7 @@ describe("prompt()", () => {
       }
 
       const inner: Parser<"async", string, MutableAnnotatedState> = {
-        $mode: "async",
+        mode: "async",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly MutableAnnotatedState[],
         priority: 1,
@@ -4694,7 +4694,7 @@ describe("prompt()", () => {
       class ThrowingState {}
 
       const inner: Parser<"async", string, ThrowingState> = {
-        $mode: "async",
+        mode: "async",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly ThrowingState[],
         priority: 1,

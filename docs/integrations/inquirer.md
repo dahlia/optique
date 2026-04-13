@@ -20,7 +20,7 @@ The fallback priority is:
 2.  *Interactive prompt*
 
 Because interactive prompts are inherently asynchronous, the returned parser
-always has `$mode: "async"`.
+always has `mode: "async"`.
 
 ::: code-group
 
@@ -503,7 +503,7 @@ Parameters
         and its options.
 
 Returns
-:   A new parser with `$mode: "async"` and interactive prompt fallback.
+:   A new parser with `mode: "async"` and interactive prompt fallback.
     The `usage` is wrapped in an `optional` term since the prompt handles
     the missing-value case.
 

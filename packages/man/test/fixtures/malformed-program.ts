@@ -7,7 +7,7 @@ export default {
         next: { buffer: [], state: null, optionsTerminated: false, usage: [] },
       };
     },
-    $mode: "sync",
+    mode: "sync",
     usage: [],
   },
   metadata: { name: "badprog" },

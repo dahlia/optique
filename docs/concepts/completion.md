@@ -265,7 +265,7 @@ import type { ValueParser } from "@optique/core/valueparser";
 // ---cut-before---
 function customParser(): ValueParser<"sync", string> {
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar: "CUSTOM",
     placeholder: "",
     parse(input) {

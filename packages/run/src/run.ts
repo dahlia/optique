@@ -673,7 +673,7 @@ export function runSync<T extends Parser<"sync", unknown, unknown>>(
       "metadata" in parserOrProgram
     ? parserOrProgram.parser
     : parserOrProgram;
-  if (parserToCheck.$mode !== "sync") {
+  if (parserToCheck.mode !== "sync") {
     throw new TypeError(
       "Cannot use an async parser with runSync(). " +
         "Use run() or runAsync() instead.",

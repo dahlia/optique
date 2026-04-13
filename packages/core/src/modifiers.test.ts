@@ -106,7 +106,7 @@ function asyncChoice<T extends string>(
   choices: readonly T[],
 ): ValueParser<"async", T> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "CHOICE",
     placeholder: choices[0],
     parse(input: string): Promise<ValueParserResult<T>> {
@@ -189,7 +189,7 @@ describe("optional", () => {
     const sourceId = Symbol("mode");
     const receivedStates: unknown[] = [];
     const inner = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -258,7 +258,7 @@ describe("optional", () => {
   it("should not delegate omitted completion to non-preserving multiple sources", () => {
     const sourceId = Symbol("multiple-source");
     const source = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -786,7 +786,7 @@ describe("optional", () => {
   it("delegates omitted source completion from the inner initial state", () => {
     const sourceId = Symbol("optional-initial-source");
     const inner = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly ("fallback" | "initial" | "live")[],
       $stateType: [] as readonly {
         readonly value: "fallback" | "initial" | "live";
@@ -838,7 +838,7 @@ describe("optional", () => {
   it("delegates omitted async source completion from the inner initial state", async () => {
     const sourceId = Symbol("optional-initial-source-async");
     const inner = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly ("fallback" | "initial" | "live")[],
       $stateType: [] as readonly {
         readonly value: "fallback" | "initial" | "live";
@@ -894,7 +894,7 @@ describe("optional", () => {
   it("rejects instead of throwing when async omitted-source completion throws synchronously", async () => {
     const sourceId = Symbol("optional-sync-throw-omitted-source");
     const inner = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { readonly value: string }[],
       priority: 0,
@@ -949,7 +949,7 @@ describe("optional", () => {
 
   it("rejects instead of throwing when async wrapped-state completion throws synchronously", async () => {
     const inner = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { readonly value: string }[],
       priority: 0,
@@ -994,7 +994,7 @@ describe("optional", () => {
   it("should collapse deferred missing-source failures to undefined", () => {
     const sourceId = Symbol("optional-deferred-missing-source");
     const inner = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly ({ readonly pending: true } | undefined)[],
       priority: 0,
@@ -1052,7 +1052,7 @@ describe("optional", () => {
   it("should collapse async deferred missing-source failures to undefined", async () => {
     const sourceId = Symbol("optional-deferred-missing-source-async");
     const inner = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly ({ readonly pending: true } | undefined)[],
       priority: 0,
@@ -1185,7 +1185,7 @@ describe("withDefault", () => {
 
   it("rejects instead of throwing when async deferred completion throws synchronously", async () => {
     const inner = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { readonly pending: true }[],
       priority: 0,
@@ -1236,7 +1236,7 @@ describe("withDefault", () => {
 
   it("rejects instead of throwing when async wrapped completion throws synchronously", async () => {
     const inner = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { readonly value: string }[],
       priority: 0,
@@ -2621,7 +2621,7 @@ describe("multiple", () => {
   it("should preserve annotations on each item state in complete()", () => {
     const annotation = Symbol.for("@test/multiple-item-annotations");
     const baseParser: Parser<"sync", string, { value: string }> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -2686,7 +2686,7 @@ describe("multiple", () => {
   it("should preserve annotations on each async item state in complete()", async () => {
     const annotation = Symbol.for("@test/multiple-item-annotations-async");
     const baseParser: Parser<"async", string, { value: string }> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -2749,7 +2749,7 @@ describe("multiple", () => {
   it("should preserve annotations after fallback parse in sync branch", () => {
     const annotation = Symbol.for("@test/multiple-fallback-annotations");
     const baseParser: Parser<"sync", string, { readonly used: boolean }> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -2814,7 +2814,7 @@ describe("multiple", () => {
   it("should pass annotations to inner parse state in sync branch", () => {
     const annotation = Symbol.for("@test/multiple-parse-annotations-sync");
     const baseParser: Parser<"sync", string, string> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -2867,7 +2867,7 @@ describe("multiple", () => {
 
   it("should retry sync parse with unwrapped primitive state after throw", () => {
     const parser = multiple({
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -2919,7 +2919,7 @@ describe("multiple", () => {
   it("should preserve annotations after fallback parse in async branch", async () => {
     const annotation = Symbol.for("@test/multiple-fallback-annotations-async");
     const baseParser: Parser<"async", string, { readonly used: boolean }> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -2985,7 +2985,7 @@ describe("multiple", () => {
   it("should pass annotations to inner parse state in async branch", async () => {
     const annotation = Symbol.for("@test/multiple-parse-annotations-async");
     const baseParser: Parser<"async", string, string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -3039,7 +3039,7 @@ describe("multiple", () => {
 
   it("should retry async parse with unwrapped primitive state after throw", async () => {
     const parser = multiple({
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -3089,7 +3089,7 @@ describe("multiple", () => {
   it("should preserve annotations for primitive item states", () => {
     const annotation = Symbol.for("@test/multiple-primitive-item-annotations");
     const baseParser: Parser<"sync", string, string> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -3174,7 +3174,7 @@ describe("multiple", () => {
 
   it("should fallback to unwrapped primitive state in complete()", () => {
     const baseParser: Parser<"sync", string, string> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -3221,7 +3221,7 @@ describe("multiple", () => {
   it("should retry complete on annotated wrapper state failures", () => {
     const seenStates: string[] = [];
     const baseParser: Parser<"sync", string, string> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -3276,7 +3276,7 @@ describe("multiple", () => {
   it("should retry async complete on annotated wrapper state failures", async () => {
     const seenStates: string[] = [];
     const baseParser: Parser<"async", string, string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -3333,7 +3333,7 @@ describe("multiple", () => {
 
   it("should fallback to unwrapped primitive state in suggest()", () => {
     const baseParser: Parser<"sync", string, string> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -3397,7 +3397,7 @@ describe("multiple", () => {
   it("should pass annotations to inner suggest state", () => {
     const annotation = Symbol.for("@test/multiple-suggest-annotations");
     const baseParser: Parser<"sync", string, string> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -3448,7 +3448,7 @@ describe("multiple", () => {
   it("should pass annotations to async inner suggest state", async () => {
     const annotation = Symbol.for("@test/multiple-suggest-annotations-async");
     const baseParser: Parser<"async", string, string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -3553,7 +3553,7 @@ describe("multiple", () => {
 
   it("should continue suggestions from the in-progress sync item", () => {
     const baseParser: Parser<"sync", string, { readonly step: number }> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -3604,7 +3604,7 @@ describe("multiple", () => {
 
   it("should continue suggestions from the in-progress async item", async () => {
     const baseParser: Parser<"async", string, { readonly step: number }> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -3658,7 +3658,7 @@ describe("multiple", () => {
   it("should not fallback to unwrapped primitive state after async suggest succeeds", async () => {
     const annotation = Symbol.for("@test/async-suggest-primitive-success");
     const baseParser: Parser<"async", string, string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -3717,7 +3717,7 @@ describe("multiple", () => {
 
   it("should not deduplicate distinct URL descriptions in suggest()", () => {
     const parser = multiple({
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -3786,7 +3786,7 @@ describe("multiple", () => {
   it("should not fallback to unwrapped primitive initial state after suggest succeeds", () => {
     const annotation = Symbol.for("@test/suggest-primitive-success");
     const parser = multiple({
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -3848,7 +3848,7 @@ describe("multiple", () => {
     }
     const initialState = new CustomState();
     const baseParser: Parser<"sync", string, CustomState> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -4374,7 +4374,7 @@ describe("multiple", () => {
 
   it("should append a sync item when a new slot reuses undefined state", () => {
     const itemParser = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -4428,7 +4428,7 @@ describe("multiple", () => {
 
   it("should append an async item when a new slot reuses undefined state", async () => {
     const itemParser = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -4513,7 +4513,7 @@ describe("multiple", () => {
       readonly cliState?: string;
     };
     const parser = multiple({
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly WrappedState[],
       priority: 0,
@@ -4550,7 +4550,7 @@ describe("multiple", () => {
       readonly cliState?: ValueParserResult<string>;
     };
     const parser = multiple({
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly WrappedState[],
       priority: 0,
@@ -4622,7 +4622,7 @@ describe("multiple", () => {
       | ValueParserResult<string>
       | undefined;
     const itemParser = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -4703,7 +4703,7 @@ describe("multiple", () => {
       | ValueParserResult<string>
       | undefined;
     const itemParser = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -5111,7 +5111,7 @@ describe("multiple", () => {
     it("should unwrap injected primitive state before delegating docs", () => {
       let observedState: unknown;
       const baseParser: Parser<"sync", string, string> = {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as const,
         $stateType: [] as const,
         priority: 0,
@@ -5573,7 +5573,7 @@ describe("state management edge cases", () => {
       return {
         $valueType: [] as readonly T[],
         $stateType: [] as readonly undefined[],
-        $mode: "sync",
+        mode: "sync",
         priority: 0,
         usage: [],
         leadingNames: new Set<string>(),
@@ -5605,7 +5605,7 @@ describe("state management edge cases", () => {
       return {
         $valueType: [] as readonly T[],
         $stateType: [] as readonly undefined[],
-        $mode: "async",
+        mode: "async",
         priority: 0,
         usage: [],
         leadingNames: new Set<string>(),
@@ -5650,7 +5650,7 @@ describe("state management edge cases", () => {
       return {
         $valueType: [] as readonly string[],
         $stateType: [] as readonly { readonly tag: string }[],
-        $mode: "sync",
+        mode: "sync",
         priority: 0,
         usage: [],
         leadingNames: new Set<string>(),
@@ -5887,7 +5887,7 @@ describe("state management edge cases", () => {
       const parser: Parser<"sync", string, StateWithPrivate> = {
         $valueType: [] as readonly string[],
         $stateType: [] as readonly StateWithPrivate[],
-        $mode: "sync",
+        mode: "sync",
         priority: 0,
         usage: [],
         leadingNames: new Set<string>(),
@@ -6051,7 +6051,7 @@ describe("state management edge cases", () => {
       const inner: Parser<"sync", string, { readonly tag: string }> = {
         $valueType: [] as readonly string[],
         $stateType: [] as readonly { readonly tag: string }[],
-        $mode: "sync",
+        mode: "sync",
         priority: 0,
         usage: [],
         leadingNames: new Set<string>(),
@@ -6153,7 +6153,7 @@ describe("state management edge cases", () => {
         const inner: Parser<"sync", string, StatefulReentryState> = {
           $valueType: [] as readonly string[],
           $stateType: [] as readonly StatefulReentryState[],
-          $mode: "sync",
+          mode: "sync",
           priority: 0,
           usage: [],
           leadingNames: new Set<string>(),
@@ -6220,7 +6220,7 @@ describe("nonEmpty", () => {
     const baseParser = option("-v", "--verbose");
     const nonEmptyParser = nonEmpty(baseParser);
 
-    assert.equal(nonEmptyParser.$mode, baseParser.$mode);
+    assert.equal(nonEmptyParser.mode, baseParser.mode);
   });
 
   it("should succeed when inner parser succeeds and consumes input", () => {
@@ -6539,7 +6539,7 @@ describe("branch coverage: modifiers edge cases", () => {
   // Line 982: async multiple() complete — inner complete() failure.
   it("multiple: async complete fails when inner completion fails", async () => {
     const inner: Parser<"async", string, string> = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
@@ -6602,7 +6602,7 @@ describe("branch coverage: modifiers edge cases", () => {
     }
     const started: string[] = [];
     const child: Parser<"async", string, string> = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
@@ -6670,7 +6670,7 @@ describe("branch coverage: modifiers edge cases", () => {
     }
     const started: string[] = [];
     const child: Parser<"async", string, string> = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
@@ -6752,7 +6752,7 @@ describe("branch coverage: modifiers edge cases", () => {
 
   it("multiple: suggest passes through non-literal suggestions", () => {
     const fileValueParser: ValueParser<"sync", string> = {
-      $mode: "sync",
+      mode: "sync",
       metavar: "FILE",
       placeholder: "",
       parse(input: string): { success: true; value: string } {
@@ -6860,7 +6860,7 @@ describe("branch coverage: modifiers edge cases", () => {
       "idle",
       { readonly kind: "idle" }
     > = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly "idle"[],
       $stateType: [] as readonly { readonly kind: "idle" }[],
       priority: 0,
@@ -6933,7 +6933,7 @@ describe("branch coverage: modifiers edge cases", () => {
 
   it("optional: suggest uses direct object state when present", () => {
     const inner = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly ("initial" | "live")[],
       $stateType: [] as readonly { readonly value: "initial" | "live" }[],
       priority: 0,
@@ -6974,7 +6974,7 @@ describe("branch coverage: modifiers edge cases", () => {
 
   it("withDefault: suggest uses direct object state when present", () => {
     const inner = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly ("initial" | "live")[],
       $stateType: [] as readonly { readonly value: "initial" | "live" }[],
       priority: 0,
@@ -7016,7 +7016,7 @@ describe("branch coverage: modifiers edge cases", () => {
   it("withDefault: transformed async parser returns plain fallback result", async () => {
     const depId = Symbol("dep");
     const transformedAsyncParser = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -7052,7 +7052,7 @@ describe("branch coverage: modifiers edge cases", () => {
 
   it("withDefault: transformed async parser without dependency returns default", async () => {
     const transformedAsyncParser = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -7084,7 +7084,7 @@ describe("branch coverage: modifiers edge cases", () => {
   it("withDefault: wrapped dependency source uses plain fallback value", () => {
     const pending = createPendingDependencySourceState(Symbol("wrapped-dep"));
     const wrappedParser = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -7114,7 +7114,7 @@ describe("branch coverage: modifiers edge cases", () => {
   it("withDefault: defined async transform state delegates to inner parser", async () => {
     const depId = Symbol("pending-dep");
     const transformedAsyncParser = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -7164,7 +7164,7 @@ describe("branch coverage: modifiers edge cases", () => {
     const depId = Symbol("opt-async-dep");
     const pending = createPendingDependencySourceState(depId);
     const asyncWrapped = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -7199,7 +7199,7 @@ describe("branch coverage: modifiers edge cases", () => {
     const depId = Symbol("opt-async-pending");
     const pending = createPendingDependencySourceState(depId);
     const asyncWrapped = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -7260,7 +7260,7 @@ describe("branch coverage: modifiers edge cases", () => {
   it("withDefault: transformed dependency path reports default callback errors", async () => {
     const depId = Symbol("wd-transform-dep");
     const transformedAsyncParser = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -7299,7 +7299,7 @@ describe("branch coverage: modifiers edge cases", () => {
   it("withDefault: wrapped dependency source reports default callback errors", () => {
     const pending = createPendingDependencySourceState(Symbol("wrapped-fail"));
     const wrappedParser = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -7331,7 +7331,7 @@ describe("branch coverage: modifiers edge cases", () => {
   it("withDefault: transformed pending dependency path handles callback errors", async () => {
     const depId = Symbol("pending-transform-fail");
     const transformedAsyncParser = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -7386,7 +7386,7 @@ describe("branch coverage: modifiers edge cases", () => {
 
   it("multiple: async parse updates existing slot without appending", async () => {
     const inner = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -7448,7 +7448,7 @@ describe("branch coverage: modifiers edge cases", () => {
 
   it("multiple: async complete returns first failure from inner parser", async () => {
     const inner = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -7480,7 +7480,7 @@ describe("branch coverage: modifiers edge cases", () => {
   it("multiple: complete retries unwrapped injected states after failure", () => {
     const seenStates: string[] = [];
     const inner = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
@@ -7520,7 +7520,7 @@ describe("branch coverage: modifiers edge cases", () => {
   it("multiple: async suggest derives selected values with child exec paths", async () => {
     const seenPaths: PropertyKey[][] = [];
     const inner = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
@@ -7581,7 +7581,7 @@ describe("branch coverage: modifiers edge cases", () => {
     const annotations = { [Symbol("annotation")]: true };
     let seenState: unknown;
     const inner = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly unknown[],
       priority: 0,
@@ -7617,7 +7617,7 @@ describe("branch coverage: modifiers edge cases", () => {
     const wrappedState = injectAnnotations(undefined, annotations);
     let seenState: unknown;
     const inner = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly unknown[],
       priority: 0,
@@ -7652,7 +7652,7 @@ describe("branch coverage: modifiers edge cases", () => {
   it("withDefault: transformed complete(undefined) catches callback errors", async () => {
     const depId = Symbol("wd-catch-undefined");
     const transformedAsyncParser = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -7695,7 +7695,7 @@ describe("branch coverage: modifiers edge cases", () => {
 
   it("withDefault: transformed missing complete catches callback errors", async () => {
     const transformedAsyncParser = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -7739,7 +7739,7 @@ describe("branch coverage: modifiers edge cases", () => {
   it("withDefault: wrapped dependency path catches callback errors", () => {
     const pending = createPendingDependencySourceState(Symbol("wrapped-catch"));
     const wrappedParser = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -7974,7 +7974,7 @@ describe(
       marker: symbol,
     ): Parser<"sync", string, string> {
       return {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly string[],
         priority: 0,
@@ -8006,7 +8006,7 @@ describe(
       marker: symbol,
     ): Parser<"sync", string, DeferredClassState> {
       return {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly DeferredClassState[],
         priority: 0,
@@ -8038,7 +8038,7 @@ describe(
       marker: symbol,
     ): Parser<"sync", string, string> {
       return {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly string[],
         priority: 0,
@@ -8071,7 +8071,7 @@ describe(
       marker: symbol,
     ): Parser<"sync", string, DeferredClassState> {
       return {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly DeferredClassState[],
         priority: 0,
@@ -8153,7 +8153,7 @@ describe(
       it(`${name} complete() deep-normalizes nested delegated primitive values`, () => {
         const marker = Symbol.for(`@test/issue-594/${name}/nested-primitive`);
         const parser = wrap({
-          $mode: "sync" as const,
+          mode: "sync" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8199,7 +8199,7 @@ describe(
         const marker = Symbol.for(`@test/issue-594/${name}/nested-class`);
         const state = new DeferredClassState();
         const parser = wrap({
-          $mode: "sync" as const,
+          mode: "sync" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8255,7 +8255,7 @@ describe(
         );
         const state = { value: "live" };
         const parser = wrap({
-          $mode: "sync" as const,
+          mode: "sync" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8320,7 +8320,7 @@ describe(
         }
 
         const parser = wrap({
-          $mode: "sync" as const,
+          mode: "sync" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8371,7 +8371,7 @@ describe(
         );
         const initialState = { value: "seed" };
         const parser = wrap({
-          $mode: "sync" as const,
+          mode: "sync" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8419,7 +8419,7 @@ describe(
         );
         const initialState = { value: "seed" };
         const parser = wrap({
-          $mode: "async" as const,
+          mode: "async" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8465,7 +8465,7 @@ describe(
 
       it(`${name} suggest() keeps primitive inner states unwrapped`, () => {
         const parser = wrap({
-          $mode: "sync" as const,
+          mode: "sync" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8506,7 +8506,7 @@ describe(
       it(`${name} getSuggestRuntimeNodes() keeps primitive inner states unwrapped`, () => {
         let seenState: unknown;
         const parser = wrap({
-          $mode: "sync" as const,
+          mode: "sync" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8578,7 +8578,7 @@ describe(
 
         const state = new DeferredArrayState("live");
         const parser = wrap({
-          $mode: "sync" as const,
+          mode: "sync" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8643,7 +8643,7 @@ describe(
         }
 
         const parser = wrap({
-          $mode: "sync" as const,
+          mode: "sync" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8681,7 +8681,7 @@ describe(
         const marker = Symbol.for(`@test/issue-594/${name}/complete-throw`);
         let callCount = 0;
         const parser = wrap({
-          $mode: "sync" as const,
+          mode: "sync" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8723,7 +8723,7 @@ describe(
         );
         let callCount = 0;
         const parser = wrap({
-          $mode: "async" as const,
+          mode: "async" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8770,7 +8770,7 @@ describe(
         );
         let callCount = 0;
         const parser = wrap({
-          $mode: "sync" as const,
+          mode: "sync" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8814,7 +8814,7 @@ describe(
         );
         let callCount = 0;
         const parser = wrap({
-          $mode: "async" as const,
+          mode: "async" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8858,7 +8858,7 @@ describe(
         const marker = Symbol.for(`@test/issue-594/${name}/defer-throw`);
         let callCount = 0;
         const parser = wrap({
-          $mode: "sync" as const,
+          mode: "sync" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8903,7 +8903,7 @@ describe(
         );
         let callCount = 0;
         const parser = wrap({
-          $mode: "sync" as const,
+          mode: "sync" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8939,7 +8939,7 @@ describe(
       it(`${name} complete() retries wrapped initial-state failures`, () => {
         const seenStates: unknown[] = [];
         const parser = wrap({
-          $mode: "sync" as const,
+          mode: "sync" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -8983,7 +8983,7 @@ describe(
       it(`${name} async complete() retries wrapped initial-state failures`, async () => {
         const seenStates: unknown[] = [];
         const parser = wrap({
-          $mode: "async" as const,
+          mode: "async" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -9037,7 +9037,7 @@ describe(
       it(`${name} complete() does not retry plain undefined failures`, () => {
         let callCount = 0;
         const parser = wrap({
-          $mode: "sync" as const,
+          mode: "sync" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -9076,7 +9076,7 @@ describe(
       it(`${name} async complete() does not retry plain undefined failures`, async () => {
         let callCount = 0;
         const parser = wrap({
-          $mode: "async" as const,
+          mode: "async" as const,
           $valueType: [] as const,
           $stateType: [] as const,
           priority: 0,
@@ -9137,7 +9137,7 @@ describe(
             },
           );
           const parser = wrap({
-            $mode: "sync" as const,
+            mode: "sync" as const,
             $valueType: [] as const,
             $stateType: [] as const,
             priority: 0,
@@ -9173,7 +9173,7 @@ describe(
         () => {
           const seenStates: unknown[] = [];
           const parser = wrap({
-            $mode: "sync" as const,
+            mode: "sync" as const,
             $valueType: [] as const,
             $stateType: [] as const,
             priority: 0,
@@ -9217,7 +9217,7 @@ describe(
           const marker = Symbol.for(`@test/issue-594/${name}/preserve-failure`);
           let callCount = 0;
           const parser = wrap({
-            $mode: "sync" as const,
+            mode: "sync" as const,
             $valueType: [] as const,
             $stateType: [] as const,
             priority: 0,
@@ -9269,7 +9269,7 @@ describe(
           );
           let callCount = 0;
           const parser = wrap({
-            $mode: "async" as const,
+            mode: "async" as const,
             $valueType: [] as const,
             $stateType: [] as const,
             priority: 0,
@@ -9324,7 +9324,7 @@ describe(
           let completeCalls = 0;
           let extractCalls = 0;
           const inner: Parser<"sync", string, string> = {
-            $mode: "sync",
+            mode: "sync",
             $valueType: [] as readonly string[],
             $stateType: [] as readonly string[],
             priority: 0,
@@ -9387,7 +9387,7 @@ describe(
           let completeCalls = 0;
           let extractCalls = 0;
           const inner: Parser<"async", string, string> = {
-            $mode: "async",
+            mode: "async",
             $valueType: [] as readonly string[],
             $stateType: [] as readonly string[],
             priority: 0,
@@ -9447,7 +9447,7 @@ describe(
           let completeCalls = 0;
           let extractCalls = 0;
           const inner: Parser<"sync", string, string> = {
-            $mode: "sync",
+            mode: "sync",
             $valueType: [] as readonly string[],
             $stateType: [] as readonly string[],
             priority: 0,
@@ -9502,7 +9502,7 @@ describe(
           let completeCalls = 0;
           let extractCalls = 0;
           const inner: Parser<"async", string, string> = {
-            $mode: "async",
+            mode: "async",
             $valueType: [] as readonly string[],
             $stateType: [] as readonly string[],
             priority: 0,
@@ -9558,7 +9558,7 @@ describe(
           let completeCalls = 0;
           let extractCalls = 0;
           const inner: Parser<"sync", string, string> = {
-            $mode: "sync",
+            mode: "sync",
             $valueType: [] as readonly string[],
             $stateType: [] as readonly string[],
             priority: 0,
@@ -9615,7 +9615,7 @@ describe(
           let completeCalls = 0;
           let extractCalls = 0;
           const inner: Parser<"sync", string, undefined> = {
-            $mode: "sync",
+            mode: "sync",
             $valueType: [] as readonly string[],
             $stateType: [] as readonly undefined[],
             priority: 0,
@@ -9673,7 +9673,7 @@ describe(
           let completeCalls = 0;
           let extractCalls = 0;
           const inner: Parser<"async", string, undefined> = {
-            $mode: "async",
+            mode: "async",
             $valueType: [] as readonly string[],
             $stateType: [] as readonly undefined[],
             priority: 0,
@@ -9744,7 +9744,7 @@ describe(
             },
           );
           const inner: Parser<"sync", typeof value, string> = {
-            $mode: "sync",
+            mode: "sync",
             $valueType: [] as readonly (typeof value)[],
             $stateType: [] as readonly string[],
             priority: 0,
@@ -9855,7 +9855,7 @@ describe("multiple() dependency source extraction", () => {
     const latest = Symbol("latest");
     const visited: unknown[] = [];
     const inner: Parser<"async", string, symbol | null> = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -9915,7 +9915,7 @@ describe("multiple() phase-two seed extraction", () => {
   it("unwraps injected annotation wrappers before extracting item seeds", () => {
     const marker = Symbol.for("@test/multiple-phase-two-seed");
     const child: Parser<"sync", string, string> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
@@ -9974,7 +9974,7 @@ describe("map() phase-two seed extraction", () => {
       | null,
   ): Parser<"sync", number, number> {
     const parser: Parser<"sync", number, number> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly number[],
       $stateType: [] as readonly number[],
       priority: 0,
@@ -10186,7 +10186,7 @@ describe("validateValue forwarding through modifiers (#414)", () => {
       // the original array would let non-canonical values leak from
       // bindEnv() / bindConfig() defaults (review r3048978718).
       const upcaseString: ValueParser<"sync", string> = {
-        $mode: "sync",
+        mode: "sync",
         metavar: "TEXT",
         placeholder: "",
         parse: (input: string) => ({
@@ -10206,7 +10206,7 @@ describe("validateValue forwarding through modifiers (#414)", () => {
 
     it("preserves canonicalized element values in async mode", async () => {
       const upcaseString: ValueParser<"async", string> = {
-        $mode: "async",
+        mode: "async",
         metavar: "TEXT",
         placeholder: "",
         parse: (input: string) =>

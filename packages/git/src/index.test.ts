@@ -215,7 +215,7 @@ describe("git parsers", () => {
 
     it("should have async mode", () => {
       const parser = gitBranch({ dir: "/tmp/dummy" });
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should format branch names correctly", () => {
@@ -315,7 +315,7 @@ describe("git parsers", () => {
 
     it("should have async mode", () => {
       const parser = gitTag({ dir: "/tmp/dummy" });
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should format tag names correctly", () => {
@@ -383,7 +383,7 @@ describe("git parsers", () => {
 
     it("should have async mode", () => {
       const parser = gitRemote({ dir: "/tmp/dummy" });
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
   });
 
@@ -505,7 +505,7 @@ describe("git parsers", () => {
 
     it("should have async mode", () => {
       const parser = gitRemoteBranch("origin", { dir: "/tmp/dummy" });
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should return no suggestions on invalid repository", async () => {
@@ -642,7 +642,7 @@ describe("git parsers", () => {
 
     it("should have async mode", () => {
       const parser = gitCommit({ dir: "/tmp/dummy" });
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should format commit SHAs correctly", () => {
@@ -823,7 +823,7 @@ describe("git parsers", () => {
 
     it("should have async mode", () => {
       const parser = gitRef({ dir: "/tmp/dummy" });
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should format ref values correctly", () => {
@@ -851,12 +851,12 @@ describe("git parsers", () => {
       const testRepoDir = await createTestRepo();
       try {
         const git = createGitParsers({ dir: testRepoDir });
-        assert.equal(git.branch().$mode, "async");
-        assert.equal(git.tag().$mode, "async");
-        assert.equal(git.remote().$mode, "async");
-        assert.equal(git.remoteBranch("origin").$mode, "async");
-        assert.equal(git.commit().$mode, "async");
-        assert.equal(git.ref().$mode, "async");
+        assert.equal(git.branch().mode, "async");
+        assert.equal(git.tag().mode, "async");
+        assert.equal(git.remote().mode, "async");
+        assert.equal(git.remoteBranch("origin").mode, "async");
+        assert.equal(git.commit().mode, "async");
+        assert.equal(git.ref().mode, "async");
       } finally {
         await cleanupTestRepo(testRepoDir);
       }

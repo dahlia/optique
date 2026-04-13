@@ -40,7 +40,7 @@ function asyncChoice<const T extends readonly string[]>(
   const parser = choice(choices);
   return {
     ...parser,
-    $mode: "async",
+    mode: "async",
     async parse(input: string) {
       return await parser.parse(input);
     },
@@ -249,7 +249,7 @@ describe("bindEnv()", () => {
       const syncIntegerParser = integer();
       const syncCliParser = option("--port", syncIntegerParser);
       const asyncEnvParser: ValueParser<"async", number> = {
-        $mode: "async",
+        mode: "async",
         metavar: syncIntegerParser.metavar,
         placeholder: 0,
         format: syncIntegerParser.format,
@@ -724,7 +724,7 @@ describe("bindEnv()", () => {
 
     it("validates defaults in async mode", async () => {
       const asyncStringWithPattern: ValueParser<"async", string> = {
-        $mode: "async",
+        mode: "async",
         metavar: "NAME",
         placeholder: "",
         parse(input: string) {
@@ -870,7 +870,7 @@ describe("bindEnv()", () => {
         metavar: "TAG",
         defaultValue: () => "default-dep",
         factory: (dep: string): ValueParser<"sync", string> => ({
-          $mode: "sync",
+          mode: "sync",
           metavar: "TAG",
           placeholder: "",
           parse: (input: string) => ({
@@ -1013,7 +1013,7 @@ describe("bindEnv()", () => {
     const source = dependency(string());
     let parseCalls = 0;
     const flakyEnvParser: ValueParser<"sync", string> = {
-      $mode: "sync",
+      mode: "sync",
       metavar: "MODE",
       placeholder: "",
       parse(input: string) {
@@ -1051,7 +1051,7 @@ describe("bindEnv()", () => {
     const source = dependency(string());
     let parseCalls = 0;
     const flakyEnvParser: ValueParser<"sync", string> = {
-      $mode: "sync",
+      mode: "sync",
       metavar: "MODE",
       placeholder: "",
       parse(input: string) {
@@ -1173,7 +1173,7 @@ describe("bindEnv()", () => {
     // provides a value through complete().  This simulates wrappers
     // like bindConfig or withDefault.
     const mockParser = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -1218,7 +1218,7 @@ describe("bindEnv()", () => {
     // is absent, bindEnv should delegate to the inner parser's complete()
     // so that the config layer can provide its value.
     const mockConfigParser = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -1295,7 +1295,7 @@ describe("bindEnv()", () => {
       }),
       key: "CONFIG",
       parser: {
-        $mode: "sync",
+        mode: "sync",
         metavar: "CONFIG",
         placeholder: { mode: "dev" as const },
         parse(input) {
@@ -1333,7 +1333,7 @@ describe("bindEnv()", () => {
 
   it("prefers env value over inner parser complete()", () => {
     const mockConfigParser = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -1374,7 +1374,7 @@ describe("bindEnv()", () => {
 
   it("returns a Promise from complete() in async mode for default path", async () => {
     const asyncInt: ValueParser<"async", number> = {
-      $mode: "async",
+      mode: "async",
       metavar: "INT",
       placeholder: 0,
       parse(input: string): Promise<ValueParserResult<number>> {
@@ -1418,7 +1418,7 @@ describe("bindEnv()", () => {
 
   it("returns a Promise from complete() in async mode for error path", async () => {
     const asyncFailureParser: Parser<"async", number, undefined> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly number[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -1453,7 +1453,7 @@ describe("bindEnv()", () => {
       context,
       key: "PORT",
       parser: {
-        $mode: "async",
+        mode: "async",
         metavar: "INT",
         placeholder: 0,
         parse(input: string): Promise<ValueParserResult<number>> {
@@ -1488,7 +1488,7 @@ describe("bindEnv()", () => {
       source: () => undefined,
     });
     const inner: Parser<"sync", string, string> = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
@@ -1540,7 +1540,7 @@ describe("bindEnv()", () => {
     const mode = dependency(choice(["dev", "prod"] as const));
     const inner = multiple(option("--mode", mode));
     const modeListParser: ValueParser<"sync", readonly ("dev" | "prod")[]> = {
-      $mode: "sync",
+      mode: "sync",
       metavar: "MODE",
       placeholder: ["dev"],
       parse(input) {
@@ -1644,7 +1644,7 @@ describe("bindEnv()", () => {
 
   it("returns a Promise from complete() in async mode for env path", async () => {
     const asyncInt: ValueParser<"async", number> = {
-      $mode: "async",
+      mode: "async",
       metavar: "INT",
       placeholder: 0,
       parse(input: string): Promise<ValueParserResult<number>> {
@@ -1696,7 +1696,7 @@ describe("bindEnv()", () => {
 
   it("returns a Promise from parse() in async mode", async () => {
     const asyncInt: ValueParser<"async", number> = {
-      $mode: "async",
+      mode: "async",
       metavar: "INT",
       placeholder: 0,
       parse(input: string): Promise<ValueParserResult<number>> {
@@ -1852,7 +1852,7 @@ describe("bindEnv()", () => {
 
   it("throws when sync mode parser.parse returns a Promise", () => {
     const brokenSyncParser = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -1899,7 +1899,7 @@ describe("bindEnv()", () => {
 
   it("throws when sync mode complete path receives a Promise", () => {
     const brokenSyncParser = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -2083,7 +2083,7 @@ describe("bindEnv()", () => {
   it("throws synchronously in async mode when the source function throws", async () => {
     const syncInt = integer();
     const asyncInt: ValueParser<"async", number> = {
-      $mode: "async",
+      mode: "async",
       metavar: syncInt.metavar,
       placeholder: 0,
       parse(input: string): Promise<ValueParserResult<number>> {
@@ -2650,7 +2650,7 @@ describe("bindEnv() with dependency sources", () => {
     const innerState = { kind: "inner-state" } as const;
     let completeCalls = 0;
     const innerParser = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -2781,7 +2781,7 @@ describe("bindEnv() with dependency sources", () => {
 
     let completedState: unknown;
     const innerParser = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,

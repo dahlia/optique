@@ -310,7 +310,7 @@ export function loggingOptions(
   // If output is disabled, create a parser that always returns default
   if (!outputEnabled) {
     const constantOutputParser: Parser<"sync", LogOutput, unknown> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly LogOutput[],
       $stateType: [],
       priority: 0,

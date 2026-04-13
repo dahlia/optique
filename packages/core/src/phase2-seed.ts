@@ -69,7 +69,7 @@ export function extractPhase2Seed<
   exec?: ExecutionContext,
 ): ModeValue<M, Phase2Seed<TValue> | null> {
   return dispatchByMode(
-    parser.$mode,
+    parser.mode,
     () => {
       const extractor = (parser as Parser<"sync", TValue, TState> & {
         readonly [extractPhase2SeedKey]?: Phase2SeedExtractor<
@@ -109,7 +109,7 @@ export function completeOrExtractPhase2Seed<
   exec?: ExecutionContext,
 ): ModeValue<M, Phase2Seed<TValue> | null> {
   return dispatchByMode(
-    parser.$mode,
+    parser.mode,
     () => {
       const result = (parser as Parser<"sync", TValue, TState>).complete(
         state,

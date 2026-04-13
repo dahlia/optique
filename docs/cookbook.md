@@ -663,7 +663,7 @@ import { print, run } from "@optique/run";
  */
 function keyValue(separator = "="): ValueParser<"sync", [string, string]> {
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar: `KEY${separator}VALUE`,
     placeholder: ["", ""] as [string, string],
     parse(input: string): ValueParserResult<[string, string]> {
@@ -1646,7 +1646,7 @@ import { string, type ValueParser,
          type ValueParserResult } from "@optique/core/valueparser";
 function keyValue(separator = "="): ValueParser<"sync", [string, string]> {
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar: `KEY${separator}VALUE`,
     placeholder: ["", ""] as [string, string],
     parse(input: string): ValueParserResult<[string, string]> {
@@ -1733,7 +1733,7 @@ function logLevel(): ValueParser<"sync", string> {
   const levels = ["error", "warn", "info", "debug", "trace"];
 
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar: "LEVEL",
     placeholder: "",
     parse(input: string): ValueParserResult<string> {

@@ -114,7 +114,7 @@ const branchParser = remoteParser.derive({
   defaultValue: () => "origin",
 });
 
-// branchParser.$mode is "async"
+// branchParser.mode is "async"
 ~~~~
 
 For explicit control over the factory mode, use `deriveSync()` or

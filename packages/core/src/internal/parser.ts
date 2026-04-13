@@ -131,7 +131,7 @@ export interface Parser<
    *
    * @since 0.9.0
    */
-  readonly $mode: M;
+  readonly mode: M;
 
   /**
    * The priority of this parser, which determines the order in which
@@ -787,7 +787,7 @@ export type InferValue<T extends Parser<Mode, unknown, unknown>> =
  * @template T The {@link Parser} to infer the execution mode from.
  * @since 0.9.0
  */
-export type InferMode<T extends Parser<Mode, unknown, unknown>> = T["$mode"];
+export type InferMode<T extends Parser<Mode, unknown, unknown>> = T["mode"];
 
 /**
  * The result type of a whole parser operation, which can either be a successful
@@ -1040,7 +1040,7 @@ export function parse<M extends Mode, T>(
   options?: ParseOptions,
 ): ModeValue<M, Result<T>> {
   return dispatchByMode(
-    parser.$mode,
+    parser.mode,
     () => parseSync(parser as Parser<"sync", T, unknown>, args, options),
     () => parseAsync(parser, args, options),
   );
@@ -1392,7 +1392,7 @@ export function suggest<M extends Mode, T>(
   options?: ParseOptions,
 ): ModeValue<M, readonly Suggestion[]> {
   return dispatchByMode(
-    parser.$mode,
+    parser.mode,
     () => suggestSync(parser as Parser<"sync", T, unknown>, args, options),
     () => suggestAsync(parser, args, options),
   );
@@ -1496,7 +1496,7 @@ export function getDocPageAsync(
   const opts = Array.isArray(argsOrOptions)
     ? options
     : (argsOrOptions as ParseOptions | undefined) ?? options;
-  if (parser.$mode === "sync") {
+  if (parser.mode === "sync") {
     return Promise.resolve(
       getDocPageSyncImpl(
         parser as Parser<"sync", unknown, unknown>,
@@ -1579,7 +1579,7 @@ export function getDocPage(
   const opts = Array.isArray(argsOrOptions)
     ? options
     : (argsOrOptions as ParseOptions | undefined) ?? options;
-  if (parser.$mode === "sync") {
+  if (parser.mode === "sync") {
     return getDocPageSyncImpl(
       parser as Parser<"sync", unknown, unknown>,
       args,

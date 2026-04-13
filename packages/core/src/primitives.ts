@@ -251,7 +251,7 @@ export function constant<const T>(value: T): Parser<"sync", T, T> {
   const result: Parser<"sync", T, T> = {
     $valueType: [],
     $stateType: [],
-    $mode: "sync",
+    mode: "sync",
     priority: 0,
     usage: [],
     leadingNames: EMPTY_LEADING_NAMES,
@@ -302,7 +302,7 @@ export function fail<T>(): Parser<"sync", T, undefined> {
   return {
     $valueType: [],
     $stateType: [],
-    $mode: "sync",
+    mode: "sync",
     priority: 0,
     usage: [],
     leadingNames: EMPTY_LEADING_NAMES,
@@ -910,7 +910,7 @@ export function option<M extends Mode, T>(
     valueParser = undefined;
   }
   validateOptionNames(optionNames, "Option");
-  const mode: M = (valueParser?.$mode ?? "sync") as M;
+  const mode: M = (valueParser?.mode ?? "sync") as M;
   const isAsync = mode === "async";
   const syncValueParser = valueParser as ValueParser<"sync", T> | undefined;
   const dependencyMetadata = valueParser != null
@@ -928,9 +928,9 @@ export function option<M extends Mode, T>(
       : message`${eOptionNames(optionNames)}: ${error}`;
 
   // Use 'as any' to allow both sync and async returns from parse method
-  // The actual mode is set correctly at the end via spread with $mode
+  // The actual mode is set correctly at the end via spread with mode
   const result = {
-    $mode: mode,
+    mode: mode,
     $valueType: [],
     $stateType: [],
     priority: 10,
@@ -1625,7 +1625,7 @@ export function flag(
   const result: Parser<"sync", true, ValueParserResult<true> | undefined> = {
     $valueType: [],
     $stateType: [],
-    $mode: "sync",
+    mode: "sync",
     priority: 10,
     usage: [{
       type: "option",
@@ -1929,7 +1929,7 @@ export function argument<M extends Mode, T>(
   valueParser: ValueParser<M, T>,
   options: ArgumentOptions = {},
 ): Parser<M, T, ValueParserResult<T> | undefined> {
-  const isAsync = valueParser.$mode === "async";
+  const isAsync = valueParser.mode === "async";
   const syncValueParser = valueParser as ValueParser<"sync", T>;
   const dependencyMetadata = extractDependencyMetadata(valueParser);
   // Shared error formatter used by both complete() and validateValue()
@@ -1951,7 +1951,7 @@ export function argument<M extends Mode, T>(
   };
   // Use type assertion to allow both sync and async returns from parse method
   const result = {
-    $mode: valueParser.$mode,
+    mode: valueParser.mode,
     $valueType: [],
     $stateType: [],
     priority: 5,
@@ -2017,7 +2017,7 @@ export function argument<M extends Mode, T>(
 
       const rawInput = context.buffer[i];
       return dispatchByMode(
-        valueParser.$mode,
+        valueParser.mode,
         () => {
           const parseResult = syncValueParser.parse(rawInput);
           const next = recordTrace(
@@ -2101,7 +2101,7 @@ export function argument<M extends Mode, T>(
         };
       };
       return dispatchByMode(
-        valueParser.$mode,
+        valueParser.mode,
         completeSync,
         completeAsync,
       );
@@ -2114,7 +2114,7 @@ export function argument<M extends Mode, T>(
     ) {
       if (normalizeInjectedAnnotationState(context.state) != null) {
         return dispatchIterableByMode<M, Suggestion>(
-          valueParser.$mode,
+          valueParser.mode,
           function* () {},
           async function* () {},
         );
@@ -2194,7 +2194,7 @@ export function argument<M extends Mode, T>(
   // skip attaching validateValue entirely.
   if (!isDerivedValueParser(valueParser)) {
     const vp = valueParser;
-    const vpMode = valueParser.$mode;
+    const vpMode = valueParser.mode;
     // Wraps a ValueParser.parse() failure with the same metavar-scoped
     // error formatting that `complete()` applies to CLI-sourced errors,
     // so fallback validation failures look identical to CLI failures.
@@ -2531,14 +2531,14 @@ export function command<M extends Mode, T, TState>(
   options: CommandOptions = {},
 ): Parser<M, T, CommandState<TState>> {
   validateCommandNames([name], "Command");
-  const isAsync = parser.$mode === "async";
+  const isAsync = parser.mode === "async";
   const syncInnerParser = parser as Parser<"sync", T, TState>;
   const asyncInnerParser = parser as Parser<"async", T, TState>;
 
   // Use type assertion to allow both sync and async returns from parse method
   const result = {
     [Symbol.for("@optique/core/commandParser")]: true,
-    $mode: parser.$mode,
+    mode: parser.mode,
     $valueType: [],
     $stateType: [],
     priority: 15, // Higher than options to match commands first
@@ -2690,7 +2690,7 @@ export function command<M extends Mode, T, TState>(
         };
 
         return dispatchByMode(
-          parser.$mode,
+          parser.mode,
           () =>
             wrapState(
               syncInnerParser.parse(
@@ -2739,7 +2739,7 @@ export function command<M extends Mode, T, TState>(
             : {}),
         };
         return dispatchByMode(
-          parser.$mode,
+          parser.mode,
           () => {
             const parseResult = syncInnerParser.parse(childContext);
             const nextExec = parseResult.success
@@ -2773,7 +2773,7 @@ export function command<M extends Mode, T, TState>(
         // Delegate to inner parser
         const childExec = withChildExecPath(exec, name);
         return dispatchByMode(
-          parser.$mode,
+          parser.mode,
           () =>
             syncInnerParser.complete(
               getCommandChildState(state, normalizedState[1], parser),
@@ -2799,7 +2799,7 @@ export function command<M extends Mode, T, TState>(
     ) {
       const normalizedState = normalizeCommandState(state);
       if (typeof normalizedState === "undefined") {
-        return wrapForMode(parser.$mode, null);
+        return wrapForMode(parser.mode, null);
       }
       if (normalizedState[0] === "matched") {
         const childExec = withChildExecPath(exec, name);
@@ -2817,7 +2817,7 @@ export function command<M extends Mode, T, TState>(
             : {}),
         };
         return dispatchByMode(
-          parser.$mode,
+          parser.mode,
           () => {
             const parseResult = syncInnerParser.parse(childContext);
             const nextExec = parseResult.success
@@ -2857,7 +2857,7 @@ export function command<M extends Mode, T, TState>(
           withChildExecPath(exec, name),
         );
       }
-      return wrapForMode(parser.$mode, null);
+      return wrapForMode(parser.mode, null);
     },
     suggest(
       context: ParserContext<CommandState<TState>>,
@@ -3061,7 +3061,7 @@ export function passThrough(
   return {
     $valueType: [],
     $stateType: [],
-    $mode: "sync",
+    mode: "sync",
     priority: -10, // Lowest priority to be tried last
     usage: [{
       type: "passthrough",

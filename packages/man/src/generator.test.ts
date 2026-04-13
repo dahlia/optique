@@ -290,7 +290,7 @@ describe("generateManPageSync()", () => {
   it("rejects a parser-like object with non-array usage", () => {
     const fakeParser = {
       parse() {},
-      $mode: "sync",
+      mode: "sync",
       usage: {},
       initialState: null,
       getDocFragments() {
@@ -306,7 +306,7 @@ describe("generateManPageSync()", () => {
   it("rejects a parser-like object missing initialState", () => {
     const fakeParser = {
       parse() {},
-      $mode: "sync",
+      mode: "sync",
       usage: [],
       getDocFragments() {
         return { fragments: [] };
@@ -318,10 +318,10 @@ describe("generateManPageSync()", () => {
     );
   });
 
-  it("rejects a parser-like object with invalid $mode", () => {
+  it("rejects a parser-like object with invalid mode", () => {
     const fakeParser = {
       parse() {},
-      $mode: "invalid",
+      mode: "invalid",
       usage: [],
       leadingNames: new Set(),
       acceptingAnyToken: false,
@@ -356,7 +356,7 @@ describe("generateManPageSync()", () => {
 
   it("falls back to empty doc page when getDocPageSync returns undefined", () => {
     const parser: Parser<"sync", string, null> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly null[],
       priority: 0,
@@ -392,7 +392,7 @@ describe("generateManPageSync()", () => {
 
   it("rejects an async parser at runtime", () => {
     const asyncParser: Parser<"async", string, null> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly null[],
       priority: 0,
@@ -428,7 +428,7 @@ describe("generateManPageSync()", () => {
 
   it("rejects an async program at runtime", () => {
     const asyncParser: Parser<"async", string, null> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly null[],
       priority: 0,
@@ -522,7 +522,7 @@ describe("generateManPageAsync()", () => {
 
   it("falls back to empty doc page when getDocPageAsync returns undefined", async () => {
     const parser: Parser<"async", string, null> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly null[],
       priority: 0,
@@ -562,7 +562,7 @@ describe("generateManPageAsync()", () => {
 describe("generateManPage() mode dispatch", () => {
   it("uses async branch when parser mode is async", async () => {
     const parser: Parser<"async", string, null> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly null[],
       priority: 0,

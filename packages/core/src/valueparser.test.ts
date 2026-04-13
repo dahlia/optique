@@ -34,14 +34,14 @@ describe("isValueParser", () => {
 
   it("should return true for different types of value parsers", () => {
     const stringParser = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       metavar: "STRING",
       placeholder: "test",
       parse: () => ({ success: true as const, value: "test" }),
       format: (v: string) => v,
     };
     const numberParser = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       metavar: "NUMBER",
       placeholder: 0,
       parse: () => ({ success: true as const, value: 42 }),
@@ -54,7 +54,7 @@ describe("isValueParser", () => {
 
   it("should throw TypeError for parser-like objects missing placeholder", () => {
     const invalidParser = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       metavar: "STRING",
       parse: () => ({ success: true as const, value: "test" }),
       format: (v: string) => v,

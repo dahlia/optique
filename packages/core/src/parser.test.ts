@@ -1197,7 +1197,7 @@ describe("Parser usage field", () => {
     it("should seed top-level suggest runtime through command wrappers", () => {
       const dependencyId = Symbol("command-child-source");
       const childParser = {
-        $mode: "sync" as const,
+        mode: "sync" as const,
         $valueType: [] as readonly string[],
         $stateType: [] as readonly string[],
         priority: 0,
@@ -1271,7 +1271,7 @@ describe("Parser usage field", () => {
     it("should seed top-level suggest runtime through async command wrappers", async () => {
       const dependencyId = Symbol("async-command-child-source");
       const childParser = {
-        $mode: "async" as const,
+        mode: "async" as const,
         $valueType: [] as readonly string[],
         $stateType: [] as readonly string[],
         priority: 0,
@@ -1349,7 +1349,7 @@ describe("Parser usage field", () => {
       const prodId = Symbol("or-prod-source");
       const otherId = Symbol("or-other-source");
       const prodBranch = {
-        $mode: "sync" as const,
+        mode: "sync" as const,
         $valueType: [] as readonly string[],
         $stateType: [] as readonly string[],
         priority: 0,
@@ -1444,7 +1444,7 @@ describe("Parser usage field", () => {
       const prodId = Symbol("longest-prod-source");
       const otherId = Symbol("longest-other-source");
       const prodBranch = {
-        $mode: "async" as const,
+        mode: "async" as const,
         $valueType: [] as readonly string[],
         $stateType: [] as readonly string[],
         priority: 0,
@@ -1981,7 +1981,7 @@ describe("getDocPage", () => {
       }),
     );
     const wrapper: Parser<"sync", unknown, unknown> = {
-      $mode: inner.$mode,
+      mode: inner.mode,
       $valueType: inner.$valueType,
       $stateType: inner.$stateType,
       priority: inner.priority,
@@ -2830,7 +2830,7 @@ describe("Annotations system", () => {
 
   it("should not unwrap object state rebuilt from primitive wrapper", () => {
     const parser: Parser<"sync", unknown, unknown> = {
-      $mode: "sync",
+      mode: "sync",
       $stateType: [] as const,
       $valueType: [] as const,
       priority: 0,
@@ -2880,7 +2880,7 @@ describe("Annotations system", () => {
       annotationStateValueKey,
     } = await import("./internal/annotations.ts");
     const parser: Parser<"sync", unknown, unknown> = {
-      $mode: "sync",
+      mode: "sync",
       $stateType: [] as const,
       $valueType: [] as const,
       priority: 0,
@@ -2984,7 +2984,7 @@ describe("Annotations system", () => {
     const parser: Parser<"async", string, number> = {
       $valueType: [] as const,
       $stateType: [] as const,
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -3033,7 +3033,7 @@ describe("Annotations system", () => {
     const parser: Parser<"sync", string, Record<PropertyKey, unknown>> = {
       $valueType: [] as const,
       $stateType: [] as const,
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -3074,7 +3074,7 @@ describe("Annotations system", () => {
     const parser = command("build", {
       $valueType: [] as const,
       $stateType: [] as const,
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -3115,7 +3115,7 @@ describe("Annotations system", () => {
     const parser: Parser<"sync", string, Record<PropertyKey, unknown>> = {
       $valueType: [] as const,
       $stateType: [] as const,
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -3158,7 +3158,7 @@ describe("Annotations system", () => {
     const parser: Parser<"async", string, Record<PropertyKey, unknown>> = {
       $valueType: [] as const,
       $stateType: [] as const,
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -3205,7 +3205,7 @@ describe("Annotations system", () => {
     const parser: Parser<"sync", string, Record<PropertyKey, unknown>> = {
       $valueType: [] as const,
       $stateType: [] as const,
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -3248,7 +3248,7 @@ describe("Annotations system", () => {
     const parser: Parser<"sync", string, Record<PropertyKey, unknown>> = {
       $valueType: [] as const,
       $stateType: [] as const,
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -3291,7 +3291,7 @@ describe("Annotations system", () => {
     const parser: Parser<"async", string, Record<PropertyKey, unknown>> = {
       $valueType: [] as const,
       $stateType: [] as const,
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -3357,7 +3357,7 @@ describe("Annotations system", () => {
   it("should provide execution context during getDocPageSync() parse passes", () => {
     const observations: Array<ExecutionContext | undefined> = [];
     const parser: Parser<"sync", unknown, unknown> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -3393,7 +3393,7 @@ describe("Annotations system", () => {
   it("should provide execution context during getDocPageAsync() parse passes", async () => {
     const observations: Array<ExecutionContext | undefined> = [];
     const parser: Parser<"async", unknown, unknown> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as const,
       $stateType: [] as const,
       priority: 0,
@@ -3450,7 +3450,7 @@ describe("Annotations system", () => {
         state: unknown;
       }> = [];
       const parser: Parser<"sync", unknown, unknown> = {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as const,
         $stateType: [] as const,
         priority: 0,
@@ -4030,7 +4030,7 @@ describe("getDocPage: filter hidden terms from custom DocFragments", () => {
     fragments: Parser<"sync", unknown, unknown>["getDocFragments"],
   ): Parser<"sync", unknown, unknown> {
     return {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as unknown[],
       $stateType: [] as unknown[],
       priority: 0,

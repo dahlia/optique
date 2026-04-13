@@ -280,7 +280,7 @@ import { gitBranch } from "@optique/git";
 import { argument } from "@optique/core/primitives";
 
 const parser = argument(gitBranch());
-// parser.$mode === "async"
+// parser.mode === "async"
 ~~~~
 
 Use `parseAsync()` with async parsers:

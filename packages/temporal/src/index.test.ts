@@ -1198,7 +1198,7 @@ describe("async mode integration", () => {
   // Helper: Create an async value parser for testing
   function asyncString(): ValueParser<"async", string> {
     return {
-      $mode: "async",
+      mode: "async",
       metavar: "ASYNC_STRING" as NonEmptyString,
       placeholder: "",
       async parse(input: string): Promise<ValueParserResult<string>> {
@@ -1213,16 +1213,16 @@ describe("async mode integration", () => {
   }
 
   describe("temporal parsers with async parsers", () => {
-    it("should have sync $mode on all temporal parsers", () => {
-      assert.equal(instant().$mode, "sync");
-      assert.equal(duration().$mode, "sync");
-      assert.equal(zonedDateTime().$mode, "sync");
-      assert.equal(plainDate().$mode, "sync");
-      assert.equal(plainTime().$mode, "sync");
-      assert.equal(plainDateTime().$mode, "sync");
-      assert.equal(plainYearMonth().$mode, "sync");
-      assert.equal(plainMonthDay().$mode, "sync");
-      assert.equal(timeZone().$mode, "sync");
+    it("should have sync mode on all temporal parsers", () => {
+      assert.equal(instant().mode, "sync");
+      assert.equal(duration().mode, "sync");
+      assert.equal(zonedDateTime().mode, "sync");
+      assert.equal(plainDate().mode, "sync");
+      assert.equal(plainTime().mode, "sync");
+      assert.equal(plainDateTime().mode, "sync");
+      assert.equal(plainYearMonth().mode, "sync");
+      assert.equal(plainMonthDay().mode, "sync");
+      assert.equal(timeZone().mode, "sync");
     });
 
     it("should propagate async mode when combined with async parser", () => {
@@ -1231,7 +1231,7 @@ describe("async mode integration", () => {
         name: argument(asyncString()),
       });
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should remain sync when all parsers are temporal", () => {
@@ -1241,7 +1241,7 @@ describe("async mode integration", () => {
         timezone: option("--tz", timeZone()),
       });
 
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
 
     it("should parse temporal with sync when no async parsers", () => {

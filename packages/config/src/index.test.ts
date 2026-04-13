@@ -648,7 +648,7 @@ describe("bindConfig", () => {
         metavar: "TAG",
         defaultValue: () => "default-dep",
         factory: (dep: string): ValueParser<"sync", string> => ({
-          $mode: "sync",
+          mode: "sync",
           metavar: "TAG",
           placeholder: "",
           parse: (input: string) => ({
@@ -2589,7 +2589,7 @@ describe("createConfigContext error paths", () => {
     const schema = z.object({ port: z.number() });
     const context = createConfigContext({ schema });
     const asyncInt: ValueParser<"async", number> = {
-      $mode: "async" as const,
+      mode: "async" as const,
       metavar: "INT",
       placeholder: 0,
       parse(input: string): Promise<ValueParserResult<number>> {
@@ -2664,7 +2664,7 @@ describe("createConfigContext error paths", () => {
     const schema = z.object({ host: z.string() });
     const context = createConfigContext({ schema });
     const inner: Parser<"sync", string, string> = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
@@ -2720,7 +2720,7 @@ describe("createConfigContext error paths", () => {
       });
       let seenHost: string | undefined;
       const inner: Parser<"sync", string, undefined> = {
-        $mode: "sync" as const,
+        mode: "sync" as const,
         $valueType: [] as readonly string[],
         $stateType: [] as readonly undefined[],
         priority: 0,
@@ -2885,7 +2885,7 @@ describe("createConfigContext error paths", () => {
     const schema = z.object({ host: z.string() });
     const context = createConfigContext({ schema });
     const inner: Parser<"sync", string, string> = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
@@ -2929,7 +2929,7 @@ describe("createConfigContext error paths", () => {
     const schema = z.object({ host: z.string() });
     const context = createConfigContext({ schema });
     const brokenParser = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,

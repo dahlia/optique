@@ -29,7 +29,7 @@ export interface ValueParser<M extends Mode = "sync", T = unknown> {
    *
    * @since 0.9.0
    */
-  readonly $mode: M;
+  readonly mode: M;
 
   /**
    * The metavariable name for this parser.  Used in help messages
@@ -314,7 +314,7 @@ export type ChoiceOptions = ChoiceOptionsString;
  * A predicate function that checks if an object is a {@link ValueParser}.
  * @param object The object to check.
  * @return `true` if the object is a {@link ValueParser}, `false` otherwise.
- * @throws {TypeError} If the object looks like a value parser (has `$mode`,
+ * @throws {TypeError} If the object looks like a value parser (has `mode`,
  *   `metavar`, `parse`, and `format`) but is missing the required
  *   `placeholder` property.
  */
@@ -323,9 +323,9 @@ export function isValueParser<M extends Mode, T>(
 ): object is ValueParser<M, T> {
   if (
     typeof object !== "object" || object == null ||
-    !("$mode" in object) ||
-    ((object as ValueParser<M, T>).$mode !== "sync" &&
-      (object as ValueParser<M, T>).$mode !== "async")
+    !("mode" in object) ||
+    ((object as ValueParser<M, T>).mode !== "sync" &&
+      (object as ValueParser<M, T>).mode !== "async")
   ) {
     return false;
   }
@@ -463,7 +463,7 @@ export function choice<const T extends string | number>(
     );
     const frozenNumberChoices = Object.freeze(numberChoices) as readonly T[];
     return {
-      $mode: "sync",
+      mode: "sync",
       metavar,
       placeholder: choices[0],
       choices: frozenNumberChoices,
@@ -601,7 +601,7 @@ export function choice<const T extends string | number>(
   }
   const stringInvalidChoice = stringOptions.errors?.invalidChoice;
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: choices[0],
     choices: stringChoices as readonly T[],
@@ -840,7 +840,7 @@ export function string(
   const patternFlags = options.pattern?.flags ?? null;
   const patternMismatch = options.errors?.patternMismatch;
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: options.placeholder ?? "",
     parse(input: string): ValueParserResult<string> {
@@ -1109,7 +1109,7 @@ export function integer(
     const metavar = options.metavar ?? "INTEGER";
     ensureNonEmptyString(metavar);
     return {
-      $mode: "sync",
+      mode: "sync",
       metavar,
       placeholder: options?.placeholder ??
         (options?.min != null && options.min > 0n
@@ -1199,7 +1199,7 @@ export function integer(
     };
   }
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: options?.placeholder ??
       (firstAllowed > 0 ? firstAllowed : lastAllowed < 0 ? lastAllowed : 0),
@@ -1368,7 +1368,7 @@ export function float(options: FloatOptions = {}): ValueParser<"sync", number> {
   ensureNonEmptyString(metavar);
 
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: options?.placeholder ??
       (options?.min != null && options.min > 0
@@ -1551,7 +1551,7 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
   const invalidUrl = options.errors?.invalidUrl;
   const disallowedProtocol = options.errors?.disallowedProtocol;
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     get placeholder() {
       return new URL(
@@ -1658,7 +1658,7 @@ export function locale(
   const metavar = options.metavar ?? "LOCALE";
   ensureNonEmptyString(metavar);
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: new Intl.Locale("und"),
     parse(input: string): ValueParserResult<Intl.Locale> {
@@ -2107,7 +2107,7 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
   const invalidVariant = options.errors?.invalidVariant;
 
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: "00000000-0000-0000-0000-000000000000" as Uuid,
     parse(input: string): ValueParserResult<Uuid> {
@@ -2455,7 +2455,7 @@ export function port(
     }
 
     return {
-      $mode: "sync",
+      mode: "sync",
       metavar,
       placeholder: options.placeholder ??
         (options.disallowWellKnown && min < 1024n
@@ -2549,7 +2549,7 @@ export function port(
   }
 
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: options?.placeholder ??
       (options?.disallowWellKnown && min < 1024 ? Math.max(1024, min) : min),
@@ -2792,7 +2792,7 @@ export function ipv4(options?: Ipv4Options): ValueParser<"sync", string> {
   const allowZero = options?.allowZero ?? true;
 
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: allowZero
       ? "0.0.0.0"
@@ -3005,7 +3005,7 @@ export function hostname(
   }
 
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: options?.placeholder ??
       (allowLocalhost
@@ -3573,7 +3573,7 @@ export function email(
   }
 
   return {
-    $mode: "sync" as const,
+    mode: "sync" as const,
     metavar,
     placeholder: (options?.placeholder ?? (options?.allowMultiple
       ? ([
@@ -3981,7 +3981,7 @@ export function socketAddress(
   }
 
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     get placeholder() {
       return {
@@ -4704,7 +4704,7 @@ export function portRange(
     });
 
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     get placeholder(): PortRangeValueNumber | PortRangeValueBigInt {
       return (isBigInt
@@ -5006,7 +5006,7 @@ export function macAddress(
   }
 
   const parserObj: ValueParser<"sync", string> = {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     get placeholder() {
       const octets = ["00", "00", "00", "00", "00", "00"];
@@ -5356,7 +5356,7 @@ export function domain(
   const tldNotAllowed = options?.errors?.tldNotAllowed;
 
   const domainParserObj: ValueParser<"sync", string> = {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: options?.placeholder ??
       `example.${allowedTldsLower?.[0] ?? "com"}`,
@@ -5669,7 +5669,7 @@ export function ipv6(
   const metavar = options?.metavar ?? "IPV6";
 
   const ipv6ParserObj: ValueParser<"sync", string> = {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: allowZero ? "::" : allowLoopback ? "::1" : "2001:db8::1",
     parse(input: string): ValueParserResult<string> {
@@ -6277,7 +6277,7 @@ export function ip(
     : undefined;
 
   const ipParserObj: ValueParser<"sync", string> = {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: version === 6
       ? ipv6Parser!.placeholder
@@ -6687,7 +6687,7 @@ export function cidr(
     : undefined;
 
   const cidrParserObj: ValueParser<"sync", CidrValue> = {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     get placeholder() {
       return version === 6 || (version === "both" && (minPrefix ?? 0) > 32)

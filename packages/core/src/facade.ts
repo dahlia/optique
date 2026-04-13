@@ -948,7 +948,7 @@ function combineWithHelpVersion(
     // Create a lenient help parser that accepts help flag anywhere
     // and ignores all other options/arguments
     const lenientHelpParser: Parser<"sync", unknown, unknown> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [],
       $stateType: [],
       priority: 200, // Very high priority
@@ -1067,7 +1067,7 @@ function combineWithHelpVersion(
     // Create a lenient version parser that accepts version flag anywhere
     // and ignores all other options/arguments
     const lenientVersionParser: Parser<"sync", unknown, unknown> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [],
       $stateType: [],
       priority: 200, // Very high priority
@@ -1726,7 +1726,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
     }
 
     return dispatchByMode(
-      parser.$mode,
+      parser.mode,
       () => {
         const result = callOnError(1);
         if (result instanceof Promise) {
@@ -1754,7 +1754,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
       ),
     );
     return dispatchByMode(
-      parser.$mode,
+      parser.mode,
       () => {
         const result = callOnError(1);
         if (result instanceof Promise) {
@@ -1779,7 +1779,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
     stdout(script);
 
     return dispatchByMode(
-      parser.$mode,
+      parser.mode,
       () => {
         const result = callOnCompletion(0);
         if (result instanceof Promise) {
@@ -1794,7 +1794,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
 
   // Provide completion suggestions
   return dispatchByMode(
-    parser.$mode,
+    parser.mode,
     () => {
       const syncParser = parser as Parser<"sync", unknown, unknown>;
       const suggestions = suggest(syncParser, args as [string, ...string[]]);
@@ -2602,7 +2602,7 @@ export function runParser<
     }
   };
 
-  const parserMode = parser.$mode as InferMode<TParser>;
+  const parserMode = parser.mode as InferMode<TParser>;
   return dispatchByMode(
     parserMode,
     () => {
@@ -2675,7 +2675,7 @@ export function runParserSync<
   args: readonly string[],
   options?: RunOptions<THelp, TError>,
 ): InferValue<TParser> {
-  if (parser.$mode !== "sync") {
+  if (parser.mode !== "sync") {
     throw new TypeError(
       "Cannot use an async parser with runParserSync(). " +
         "Use runParser() or runParserAsync() instead.",
@@ -3289,7 +3289,7 @@ async function runWithBody<
     // injected because they may change what the parser accepts as ordinary
     // data.
     if (await needsEarlyExitAsync(earlyExitParser, args, options)) {
-      if (parser.$mode === "async") {
+      if (parser.mode === "async") {
         return runParser(
           earlyExitParser,
           programName,
@@ -3314,7 +3314,7 @@ async function runWithBody<
 
   if (!needsTwoPhase) {
     // All contexts are single-pass.
-    if (parser.$mode === "async") {
+    if (parser.mode === "async") {
       return runParser(
         augmentedParser1,
         programName,
@@ -3332,7 +3332,7 @@ async function runWithBody<
   // Two-phase parsing for two-pass contexts.
   // First pass: parse with Phase 1 annotations to get initial result
   const firstPassSeed = await dispatchByMode(
-    parser.$mode,
+    parser.mode,
     () =>
       extractPhase2SeedSync(
         augmentedParser1 as Parser<"sync", unknown, unknown>,
@@ -3349,7 +3349,7 @@ async function runWithBody<
       parser,
       phase1Annotations,
     );
-    if (parser.$mode === "async") {
+    if (parser.mode === "async") {
       return runParser(
         fallbackParser,
         programName,
@@ -3382,7 +3382,7 @@ async function runWithBody<
     finalAnnotations,
   );
 
-  if (parser.$mode === "async") {
+  if (parser.mode === "async") {
     return runParser(augmentedParser2, programName, args, options) as Promise<
       InferValue<TParser>
     >;
@@ -3476,7 +3476,7 @@ export async function runWith<
 
   // If no contexts, just run the parser directly
   if (contexts.length === 0) {
-    if (parser.$mode === "async") {
+    if (parser.mode === "async") {
       return runParser(parser, programName, args, options) as Promise<
         InferValue<TParser>
       >;
@@ -3639,7 +3639,7 @@ export function runWithSync<
     & RunWithOptions<THelp, TError>
     & ContextOptionsParam<TContexts, InferValue<TParser>>,
 ): InferValue<TParser> {
-  if (parser.$mode !== "sync") {
+  if (parser.mode !== "sync") {
     throw new TypeError(
       "Cannot use an async parser with runWithSync(). " +
         "Use runWith() or runWithAsync() instead.",

@@ -25,7 +25,7 @@ describe("parser.ts coverage branches", () => {
     const asyncParser: Parser<"async", string, { readonly called: boolean }> = {
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { readonly called: boolean }[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -80,7 +80,7 @@ describe("parser.ts coverage branches", () => {
     const asyncParser: Parser<"async", "ok", number> = {
       $valueType: [] as readonly "ok"[],
       $stateType: [] as readonly number[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -128,7 +128,7 @@ describe("parser.ts coverage branches", () => {
     const syncParser: Parser<"sync", "x", null> = {
       $valueType: [] as readonly "x"[],
       $stateType: [] as readonly null[],
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -156,7 +156,7 @@ describe("parser.ts coverage branches", () => {
     const asyncParser: Parser<"async", "x", number> = {
       $valueType: [] as readonly "x"[],
       $stateType: [] as readonly number[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -206,7 +206,7 @@ describe("parser.ts coverage branches", () => {
     const syncParser: Parser<"sync", "ok", number> = {
       $valueType: [] as readonly "ok"[],
       $stateType: [] as readonly number[],
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -235,7 +235,7 @@ describe("parser.ts coverage branches", () => {
     const asyncParser: Parser<"async", "ok", number> = {
       $valueType: [] as readonly "ok"[],
       $stateType: [] as readonly number[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -301,7 +301,7 @@ describe("parser.ts coverage branches", () => {
     const failing: Parser<"async", never, null> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly null[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -333,7 +333,7 @@ describe("parser.ts coverage branches", () => {
     const failOnComplete: Parser<"async", never, string> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly string[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -365,7 +365,7 @@ describe("parser.ts coverage branches", () => {
     const stalling: Parser<"async", never, number> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly number[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -397,7 +397,7 @@ describe("parser.ts coverage branches", () => {
     const failingWithSuggestions: Parser<"sync", never, null> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly null[],
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -430,7 +430,7 @@ describe("parser.ts coverage branches", () => {
     const stalling: Parser<"sync", never, number> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly number[],
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -459,7 +459,7 @@ describe("parser.ts coverage branches", () => {
     const failingAsync: Parser<"async", never, null> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly null[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -495,7 +495,7 @@ describe("parser.ts coverage branches", () => {
     const stalling: Parser<"async", never, number> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly number[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -540,7 +540,7 @@ describe("parser.ts coverage branches", () => {
     const nullInitParser: Parser<"async", "ok", null> = {
       $valueType: [] as readonly "ok"[],
       $stateType: [] as readonly null[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -583,7 +583,7 @@ describe("parser.ts coverage branches", () => {
     const nullInitParser: Parser<"sync", never, null> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly null[],
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -624,7 +624,7 @@ describe("parser.ts coverage branches", () => {
     const nullInitParser: Parser<"async", never, null> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly null[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -672,7 +672,7 @@ describe("parser.ts coverage branches", () => {
     const nullInitParser: Parser<"sync", never, null> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly null[],
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -713,7 +713,7 @@ describe("parser.ts coverage branches", () => {
     const nullInitParser: Parser<"async", never, null> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly null[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -766,7 +766,7 @@ describe("parser.ts coverage branches", () => {
     const syncParser: Parser<"sync", never, number> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly number[],
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -793,7 +793,7 @@ describe("parser.ts coverage branches", () => {
     const asyncParser: Parser<"async", never, number> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly number[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -865,7 +865,7 @@ describe("parser.ts coverage branches", () => {
     const syncParser: Parser<"sync", never, { readonly base: string }> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly { readonly base: string }[],
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -892,7 +892,7 @@ describe("parser.ts coverage branches", () => {
     const asyncParser: Parser<"async", never, { readonly base: string }> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly { readonly base: string }[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -1102,7 +1102,7 @@ describe("parser.ts coverage branches", () => {
     const stalling: Parser<"sync", never, number> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly number[],
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -1131,7 +1131,7 @@ describe("parser.ts coverage branches", () => {
     const stalling: Parser<"sync", never, number> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly number[],
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -1160,7 +1160,7 @@ describe("parser.ts coverage branches", () => {
     const stalling: Parser<"async", never, number> = {
       $valueType: [] as readonly never[],
       $stateType: [] as readonly number[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),

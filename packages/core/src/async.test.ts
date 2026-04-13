@@ -49,7 +49,7 @@ import {
  */
 function asyncString(delay = 0): ValueParser<"async", string> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "ASYNC_STRING",
     placeholder: "",
     async parse(input: string): Promise<ValueParserResult<string>> {
@@ -69,7 +69,7 @@ function asyncString(delay = 0): ValueParser<"async", string> {
  */
 function asyncInteger(): ValueParser<"async", number> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "ASYNC_INT",
     placeholder: 0,
     parse(input: string): Promise<ValueParserResult<number>> {
@@ -95,7 +95,7 @@ function asyncChoice(
   choices: readonly string[],
 ): ValueParser<"async", string> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "ASYNC_CHOICE",
     placeholder: "",
     parse(input: string): Promise<ValueParserResult<string>> {
@@ -143,9 +143,9 @@ describe("Async ValueParser", () => {
       assert.equal(parser.format("HELLO"), "hello");
     });
 
-    it("should have $mode property set to async", () => {
+    it("should have mode property set to async", () => {
       const parser = asyncString();
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
   });
 
@@ -172,12 +172,12 @@ describe("Mode propagation in primitives", () => {
   describe("option()", () => {
     it("should be sync when using sync ValueParser", () => {
       const parser = option("--name", string());
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
 
     it("should be async when using async ValueParser", () => {
       const parser = option("--name", asyncString());
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should parse async option correctly", async () => {
@@ -193,12 +193,12 @@ describe("Mode propagation in primitives", () => {
   describe("argument()", () => {
     it("should be sync when using sync ValueParser", () => {
       const parser = argument(string());
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
 
     it("should be async when using async ValueParser", () => {
       const parser = argument(asyncString());
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should parse async argument correctly", async () => {
@@ -214,14 +214,14 @@ describe("Mode propagation in primitives", () => {
   describe("constant()", () => {
     it("should always be sync", () => {
       const parser = constant("value");
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
   });
 
   describe("flag()", () => {
     it("should always be sync", () => {
       const parser = flag("-v", "--verbose");
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
   });
 
@@ -229,13 +229,13 @@ describe("Mode propagation in primitives", () => {
     it("should propagate sync mode from inner parser", () => {
       const inner = object({ name: argument(string()) });
       const parser = command("cmd", inner);
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
 
     it("should propagate async mode from inner parser", () => {
       const inner = object({ name: argument(asyncString()) });
       const parser = command("cmd", inner);
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
   });
 });
@@ -248,12 +248,12 @@ describe("Mode propagation in modifiers", () => {
   describe("optional()", () => {
     it("should propagate sync mode", () => {
       const parser = optional(option("--name", string()));
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
 
     it("should propagate async mode", () => {
       const parser = optional(option("--name", asyncString()));
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should parse async optional correctly when present", async () => {
@@ -278,12 +278,12 @@ describe("Mode propagation in modifiers", () => {
   describe("withDefault()", () => {
     it("should propagate sync mode", () => {
       const parser = withDefault(option("--name", string()), "default");
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
 
     it("should propagate async mode", () => {
       const parser = withDefault(option("--name", asyncString()), "DEFAULT");
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should use default when async option is absent", async () => {
@@ -299,12 +299,12 @@ describe("Mode propagation in modifiers", () => {
   describe("map()", () => {
     it("should propagate sync mode", () => {
       const parser = map(option("--count", integer()), (n) => n * 2);
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
 
     it("should propagate async mode", () => {
       const parser = map(option("--name", asyncString()), (s) => s.length);
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should apply map function to async result", async () => {
@@ -320,12 +320,12 @@ describe("Mode propagation in modifiers", () => {
   describe("multiple()", () => {
     it("should propagate sync mode", () => {
       const parser = multiple(option("--file", string()));
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
 
     it("should propagate async mode", () => {
       const parser = multiple(option("--file", asyncString()));
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should collect multiple async values", async () => {
@@ -357,7 +357,7 @@ describe("Mode propagation in constructs", () => {
         name: option("--name", string()),
         count: option("--count", integer()),
       });
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
 
     it("should be async when any field is async", () => {
@@ -365,7 +365,7 @@ describe("Mode propagation in constructs", () => {
         name: option("--name", asyncString()),
         count: option("--count", integer()),
       });
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should be async when all fields are async", () => {
@@ -373,7 +373,7 @@ describe("Mode propagation in constructs", () => {
         name: option("--name", asyncString()),
         value: option("--value", asyncString()),
       });
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should parse mixed sync/async object correctly", async () => {
@@ -395,12 +395,12 @@ describe("Mode propagation in constructs", () => {
   describe("tuple()", () => {
     it("should be sync when all elements are sync", () => {
       const parser = tuple([argument(string()), argument(integer())]);
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
 
     it("should be async when any element is async", () => {
       const parser = tuple([argument(asyncString()), argument(integer())]);
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should parse async tuple correctly", async () => {
@@ -417,7 +417,7 @@ describe("Mode propagation in constructs", () => {
         object({ cmd: constant("a" as const) }),
         object({ cmd: constant("b" as const) }),
       );
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
 
     it("should be async when any alternative is async", () => {
@@ -428,7 +428,7 @@ describe("Mode propagation in constructs", () => {
         }),
         object({ cmd: constant("b" as const) }),
       );
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should parse async alternative correctly", async () => {
@@ -452,7 +452,7 @@ describe("Mode propagation in constructs", () => {
         object({ name: option("--name", string()) }),
         object({ count: option("--count", integer()) }),
       );
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
 
     it("should be async when any parser is async", () => {
@@ -460,7 +460,7 @@ describe("Mode propagation in constructs", () => {
         object({ name: option("--name", asyncString()) }),
         object({ count: option("--count", integer()) }),
       );
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should parse merged async parsers correctly", async () => {
@@ -485,7 +485,7 @@ describe("Mode propagation in constructs", () => {
         object({ a: flag("-a") }),
         object({ b: flag("-b") }),
       );
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
 
     it("should be async when any parser is async", () => {
@@ -493,7 +493,7 @@ describe("Mode propagation in constructs", () => {
         object({ name: argument(asyncString()) }),
         object({ b: flag("-b") }),
       );
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
   });
 });
@@ -601,7 +601,7 @@ describe("Complex async scenarios", () => {
       count: withDefault(option("--count", integer()), 1),
     });
     // Parser should be async due to nested asyncString
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     const result = await parseAsync(parser, ["--name", "test", "--count", "5"]);
     assert.ok(result.success);
@@ -615,7 +615,7 @@ describe("Complex async scenarios", () => {
 
     // Using command() directly
     const cmdParser = command("process", subparser);
-    assert.equal(cmdParser.$mode, "async");
+    assert.equal(cmdParser.mode, "async");
 
     // Test parsing through command
     const parser = or(cmdParser, object({ cmd: constant("other" as const) }));
@@ -636,7 +636,7 @@ describe("Complex async scenarios", () => {
       }),
     );
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     // Test async branch
     const result1 = await parseAsync(parser, ["http://example.com"]);
@@ -675,7 +675,7 @@ describe("Complex async scenarios", () => {
       ),
     });
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     const result = await parseAsync(parser, ["--name", "World"]);
     assert.ok(result.success);
@@ -691,14 +691,14 @@ describe("Type safety", () => {
   it("should infer correct mode type for sync parser", () => {
     const parser = object({ name: argument(string()) });
     // TypeScript should infer parser as Parser<"sync", ...>
-    const mode: "sync" = parser.$mode;
+    const mode: "sync" = parser.mode;
     assert.equal(mode, "sync");
   });
 
   it("should infer correct mode type for async parser", () => {
     const parser = object({ name: argument(asyncString()) });
     // TypeScript should infer parser as Parser<"async", ...>
-    const mode: "async" = parser.$mode;
+    const mode: "async" = parser.mode;
     assert.equal(mode, "async");
   });
 
@@ -708,7 +708,7 @@ describe("Type safety", () => {
       asyncField: argument(asyncString()),
     });
     // Combined mode should be async
-    const mode: "async" = parser.$mode;
+    const mode: "async" = parser.mode;
     assert.equal(mode, "async");
   });
 });
@@ -766,7 +766,7 @@ describe("Additional async construct tests", () => {
           b: object({ count: option("--count", integer()) }),
         },
       );
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should propagate async mode from branch parsers", () => {
@@ -777,7 +777,7 @@ describe("Additional async construct tests", () => {
           b: object({ count: option("--count", integer()) }),
         },
       );
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     // Note: Async parsing tests for conditional() are skipped because
@@ -791,7 +791,7 @@ describe("Additional async construct tests", () => {
         name: option("--name", asyncString()),
       });
       const parser = group("Options", inner);
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should parse async grouped parser", async () => {
@@ -813,7 +813,7 @@ describe("Additional async construct tests", () => {
         tuple([option("--name", string())]),
         tuple([option("--count", integer())]),
       );
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
 
     it("should be async when any parser is async", () => {
@@ -821,7 +821,7 @@ describe("Additional async construct tests", () => {
         tuple([option("--name", asyncString())]),
         tuple([option("--count", integer())]),
       );
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     // Note: Async parsing test for concat() is skipped because
@@ -1244,7 +1244,7 @@ describe("State persistence across multiple parse calls", () => {
       callCount: number;
     } {
       const parser: ValueParser<"async", string> & { callCount: number } = {
-        $mode: "async",
+        mode: "async",
         metavar: "COUNTING_STRING",
         placeholder: "",
         callCount: 0,
@@ -1520,7 +1520,7 @@ describe("Deeply nested async parser combinations", () => {
       );
 
       const parser = or(startCmd, stopCmd);
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
 
       // Test start command
       const startResult = await parseAsync(parser, [
@@ -1575,7 +1575,7 @@ describe("Deeply nested async parser combinations", () => {
         ),
       );
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
 
       const result = await parseAsync(parser, [
         "deploy",
@@ -1609,7 +1609,7 @@ describe("Deeply nested async parser combinations", () => {
         ),
       );
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
 
       // First match: first + age
       const result1 = await parseAsync(parser, [
@@ -1654,7 +1654,7 @@ describe("Deeply nested async parser combinations", () => {
         ]),
       );
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
 
       // First branch: async string + async choice
       const result1 = await parseAsync(parser, [
@@ -1687,7 +1687,7 @@ describe("Deeply nested async parser combinations", () => {
         cmd: cmdParser,
       });
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
 
       const result = await parseAsync(parser, [
         "process",
@@ -1722,7 +1722,7 @@ describe("Multi-level modifier chains with async", () => {
         ),
       });
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
 
       const result = await parseAsync(parser, ["--value", "Hello"]);
       assert.ok(result.success);
@@ -1742,7 +1742,7 @@ describe("Multi-level modifier chains with async", () => {
         ),
       });
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
 
       // Not provided - uses default
       const result1 = await parseAsync(parser, []);
@@ -1764,7 +1764,7 @@ describe("Multi-level modifier chains with async", () => {
         tags: optional(multiple(option("--tag", asyncString()))),
       });
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
 
       // No tags
       const result1 = await parseAsync(parser, []);
@@ -1793,7 +1793,7 @@ describe("Multi-level modifier chains with async", () => {
         ),
       });
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
 
       const result = await parseAsync(parser, [
         "--word",
@@ -1821,7 +1821,7 @@ describe("Multi-level modifier chains with async", () => {
         ),
       });
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
 
       // Default - should get length of "DEFAULT" (asyncString uppercases) = 7
       const result1 = await parseAsync(parser, []);
@@ -1866,7 +1866,7 @@ describe("Real-world CLI patterns with async", () => {
       );
 
       const parser = or(cloneCmd, fetchCmd);
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
 
       // Test clone
       const cloneResult = await parseAsync(parser, [
@@ -1939,7 +1939,7 @@ describe("Real-world CLI patterns with async", () => {
       );
 
       const parser = or(getCmd, deleteCmd);
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
 
       // Test get
       const getResult = await parseAsync(parser, [
@@ -1990,7 +1990,7 @@ describe("Real-world CLI patterns with async", () => {
         verbose: flag("-v", "--verbose"),
       });
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
 
       const result = await parseAsync(parser, [
         "-p",
@@ -2262,7 +2262,7 @@ describe("passThrough() with async combinations", () => {
       rest: passThrough(),
     });
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
   });
 
   it("should capture --opt=val format with async options (equalsOnly)", async () => {
@@ -2320,7 +2320,7 @@ describe("passThrough() with async combinations", () => {
       object({ rest: passThrough() }), // equalsOnly format
     );
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     const result = await parseAsync(parser, [
       "--count",
@@ -2343,7 +2343,7 @@ describe("passThrough() with async combinations", () => {
       object({ rest: passThrough({ format: "greedy" }) }),
     );
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     const result = await parseAsync(parser, [
       "--count",
@@ -2376,7 +2376,7 @@ describe("conditional() actual parsing with async", () => {
       },
     );
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
   });
 
   it("should propagate async mode from branch parsers", () => {
@@ -2385,7 +2385,7 @@ describe("conditional() actual parsing with async", () => {
       b: object({ num: option("--num", asyncInteger()) }),
     });
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
   });
 
   it("should propagate async mode from both discriminator and branches", () => {
@@ -2397,7 +2397,7 @@ describe("conditional() actual parsing with async", () => {
       },
     );
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
   });
 
   // Actual parsing tests - these test that async actually works
@@ -2515,7 +2515,7 @@ describe("concat() actual parsing with async", () => {
       tuple([option("--count", asyncInteger())]),
     );
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
   });
 
   it("should propagate async mode in concat with mixed parsers", () => {
@@ -2524,7 +2524,7 @@ describe("concat() actual parsing with async", () => {
       tuple([option("--async", asyncString())]),
     );
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
   });
 
   it("should handle error in concat with async", async () => {
@@ -2630,7 +2630,7 @@ describe("concat() actual parsing with async", () => {
  */
 function asyncThrowingParser(): ValueParser<"async", string> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "THROW",
     placeholder: "",
     parse(_input: string): Promise<ValueParserResult<string>> {
@@ -2647,7 +2647,7 @@ function asyncThrowingParser(): ValueParser<"async", string> {
  */
 function asyncRejectingParser(): ValueParser<"async", string> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "REJECT",
     placeholder: "",
     parse(_input: string): Promise<ValueParserResult<string>> {
@@ -2738,7 +2738,7 @@ describe("Nested commands with async", () => {
       }),
     );
 
-    assert.equal(outerCmd.$mode, "async");
+    assert.equal(outerCmd.mode, "async");
 
     const result = await parseAsync(outerCmd, [
       "outer",
@@ -2774,7 +2774,7 @@ describe("Nested commands with async", () => {
     );
 
     const parser = or(cmdA, cmdB);
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     const result1 = await parseAsync(parser, [
       "cmd-a",
@@ -2806,7 +2806,7 @@ describe("Nested commands with async", () => {
 
     const level1 = command("level1", object({ l2: level2 }));
 
-    assert.equal(level1.$mode, "async");
+    assert.equal(level1.mode, "async");
 
     const result = await parseAsync(level1, [
       "level1",
@@ -2835,7 +2835,7 @@ describe("map() after other modifiers with async", () => {
       ),
     });
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     // With value
     const result1 = await parseAsync(parser, ["--name", "alice"]);
@@ -2860,7 +2860,7 @@ describe("map() after other modifiers with async", () => {
       ),
     });
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     const result = await parseAsync(parser, [
       "--num",
@@ -2884,7 +2884,7 @@ describe("map() after other modifiers with async", () => {
       ),
     });
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     // With value
     const result1 = await parseAsync(parser, ["--num", "10"]);
@@ -2916,7 +2916,7 @@ describe("map() after other modifiers with async", () => {
       ),
     });
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     // With value: "HELLO" (asyncString uppercases) -> "hello" -> "processed: hello"
     const result1 = await parseAsync(parser, ["--value", "hello"]);
@@ -2953,7 +2953,7 @@ describe("Async error recovery patterns", () => {
       }),
     );
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     // First branch selected when --verbose is present
     const result1 = await parseAsync(parser, [
@@ -2995,7 +2995,7 @@ describe("Async error recovery patterns", () => {
       }),
     );
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     // First branch matches with two options (longer match)
     const result1 = await parseAsync(parser, ["--alpha", "1", "--beta", "2"]);
@@ -3047,7 +3047,7 @@ describe("Async error recovery patterns", () => {
      */
     function asyncStrictInteger(): ValueParser<"async", number> {
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "STRICT_INT",
         placeholder: 0,
         parse(input: string): Promise<ValueParserResult<number>> {
@@ -3099,7 +3099,7 @@ describe("Async suggestions with prefix filtering", () => {
     choices: readonly string[],
   ): ValueParser<"async", string> {
     return {
-      $mode: "async",
+      mode: "async",
       metavar: "FILTERED_CHOICE",
       placeholder: "",
       parse(input: string): Promise<ValueParserResult<string>> {
@@ -3190,7 +3190,7 @@ describe("Large-scale async combinations", () => {
       h: option("--h", asyncInteger()),
     });
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     const result = await parseAsync(parser, [
       "--a",
@@ -3247,7 +3247,7 @@ describe("Large-scale async combinations", () => {
       }),
     );
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     // Test last branch
     const result = await parseAsync(parser, ["--e", "test"]);
@@ -3267,7 +3267,7 @@ describe("Large-scale async combinations", () => {
       argument(asyncInteger()),
     ]);
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     const result = await parseAsync(parser, ["hello", "1", "world", "2"]);
     assert.ok(result.success);
@@ -3287,7 +3287,7 @@ describe("Async variadic arguments", () => {
       files: multiple(argument(asyncString()), { min: 1 }),
     });
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     const result = await parseAsync(parser, ["file1", "file2", "file3"]);
     assert.ok(
@@ -3370,7 +3370,7 @@ describe("Complex nested modifier chains with async", () => {
       ),
     });
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     // With tags
     const result1 = await parseAsync(parser, ["--tag", "a", "--tag", "b"]);
@@ -3402,7 +3402,7 @@ describe("Complex nested modifier chains with async", () => {
       ),
     });
 
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
 
     // With value
     const result1 = await parseAsync(parser, ["--count", "5"]);
@@ -3434,7 +3434,7 @@ describe("Complex nested modifier chains with async", () => {
       outer: option("--outer", asyncString()),
     });
 
-    assert.equal(outerParser.$mode, "async");
+    assert.equal(outerParser.mode, "async");
 
     const result = await parseAsync(outerParser, [
       "--deep",
@@ -4480,7 +4480,7 @@ describe("Edge cases in nested async structures", () => {
 
   it("should propagate async errors through all nesting levels", async () => {
     const failingParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "FAIL",
       placeholder: "",
       parse: () =>
@@ -4531,7 +4531,7 @@ describe("usage and help text generation with async parsers", () => {
         count: option("-c", "--count", integer()),
       });
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
 
       const usage = formatUsage("test-app", parser.usage);
       assert.ok(usage.includes("-c"));
@@ -4741,7 +4741,7 @@ describe("Realistic async I/O scenarios", () => {
       ]);
 
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "FILE",
         placeholder: "",
         async parse(input: string): Promise<ValueParserResult<string>> {
@@ -4814,7 +4814,7 @@ describe("Realistic async I/O scenarios", () => {
       const validUserIds = new Set([1, 2, 3, 42, 100, 999]);
 
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "USER_ID",
         placeholder: 0,
         async parse(input: string): Promise<ValueParserResult<number>> {
@@ -4886,7 +4886,7 @@ describe("Realistic async I/O scenarios", () => {
       ]);
 
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "HOSTNAME",
         placeholder: "",
         async parse(input: string): Promise<ValueParserResult<string>> {
@@ -4940,7 +4940,7 @@ describe("Realistic async I/O scenarios", () => {
       database: string;
     }> {
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "DB_URL",
         placeholder: { host: "", port: 0, database: "" },
         async parse(
@@ -5034,7 +5034,7 @@ describe("Realistic async I/O scenarios", () => {
       const availableOptions = ["production", "staging", "development", "test"];
 
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "ENVIRONMENT",
         placeholder: "",
         async parse(input: string): Promise<ValueParserResult<string>> {
@@ -5113,7 +5113,7 @@ describe("Realistic async I/O scenarios", () => {
       calls: Map<string, readonly string[]>,
     ): ValueParser<"async", string> {
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "VALUE",
         placeholder: "",
         async parse(input: string): Promise<ValueParserResult<string>> {
@@ -5160,7 +5160,7 @@ describe("Realistic async I/O scenarios", () => {
   describe("error message propagation from async validators", () => {
     function asyncValidatorWithDetailedError(): ValueParser<"async", string> {
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "VALUE",
         placeholder: "",
         async parse(input: string): Promise<ValueParserResult<string>> {
@@ -5236,7 +5236,7 @@ describe("Async exception handling", () => {
     // Value parser that throws an exception instead of returning error result
     function throwingAsyncParser(): ValueParser<"async", string> {
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "THROWING",
         placeholder: "",
         parse(_input: string): Promise<ValueParserResult<string>> {
@@ -5343,7 +5343,7 @@ describe("Async exception handling", () => {
   describe("async exception in suggest", () => {
     function throwingSuggestParser(): ValueParser<"async", string> {
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "THROWING_SUGGEST",
         placeholder: "",
         parse(input: string): Promise<ValueParserResult<string>> {
@@ -5376,7 +5376,7 @@ describe("Async exception handling", () => {
       delayMs: number,
     ): ValueParser<"async", string> {
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "DELAYED_THROW",
         placeholder: "",
         async parse(_input: string): Promise<ValueParserResult<string>> {
@@ -5475,7 +5475,7 @@ describe("map() modifier with async parsers", () => {
       const mappedParser = map(baseParser, (s) => s.length);
 
       // The mapped parser should still be async
-      assert.equal(mappedParser.$mode, "async");
+      assert.equal(mappedParser.mode, "async");
     });
   });
 
@@ -5723,7 +5723,7 @@ describe("longestMatch() with async parsers", () => {
     it("should propagate exception from async parser in longestMatch", async () => {
       function throwingParser(): ValueParser<"async", string> {
         return {
-          $mode: "async",
+          mode: "async",
           metavar: "THROW",
           placeholder: "",
           parse(_input: string): Promise<ValueParserResult<string>> {
@@ -5855,7 +5855,7 @@ describe("concat() with async parsers", () => {
       const tupleB = tuple([option("--b", asyncInteger())]);
       const parser = concat(tupleA, tupleB);
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
   });
 
@@ -5865,7 +5865,7 @@ describe("concat() with async parsers", () => {
       const syncTuple = tuple([option("--sync", string())]);
       const parser = concat(asyncTuple, syncTuple);
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should have async mode when second parser is async", () => {
@@ -5873,7 +5873,7 @@ describe("concat() with async parsers", () => {
       const asyncTuple = tuple([option("--async", asyncString())]);
       const parser = concat(syncTuple, asyncTuple);
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should have sync mode when all parsers are sync", () => {
@@ -5881,7 +5881,7 @@ describe("concat() with async parsers", () => {
       const tupleB = tuple([option("--b", integer())]);
       const parser = concat(tupleA, tupleB);
 
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
 
     it("should parse mixed async/sync parsers correctly", async () => {
@@ -5979,7 +5979,7 @@ describe("concat() with async parsers", () => {
   describe("concat exception handling", () => {
     function throwingAsyncParser(): ValueParser<"async", string> {
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "THROWING",
         placeholder: "",
         parse(_input: string): Promise<ValueParserResult<string>> {
@@ -6126,7 +6126,7 @@ describe("group() with async parsers", () => {
         }),
       );
 
-      assert.equal(parser.$mode, "async");
+      assert.equal(parser.mode, "async");
     });
 
     it("should preserve sync mode from wrapped parser", () => {
@@ -6138,7 +6138,7 @@ describe("group() with async parsers", () => {
         }),
       );
 
-      assert.equal(parser.$mode, "sync");
+      assert.equal(parser.mode, "sync");
     });
 
     it("should parse async grouped parser correctly", async () => {
@@ -6206,7 +6206,7 @@ describe("group() with async parsers", () => {
   describe("group exception handling", () => {
     function throwingAsyncParser(): ValueParser<"async", string> {
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "THROWING",
         placeholder: "",
         parse(_input: string): Promise<ValueParserResult<string>> {
@@ -6327,8 +6327,8 @@ describe("group() with async parsers", () => {
       );
       const outerGroup = group("outer", innerGroup);
 
-      assert.equal(innerGroup.$mode, "async");
-      assert.equal(outerGroup.$mode, "async");
+      assert.equal(innerGroup.mode, "async");
+      assert.equal(outerGroup.mode, "async");
     });
   });
 
@@ -6766,7 +6766,7 @@ describe("multiple async parser failures (error reporting)", () => {
   describe("async failures with error messages", () => {
     function asyncIntegerWithMessage(): ValueParser<"async", number> {
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "INT",
         placeholder: 0,
         parse(input: string): Promise<ValueParserResult<number>> {
@@ -6954,7 +6954,7 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
   describe("exception handling in conditional with async", () => {
     function throwingAsyncChoice(): ValueParser<"async", string> {
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "CHOICE",
         placeholder: "",
         parse(_input: string): Promise<ValueParserResult<string>> {
@@ -6984,7 +6984,7 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
     it("should propagate exception from async branch parser", async () => {
       function throwingAsyncString(): ValueParser<"async", string> {
         return {
-          $mode: "async",
+          mode: "async",
           metavar: "THROWING",
           placeholder: "",
           parse(_input: string): Promise<ValueParserResult<string>> {
@@ -7013,7 +7013,7 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
     it("should not throw when using non-throwing branch", async () => {
       function throwingAsyncString(): ValueParser<"async", string> {
         return {
-          $mode: "async",
+          mode: "async",
           metavar: "THROWING",
           placeholder: "",
           parse(_input: string): Promise<ValueParserResult<string>> {
@@ -7587,7 +7587,7 @@ describe("runParserAsync", () => {
 
   it("should handle async parser errors", async () => {
     const failingParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "FAIL",
       placeholder: "",
       parse(_input: string): Promise<ValueParserResult<string>> {

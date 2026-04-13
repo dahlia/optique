@@ -302,7 +302,7 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
   }
 
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: options.placeholder ?? ".",
     parse(input: string): ValueParserResult<string> {

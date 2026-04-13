@@ -778,7 +778,7 @@ describe("run", () => {
     // (simulates async validation like checking a file exists or network lookup)
     function asyncString(): ValueParser<"async", string> {
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "ASYNC_STRING",
         placeholder: "",
         async parse(input: string): Promise<ValueParserResult<string>> {
@@ -950,10 +950,10 @@ describe("run", () => {
         });
 
         // Sync parser should have mode "sync"
-        assert.equal(syncParser.$mode, "sync");
+        assert.equal(syncParser.mode, "sync");
 
         // Async parser should have mode "async"
-        assert.equal(asyncParser.$mode, "async");
+        assert.equal(asyncParser.mode, "async");
       });
 
       it("should correctly type sync parser result", () => {
@@ -1162,7 +1162,7 @@ describe("runSync", () => {
   // Create a sync ValueParser for testing
   function syncString(): ValueParser<"sync", string> {
     return {
-      $mode: "sync",
+      mode: "sync",
       metavar: "STRING",
       placeholder: "",
       parse(input: string): ValueParserResult<string> {
@@ -1325,7 +1325,7 @@ describe("runAsync", () => {
   // Create an async ValueParser for testing
   function asyncString(): ValueParser<"async", string> {
     return {
-      $mode: "async",
+      mode: "async",
       metavar: "ASYNC_STRING",
       placeholder: "",
       parse(input: string): Promise<ValueParserResult<string>> {
@@ -2868,7 +2868,7 @@ describe("runAsync with contexts", () => {
 describe("runSync async parser rejection", () => {
   function asyncString(): ValueParser<"async", string> {
     return {
-      $mode: "async",
+      mode: "async",
       metavar: "STRING",
       placeholder: "",
       parse(input: string) {

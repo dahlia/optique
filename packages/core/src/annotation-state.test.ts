@@ -22,7 +22,7 @@ import {
 
 function createInheritedTestParser(): Parser<"sync", unknown, unknown> {
   const parser: Parser<"sync", unknown, unknown> = {
-    $mode: "sync",
+    mode: "sync",
     $valueType: [] as readonly unknown[],
     $stateType: [] as readonly unknown[],
     priority: 1,

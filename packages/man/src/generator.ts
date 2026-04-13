@@ -46,8 +46,8 @@ function isParser(
       typeof p.parse === "function" &&
       "complete" in p &&
       typeof p.complete === "function" &&
-      "$mode" in p &&
-      (p.$mode === "sync" || p.$mode === "async") &&
+      "mode" in p &&
+      (p.mode === "sync" || p.mode === "async") &&
       "usage" in p &&
       Array.isArray(p.usage) &&
       "initialState" in p &&
@@ -180,7 +180,7 @@ export function generateManPageSync(
     parserOrProgram,
     options,
   );
-  if ((parser as { readonly $mode: string }).$mode === "async") {
+  if ((parser as { readonly mode: string }).mode === "async") {
     throw new TypeError(
       "Cannot use an async parser with generateManPageSync(). " +
         "Use generateManPageAsync() or generateManPage() instead.",
@@ -346,7 +346,7 @@ export function generateManPage(
     parserOrProgram,
     options,
   );
-  if (parser.$mode === "async") {
+  if (parser.mode === "async") {
     return generateManPageAsync(parser, mergedOptions);
   }
   return generateManPageSync(

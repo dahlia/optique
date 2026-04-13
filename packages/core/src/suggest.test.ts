@@ -551,7 +551,7 @@ describe("suggest function", () => {
     // Regression tests for https://github.com/dahlia/optique/issues/55
     it("should only suggest option values when option is expecting a value", () => {
       const remoteParser = {
-        $mode: "sync" as const,
+        mode: "sync" as const,
         metavar: "REMOTE" as const,
         placeholder: "",
         parse(input: string) {
@@ -571,7 +571,7 @@ describe("suggest function", () => {
       };
 
       const tagParser = {
-        $mode: "sync" as const,
+        mode: "sync" as const,
         metavar: "TAG" as const,
         placeholder: "",
         parse(input: string) {
@@ -607,7 +607,7 @@ describe("suggest function", () => {
 
     it("should suggest both options and positional arguments when not in option value context", () => {
       const remoteParser = {
-        $mode: "sync" as const,
+        mode: "sync" as const,
         metavar: "REMOTE" as const,
         placeholder: "",
         parse(input: string) {
@@ -627,7 +627,7 @@ describe("suggest function", () => {
       };
 
       const tagParser = {
-        $mode: "sync" as const,
+        mode: "sync" as const,
         metavar: "TAG" as const,
         placeholder: "",
         parse(input: string) {
@@ -662,7 +662,7 @@ describe("suggest function", () => {
 
     it("should only suggest option values for simple case without preceding arguments", () => {
       const formatParser = {
-        $mode: "sync" as const,
+        mode: "sync" as const,
         metavar: "FORMAT" as const,
         placeholder: "",
         parse(input: string) {
@@ -682,7 +682,7 @@ describe("suggest function", () => {
       };
 
       const fileParser = {
-        $mode: "sync" as const,
+        mode: "sync" as const,
         metavar: "FILE" as const,
         placeholder: "",
         parse(input: string) {
@@ -767,7 +767,7 @@ describe("suggest function", () => {
       choices: readonly T[],
     ): ValueParser<"async", T> {
       return {
-        $mode: "async",
+        mode: "async",
         metavar: "ASYNC_CHOICE" as NonEmptyString,
         placeholder: choices[0],
         parse(input: string): Promise<ValueParserResult<T>> {

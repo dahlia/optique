@@ -10,6 +10,11 @@ To be released.
 
 ### @optique/core
 
+ -  *Breaking change:* Renamed the runtime `Parser.$mode` and
+    `ValueParser.$mode` properties to `mode`.  Type-only markers such as
+    `Parser.$valueType`, `Parser.$stateType`, and
+    `SourceContext.$requiredOptions` keep the `$` prefix.
+
  -  Fixed duplicate option-name validation to include `hidden: true`
     options in `object()`, `tuple()`, `merge()`, and wrapped `group()`
     parsers. Hidden options still consume CLI syntax, so hidden-visible
@@ -520,7 +525,7 @@ To be released.
 
  -  Fixed `runParserSync()` and `runWithSync()` accepting async parser objects
     at runtime and returning `Promise`s instead of throwing.  These sync-only
-    APIs now validate `parser.$mode` at runtime and throw `TypeError` if the
+    APIs now validate `parser.mode` at runtime and throw `TypeError` if the
     parser is not synchronous.  [[#279], [#676]]
 
  -  Fixed `runWith()`, `runWithSync()`, and `runWithAsync()` silently accepting
@@ -2033,7 +2038,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
  -  Re-exports `Separator` from `@inquirer/prompts` for use in choice lists.
 
- -  `prompt()` always returns an async parser (`$mode: "async"`) and integrates
+ -  `prompt()` always returns an async parser (`mode: "async"`) and integrates
     cleanly with `bindEnv()` and `bindConfig()` — the prompt is skipped
     whenever the CLI, environment variable, or config file supplies a value.
 
@@ -2235,7 +2240,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
  -  Fixed `runSync()` accepting async parser objects (including `Program`
     wrapping async parsers) at runtime and returning `Promise`s instead of
-    throwing.  `runSync()` now validates `parser.$mode` at runtime and throws
+    throwing.  `runSync()` now validates `parser.mode` at runtime and throws
     `TypeError` if the parser is not synchronous.  [[#279], [#676]]
 
  -  Fixed `run()`, `runSync()`, and `runAsync()` to follow the parser-aware

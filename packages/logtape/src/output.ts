@@ -106,7 +106,7 @@ function logOutputValueParser(
   const metavar = options.metavar ?? "FILE";
   ensureNonEmptyString(metavar);
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: { type: "console" },
     parse(input: string): ValueParserResult<LogOutput> {

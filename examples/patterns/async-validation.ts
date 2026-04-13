@@ -20,7 +20,7 @@ import { runAsync } from "@optique/run";
  */
 function reachableUrl(): ValueParser<"async", URL> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "URL",
     placeholder: new URL("http://0.invalid"),
     async parse(input: string): Promise<ValueParserResult<URL>> {
@@ -65,7 +65,7 @@ function reachableUrl(): ValueParser<"async", URL> {
  */
 function apiKey(validationEndpoint: string): ValueParser<"async", string> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "API_KEY",
     placeholder: "",
     async parse(input: string): Promise<ValueParserResult<string>> {

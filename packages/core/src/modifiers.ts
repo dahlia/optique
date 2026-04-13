@@ -224,7 +224,7 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
     !Array.isArray(state) &&
     !(state != null && typeof state === "object")
   ) {
-    return wrapForMode(parser.$mode, null);
+    return wrapForMode(parser.mode, null);
   }
   const innerState = normalizeOptionalLikeInnerState(
     state,
@@ -235,7 +235,7 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
   const shouldRetryFalseResult = hasCarrier &&
     isAnnotationWrappedInitialState(innerState);
   return dispatchByMode(
-    parser.$mode,
+    parser.mode,
     () => {
       try {
         const result = (parser as Parser<"sync", TValue, TState>).complete(
@@ -694,7 +694,7 @@ export function optional<M extends Mode, TValue, TState>(
 
   // Type cast needed due to TypeScript's conditional type limitations with generic M
   const optionalParser = {
-    $mode: parser.$mode,
+    mode: parser.mode,
     $valueType: [],
     $stateType: [],
     // Forward the non-CLI source-binding marker so that `optional()`'s
@@ -749,7 +749,7 @@ export function optional<M extends Mode, TValue, TState>(
     },
     parse(context: ParserContext<[TState] | undefined>) {
       return dispatchByMode(
-        parser.$mode,
+        parser.mode,
         () => parseOptionalStyleSync(context, syncParser),
         () => parseOptionalStyleAsync(context, parser),
       );
@@ -764,7 +764,7 @@ export function optional<M extends Mode, TValue, TState>(
           resolvedInnerState: TState,
         ): ModeValue<M, ValueParserResult<TValue | undefined>> => {
           const innerResult = dispatchByMode(
-            parser.$mode,
+            parser.mode,
             () =>
               completeOptionalLikeSync(syncParser, resolvedInnerState, exec),
             async () =>
@@ -775,7 +775,7 @@ export function optional<M extends Mode, TValue, TState>(
               ) as ValueParserResult<TValue | undefined>,
           );
           return mapModeValue(
-            parser.$mode,
+            parser.mode,
             innerResult,
             (result) =>
               result.success
@@ -811,7 +811,7 @@ export function optional<M extends Mode, TValue, TState>(
             parser,
           );
           return dispatchByMode(
-            parser.$mode,
+            parser.mode,
             () => completeOptionalLikeSync(syncParser, delegatedState, exec),
             async () =>
               await completeOptionalLikeAsync(
@@ -854,7 +854,7 @@ export function optional<M extends Mode, TValue, TState>(
         parser,
       );
       return dispatchByMode(
-        parser.$mode,
+        parser.mode,
         () =>
           completeOptionalLikeSync(syncParser, innerElement as TState, exec),
         async () =>
@@ -870,7 +870,7 @@ export function optional<M extends Mode, TValue, TState>(
       prefix: string,
     ) {
       return dispatchIterableByMode(
-        parser.$mode,
+        parser.mode,
         () => suggestSync(context, prefix),
         () => suggestAsync(context, prefix),
       );
@@ -912,7 +912,7 @@ export function optional<M extends Mode, TValue, TState>(
       ): ModeValue<M, ValueParserResult<TValue | undefined>> {
         if (v === undefined) {
           return wrapForMode<M, ValueParserResult<TValue | undefined>>(
-            parser.$mode,
+            parser.mode,
             { success: true as const, value: v },
           );
         }
@@ -1117,7 +1117,7 @@ export function withDefault<
 
   // Type cast needed due to TypeScript's conditional type limitations with generic M
   const withDefaultParser = {
-    $mode: parser.$mode,
+    mode: parser.mode,
     $valueType: [],
     $stateType: [],
     // Forward the non-CLI source-binding marker.  See `optional()` for
@@ -1167,7 +1167,7 @@ export function withDefault<
     },
     parse(context: ParserContext<[TState] | undefined>) {
       return dispatchByMode(
-        parser.$mode,
+        parser.mode,
         () => parseOptionalStyleSync(context, syncParser),
         () => parseOptionalStyleAsync(context, parser),
       );
@@ -1208,7 +1208,7 @@ export function withDefault<
             parser,
           );
           const innerResult = dispatchByMode(
-            parser.$mode,
+            parser.mode,
             () => completeOptionalLikeSync(syncParser, innerState, exec),
             async () =>
               await completeOptionalLikeAsync(
@@ -1248,7 +1248,7 @@ export function withDefault<
             parser,
           );
           const innerResult = dispatchByMode(
-            parser.$mode,
+            parser.mode,
             () => completeOptionalLikeSync(syncParser, innerState, exec),
             async () =>
               await completeOptionalLikeAsync(
@@ -1284,7 +1284,7 @@ export function withDefault<
             ValueParserResult<TValue>,
             ValueParserResult<TValue | TDefault>
           >(
-            parser.$mode,
+            parser.mode,
             innerResult,
             handleInnerResult,
           );
@@ -1307,7 +1307,7 @@ export function withDefault<
         parser,
       );
       return dispatchByMode(
-        parser.$mode,
+        parser.mode,
         () =>
           completeOptionalLikeSync(syncParser, innerElement as TState, exec),
         async () =>
@@ -1323,7 +1323,7 @@ export function withDefault<
       prefix: string,
     ) {
       return dispatchIterableByMode(
-        parser.$mode,
+        parser.mode,
         () => suggestSync(context, prefix),
         () => suggestAsync(context, prefix),
       );
@@ -1558,7 +1558,7 @@ export function map<M extends Mode, T, U, TState>(
     exec?: ExecutionContext,
   ): ModeValue<M, ValueParserResult<U>> => {
     return mapModeValue(
-      parser.$mode,
+      parser.mode,
       parser.complete(state, exec),
       (result) => {
         if (!result.success) return result;
@@ -1602,7 +1602,7 @@ export function map<M extends Mode, T, U, TState>(
     complete,
     [extractPhase2SeedKey](state: TState, exec?: ExecutionContext) {
       return mapModeValue(
-        parser.$mode,
+        parser.mode,
         completeOrExtractPhase2Seed(parser, state, exec),
         (seed) => {
           if (seed == null) return null;
@@ -2265,7 +2265,7 @@ export function multiple<M extends Mode, TValue, TState>(
   };
 
   const resultParser = {
-    $mode: parser.$mode,
+    mode: parser.mode,
     $valueType: [] as readonly TValue[],
     $stateType: [] as readonly TState[],
     priority: parser.priority,
@@ -2285,14 +2285,14 @@ export function multiple<M extends Mode, TValue, TState>(
     },
     parse(context: ParserContext<MultipleState>) {
       return dispatchByMode(
-        parser.$mode,
+        parser.mode,
         () => parseSync(context),
         () => parseAsync(context),
       );
     },
     complete(state: MultipleState, exec?: ExecutionContext) {
       return dispatchByMode(
-        parser.$mode,
+        parser.mode,
         () => {
           // Sync complete
           const result: TValue[] = [];
@@ -2360,7 +2360,7 @@ export function multiple<M extends Mode, TValue, TState>(
     },
     [extractPhase2SeedKey](state: MultipleState, exec?: ExecutionContext) {
       return dispatchByMode(
-        parser.$mode,
+        parser.mode,
         () => {
           const values: TValue[] = [];
           const deferredIndices = new Map<PropertyKey, DeferredMap | null>();
@@ -2450,7 +2450,7 @@ export function multiple<M extends Mode, TValue, TState>(
       const canOpenNew = context.state.length < max;
       if (!canExtendCurrent && !canOpenNew) {
         return dispatchIterableByMode(
-          parser.$mode,
+          parser.mode,
           function* () {},
           async function* () {},
         );
@@ -2536,7 +2536,7 @@ export function multiple<M extends Mode, TValue, TState>(
       };
 
       return dispatchIterableByMode(
-        parser.$mode,
+        parser.mode,
         function* () {
           const selectedValues = collectSelectedValuesSync();
           const emitted = new Set<string>();
@@ -2797,7 +2797,7 @@ export function multiple<M extends Mode, TValue, TState>(
         if (!Array.isArray(values)) {
           const actualType = values === null ? "null" : typeof values;
           return wrapForMode<M, ValueParserResult<readonly TValue[]>>(
-            parser.$mode,
+            parser.mode,
             {
               success: false as const,
               error:
@@ -2808,13 +2808,13 @@ export function multiple<M extends Mode, TValue, TState>(
         const arity = validateArity(values);
         if (!arity.success) {
           return wrapForMode<M, ValueParserResult<readonly TValue[]>>(
-            parser.$mode,
+            parser.mode,
             arity,
           );
         }
         if (innerValidate == null) {
           return wrapForMode<M, ValueParserResult<readonly TValue[]>>(
-            parser.$mode,
+            parser.mode,
             arity,
           );
         }
@@ -2825,7 +2825,7 @@ export function multiple<M extends Mode, TValue, TState>(
         // element actually changed to avoid needless churn on the
         // common "already canonical" case (see review r3048978718).
         return dispatchByMode<M, ValueParserResult<readonly TValue[]>>(
-          parser.$mode,
+          parser.mode,
           () => {
             let changed = false;
             const normalized: TValue[] = [];
@@ -2988,7 +2988,7 @@ export function nonEmpty<M extends Mode, T, TState>(
   };
 
   const nonEmptyParser: Parser<M, T, TState> = {
-    $mode: parser.$mode,
+    mode: parser.mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
@@ -3009,7 +3009,7 @@ export function nonEmpty<M extends Mode, T, TState>(
     },
     parse(context: ParserContext<TState>) {
       return dispatchByMode(
-        parser.$mode,
+        parser.mode,
         () => parseSync(context),
         () => parseAsync(context),
       );

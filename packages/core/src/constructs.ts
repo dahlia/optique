@@ -932,7 +932,7 @@ function assertParsers(
     if (
       p == null ||
       (typeof p !== "object" && typeof p !== "function") ||
-      !(r.$mode === "sync" || r.$mode === "async") ||
+      !(r.mode === "sync" || r.mode === "async") ||
       !Array.isArray(r.usage) ||
       typeof r.priority !== "number" || Number.isNaN(r.priority) ||
       !("initialState" in p) ||
@@ -1197,7 +1197,7 @@ function createExclusiveComplete(
           // completability check on empty input).
           if (
             candidate != null &&
-            (parsers[candidate.index].$mode === "sync" ||
+            (parsers[candidate.index].mode === "sync" ||
               (exec?.phase !== "parse" && exec?.phase !== "suggest"))
           ) {
             const p = parsers[candidate.index];
@@ -1313,7 +1313,7 @@ function createExclusiveSuggest(
               withChildContext(context, i, parser.initialState, parser),
               prefix,
             );
-            if (parser.$mode === "async") {
+            if (parser.mode === "async") {
               for await (
                 const s of parserSuggestions as AsyncIterable<Suggestion>
               ) {
@@ -1337,7 +1337,7 @@ function createExclusiveSuggest(
               ),
               prefix,
             );
-            if (parser.$mode === "async") {
+            if (parser.mode === "async") {
               for await (
                 const s of parserSuggestions as AsyncIterable<Suggestion>
               ) {
@@ -3060,7 +3060,7 @@ export function or(
   const noMatchContext = analyzeNoMatchContext(parsers);
 
   // Compute combined mode: if any parser is async, the result is async
-  const combinedMode: Mode = parsers.some((p) => p.$mode === "async")
+  const combinedMode: Mode = parsers.some((p) => p.mode === "async")
     ? "async"
     : "sync";
 
@@ -3858,7 +3858,7 @@ export function or(
   };
 
   const singleResult = {
-    $mode: combinedMode,
+    mode: combinedMode,
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
@@ -4230,7 +4230,7 @@ export function longestMatch(
   const noMatchContext = analyzeNoMatchContext(parsers);
 
   // Compute combined mode: if any parser is async, the result is async
-  const combinedMode: Mode = parsers.some((p) => p.$mode === "async")
+  const combinedMode: Mode = parsers.some((p) => p.mode === "async")
     ? "async"
     : "sync";
 
@@ -4427,7 +4427,7 @@ export function longestMatch(
   };
 
   const multiResult = {
-    $mode: combinedMode,
+    mode: combinedMode,
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
@@ -5657,7 +5657,7 @@ export function object<
 
   // Compute combined mode: if any parser is async, the result is async
   const combinedMode: Mode = parserKeys.some(
-      (k) => parsers[k].$mode === "async",
+      (k) => parsers[k].mode === "async",
     )
     ? "async"
     : "sync";
@@ -6052,7 +6052,7 @@ export function object<
   };
 
   const objectParser = {
-    $mode: combinedMode,
+    mode: combinedMode,
     $valueType: [],
     $stateType: [],
     [fieldParsersKey]: parserPairs,
@@ -6872,7 +6872,7 @@ async function* suggestTupleAsync(
       prefix,
     );
 
-    if (parser.$mode === "async") {
+    if (parser.mode === "async") {
       for await (const s of parserSuggestions as AsyncIterable<Suggestion>) {
         suggestions.push(s);
       }
@@ -7303,7 +7303,7 @@ export function tuple<
   }
 
   // Compute combined mode: if any parser is async, the result is async
-  const combinedMode: Mode = parsers.some((p) => p.$mode === "async")
+  const combinedMode: Mode = parsers.some((p) => p.mode === "async")
     ? "async"
     : "sync";
 
@@ -7591,7 +7591,7 @@ export function tuple<
   };
 
   const tupleParser = {
-    $mode: combinedMode,
+    mode: combinedMode,
     $valueType: [],
     $stateType: [],
     [fieldParsersKey]: parsers.map(
@@ -8280,7 +8280,7 @@ export function merge(
   assertParsers(rawParsers, "merge()");
 
   // Compute combined mode: if any parser is async, the result is async
-  const combinedMode: Mode = rawParsers.some((p) => p.$mode === "async")
+  const combinedMode: Mode = rawParsers.some((p) => p.mode === "async")
     ? "async"
     : "sync";
 
@@ -8610,7 +8610,7 @@ export function merge(
   };
 
   const mergeParser = {
-    $mode: combinedMode,
+    mode: combinedMode,
     $valueType: [],
     $stateType: [],
     [fieldParsersKey]: mergedFieldParsers,
@@ -9416,7 +9416,7 @@ export function merge(
               prefix,
             );
 
-            if (parser.$mode === "async") {
+            if (parser.mode === "async") {
               for await (
                 const s of parserSuggestions as AsyncIterable<Suggestion>
               ) {
@@ -10205,7 +10205,7 @@ export function concat(
   assertParsers(parsers, "concat()");
 
   // Compute combined mode: if any parser is async, the result is async
-  const combinedMode: Mode = parsers.some((p) => p.$mode === "async")
+  const combinedMode: Mode = parsers.some((p) => p.mode === "async")
     ? "async"
     : "sync";
 
@@ -10702,7 +10702,7 @@ export function concat(
   };
 
   const concatParser = {
-    $mode: combinedMode,
+    mode: combinedMode,
     $valueType: [],
     $stateType: [],
     priority: parsers.length > 0
@@ -10898,7 +10898,7 @@ export function concat(
               prefix,
             );
 
-            if (parser.$mode === "async") {
+            if (parser.mode === "async") {
               for await (
                 const s of parserSuggestions as AsyncIterable<Suggestion>
               ) {
@@ -11036,7 +11036,7 @@ export function group<M extends Mode, TValue, TState>(
 ): Parser<M, TValue, TState> {
   validateLabel(label);
   const groupParser: Parser<M, TValue, TState> = {
-    $mode: parser.$mode,
+    mode: parser.mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
@@ -11072,7 +11072,7 @@ export function group<M extends Mode, TValue, TState>(
     suggest: (context, prefix) => {
       if (options.hidden === true) {
         return dispatchIterableByMode(
-          parser.$mode,
+          parser.mode,
           function* () {},
           async function* () {},
         );
@@ -11439,8 +11439,8 @@ export function conditional(
     : branchParsers.map(([_, p]) => p);
 
   // Compute combined mode
-  const combinedMode: Mode = discriminator.$mode === "async" ||
-      allBranchParsers.some((p) => p.$mode === "async")
+  const combinedMode: Mode = discriminator.mode === "async" ||
+      allBranchParsers.some((p) => p.mode === "async")
     ? "async"
     : "sync";
 
@@ -11886,7 +11886,7 @@ export function conditional(
       // complete(), yielding a more specific result.
       if (
         discriminatorResult.consumed.length === 0 &&
-        discriminator.$mode === "async"
+        discriminator.mode === "async"
       ) {
         // Try named branches speculatively: when the discriminator is
         // deferred, we don't know which branch to use, but if exactly one
@@ -13306,7 +13306,7 @@ export function conditional(
       // for sync discriminators — async ones (e.g., prompt()) may
       // trigger side effects that are unsafe during suggest.
       let discResolved = false;
-      if (discriminator.$mode === "sync") {
+      if (discriminator.mode === "sync") {
         const annotatedDiscState = getAnnotatedChildState(
           state,
           state.discriminatorState,
@@ -13411,7 +13411,7 @@ export function conditional(
   }
 
   const conditionalParser = {
-    $mode: combinedMode,
+    mode: combinedMode,
     $valueType: [],
     $stateType: [],
     priority: maxPriority,

@@ -327,7 +327,7 @@ export type CombinedDependencyMode<T extends readonly unknown[]> =
 export interface AnyDependencySource<M extends Mode = Mode> {
   readonly [dependencySourceMarker]: true;
   readonly [dependencyId]: symbol;
-  readonly $mode: M;
+  readonly mode: M;
 }
 
 /**
@@ -588,7 +588,7 @@ export function dependency<M extends Mode, T>(
       options: DeriveSyncOptions<T, U>,
     ): DerivedValueParser<M, U, T> {
       // For sync factories, the mode is determined solely by the source mode
-      if (parser.$mode === "async") {
+      if (parser.mode === "async") {
         return createAsyncDerivedParserFromSyncFactory(
           id,
           options,
@@ -687,7 +687,7 @@ export function deriveFrom<
     );
   }
 
-  const depsAsync = options.dependencies.some((dep) => dep.$mode === "async");
+  const depsAsync = options.dependencies.some((dep) => dep.mode === "async");
 
   const sourceId = options.dependencies.length > 0
     ? options.dependencies[0][dependencyId]
@@ -745,7 +745,7 @@ export function deriveFromSync<
   options: DeriveFromSyncOptions<Deps, T>,
 ): DerivedValueParser<CombinedDependencyMode<Deps>, T, DependencyValues<Deps>> {
   // Check if any dependency is async
-  const depsAsync = options.dependencies.some((dep) => dep.$mode === "async");
+  const depsAsync = options.dependencies.some((dep) => dep.mode === "async");
 
   const sourceId = options.dependencies.length > 0
     ? options.dependencies[0][dependencyId]
@@ -799,8 +799,8 @@ export function deriveFromAsync<
   return createAsyncDerivedFromParserFromAsyncFactory(sourceId, options);
 }
 
-function isAsyncModeParser(parser: { readonly $mode: Mode }): boolean {
-  return parser.$mode === "async";
+function isAsyncModeParser(parser: { readonly mode: Mode }): boolean {
+  return parser.mode === "async";
 }
 
 /**
@@ -927,7 +927,7 @@ function createSyncDerivedFromParser<
   const alldependencyIds = options.dependencies.map((dep) => dep[dependencyId]);
 
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar: options.metavar,
     get placeholder(): T {
       // The factory is synchronous — it returns a ValueParser, not a
@@ -964,7 +964,7 @@ function createSyncDerivedFromParser<
           ? failure
           : snapshotDefaultDependencyValues(failure, sourceValues);
       }
-      if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
+      if (isAsyncModeParser(derivedParser as { readonly mode: Mode })) {
         const failure: ValueParserResult<T> = {
           success: false,
           error:
@@ -994,7 +994,7 @@ function createSyncDerivedFromParser<
         const msg = e instanceof Error ? e.message : String(e);
         return { success: false, error: message`Factory error: ${msg}` };
       }
-      if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
+      if (isAsyncModeParser(derivedParser as { readonly mode: Mode })) {
         const failure: ValueParserResult<T> = {
           success: false,
           error:
@@ -1029,7 +1029,7 @@ function createSyncDerivedFromParser<
         return;
       }
       if (
-        isAsyncModeParser(derivedParser as { readonly $mode: Mode }) ||
+        isAsyncModeParser(derivedParser as { readonly mode: Mode }) ||
         !derivedParser.suggest
       ) {
         return;
@@ -1065,7 +1065,7 @@ function createSyncDerivedFromParser<
         }
       }
       if (
-        isAsyncModeParser(derivedParser as { readonly $mode: Mode }) ||
+        isAsyncModeParser(derivedParser as { readonly mode: Mode }) ||
         !derivedParser.suggest
       ) {
         return;
@@ -1090,7 +1090,7 @@ function createAsyncDerivedFromParserFromAsyncFactory<
   const alldependencyIds = options.dependencies.map((dep) => dep[dependencyId]);
 
   return {
-    $mode: "async",
+    mode: "async",
     metavar: options.metavar,
     get placeholder(): T {
       // The factory is synchronous — it returns a ValueParser, not a
@@ -1234,7 +1234,7 @@ function createAsyncDerivedFromParserFromSyncFactory<
   const alldependencyIds = options.dependencies.map((dep) => dep[dependencyId]);
 
   return {
-    $mode: "async",
+    mode: "async",
     metavar: options.metavar,
     get placeholder(): T {
       // The factory is synchronous — it returns a ValueParser, not a
@@ -1373,7 +1373,7 @@ function createDerivedValueParser<
   // Use the explicit mode to avoid calling the factory during
   // parser construction.
   const factoryReturnsAsync = factoryMode === "async";
-  const isAsync = sourceParser.$mode === "async" || factoryReturnsAsync;
+  const isAsync = sourceParser.mode === "async" || factoryReturnsAsync;
 
   if (isAsync) {
     if (factoryReturnsAsync) {
@@ -1399,7 +1399,7 @@ function createSyncDerivedParser<S, T>(
   options: InternalDeriveOptions<S, T, "sync">,
 ): DerivedValueParser<"sync", T, S> {
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar: options.metavar,
     get placeholder(): T {
       // The factory is synchronous — it returns a ValueParser, not a
@@ -1433,7 +1433,7 @@ function createSyncDerivedParser<S, T>(
           ? snapshotDefaultDependencyValues(failure, [sourceValue])
           : failure;
       }
-      if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
+      if (isAsyncModeParser(derivedParser as { readonly mode: Mode })) {
         const failure: ValueParserResult<T> = {
           success: false,
           error:
@@ -1460,7 +1460,7 @@ function createSyncDerivedParser<S, T>(
         const msg = e instanceof Error ? e.message : String(e);
         return { success: false, error: message`Factory error: ${msg}` };
       }
-      if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
+      if (isAsyncModeParser(derivedParser as { readonly mode: Mode })) {
         return {
           success: false,
           error:
@@ -1497,7 +1497,7 @@ function createSyncDerivedParser<S, T>(
         return;
       }
       if (
-        isAsyncModeParser(derivedParser as { readonly $mode: Mode }) ||
+        isAsyncModeParser(derivedParser as { readonly mode: Mode }) ||
         !derivedParser.suggest
       ) {
         return;
@@ -1521,7 +1521,7 @@ function createSyncDerivedParser<S, T>(
         }
       }
       if (
-        isAsyncModeParser(derivedParser as { readonly $mode: Mode }) ||
+        isAsyncModeParser(derivedParser as { readonly mode: Mode }) ||
         !derivedParser.suggest
       ) {
         return;
@@ -1540,7 +1540,7 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
   options: InternalDeriveOptions<S, T, "async">,
 ): DerivedValueParser<"async", T, S> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: options.metavar,
     get placeholder(): T {
       // The factory is synchronous — it returns a ValueParser, not a
@@ -1664,7 +1664,7 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
   options: InternalDeriveOptions<S, T, "sync">,
 ): DerivedValueParser<"async", T, S> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: options.metavar,
     get placeholder(): T {
       // The factory is synchronous — it returns a ValueParser, not a

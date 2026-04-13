@@ -100,7 +100,7 @@ function assertErrorIncludes(error: Message, text: string): void {
 
 function asyncStringValue(): ValueParser<"async", string> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "ASYNC_STRING",
     placeholder: "",
     parse(input: string): Promise<ValueParserResult<string>> {
@@ -128,7 +128,7 @@ function toAsyncParser<TValue, TState>(
     };
   const asyncParser: Parser<"async", TValue, TState> = {
     ...rest,
-    $mode: "async",
+    mode: "async",
     // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
     async parse(context: ParserContext<TState>) {
       return parser.parse(context);
@@ -235,7 +235,7 @@ describe("or", () => {
       () =>
         or(
           {
-            $mode: "sync",
+            mode: "sync",
             usage: [],
             parse() {},
             getDocFragments() {},
@@ -254,7 +254,7 @@ describe("or", () => {
       () =>
         or(
           {
-            $mode: "sync",
+            mode: "sync",
             usage: null,
             priority: 0,
             initialState: undefined,
@@ -1186,7 +1186,7 @@ describe("or() - duplicate option handling", () => {
     const parserA: Parser<"async", string, string> = {
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
-      $mode: "async",
+      mode: "async",
       priority: 10,
       usage: [{ type: "option", names: ["--shared"], metavar: "VALUE" }],
       leadingNames: new Set(),
@@ -1228,7 +1228,7 @@ describe("or() - duplicate option handling", () => {
     const parserB: Parser<"async", string, string> = {
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
-      $mode: "async",
+      mode: "async",
       priority: 9,
       usage: [
         { type: "option", names: ["--shared"], metavar: "VALUE" },
@@ -1923,7 +1923,7 @@ describe("longestMatch()", () => {
     const parserA: Parser<"sync", string, null> = {
       $valueType: [] as readonly string[],
       $stateType: [] as readonly null[],
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -1969,7 +1969,7 @@ describe("longestMatch()", () => {
     const parserA: Parser<"async", string, null> = {
       $valueType: [] as readonly string[],
       $stateType: [] as readonly null[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -2655,7 +2655,7 @@ describe("object", () => {
     const modeParser: Parser<"async", string, string> = {
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [{
         type: "option",
@@ -2731,7 +2731,7 @@ describe("object", () => {
     ): Parser<"async", string, string> => ({
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
-      $mode: "async",
+      mode: "async",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -3112,7 +3112,7 @@ describe("object", () => {
 
   it("should preserve complete-time values from non-consuming parsers", () => {
     const custom: Parser<"sync", string, null> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -3547,7 +3547,7 @@ describe("object() - duplicate option detection", () => {
     }
 
     const childParser: Parser<"sync", string, PrivateState> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly PrivateState[],
       priority: 0,
@@ -3596,7 +3596,7 @@ describe("object() - duplicate option detection", () => {
     const initialState = { value: "ok" };
     let seenState: unknown;
     const childParser: Parser<"sync", string, typeof initialState> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly (typeof initialState)[],
       priority: 1,
@@ -3663,7 +3663,7 @@ describe("object() - duplicate option detection", () => {
 
     let seenState: unknown;
     const childParser: Parser<"sync", string, PrivateState> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly PrivateState[],
       priority: 1,
@@ -3730,7 +3730,7 @@ describe("object() - duplicate option detection", () => {
       typeof completedValue,
       { seen: boolean }
     > = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly (typeof completedValue)[],
       $stateType: [] as readonly { seen: boolean }[],
       priority: 1,
@@ -3786,7 +3786,7 @@ describe("object() - duplicate option detection", () => {
       { readonly inner: unknown },
       typeof rawState
     > = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly { readonly inner: unknown }[],
       $stateType: [] as readonly (typeof rawState)[],
       priority: 1,
@@ -3893,7 +3893,7 @@ describe("object() - duplicate option detection", () => {
       },
       { readonly value: string }
     > = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly {
         readonly first: readonly string[];
         readonly second: readonly string[];
@@ -3972,7 +3972,7 @@ describe("object() - duplicate option detection", () => {
       typeof initialState,
       typeof initialState
     > = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly (typeof initialState)[],
       $stateType: [] as readonly (typeof initialState)[],
       priority: 1,
@@ -4046,7 +4046,7 @@ describe("object() - duplicate option detection", () => {
 
     const childState = new ChildState();
     const childParser: Parser<"sync", string, ChildState> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly ChildState[],
       priority: 1,
@@ -8180,7 +8180,7 @@ describe("conditional", () => {
   it("should not re-complete discriminator when cached value matches", () => {
     let completeCalls = 0;
     const countingDiscriminator: Parser<"sync", string, null> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -8248,7 +8248,7 @@ describe("conditional", () => {
     // suggest() must not call complete() on async discriminators.
     let completeCalled = false;
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -8287,7 +8287,7 @@ describe("conditional", () => {
     // branch parser should still see inherited annotations.
     const marker = Symbol.for("deferred-branch-ann-test");
     const branchParser: Parser<"sync", string> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -8330,7 +8330,7 @@ describe("conditional", () => {
     // Async discriminator that returns consumed=[] during parse,
     // resolving to "fast" during complete (simulates prompt())
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -8369,7 +8369,7 @@ describe("conditional", () => {
   it("should handle mismatch between speculative and actual branch", async () => {
     // Discriminator resolves to "slow" but user provided --threads (fast branch)
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -8412,7 +8412,7 @@ describe("conditional", () => {
 
   it("should work inside object() when async discriminator is deferred", async () => {
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -8467,7 +8467,7 @@ describe("conditional", () => {
     let branchCompletePhase: string | undefined;
     let discriminatorCompleteCount = 0;
     const branchParser: Parser<"async", number, number> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly number[],
       $stateType: [0] as [number],
       priority: 0,
@@ -8507,7 +8507,7 @@ describe("conditional", () => {
       getDocFragments: () => ({ fragments: [] }),
     };
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -8617,7 +8617,7 @@ describe("conditional", () => {
     let defaultCompletePhase: string | undefined;
     let discriminatorCompleteCount = 0;
     const defaultBranchParser: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -8645,7 +8645,7 @@ describe("conditional", () => {
     // Discriminator resolves to a key NOT in branches so the real
     // complete path falls through to the default branch.
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -8762,7 +8762,7 @@ describe("conditional", () => {
     let discriminatorCompleteCount = 0;
     let discriminatorPhase: string | undefined;
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -8865,7 +8865,7 @@ describe("conditional", () => {
   it("should fall back to deferred when no branch consumes tokens", async () => {
     let completeCalled = false;
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -8908,7 +8908,7 @@ describe("conditional", () => {
 
   it("should propagate discriminator failure for speculative branches", async () => {
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -8955,7 +8955,7 @@ describe("conditional", () => {
 
   it("should skip speculation when multiple branches consume tokens", async () => {
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -9011,7 +9011,7 @@ describe("conditional", () => {
     // branch.  Skip the default and let the parse fail loudly so that
     // the ambiguity surfaces instead of being papered over.
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -9050,7 +9050,7 @@ describe("conditional", () => {
 
   it("should reject contradictory input on speculative mismatch with defaults", async () => {
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -9095,7 +9095,7 @@ describe("conditional", () => {
 
   it("should detect mismatch before branch completion errors", async () => {
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -9147,7 +9147,7 @@ describe("conditional", () => {
 
   it("should not block or() alternatives with speculative commit", async () => {
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -9189,7 +9189,7 @@ describe("conditional", () => {
 
   it("should use the branchMismatch error hook when speculative selection contradicts the discriminator", async () => {
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -9250,7 +9250,7 @@ describe("conditional", () => {
     // provisional fallback because the active branch already consumed
     // tokens.
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -9299,7 +9299,7 @@ describe("conditional", () => {
 
   it("should propagate branch-specific parse errors from speculation", async () => {
     const asyncDiscriminator: Parser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -9352,7 +9352,7 @@ describe("conditional", () => {
     // contaminated by the branch's source, it returns "slow" (which
     // would mismatch).
     const isolationProbe: Parser<"async", string, null> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -9386,7 +9386,7 @@ describe("conditional", () => {
       number,
       { readonly value: number } | null
     > = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly number[],
       $stateType: [null] as [{ readonly value: number } | null],
       priority: 10,
@@ -9476,7 +9476,7 @@ describe("conditional", () => {
     // incidental branch composition and contradicts the ambiguity
     // skip.
     const asyncDiscriminator: Parser<"async", string, null> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -9499,7 +9499,7 @@ describe("conditional", () => {
     // provisional success (mimicking what a nested speculative
     // conditional() would produce).
     const makeProvisionalConsumer = (): Parser<"async", string, null> => ({
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -9536,7 +9536,7 @@ describe("conditional", () => {
     // A custom branch that consumes "--a" and then fails at parse
     // time (sets speculativeError because !success && consumed > 0).
     const failingConsumer: Parser<"async", string, null> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [null] as [null],
       priority: 0,
@@ -10966,7 +10966,7 @@ describe("branch coverage: conditional() complete/suggest edges", () => {
 
   it("sync complete falls back to selected branch key when discriminator completion fails", () => {
     const badDiscriminator: Parser<"sync", string, string> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 10,
@@ -11065,7 +11065,7 @@ describe("branch coverage: conditional() complete/suggest edges", () => {
 
   it("conditional usage appends literal through optional/multiple/exclusive", () => {
     const discriminator: Parser<"sync", string, undefined> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 1,
@@ -11260,14 +11260,14 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.ok(!result.success);
   });
 
-  // ----- createExclusiveSuggest: parser.$mode === "async" else branch (line 575) -----
+  // ----- createExclusiveSuggest: parser.mode === "async" else branch (line 575) -----
   it("or() async suggest: selected sync parser goes through else branch", async () => {
     // An async-mode or() with a sync inner parser: when a sync parser's
     // suggestions are collected in the async path, the else branch at line 575
     // is hit (push via spread, not async iteration).
     const syncParser = option("--sync", string());
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -11283,7 +11283,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- suggestObjectAsync: DependencyRegistry false branch (line 2294) -----
   it("suggestObjectAsync with no dependency registry builds fresh registry", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -11301,7 +11301,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- suggestObjectAsync: field not in context.state (line 2268 / 2317) -----
   it("suggestObjectAsync with state missing some fields uses initialState", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -11414,7 +11414,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- object() parseAsync: error.consumed update (line 2971) -----
   it("object() parseAsync updates best error when consumed improves", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -11432,7 +11432,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- object() parseAsync: allCanComplete false path (line 3014) -----
   it("object() parseAsync fails when required field cannot complete", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -11466,7 +11466,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     // withDefault(option(...)) creates a parser with PendingDependencySourceState.
     // Using an async value parser forces object() into async mode.
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -11489,7 +11489,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     // An option with dependencySource creates PendingDependencySourceState as initialState.
     // We need an async object to exercise the async complete path.
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -11508,7 +11508,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("object() sync complete handles explicit pending state (Phase 1 Case 1)", () => {
     const dep = createPendingDependencySourceState(Symbol("obj-sync-case1"));
     const source = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -11541,7 +11541,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("object() sync complete handles undefined with pending initialState (Phase 1 Case 2)", () => {
     const dep = createPendingDependencySourceState(Symbol("obj-sync-case2"));
     const source = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -11574,7 +11574,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("object() async complete handles explicit pending and pending initialState", async () => {
     const dep = createPendingDependencySourceState(Symbol("obj-async-cases"));
     const source = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -11616,7 +11616,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("object() complete extracts pre-completed dependency failure (sync)", () => {
     const dep = createPendingDependencySourceState(Symbol("obj-sync-dep"));
     const failingWrapped = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -11652,7 +11652,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("object() complete extracts pre-completed dependency failure (async)", async () => {
     const dep = createPendingDependencySourceState(Symbol("obj-async-dep"));
     const failingWrapped = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -11691,7 +11691,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("object() async complete short-circuits before deferred later fields", async () => {
     let laterFieldCompleted = false;
     const first = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 1,
@@ -11714,7 +11714,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as unknown as Parser<"async", string, undefined>;
     const later = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -11762,7 +11762,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- suggestTupleAsync: sync parser in async path (line 3391) -----
   it("suggestTupleAsync: sync parser in async tuple goes through else branch", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -11780,7 +11780,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- tuple() parseAsync: zero-consumed success (line 3681) -----
   it("tuple() parseAsync handles optional parser succeeding without consuming", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -11833,7 +11833,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       dep: ReturnType<typeof createPendingDependencySourceState>,
     ) =>
       ({
-        $mode: "sync" as const,
+        mode: "sync" as const,
         $valueType: undefined,
         $stateType: undefined,
         priority: 0,
@@ -11881,7 +11881,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
 
   it("tuple() async complete Case 1: PendingDependencySourceState", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -11901,7 +11901,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
 
   it("tuple() async complete Case 2: undefined state, initialState is Pending", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -11926,7 +11926,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       dep: ReturnType<typeof createPendingDependencySourceState>,
     ) =>
       ({
-        $mode: "async" as const,
+        mode: "async" as const,
         $valueType: undefined,
         $stateType: undefined,
         priority: 0,
@@ -11981,7 +11981,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("tuple() complete pre-completed dependency failure (sync)", () => {
     const dep = createPendingDependencySourceState(Symbol("tuple-sync-dep"));
     const failingWrapped = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -12016,7 +12016,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("tuple() complete pre-completed dependency failure (async)", async () => {
     const dep = createPendingDependencySourceState(Symbol("tuple-async-dep"));
     const failingWrapped = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -12054,7 +12054,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("tuple() complete pre-completed dependency success (sync + async)", async () => {
     const syncDep = createPendingDependencySourceState(Symbol("tuple-sync-ok"));
     const syncWrapped = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -12086,7 +12086,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       Symbol("tuple-async-ok"),
     );
     const asyncWrapped = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -12134,7 +12134,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
 
   it("tuple() getDocFragments merges untitled section entries", () => {
     const parserWithUntitledSection = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: undefined,
       $stateType: undefined,
       priority: 0,
@@ -12272,7 +12272,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- merge() suggest: async parser with sync inner (line 5517) -----
   it("merge() async suggest: sync inner parser goes through else branch", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12281,7 +12281,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const p1 = object({ a: option("--a", asyncValueParser) });
     const p2 = object({ b: flag("--b") });
     const m = merge(p1, p2);
-    // m is async; async suggest path at line 5504 checks parser.$mode:
+    // m is async; async suggest path at line 5504 checks parser.mode:
     // p2 is sync → else branch (line 5510/5517 area)
     const suggs = await suggestAsync(m, ["--"]);
     assert.ok(Array.isArray(suggs));
@@ -12398,7 +12398,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
 
   it("concat() parseAsync updates error and fails when nothing matches", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12442,7 +12442,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- concatTuples() completeAsync: array value flattened (line 6083) -----
   it("concat() async complete flattens results", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12485,7 +12485,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- conditional() async parse: selectedBranch branch (lines 6769-6783) -----
   it("conditional() async parse: delegates to selected branch parser", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12508,7 +12508,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- conditional() async parse: no-match/default branch (lines 6865-6893) -----
   it("conditional() async parse: default branch used when discriminator no-match", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12530,7 +12530,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- conditional() async complete: selectedBranch.kind === "default" (line 7047) -----
   it("conditional() async complete: default branch selected", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12553,7 +12553,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- conditional() async complete: named branch selected (lines 7064/7070) -----
   it("conditional() async complete: named branch selected, discriminator succeeds", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12574,7 +12574,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- conditional() async suggest: no branch selected (lines 7131/7142) -----
   it("conditional() async suggest: no branch selected yields discriminator suggestions", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12594,7 +12594,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- conditional() async suggest: branch selected (line 7153) -----
   it("conditional() async suggest: selected branch yields branch suggestions", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12615,7 +12615,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- conditional() async no-match failure (line 6912) -----
   it("conditional() async parse fails when nothing matches and no default", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12633,7 +12633,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- conditional() async complete: no branch, no default (line 6998) -----
   it("conditional() async complete with no branch and no default returns error", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12651,7 +12651,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   // ----- conditional() async complete: branchError option (line 7047/7048) -----
   it("conditional() async complete with branchError option uses custom error", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12699,7 +12699,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("conditional() async complete falls back to selectedBranch.key on discriminator failure", async () => {
     // Build an async conditional where discriminator complete is normal
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12731,7 +12731,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.ok(Array.isArray([...syncSuggestions]));
 
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12760,7 +12760,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
 
   it("concat() suggest handles non-array state in async mode", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12819,7 +12819,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.ok(syncFromSelected.success);
 
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12830,7 +12830,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       string,
       { readonly value: string }
     > = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { readonly value: string }[],
       priority: 0,
@@ -12919,7 +12919,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     }
 
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -12957,7 +12957,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       string,
       { value: string }
     > => ({
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { value: string }[],
       priority: 1,
@@ -13037,7 +13037,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       string,
       { readonly value: string }
     > = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { readonly value: string }[],
       priority: 1,
@@ -13119,7 +13119,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         string,
         { readonly value: string }
       > = {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly { readonly value: string }[],
         priority: 1,
@@ -13214,7 +13214,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         { readonly inner: { readonly value: string } },
         { readonly value: string }
       > = {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly {
           readonly inner: { readonly value: string };
         }[],
@@ -13639,7 +13639,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         const { parser: modeParser, getCallCount } =
           createCountingSourceParser();
         const discriminator: Parser<"sync", string, undefined> = {
-          $mode: "sync",
+          mode: "sync",
           $valueType: [] as readonly string[],
           $stateType: [] as readonly undefined[],
           priority: 0,
@@ -13682,7 +13682,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         const { parser: modeParser, getCallCount } =
           createCountingSourceParser();
         const discriminator: Parser<"sync", string, undefined> = {
-          $mode: "sync",
+          mode: "sync",
           $valueType: [] as readonly string[],
           $stateType: [] as readonly undefined[],
           priority: 0,
@@ -13726,7 +13726,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       it("object() seeds child completion with a fallback exec", () => {
         let childExec: ExecutionContext | undefined;
         const seedableParser: Parser<"sync", string, undefined> = {
-          $mode: "sync",
+          mode: "sync",
           $valueType: [] as readonly string[],
           $stateType: [] as readonly undefined[],
           priority: 0,
@@ -13773,7 +13773,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       it("tuple() seeds child completion with a fallback exec", () => {
         let childExec: ExecutionContext | undefined;
         const seedableParser: Parser<"sync", string, undefined> = {
-          $mode: "sync",
+          mode: "sync",
           $valueType: [] as readonly string[],
           $stateType: [] as readonly undefined[],
           priority: 0,
@@ -13847,7 +13847,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       ) {
         it(`${name} extracts seeds from a unique zero-input branch`, () => {
           const seedableParser: Parser<"sync", string, { ready: boolean }> = {
-            $mode: "sync",
+            mode: "sync",
             $valueType: [] as readonly string[],
             $stateType: [] as readonly { ready: boolean }[],
             priority: 0,
@@ -13911,7 +13911,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         "conditional() extracts async completion-only seeds from the selected branch",
         async () => {
           const discriminator: Parser<"sync", string, undefined> = {
-            $mode: "sync",
+            mode: "sync",
             $valueType: [] as readonly string[],
             $stateType: [] as readonly undefined[],
             priority: 0,
@@ -13954,7 +13954,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
 
   it("conditional() suggest handles undefined and selected branch states", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),
@@ -14010,7 +14010,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       { readonly dynamic: string },
       { readonly dynamicState?: string } | undefined
     > = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly { readonly dynamic: string }[],
       $stateType:
         [] as readonly ({ readonly dynamicState?: string } | undefined)[],
@@ -14072,7 +14072,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("conditional() complete uses DependencySourceState discriminator value (sync)", () => {
     const dep = Symbol("cond-disc-sync");
     const discriminator = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
@@ -14097,7 +14097,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as unknown as Parser<"sync", string, string>;
     const slowBranch = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -14135,7 +14135,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("conditional() complete falls back to selected key on discriminator dependency failure", () => {
     const dep = Symbol("cond-disc-sync-fail");
     const discriminator = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
@@ -14160,7 +14160,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as unknown as Parser<"sync", string, string>;
     const slowBranch = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -14199,7 +14199,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const dep = Symbol("cond-disc-default-sync");
     let discriminatorCompleteCalls = 0;
     const discriminator = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
@@ -14230,7 +14230,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as unknown as Parser<"sync", string, string>;
     const defaultBranch = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -14277,7 +14277,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       string,
       { readonly value: string }
     > = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { readonly value: string }[],
       priority: 0,
@@ -14329,7 +14329,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       "fast",
       { readonly seen: boolean }
     > = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly "fast"[],
       $stateType: [] as readonly { readonly seen: boolean }[],
       priority: 0,
@@ -14412,7 +14412,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       string,
       { readonly value: string }
     > = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { readonly value: string }[],
       priority: 0,
@@ -14483,7 +14483,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       string,
       { readonly value: string }
     > = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { readonly value: string }[],
       priority: 0,
@@ -14557,7 +14557,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       string,
       { readonly value: string }
     > = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { readonly value: string }[],
       priority: 0,
@@ -14637,7 +14637,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("conditional() async complete uses DependencySourceState discriminator value", async () => {
     const dep = Symbol("cond-disc-async");
     const discriminator = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
@@ -14664,7 +14664,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as unknown as Parser<"async", string, string>;
     const slowBranch = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -14707,7 +14707,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const dep = Symbol("cond-disc-default-async");
     let discriminatorCompleteCalls = 0;
     const discriminator = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
@@ -14740,7 +14740,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as unknown as Parser<"async", string, string>;
     const defaultBranch = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -14818,7 +14818,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const staleRegistry = new DependencyRegistry();
     const freshRegistry = new DependencyRegistry();
     const tupleFirstChild = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -14836,7 +14836,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as const satisfies Parser<"sync", string, undefined>;
     const tupleChild = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -14883,7 +14883,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     );
 
     const mergeFirstChild = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly { readonly first: string }[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -14901,7 +14901,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as const satisfies Parser<"sync", { readonly first: string }, undefined>;
     const mergeChild = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly { readonly value: string }[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -14948,7 +14948,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     );
 
     const concatFirstChild = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly [string][],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -14966,7 +14966,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as const satisfies Parser<"sync", readonly [string], undefined>;
     const concatChild = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly [string][],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -15021,7 +15021,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     let completeCalls = 0;
     const sourceId = Symbol("concat-sync-suggest-source");
     const firstField = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -15040,7 +15040,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as const satisfies Parser<"sync", string, undefined>;
     const sourceField = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -15105,7 +15105,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     let completeCalls = 0;
     const sourceId = Symbol("concat-async-suggest-source");
     const firstField = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -15131,7 +15131,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as const satisfies Parser<"async", string, undefined>;
     const childField = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -15209,7 +15209,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("merge() complete preserves child-local duplicate sources", () => {
     const sourceId = Symbol("merge-duplicate-source");
     const sharedSource = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly (string | undefined)[],
       $stateType: [] as readonly unknown[],
       priority: 0,
@@ -15268,7 +15268,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       },
     } as const satisfies Parser<"sync", string | undefined, unknown>;
     const derivedField = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -15291,7 +15291,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as const satisfies Parser<"sync", string, undefined>;
     const unrelatedShared = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly unknown[],
       priority: 0,
@@ -15347,7 +15347,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("merge() complete ignores ambiguous duplicate sources across children", () => {
     const sourceId = Symbol("merge-duplicate-source-cross-child");
     const sharedSource = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly (string | undefined)[],
       $stateType: [] as readonly unknown[],
       priority: 0,
@@ -15406,7 +15406,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       },
     } as const satisfies Parser<"sync", string | undefined, unknown>;
     const derivedField = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -15429,7 +15429,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as const satisfies Parser<"sync", string, undefined>;
     const unrelatedShared = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly unknown[],
       priority: 0,
@@ -15485,7 +15485,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("merge() async complete preserves child-local duplicate sources", async () => {
     const sourceId = Symbol("merge-duplicate-source-async");
     const sharedSource = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly (string | undefined)[],
       $stateType: [] as readonly unknown[],
       priority: 0,
@@ -15544,7 +15544,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       },
     } as const satisfies Parser<"sync", string | undefined, unknown>;
     const derivedField = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -15567,7 +15567,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as const satisfies Parser<"sync", string, undefined>;
     const unrelatedShared = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly unknown[],
       priority: 0,
@@ -15623,7 +15623,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("merge() async complete ignores ambiguous duplicate sources across children", async () => {
     const sourceId = Symbol("merge-duplicate-source-cross-child-async");
     const sharedSource = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly (string | undefined)[],
       $stateType: [] as readonly unknown[],
       priority: 0,
@@ -15682,7 +15682,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       },
     } as const satisfies Parser<"sync", string | undefined, unknown>;
     const derivedField = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -15705,7 +15705,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as const satisfies Parser<"sync", string, undefined>;
     const unrelatedShared = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly unknown[],
       priority: 0,
@@ -15763,7 +15763,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       const sourceId = Symbol("merge-duplicate-source-suggest-local-sync");
       const expectedToken = failed ? "broken" : "first";
       const sharedSource = {
-        $mode: "sync" as const,
+        mode: "sync" as const,
         $valueType: [] as readonly (string | undefined)[],
         $stateType: [] as readonly unknown[],
         priority: 0,
@@ -15834,7 +15834,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         },
       } as const satisfies Parser<"sync", string | undefined, unknown>;
       const derivedField = {
-        $mode: "sync" as const,
+        mode: "sync" as const,
         $valueType: [] as readonly string[],
         $stateType: [] as readonly undefined[],
         priority: 0,
@@ -15857,7 +15857,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         getDocFragments: () => ({ fragments: [] }),
       } as const satisfies Parser<"sync", string, undefined>;
       const unrelatedShared = {
-        $mode: "sync" as const,
+        mode: "sync" as const,
         $valueType: [] as readonly string[],
         $stateType: [] as readonly unknown[],
         priority: 0,
@@ -15892,7 +15892,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       const sourceId = Symbol("merge-duplicate-source-suggest-local-async");
       const expectedToken = failed ? "broken" : "first";
       const sharedSource = {
-        $mode: "async" as const,
+        mode: "async" as const,
         $valueType: [] as readonly (string | undefined)[],
         $stateType: [] as readonly unknown[],
         priority: 0,
@@ -15963,7 +15963,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         },
       } as const satisfies Parser<"async", string | undefined, unknown>;
       const derivedField = {
-        $mode: "async" as const,
+        mode: "async" as const,
         $valueType: [] as readonly string[],
         $stateType: [] as readonly undefined[],
         priority: 0,
@@ -15990,7 +15990,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
         getDocFragments: () => ({ fragments: [] }),
       } as const satisfies Parser<"async", string, undefined>;
       const unrelatedShared = {
-        $mode: "async" as const,
+        mode: "async" as const,
         $valueType: [] as readonly string[],
         $stateType: [] as readonly unknown[],
         priority: 0,
@@ -16153,7 +16153,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("merge() suggest ignores ambiguous duplicate source keys", async () => {
     const sourceId = Symbol("merge-duplicate-source-suggest-ambiguous");
     const syncSharedSource = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly (string | undefined)[],
       $stateType: [] as readonly unknown[],
       priority: 0,
@@ -16210,7 +16210,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       },
     } as const satisfies Parser<"sync", string | undefined, unknown>;
     const syncDerivedField = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -16233,7 +16233,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as const satisfies Parser<"sync", string, undefined>;
     const syncUnrelatedShared = {
-      $mode: "sync" as const,
+      mode: "sync" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly unknown[],
       priority: 0,
@@ -16285,7 +16285,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     );
 
     const asyncSharedSource = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly (string | undefined)[],
       $stateType: [] as readonly unknown[],
       priority: 0,
@@ -16342,7 +16342,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       },
     } as const satisfies Parser<"async", string | undefined, unknown>;
     const asyncDerivedField = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -16369,7 +16369,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as const satisfies Parser<"async", string, undefined>;
     const asyncUnrelatedShared = {
-      $mode: "async" as const,
+      mode: "async" as const,
       $valueType: [] as readonly string[],
       $stateType: [] as readonly unknown[],
       priority: 0,
@@ -16576,7 +16576,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
 
   it("concat() marks zero-consumed failures as matched in sync and async", async () => {
     const failSync: Parser<"sync", readonly string[], undefined> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly (readonly string[])[],
       $stateType: [] as readonly undefined[],
       priority: 5,
@@ -16610,7 +16610,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     }
 
     const failAsync: Parser<"async", readonly string[], undefined> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly (readonly string[])[],
       $stateType: [] as readonly undefined[],
       priority: 5,
@@ -16696,7 +16696,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("conditional() async complete returns default branch failure", async () => {
     const discriminator = option("--mode", asyncStringValue());
     const failingDefault: Parser<"async", string, undefined> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 1,
@@ -16767,7 +16767,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
 
   it("concat() parse sync returns deepest consuming error", () => {
     const failing: Parser<"sync", readonly unknown[], undefined> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly (readonly unknown[])[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -16798,7 +16798,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
 
   it("concat() handles scalar completion values and empty priority", async () => {
     const syncScalar = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly unknown[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -16818,7 +16818,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
       }),
     } as unknown as Parser<"sync", unknown, undefined>;
     const asyncScalar = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly unknown[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -16978,7 +16978,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
   it("conditional() async complete handles dependency source completion state", async () => {
     const dep = Symbol("conditional-dep");
     const discriminator = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly unknown[],
       priority: 1,
@@ -17009,7 +17009,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     } as unknown as Parser<"async", string, unknown>;
 
     const fastBranch = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly unknown[],
       priority: 1,
@@ -17045,7 +17045,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
 
   it("conditional() async complete falls back to selected key on discriminator failure", async () => {
     const discriminator = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly unknown[],
       priority: 1,
@@ -17071,7 +17071,7 @@ describe("branch coverage: constructs.ts edge cases", () => {
     } as unknown as Parser<"async", string, unknown>;
 
     const fastBranch = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly unknown[],
       priority: 1,
@@ -17242,7 +17242,7 @@ describe("merge()/concat() suggest with cross-parser dependencies", () => {
   // pre-parsing, so later sync dependency sources are still resolved.
   it("concat() suggest skips unmatched async child", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VAL",
       placeholder: "",
       parse: (v) => Promise.resolve({ success: true, value: v }),

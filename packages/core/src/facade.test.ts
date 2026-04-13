@@ -5572,7 +5572,7 @@ describe("runWith", () => {
       const sharedKey = Symbol.for("@test/phase-merge-priority");
 
       const parser: Parser<"sync", string, string | undefined> = {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly (string | undefined)[],
         priority: 1,
@@ -5641,7 +5641,7 @@ describe("runWith", () => {
       const sharedKey = Symbol.for("@test/phase-clear-priority");
 
       const parser: Parser<"sync", string | undefined, undefined> = {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly (string | undefined)[],
         $stateType: [] as readonly undefined[],
         priority: 1,
@@ -6216,7 +6216,7 @@ describe("runWith", () => {
         { readonly value: string },
         string | undefined
       > = {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly { readonly value: string }[],
         $stateType: [] as readonly (string | undefined)[],
         priority: 0,
@@ -6424,7 +6424,7 @@ describe("runWith", () => {
         readDisposed: () => boolean,
       ): Parser<"sync", boolean, string | null> {
         return {
-          $mode: "sync",
+          mode: "sync",
           $valueType: [] as readonly boolean[],
           $stateType: [] as readonly (string | null)[],
           priority: 0,
@@ -6466,7 +6466,7 @@ describe("runWith", () => {
         completeValue: (state: string) => Promise<string>,
       ): Parser<"async", string, string | null> {
         return {
-          $mode: "async",
+          mode: "async",
           $valueType: [] as readonly string[],
           $stateType: [] as readonly (string | null)[],
           priority: 0,
@@ -7468,7 +7468,7 @@ describe("runWithSync", () => {
         { readonly value: string },
         string | undefined
       > = {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly { readonly value: string }[],
         $stateType: [] as readonly (string | undefined)[],
         priority: 0,
@@ -7903,7 +7903,7 @@ describe("runWithSync", () => {
       const sharedKey = Symbol.for("@test/phase-merge-priority-sync");
 
       const parser: Parser<"sync", string, string | undefined> = {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly (string | undefined)[],
         priority: 1,
@@ -7972,7 +7972,7 @@ describe("runWithSync", () => {
       const sharedKey = Symbol.for("@test/phase-clear-priority-sync");
 
       const parser: Parser<"sync", string | undefined, undefined> = {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly (string | undefined)[],
         $stateType: [] as readonly undefined[],
         priority: 1,
@@ -10192,7 +10192,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     const parser: Parser<"sync", AnnotationValue | null, undefined> = {
       $valueType: [] as readonly (AnnotationValue | null)[],
       $stateType: [] as readonly undefined[],
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -10292,7 +10292,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     let phase2Parsed: unknown;
 
     const tokenParser: Parser<"sync", string, undefined> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -10370,7 +10370,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     let phase2Called = false;
 
     const tokenParser: Parser<"async", string, undefined> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -10448,7 +10448,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     let phase2Called = false;
 
     const tokenParser: Parser<"sync", string, { token: string | null }> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { token: string | null }[],
       priority: 0,
@@ -10538,7 +10538,7 @@ describe("branch coverage: facade.ts edge cases", () => {
         { readonly config: string; readonly token: string },
         { readonly config?: string; readonly token?: string }
       > = {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly {
           readonly config: string;
           readonly token: string;
@@ -10666,7 +10666,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       { readonly config: string; readonly token: string },
       { readonly config?: string; readonly token?: string }
     > = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly {
         readonly config: string;
         readonly token: string;
@@ -10788,7 +10788,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     let phase2Called = false;
 
     const parser: Parser<"sync", string, undefined> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -10851,7 +10851,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     let phase2Called = false;
 
     const parser: Parser<"async", string, undefined> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -10915,7 +10915,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     const tokenKey = Symbol.for("@test/dyn-phase-two-group-seed");
 
     const tokenParser: Parser<"sync", string, undefined> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -10993,7 +10993,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     const tokenKey = Symbol.for("@test/dyn-phase-two-non-empty-seed");
 
     const tokenParser: Parser<"sync", string, undefined> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -11071,7 +11071,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     const runtimeExtractPhase2SeedKey = getRuntimeExtractPhase2SeedKey();
 
     const tokenParser: Parser<"sync", string, undefined> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -11135,7 +11135,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     const runtimeExtractPhase2SeedKey = getRuntimeExtractPhase2SeedKey();
 
     const tokenParser: Parser<"async", string, undefined> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -11211,7 +11211,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     };
 
     const configParser: Parser<"sync", string, string | undefined> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly (string | undefined)[],
       priority: 0,
@@ -11250,7 +11250,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     };
 
     const tokenParser: Parser<"sync", string, undefined> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -11362,7 +11362,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     // Build a proper async-mode parser; state must be an object (not array)
     // because injectAnnotationsIntoParser spreads initialState as an object.
     const asyncParser: Parser<"async", string, { value: string | null }> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { value: string | null }[],
       priority: 0,
@@ -11413,7 +11413,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     async () => {
       const key = Symbol.for("@test/two-pass-undefined-first-pass-async");
       const parser: Parser<"sync", string | undefined, null> = {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly (string | undefined)[],
         $stateType: [] as readonly null[],
         priority: 0,
@@ -11466,7 +11466,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     };
     // Use a native async parser with object state (not array)
     const asyncParser: Parser<"async", string, { value: string | null }> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { value: string | null }[],
       priority: 0,
@@ -11560,7 +11560,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     let parseCalls = 0;
     const ctxKey = Symbol.for("@test/sync-single-pass-meta-probe");
     const parser: Parser<"sync", string, string | undefined> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly (string | undefined)[],
       priority: 0,
@@ -11656,7 +11656,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       },
     };
     const parser: Parser<"sync", string, undefined> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -11699,7 +11699,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     () => {
       const key = Symbol.for("@test/two-pass-undefined-first-pass-sync");
       const parser: Parser<"sync", string | undefined, null> = {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly (string | undefined)[],
         $stateType: [] as readonly null[],
         priority: 0,
@@ -11774,7 +11774,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     const parser: Parser<"sync", AnnotationValue | null, undefined> = {
       $valueType: [] as readonly (AnnotationValue | null)[],
       $stateType: [] as readonly undefined[],
-      $mode: "sync",
+      mode: "sync",
       priority: 0,
       usage: [],
       leadingNames: new Set(),
@@ -12017,7 +12017,7 @@ describe("branch coverage: facade.ts edge cases", () => {
 
   it("runWith takes async early-exit branch for completion command", async () => {
     const asyncParser: Parser<"async", string, { value: string | null }> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { value: string | null }[],
       priority: 0,
@@ -12077,7 +12077,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       },
     };
     const throwingParser: Parser<"async", string, { value: string | null }> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { value: string | null }[],
       priority: 0,
@@ -12123,7 +12123,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       },
     };
     const throwingParser: Parser<"sync", string, { value: string | null }> = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { value: string | null }[],
       priority: 0,
@@ -12165,7 +12165,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       },
       undefined
     > = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as never,
       $stateType: [] as never,
       priority: 0,
@@ -12222,7 +12222,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       },
       undefined
     > = {
-      $mode: "sync",
+      mode: "sync",
       $valueType: [] as never,
       $stateType: [] as never,
       priority: 0,
@@ -12268,7 +12268,7 @@ describe("branch coverage: facade.ts edge cases", () => {
   it("does not reclassify consumed help tokens after sync parse failures", () => {
     const parsers: readonly Parser<"sync", string, undefined>[] = [
       {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly undefined[],
         priority: 0,
@@ -12295,7 +12295,7 @@ describe("branch coverage: facade.ts edge cases", () => {
         },
       },
       {
-        $mode: "sync",
+        mode: "sync",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly undefined[],
         priority: 0,
@@ -12345,7 +12345,7 @@ describe("branch coverage: facade.ts edge cases", () => {
   it("does not reclassify consumed help tokens after async parse failures", async () => {
     const parsers: readonly Parser<"async", string, undefined>[] = [
       {
-        $mode: "async",
+        mode: "async",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly undefined[],
         priority: 0,
@@ -12372,7 +12372,7 @@ describe("branch coverage: facade.ts edge cases", () => {
         },
       },
       {
-        $mode: "async",
+        mode: "async",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly undefined[],
         priority: 0,
@@ -12431,7 +12431,7 @@ describe("branch coverage: facade.ts edge cases", () => {
 
   it("runWith uses async fast-path without contexts and with single-pass contexts", async () => {
     const asyncParser: Parser<"async", string, { value: string | null }> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly { value: string | null }[],
       priority: 0,
@@ -12496,7 +12496,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     let parseCalls = 0;
     const ctxKey = Symbol.for("@test/async-two-phase-no-meta-probe");
     const parser: Parser<"async", string, string | undefined> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly (string | undefined)[],
       priority: 0,
@@ -12593,7 +12593,7 @@ describe("branch coverage: facade.ts edge cases", () => {
 
   it("completion unsupported shell follows async dispatch path", async () => {
     const asyncParser: Parser<"async", Record<string, never>, undefined> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as never,
       $stateType: [] as never,
       priority: 0,
@@ -12696,7 +12696,7 @@ describe("branch coverage: facade.ts edge cases", () => {
 
   it("uses async help-command validation path before showing help", async () => {
     const asyncParser: Parser<"async", string, undefined> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as never,
       $stateType: [] as never,
       priority: 0,
@@ -12748,7 +12748,7 @@ describe("branch coverage: facade.ts edge cases", () => {
 
   it("reports invalid async help command path before showing help", async () => {
     const asyncParser: Parser<"async", string, undefined> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as never,
       $stateType: [] as never,
       priority: 0,
@@ -12941,7 +12941,7 @@ describe("branch coverage: facade.ts edge cases", () => {
 
   it("aboveError=help with async parser uses promise doc path and usage fallback", async () => {
     const asyncParser: Parser<"async", string, undefined> = {
-      $mode: "async",
+      mode: "async",
       $valueType: [] as readonly string[],
       $stateType: [] as readonly undefined[],
       priority: 0,
@@ -13394,7 +13394,7 @@ describe("branch coverage: facade.ts edge cases", () => {
 describe("runParserSync", () => {
   it("should reject async parser at runtime", () => {
     const asyncVp: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "STR",
       placeholder: "",
       parse(input: string) {
@@ -13419,7 +13419,7 @@ describe("runParserSync", () => {
 describe("runWithSync async parser rejection", () => {
   it("should reject async parser at runtime", () => {
     const asyncVp: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "STR",
       placeholder: "",
       parse(input: string) {

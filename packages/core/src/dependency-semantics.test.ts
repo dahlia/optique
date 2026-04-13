@@ -41,7 +41,7 @@ function createEnvSource() {
 
 function asyncChoice<T extends string>(choices: readonly T[]) {
   return {
-    $mode: "async" as const,
+    mode: "async" as const,
     metavar: choices.join("|") as NonEmptyString,
     placeholder: "",
     parse(input: string) {

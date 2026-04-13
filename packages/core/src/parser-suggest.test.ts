@@ -252,7 +252,7 @@ describe("Parser suggest() methods", () => {
 
     it("should not suggest after async argument is already consumed", async () => {
       const asyncParser: ValueParser<"async", string> = {
-        $mode: "async",
+        mode: "async",
         metavar: "CHOICE",
         placeholder: "",
         parse(input: string) {

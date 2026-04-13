@@ -163,7 +163,7 @@ function configOption(
   return {
     $valueType: [] as const,
     $stateType: [] as const,
-    $mode: "sync",
+    mode: "sync",
     priority: 0,
     usage: [],
     leadingNames: new Set(),
@@ -200,6 +200,11 @@ function configOption(
   };
 }
 ~~~~
+
+Here, `mode` is a real runtime field that Optique reads to decide whether the
+parser runs synchronously or asynchronously. By contrast, `$valueType` and
+`$stateType` are type markers for inference and do not carry meaningful runtime
+information.
 
 The key insight here is that `complete()` receives the accumulated parser state,
 which includes any annotations passed to `parse()`. By calling
@@ -660,7 +665,7 @@ interface EnvironmentData {
 // ---cut-before---
 function portValidator(): ValueParser<"sync", number> {
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar: "PORT",
     placeholder: 1,
 

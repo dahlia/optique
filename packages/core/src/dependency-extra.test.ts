@@ -55,7 +55,7 @@ function asyncChoice<T extends string>(
   delay = 0,
 ): ValueParser<"async", T> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "ASYNC_CHOICE" as NonEmptyString,
     placeholder: choices[0],
     async parse(input: string): Promise<ValueParserResult<T>> {
@@ -1648,7 +1648,7 @@ describe("flag() parser with dependencies", () => {
   test("boolean dependency source with derive()", async () => {
     // Create a custom boolean value parser for dependency
     const boolParser: ValueParser<"sync", boolean> = {
-      $mode: "sync",
+      mode: "sync",
       metavar: "BOOL" as NonEmptyString,
       placeholder: false,
       parse(input: string) {
@@ -1726,7 +1726,7 @@ describe("Factory edge cases", () => {
       metavar: "VALUE",
       mode: "sync",
       factory: (_mode: "fail") => ({
-        $mode: "sync" as const,
+        mode: "sync" as const,
         metavar: "VALUE" as NonEmptyString,
         placeholder: "",
         parse(_input: string) {
@@ -4883,7 +4883,7 @@ describe("multiple() with derived parser", () => {
         if (type === "number") {
           // Only accept numeric strings
           return {
-            $mode: "sync" as const,
+            mode: "sync" as const,
             metavar: "NUMBER" as const,
             placeholder: "",
             parse: (input: string) => {
@@ -4978,7 +4978,7 @@ describe("multiple() with derived parser", () => {
       mode: "sync",
       factory: (format: "json" | "csv") => {
         return {
-          $mode: "sync" as const,
+          mode: "sync" as const,
           metavar: "FILE" as const,
           placeholder: "",
           parse: (input: string) => {
@@ -5058,7 +5058,7 @@ describe("Multi-level dependencies using deriveFrom()", () => {
         if (!validRegions[env].includes(region)) {
           // Return a parser that will fail for any input
           return {
-            $mode: "sync" as const,
+            mode: "sync" as const,
             metavar: "INSTANCE" as const,
             placeholder: "",
             parse: () => ({
@@ -5265,7 +5265,7 @@ describe("Edge case dependency values", () => {
       mode: "sync",
       factory: (prefix: string) => {
         return {
-          $mode: "sync" as const,
+          mode: "sync" as const,
           metavar: "VALUE" as const,
           placeholder: "",
           parse: (input: string) => {
@@ -5328,7 +5328,7 @@ describe("Edge case dependency values", () => {
       mode: "sync",
       factory: (delim: string) => {
         return {
-          $mode: "sync" as const,
+          mode: "sync" as const,
           metavar: "ITEMS" as const,
           placeholder: "",
           parse: (input: string) => {
@@ -5367,7 +5367,7 @@ describe("Edge case dependency values", () => {
       mode: "sync",
       factory: (pattern: string) => {
         return {
-          $mode: "sync" as const,
+          mode: "sync" as const,
           metavar: "INPUT" as const,
           placeholder: "",
           parse: (input: string) => {
@@ -5518,7 +5518,7 @@ describe("Real-world scenario: Database CLI", () => {
     const schemaDep = dependency(
       // Use a simple string parser since schema values are validated by schemaParser
       {
-        $mode: "sync" as const,
+        mode: "sync" as const,
         metavar: "SCHEMA" as const,
         placeholder: "",
         parse: (s: string) => ({ success: true, value: s }),
@@ -5553,7 +5553,7 @@ describe("Real-world scenario: Database CLI", () => {
           option(
             "--limit",
             {
-              $mode: "sync" as const,
+              mode: "sync" as const,
               metavar: "N" as const,
               placeholder: 0,
               parse: (s: string) => ({ success: true, value: parseInt(s, 10) }),
@@ -5645,7 +5645,7 @@ describe("Real-world scenario: Database CLI", () => {
         // If schema is not valid for this db, return a parser that always fails
         if (!dbSchemas[db]?.includes(schema)) {
           return {
-            $mode: "sync" as const,
+            mode: "sync" as const,
             metavar: "TABLE" as const,
             placeholder: "",
             parse: () => ({
@@ -6148,7 +6148,7 @@ describe("Negatable-style options with dependencies", () => {
   // Helper: create a boolean value parser that accepts "true"/"false"
   function booleanValueParser(): ValueParser<"sync", boolean> {
     return {
-      $mode: "sync",
+      mode: "sync",
       metavar: "BOOL" as NonEmptyString,
       placeholder: false,
       parse(input: string): ValueParserResult<boolean> {

@@ -9,7 +9,7 @@ when no CLI value is provided.  The fallback priority is:
 CLI arguments > interactive prompt.
 
 Because interactive prompts are inherently asynchronous, the returned parser
-always has `$mode: "async"`.
+always has `mode: "async"`.
 
 [Optique]: https://optique.dev/
 [Inquirer.js]: https://github.com/SBoudrias/Inquirer.js

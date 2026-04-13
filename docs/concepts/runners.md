@@ -338,7 +338,7 @@ import { message } from "@optique/core/message";
 
 function apiKey(): ValueParser<"async", string> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "KEY",
     placeholder: "",
     async parse(input: string): Promise<ValueParserResult<string>> {
@@ -1005,7 +1005,7 @@ Async parser execution
 *This API is available since Optique 0.9.0.*
 
 Parsers in Optique can be either synchronous or asynchronous. The mode is
-tracked at compile time through the `$mode` property and the `Mode` type
+tracked at compile time through the `mode` property and the `Mode` type
 parameter. When any component of a parser (such as a value parser) is async,
 the entire composite parser becomes async.
 
@@ -1024,7 +1024,7 @@ import { message } from "@optique/core/message";
 // A custom async value parser
 function apiKey(): ValueParser<"async", string> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "KEY",
     placeholder: "",
     async parse(input: string): Promise<ValueParserResult<string>> {
@@ -1114,7 +1114,7 @@ import { message } from "@optique/core/message";
 
 function apiKey(): ValueParser<"async", string> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "KEY",
     placeholder: "",
     async parse(input: string): Promise<ValueParserResult<string>> {
@@ -1167,7 +1167,7 @@ import { message } from "@optique/core/message";
 
 function apiKey(): ValueParser<"async", string> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "KEY",
     placeholder: "",
     async parse(input: string): Promise<ValueParserResult<string>> {

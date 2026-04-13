@@ -295,7 +295,7 @@ export function instant(
   const metavar = options.metavar ?? "TIMESTAMP";
   ensureNonEmptyString(metavar);
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     get placeholder(): Temporal.Instant {
       try {
@@ -346,7 +346,7 @@ export function duration(
   const metavar = options.metavar ?? "DURATION";
   ensureNonEmptyString(metavar);
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     get placeholder(): Temporal.Duration {
       try {
@@ -396,7 +396,7 @@ export function zonedDateTime(
   const metavar = options.metavar ?? "ZONED_DATETIME";
   ensureNonEmptyString(metavar);
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     get placeholder(): Temporal.ZonedDateTime {
       try {
@@ -529,7 +529,7 @@ export function plainDate(
   const metavar = options.metavar ?? "DATE";
   ensureNonEmptyString(metavar);
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     get placeholder(): Temporal.PlainDate {
       try {
@@ -580,7 +580,7 @@ export function plainTime(
   const metavar = options.metavar ?? "TIME";
   ensureNonEmptyString(metavar);
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     get placeholder(): Temporal.PlainTime {
       try {
@@ -631,7 +631,7 @@ export function plainDateTime(
   const metavar = options.metavar ?? "DATETIME";
   ensureNonEmptyString(metavar);
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     get placeholder(): Temporal.PlainDateTime {
       try {
@@ -682,7 +682,7 @@ export function plainYearMonth(
   const metavar = options.metavar ?? "YEAR-MONTH";
   ensureNonEmptyString(metavar);
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     get placeholder(): Temporal.PlainYearMonth {
       try {
@@ -733,7 +733,7 @@ export function plainMonthDay(
   const metavar = options.metavar ?? "MONTH-DAY";
   ensureNonEmptyString(metavar);
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     get placeholder(): Temporal.PlainMonthDay {
       try {
@@ -851,7 +851,7 @@ export function timeZone(
   const metavar = options.metavar ?? "TIMEZONE";
   ensureNonEmptyString(metavar);
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: "UTC" as TimeZone,
     parse(input: string): ValueParserResult<TimeZone> {

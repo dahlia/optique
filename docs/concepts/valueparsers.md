@@ -2868,7 +2868,7 @@ marker:
 import type { Mode, ModeValue, NonEmptyString, ValueParserResult } from "@optique/core/valueparser";
 // ---cut-before---
 interface ValueParser<M extends Mode, T> {
-  readonly $mode: M;
+  readonly mode: M;
   readonly metavar: NonEmptyString;
   readonly placeholder: T;
   parse(input: string): ModeValue<M, ValueParserResult<T>>;
@@ -2876,6 +2876,12 @@ interface ValueParser<M extends Mode, T> {
   normalize?(value: T): T;
 }
 ~~~~
+
+`mode`
+:   The parser's runtime execution mode. Use `"sync"` for value parsers that
+    return values directly and `"async"` for value parsers that return
+    `Promise`s. Unlike parser type markers such as `$valueType` and
+    `$stateType`, this field is consumed at runtime.
 
 `metavar`
 :   The placeholder text shown in help messages (usually uppercase).
@@ -2931,7 +2937,7 @@ interface IPv4Address {
 
 function ipv4(): ValueParser<"sync", IPv4Address> {
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar: "IP_ADDRESS",
     placeholder: {
       octets: [0, 0, 0, 0],
@@ -2999,7 +3005,7 @@ function date(options: DateParserOptions = {}): ValueParser<"sync", Date> {
   const { metavar = "DATE", format = 'iso', allowFuture = true } = options;
 
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: new Date(0),
 
@@ -3094,7 +3100,7 @@ interface IPv4Address {
 
 function ipv4(): ValueParser<"sync", IPv4Address> {
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar: "IP_ADDRESS",
     placeholder: {
       octets: [0, 0, 0, 0],
@@ -3118,7 +3124,7 @@ interface DateParserOptions {
 function date(options: DateParserOptions = {}): ValueParser<"sync", Date> {
   const { metavar = "DATE", format = 'iso', allowFuture = true } = options;
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: new Date(0),
     parse(input: string): ValueParserResult<Date> {
@@ -3199,7 +3205,7 @@ function withinBounds(input: string): boolean;
 function semanticallyValid(input: string): boolean;
 function parser<T>(): ValueParser<"sync", T> {
 return {
-$mode: "sync",
+mode: "sync",
 metavar: "VALUE",
 // Generic T has no concrete default; cast undefined to satisfy the type:
 placeholder: undefined as unknown as T,
@@ -3258,7 +3264,7 @@ Async value parsers
 *This API is available since Optique 0.9.0.*
 
 Value parsers can operate in either synchronous (`"sync"`) or asynchronous
-(`"async"`) mode. The mode is declared via the `$mode` property, which affects
+(`"async"`) mode. The mode is declared via the `mode` property, which affects
 the return types of the `parse()` and `suggest()` methods.
 
 All built-in value parsers are synchronous, but you can create async parsers
@@ -3270,7 +3276,7 @@ for scenarios like:
 
 ### Creating async value parsers
 
-An async value parser declares `$mode: "async"` and returns a `Promise` from
+An async value parser declares `mode: "async"` and returns a `Promise` from
 its `parse()` method:
 
 ~~~~ typescript twoslash
@@ -3280,7 +3286,7 @@ import { message } from "@optique/core/message";
 // An async value parser that validates a URL by checking if it's reachable
 function reachableUrl(): ValueParser<"async", URL> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "URL",
     placeholder: new URL("http://0.invalid"),
     async parse(input: string): Promise<ValueParserResult<URL>> {
@@ -3340,7 +3346,7 @@ const parser = object({
   endpoint: option("--endpoint", reachableUrl()),  // async
   name: option("-n", "--name", string()),          // sync
 });
-// parser.$mode is "async"
+// parser.mode is "async"
 ~~~~
 
 The mode is tracked at compile time through TypeScript's type system,
@@ -3388,7 +3394,7 @@ import { message } from "@optique/core/message";
 // A value parser that suggests valid user IDs from a remote service
 function userId(): ValueParser<"async", string> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "USER_ID",
     placeholder: "",
     async parse(input: string): Promise<ValueParserResult<string>> {
@@ -3488,7 +3494,7 @@ function httpMethod(): ValueParser<"sync", string> {
   const methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
 
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar: "METHOD",
     placeholder: "",
     parse(input: string): ValueParserResult<string> {
@@ -3533,7 +3539,7 @@ import { message } from "@optique/core/message";
 
 function configFile(): ValueParser<"sync", string> {
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar: "CONFIG",
     placeholder: "",
     parse(input: string): ValueParserResult<string> {

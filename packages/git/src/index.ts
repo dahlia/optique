@@ -344,7 +344,7 @@ function createAsyncValueParser(
   const validatedDepth = options?.suggestionDepth ?? DEFAULT_SUGGESTION_DEPTH;
 
   return {
-    $mode: "async",
+    mode: "async",
     metavar,
     placeholder: "",
     parse(input: string): Promise<ValueParserResult<string>> {

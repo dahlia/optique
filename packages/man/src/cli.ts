@@ -494,7 +494,7 @@ function isParser(
       typeof value === "object" &&
       "parse" in value &&
       typeof (value as { parse?: unknown }).parse === "function" &&
-      "$mode" in value &&
+      "mode" in value &&
       "usage" in value &&
       "getDocFragments" in value &&
       typeof (value as { getDocFragments?: unknown }).getDocFragments ===

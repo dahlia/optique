@@ -51,7 +51,7 @@ import * as fc from "fast-check";
  */
 function _asyncString(delay = 0): ValueParser<"async", string> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "ASYNC_STRING" as NonEmptyString,
     placeholder: "",
     async parse(input: string): Promise<ValueParserResult<string>> {
@@ -74,7 +74,7 @@ function asyncChoice<T extends string>(
   delay = 0,
 ): ValueParser<"async", T> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "ASYNC_CHOICE" as NonEmptyString,
     placeholder: choices[0],
     async parse(input: string): Promise<ValueParserResult<T>> {
@@ -107,7 +107,7 @@ function syncThrowingParser<
   T extends string,
 >(mode: M): ValueParser<M, T> {
   return {
-    $mode: mode,
+    mode: mode,
     metavar: "THROWING" as NonEmptyString,
     placeholder: "" as T,
     parse(): never {
@@ -128,7 +128,7 @@ function asyncInteger(
   delay = 0,
 ): ValueParser<"async", number> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "ASYNC_INT" as NonEmptyString,
     placeholder: 0,
     async parse(input: string): Promise<ValueParserResult<number>> {
@@ -161,7 +161,7 @@ function asyncInteger(
  */
 function asyncFailingParser(errorMsg: string): ValueParser<"async", string> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "FAIL" as NonEmptyString,
     placeholder: "",
     parse(_input: string): Promise<ValueParserResult<string>> {
@@ -181,7 +181,7 @@ function asyncFailingParser(errorMsg: string): ValueParser<"async", string> {
  */
 function asyncThrowingParser(errorMsg: string): ValueParser<"async", string> {
   return {
-    $mode: "async",
+    mode: "async",
     metavar: "THROW" as NonEmptyString,
     placeholder: "",
     parse(_input: string): Promise<ValueParserResult<string>> {
@@ -207,7 +207,7 @@ describe("dependency()", () => {
     const parser = string({ metavar: "DIR" });
     const source = dependency(parser);
 
-    assert.equal(source.$mode, "sync");
+    assert.equal(source.mode, "sync");
     assert.equal(source.metavar, "DIR");
   });
 
@@ -329,7 +329,7 @@ describe("derive()", () => {
       defaultValue: () => "/default",
     });
 
-    assert.equal(derived.$mode, "sync");
+    assert.equal(derived.mode, "sync");
   });
 
   test("derived parser format uses factory with default value", () => {
@@ -464,7 +464,7 @@ describe("deriveFrom()", () => {
       defaultValues: () => ["/config", "dev"] as const,
     });
 
-    assert.equal(derived.$mode, "sync");
+    assert.equal(derived.mode, "sync");
   });
 });
 
@@ -871,7 +871,7 @@ describe("snapshotDefaultDependencyValues", () => {
       metavar: "URL",
       dependencies: [env, region] as const,
       factory: (currentEnv, currentRegion) => ({
-        $mode: "async" as const,
+        mode: "async" as const,
         metavar: "URL",
         placeholder: "",
         async parse(input: string): Promise<ValueParserResult<string>> {
@@ -912,7 +912,7 @@ describe("snapshotDefaultDependencyValues", () => {
       metavar: "URL",
       dependencies: [env, region] as const,
       factory: (currentEnv, currentRegion) => ({
-        $mode: "sync" as const,
+        mode: "sync" as const,
         metavar: "URL",
         placeholder: "",
         parse(input: string): ValueParserResult<string> {
@@ -1324,7 +1324,7 @@ describe("derive() with async factory", () => {
     });
 
     // Derived parser should be async
-    assert.equal(derived.$mode, "async");
+    assert.equal(derived.mode, "async");
   });
 
   test("async source + sync factory → async derived parser", () => {
@@ -1343,7 +1343,7 @@ describe("derive() with async factory", () => {
     });
 
     // Derived parser should be async (source is async)
-    assert.equal(derived.$mode, "async");
+    assert.equal(derived.mode, "async");
   });
 
   test("async source + async factory → async derived parser", () => {
@@ -1361,7 +1361,7 @@ describe("derive() with async factory", () => {
       defaultValue: () => "dev" as const,
     });
 
-    assert.equal(derived.$mode, "async");
+    assert.equal(derived.mode, "async");
   });
 
   test("async factory parse returns Promise", async () => {
@@ -1523,7 +1523,7 @@ describe("deriveSync()", () => {
       defaultValue: () => "dev" as const,
     });
 
-    assert.equal(derived.$mode, "sync");
+    assert.equal(derived.mode, "sync");
   });
 
   test("async source + sync factory → async derived parser", () => {
@@ -1541,7 +1541,7 @@ describe("deriveSync()", () => {
     });
 
     // Even with sync factory, async source makes it async
-    assert.equal(derived.$mode, "async");
+    assert.equal(derived.mode, "async");
   });
 
   test("async source parse rejects synchronous parser throws", async () => {
@@ -1632,7 +1632,7 @@ describe("deriveSync()", () => {
     const derived = modeParser.deriveSync({
       metavar: "VALUE",
       factory: (_value: "safe" | "broken"): ValueParser<"sync", string> => ({
-        $mode: "sync",
+        mode: "sync",
         metavar: "VALUE" as NonEmptyString,
         placeholder: "",
         parse: (input: string) => ({ success: true, value: input }),
@@ -1664,7 +1664,7 @@ describe("deriveAsync()", () => {
       defaultValue: () => "dev" as const,
     });
 
-    assert.equal(derived.$mode, "async");
+    assert.equal(derived.mode, "async");
   });
 
   test("async source + async factory → async derived parser", () => {
@@ -1681,7 +1681,7 @@ describe("deriveAsync()", () => {
       defaultValue: () => "dev" as const,
     });
 
-    assert.equal(derived.$mode, "async");
+    assert.equal(derived.mode, "async");
   });
 
   test("deriveAsync parse returns Promise and works correctly", async () => {
@@ -1764,7 +1764,7 @@ describe("deriveFrom() with async factory", () => {
       defaultValues: () => ["/config", "dev"] as const,
     });
 
-    assert.equal(derived.$mode, "async");
+    assert.equal(derived.mode, "async");
   });
 
   test("mixed sync/async sources + sync factory → async derived parser", () => {
@@ -1781,7 +1781,7 @@ describe("deriveFrom() with async factory", () => {
     });
 
     // Even with sync factory, async source makes it async
-    assert.equal(derived.$mode, "async");
+    assert.equal(derived.mode, "async");
   });
 
   test("async factory parse returns Promise", async () => {
@@ -1887,7 +1887,7 @@ describe("deriveFrom() with async factory", () => {
       metavar: "VALUE",
       dependencies: [dirParser, modeParser] as const,
       factory: () => ({
-        $mode: "async" as const,
+        mode: "async" as const,
         metavar: "VALUE" as NonEmptyString,
         placeholder: "" as string,
         parse(input: string): Promise<ValueParserResult<string>> {
@@ -1923,7 +1923,7 @@ describe("deriveFromSync()", () => {
       defaultValues: () => ["/config", "dev"] as const,
     });
 
-    assert.equal(derived.$mode, "sync");
+    assert.equal(derived.mode, "sync");
   });
 
   test("mixed sync/async sources + sync factory → async derived parser", () => {
@@ -1939,7 +1939,7 @@ describe("deriveFromSync()", () => {
     });
 
     // Async source makes it async even with sync factory
-    assert.equal(derived.$mode, "async");
+    assert.equal(derived.mode, "async");
   });
 
   test("mixed sync/async sources reject synchronous parser throws", async () => {
@@ -2025,7 +2025,7 @@ describe("deriveFromAsync()", () => {
       defaultValues: () => ["/config", "dev"] as const,
     });
 
-    assert.equal(derived.$mode, "async");
+    assert.equal(derived.mode, "async");
   });
 
   test("deriveFromAsync parse works correctly", async () => {
@@ -2118,7 +2118,7 @@ describe("Integration: Async derived parser with object() and parseAsync()", () 
     });
 
     // The combined parser should be async
-    assert.equal(parser.$mode, "async");
+    assert.equal(parser.mode, "async");
   });
 
   test("parseAsync with async derived parser works correctly", async () => {
@@ -3929,7 +3929,7 @@ describe("Async combinations with dependencies", () => {
       metavar: "LEVEL",
       factory: (mode: "dev" | "prod") =>
         ({
-          $mode: "async",
+          mode: "async",
           metavar: "LEVEL" as NonEmptyString,
           placeholder: (mode === "dev" ? "debug" : "quiet") as
             | "debug"
@@ -3958,7 +3958,7 @@ describe("Async combinations with dependencies", () => {
       metavar: "PORT",
       factory: (mode: "dev" | "prod") =>
         ({
-          $mode: "async",
+          mode: "async",
           metavar: "PORT" as NonEmptyString,
           placeholder: mode === "dev" ? 3000 : 80,
           async parse(input: string) {
@@ -4039,7 +4039,7 @@ describe("coverage-guided dependency parser tests", () => {
       factory: () => choice(["alpha", "beta"] as const),
       defaultValues: () => [] as const,
     });
-    assert.equal(derived.$mode, "sync");
+    assert.equal(derived.mode, "sync");
     assert.equal(typeof derived[dependencyId], "symbol");
 
     const parsedSync = derived.parse("alpha");
@@ -4057,7 +4057,7 @@ describe("coverage-guided dependency parser tests", () => {
       factory: () => choice(["alpha", "beta"] as const),
       defaultValues: () => [] as const,
     });
-    assert.equal(derivedSync.$mode, "sync");
+    assert.equal(derivedSync.mode, "sync");
     assert.equal(typeof derivedSync[dependencyId], "symbol");
     const parsedFromSync = derivedSync.parse("beta");
     assert.ok(parsedFromSync.success);
@@ -4068,7 +4068,7 @@ describe("coverage-guided dependency parser tests", () => {
       factory: () => asyncChoice(["alpha", "beta"] as const),
       defaultValues: () => [] as const,
     });
-    assert.equal(derivedAsync.$mode, "async");
+    assert.equal(derivedAsync.mode, "async");
     assert.equal(typeof derivedAsync[dependencyId], "symbol");
 
     const parsedAsync = await derivedAsync.parse("beta");
@@ -4275,7 +4275,7 @@ describe("coverage-guided dependency parser tests", () => {
       metavar: "VALUE",
       dependencies: [modeParser, envParser] as const,
       factory: () => ({
-        $mode: "sync" as const,
+        mode: "sync" as const,
         metavar: "VALUE",
         placeholder: "ok" as const,
         parse(_input: string): ValueParserResult<"ok"> {
@@ -4309,7 +4309,7 @@ describe("coverage-guided dependency parser tests", () => {
       mode: "sync",
       factory: () => {
         return {
-          $mode: "sync" as const,
+          mode: "sync" as const,
           metavar: "VALUE",
           placeholder: "ok" as const,
           parse(_input: string): ValueParserResult<"ok"> {
@@ -4745,7 +4745,7 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
 
   test("deriveFromAsync() does not call factory with defaults when dependencies are provided", async () => {
     const asyncString: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VALUE" as NonEmptyString,
       placeholder: "",
       parse(input: string): Promise<ValueParserResult<string>> {
@@ -4861,7 +4861,7 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
       defaultValue: () => "broken" as const,
     });
     assert.equal(factoryCalls, 0);
-    assert.equal(derived.$mode, "sync");
+    assert.equal(derived.mode, "sync");
   });
 
   test("derive() with explicit mode: 'async' does not call factory during construction", () => {
@@ -4880,12 +4880,12 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
       defaultValue: () => "broken" as const,
     });
     assert.equal(factoryCalls, 0);
-    assert.equal(derived.$mode, "async");
+    assert.equal(derived.mode, "async");
   });
 
   test("deriveAsync() does not throw during construction when factory throws for default value", async () => {
     const asyncString: ValueParser<"async", string> = {
-      $mode: "async",
+      mode: "async",
       metavar: "VALUE" as NonEmptyString,
       placeholder: "",
       parse(input: string): Promise<ValueParserResult<string>> {
@@ -4957,7 +4957,7 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
       defaultValues: () => ["broken" as const, 0] as const,
     });
     assert.equal(factoryCalls, 0);
-    assert.equal(derived.$mode, "sync");
+    assert.equal(derived.mode, "sync");
   });
 
   test("deriveFrom() with explicit mode: 'async' does not call factory during construction", () => {
@@ -4978,7 +4978,7 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
       defaultValues: () => ["broken" as const, 0] as const,
     });
     assert.equal(factoryCalls, 0);
-    assert.equal(derived.$mode, "async");
+    assert.equal(derived.mode, "async");
   });
 });
 

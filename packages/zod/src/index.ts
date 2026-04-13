@@ -761,7 +761,7 @@ export function zod<T>(
   }
 
   const parser: ValueParser<"sync", T> = {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: options.placeholder,
     ...(boolInfo.exposeChoices

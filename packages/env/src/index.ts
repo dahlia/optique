@@ -271,7 +271,7 @@ export function bindEnv<
   // wrappers from invoking it without the annotation context it requires.
 
   const boundParser: Parser<M, TValue, TState> = {
-    $mode: parser.$mode,
+    mode: parser.mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
@@ -356,7 +356,7 @@ export function bindEnv<
       };
 
       return mapModeValue(
-        parser.$mode,
+        parser.mode,
         parser.parse(innerContext),
         processResult,
       );
@@ -370,7 +370,7 @@ export function bindEnv<
       return getEnvOrDefault(
         state,
         options,
-        parser.$mode,
+        parser.mode,
         parser,
         isEnvBindState(state)
           ? state.cliState
@@ -734,7 +734,7 @@ function getEnvSourceValue<M extends Mode, TValue>(
     // (see CLAUDE.md: "All mode-based type assertions are isolated in
     // mode-dispatch.ts").
     return mapModeValue(
-      options.parser.$mode,
+      options.parser.mode,
       options.parser.parse(rawValue),
       (p) => validateFallback(p as ValueParserResult<TValue>),
     ) as
@@ -798,7 +798,7 @@ export function bool(options: BoolOptions = {}): ValueParser<"sync", boolean> {
   ensureNonEmptyString(metavar);
 
   return {
-    $mode: "sync",
+    mode: "sync",
     metavar,
     placeholder: false,
     choices: [true, false],
