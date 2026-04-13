@@ -109,9 +109,11 @@ export function createGitSignature(
  * Converts a file path to be relative to the repository root.
  */
 function toRepoRelativePath(repo: Repository, filePath: string): string {
-  const repoRoot = repo.path().replace(/\.git\/?$/, "");
+  // Strip the trailing /.git/ or \.git\ (Windows) from the repo path.
+  const repoRoot = repo.path().replace(/[/\\]?\.git[/\\]?$/, "");
   const absolutePath = resolve(process.cwd(), filePath);
-  return relative(repoRoot, absolutePath);
+  // Normalize to forward slashes — libgit2/es-git expects POSIX separators.
+  return relative(repoRoot, absolutePath).replace(/\\/g, "/");
 }
 
 /**

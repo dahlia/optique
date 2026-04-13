@@ -24,7 +24,7 @@ import {
  * Diff algorithm choices.
  * Demonstrates Optique's choice() value parser.
  */
-const algorithms = ["default", "minimal", "patience", "histogram"] as const;
+const algorithms = ["default", "minimal", "patience"] as const;
 
 /**
  * Display options for the diff command.
@@ -67,7 +67,7 @@ const contextOptions = group(
     algorithm: withDefault(
       option("--diff-algorithm", choice(algorithms, { metavar: "ALGORITHM" }), {
         description:
-          message`Choose a diff algorithm (default, minimal, patience, histogram)`,
+          message`Choose a diff algorithm (default, minimal, patience)`,
       }),
       "default" as const,
     ),
