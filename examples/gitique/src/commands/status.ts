@@ -10,6 +10,7 @@ import {
   optionName,
 } from "@optique/core/message";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { printError } from "@optique/run";
 import { getRepository, getStatus } from "../utils/git.ts";
 import type { FileStatus } from "../utils/git.ts";
@@ -24,7 +25,7 @@ type FileStatusEntry = Pick<FileStatus, "path" | "status" | "oldPath">;
  */
 function readHeadBranchName(gitDir: string): string | null {
   try {
-    const headContent = readFileSync(gitDir + "HEAD", "utf-8").trim();
+    const headContent = readFileSync(resolve(gitDir, "HEAD"), "utf-8").trim();
     if (headContent.startsWith("ref: refs/heads/")) {
       return headContent.slice("ref: refs/heads/".length);
     }

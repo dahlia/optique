@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { group, merge, object } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
@@ -101,8 +102,8 @@ export type CommitConfig = InferValue<typeof commitCommand>;
  */
 function parseAuthor(authorString: string): { name: string; email: string } {
   const match = authorString.match(/^(.+?)\s*<(.+?)>$/);
-  const name = match?.[1].trim() ?? "";
-  const email = match?.[2].trim() ?? "";
+  const name = match?.[1]?.trim() ?? "";
+  const email = match?.[2]?.trim() ?? "";
   if (!name || !email) {
     throw new Error(
       `Invalid author format: "${authorString}". Expected format: "Name <email>"`,
@@ -173,7 +174,7 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
         // Unborn/just-created branch — read from .git/HEAD directly
         try {
           const headContent = readFileSync(
-            repo.path() + "HEAD",
+            resolve(repo.path(), "HEAD"),
             "utf-8",
           ).trim();
           if (headContent.startsWith("ref: refs/heads/")) {

@@ -191,7 +191,7 @@ function parseNumstat(
     }
   };
 
-  for (const line of diffText.split("\n")) {
+  for (const line of diffText.split(/\r?\n/)) {
     if (line.startsWith("diff --git ")) {
       // Start of a new file patch — flush previous file and reset hunk state.
       flush();

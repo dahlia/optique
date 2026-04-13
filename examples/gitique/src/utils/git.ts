@@ -51,7 +51,7 @@ export function createGitSignature(
     if (repo) {
       configSources.push(() => {
         try {
-          const localConfig = openConfig(repo.path() + "config");
+          const localConfig = openConfig(resolve(repo.path(), "config"));
           if (!authorName) {
             try {
               authorName = localConfig.getString("user.name");
@@ -346,7 +346,8 @@ export function moveHead(repo: Repository, targetOid: string): void {
     } catch {
       // Unborn branch — read the symbolic target from .git/HEAD
       try {
-        const headContent = readFileSync(repo.path() + "HEAD", "utf-8").trim();
+        const headContent = readFileSync(resolve(repo.path(), "HEAD"), "utf-8")
+          .trim();
         if (headContent.startsWith("ref: refs/heads/")) {
           branchName = headContent.slice("ref: refs/heads/".length);
         }
