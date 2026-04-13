@@ -1,12 +1,12 @@
 /**
- * Internal helpers for mode-based dispatch.
+ * Helpers for mode-based dispatch.
  *
- * This module contains utilities for handling sync/async mode dispatch
- * in a type-safe way. The type assertions in this file are necessary
- * due to TypeScript's limitation in narrowing conditional types based
- * on runtime checks.
+ * This internal implementation module contains the mode-dispatch helpers used
+ * by Optique itself, including the supported functions re-exported from
+ * `@optique/core/extension`. The type assertions in this file are necessary
+ * due to TypeScript's limitation in narrowing conditional types based on
+ * runtime checks.
  *
- * @internal
  * @since 0.10.0
  */
 
