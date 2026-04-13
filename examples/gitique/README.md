@@ -119,7 +119,7 @@ gitique commit -a -m "Update documentation"
 **Viewing history:**
 
 ~~~~ bash
-# Show all commits (detailed)
+# Show recent commits (default: last 10)
 gitique log
 
 # Show commits in one line format
