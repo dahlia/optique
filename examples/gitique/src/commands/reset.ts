@@ -12,6 +12,7 @@ import {
 import process from "node:process";
 import { printError } from "@optique/run";
 import {
+  checkoutHead,
   getRepository,
   moveHead,
   resetIndex,
@@ -253,7 +254,7 @@ function resetToCommit(
       case "hard":
         // HEAD moved; reset both index and working directory
         resetIndex(repo);
-        repo.checkoutHead({ force: true });
+        checkoutHead(repo, { force: true });
         if (!quiet) {
           console.log(
             formatWarning(

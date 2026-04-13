@@ -485,6 +485,18 @@ export function resetIndex(repo: Repository): void {
 }
 
 /**
+ * Checks out HEAD, updating the working directory to match.
+ * Wraps es-git's repo.checkoutHead() to keep all es-git calls
+ * in the shared utility layer rather than in command handlers.
+ */
+export function checkoutHead(
+  repo: Repository,
+  options?: { force?: boolean },
+): void {
+  repo.checkoutHead(options);
+}
+
+/**
  * Represents a file's status in the working directory.
  */
 export interface FileStatus {
