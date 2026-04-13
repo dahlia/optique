@@ -129,6 +129,9 @@ const statusOptionsParser = map(
         "Cannot use --short or --porcelain together with --format.",
       );
     }
+    if (result.short && result.porcelain) {
+      throw new Error("Cannot use --short and --porcelain together.");
+    }
     return {
       ...result,
       format: result.short
