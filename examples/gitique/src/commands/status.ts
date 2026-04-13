@@ -1,5 +1,5 @@
 import { group, merge, object } from "@optique/core/constructs";
-import { map, withDefault } from "@optique/core/modifiers";
+import { map, optional } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { command, constant, option } from "@optique/core/primitives";
 import { choice } from "@optique/core/valueparser";
@@ -32,12 +32,11 @@ const outputFormats = ["long", "short", "porcelain"] as const;
 const displayOptions = group(
   "Display Options",
   object({
-    format: withDefault(
+    format: optional(
       option("--format", choice(outputFormats, { metavar: "FORMAT" }), {
         description:
           message`Output format: long (default), short, or porcelain`,
       }),
-      "long" as const,
     ),
     short: option("-s", "--short", {
       description: message`Shorthand for ${optionName("--format")}=short`,
@@ -67,15 +66,21 @@ const statusOptionsParser = map(
     object({ command: constant("status" as const) }),
     displayOptions,
   ),
-  (result) => ({
-    ...result,
-    // Handle shorthand flags by overriding format
-    format: result.short
-      ? ("short" as const)
-      : result.porcelain
-      ? ("porcelain" as const)
-      : result.format,
-  }),
+  (result) => {
+    if ((result.short || result.porcelain) && result.format !== undefined) {
+      throw new Error(
+        "Cannot use --short or --porcelain together with --format.",
+      );
+    }
+    return {
+      ...result,
+      format: result.short
+        ? ("short" as const)
+        : result.porcelain
+        ? ("porcelain" as const)
+        : (result.format ?? ("long" as const)),
+    };
+  },
 );
 
 /**

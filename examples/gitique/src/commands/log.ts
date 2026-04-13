@@ -31,11 +31,10 @@ const formatChoices = ["oneline", "short", "medium", "full"] as const;
 const displayOptions = group(
   "Display Options",
   object({
-    format: withDefault(
+    format: optional(
       option("--format", choice(formatChoices, { metavar: "FORMAT" }), {
         description: message`Output format: oneline, short, medium, or full`,
       }),
-      "medium" as const,
     ),
     oneline: option("--oneline", {
       description: message`Shorthand for ${optionName("--format")}=oneline`,
@@ -95,11 +94,17 @@ const logOptionsParser = map(
     displayOptions,
     filterOptions,
   ),
-  (result) => ({
-    ...result,
-    // Handle --oneline shorthand by overriding format
-    format: result.oneline ? ("oneline" as const) : result.format,
-  }),
+  (result) => {
+    if (result.oneline && result.format !== undefined) {
+      throw new Error("Cannot use --oneline together with --format.");
+    }
+    return {
+      ...result,
+      format: result.oneline
+        ? ("oneline" as const)
+        : (result.format ?? ("medium" as const)),
+    };
+  },
 );
 
 /**

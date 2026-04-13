@@ -1,5 +1,5 @@
 import { group, merge, object } from "@optique/core/constructs";
-import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
+import { map, multiple, optional } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
 import { choice, string } from "@optique/core/valueparser";
@@ -37,12 +37,11 @@ const resetModes = ["soft", "mixed", "hard"] as const;
 const modeOptions = group(
   "Reset Mode",
   object({
-    mode: withDefault(
+    mode: optional(
       option("--mode", choice(resetModes, { metavar: "MODE" }), {
         description:
           message`Reset mode: ${"soft"} (keep changes staged), ${"mixed"} (unstage changes), ${"hard"} (discard all)`,
       }),
-      "mixed" as const,
     ),
     soft: option("--soft", {
       description: message`Shorthand for ${commandLine("--mode=soft")}`,
@@ -97,15 +96,21 @@ const resetOptionsParser = map(
       ),
     }),
   ),
-  (result) => ({
-    ...result,
-    // Handle shorthand flags by overriding mode
-    mode: result.soft
-      ? ("soft" as const)
-      : result.hard
-      ? ("hard" as const)
-      : result.mode,
-  }),
+  (result) => {
+    if ((result.soft || result.hard) && result.mode !== undefined) {
+      throw new Error(
+        "Cannot use --soft or --hard together with --mode.",
+      );
+    }
+    return {
+      ...result,
+      mode: result.soft
+        ? ("soft" as const)
+        : result.hard
+        ? ("hard" as const)
+        : (result.mode ?? ("mixed" as const)),
+    };
+  },
 );
 
 /**
