@@ -204,8 +204,13 @@ export function getStatus(repo: Repository): FileStatus[] {
       });
     }
 
-    // Unstaged changes: compare index to working directory
-    const unstagedDiff = repo.diffIndexToWorkdir();
+    // Unstaged changes: compare index to working directory.
+    // includeUntracked: true ensures untracked files are shown,
+    // which is required both in normal repos and in unborn repos
+    // where no HEAD exists yet.
+    const unstagedDiff = repo.diffIndexToWorkdir(undefined, {
+      includeUntracked: true,
+    });
     for (const delta of unstagedDiff.deltas()) {
       const path = delta.newFile().path();
       if (path === null) continue;
