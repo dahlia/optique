@@ -206,14 +206,15 @@ export async function executeDiff(config: DiffConfig): Promise<void> {
       }
 
       case "stat": {
-        // Print stat-style summary for each file
+        // Print stat-style summary for each file.
+        // Per-file insertion/deletion counts are not available from es-git,
+        // so only file names are shown; totals are approximate.
         for (const delta of diffResult.deltas) {
-          // Note: We don't have per-file stats, so just show file names with status
           console.log(` ${delta.path}`);
         }
         console.log("");
         console.log(
-          formatDiffStats(
+          "(approximate) " + formatDiffStats(
             diffResult.stats.filesChanged,
             diffResult.stats.insertions,
             diffResult.stats.deletions,
@@ -223,14 +224,14 @@ export async function executeDiff(config: DiffConfig): Promise<void> {
       }
 
       case "numstat": {
-        // Print numstat format (insertions deletions filename)
-        // Note: We don't have per-file stats, showing totals
-        console.log(
-          `${diffResult.stats.insertions}\t${diffResult.stats.deletions}\ttotal`,
-        );
+        // Print numstat format (insertions deletions filename).
+        // Per-file counts are not available; 0 is used as a placeholder.
         for (const delta of diffResult.deltas) {
-          console.log(`-\t-\t${delta.path}`);
+          console.log(`0\t0\t${delta.path}`);
         }
+        console.log(
+          `${diffResult.stats.insertions}\t${diffResult.stats.deletions}\t(total, approximate)`,
+        );
         break;
       }
 
