@@ -281,7 +281,13 @@ export function getDiff(
     if (options.cached) {
       // Staged changes only: compare HEAD tree to index tree.
       // Using diffTreeToWorkdirWithIndex would blend in unstaged changes.
-      const headTree = repo.head().peelToTree();
+      // When on an unborn branch (no HEAD yet) treat as empty old tree.
+      let headTree;
+      try {
+        headTree = repo.head().peelToTree();
+      } catch {
+        // No HEAD yet (unborn repository) — diff against empty tree
+      }
       const index = repo.index();
       const indexTreeOid = index.writeTree();
       const indexTree = repo.getTree(indexTreeOid);
