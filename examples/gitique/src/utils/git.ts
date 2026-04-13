@@ -1,6 +1,7 @@
 import {
   type Commit,
   createSignature,
+  openDefaultConfig,
   openRepository,
   type Repository,
   RevwalkSort,
@@ -22,26 +23,51 @@ interface CommitWithOid {
 export async function getRepository(): Promise<Repository> {
   try {
     return await openRepository(".");
-  } catch (_error) {
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
     throw new Error(
-      "Not a git repository (or any of the parent directories): .git",
+      `Not a git repository (or any of the parent directories): .git (${detail})`,
     );
   }
 }
 
 /**
  * Creates a signature for commits using Git configuration or provided values.
+ * Reads user.name and user.email from the default git config when not provided.
  */
 export function createGitSignature(
   name?: string,
   email?: string,
 ): Signature {
-  // In a real implementation, we would read from git config
-  // For this example, we'll use defaults or provided values
-  const authorName = name ?? "Gitique User";
-  const authorEmail = email ?? "gitique@example.com";
+  let authorName = name;
+  let authorEmail = email;
 
-  return createSignature(authorName, authorEmail);
+  if (!authorName || !authorEmail) {
+    try {
+      const config = openDefaultConfig();
+      if (!authorName) {
+        try {
+          authorName = config.getString("user.name");
+        } catch {
+          // Key not set in any config file
+        }
+      }
+      if (!authorEmail) {
+        try {
+          authorEmail = config.getString("user.email");
+        } catch {
+          // Key not set in any config file
+        }
+      }
+    } catch {
+      // Config files unavailable — fall through to defaults
+    }
+  }
+
+  return createSignature(
+    authorName ?? "Gitique User",
+    authorEmail ?? "gitique@example.com",
+  );
 }
 
 /**
@@ -452,6 +478,13 @@ export function getDiff(
   repo: Repository,
   options: DiffOptions = {},
 ): DiffResult {
+  if (options.cached && options.commit2) {
+    throw new Error(
+      "--cached compares the index to a base tree; " +
+        "specifying two commits is not supported with --cached.",
+    );
+  }
+
   try {
     let diff;
 
