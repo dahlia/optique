@@ -799,36 +799,36 @@ export type Result<T> =
     /**
      * Indicates that the parsing operation was successful.
      */
-    success: true;
+    readonly success: true;
     /**
      * The successfully parsed value of type {@link T}.
      * This is the final result of the parsing operation after all parsers
      * have been applied and completed.
      */
-    value: T;
+    readonly value: T;
     /**
      * When `true`, indicates that the value contains deferred prompt
      * placeholders.  Propagated from {@link ValueParserResult.deferred}.
      * @since 1.0.0
      */
-    deferred?: true;
+    readonly deferred?: true;
     /**
      * Property keys (object field names or array indices) whose values are
      * deferred placeholders.
      * Propagated from {@link ValueParserResult.deferredKeys}.
      * @since 1.0.0
      */
-    deferredKeys?: DeferredMap;
+    readonly deferredKeys?: DeferredMap;
   }
   | {
     /**
      * Indicates that the parsing operation failed.
      */
-    success: false;
+    readonly success: false;
     /**
      * The error message describing why the parsing failed.
      */
-    error: Message;
+    readonly error: Message;
   };
 
 function injectAnnotationsIntoState<TState>(
