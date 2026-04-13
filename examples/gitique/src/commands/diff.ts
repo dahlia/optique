@@ -174,8 +174,11 @@ export type DiffConfig = InferValue<typeof diffCommand>;
  */
 function parseNumstat(
   diffText: string,
-): Map<string, { ins: number | null; del: number | null }> {
-  const result = new Map<string, { ins: number | null; del: number | null }>();
+): Map<string, { readonly ins: number | null; readonly del: number | null }> {
+  const result = new Map<
+    string,
+    { readonly ins: number | null; readonly del: number | null }
+  >();
   let currentPath: string | null = null;
   let pendingOldPath: string | null = null;
   let inHunk = false;
