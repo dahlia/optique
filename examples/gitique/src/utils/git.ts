@@ -227,12 +227,17 @@ export function isIndexEmpty(repo: Repository): boolean {
 }
 
 /**
- * Resolves a commit-ish spec (e.g. "HEAD", "HEAD~1", an OID) to a full OID.
+ * Resolves a commit-ish spec (e.g. "HEAD", "HEAD~1", an OID, a tag name) to
+ * the OID of the underlying commit.  Peels through annotated tags so that
+ * tag references can be used wherever commit OIDs are expected.
  *
- * @throws If the spec cannot be resolved.
+ * @throws If the spec cannot be resolved or does not point to a commit.
  */
 export function resolveCommitOid(repo: Repository, spec: string): string {
-  return repo.revparseSingle(spec);
+  const oid = repo.revparseSingle(spec);
+  const obj = repo.findObject(oid);
+  if (!obj) throw new Error(`Failed to find object for '${spec}'`);
+  return obj.peelToCommit().id();
 }
 
 /**
@@ -241,7 +246,9 @@ export function resolveCommitOid(repo: Repository, spec: string): string {
  * createBranch; otherwise (detached HEAD) setHeadDetached is used.
  */
 export function moveHead(repo: Repository, targetOid: string): void {
-  const commit = repo.getCommit(targetOid);
+  const obj = repo.findObject(targetOid);
+  if (!obj) throw new Error(`Failed to find object: ${targetOid}`);
+  const commit = obj.peelToCommit();
 
   // repo.headDetached() returns true for detached HEAD and false when HEAD
   // points to a branch.  repo.head() resolves the ref so symbolicTarget()
@@ -358,7 +365,15 @@ export function resetIndex(repo: Repository): void {
  */
 export interface FileStatus {
   path: string;
-  status: "Added" | "Deleted" | "Modified" | "Renamed" | "Copied" | "Untracked";
+  status:
+    | "Added"
+    | "Deleted"
+    | "Modified"
+    | "Renamed"
+    | "Copied"
+    | "Untracked"
+    | "Typechange"
+    | "Conflicted";
   oldPath?: string;
   staged: boolean;
 }
@@ -514,9 +529,12 @@ export function getDiff(
       // otherwise HEAD.  Unborn repos fall back to an empty tree.
       let baseTree;
       if (options.commit) {
-        // Explicit commit argument — let revspec errors propagate to the caller
+        // Explicit commit argument — let revspec errors propagate to the caller.
+        // Peel through annotated tags to get the actual commit tree.
         const baseOid = repo.revparseSingle(options.commit);
-        baseTree = repo.getCommit(baseOid).tree();
+        const baseObj = repo.findObject(baseOid);
+        if (!baseObj) throw new Error(`Object not found: ${baseOid}`);
+        baseTree = baseObj.peelToCommit().tree();
       } else {
         try {
           baseTree = repo.head().peelToTree();
@@ -529,18 +547,23 @@ export function getDiff(
       const indexTree = repo.getTree(indexTreeOid);
       diff = repo.diffTreeToTree(baseTree, indexTree, esDiffOptions);
     } else if (options.commit && options.commit2) {
-      // Compare two specific commits; resolve revspecs first so names like
-      // HEAD, HEAD~1, and branch names work (getCommit expects raw OIDs).
+      // Compare two specific commits; peel through annotated tags so that
+      // tag refs like 'v1.0' work alongside branch names and OIDs.
       const oid1 = repo.revparseSingle(options.commit);
       const oid2 = repo.revparseSingle(options.commit2);
-      const tree1 = repo.getCommit(oid1).tree();
-      const tree2 = repo.getCommit(oid2).tree();
+      const obj1 = repo.findObject(oid1);
+      const obj2 = repo.findObject(oid2);
+      if (!obj1) throw new Error(`Object not found: ${oid1}`);
+      if (!obj2) throw new Error(`Object not found: ${oid2}`);
+      const tree1 = obj1.peelToCommit().tree();
+      const tree2 = obj2.peelToCommit().tree();
       diff = repo.diffTreeToTree(tree1, tree2, esDiffOptions);
     } else if (options.commit) {
-      // Compare with specific commit; resolve revspec first
+      // Compare with specific commit; peel through annotated tags.
       const oid = repo.revparseSingle(options.commit);
-      const commitObj = repo.getCommit(oid);
-      const commitTree = commitObj.tree();
+      const obj = repo.findObject(oid);
+      if (!obj) throw new Error(`Object not found: ${oid}`);
+      const commitTree = obj.peelToCommit().tree();
       diff = repo.diffTreeToWorkdirWithIndex(commitTree, esDiffOptions);
     } else {
       // Unstaged changes: index vs workdir

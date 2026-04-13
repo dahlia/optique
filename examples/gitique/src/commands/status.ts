@@ -23,6 +23,8 @@ const statusIndicatorMap: Record<string, string> = {
   Renamed: "R",
   Copied: "C",
   Untracked: "?",
+  Typechange: "T",
+  Conflicted: "U",
 };
 
 /**
