@@ -106,7 +106,7 @@ function parseAuthor(authorString: string): { name: string; email: string } {
   const email = match?.[2]?.trim() ?? "";
   if (!name || !email) {
     throw new Error(
-      `Invalid author format: "${authorString}". Expected format: "Name <email>"`,
+      `Invalid author format: "${authorString}". Expected format: "Name <email>".`,
     );
   }
   return { name, email };

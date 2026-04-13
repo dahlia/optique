@@ -27,7 +27,7 @@ export async function getRepository(): Promise<Repository> {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `Not a git repository (or any of the parent directories): .git (${detail})`,
+      `Not a git repository (or any of the parent directories): .git (${detail}).`,
     );
   }
 }
@@ -192,7 +192,7 @@ export function addFile(
       const inIndex = index.getByPath(repoRelativePath) !== null;
       if (!trackedInHead && !inIndex) {
         throw new Error(
-          `pathspec '${filePath}' did not match any files`,
+          `pathspec '${filePath}' did not match any files.`,
         );
       }
     }
@@ -319,7 +319,7 @@ export function isIndexEmpty(repo: Repository): boolean {
 export function resolveCommitOid(repo: Repository, spec: string): string {
   const oid = repo.revparseSingle(spec);
   const obj = repo.findObject(oid);
-  if (!obj) throw new Error(`Failed to find object for '${spec}'`);
+  if (!obj) throw new Error(`Failed to find object for '${spec}'.`);
   return obj.peelToCommit().id();
 }
 
@@ -423,7 +423,7 @@ export function unstageFile(repo: Repository, filePath: string): void {
   // proceeding; an entirely unknown path should be an error, not a no-op.
   const inIndex = index.getByPath(repoRelativePath) !== null;
   if (!inHead && !inIndex) {
-    throw new Error(`pathspec '${filePath}' did not match any files`);
+    throw new Error(`pathspec '${filePath}' did not match any files.`);
   }
 
   // Remove the staged version from the index.  Without a readTree API in
