@@ -105,6 +105,19 @@ describe("injectAnnotations", () => {
     assert.equal(wrapper[annotationStateValueKey], undefined);
   });
 
+  it("should not recurse forever when reinjecting augmented wrappers", () => {
+    const first = injectAnnotations(undefined, { [Symbol.for("@test/a")]: 1 });
+    assert.ok(first != null && typeof first === "object");
+    const augmented = first as Record<PropertyKey, unknown>;
+    augmented.extra = true;
+
+    const second = injectAnnotations(augmented, { [Symbol.for("@test/b")]: 2 });
+
+    assert.notEqual(second, augmented);
+    assert.equal((second as Record<PropertyKey, unknown>).extra, true);
+    assert.deepEqual(getAnnotations(second), { [Symbol.for("@test/b")]: 2 });
+  });
+
   it("should treat nullish annotations as a no-op", () => {
     assert.equal(injectAnnotations(undefined, undefined), undefined);
     assert.equal(injectAnnotations("state", null), "state");

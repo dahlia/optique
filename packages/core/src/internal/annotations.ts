@@ -330,10 +330,10 @@ export function injectAnnotations<TState>(
     return cloned as TState;
   }
   if (isInjectedAnnotationWrapper(state)) {
-    return injectAnnotations(
-      unwrapInjectedAnnotationWrapper(state),
-      annotations,
-    );
+    const unwrapped = unwrapInjectedAnnotationWrapper(state);
+    if (unwrapped !== state) {
+      return injectAnnotations(unwrapped, annotations);
+    }
   }
   if (state instanceof Date) {
     const cloned = new Date(state.getTime()) as Date & {
