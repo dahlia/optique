@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { group, merge, object } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
@@ -160,13 +161,27 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
       committerSignature,
     );
 
-    // Resolve branch name for the commit header
+    // Resolve branch name for the commit header.
+    // After creating a root commit on an unborn branch, repo.head() may
+    // still fail to resolve if it isn't cached yet; read .git/HEAD directly
+    // as a fallback so the output shows the real branch name.
     let branchName = "(detached)";
     if (!repo.headDetached()) {
       try {
         branchName = repo.head().name().replace("refs/heads/", "");
       } catch {
-        // Unborn branch — keep "(detached)" default
+        // Unborn/just-created branch — read from .git/HEAD directly
+        try {
+          const headContent = readFileSync(
+            repo.path() + "HEAD",
+            "utf-8",
+          ).trim();
+          if (headContent.startsWith("ref: refs/heads/")) {
+            branchName = headContent.slice("ref: refs/heads/".length);
+          }
+        } catch {
+          // Unable to determine branch name
+        }
       }
     }
 

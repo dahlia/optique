@@ -169,6 +169,30 @@ export function addFile(
     // Also call updateAll first so that a tracked file that was deleted
     // from the worktree has its deletion staged even under --force.
     const repoRelativePath = toRepoRelativePath(repo, filePath);
+    // Validate that the path exists on disk or is already tracked in HEAD
+    // so that --force on a completely unknown path still errors.
+    const existsOnDisk = (() => {
+      try {
+        statSync(absolutePath);
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+    if (!existsOnDisk) {
+      let trackedInHead = false;
+      try {
+        const headTree = repo.head().peelToTree();
+        trackedInHead = headTree.getPath(repoRelativePath) !== null;
+      } catch {
+        // Unborn repository
+      }
+      if (!trackedInHead) {
+        throw new Error(
+          `pathspec '${filePath}' did not match any files`,
+        );
+      }
+    }
     index.updateAll([repoRelativePath]);
     index.addAll([repoRelativePath], { force: true });
   } else {
@@ -373,6 +397,13 @@ export function unstageFile(repo: Repository, filePath: string): void {
     inHead = headTree.getPath(repoRelativePath) !== null;
   } catch {
     // Unborn repository — nothing in HEAD
+  }
+
+  // Verify the path is known to at least one of HEAD or the index before
+  // proceeding; an entirely unknown path should be an error, not a no-op.
+  const inIndex = index.getByPath(repoRelativePath) !== null;
+  if (!inHead && !inIndex) {
+    throw new Error(`pathspec '${filePath}' did not match any files`);
   }
 
   // Remove the staged version from the index.  Without a readTree API in
