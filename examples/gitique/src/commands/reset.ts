@@ -87,10 +87,12 @@ const resetOptionsParser = map(
           description: message`Commit to reset to (defaults to HEAD)`,
         }),
       ),
+      // Use an explicit --file option instead of a positional argument to
+      // avoid ambiguity between commit refs and file paths, which Optique
+      // cannot disambiguate via "--" for positional parsers.
       files: multiple(
-        argument(string({ metavar: "FILE" }), {
-          description:
-            message`Files to reset (when used without commit, resets these files to HEAD)`,
+        option("-f", "--file", string({ metavar: "FILE" }), {
+          description: message`Unstage specific files (can be repeated)`,
         }),
       ),
     }),
@@ -128,7 +130,7 @@ export const resetCommand = command("reset", resetOptionsParser, {
   ${
     commandLine("gitique reset --hard")
   }             Hard reset (DANGER: loses changes)${lineBreak()}
-  ${commandLine("gitique reset -- file.ts")}         Unstage specific file`,
+  ${commandLine("gitique reset --file file.ts")}      Unstage a specific file`,
 });
 
 /**

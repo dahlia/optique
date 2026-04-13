@@ -10,7 +10,7 @@ import {
   metavar,
   optionName,
 } from "@optique/core/message";
-import { path, printError } from "@optique/run";
+import { printError } from "@optique/run";
 import process from "node:process";
 import { getDiff, getRepository } from "../utils/git.ts";
 import {
@@ -105,17 +105,15 @@ const diffOptionsParser = map(
     displayOptions,
     contextOptions,
     filterOptions,
+    // Path filtering via positional arguments is not supported because
+    // Optique cannot disambiguate commit refs from file paths without a
+    // "--" separator.  All positionals are consumed as commit arguments.
     object({
       commits: multiple(
         argument(string({ metavar: "COMMIT" }), {
           description: message`Commits to compare (0, 1, or 2)`,
         }),
         { max: 2 },
-      ),
-      paths: multiple(
-        argument(path({ metavar: "PATH" }), {
-          description: message`Limit diff to these paths`,
-        }),
       ),
     }),
   ),
@@ -186,7 +184,6 @@ export async function executeDiff(config: DiffConfig): Promise<void> {
       cached: config.cached,
       commit,
       commit2,
-      paths: config.paths.length > 0 ? [...config.paths] : undefined,
       unified: config.unified,
       algorithm: config.algorithm,
     });
