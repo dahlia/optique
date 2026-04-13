@@ -143,8 +143,16 @@ export type LogConfig = InferValue<typeof logCommand>;
  * Parses a date string into a Date object.
  * Accepts any format understood by `new Date(string)`, such as ISO 8601
  * dates.  Relative phrases like "2 days ago" are not supported.
+ *
+ * Bare `YYYY-MM-DD` strings are treated as local-time midnight to avoid
+ * UTC-offset surprises (e.g. "2024-01-01" meaning 2023-12-31 for UTC-8).
  */
 function parseDate(dateString: string): Date {
+  // ISO date-only: treat as local midnight, not UTC midnight.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    const [year, month, day] = dateString.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
   const date = new Date(dateString);
   if (isNaN(date.getTime())) {
     throw new Error(`Invalid date format: "${dateString}"`);

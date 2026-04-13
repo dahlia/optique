@@ -9,12 +9,30 @@ import {
   message,
   optionName,
 } from "@optique/core/message";
+import { readFileSync } from "node:fs";
 import { printError } from "@optique/run";
 import { getRepository, getStatus } from "../utils/git.ts";
 import type { FileStatus } from "../utils/git.ts";
 import { colors, formatError, formatStatusLong } from "../utils/formatters.ts";
 
 type FileStatusEntry = Pick<FileStatus, "path" | "status" | "oldPath">;
+
+/**
+ * Reads the current branch name from the repository even when HEAD hasn't been
+ * resolved yet (i.e., an unborn branch where the branch ref doesn't exist).
+ * Returns the branch name string, or null if HEAD is detached or unreadable.
+ */
+function readHeadBranchName(gitDir: string): string | null {
+  try {
+    const headContent = readFileSync(gitDir + "HEAD", "utf-8").trim();
+    if (headContent.startsWith("ref: refs/heads/")) {
+      return headContent.slice("ref: refs/heads/".length);
+    }
+  } catch {
+    // Ignore read errors
+  }
+  return null;
+}
 
 const statusIndicatorMap: Record<string, string> = {
   Added: "A",
@@ -183,11 +201,16 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
         if (repo.headDetached()) {
           console.log("## HEAD (no branch)");
         } else {
+          let branchName: string | null = null;
           try {
-            const head = repo.head();
-            const branchName = head.name().replace("refs/heads/", "");
-            console.log(`## ${branchName}`);
+            branchName = repo.head().name().replace("refs/heads/", "");
           } catch {
+            // HEAD can't be resolved (unborn branch) — read from .git/HEAD
+            branchName = readHeadBranchName(repo.path());
+          }
+          if (branchName) {
+            console.log(`## ${branchName}`);
+          } else {
             console.log("## HEAD (no branch)");
           }
         }
@@ -196,14 +219,19 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
           console.log("Not currently on any branch.");
           console.log("");
         } else {
+          let branchName: string | null = null;
           try {
-            const head = repo.head();
-            const branchName = head.name().replace("refs/heads/", "");
+            branchName = repo.head().name().replace("refs/heads/", "");
+          } catch {
+            // HEAD can't be resolved (unborn branch) — read from .git/HEAD
+            branchName = readHeadBranchName(repo.path());
+          }
+          if (branchName) {
             console.log(
               `On branch ${colors.green}${branchName}${colors.reset}`,
             );
             console.log("");
-          } catch {
+          } else {
             console.log("Not currently on any branch.");
             console.log("");
           }

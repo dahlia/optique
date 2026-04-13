@@ -291,7 +291,11 @@ export async function executeDiff(config: DiffConfig): Promise<void> {
         const fileStats = parseNumstat(diffResult.text);
         for (const delta of diffResult.deltas) {
           const stats = fileStats.get(delta.path) ?? { ins: 0, del: 0 };
-          console.log(`${stats.ins}\t${stats.del}\t${delta.path}`);
+          // For renames/copies, git numstat uses "{old => new}" path notation.
+          const displayPath = delta.oldPath
+            ? `${delta.oldPath} => ${delta.path}`
+            : delta.path;
+          console.log(`${stats.ins}\t${stats.del}\t${displayPath}`);
         }
         break;
       }

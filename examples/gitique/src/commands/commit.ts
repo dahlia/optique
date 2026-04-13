@@ -100,16 +100,14 @@ export type CommitConfig = InferValue<typeof commitCommand>;
  */
 function parseAuthor(authorString: string): { name: string; email: string } {
   const match = authorString.match(/^(.+?)\s*<(.+?)>$/);
-  if (!match) {
+  const name = match?.[1].trim() ?? "";
+  const email = match?.[2].trim() ?? "";
+  if (!name || !email) {
     throw new Error(
       `Invalid author format: "${authorString}". Expected format: "Name <email>"`,
     );
   }
-
-  return {
-    name: match[1].trim(),
-    email: match[2].trim(),
-  };
+  return { name, email };
 }
 
 /**
