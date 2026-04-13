@@ -23,7 +23,7 @@ const stagingOptions = group(
     }),
     force: option("-f", "--force", {
       description:
-        message`Force adding files, even if they would normally be ignored`,
+        message`Allow adding gitignore-excluded files by skipping ignore rules`,
     }),
   }),
 );
@@ -98,7 +98,7 @@ export async function executeAdd(config: AddConfig): Promise<void> {
         console.log("Adding all files to the index...");
       }
 
-      addAllFiles(repo);
+      addAllFiles(repo, config.force);
 
       if (config.verbose) {
         console.log(formatSuccess("Successfully added all files to the index"));
@@ -107,7 +107,7 @@ export async function executeAdd(config: AddConfig): Promise<void> {
       // Add specific files
       for (const file of config.files) {
         try {
-          addFile(repo, file);
+          addFile(repo, file, config.force);
 
           if (config.verbose) {
             console.log(formatAddedFile(file));

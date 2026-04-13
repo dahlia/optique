@@ -58,12 +58,15 @@ function toRepoRelativePath(repo: Repository, filePath: string): string {
 export function addFile(
   repo: Repository,
   filePath: string,
+  force?: boolean,
 ): void {
   const index = repo.index();
   const absolutePath = resolve(process.cwd(), filePath);
 
   // When the path is "." or an existing directory, use addAll with a
   // glob pattern so libgit2 can enumerate the contents recursively.
+  // For individual files with --force, also use addAll because addPath
+  // has no force option.
   let isDirectory = filePath === ".";
   if (!isDirectory) {
     try {
@@ -77,7 +80,11 @@ export function addFile(
     const pattern = filePath === "."
       ? "*"
       : toRepoRelativePath(repo, filePath) + "/**";
-    index.addAll([pattern]);
+    index.addAll([pattern], force ? { force: true } : undefined);
+  } else if (force) {
+    // addPath has no force option; route through addAll instead
+    const repoRelativePath = toRepoRelativePath(repo, filePath);
+    index.addAll([repoRelativePath], { force: true });
   } else {
     const repoRelativePath = toRepoRelativePath(repo, filePath);
     index.addPath(repoRelativePath);
@@ -88,9 +95,9 @@ export function addFile(
 /**
  * Adds all files to the Git index (equivalent to `git add .`).
  */
-export function addAllFiles(repo: Repository): void {
+export function addAllFiles(repo: Repository, force?: boolean): void {
   const index = repo.index();
-  index.addAll(["*"]);
+  index.addAll(["*"], force ? { force: true } : undefined);
   index.write();
 }
 
