@@ -241,7 +241,21 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
 
     if (statuses.length === 0) {
       if (config.format === "long") {
-        console.log("nothing to commit, working tree clean");
+        // Distinguish a clean repo with commits from a brand-new unborn repo
+        let hasCommits = false;
+        try {
+          repo.head().peelToTree();
+          hasCommits = true;
+        } catch {
+          // Unborn branch — no commits yet
+        }
+        if (hasCommits) {
+          console.log("nothing to commit, working tree clean");
+        } else {
+          console.log(
+            "No commits yet\n\nnothing to commit (create/copy files and use 'gitique add' to track)",
+          );
+        }
       }
       return;
     }

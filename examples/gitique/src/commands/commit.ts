@@ -132,7 +132,12 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
       );
     }
 
-    const commitMessage = config.message;
+    const commitMessage = config.message.trim();
+    if (!commitMessage) {
+      throw new Error(
+        "Aborting commit due to empty commit message.",
+      );
+    }
 
     // Create author signature; pass repo so local config is checked first.
     let authorSignature;

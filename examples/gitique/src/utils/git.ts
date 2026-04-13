@@ -165,8 +165,11 @@ export function addFile(
     index.updateAll([pattern]);
     index.addAll([pattern], force ? { force: true } : undefined);
   } else if (force) {
-    // addPath has no force option; route through addAll instead
+    // addPath has no force option; route through addAll instead.
+    // Also call updateAll first so that a tracked file that was deleted
+    // from the worktree has its deletion staged even under --force.
     const repoRelativePath = toRepoRelativePath(repo, filePath);
+    index.updateAll([repoRelativePath]);
     index.addAll([repoRelativePath], { force: true });
   } else {
     const repoRelativePath = toRepoRelativePath(repo, filePath);
