@@ -1220,15 +1220,12 @@ parsed arguments. The `getAnnotations()` method receives the parsed result and
 uses it to load the configuration:
 
 ~~~~ typescript twoslash
-declare const Deno: {
-  readTextFile(path: string): Promise<string>;
-};
-// ---cut-before---
 import type {
   Annotations,
   SourceContext,
   SourceContextRequest,
 } from "@optique/core/context";
+import { readFile } from "node:fs/promises";
 
 const configKey = Symbol.for("@myapp/config");
 
@@ -1251,7 +1248,7 @@ export function createConfigContext(): SourceContext {
       if (!parsed?.config) return {}; // No config file specified
       
       try {
-        const content = await Deno.readTextFile(parsed.config);
+        const content = await readFile(parsed.config, "utf8");
         const data: ConfigData = JSON.parse(content);
         return { [configKey]: data };
       } catch {
@@ -1278,16 +1275,13 @@ For a more reusable approach, use `ParserValuePlaceholder` to declare that
 the caller must provide a `getConfigPath` function:
 
 ~~~~ typescript twoslash
-declare const Deno: {
-  readTextFile(path: string): Promise<string>;
-};
-// ---cut-before---
 import type {
   Annotations,
   ParserValuePlaceholder,
   SourceContext,
   SourceContextRequest,
 } from "@optique/core/context";
+import { readFile } from "node:fs/promises";
 
 const configKey = Symbol.for("@myapp/config");
 
@@ -1324,7 +1318,7 @@ export function createConfigContext(): ConfigContext {
       if (!configPath) return {};
       
       try {
-        const content = await Deno.readTextFile(configPath);
+        const content = await readFile(configPath, "utf8");
         const data: ConfigData = JSON.parse(content);
         return { [configKey]: data };
       } catch {
