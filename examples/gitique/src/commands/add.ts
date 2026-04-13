@@ -136,7 +136,8 @@ export async function executeAdd(config: AddConfig): Promise<void> {
     } else {
       // No files specified and --all not used
       throw new Error(
-        "Nothing specified, nothing added.\nMaybe you wanted to say 'gitique add .'?",
+        "Nothing specified, nothing added.\n" +
+          "Maybe you wanted to say 'gitique add .' or 'gitique add -A'?",
       );
     }
   } catch (error) {

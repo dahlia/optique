@@ -5,6 +5,7 @@ import {
   type Repository,
   type Signature,
 } from "es-git";
+import { statSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import process from "node:process";
 
@@ -59,8 +60,28 @@ export function addFile(
   filePath: string,
 ): void {
   const index = repo.index();
-  const repoRelativePath = toRepoRelativePath(repo, filePath);
-  index.addPath(repoRelativePath);
+  const absolutePath = resolve(process.cwd(), filePath);
+
+  // When the path is "." or an existing directory, use addAll with a
+  // glob pattern so libgit2 can enumerate the contents recursively.
+  let isDirectory = filePath === ".";
+  if (!isDirectory) {
+    try {
+      isDirectory = statSync(absolutePath).isDirectory();
+    } catch {
+      // Path doesn't exist — let addPath handle the error
+    }
+  }
+
+  if (isDirectory) {
+    const pattern = filePath === "."
+      ? "*"
+      : toRepoRelativePath(repo, filePath) + "/**";
+    index.addAll([pattern]);
+  } else {
+    const repoRelativePath = toRepoRelativePath(repo, filePath);
+    index.addPath(repoRelativePath);
+  }
   index.write();
 }
 
