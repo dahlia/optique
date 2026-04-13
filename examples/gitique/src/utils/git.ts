@@ -8,7 +8,7 @@ import {
   RevwalkSort,
   type Signature,
 } from "es-git";
-import { statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import process from "node:process";
 
@@ -187,7 +187,10 @@ export function addFile(
       } catch {
         // Unborn repository
       }
-      if (!trackedInHead) {
+      // Also allow a file that is staged but not yet committed (in index but
+      // not in HEAD) — staging its deletion is valid even under --force.
+      const inIndex = index.getByPath(repoRelativePath) !== null;
+      if (!trackedInHead && !inIndex) {
         throw new Error(
           `pathspec '${filePath}' did not match any files`,
         );
@@ -211,7 +214,10 @@ export function addFile(
       } catch {
         // Unborn repository — nothing in HEAD
       }
-      if (trackedInHead) {
+      // Also handle a staged-but-not-committed file deleted from disk:
+      // it's not in HEAD but IS in the index, and staging the deletion is valid.
+      const inIndex = index.getByPath(repoRelativePath) !== null;
+      if (trackedInHead || inIndex) {
         index.updateAll([repoRelativePath]);
       } else {
         throw err;
@@ -331,13 +337,26 @@ export function moveHead(repo: Repository, targetOid: string): void {
   // points to a branch.  repo.head() resolves the ref so symbolicTarget()
   // is always null there — use headDetached() to distinguish the two cases.
   if (!repo.headDetached()) {
+    // Try to resolve the branch name from the resolved ref first; fall back
+    // to reading .git/HEAD directly for unborn branches where repo.head()
+    // throws because the branch ref doesn't exist yet.
+    let branchName: string | null = null;
     try {
-      const head = repo.head();
-      const branchName = head.name().replace(/^refs\/heads\//, "");
+      branchName = repo.head().name().replace(/^refs\/heads\//, "");
+    } catch {
+      // Unborn branch — read the symbolic target from .git/HEAD
+      try {
+        const headContent = readFileSync(repo.path() + "HEAD", "utf-8").trim();
+        if (headContent.startsWith("ref: refs/heads/")) {
+          branchName = headContent.slice("ref: refs/heads/".length);
+        }
+      } catch {
+        // Unable to read HEAD
+      }
+    }
+    if (branchName) {
       repo.createBranch(branchName, commit, { force: true });
       return;
-    } catch {
-      // Fall through to detached-HEAD path (e.g., unborn branch)
     }
   }
   repo.setHeadDetached(commit);
