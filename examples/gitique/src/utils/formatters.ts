@@ -60,10 +60,14 @@ export function formatAddedFile(filePath: string): string {
 /**
  * Formats commit creation message
  */
-export function formatCommitCreated(oid: string, message: string): string {
+export function formatCommitCreated(
+  oid: string,
+  message: string,
+  branchName: string,
+): string {
   const shortOid = oid.substring(0, 7);
   const summary = message.split("\n")[0];
-  return `[main ${colors.yellow}${shortOid}${colors.reset}] ${summary}`;
+  return `[${branchName} ${colors.yellow}${shortOid}${colors.reset}] ${summary}`;
 }
 
 /**

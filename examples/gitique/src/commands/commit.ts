@@ -163,14 +163,22 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
       authorSignature, // Use same signature for committer
     );
 
-    // Output success message
-    console.log(formatCommitCreated(commitOid, commitMessage));
+    // Resolve branch name for the commit header
+    let branchName = "(detached)";
+    try {
+      branchName = repo.head().name().replace("refs/heads/", "");
+    } catch {
+      // Detached HEAD or unborn branch — keep default
+    }
 
-    // Show commit details
+    // Output success message
+    console.log(formatCommitCreated(commitOid, commitMessage, branchName));
+
+    // Show commit details using the actual commit timestamp
     const commit = repo.getCommit(commitOid);
     const author = commit.author();
     console.log(`Author: ${author.name} <${author.email}>`);
-    console.log(`Date: ${new Date().toISOString()}`);
+    console.log(`Date: ${commit.time().toISOString()}`);
 
     if (config.all) {
       console.log(formatSuccess("Changes automatically staged and committed"));
