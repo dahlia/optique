@@ -327,8 +327,13 @@ export function resolveCommitOid(repo: Repository, spec: string): string {
 
 /**
  * Moves HEAD (and the current branch pointer) to the given commit OID.
- * When HEAD is a symbolic reference the branch pointer is updated via
- * createBranch; otherwise (detached HEAD) setHeadDetached is used.
+ * When HEAD is a symbolic reference the branch pointer is updated;
+ * otherwise (detached HEAD) setHeadDetached is used.
+ *
+ * libgit2 (and thus es-git) rejects createBranch(..., { force: true })
+ * when the branch is currently checked out.  The workaround is to
+ * temporarily detach HEAD so that the branch reference is no longer
+ * "in use", update the branch, then re-attach HEAD.
  */
 export function moveHead(repo: Repository, targetOid: string): void {
   const obj = repo.findObject(targetOid);
@@ -358,7 +363,11 @@ export function moveHead(repo: Repository, targetOid: string): void {
       }
     }
     if (branchName) {
+      // Detach HEAD first to lift the "branch is checked out" restriction,
+      // then update the branch reference, then re-attach HEAD.
+      repo.setHeadDetached(commit);
       repo.createBranch(branchName, commit, { force: true });
+      repo.setHead(`refs/heads/${branchName}`);
       return;
     }
   }
