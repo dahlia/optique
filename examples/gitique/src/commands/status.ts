@@ -113,14 +113,25 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
 
     // Show branch information if requested
     if (config.branch) {
-      try {
-        const head = repo.head();
-        const branchName = head.name().replace("refs/heads/", "");
-        console.log(`On branch ${colors.green}${branchName}${colors.reset}`);
-        console.log("");
-      } catch {
-        console.log("Not currently on any branch.");
-        console.log("");
+      if (config.format === "porcelain") {
+        // Machine-readable porcelain v1 branch line
+        try {
+          const head = repo.head();
+          const branchName = head.name().replace("refs/heads/", "");
+          console.log(`## ${branchName}`);
+        } catch {
+          console.log("## HEAD (no branch)");
+        }
+      } else {
+        try {
+          const head = repo.head();
+          const branchName = head.name().replace("refs/heads/", "");
+          console.log(`On branch ${colors.green}${branchName}${colors.reset}`);
+          console.log("");
+        } catch {
+          console.log("Not currently on any branch.");
+          console.log("");
+        }
       }
     }
 
