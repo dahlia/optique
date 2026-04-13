@@ -175,10 +175,12 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
 
     // Resolve branch name for the commit header
     let branchName = "(detached)";
-    try {
-      branchName = repo.head().name().replace("refs/heads/", "");
-    } catch {
-      // Detached HEAD or unborn branch — keep default
+    if (!repo.headDetached()) {
+      try {
+        branchName = repo.head().name().replace("refs/heads/", "");
+      } catch {
+        // Unborn branch — keep "(detached)" default
+      }
     }
 
     // Output success message

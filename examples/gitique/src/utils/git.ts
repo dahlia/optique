@@ -3,6 +3,7 @@ import {
   createSignature,
   openRepository,
   type Repository,
+  RevwalkSort,
   type Signature,
 } from "es-git";
 import { statSync } from "node:fs";
@@ -242,7 +243,7 @@ export function getCommitHistory(
   const commits: CommitWithOid[] = [];
 
   try {
-    const revwalk = repo.revwalk().pushHead();
+    const revwalk = repo.revwalk().setSorting(RevwalkSort.Time).pushHead();
 
     let count = 0;
     for (const oid of revwalk) {
@@ -361,6 +362,7 @@ export function getStatus(repo: Repository): FileStatus[] {
       headTree ?? undefined,
       indexTree,
     );
+    stagedDiff.findSimilar();
     for (const delta of stagedDiff.deltas()) {
       // Deleted deltas have no newFile path; use oldFile path instead.
       const status = delta.status() as FileStatus["status"];
@@ -387,6 +389,7 @@ export function getStatus(repo: Repository): FileStatus[] {
     const unstagedDiff = repo.diffIndexToWorkdir(undefined, {
       includeUntracked: true,
     });
+    unstagedDiff.findSimilar();
     for (const delta of unstagedDiff.deltas()) {
       // Deleted deltas have no newFile path; use oldFile path instead.
       const status = delta.status() as FileStatus["status"];
@@ -509,6 +512,9 @@ export function getDiff(
       // Unstaged changes: index vs workdir
       diff = repo.diffIndexToWorkdir(undefined, esDiffOptions);
     }
+
+    // Enable rename and copy detection.
+    diff.findSimilar();
 
     const stats = diff.stats();
     const deltas: DiffResult["deltas"] = [];
