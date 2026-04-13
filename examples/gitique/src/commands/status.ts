@@ -246,12 +246,7 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
 
     if (statuses.length === 0) {
       if (config.format === "long") {
-        // Only print "No commits yet" prefix if -b hasn't already shown it
-        if (isUnbornBranch && !config.branch) {
-          console.log(
-            "No commits yet\n\nnothing to commit (create/copy files and use 'gitique add' to track)",
-          );
-        } else if (isUnbornBranch) {
+        if (isUnbornBranch) {
           console.log(
             "nothing to commit (create/copy files and use 'gitique add' to track)",
           );
@@ -269,12 +264,6 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
     // Format output based on format option
     switch (config.format) {
       case "long": {
-        if (isUnbornBranch && !config.branch) {
-          // Show the unborn-branch header even without -b so users know
-          // they're looking at a pre-first-commit state.
-          console.log("No commits yet");
-          console.log("");
-        }
         if (staged.length > 0) {
           console.log("Changes to be committed:");
           console.log('  (use "gitique reset --file <file>..." to unstage)');
