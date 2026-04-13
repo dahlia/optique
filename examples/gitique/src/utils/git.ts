@@ -279,10 +279,13 @@ export function getDiff(
     let diff;
 
     if (options.cached) {
-      // Staged changes: compare HEAD tree to workdir with index
-      // This shows what would be committed
+      // Staged changes only: compare HEAD tree to index tree.
+      // Using diffTreeToWorkdirWithIndex would blend in unstaged changes.
       const headTree = repo.head().peelToTree();
-      diff = repo.diffTreeToWorkdirWithIndex(headTree);
+      const index = repo.index();
+      const indexTreeOid = index.writeTree();
+      const indexTree = repo.getTree(indexTreeOid);
+      diff = repo.diffTreeToTree(headTree, indexTree);
     } else if (options.commit) {
       // Compare with specific commit
       const commitObj = repo.getCommit(options.commit);
