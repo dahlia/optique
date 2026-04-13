@@ -15,6 +15,7 @@ import {
   createCommit,
   createGitSignature,
   getRepository,
+  isIndexEmpty,
 } from "../utils/git.ts";
 import {
   formatCommitCreated,
@@ -141,6 +142,13 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
     if (config.all) {
       console.log("Staging all modified and deleted files...");
       await addAllFiles(repo);
+    }
+
+    // Reject empty commits unless --allow-empty is set
+    if (!config.allowEmpty && isIndexEmpty(repo)) {
+      throw new Error(
+        "nothing to commit (create/copy files and use 'git add' to track)",
+      );
     }
 
     // Get commit message

@@ -137,6 +137,31 @@ export function createCommit(
 }
 
 /**
+ * Returns true when the index matches HEAD (nothing staged to commit).
+ * In an unborn repository the index is empty when it has no entries.
+ */
+export function isIndexEmpty(repo: Repository): boolean {
+  const index = repo.index();
+  const indexTreeOid = index.writeTree();
+  const indexTree = repo.getTree(indexTreeOid);
+
+  let headTree;
+  try {
+    headTree = repo.head().peelToTree();
+  } catch {
+    // Unborn repository — index is non-empty when the tree has any entries
+    return indexTree.isEmpty();
+  }
+
+  const diff = repo.diffTreeToTree(headTree, indexTree);
+  // Deltas is an iterable with no length property; check for any delta
+  for (const _ of diff.deltas()) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Gets the commit history starting from HEAD.
  */
 export function getCommitHistory(
