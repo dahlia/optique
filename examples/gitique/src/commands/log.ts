@@ -181,16 +181,16 @@ function filterCommits(
   if (config.since) {
     const sinceDate = parseDate(config.since);
     filtered = filtered.filter(({ commit }) => {
-      const commitDate = commit.time();
-      return commitDate >= sinceDate;
+      const authorDate = new Date(commit.author().timestamp * 1000);
+      return authorDate >= sinceDate;
     });
   }
 
   if (config.until) {
     const untilDate = parseDate(config.until);
     filtered = filtered.filter(({ commit }) => {
-      const commitDate = commit.time();
-      return commitDate <= untilDate;
+      const authorDate = new Date(commit.author().timestamp * 1000);
+      return authorDate <= untilDate;
     });
   }
 
