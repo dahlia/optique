@@ -11,6 +11,7 @@ import {
 } from "@optique/core/message";
 import { printError } from "@optique/run";
 import { getRepository, getStatus } from "../utils/git.ts";
+import type { FileStatus } from "../utils/git.ts";
 import {
   colors,
   formatError,
@@ -18,6 +19,68 @@ import {
   formatStatusPorcelain,
   formatStatusShort,
 } from "../utils/formatters.ts";
+
+type FileStatusEntry = Pick<FileStatus, "path" | "status" | "oldPath">;
+
+/**
+ * Merges staged and unstaged state into a single short-format status line,
+ * producing the XY two-column format used by `git status -s`.
+ */
+function formatStatusShortMerged(
+  stagedEntry: FileStatusEntry | undefined,
+  unstagedEntry: FileStatusEntry | undefined,
+  path: string,
+): string {
+  const stagedStatus = stagedEntry?.status ?? "";
+  const unstagedStatus = unstagedEntry?.status ?? "";
+  const oldPath = stagedEntry?.oldPath ?? unstagedEntry?.oldPath;
+  const staged = stagedEntry !== undefined;
+  return formatStatusShort(
+    path,
+    staged ? stagedStatus : unstagedStatus,
+    staged,
+    oldPath,
+  )
+    .replace(/^( ?)( ?)/, () => {
+      // Overwrite both columns with the correct indicators
+      const stagedIndicator = stagedEntry
+        ? (stagedEntry.status[0] ?? "?")
+        : " ";
+      const unstagedIndicator = unstagedEntry
+        ? (unstagedEntry.status[0] ?? "?")
+        : " ";
+      return `${stagedIndicator}${unstagedIndicator}`;
+    });
+}
+
+/**
+ * Merges staged and unstaged state into a single porcelain-format status line.
+ */
+function formatStatusPorcelainMerged(
+  stagedEntry: FileStatusEntry | undefined,
+  unstagedEntry: FileStatusEntry | undefined,
+  path: string,
+): string {
+  const stagedStatus = stagedEntry?.status ?? "";
+  const unstagedStatus = unstagedEntry?.status ?? "";
+  const oldPath = stagedEntry?.oldPath ?? unstagedEntry?.oldPath;
+  const staged = stagedEntry !== undefined;
+  return formatStatusPorcelain(
+    path,
+    staged ? stagedStatus : unstagedStatus,
+    staged,
+    oldPath,
+  )
+    .replace(/^( ?)( ?)/, () => {
+      const stagedIndicator = stagedEntry
+        ? (stagedEntry.status[0] ?? "?")
+        : " ";
+      const unstagedIndicator = unstagedEntry
+        ? (unstagedEntry.status[0] ?? "?")
+        : " ";
+      return `${stagedIndicator}${unstagedIndicator}`;
+    });
+}
 
 /**
  * Output format choices for the status command.
@@ -182,28 +245,30 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
       }
 
       case "short": {
+        // Merge staged and unstaged entries for the same path into one line
+        // so a dual-state file shows "MM" instead of two separate lines.
+        const seenShort = new Set<string>();
         for (const file of statuses) {
+          if (seenShort.has(file.path)) continue;
+          seenShort.add(file.path);
+          const stagedEntry = staged.find((s) => s.path === file.path);
+          const unstagedEntry = unstaged.find((u) => u.path === file.path);
           console.log(
-            formatStatusShort(
-              file.path,
-              file.status,
-              file.staged,
-              file.oldPath,
-            ),
+            formatStatusShortMerged(stagedEntry, unstagedEntry, file.path),
           );
         }
         break;
       }
 
       case "porcelain": {
+        const seenPorcelain = new Set<string>();
         for (const file of statuses) {
+          if (seenPorcelain.has(file.path)) continue;
+          seenPorcelain.add(file.path);
+          const stagedEntry = staged.find((s) => s.path === file.path);
+          const unstagedEntry = unstaged.find((u) => u.path === file.path);
           console.log(
-            formatStatusPorcelain(
-              file.path,
-              file.status,
-              file.staged,
-              file.oldPath,
-            ),
+            formatStatusPorcelainMerged(stagedEntry, unstagedEntry, file.path),
           );
         }
         break;

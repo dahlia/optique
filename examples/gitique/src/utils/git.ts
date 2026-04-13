@@ -83,6 +83,9 @@ export function addFile(
     const repoRelDir = toRepoRelativePath(repo, filePath);
     // An empty string means the cwd is the repo root — use "*" to match all
     const pattern = repoRelDir === "" ? "*" : repoRelDir + "/**";
+    // updateAll first to stage deletions of tracked files, then addAll for
+    // new and modified files.
+    index.updateAll([pattern]);
     index.addAll([pattern], force ? { force: true } : undefined);
   } else if (force) {
     // addPath has no force option; route through addAll instead
@@ -100,6 +103,9 @@ export function addFile(
  */
 export function addAllFiles(repo: Repository, force?: boolean): void {
   const index = repo.index();
+  // updateAll stages removals of tracked files (paths deleted from workdir)
+  index.updateAll(["*"]);
+  // addAll stages new and modified files; force bypasses gitignore
   index.addAll(["*"], force ? { force: true } : undefined);
   index.write();
 }
@@ -273,14 +279,22 @@ export function unstageFile(repo: Repository, filePath: string): void {
 
 /**
  * Resets the index to match HEAD (unstages all changes).
+ *
+ * Note: es-git does not expose `git_index_read_tree`, so we cannot
+ * restore index entries from an arbitrary commit tree.  As an
+ * approximation, reload the on-disk index (which reflects the last
+ * commit) and then synchronize tracked entries with the working
+ * tree.  This correctly unstages modifications but may leave deleted
+ * tracked files as staged removals until the next hard reset.
  */
 export function resetIndex(repo: Repository): void {
   try {
     const index = repo.index();
-
-    // Remove all files from index using removeAll with wildcard
-    // This effectively clears the index
-    index.removeAll(["*"]);
+    // Reload the index from disk to drop in-memory staged changes
+    index.read(true);
+    // Re-synchronize tracked entries with the working tree so that
+    // existing modifications in the workdir are reflected correctly
+    index.updateAll(["*"]);
     index.write();
   } catch (error) {
     throw new Error(
@@ -434,19 +448,24 @@ export function getDiff(
     }
 
     if (options.cached) {
-      // Staged changes only: compare HEAD tree to index tree.
-      // Using diffTreeToWorkdirWithIndex would blend in unstaged changes.
-      // When on an unborn branch (no HEAD yet) treat as empty old tree.
-      let headTree;
+      // Staged changes only: compare a base tree to the index tree.
+      // The base is options.commit when provided (e.g. diff --cached HEAD~1),
+      // otherwise HEAD.  Unborn repos fall back to an empty tree.
+      let baseTree;
       try {
-        headTree = repo.head().peelToTree();
+        if (options.commit) {
+          const baseOid = repo.revparseSingle(options.commit);
+          baseTree = repo.getCommit(baseOid).tree();
+        } else {
+          baseTree = repo.head().peelToTree();
+        }
       } catch {
         // No HEAD yet (unborn repository) — diff against empty tree
       }
       const index = repo.index();
       const indexTreeOid = index.writeTree();
       const indexTree = repo.getTree(indexTreeOid);
-      diff = repo.diffTreeToTree(headTree, indexTree, esDiffOptions);
+      diff = repo.diffTreeToTree(baseTree, indexTree, esDiffOptions);
     } else if (options.commit && options.commit2) {
       // Compare two specific commits; resolve revspecs first so names like
       // HEAD, HEAD~1, and branch names work (getCommit expects raw OIDs).
