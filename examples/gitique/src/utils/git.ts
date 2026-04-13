@@ -35,7 +35,9 @@ export async function getRepository(): Promise<Repository> {
 /**
  * Creates a signature for commits using Git configuration or provided values.
  * When name/email are not provided, reads user.name and user.email from
- * the repo-local config first, then from the default (global/XDG/system) config.
+ * the default (global/XDG/system) config.  If `repo` is provided, the
+ * repo-local config is consulted first and takes precedence over the
+ * default config.
  */
 export function createGitSignature(
   name?: string,

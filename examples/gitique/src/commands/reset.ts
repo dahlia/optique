@@ -178,7 +178,7 @@ function resetFiles(
   quiet: boolean,
 ): boolean {
   if (!quiet) {
-    console.log(`Resetting ${files.length} file(s) to HEAD...`);
+    console.log(`Unstaging ${files.length} file(s)...`);
   }
 
   let hadError = false;
