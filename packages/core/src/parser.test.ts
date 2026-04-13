@@ -14,6 +14,7 @@ import {
 } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
+  type ExecutionContext,
   getDocPage,
   getDocPageAsync,
   getDocPageSync,
@@ -3351,6 +3352,78 @@ describe("Annotations system", () => {
     const opts: ParseOptions | undefined = undefined;
     const doc = await getDocPageAsync(parser, opts);
     assert.ok(doc !== undefined);
+  });
+
+  it("should provide execution context during getDocPageSync() parse passes", () => {
+    const observations: Array<ExecutionContext | undefined> = [];
+    const parser: Parser<"sync", unknown, unknown> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: {},
+      parse(context) {
+        observations.push(context.exec);
+        return {
+          success: true as const,
+          next: { ...context, buffer: [] },
+          consumed: [],
+        };
+      },
+      complete(state) {
+        return { success: true as const, value: state };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    getDocPageSync(parser, ["x"]);
+
+    assert.equal(observations.length, 1);
+    assert.equal(observations[0]?.phase, "parse");
+    assert.deepEqual(observations[0]?.path, []);
+    assert.ok(observations[0]?.trace != null);
+  });
+
+  it("should provide execution context during getDocPageAsync() parse passes", async () => {
+    const observations: Array<ExecutionContext | undefined> = [];
+    const parser: Parser<"async", unknown, unknown> = {
+      $mode: "async",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: {},
+      parse(context) {
+        observations.push(context.exec);
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, buffer: [] },
+          consumed: [],
+        });
+      },
+      complete(state) {
+        return Promise.resolve({ success: true as const, value: state });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    await getDocPageAsync(parser, ["x"]);
+
+    assert.equal(observations.length, 1);
+    assert.equal(observations[0]?.phase, "parse");
+    assert.deepEqual(observations[0]?.path, []);
+    assert.ok(observations[0]?.trace != null);
   });
 
   it("should accept union-typed argsOrOptions forwarding", () => {

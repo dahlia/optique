@@ -1598,13 +1598,16 @@ function getDocPageSyncImpl(
   options?: ParseOptions,
 ): DocPage | undefined {
   const initialState = injectAnnotationsIntoState(parser.initialState, options);
-
-  let context: ParserContext<unknown> = {
-    buffer: args,
-    optionsTerminated: false,
-    state: initialState,
+  const exec: ExecutionContext = {
     usage: parser.usage,
+    phase: "parse",
+    path: [],
+    trace: createInputTrace(),
   };
+  let context: ParserContext<unknown> = createParserContext(
+    { buffer: args, state: initialState, optionsTerminated: false },
+    exec,
+  );
   while (context.buffer.length > 0) {
     const result = parser.parse(context);
     if (!result.success) break;
@@ -1624,13 +1627,16 @@ async function getDocPageAsyncImpl(
   options?: ParseOptions,
 ): Promise<DocPage | undefined> {
   const initialState = injectAnnotationsIntoState(parser.initialState, options);
-
-  let context: ParserContext<unknown> = {
-    buffer: args,
-    optionsTerminated: false,
-    state: initialState,
+  const exec: ExecutionContext = {
     usage: parser.usage,
+    phase: "parse",
+    path: [],
+    trace: createInputTrace(),
   };
+  let context: ParserContext<unknown> = createParserContext(
+    { buffer: args, state: initialState, optionsTerminated: false },
+    exec,
+  );
   while (context.buffer.length > 0) {
     const result = await parser.parse(context);
     if (!result.success) break;
