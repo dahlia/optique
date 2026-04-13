@@ -219,13 +219,16 @@ function formatCommitShort(oid: string, commit: Commit): string {
 function formatCommitFull(oid: string, commit: Commit): string {
   const author = commit.author();
   const committer = commit.committer();
-  const commitTime = commit.time();
+  // Use author timestamp for the Date line; use committer timestamp for Commit.
+  const authorDate = new Date(author.timestamp * 1000);
+  const committerDate = new Date(committer.timestamp * 1000);
 
   const lines = [
     `commit ${oid}`,
     `Author: ${author.name} <${author.email}>`,
+    `AuthorDate: ${authorDate.toISOString()}`,
     `Commit: ${committer.name} <${committer.email}>`,
-    `Date:   ${commitTime.toDateString()}`,
+    `CommitDate: ${committerDate.toISOString()}`,
     "",
     ...commit.message().split("\n").map((line: string) => `    ${line}`),
     "",

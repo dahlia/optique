@@ -36,12 +36,13 @@ export function formatCommitOneline(oid: string, commit: Commit): string {
 export function formatCommitDetailed(oid: string, commit: Commit): string {
   const author = commit.author();
   const message = commit.message();
-  const commitTime = commit.time();
+  // Use author timestamp (when the change was authored), not committer time.
+  const authorDate = new Date(author.timestamp * 1000);
 
   const lines = [
     `${colors.yellow}commit ${oid}${colors.reset}`,
     `Author: ${author.name} <${author.email}>`,
-    `Date:   ${commitTime.toDateString()}`,
+    `Date:   ${authorDate.toISOString()}`,
     "",
     ...message.split("\n").map((line: string) => `    ${line}`),
     "",

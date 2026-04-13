@@ -117,11 +117,21 @@ const diffOptionsParser = map(
       ),
     }),
   ),
-  (result) => ({
-    ...result,
+  (result) => {
     // Treat --staged as alias for --cached
-    cached: result.cached || result.staged,
-  }),
+    const displayModes = [
+      result.stat,
+      result.numstat,
+      result.nameOnly,
+      result.nameStatus,
+    ].filter(Boolean).length;
+    if (displayModes > 1) {
+      throw new Error(
+        "Only one of --stat, --numstat, --name-only, --name-status may be used at a time.",
+      );
+    }
+    return { ...result, cached: result.cached || result.staged };
+  },
 );
 
 /**

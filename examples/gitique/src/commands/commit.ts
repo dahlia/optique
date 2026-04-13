@@ -30,11 +30,9 @@ import {
 const commitOptions = group(
   "Commit Options",
   object({
-    message: optional(
-      option("-m", "--message", string({ metavar: "MESSAGE" }), {
-        description: message`Commit message to use for this commit`,
-      }),
-    ),
+    message: option("-m", "--message", string({ metavar: "MESSAGE" }), {
+      description: message`Commit message`,
+    }),
     all: option("-a", "--all", {
       description:
         message`Automatically stage all modified and deleted files before committing`,
@@ -115,23 +113,6 @@ function parseAuthor(authorString: string): { name: string; email: string } {
 }
 
 /**
- * Prompts user for commit message if not provided via -m option.
- * In a real implementation, this would open an editor.
- */
-function getCommitMessage(providedMessage?: string): string {
-  if (providedMessage) {
-    return providedMessage;
-  }
-
-  // In a real implementation, we would open an editor like vim/nano
-  // For this example, we'll require the message to be provided via -m
-  throw new Error(
-    "Aborting commit due to empty commit message.\n" +
-      "Please use 'gitique commit -m \"your message\"' to provide a commit message.",
-  );
-}
-
-/**
  * Executes the git commit command with the parsed configuration.
  */
 export async function executeCommit(config: CommitConfig): Promise<void> {
@@ -153,8 +134,7 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
       );
     }
 
-    // Get commit message
-    const commitMessage = getCommitMessage(config.message);
+    const commitMessage = config.message;
 
     // Create author signature; pass repo so local config is checked first.
     let authorSignature;

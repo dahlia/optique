@@ -99,10 +99,23 @@ export function createGitSignature(
     }
   }
 
-  return createSignature(
-    authorName ?? "Gitique User",
-    authorEmail ?? "gitique@example.com",
-  );
+  if (!authorName || !authorEmail) {
+    const missing = [
+      !authorName && "user.name",
+      !authorEmail && "user.email",
+    ].filter(Boolean).join(" and ");
+    throw new Error(
+      `Please tell me who you are.\n\n` +
+        `Run\n\n` +
+        `  git config --global ${
+          !authorName ? "user.name" : "user.email"
+        } "Your ${!authorName ? "Name" : "Email"}"\n\n` +
+        `to set your account's default identity.\n\n` +
+        `Cannot read ${missing} from git config.`,
+    );
+  }
+
+  return createSignature(authorName, authorEmail);
 }
 
 /**
@@ -323,8 +336,17 @@ export function getCommitHistory(
       commits.push({ oid, commit });
       count++;
     }
-  } catch (_error) {
-    // No commits yet or other error - this is normal for empty repositories
+  } catch (error) {
+    // An unborn repository has no HEAD — treat it as empty history.
+    // Rethrow any other unexpected error.
+    const msg = error instanceof Error ? error.message : String(error);
+    if (
+      !msg.includes("reference") &&
+      !msg.includes("HEAD") &&
+      !msg.includes("unborn")
+    ) {
+      throw error;
+    }
   }
 
   return commits;
@@ -450,7 +472,7 @@ export function getStatus(repo: Repository): FileStatus[] {
       results.push({
         path,
         status,
-        oldPath: status === "Renamed"
+        oldPath: (status === "Renamed" || status === "Copied")
           ? (delta.oldFile().path() ?? undefined)
           : undefined,
         staged: true,
@@ -477,7 +499,7 @@ export function getStatus(repo: Repository): FileStatus[] {
       results.push({
         path,
         status,
-        oldPath: status === "Renamed"
+        oldPath: (status === "Renamed" || status === "Copied")
           ? (delta.oldFile().path() ?? undefined)
           : undefined,
         staged: false,
@@ -503,7 +525,7 @@ export interface DiffOptions {
   commit2?: string;
   paths?: string[];
   unified?: number;
-  algorithm?: "default" | "minimal" | "patience" | "histogram";
+  algorithm?: "default" | "minimal" | "patience";
 }
 
 /**
@@ -555,7 +577,7 @@ export function getDiff(
     } else if (options.algorithm === "minimal") {
       esDiffOptions.minimal = true;
     }
-    // "histogram" and "default" use default es-git behaviour
+    // "default" uses default es-git behaviour
     if (options.paths && options.paths.length > 0) {
       esDiffOptions.pathspecs = options.paths;
     }
@@ -621,7 +643,7 @@ export function getDiff(
 
       deltas.push({
         path,
-        oldPath: status === "Renamed"
+        oldPath: (status === "Renamed" || status === "Copied")
           ? (delta.oldFile().path() ?? undefined)
           : undefined,
         status,

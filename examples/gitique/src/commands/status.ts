@@ -237,13 +237,30 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
           console.log("");
         }
 
-        if (unstaged.length > 0) {
+        const tracked = unstaged.filter((f) => f.status !== "Untracked");
+        const untracked = unstaged.filter((f) => f.status === "Untracked");
+
+        if (tracked.length > 0) {
           console.log("Changes not staged for commit:");
           console.log(
             '  (use "gitique add <file>..." to update what will be committed)',
           );
           console.log("");
-          for (const file of unstaged) {
+          for (const file of tracked) {
+            console.log(
+              formatStatusLong(file.path, file.status, false, file.oldPath),
+            );
+          }
+          console.log("");
+        }
+
+        if (untracked.length > 0) {
+          console.log("Untracked files:");
+          console.log(
+            '  (use "gitique add <file>..." to include in what will be committed)',
+          );
+          console.log("");
+          for (const file of untracked) {
             console.log(
               formatStatusLong(file.path, file.status, false, file.oldPath),
             );
