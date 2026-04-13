@@ -12,15 +12,18 @@ import {
 import { printError } from "@optique/run";
 import { getRepository, getStatus } from "../utils/git.ts";
 import type { FileStatus } from "../utils/git.ts";
-import {
-  colors,
-  formatError,
-  formatStatusLong,
-  formatStatusPorcelain,
-  formatStatusShort,
-} from "../utils/formatters.ts";
+import { colors, formatError, formatStatusLong } from "../utils/formatters.ts";
 
 type FileStatusEntry = Pick<FileStatus, "path" | "status" | "oldPath">;
+
+const statusIndicatorMap: Record<string, string> = {
+  Added: "A",
+  Deleted: "D",
+  Modified: "M",
+  Renamed: "R",
+  Copied: "C",
+  Untracked: "?",
+};
 
 /**
  * Merges staged and unstaged state into a single short-format status line,
@@ -31,26 +34,17 @@ function formatStatusShortMerged(
   unstagedEntry: FileStatusEntry | undefined,
   path: string,
 ): string {
-  const stagedStatus = stagedEntry?.status ?? "";
-  const unstagedStatus = unstagedEntry?.status ?? "";
+  const stagedCol = stagedEntry
+    ? (statusIndicatorMap[stagedEntry.status] ?? "?")
+    : " ";
+  const unstagedCol = unstagedEntry
+    ? (statusIndicatorMap[unstagedEntry.status] ?? "?")
+    : " ";
   const oldPath = stagedEntry?.oldPath ?? unstagedEntry?.oldPath;
-  const staged = stagedEntry !== undefined;
-  return formatStatusShort(
-    path,
-    staged ? stagedStatus : unstagedStatus,
-    staged,
-    oldPath,
-  )
-    .replace(/^( ?)( ?)/, () => {
-      // Overwrite both columns with the correct indicators
-      const stagedIndicator = stagedEntry
-        ? (stagedEntry.status[0] ?? "?")
-        : " ";
-      const unstagedIndicator = unstagedEntry
-        ? (unstagedEntry.status[0] ?? "?")
-        : " ";
-      return `${stagedIndicator}${unstagedIndicator}`;
-    });
+  const displayPath = oldPath ? `${oldPath} -> ${path}` : path;
+  const stagedColor = stagedEntry ? colors.green : "";
+  const unstagedColor = unstagedEntry ? colors.red : "";
+  return `${stagedColor}${stagedCol}${colors.reset}${unstagedColor}${unstagedCol}${colors.reset} ${displayPath}`;
 }
 
 /**
@@ -61,25 +55,17 @@ function formatStatusPorcelainMerged(
   unstagedEntry: FileStatusEntry | undefined,
   path: string,
 ): string {
-  const stagedStatus = stagedEntry?.status ?? "";
-  const unstagedStatus = unstagedEntry?.status ?? "";
+  const stagedCol = stagedEntry
+    ? (statusIndicatorMap[stagedEntry.status] ?? "?")
+    : " ";
+  const unstagedCol = unstagedEntry
+    ? (statusIndicatorMap[unstagedEntry.status] ?? "?")
+    : " ";
   const oldPath = stagedEntry?.oldPath ?? unstagedEntry?.oldPath;
-  const staged = stagedEntry !== undefined;
-  return formatStatusPorcelain(
-    path,
-    staged ? stagedStatus : unstagedStatus,
-    staged,
-    oldPath,
-  )
-    .replace(/^( ?)( ?)/, () => {
-      const stagedIndicator = stagedEntry
-        ? (stagedEntry.status[0] ?? "?")
-        : " ";
-      const unstagedIndicator = unstagedEntry
-        ? (unstagedEntry.status[0] ?? "?")
-        : " ";
-      return `${stagedIndicator}${unstagedIndicator}`;
-    });
+  if (oldPath) {
+    return `${stagedCol}${unstagedCol} ${oldPath} -> ${path}`;
+  }
+  return `${stagedCol}${unstagedCol} ${path}`;
 }
 
 /**

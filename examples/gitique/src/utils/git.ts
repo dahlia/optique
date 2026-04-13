@@ -93,7 +93,13 @@ export function addFile(
     index.addAll([repoRelativePath], { force: true });
   } else {
     const repoRelativePath = toRepoRelativePath(repo, filePath);
-    index.addPath(repoRelativePath);
+    try {
+      index.addPath(repoRelativePath);
+    } catch {
+      // addPath requires the file to exist in the working tree.
+      // If it doesn't exist, try updateAll to stage a tracked deletion.
+      index.updateAll([repoRelativePath]);
+    }
   }
   index.write();
 }
@@ -260,19 +266,21 @@ export function unstageFile(repo: Repository, filePath: string): void {
     // Unborn repository — nothing in HEAD
   }
 
+  // Remove the staged version from the index.  Without a readTree API in
+  // es-git, we cannot restore the exact HEAD blob; removing the entry and
+  // re-reading from disk is the closest approximation available.
+  // - For a new file (not in HEAD): removal correctly unstages it.
+  // - For a modified tracked file: removal leaves the file untracked in
+  //   the index view, which is an imperfect approximation.
+  index.removeAll([repoRelativePath]);
   if (inHead) {
-    // Re-stage from the working tree (addPath refreshes from disk).
-    // This is an approximation: it restores the on-disk version rather
-    // than the HEAD blob, demonstrating the unstage interaction pattern.
-    index.removeAll([repoRelativePath]);
+    // Re-read from disk so the file stays tracked rather than appearing
+    // as a staged deletion; this is an approximation of HEAD restoration.
     try {
       index.addPath(repoRelativePath);
     } catch {
-      // File deleted in the working tree — leave it removed from index
+      // File was deleted from the working tree — leave the staged deletion
     }
-  } else {
-    // File is new in the index (not tracked in HEAD) — just remove it
-    index.removeAll([repoRelativePath]);
   }
   index.write();
 }

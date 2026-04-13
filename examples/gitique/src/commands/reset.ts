@@ -179,6 +179,7 @@ function resetFiles(
     console.log(`Resetting ${files.length} file(s) to HEAD...`);
   }
 
+  let hadError = false;
   for (const file of files) {
     try {
       unstageFile(repo, file);
@@ -186,6 +187,7 @@ function resetFiles(
         console.log(`Reset '${file}' to HEAD.`);
       }
     } catch (error) {
+      hadError = true;
       printError(
         message`${
           formatError(
@@ -196,6 +198,10 @@ function resetFiles(
         }`,
       );
     }
+  }
+
+  if (hadError) {
+    throw new Error("One or more files could not be reset.");
   }
 }
 
