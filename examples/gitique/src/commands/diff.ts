@@ -185,6 +185,8 @@ export async function executeDiff(config: DiffConfig): Promise<void> {
       cached: config.cached,
       commit,
       paths: config.paths.length > 0 ? [...config.paths] : undefined,
+      unified: config.unified,
+      algorithm: config.algorithm,
     });
 
     const outputMode = getOutputMode(config);

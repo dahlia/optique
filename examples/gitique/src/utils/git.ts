@@ -249,6 +249,8 @@ export interface DiffOptions {
   cached?: boolean;
   commit?: string;
   paths?: string[];
+  unified?: number;
+  algorithm?: "default" | "minimal" | "patience" | "histogram";
 }
 
 /**
@@ -278,6 +280,22 @@ export function getDiff(
   try {
     let diff;
 
+    // Build es-git diff options from our options
+    const esDiffOptions: {
+      contextLines?: number;
+      patience?: boolean;
+      minimal?: boolean;
+    } = {};
+    if (options.unified !== undefined) {
+      esDiffOptions.contextLines = options.unified;
+    }
+    if (options.algorithm === "patience") {
+      esDiffOptions.patience = true;
+    } else if (options.algorithm === "minimal") {
+      esDiffOptions.minimal = true;
+    }
+    // "histogram" and "default" use default es-git behaviour
+
     if (options.cached) {
       // Staged changes only: compare HEAD tree to index tree.
       // Using diffTreeToWorkdirWithIndex would blend in unstaged changes.
@@ -291,15 +309,15 @@ export function getDiff(
       const index = repo.index();
       const indexTreeOid = index.writeTree();
       const indexTree = repo.getTree(indexTreeOid);
-      diff = repo.diffTreeToTree(headTree, indexTree);
+      diff = repo.diffTreeToTree(headTree, indexTree, esDiffOptions);
     } else if (options.commit) {
       // Compare with specific commit
       const commitObj = repo.getCommit(options.commit);
       const commitTree = commitObj.tree();
-      diff = repo.diffTreeToWorkdirWithIndex(commitTree);
+      diff = repo.diffTreeToWorkdirWithIndex(commitTree, esDiffOptions);
     } else {
       // Unstaged changes: index vs workdir
-      diff = repo.diffIndexToWorkdir();
+      diff = repo.diffIndexToWorkdir(undefined, esDiffOptions);
     }
 
     const stats = diff.stats();
