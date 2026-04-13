@@ -77,9 +77,12 @@ export function addFile(
   }
 
   if (isDirectory) {
-    const pattern = filePath === "."
-      ? "*"
-      : toRepoRelativePath(repo, filePath) + "/**";
+    // Convert "." to the repo-relative path of the current directory so that
+    // `gitique add .` from a subdirectory stages only that subtree, not the
+    // whole repository.
+    const repoRelDir = toRepoRelativePath(repo, filePath);
+    // An empty string means the cwd is the repo root — use "*" to match all
+    const pattern = repoRelDir === "" ? "*" : repoRelDir + "/**";
     index.addAll([pattern], force ? { force: true } : undefined);
   } else if (force) {
     // addPath has no force option; route through addAll instead
@@ -188,21 +191,20 @@ export function resolveCommitOid(repo: Repository, spec: string): string {
 export function moveHead(repo: Repository, targetOid: string): void {
   const commit = repo.getCommit(targetOid);
 
-  try {
-    const head = repo.head();
-    const symbolicTarget = head.symbolicTarget();
-    if (symbolicTarget) {
-      // Attached HEAD — move the branch tip to the target commit
-      const branchName = symbolicTarget.replace(/^refs\/heads\//, "");
+  // repo.headDetached() returns true for detached HEAD and false when HEAD
+  // points to a branch.  repo.head() resolves the ref so symbolicTarget()
+  // is always null there — use headDetached() to distinguish the two cases.
+  if (!repo.headDetached()) {
+    try {
+      const head = repo.head();
+      const branchName = head.name().replace(/^refs\/heads\//, "");
       repo.createBranch(branchName, commit, { force: true });
-    } else {
-      // Detached HEAD
-      repo.setHeadDetached(commit);
+      return;
+    } catch {
+      // Fall through to detached-HEAD path (e.g., unborn branch)
     }
-  } catch {
-    // Unborn branch — set detached HEAD as fallback
-    repo.setHeadDetached(commit);
   }
+  repo.setHeadDetached(commit);
 }
 
 /**
@@ -240,30 +242,31 @@ export function getCommitHistory(
  */
 export function unstageFile(repo: Repository, filePath: string): void {
   const index = repo.index();
+  // All index operations require repo-root-relative paths
+  const repoRelativePath = toRepoRelativePath(repo, filePath);
 
   // Check whether the file exists in HEAD
   let inHead = false;
   try {
     const headTree = repo.head().peelToTree();
-    inHead = headTree.getPath(filePath) !== null;
+    inHead = headTree.getPath(repoRelativePath) !== null;
   } catch {
     // Unborn repository — nothing in HEAD
   }
 
   if (inHead) {
-    // Re-stage from the working tree (addPath refreshes from disk),
-    // then let the caller know the index was updated.  This is an
-    // approximation: it re-adds the current on-disk version instead
-    // of the HEAD blob, but it demonstrates the unstage pattern.
-    index.removeAll([filePath]);
+    // Re-stage from the working tree (addPath refreshes from disk).
+    // This is an approximation: it restores the on-disk version rather
+    // than the HEAD blob, demonstrating the unstage interaction pattern.
+    index.removeAll([repoRelativePath]);
     try {
-      index.addPath(filePath);
+      index.addPath(repoRelativePath);
     } catch {
-      // File may have been deleted in the working tree — leave removed
+      // File deleted in the working tree — leave it removed from index
     }
   } else {
     // File is new in the index (not tracked in HEAD) — just remove it
-    index.removeAll([filePath]);
+    index.removeAll([repoRelativePath]);
   }
   index.write();
 }
@@ -341,19 +344,15 @@ export function getStatus(repo: Repository): FileStatus[] {
     // includeUntracked: true ensures untracked files are shown,
     // which is required both in normal repos and in unborn repos
     // where no HEAD exists yet.
+    // A file that has both staged and unstaged changes is intentionally
+    // reported twice (once per state) so callers can show dual-state
+    // output like "MM" or "AM".
     const unstagedDiff = repo.diffIndexToWorkdir(undefined, {
       includeUntracked: true,
     });
     for (const delta of unstagedDiff.deltas()) {
       const path = delta.newFile().path();
       if (path === null) continue;
-
-      // Skip if already reported as staged (avoid duplicates for files
-      // that have both staged and unstaged changes)
-      const alreadyStaged = results.some(
-        (r) => r.path === path && r.staged,
-      );
-      if (alreadyStaged) continue;
 
       results.push({
         path,
@@ -449,13 +448,17 @@ export function getDiff(
       const indexTree = repo.getTree(indexTreeOid);
       diff = repo.diffTreeToTree(headTree, indexTree, esDiffOptions);
     } else if (options.commit && options.commit2) {
-      // Compare two specific commits
-      const tree1 = repo.getCommit(options.commit).tree();
-      const tree2 = repo.getCommit(options.commit2).tree();
+      // Compare two specific commits; resolve revspecs first so names like
+      // HEAD, HEAD~1, and branch names work (getCommit expects raw OIDs).
+      const oid1 = repo.revparseSingle(options.commit);
+      const oid2 = repo.revparseSingle(options.commit2);
+      const tree1 = repo.getCommit(oid1).tree();
+      const tree2 = repo.getCommit(oid2).tree();
       diff = repo.diffTreeToTree(tree1, tree2, esDiffOptions);
     } else if (options.commit) {
-      // Compare with specific commit
-      const commitObj = repo.getCommit(options.commit);
+      // Compare with specific commit; resolve revspec first
+      const oid = repo.revparseSingle(options.commit);
+      const commitObj = repo.getCommit(oid);
       const commitTree = commitObj.tree();
       diff = repo.diffTreeToWorkdirWithIndex(commitTree, esDiffOptions);
     } else {

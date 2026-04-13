@@ -241,16 +241,20 @@ export async function executeLog(config: LogConfig): Promise<void> {
   try {
     const repo = await getRepository();
 
-    // Get commit history
-    const commits = getCommitHistory(repo, config.maxCount);
+    // Fetch all commits first, then filter, then limit.  Limiting before
+    // filtering would incorrectly exclude matching commits deeper in history.
+    const allCommits = getCommitHistory(repo);
 
-    if (commits.length === 0) {
+    if (allCommits.length === 0) {
       console.log("No commits found in the repository.");
       return;
     }
 
-    // Apply filters
-    const filteredCommits = filterCommits(commits, config);
+    // Apply filters, then honour --max-count
+    const filteredCommits = filterCommits(allCommits, config).slice(
+      0,
+      config.maxCount,
+    );
 
     if (filteredCommits.length === 0) {
       console.log("No commits match the specified criteria.");
