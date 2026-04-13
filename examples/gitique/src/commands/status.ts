@@ -194,67 +194,61 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
     const repo = await getRepository();
     const statuses = getStatus(repo);
 
+    // Determine branch state once for use in both -b header and long body.
+    let resolvedBranchName: string | null = null;
+    let isUnbornBranch = false;
+    if (!repo.headDetached()) {
+      try {
+        resolvedBranchName = repo.head().name().replace("refs/heads/", "");
+      } catch {
+        // HEAD can't be resolved (unborn branch) — read from .git/HEAD
+        resolvedBranchName = readHeadBranchName(repo.path());
+        isUnbornBranch = true;
+      }
+    }
+
     // Show branch information if requested
     if (config.branch) {
       if (config.format === "porcelain") {
-        // Machine-readable porcelain v1 branch line
+        // Machine-readable porcelain v1 branch line.
+        // git uses "## No commits yet on <branch>" for unborn branches.
         if (repo.headDetached()) {
           console.log("## HEAD (no branch)");
+        } else if (isUnbornBranch && resolvedBranchName) {
+          console.log(`## No commits yet on ${resolvedBranchName}`);
+        } else if (resolvedBranchName) {
+          console.log(`## ${resolvedBranchName}`);
         } else {
-          let branchName: string | null = null;
-          try {
-            branchName = repo.head().name().replace("refs/heads/", "");
-          } catch {
-            // HEAD can't be resolved (unborn branch) — read from .git/HEAD
-            branchName = readHeadBranchName(repo.path());
-          }
-          if (branchName) {
-            console.log(`## ${branchName}`);
-          } else {
-            console.log("## HEAD (no branch)");
-          }
+          console.log("## HEAD (no branch)");
         }
       } else {
         if (repo.headDetached()) {
           console.log("Not currently on any branch.");
           console.log("");
+        } else if (resolvedBranchName) {
+          console.log(
+            `On branch ${colors.green}${resolvedBranchName}${colors.reset}`,
+          );
+          if (isUnbornBranch) {
+            console.log("");
+            console.log("No commits yet");
+          }
+          console.log("");
         } else {
-          let branchName: string | null = null;
-          try {
-            branchName = repo.head().name().replace("refs/heads/", "");
-          } catch {
-            // HEAD can't be resolved (unborn branch) — read from .git/HEAD
-            branchName = readHeadBranchName(repo.path());
-          }
-          if (branchName) {
-            console.log(
-              `On branch ${colors.green}${branchName}${colors.reset}`,
-            );
-            console.log("");
-          } else {
-            console.log("Not currently on any branch.");
-            console.log("");
-          }
+          console.log("Not currently on any branch.");
+          console.log("");
         }
       }
     }
 
     if (statuses.length === 0) {
       if (config.format === "long") {
-        // Distinguish a clean repo with commits from a brand-new unborn repo
-        let hasCommits = false;
-        try {
-          repo.head().peelToTree();
-          hasCommits = true;
-        } catch {
-          // Unborn branch — no commits yet
-        }
-        if (hasCommits) {
-          console.log("nothing to commit, working tree clean");
-        } else {
+        if (isUnbornBranch) {
           console.log(
             "No commits yet\n\nnothing to commit (create/copy files and use 'gitique add' to track)",
           );
+        } else {
+          console.log("nothing to commit, working tree clean");
         }
       }
       return;
@@ -267,6 +261,12 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
     // Format output based on format option
     switch (config.format) {
       case "long": {
+        if (isUnbornBranch && !config.branch) {
+          // Show the unborn-branch header even without -b so users know
+          // they're looking at a pre-first-commit state.
+          console.log("No commits yet");
+          console.log("");
+        }
         if (staged.length > 0) {
           console.log("Changes to be committed:");
           console.log('  (use "gitique reset --file <file>..." to unstage)');

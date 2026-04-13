@@ -151,7 +151,15 @@ function parseDate(dateString: string): Date {
   // ISO date-only: treat as local midnight, not UTC midnight.
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
     const [year, month, day] = dateString.split("-").map(Number);
-    return new Date(year, month - 1, day);
+    const d = new Date(year, month - 1, day);
+    // new Date() normalises impossible dates (e.g. Feb 31 → Mar 2); reject them.
+    if (
+      d.getFullYear() !== year || d.getMonth() !== month - 1 ||
+      d.getDate() !== day
+    ) {
+      throw new Error(`Invalid date: "${dateString}"`);
+    }
+    return d;
   }
   const date = new Date(dateString);
   if (isNaN(date.getTime())) {
