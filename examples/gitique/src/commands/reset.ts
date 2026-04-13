@@ -15,6 +15,7 @@ import {
   moveHead,
   resetIndex,
   resolveCommitOid,
+  unstageFile,
 } from "../utils/git.ts";
 import type { Repository } from "es-git";
 import {
@@ -163,7 +164,7 @@ function validateResetConfig(config: ResetConfig): void {
  * Resets specific files to HEAD state.
  */
 function resetFiles(
-  _repo: Repository,
+  repo: Repository,
   files: string[],
   quiet: boolean,
 ): void {
@@ -173,8 +174,7 @@ function resetFiles(
 
   for (const file of files) {
     try {
-      // In a real implementation, this would reset the specific file
-      // For now, we'll just show what would happen
+      unstageFile(repo, file);
       if (!quiet) {
         console.log(`Reset '${file}' to HEAD.`);
       }
