@@ -51,13 +51,13 @@ function unwrapDelegatedAnnotationClone<T>(value: T): T {
 }
 
 /**
- * Creates a proxy that exposes annotations without changing the target shape.
+ * Creates an annotation-aware proxy without changing the target shape.
  *
  * @param state The object state to expose through an annotation-aware view.
  * @param annotations The annotations to surface through the proxy.
  * @returns A proxy over the unwrapped target object that reports the supplied
  *          annotations while preserving the target's structural behavior.
- * @internal
+ * @since 1.0.0
  */
 export function withAnnotationView<T extends object>(
   state: T,
