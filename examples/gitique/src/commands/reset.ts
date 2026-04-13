@@ -186,7 +186,7 @@ function resetFiles(
     try {
       unstageFile(repo, file);
       if (!quiet) {
-        console.log(`Reset '${file}' to HEAD.`);
+        console.log(`Unstaged '${file}'.`);
       }
     } catch (error) {
       hadError = true;
