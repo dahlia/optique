@@ -261,6 +261,12 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
     const staged = statuses.filter((s) => s.staged);
     const unstaged = statuses.filter((s) => !s.staged);
 
+    // Pre-index staged/unstaged entries for O(1) lookups in the merge loops.
+    const stagedByPath = new Map(staged.map((entry) => [entry.path, entry]));
+    const unstagedByPath = new Map(
+      unstaged.map((entry) => [entry.path, entry]),
+    );
+
     // Format output based on format option
     switch (config.format) {
       case "long": {
@@ -315,8 +321,8 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
         for (const file of statuses) {
           if (seenShort.has(file.path)) continue;
           seenShort.add(file.path);
-          const stagedEntry = staged.find((s) => s.path === file.path);
-          const unstagedEntry = unstaged.find((u) => u.path === file.path);
+          const stagedEntry = stagedByPath.get(file.path);
+          const unstagedEntry = unstagedByPath.get(file.path);
           console.log(
             formatStatusShortMerged(stagedEntry, unstagedEntry, file.path),
           );
@@ -329,8 +335,8 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
         for (const file of statuses) {
           if (seenPorcelain.has(file.path)) continue;
           seenPorcelain.add(file.path);
-          const stagedEntry = staged.find((s) => s.path === file.path);
-          const unstagedEntry = unstaged.find((u) => u.path === file.path);
+          const stagedEntry = stagedByPath.get(file.path);
+          const unstagedEntry = unstagedByPath.get(file.path);
           console.log(
             formatStatusPorcelainMerged(stagedEntry, unstagedEntry, file.path),
           );
