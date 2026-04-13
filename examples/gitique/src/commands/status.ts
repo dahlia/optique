@@ -205,7 +205,7 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
       case "long": {
         if (staged.length > 0) {
           console.log("Changes to be committed:");
-          console.log('  (use "gitique reset HEAD <file>..." to unstage)');
+          console.log('  (use "gitique reset --file <file>..." to unstage)');
           console.log("");
           for (const file of staged) {
             console.log(

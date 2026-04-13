@@ -222,13 +222,11 @@ export async function executeDiff(config: DiffConfig): Promise<void> {
 
       case "numstat": {
         // Print numstat format (insertions deletions filename).
-        // Per-file counts are not available; 0 is used as a placeholder.
+        // es-git does not expose per-file insertion/deletion counts, so
+        // 0 is used as a placeholder to preserve the parseable format.
         for (const delta of diffResult.deltas) {
           console.log(`0\t0\t${delta.path}`);
         }
-        console.log(
-          `${diffResult.stats.insertions}\t${diffResult.stats.deletions}\t(total, approximate)`,
-        );
         break;
       }
 

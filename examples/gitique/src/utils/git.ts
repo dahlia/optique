@@ -95,10 +95,23 @@ export function addFile(
     const repoRelativePath = toRepoRelativePath(repo, filePath);
     try {
       index.addPath(repoRelativePath);
-    } catch {
+    } catch (err) {
       // addPath requires the file to exist in the working tree.
-      // If it doesn't exist, try updateAll to stage a tracked deletion.
-      index.updateAll([repoRelativePath]);
+      // For tracked files deleted from the worktree, fall back to
+      // updateAll to stage the deletion.  For completely unknown paths
+      // (not in HEAD and not on disk), rethrow the original error.
+      let trackedInHead = false;
+      try {
+        const headTree = repo.head().peelToTree();
+        trackedInHead = headTree.getPath(repoRelativePath) !== null;
+      } catch {
+        // Unborn repository — nothing in HEAD
+      }
+      if (trackedInHead) {
+        index.updateAll([repoRelativePath]);
+      } else {
+        throw err;
+      }
     }
   }
   index.write();
