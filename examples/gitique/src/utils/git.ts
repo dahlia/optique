@@ -178,42 +178,53 @@ export function getStatus(repo: Repository): FileStatus[] {
     try {
       headTree = repo.head().peelToTree();
     } catch {
-      // No HEAD exists (empty repository)
+      // No HEAD exists (unborn repository)
     }
 
-    // Get all changes (staged + unstaged) using diffTreeToWorkdirWithIndex
-    // This compares HEAD tree to working directory with index
-    if (headTree) {
-      const diff = repo.diffTreeToWorkdirWithIndex(headTree);
-      for (const delta of diff.deltas()) {
-        const path = delta.newFile().path();
-        if (path === null) continue;
+    // Staged changes: compare HEAD tree (or empty) to the index
+    const index = repo.index();
+    const indexTreeOid = index.writeTree();
+    const indexTree = repo.getTree(indexTreeOid);
 
-        results.push({
-          path,
-          status: delta.status() as FileStatus["status"],
-          oldPath: delta.status() === "Renamed"
-            ? (delta.oldFile().path() ?? undefined)
-            : undefined,
-          staged: false, // We can't distinguish staged/unstaged with this method
-        });
-      }
-    } else {
-      // For empty repository, get unstaged changes only
-      const unstagedDiff = repo.diffIndexToWorkdir();
-      for (const delta of unstagedDiff.deltas()) {
-        const path = delta.newFile().path();
-        if (path === null) continue;
+    const stagedDiff = repo.diffTreeToTree(
+      headTree ?? undefined,
+      indexTree,
+    );
+    for (const delta of stagedDiff.deltas()) {
+      const path = delta.newFile().path();
+      if (path === null) continue;
 
-        results.push({
-          path,
-          status: delta.status() as FileStatus["status"],
-          oldPath: delta.status() === "Renamed"
-            ? (delta.oldFile().path() ?? undefined)
-            : undefined,
-          staged: false,
-        });
-      }
+      results.push({
+        path,
+        status: delta.status() as FileStatus["status"],
+        oldPath: delta.status() === "Renamed"
+          ? (delta.oldFile().path() ?? undefined)
+          : undefined,
+        staged: true,
+      });
+    }
+
+    // Unstaged changes: compare index to working directory
+    const unstagedDiff = repo.diffIndexToWorkdir();
+    for (const delta of unstagedDiff.deltas()) {
+      const path = delta.newFile().path();
+      if (path === null) continue;
+
+      // Skip if already reported as staged (avoid duplicates for files
+      // that have both staged and unstaged changes)
+      const alreadyStaged = results.some(
+        (r) => r.path === path && r.staged,
+      );
+      if (alreadyStaged) continue;
+
+      results.push({
+        path,
+        status: delta.status() as FileStatus["status"],
+        oldPath: delta.status() === "Renamed"
+          ? (delta.oldFile().path() ?? undefined)
+          : undefined,
+        staged: false,
+      });
     }
   } catch (error) {
     throw new Error(
