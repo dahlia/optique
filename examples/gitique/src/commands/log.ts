@@ -125,10 +125,10 @@ export type LogConfig = InferValue<typeof logCommand>;
 
 /**
  * Parses a date string into a Date object.
- * Supports various formats like "2024-01-01", "2 days ago", etc.
+ * Accepts any format understood by `new Date(string)`, such as ISO 8601
+ * dates.  Relative phrases like "2 days ago" are not supported.
  */
 function parseDate(dateString: string): Date {
-  // Simple implementation - in a real scenario, you'd want more robust date parsing
   const date = new Date(dateString);
   if (isNaN(date.getTime())) {
     throw new Error(`Invalid date format: "${dateString}"`);
