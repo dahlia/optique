@@ -248,6 +248,7 @@ export function getStatus(repo: Repository): FileStatus[] {
 export interface DiffOptions {
   cached?: boolean;
   commit?: string;
+  commit2?: string;
   paths?: string[];
   unified?: number;
   algorithm?: "default" | "minimal" | "patience" | "histogram";
@@ -285,6 +286,7 @@ export function getDiff(
       contextLines?: number;
       patience?: boolean;
       minimal?: boolean;
+      pathspecs?: string[];
     } = {};
     if (options.unified !== undefined) {
       esDiffOptions.contextLines = options.unified;
@@ -295,6 +297,9 @@ export function getDiff(
       esDiffOptions.minimal = true;
     }
     // "histogram" and "default" use default es-git behaviour
+    if (options.paths && options.paths.length > 0) {
+      esDiffOptions.pathspecs = options.paths;
+    }
 
     if (options.cached) {
       // Staged changes only: compare HEAD tree to index tree.
@@ -310,6 +315,11 @@ export function getDiff(
       const indexTreeOid = index.writeTree();
       const indexTree = repo.getTree(indexTreeOid);
       diff = repo.diffTreeToTree(headTree, indexTree, esDiffOptions);
+    } else if (options.commit && options.commit2) {
+      // Compare two specific commits
+      const tree1 = repo.getCommit(options.commit).tree();
+      const tree2 = repo.getCommit(options.commit2).tree();
+      diff = repo.diffTreeToTree(tree1, tree2, esDiffOptions);
     } else if (options.commit) {
       // Compare with specific commit
       const commitObj = repo.getCommit(options.commit);

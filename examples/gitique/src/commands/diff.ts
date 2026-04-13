@@ -180,10 +180,12 @@ export async function executeDiff(config: DiffConfig): Promise<void> {
 
     // Determine what to diff
     const commit = config.commits.length > 0 ? config.commits[0] : undefined;
+    const commit2 = config.commits.length > 1 ? config.commits[1] : undefined;
 
     const diffResult = getDiff(repo, {
       cached: config.cached,
       commit,
+      commit2,
       paths: config.paths.length > 0 ? [...config.paths] : undefined,
       unified: config.unified,
       algorithm: config.algorithm,
