@@ -206,11 +206,22 @@ function parseNumstat(
     } else if (line.startsWith("@@")) {
       // Hunk header — from here on, +/- lines are content, not file headers.
       inHunk = true;
-    } else if (
-      !inHunk &&
-      (line.startsWith("Binary files ") || line.startsWith("GIT binary patch"))
-    ) {
+    } else if (!inHunk && line.startsWith("Binary files ")) {
       // Binary patch — no textual hunk lines; mark as binary so we emit "-".
+      isBinary = true;
+      // Some diff generators omit the --- / +++ headers for binary files,
+      // leaving currentPath null.  Extract the path from the "Binary files"
+      // line directly so we still record the entry.
+      if (currentPath === null) {
+        const m = line.match(
+          /^Binary files (?:a\/(.+)|\/dev\/null) and (?:b\/(.+)|\/dev\/null) differ$/,
+        );
+        if (m) {
+          currentPath = m[2] ?? m[1] ?? null;
+        }
+      }
+    } else if (!inHunk && line.startsWith("GIT binary patch")) {
+      // git-format binary patch — path already captured from --- / +++ lines.
       isBinary = true;
     } else if (!inHunk && line.startsWith("--- a/")) {
       pendingOldPath = line.slice(6);
