@@ -104,12 +104,14 @@ export function createGitSignature(
       !authorName && "user.name",
       !authorEmail && "user.email",
     ].filter(Boolean).join(" and ");
+    const commands = [
+      !authorName && `  git config --global user.name "Your Name"`,
+      !authorEmail && `  git config --global user.email "you@example.com"`,
+    ].filter(Boolean).join("\n");
     throw new Error(
       `Please tell me who you are.\n\n` +
         `Run\n\n` +
-        `  git config --global ${
-          !authorName ? "user.name" : "user.email"
-        } "Your ${!authorName ? "Name" : "Email"}"\n\n` +
+        `${commands}\n\n` +
         `to set your account's default identity.\n\n` +
         `Cannot read ${missing} from git config.`,
     );
