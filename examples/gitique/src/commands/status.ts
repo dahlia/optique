@@ -35,7 +35,7 @@ function readHeadBranchName(gitDir: string): string | null {
   return null;
 }
 
-const statusIndicatorMap: Record<string, string> = {
+const statusIndicatorMap: Record<FileStatus["status"], string> = {
   Added: "A",
   Deleted: "D",
   Modified: "M",
