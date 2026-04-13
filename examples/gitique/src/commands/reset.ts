@@ -107,7 +107,9 @@ export const resetCommand = command("reset", resetOptionsParser, {
   brief: message`Reset current HEAD`,
   description: message`Reset current HEAD to the specified state. Use ${
     optionName("--soft")
-  } to keep changes staged, ${optionName("--mixed")} to unstage, or ${
+  } to keep changes staged, omit a mode flag (or use ${
+    optionName("--mode=mixed")
+  }) for the default mixed reset, or ${
     optionName("--hard")
   } to discard all changes (dangerous).`,
   footer: message`Examples:${lineBreak()}
