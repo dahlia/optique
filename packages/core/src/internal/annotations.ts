@@ -334,6 +334,13 @@ export function injectAnnotations<TState>(
     if (unwrapped !== state) {
       return injectAnnotations(unwrapped, annotations);
     }
+    const cloned = Object.create(
+      Object.getPrototypeOf(state),
+      Object.getOwnPropertyDescriptors(state as Record<PropertyKey, unknown>),
+    ) as TState & { [annotationKey]?: Annotations };
+    cloned[annotationKey] = annotations;
+    injectedAnnotationWrappers.add(cloned as object);
+    return cloned;
   }
   if (state instanceof Date) {
     const cloned = new Date(state.getTime()) as Date & {
@@ -366,10 +373,12 @@ export function injectAnnotations<TState>(
   }
   const proto = Object.getPrototypeOf(state);
   if (proto === Object.prototype || proto === null) {
-    return {
-      ...(state as Record<PropertyKey, unknown>),
-      [annotationKey]: annotations,
-    } as TState;
+    const cloned = Object.create(
+      proto,
+      Object.getOwnPropertyDescriptors(state as Record<PropertyKey, unknown>),
+    ) as TState & { [annotationKey]?: Annotations };
+    cloned[annotationKey] = annotations;
+    return cloned;
   }
   const cloned = Object.create(
     proto,
@@ -394,7 +403,8 @@ export function unwrapInjectedAnnotationWrapper<T>(value: T): T {
   if (!hasInjectedAnnotationWrapperShape(value)) {
     return value;
   }
-  return value[annotationStateValueKey] as T;
+  const valueRecord = value as Record<PropertyKey, unknown>;
+  return valueRecord[annotationStateValueKey] as T;
 }
 
 /**

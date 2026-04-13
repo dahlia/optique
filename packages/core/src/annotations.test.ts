@@ -105,7 +105,7 @@ describe("injectAnnotations", () => {
     assert.equal(wrapper[annotationStateValueKey], undefined);
   });
 
-  it("should not recurse forever when reinjecting augmented wrappers", () => {
+  it("should preserve primitive payloads when reinjecting augmented wrappers", () => {
     const first = injectAnnotations(undefined, { [Symbol.for("@test/a")]: 1 });
     assert.ok(first != null && typeof first === "object");
     const augmented = first as Record<PropertyKey, unknown>;
@@ -114,7 +114,11 @@ describe("injectAnnotations", () => {
     const second = injectAnnotations(augmented, { [Symbol.for("@test/b")]: 2 });
 
     assert.notEqual(second, augmented);
-    assert.equal((second as Record<PropertyKey, unknown>).extra, true);
+    assert.equal(unwrapInjectedAnnotationWrapper(second), second);
+    const wrapper = second as Record<PropertyKey, unknown>;
+    assert.equal(wrapper.extra, true);
+    assert.equal(wrapper[annotationWrapperKey], true);
+    assert.equal(wrapper[annotationStateValueKey], undefined);
     assert.deepEqual(getAnnotations(second), { [Symbol.for("@test/b")]: 2 });
   });
 
@@ -397,11 +401,19 @@ describe("unwrapInjectedAnnotationWrapper", () => {
     assert.equal(unwrapInjectedAnnotationWrapper(copied), "active");
   });
 
-  it("should not unwrap wrappers with additional own keys", () => {
+  it("should not unwrap copied wrappers with additional own keys", () => {
     const wrapped = injectAnnotations("value", {
       [Symbol.for("@test/unwrap-extra")]: "ok",
     });
-    const wrapperObject = wrapped as unknown as Record<PropertyKey, unknown>;
+    const wrappedObject = (() => {
+      const wrappedUnknown: unknown = wrapped;
+      assert.ok(wrappedUnknown != null && typeof wrappedUnknown === "object");
+      return wrappedUnknown;
+    })();
+    const wrapperObject = Object.create(
+      Object.getPrototypeOf(wrappedObject),
+      Object.getOwnPropertyDescriptors(wrappedObject),
+    ) as Record<PropertyKey, unknown>;
     wrapperObject.extra = true;
 
     assert.equal(
@@ -437,4 +449,26 @@ describe("public annotation-state aliases", () => {
       unwrapInjectedAnnotationWrapper(wrapped),
     );
   });
+});
+it("should preserve non-enumerable and symbol properties on plain objects", () => {
+  const marker = Symbol.for("@test/plain-object-symbol");
+  const hidden = Symbol.for("@test/plain-object-hidden");
+  const source = { visible: 1, [marker]: 2 };
+  Object.defineProperty(source, hidden, {
+    value: 3,
+    enumerable: false,
+    configurable: true,
+    writable: true,
+  });
+
+  const result = injectAnnotations(source, { [Symbol.for("@test/ann")]: true });
+
+  assert.notEqual(result, source);
+  assert.equal((result as typeof source).visible, 1);
+  assert.equal((result as typeof source)[marker], 2);
+  assert.equal((result as Record<PropertyKey, unknown>)[hidden], 3);
+  assert.equal(
+    Object.getOwnPropertyDescriptor(result, hidden)?.enumerable,
+    false,
+  );
 });
