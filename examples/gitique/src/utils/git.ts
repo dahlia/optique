@@ -102,6 +102,16 @@ export function addAllFiles(repo: Repository, force?: boolean): void {
 }
 
 /**
+ * Stages only tracked (already-indexed) files, equivalent to `git add -u`.
+ * Untracked files are left unstaged, matching `git commit -a` semantics.
+ */
+export function stageTrackedFiles(repo: Repository): void {
+  const index = repo.index();
+  index.updateAll(["*"]);
+  index.write();
+}
+
+/**
  * Creates a commit with the current index state.
  */
 export function createCommit(

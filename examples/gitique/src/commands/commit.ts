@@ -11,11 +11,11 @@ import {
 } from "@optique/core/message";
 import { printError } from "@optique/run";
 import {
-  addAllFiles,
   createCommit,
   createGitSignature,
   getRepository,
   isIndexEmpty,
+  stageTrackedFiles,
 } from "../utils/git.ts";
 import {
   formatCommitCreated,
@@ -138,10 +138,12 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
   try {
     const repo = await getRepository();
 
-    // Stage all files if --all option is used
+    // Stage tracked (modified/deleted) files if --all option is used.
+    // Use stageTrackedFiles (index.updateAll) rather than addAllFiles so
+    // that untracked files are not accidentally staged, matching git -a.
     if (config.all) {
       console.log("Staging all modified and deleted files...");
-      await addAllFiles(repo);
+      stageTrackedFiles(repo);
     }
 
     // Reject empty commits unless --allow-empty is set
