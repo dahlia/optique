@@ -193,7 +193,7 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
     const commit = repo.getCommit(commitOid);
     const author = commit.author();
     console.log(`Author: ${author.name} <${author.email}>`);
-    console.log(`Date: ${commit.time().toISOString()}`);
+    console.log(`Date: ${new Date(author.timestamp * 1000).toISOString()}`);
 
     if (config.all) {
       console.log(formatSuccess("Changes automatically staged and committed"));
