@@ -3,7 +3,12 @@ import { map, optional, withDefault } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { command, constant, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
-import { commandLine, message, optionName } from "@optique/core/message";
+import {
+  commandLine,
+  lineBreak,
+  message,
+  optionName,
+} from "@optique/core/message";
 import { printError } from "@optique/run";
 import { getCommitHistory, getRepository } from "../utils/git.ts";
 import {
@@ -108,13 +113,19 @@ export const logCommand = command("log", logOptionsParser, {
     } for compact output or ${
       optionName("--format")
     } to customize the display.`,
-  footer: message`Examples:
-  ${commandLine("gitique log")}                     Show recent commits
+  footer: message`Examples:${lineBreak()}
+  ${
+    commandLine("gitique log")
+  }                     Show recent commits${lineBreak()}
   ${
     commandLine("gitique log --oneline -n 5")
-  }      Show 5 commits in one-line format
-  ${commandLine("gitique log --format=full")}       Show full commit details
-  ${commandLine("gitique log --author=john")}       Filter by author
+  }      Show 5 commits in one-line format${lineBreak()}
+  ${
+    commandLine("gitique log --format=full")
+  }       Show full commit details${lineBreak()}
+  ${
+    commandLine("gitique log --author=john")
+  }       Filter by author${lineBreak()}
   ${commandLine('gitique log --since="2024-01-01"')}  Show commits since date`,
 });
 

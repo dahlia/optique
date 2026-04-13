@@ -3,7 +3,12 @@ import { map, withDefault } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { command, constant, option } from "@optique/core/primitives";
 import { choice } from "@optique/core/valueparser";
-import { commandLine, message, optionName } from "@optique/core/message";
+import {
+  commandLine,
+  lineBreak,
+  message,
+  optionName,
+} from "@optique/core/message";
 import { printError } from "@optique/run";
 import { getRepository, getStatus } from "../utils/git.ts";
 import {
@@ -84,10 +89,12 @@ export const statusCommand = command("status", statusOptionsParser, {
     } for compact output or ${
       optionName("--porcelain")
     } for machine-readable format.`,
-  footer: message`Examples:
-  ${commandLine("gitique status")}              Show full status
-  ${commandLine("gitique status -s")}           Show short format
-  ${commandLine("gitique status --porcelain")}  Machine-readable format
+  footer: message`Examples:${lineBreak()}
+  ${commandLine("gitique status")}              Show full status${lineBreak()}
+  ${commandLine("gitique status -s")}           Show short format${lineBreak()}
+  ${
+    commandLine("gitique status --porcelain")
+  }  Machine-readable format${lineBreak()}
   ${commandLine("gitique status -b")}           Show branch information`,
 });
 

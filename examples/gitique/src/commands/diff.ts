@@ -5,6 +5,7 @@ import { argument, command, constant, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import {
   commandLine,
+  lineBreak,
   message,
   metavar,
   optionName,
@@ -134,11 +135,19 @@ export const diffCommand = command("diff", diffOptionsParser, {
     message`Show changes between commits, commit and working tree, etc. Use ${
       optionName("--cached")
     } to view staged changes.`,
-  footer: message`Examples:
-  ${commandLine("gitique diff")}                    Show unstaged changes
-  ${commandLine("gitique diff --cached")}           Show staged changes
-  ${commandLine("gitique diff HEAD~1")}             Compare with previous commit
-  ${commandLine("gitique diff --stat")}             Show change statistics
+  footer: message`Examples:${lineBreak()}
+  ${
+    commandLine("gitique diff")
+  }                    Show unstaged changes${lineBreak()}
+  ${
+    commandLine("gitique diff --cached")
+  }           Show staged changes${lineBreak()}
+  ${
+    commandLine("gitique diff HEAD~1")
+  }             Compare with previous commit${lineBreak()}
+  ${
+    commandLine("gitique diff --stat")
+  }             Show change statistics${lineBreak()}
   ${
     commandLine("gitique diff --name-only")
   }        Show only changed file names`,
