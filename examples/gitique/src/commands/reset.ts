@@ -71,7 +71,7 @@ const outputOptions = group(
  * Demonstrates:
  * - group() for organizing options in help text
  * - merge() for combining multiple option groups
- * - withDefault() for default values
+ * - optional() for optional values
  * - choice() for enumerated values
  * - map() for transforming parser results
  */
@@ -172,7 +172,7 @@ function validateResetConfig(config: ResetConfig): void {
  */
 function resetFiles(
   repo: Repository,
-  files: string[],
+  files: readonly string[],
   quiet: boolean,
 ): void {
   if (!quiet) {
@@ -281,7 +281,7 @@ export async function executeReset(config: ResetConfig): Promise<void> {
 
     if (config.files.length > 0) {
       // Reset specific files
-      resetFiles(repo, [...config.files], config.quiet);
+      resetFiles(repo, config.files, config.quiet);
     } else {
       // Reset to commit
       const targetCommit = config.commit ?? "HEAD";
