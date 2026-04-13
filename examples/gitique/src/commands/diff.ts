@@ -174,20 +174,26 @@ export type DiffConfig = InferValue<typeof diffCommand>;
  */
 function parseNumstat(
   diffText: string,
-): Map<string, { ins: number; del: number }> {
-  const result = new Map<string, { ins: number; del: number }>();
+): Map<string, { ins: number | null; del: number | null }> {
+  const result = new Map<string, { ins: number | null; del: number | null }>();
   let currentPath: string | null = null;
   let pendingOldPath: string | null = null;
   let inHunk = false;
+  let isBinary = false;
   let ins = 0;
   let del = 0;
 
   const flush = () => {
     if (currentPath !== null) {
-      result.set(currentPath, { ins, del });
+      // Binary files have no hunk lines; represent them as null (git uses "-").
+      result.set(currentPath, {
+        ins: isBinary ? null : ins,
+        del: isBinary ? null : del,
+      });
       currentPath = null;
       ins = 0;
       del = 0;
+      isBinary = false;
     }
   };
 
@@ -200,6 +206,12 @@ function parseNumstat(
     } else if (line.startsWith("@@")) {
       // Hunk header — from here on, +/- lines are content, not file headers.
       inHunk = true;
+    } else if (
+      !inHunk &&
+      (line.startsWith("Binary files ") || line.startsWith("GIT binary patch"))
+    ) {
+      // Binary patch — no textual hunk lines; mark as binary so we emit "-".
+      isBinary = true;
     } else if (!inHunk && line.startsWith("--- a/")) {
       pendingOldPath = line.slice(6);
     } else if (!inHunk && line.startsWith("--- /dev/null")) {
@@ -291,11 +303,14 @@ export async function executeDiff(config: DiffConfig): Promise<void> {
         const fileStats = parseNumstat(diffResult.text);
         for (const delta of diffResult.deltas) {
           const stats = fileStats.get(delta.path) ?? { ins: 0, del: 0 };
+          // Binary files have null counts; git numstat uses "-" for these.
+          const insCol = stats.ins === null ? "-" : String(stats.ins);
+          const delCol = stats.del === null ? "-" : String(stats.del);
           // For renames/copies, git numstat uses "{old => new}" path notation.
           const displayPath = delta.oldPath
             ? `${delta.oldPath} => ${delta.path}`
             : delta.path;
-          console.log(`${stats.ins}\t${stats.del}\t${displayPath}`);
+          console.log(`${insCol}\t${delCol}\t${displayPath}`);
         }
         break;
       }
