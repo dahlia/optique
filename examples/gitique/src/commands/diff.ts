@@ -157,6 +157,53 @@ export const diffCommand = command("diff", diffOptionsParser, {
 export type DiffConfig = InferValue<typeof diffCommand>;
 
 /**
+ * Parses per-file insertion/deletion counts from unified diff text.
+ * Handles additions, deletions, and modifications including renamed files.
+ */
+function parseNumstat(
+  diffText: string,
+): Map<string, { ins: number; del: number }> {
+  const result = new Map<string, { ins: number; del: number }>();
+  let currentPath: string | null = null;
+  let pendingOldPath: string | null = null;
+  let ins = 0;
+  let del = 0;
+
+  const flush = () => {
+    if (currentPath !== null) {
+      result.set(currentPath, { ins, del });
+      currentPath = null;
+      ins = 0;
+      del = 0;
+    }
+  };
+
+  for (const line of diffText.split("\n")) {
+    if (line.startsWith("--- a/")) {
+      flush();
+      pendingOldPath = line.slice(6);
+    } else if (line.startsWith("--- /dev/null")) {
+      flush();
+      pendingOldPath = null; // New file — path comes from +++ line
+    } else if (line.startsWith("+++ b/")) {
+      currentPath = line.slice(6);
+      pendingOldPath = null;
+    } else if (line.startsWith("+++ /dev/null")) {
+      // Deletion — use the old path captured from --- line
+      currentPath = pendingOldPath;
+      pendingOldPath = null;
+    } else if (line.startsWith("+") && !line.startsWith("+++")) {
+      if (currentPath !== null) ins++;
+    } else if (line.startsWith("-") && !line.startsWith("---")) {
+      if (currentPath !== null) del++;
+    }
+  }
+  flush();
+
+  return result;
+}
+
+/**
  * Determines the output mode based on display options.
  */
 type OutputMode = "patch" | "stat" | "numstat" | "name-only" | "name-status";
@@ -221,11 +268,11 @@ export async function executeDiff(config: DiffConfig): Promise<void> {
       }
 
       case "numstat": {
-        // Print numstat format (insertions deletions filename).
-        // es-git does not expose per-file insertion/deletion counts, so
-        // 0 is used as a placeholder to preserve the parseable format.
+        // Parse per-file counts from the diff text.
+        const fileStats = parseNumstat(diffResult.text);
         for (const delta of diffResult.deltas) {
-          console.log(`0\t0\t${delta.path}`);
+          const stats = fileStats.get(delta.path) ?? { ins: 0, del: 0 };
+          console.log(`${stats.ins}\t${stats.del}\t${delta.path}`);
         }
         break;
       }

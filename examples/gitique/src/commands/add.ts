@@ -104,7 +104,8 @@ export async function executeAdd(config: AddConfig): Promise<void> {
         console.log(formatSuccess("Successfully added all files to the index"));
       }
     } else if (config.files.length > 0) {
-      // Add specific files
+      // Add specific files; collect all per-file errors before failing.
+      let hadError = false;
       for (const file of config.files) {
         try {
           addFile(repo, file, config.force);
@@ -113,6 +114,7 @@ export async function executeAdd(config: AddConfig): Promise<void> {
             console.log(formatAddedFile(file));
           }
         } catch (error) {
+          hadError = true;
           printError(
             message`${
               formatError(
@@ -121,9 +123,12 @@ export async function executeAdd(config: AddConfig): Promise<void> {
                 }`,
               )
             }`,
-            config.force ? undefined : { exitCode: 1 },
           );
         }
+      }
+
+      if (hadError) {
+        throw new Error("One or more files could not be added.");
       }
 
       if (config.verbose) {

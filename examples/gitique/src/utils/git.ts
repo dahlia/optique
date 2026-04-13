@@ -362,13 +362,15 @@ export function getStatus(repo: Repository): FileStatus[] {
       indexTree,
     );
     for (const delta of stagedDiff.deltas()) {
-      const path = delta.newFile().path();
+      // Deleted deltas have no newFile path; use oldFile path instead.
+      const status = delta.status() as FileStatus["status"];
+      const path = delta.newFile().path() ?? delta.oldFile().path();
       if (path === null) continue;
 
       results.push({
         path,
-        status: delta.status() as FileStatus["status"],
-        oldPath: delta.status() === "Renamed"
+        status,
+        oldPath: status === "Renamed"
           ? (delta.oldFile().path() ?? undefined)
           : undefined,
         staged: true,
@@ -386,13 +388,15 @@ export function getStatus(repo: Repository): FileStatus[] {
       includeUntracked: true,
     });
     for (const delta of unstagedDiff.deltas()) {
-      const path = delta.newFile().path();
+      // Deleted deltas have no newFile path; use oldFile path instead.
+      const status = delta.status() as FileStatus["status"];
+      const path = delta.newFile().path() ?? delta.oldFile().path();
       if (path === null) continue;
 
       results.push({
         path,
-        status: delta.status() as FileStatus["status"],
-        oldPath: delta.status() === "Renamed"
+        status,
+        oldPath: status === "Renamed"
           ? (delta.oldFile().path() ?? undefined)
           : undefined,
         staged: false,
@@ -510,15 +514,17 @@ export function getDiff(
     const deltas: DiffResult["deltas"] = [];
 
     for (const delta of diff.deltas()) {
-      const path = delta.newFile().path();
+      // Deleted deltas have no newFile path; use oldFile path instead.
+      const status = delta.status();
+      const path = delta.newFile().path() ?? delta.oldFile().path();
       if (path === null) continue;
 
       deltas.push({
         path,
-        oldPath: delta.status() === "Renamed"
+        oldPath: status === "Renamed"
           ? (delta.oldFile().path() ?? undefined)
           : undefined,
-        status: delta.status(),
+        status,
       });
     }
 
