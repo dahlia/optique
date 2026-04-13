@@ -8,7 +8,7 @@ import {
   RevwalkSort,
   type Signature,
 } from "es-git";
-import { readFileSync, statSync } from "node:fs";
+import { lstatSync, readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import process from "node:process";
 
@@ -147,7 +147,7 @@ export function addFile(
   let isDirectory = filePath === ".";
   if (!isDirectory) {
     try {
-      isDirectory = statSync(absolutePath).isDirectory();
+      isDirectory = lstatSync(absolutePath).isDirectory();
     } catch {
       // Path doesn't exist — let addPath handle the error
     }
@@ -173,7 +173,7 @@ export function addFile(
     // so that --force on a completely unknown path still errors.
     const existsOnDisk = (() => {
       try {
-        statSync(absolutePath);
+        lstatSync(absolutePath);
         return true;
       } catch {
         return false;

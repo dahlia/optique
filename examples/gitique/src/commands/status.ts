@@ -209,8 +209,8 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
 
     // Show branch information if requested
     if (config.branch) {
-      if (config.format === "porcelain") {
-        // Machine-readable porcelain v1 branch line.
+      if (config.format === "porcelain" || config.format === "short") {
+        // Machine-readable / short format: ## <branch> header line.
         // git uses "## No commits yet on <branch>" for unborn branches.
         if (repo.headDetached()) {
           console.log("## HEAD (no branch)");
@@ -222,6 +222,7 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
           console.log("## HEAD (no branch)");
         }
       } else {
+        // Long format: human-readable branch header.
         if (repo.headDetached()) {
           console.log("Not currently on any branch.");
           console.log("");
@@ -243,9 +244,14 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
 
     if (statuses.length === 0) {
       if (config.format === "long") {
-        if (isUnbornBranch) {
+        // Only print "No commits yet" prefix if -b hasn't already shown it
+        if (isUnbornBranch && !config.branch) {
           console.log(
             "No commits yet\n\nnothing to commit (create/copy files and use 'gitique add' to track)",
+          );
+        } else if (isUnbornBranch) {
+          console.log(
+            "nothing to commit (create/copy files and use 'gitique add' to track)",
           );
         } else {
           console.log("nothing to commit, working tree clean");
