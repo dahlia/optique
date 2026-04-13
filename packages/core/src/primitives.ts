@@ -11,8 +11,8 @@ import {
   getSnapshottedDefaultDependencyValues,
   isDerivedValueParser,
   suggestWithDependency,
-} from "./dependency.ts";
-import { annotateFreshArray, getAnnotations } from "./annotations.ts";
+} from "./internal/dependency.ts";
+import { annotateFreshArray, getAnnotations } from "./internal/annotations.ts";
 import { extractDependencyMetadata } from "./dependency-metadata.ts";
 import {
   replayDerivedParser,
@@ -28,7 +28,7 @@ import {
   dispatchByMode,
   dispatchIterableByMode,
   wrapForMode,
-} from "./mode-dispatch.ts";
+} from "./internal/mode-dispatch.ts";
 import {
   completeOrExtractPhase2Seed,
   extractPhase2SeedKey,

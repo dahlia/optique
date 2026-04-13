@@ -11,7 +11,7 @@ import {
   dependencyId,
   deriveFrom,
   isDependencySourceState,
-} from "./dependency.ts";
+} from "./internal/dependency.ts";
 import { choice } from "./valueparser.ts";
 import type { NonEmptyString } from "./nonempty.ts";
 import {

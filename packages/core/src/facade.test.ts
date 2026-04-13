@@ -7,18 +7,16 @@ import {
   or,
   tuple,
 } from "@optique/core/constructs";
-import { getAnnotations, inheritAnnotations } from "@optique/core/annotations";
+import { getAnnotations } from "@optique/core/annotations";
+import { inheritAnnotations } from "@optique/core/extension";
 import type {
   SourceContext,
   SourceContextPhase2Request,
   SourceContextRequest,
 } from "@optique/core/context";
 import type { DocSection } from "@optique/core/doc";
-import {
-  defineInheritedAnnotationParser,
-  type ExecutionContext,
-  type Parser,
-} from "@optique/core/parser";
+import { defineInheritedAnnotationParser } from "./internal/parser.ts";
+import type { ExecutionContext, Parser } from "@optique/core/parser";
 import {
   type RunOptions,
   runParser,

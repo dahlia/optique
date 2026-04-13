@@ -1,5 +1,5 @@
-import { unwrapInjectedAnnotationWrapper } from "./annotations.ts";
-import { dispatchByMode } from "./mode-dispatch.ts";
+import { unwrapInjectedAnnotationWrapper } from "./internal/annotations.ts";
+import { dispatchByMode } from "./internal/mode-dispatch.ts";
 import type { ExecutionContext, Mode, ModeValue, Parser } from "./parser.ts";
 import type { DeferredMap, ValueParserResult } from "./valueparser.ts";
 

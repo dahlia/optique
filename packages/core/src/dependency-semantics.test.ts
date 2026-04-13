@@ -10,7 +10,7 @@
  */
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
-import { dependency, deriveFrom } from "./dependency.ts";
+import { dependency, deriveFrom } from "./internal/dependency.ts";
 import {
   parseAsync,
   parseSync,

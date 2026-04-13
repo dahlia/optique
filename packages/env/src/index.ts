@@ -1,23 +1,18 @@
-import {
-  annotationKey,
-  getAnnotations,
-  injectAnnotations,
-  isInjectedAnnotationState,
-} from "@optique/core/annotations";
+import { getAnnotations } from "@optique/core/annotations";
 import type { Annotations, SourceContext } from "@optique/core/context";
 import {
   defineTraits,
   delegateSuggestNodes,
+  dispatchByMode,
   getTraits,
+  injectAnnotations,
+  isInjectedAnnotationState,
+  mapModeValue,
   mapSourceMetadata,
   type ParserSourceMetadata,
+  wrapForMode,
 } from "@optique/core/extension";
 import { envVar, type Message, message, valueSet } from "@optique/core/message";
-import {
-  dispatchByMode,
-  mapModeValue,
-  wrapForMode,
-} from "@optique/core/mode-dispatch";
 import type {
   ExecutionContext,
   Mode,
@@ -328,16 +323,15 @@ export function bindEnv<
           // absent; treating those as "CLI provided" would skip the env
           // fallback and break composition.
           const cliConsumed = result.consumed.length > 0;
-          const nextState = {
+          const nextState = injectAnnotations({
             [envBindStateKey]: true as const,
             hasCliValue: cliConsumed,
             cliState: result.next.state,
-            ...(annotations && { [annotationKey]: annotations }),
-          } as unknown as TState;
+          }, annotations);
           return {
             success: true,
             ...(result.provisional ? { provisional: true as const } : {}),
-            next: { ...result.next, state: nextState },
+            next: { ...result.next, state: nextState as TState },
             consumed: result.consumed,
           };
         }
@@ -350,14 +344,13 @@ export function bindEnv<
           return result;
         }
 
-        const nextState = {
+        const nextState = injectAnnotations({
           [envBindStateKey]: true as const,
           hasCliValue: false,
-          ...(annotations && { [annotationKey]: annotations }),
-        } as unknown as TState;
+        }, annotations);
         return {
           success: true,
-          next: { ...innerContext, state: nextState },
+          next: { ...innerContext, state: nextState as TState },
           consumed: [],
         };
       };

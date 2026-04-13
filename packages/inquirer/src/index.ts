@@ -16,20 +16,17 @@ import {
   select,
   Separator,
 } from "@inquirer/prompts";
-import {
-  annotationKey,
-  type Annotations,
-  getAnnotations,
-  inheritAnnotations,
-  injectAnnotations,
-  unwrapInjectedAnnotationState,
-} from "@optique/core/annotations";
+import { getAnnotations } from "@optique/core/annotations";
 import {
   defineTraits,
   delegateSuggestNodes,
   getTraits,
+  inheritAnnotations,
+  injectAnnotations,
   mapSourceMetadata,
   type ParserSourceMetadata,
+  unwrapInjectedAnnotationState,
+  withAnnotationView,
 } from "@optique/core/extension";
 import type {
   ExecutionContext,
@@ -186,26 +183,6 @@ function deferredPromptResult<TValue>(
   };
 }
 
-function withAnnotationView<T extends object, TResult>(
-  state: T,
-  annotations: Annotations,
-  run: (annotatedState: T) => TResult,
-): TResult {
-  const annotatedState = new Proxy(state, {
-    get(target, key) {
-      if (key === annotationKey) {
-        return annotations;
-      }
-      const value = Reflect.get(target, key, target);
-      return typeof value === "function" ? value.bind(target) : value;
-    },
-    has(target, key) {
-      return key === annotationKey || Reflect.has(target, key);
-    },
-  });
-  return run(annotatedState);
-}
-
 function withAnnotatedInnerState<TState, TResult>(
   sourceState: unknown,
   innerState: TState,
@@ -216,7 +193,7 @@ function withAnnotatedInnerState<TState, TResult>(
     annotations == null ||
     innerState == null ||
     typeof innerState !== "object" ||
-    (typeof innerState === "object" && annotationKey in innerState)
+    getAnnotations(innerState) != null
   ) {
     return run(innerState);
   }
@@ -226,11 +203,7 @@ function withAnnotatedInnerState<TState, TResult>(
     return run(inheritedState);
   }
 
-  return withAnnotationView(
-    innerState,
-    annotations,
-    (annotatedState) => run(annotatedState as TState),
-  );
+  return run(withAnnotationView(innerState, annotations));
 }
 
 // ---- Choice types ----
@@ -710,8 +683,7 @@ export function prompt<M extends Mode, TValue, TState>(
     if (cliState == null) {
       return false;
     }
-    const cliStateHasAnnotations = typeof cliState === "object" &&
-      annotationKey in cliState;
+    const cliStateHasAnnotations = getAnnotations(cliState) != null;
     if (cliStateHasAnnotations) {
       return true;
     }
@@ -755,7 +727,7 @@ export function prompt<M extends Mode, TValue, TState>(
           (
             cliState[0] != null &&
             typeof cliState[0] === "object" &&
-            annotationKey in cliState[0]
+            getAnnotations(cliState[0]) != null
           )));
     if (
       cliStateIsInjectedAnnotationWrapper &&
@@ -1017,16 +989,15 @@ export function prompt<M extends Mode, TValue, TState>(
           // input tokens.  Wrappers that return success with consumed: []
           // (e.g., withDefault, bindConfig) should NOT suppress the prompt.
           const cliConsumed = result.consumed.length > 0;
-          const nextState = {
+          const nextState = injectAnnotations({
             [promptBindStateKey]: true as const,
             hasCliValue: cliConsumed,
             cliState,
-            ...(annotations != null ? { [annotationKey]: annotations } : {}),
-          } as unknown as TState;
+          }, annotations);
           return {
             success: true,
             ...(result.provisional ? { provisional: true as const } : {}),
-            next: { ...result.next, state: nextState },
+            next: { ...result.next, state: nextState as TState },
             consumed: result.consumed,
           };
         }
@@ -1038,14 +1009,13 @@ export function prompt<M extends Mode, TValue, TState>(
           return result;
         }
 
-        const nextState = {
+        const nextState = injectAnnotations({
           [promptBindStateKey]: true as const,
           hasCliValue: false,
-          ...(annotations != null ? { [annotationKey]: annotations } : {}),
-        } as unknown as TState;
+        }, annotations);
         return {
           success: true,
-          next: { ...baseInnerContext, state: nextState },
+          next: { ...baseInnerContext, state: nextState as TState },
           consumed: [],
         };
       };

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { type Annotations, injectAnnotations } from "./annotations.ts";
+import { type Annotations, injectAnnotations } from "./internal/annotations.ts";
 import {
   command,
   constant,

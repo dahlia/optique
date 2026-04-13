@@ -11,9 +11,10 @@ import {
   or,
   tuple,
 } from "@optique/core/constructs";
-import { getAnnotations, injectAnnotations } from "@optique/core/annotations";
+import { type Annotations, getAnnotations } from "@optique/core/annotations";
 import type { SourceContextRequest } from "@optique/core/context";
 import { dependency } from "@optique/core/dependency";
+import { injectAnnotations } from "@optique/core/extension";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { constant, fail, flag, option } from "@optique/core/primitives";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
@@ -21,7 +22,6 @@ import { choice, integer, string } from "@optique/core/valueparser";
 import { formatMessage, message } from "@optique/core/message";
 import { bindEnv, createEnvContext } from "@optique/env";
 
-import type { Annotations } from "@optique/core/annotations";
 import {
   collectExplicitSourceValues,
   createDependencyRuntimeContext,

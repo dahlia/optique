@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
-import { injectAnnotations } from "@optique/core/annotations";
+import { injectAnnotations } from "@optique/core/extension";
 import {
   concat,
   group,

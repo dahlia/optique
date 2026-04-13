@@ -1,16 +1,16 @@
 /**
- * Internal helpers for mode-based dispatch.
+ * Helpers for mode-based dispatch.
  *
- * This module contains utilities for handling sync/async mode dispatch
- * in a type-safe way. The type assertions in this file are necessary
- * due to TypeScript's limitation in narrowing conditional types based
- * on runtime checks.
+ * This internal implementation module contains the mode-dispatch helpers used
+ * by Optique itself, including the supported functions re-exported from
+ * `@optique/core/extension`. The type assertions in this file are necessary
+ * due to TypeScript's limitation in narrowing conditional types based on
+ * runtime checks.
  *
- * @internal
  * @since 0.10.0
  */
 
-import type { Mode, ModeIterable, ModeValue } from "./parser.ts";
+import type { Mode, ModeIterable, ModeValue } from "../parser.ts";
 
 /**
  * Dispatches to sync or async implementation based on mode.
@@ -23,7 +23,6 @@ import type { Mode, ModeIterable, ModeValue } from "./parser.ts";
  * @param syncFn Function to call for sync execution.
  * @param asyncFn Function to call for async execution.
  * @returns The result with correct mode wrapping.
- * @internal
  * @since 0.10.0
  */
 export function dispatchByMode<M extends Mode, T>(
@@ -43,7 +42,6 @@ export function dispatchByMode<M extends Mode, T>(
  * @param mode The execution mode.
  * @param value The value to wrap.
  * @returns The wrapped value with correct mode semantics.
- * @internal
  * @since 1.0.0
  */
 export function wrapForMode<T>(mode: "sync", value: T | Promise<T>): T;
@@ -75,7 +73,6 @@ export function wrapForMode<T>(
  * @param value The mode-wrapped value to transform.
  * @param mapFn Mapping function applied to the unwrapped value.
  * @returns The mapped value with correct mode wrapping.
- * @internal
  * @since 1.0.0
  */
 export function mapModeValue<M extends Mode, T, U>(

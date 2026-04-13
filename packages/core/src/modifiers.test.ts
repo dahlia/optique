@@ -3,8 +3,7 @@ import {
   annotationStateValueKey,
   getAnnotations,
   injectAnnotations,
-} from "@optique/core/annotations";
-import { injectAnnotations as injectAnnotationsLocal } from "./annotations.ts";
+} from "./internal/annotations.ts";
 import {
   createDependencySourceState,
   createPendingDependencySourceState,
@@ -12,7 +11,7 @@ import {
   isDependencySourceState,
   transformsDependencyValueMarker,
   wrappedDependencySourceMarker,
-} from "@optique/core/dependency";
+} from "./internal/dependency.ts";
 import {
   envVar,
   formatMessage,
@@ -8965,7 +8964,7 @@ describe(
             return { fragments: [] };
           },
         });
-        const outerState = injectAnnotationsLocal(undefined, {
+        const outerState = injectAnnotations(undefined, {
           [Symbol.for(`@test/issue-594/${name}/wrapped-initial-complete`)]:
             true,
         });
@@ -9018,7 +9017,7 @@ describe(
             return { fragments: [] };
           },
         });
-        const outerState = injectAnnotationsLocal(undefined, {
+        const outerState = injectAnnotations(undefined, {
           [
             Symbol.for(`@test/issue-594/${name}/wrapped-initial-async-complete`)
           ]: true,
@@ -9197,7 +9196,7 @@ describe(
               return { fragments: [] };
             },
           });
-          const outerState = injectAnnotationsLocal(undefined, {
+          const outerState = injectAnnotations(undefined, {
             [
               Symbol.for(`@test/issue-594/${name}/wrapped-initial-defer`)
             ]: true,
@@ -9945,7 +9944,7 @@ describe("multiple() phase-two seed extraction", () => {
       },
     });
 
-    const wrappedItem = injectAnnotationsLocal("optique.json", {
+    const wrappedItem = injectAnnotations("optique.json", {
       [marker]: true,
     });
     const seed = completeOrExtractPhase2Seed(

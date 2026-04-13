@@ -17,7 +17,20 @@ import {
   getDelegatingSuggestRuntimeNodes,
   inheritParentAnnotationsKey,
   unmatchedNonCliDependencySourceStateMarker,
-} from "./parser.ts";
+} from "./internal/parser.ts";
+
+export {
+  inheritAnnotations,
+  injectAnnotations,
+  isInjectedAnnotationState,
+  unwrapInjectedAnnotationState,
+} from "./internal/annotations.ts";
+export { withAnnotationView } from "./annotation-state.ts";
+export {
+  dispatchByMode,
+  mapModeValue,
+  wrapForMode,
+} from "./internal/mode-dispatch.ts";
 
 /**
  * Stable trait flags for custom parser extensions.

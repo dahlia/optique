@@ -14,6 +14,7 @@ import {
 } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
+  type ExecutionContext,
   getDocPage,
   getDocPageAsync,
   getDocPageSync,
@@ -36,7 +37,7 @@ import {
   getAnnotations,
   isInjectedAnnotationWrapper,
   type ParseOptions,
-} from "@optique/core/annotations";
+} from "./internal/annotations.ts";
 import type { Usage } from "@optique/core/usage";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { type DocEntry, formatDocPage } from "@optique/core/doc";
@@ -2483,7 +2484,7 @@ describe("Annotations system", () => {
   it("should pass annotations to parser via ParseOptions", async () => {
     const testKey = Symbol.for("@test/data");
     const testData = { value: 42 };
-    const { getAnnotations } = await import("./annotations.ts");
+    const { getAnnotations } = await import("./internal/annotations.ts");
     let capturedState: unknown;
 
     // Use constant parser and wrap complete() to capture state
@@ -2509,7 +2510,9 @@ describe("Annotations system", () => {
   });
 
   it("should extract annotations using getAnnotations()", async () => {
-    const { getAnnotations, annotationKey } = await import("./annotations.ts");
+    const { getAnnotations, annotationKey } = await import(
+      "./internal/annotations.ts"
+    );
     const testKey = Symbol.for("@test/key");
     const testData = { foo: "bar" };
 
@@ -2570,7 +2573,7 @@ describe("Annotations system", () => {
     const data2 = { pkg2: "value2" };
     const data3 = { pkg3: "value3" };
 
-    const { getAnnotations } = await import("./annotations.ts");
+    const { getAnnotations } = await import("./internal/annotations.ts");
     let capturedState: unknown;
 
     const baseParser = constant("test");
@@ -2601,7 +2604,7 @@ describe("Annotations system", () => {
   it("should support annotations in parseSync()", async () => {
     const testKey = Symbol.for("@test/sync");
     const testData = "sync-data";
-    const { getAnnotations } = await import("./annotations.ts");
+    const { getAnnotations } = await import("./internal/annotations.ts");
     const { parseSync } = await import("./parser.ts");
     let capturedState: unknown;
 
@@ -2632,7 +2635,7 @@ describe("Annotations system", () => {
   it("should support annotations in parseAsync()", async () => {
     const testKey = Symbol.for("@test/async-func");
     const testData = "async-data";
-    const { getAnnotations } = await import("./annotations.ts");
+    const { getAnnotations } = await import("./internal/annotations.ts");
     const { parseAsync } = await import("./parser.ts");
     let capturedState: unknown;
 
@@ -2699,7 +2702,7 @@ describe("Annotations system", () => {
 
   it("should preserve array state annotations across state transitions", async () => {
     const testKey = Symbol.for("@test/array-state");
-    const { getAnnotations } = await import("./annotations.ts");
+    const { getAnnotations } = await import("./internal/annotations.ts");
     const baseParser = multiple(argument(string()));
     let capturedState: unknown;
     const parser = {
@@ -2723,7 +2726,9 @@ describe("Annotations system", () => {
   });
 
   it("should not unwrap regular objects that contain only internal value key", async () => {
-    const { annotationStateValueKey } = await import("./annotations.ts");
+    const { annotationStateValueKey } = await import(
+      "./internal/annotations.ts"
+    );
     const value = {
       ok: true,
       [annotationStateValueKey]: "not-wrapper",
@@ -2741,7 +2746,7 @@ describe("Annotations system", () => {
     const {
       annotationKey,
       annotationStateValueKey,
-    } = await import("./annotations.ts");
+    } = await import("./internal/annotations.ts");
     const value = {
       ok: true,
       [annotationKey]: { [testKey]: "value" },
@@ -2763,7 +2768,7 @@ describe("Annotations system", () => {
       annotationKey,
       annotationStateValueKey,
       annotationWrapperKey,
-    } = await import("./annotations.ts");
+    } = await import("./internal/annotations.ts");
     const value = {
       ok: true,
       [annotationKey]: { [testKey]: "value" },
@@ -2786,7 +2791,7 @@ describe("Annotations system", () => {
       annotationKey,
       annotationStateValueKey,
       annotationWrapperKey,
-    } = await import("./annotations.ts");
+    } = await import("./internal/annotations.ts");
     const value = {
       ok: true,
       [annotationKey]: { [testKey]: "value" },
@@ -2808,7 +2813,7 @@ describe("Annotations system", () => {
       annotationKey,
       annotationStateValueKey,
       annotationWrapperKey,
-    } = await import("./annotations.ts");
+    } = await import("./internal/annotations.ts");
     const value = {
       ok: true,
       [annotationKey]: {},
@@ -2873,7 +2878,7 @@ describe("Annotations system", () => {
     const {
       annotationWrapperKey,
       annotationStateValueKey,
-    } = await import("./annotations.ts");
+    } = await import("./internal/annotations.ts");
     const parser: Parser<"sync", unknown, unknown> = {
       $mode: "sync",
       $stateType: [] as const,
@@ -3060,6 +3065,47 @@ describe("Annotations system", () => {
     assert.ok(doc!.footer !== undefined);
     assert.equal(
       (doc!.footer![0] as { type: "text"; text: string }).text,
+      "injected",
+    );
+  });
+
+  it("should preserve annotations when synthesizing top-level command docs", () => {
+    const testKey = Symbol.for("@test/doc-command-root");
+    const parser = command("build", {
+      $valueType: [] as const,
+      $stateType: [] as const,
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: {},
+      parse(_context) {
+        return { success: false as const, consumed: 0, error: message`no` };
+      },
+      complete() {
+        return { success: true as const, value: "ok" };
+      },
+      *suggest() {},
+      getDocFragments(state) {
+        const annotations = state.kind === "available"
+          ? getAnnotations(state.state)
+          : undefined;
+        return {
+          fragments: [],
+          footer: [{
+            type: "text" as const,
+            text: String(annotations?.[testKey] ?? "none"),
+          }],
+        };
+      },
+    });
+
+    const doc = getDocPage(parser, { annotations: { [testKey]: "injected" } });
+
+    assert.ok(doc?.footer !== undefined);
+    assert.equal(
+      (doc.footer![0] as { type: "text"; text: string }).text,
       "injected",
     );
   });
@@ -3306,6 +3352,78 @@ describe("Annotations system", () => {
     const opts: ParseOptions | undefined = undefined;
     const doc = await getDocPageAsync(parser, opts);
     assert.ok(doc !== undefined);
+  });
+
+  it("should provide execution context during getDocPageSync() parse passes", () => {
+    const observations: Array<ExecutionContext | undefined> = [];
+    const parser: Parser<"sync", unknown, unknown> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: {},
+      parse(context) {
+        observations.push(context.exec);
+        return {
+          success: true as const,
+          next: { ...context, buffer: [] },
+          consumed: [],
+        };
+      },
+      complete(state) {
+        return { success: true as const, value: state };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    getDocPageSync(parser, ["x"]);
+
+    assert.equal(observations.length, 1);
+    assert.equal(observations[0]?.phase, "parse");
+    assert.deepEqual(observations[0]?.path, []);
+    assert.ok(observations[0]?.trace != null);
+  });
+
+  it("should provide execution context during getDocPageAsync() parse passes", async () => {
+    const observations: Array<ExecutionContext | undefined> = [];
+    const parser: Parser<"async", unknown, unknown> = {
+      $mode: "async",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: {},
+      parse(context) {
+        observations.push(context.exec);
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, buffer: [] },
+          consumed: [],
+        });
+      },
+      complete(state) {
+        return Promise.resolve({ success: true as const, value: state });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    await getDocPageAsync(parser, ["x"]);
+
+    assert.equal(observations.length, 1);
+    assert.equal(observations[0]?.phase, "parse");
+    assert.deepEqual(observations[0]?.path, []);
+    assert.ok(observations[0]?.trace != null);
   });
 
   it("should accept union-typed argsOrOptions forwarding", () => {

@@ -2,9 +2,12 @@ import {
   type Annotations,
   getAnnotations,
   injectAnnotations,
-} from "./annotations.ts";
+} from "./internal/annotations.ts";
 import { message } from "./message.ts";
-import { defineInheritedAnnotationParser, type Parser } from "./parser.ts";
+import {
+  defineInheritedAnnotationParser,
+  type Parser,
+} from "./internal/parser.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {

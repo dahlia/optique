@@ -21,7 +21,7 @@ import {
   parseWithDependency,
   singleDefaultValue,
   suggestWithDependency,
-} from "./dependency.ts";
+} from "./internal/dependency.ts";
 import type { Mode, ValueParser, ValueParserResult } from "./valueparser.ts";
 
 // =============================================================================
