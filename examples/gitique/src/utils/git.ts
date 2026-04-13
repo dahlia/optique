@@ -613,7 +613,6 @@ export interface DiffOptions {
   cached?: boolean;
   commit?: string;
   commit2?: string;
-  paths?: string[];
   unified?: number;
   algorithm?: "default" | "minimal" | "patience";
 }
@@ -668,9 +667,6 @@ export function getDiff(
       esDiffOptions.minimal = true;
     }
     // "default" uses default es-git behaviour
-    if (options.paths && options.paths.length > 0) {
-      esDiffOptions.pathspecs = options.paths;
-    }
 
     if (options.cached) {
       // Staged changes only: compare a base tree to the index tree.
