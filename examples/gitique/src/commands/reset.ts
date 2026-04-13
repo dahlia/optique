@@ -10,7 +10,12 @@ import {
   optionName,
 } from "@optique/core/message";
 import { printError } from "@optique/run";
-import { getRepository, resetIndex } from "../utils/git.ts";
+import {
+  getRepository,
+  moveHead,
+  resetIndex,
+  resolveCommitOid,
+} from "../utils/git.ts";
 import type { Repository } from "es-git";
 import {
   formatError,
@@ -190,20 +195,24 @@ function resetFiles(
 /**
  * Resets the repository to a specific commit with the given mode.
  */
-async function resetToCommit(
+function resetToCommit(
   repo: Repository,
   commit: string,
   mode: "soft" | "mixed" | "hard",
   quiet: boolean,
-): Promise<void> {
+): void {
   if (!quiet) {
     console.log(`Performing ${mode} reset to ${commit}...`);
   }
 
   try {
+    // Resolve the spec and move HEAD (and the branch pointer) to the target
+    const targetOid = resolveCommitOid(repo, commit);
+    moveHead(repo, targetOid);
+
     switch (mode) {
       case "soft":
-        // Only move HEAD, keep index and working directory
+        // HEAD moved; index and working directory unchanged
         if (!quiet) {
           console.log(
             formatWarning(
@@ -214,8 +223,8 @@ async function resetToCommit(
         break;
 
       case "mixed":
-        // Move HEAD and reset index, keep working directory
-        await resetIndex(repo);
+        // HEAD moved; reset index, keep working directory
+        resetIndex(repo);
         if (!quiet) {
           console.log(
             formatSuccess(
@@ -226,8 +235,9 @@ async function resetToCommit(
         break;
 
       case "hard":
-        // Move HEAD, reset index, and reset working directory
-        await resetIndex(repo);
+        // HEAD moved; reset both index and working directory
+        resetIndex(repo);
+        repo.checkoutHead({ force: true });
         if (!quiet) {
           console.log(
             formatWarning(
@@ -271,7 +281,7 @@ export async function executeReset(config: ResetConfig): Promise<void> {
         );
       }
 
-      await resetToCommit(repo, targetCommit, config.mode, config.quiet);
+      resetToCommit(repo, targetCommit, config.mode, config.quiet);
     }
 
     if (!config.quiet) {

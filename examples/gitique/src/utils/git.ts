@@ -172,6 +172,40 @@ export function isIndexEmpty(repo: Repository): boolean {
 }
 
 /**
+ * Resolves a commit-ish spec (e.g. "HEAD", "HEAD~1", an OID) to a full OID.
+ *
+ * @throws If the spec cannot be resolved.
+ */
+export function resolveCommitOid(repo: Repository, spec: string): string {
+  return repo.revparseSingle(spec);
+}
+
+/**
+ * Moves HEAD (and the current branch pointer) to the given commit OID.
+ * When HEAD is a symbolic reference the branch pointer is updated via
+ * createBranch; otherwise (detached HEAD) setHeadDetached is used.
+ */
+export function moveHead(repo: Repository, targetOid: string): void {
+  const commit = repo.getCommit(targetOid);
+
+  try {
+    const head = repo.head();
+    const symbolicTarget = head.symbolicTarget();
+    if (symbolicTarget) {
+      // Attached HEAD — move the branch tip to the target commit
+      const branchName = symbolicTarget.replace(/^refs\/heads\//, "");
+      repo.createBranch(branchName, commit, { force: true });
+    } else {
+      // Detached HEAD
+      repo.setHeadDetached(commit);
+    }
+  } catch {
+    // Unborn branch — set detached HEAD as fallback
+    repo.setHeadDetached(commit);
+  }
+}
+
+/**
  * Gets the commit history starting from HEAD.
  */
 export function getCommitHistory(
