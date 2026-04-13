@@ -656,7 +656,6 @@ export function getDiff(
       contextLines?: number;
       patience?: boolean;
       minimal?: boolean;
-      pathspecs?: string[];
     } = {};
     if (options.unified !== undefined) {
       esDiffOptions.contextLines = options.unified;
