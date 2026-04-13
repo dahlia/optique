@@ -216,7 +216,7 @@ gitique completion zsh > ~/.zsh/completions/_gitique
 # Test completion
 gitique <TAB>                    # Shows: add, commit, diff, log, ...
 gitique add --<TAB>              # Shows: --all, --force, --verbose, --help
-gitique commit --author <TAB>    # Shows available author suggestions
+gitique commit --author <TAB>    # No completions (plain string option)
 ~~~~
 
 
