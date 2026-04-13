@@ -92,6 +92,13 @@ export async function executeAdd(config: AddConfig): Promise<void> {
   try {
     const repo = await getRepository();
 
+    if (config.all && config.files.length > 0) {
+      throw new Error(
+        "Cannot combine --all with explicit file paths. Use --all alone " +
+          "or specify files without --all.",
+      );
+    }
+
     if (config.all) {
       // Add all files (equivalent to `git add .`)
       if (config.verbose) {

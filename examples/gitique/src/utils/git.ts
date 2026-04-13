@@ -480,15 +480,16 @@ export function getDiff(
       // The base is options.commit when provided (e.g. diff --cached HEAD~1),
       // otherwise HEAD.  Unborn repos fall back to an empty tree.
       let baseTree;
-      try {
-        if (options.commit) {
-          const baseOid = repo.revparseSingle(options.commit);
-          baseTree = repo.getCommit(baseOid).tree();
-        } else {
+      if (options.commit) {
+        // Explicit commit argument — let revspec errors propagate to the caller
+        const baseOid = repo.revparseSingle(options.commit);
+        baseTree = repo.getCommit(baseOid).tree();
+      } else {
+        try {
           baseTree = repo.head().peelToTree();
+        } catch {
+          // No HEAD yet (unborn repository) — diff against empty tree
         }
-      } catch {
-        // No HEAD yet (unborn repository) — diff against empty tree
       }
       const index = repo.index();
       const indexTreeOid = index.writeTree();

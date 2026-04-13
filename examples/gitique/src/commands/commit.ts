@@ -165,12 +165,16 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
       authorSignature = createGitSignature();
     }
 
+    // Committer is always the default identity; only the author can be
+    // overridden with --author.
+    const committerSignature = createGitSignature();
+
     // Create the commit
     const commitOid = createCommit(
       repo,
       commitMessage,
       authorSignature,
-      authorSignature, // Use same signature for committer
+      committerSignature,
     );
 
     // Resolve branch name for the commit header
