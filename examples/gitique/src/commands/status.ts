@@ -207,8 +207,9 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
       }
     }
 
-    // Show branch information if requested
-    if (config.branch) {
+    // Show branch information: always in long format, only with -b in
+    // short/porcelain formats (where it changes the output structure).
+    if (config.branch || config.format === "long") {
       if (config.format === "porcelain" || config.format === "short") {
         // Machine-readable / short format: ## <branch> header line.
         // git uses "## No commits yet on <branch>" for unborn branches.
