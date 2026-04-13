@@ -34,15 +34,19 @@ function formatStatusShortMerged(
   unstagedEntry: FileStatusEntry | undefined,
   path: string,
 ): string {
-  const stagedCol = stagedEntry
-    ? (statusIndicatorMap[stagedEntry.status] ?? "?")
-    : " ";
+  // Untracked files use '??' in both columns (git status -s convention).
+  const isUntracked = !stagedEntry && unstagedEntry?.status === "Untracked";
+  const stagedCol = isUntracked
+    ? "?"
+    : (stagedEntry ? (statusIndicatorMap[stagedEntry.status] ?? "?") : " ");
   const unstagedCol = unstagedEntry
     ? (statusIndicatorMap[unstagedEntry.status] ?? "?")
     : " ";
   const oldPath = stagedEntry?.oldPath ?? unstagedEntry?.oldPath;
   const displayPath = oldPath ? `${oldPath} -> ${path}` : path;
-  const stagedColor = stagedEntry ? colors.green : "";
+  const stagedColor = isUntracked
+    ? colors.red
+    : (stagedEntry ? colors.green : "");
   const unstagedColor = unstagedEntry ? colors.red : "";
   return `${stagedColor}${stagedCol}${colors.reset}${unstagedColor}${unstagedCol}${colors.reset} ${displayPath}`;
 }
@@ -55,9 +59,11 @@ function formatStatusPorcelainMerged(
   unstagedEntry: FileStatusEntry | undefined,
   path: string,
 ): string {
-  const stagedCol = stagedEntry
-    ? (statusIndicatorMap[stagedEntry.status] ?? "?")
-    : " ";
+  // Untracked files use '??' in both columns (git status --porcelain convention).
+  const isUntracked = !stagedEntry && unstagedEntry?.status === "Untracked";
+  const stagedCol = isUntracked
+    ? "?"
+    : (stagedEntry ? (statusIndicatorMap[stagedEntry.status] ?? "?") : " ");
   const unstagedCol = unstagedEntry
     ? (statusIndicatorMap[unstagedEntry.status] ?? "?")
     : " ";

@@ -192,9 +192,14 @@ function parseNumstat(
       // Deletion — use the old path captured from --- line
       currentPath = pendingOldPath;
       pendingOldPath = null;
-    } else if (line.startsWith("+") && !line.startsWith("+++")) {
+    } else if (line.startsWith("+")) {
+      // Content insertion. File headers (+++ b/... and +++ /dev/null) were
+      // already matched by the earlier else-if branches; any remaining line
+      // starting with "+" is a hunk insertion, even if its content starts
+      // with "++" (which makes the full line start with "+++").
       if (currentPath !== null) ins++;
-    } else if (line.startsWith("-") && !line.startsWith("---")) {
+    } else if (line.startsWith("-")) {
+      // Content deletion — same reasoning as above.
       if (currentPath !== null) del++;
     }
   }
