@@ -4113,7 +4113,7 @@ describe("prompt()", () => {
               readonly hasCliValue?: boolean;
             };
           assert.equal(parsedState.hasCliValue, false);
-          assert.ok(parsedState[annotationKey] != null);
+          assert.equal(getAnnotations(parsed.next.state), annotations);
 
           const suggestions: Suggestion[] = [];
           for await (

@@ -121,7 +121,7 @@ export interface ParseOptions {
    * Annotations to attach to the parsing session.
    * Parsers can access these annotations via getAnnotations(state).
    */
-  annotations?: Annotations;
+  readonly annotations?: Annotations;
 }
 
 /**
