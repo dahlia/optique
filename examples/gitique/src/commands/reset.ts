@@ -9,6 +9,7 @@ import {
   message,
   optionName,
 } from "@optique/core/message";
+import process from "node:process";
 import { printError } from "@optique/run";
 import {
   getRepository,
@@ -201,7 +202,8 @@ function resetFiles(
   }
 
   if (hadError) {
-    throw new Error("One or more files could not be reset.");
+    process.exitCode = 1;
+    return;
   }
 }
 

@@ -1,3 +1,4 @@
+import process from "node:process";
 import { group, merge, object } from "@optique/core/constructs";
 import { multiple } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
@@ -135,7 +136,8 @@ export async function executeAdd(config: AddConfig): Promise<void> {
       }
 
       if (hadError) {
-        throw new Error("One or more files could not be added.");
+        process.exitCode = 1;
+        return;
       }
 
       if (config.verbose) {
