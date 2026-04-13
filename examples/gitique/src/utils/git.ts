@@ -1,6 +1,7 @@
 import {
   type Commit,
   createSignature,
+  openConfig,
   openDefaultConfig,
   openRepository,
   type Repository,
@@ -33,34 +34,68 @@ export async function getRepository(): Promise<Repository> {
 
 /**
  * Creates a signature for commits using Git configuration or provided values.
- * Reads user.name and user.email from the default git config when not provided.
+ * When name/email are not provided, reads user.name and user.email from
+ * the repo-local config first, then from the default (global/XDG/system) config.
  */
 export function createGitSignature(
   name?: string,
   email?: string,
+  repo?: Repository,
 ): Signature {
   let authorName = name;
   let authorEmail = email;
 
   if (!authorName || !authorEmail) {
-    try {
-      const config = openDefaultConfig();
-      if (!authorName) {
+    // Try local repo config first, then the default cascade.
+    const configSources: Array<() => void> = [];
+    if (repo) {
+      configSources.push(() => {
         try {
-          authorName = config.getString("user.name");
+          const localConfig = openConfig(repo.path() + "config");
+          if (!authorName) {
+            try {
+              authorName = localConfig.getString("user.name");
+            } catch {
+              // Key not set in local config
+            }
+          }
+          if (!authorEmail) {
+            try {
+              authorEmail = localConfig.getString("user.email");
+            } catch {
+              // Key not set in local config
+            }
+          }
         } catch {
-          // Key not set in any config file
+          // Local config file unavailable
         }
-      }
-      if (!authorEmail) {
-        try {
-          authorEmail = config.getString("user.email");
-        } catch {
-          // Key not set in any config file
+      });
+    }
+    configSources.push(() => {
+      try {
+        const defaultConfig = openDefaultConfig();
+        if (!authorName) {
+          try {
+            authorName = defaultConfig.getString("user.name");
+          } catch {
+            // Key not set in global config
+          }
         }
+        if (!authorEmail) {
+          try {
+            authorEmail = defaultConfig.getString("user.email");
+          } catch {
+            // Key not set in global config
+          }
+        }
+      } catch {
+        // Default config unavailable
       }
-    } catch {
-      // Config files unavailable — fall through to defaults
+    });
+
+    for (const tryConfig of configSources) {
+      tryConfig();
+      if (authorName && authorEmail) break;
     }
   }
 

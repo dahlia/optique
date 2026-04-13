@@ -158,7 +158,9 @@ export type DiffConfig = InferValue<typeof diffCommand>;
 
 /**
  * Parses per-file insertion/deletion counts from unified diff text.
- * Handles additions, deletions, and modifications including renamed files.
+ * Uses a state machine to distinguish file-header lines from hunk content,
+ * so that content lines whose text starts with '+' or '-' are never
+ * mistaken for file headers.
  */
 function parseNumstat(
   diffText: string,
@@ -166,6 +168,7 @@ function parseNumstat(
   const result = new Map<string, { ins: number; del: number }>();
   let currentPath: string | null = null;
   let pendingOldPath: string | null = null;
+  let inHunk = false;
   let ins = 0;
   let del = 0;
 
@@ -179,27 +182,28 @@ function parseNumstat(
   };
 
   for (const line of diffText.split("\n")) {
-    if (line.startsWith("--- a/")) {
+    if (line.startsWith("diff --git ")) {
+      // Start of a new file patch — flush previous file and reset hunk state.
       flush();
+      inHunk = false;
+      pendingOldPath = null;
+    } else if (line.startsWith("@@")) {
+      // Hunk header — from here on, +/- lines are content, not file headers.
+      inHunk = true;
+    } else if (!inHunk && line.startsWith("--- a/")) {
       pendingOldPath = line.slice(6);
-    } else if (line.startsWith("--- /dev/null")) {
-      flush();
-      pendingOldPath = null; // New file — path comes from +++ line
-    } else if (line.startsWith("+++ b/")) {
+    } else if (!inHunk && line.startsWith("--- /dev/null")) {
+      pendingOldPath = null; // New file — path comes from the +++ line
+    } else if (!inHunk && line.startsWith("+++ b/")) {
       currentPath = line.slice(6);
       pendingOldPath = null;
-    } else if (line.startsWith("+++ /dev/null")) {
+    } else if (!inHunk && line.startsWith("+++ /dev/null")) {
       // Deletion — use the old path captured from --- line
       currentPath = pendingOldPath;
       pendingOldPath = null;
-    } else if (line.startsWith("+")) {
-      // Content insertion. File headers (+++ b/... and +++ /dev/null) were
-      // already matched by the earlier else-if branches; any remaining line
-      // starting with "+" is a hunk insertion, even if its content starts
-      // with "++" (which makes the full line start with "+++").
+    } else if (inHunk && line.startsWith("+")) {
       if (currentPath !== null) ins++;
-    } else if (line.startsWith("-")) {
-      // Content deletion — same reasoning as above.
+    } else if (inHunk && line.startsWith("-")) {
       if (currentPath !== null) del++;
     }
   }

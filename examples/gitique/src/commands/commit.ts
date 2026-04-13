@@ -156,18 +156,18 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
     // Get commit message
     const commitMessage = getCommitMessage(config.message);
 
-    // Create author signature
+    // Create author signature; pass repo so local config is checked first.
     let authorSignature;
     if (config.author) {
       const { name, email } = parseAuthor(config.author);
-      authorSignature = createGitSignature(name, email);
+      authorSignature = createGitSignature(name, email, repo);
     } else {
-      authorSignature = createGitSignature();
+      authorSignature = createGitSignature(undefined, undefined, repo);
     }
 
     // Committer is always the default identity; only the author can be
     // overridden with --author.
-    const committerSignature = createGitSignature();
+    const committerSignature = createGitSignature(undefined, undefined, repo);
 
     // Create the commit
     const commitOid = createCommit(
