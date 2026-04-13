@@ -67,8 +67,10 @@ const prog = defineProgram({
 *Benefits of using `Program`:*
 
  -  Metadata is defined once and reused everywhere
- -  `runParser()` and `run()` automatically extract metadata
- -  Future features like man page generation (see [#77]) will use the same metadata
+ -  `runParser()` and `run()` automatically reuse the program name and
+    help-text metadata
+ -  Version display can still opt into `metadata.version` explicitly
+ -  Man page generation and related tooling can reuse the same metadata
  -  Cleaner API with fewer parameters to pass
 
 *When to use `Program`:*
@@ -84,8 +86,6 @@ const prog = defineProgram({
  -  When metadata needs to be computed dynamically at runtime
 
 Both approaches are fully supported and you can choose based on your needs.
-
-[#77]: https://github.com/dahlia/optique/issues/77
 
 
 Low-level parsing with `parse()`
@@ -183,7 +183,7 @@ const prog = defineProgram({
   },
 });
 
-// Program metadata is automatically used for help and error messages
+// Program metadata provides the program name and documentation fields
 const config = runParser(
   prog,
   process.argv.slice(2),          // arguments
@@ -252,14 +252,16 @@ const config = runParser(
 console.log(`Starting ${config.name} on port ${config.port}.`);
 ~~~~
 
-Both approaches automatically handle:
+When configured, both approaches automatically handle:
 
  -  *Help generation*: Creates formatted help text from parser structure
  -  *Version display*: Shows version information via `--version` or `version`
     command
+ -  *Shell completion*: Generates completion scripts and handles completion
+    requests
  -  *Error formatting*: Shows clear error messages with usage information
- -  *Option parsing*: Recognizes `--help`/`--version` flags and `help`/`version`
-    subcommands
+ -  *Meta request parsing*: Recognizes configured help/version/completion
+    flags and subcommands
  -  *Usage display*: Shows command syntax when errors occur
 
 Built-in help, version, and completion requests are parser-aware.  The
@@ -434,9 +436,10 @@ The function automatically:
  -  *Uses program name* from `Program` metadata
  -  *Auto-detects colors* from `process.stdout.isTTY`
  -  *Auto-detects width* from `process.stdout.columns`
- -  *Exits on help* with code 0
- -  *Exits on version* with code 0
- -  *Exits on error* with code 1
+ -  *Exits on error* with code 1 by default
+
+When `help`, `version`, or `completion` is enabled, the same runner also
+handles those meta requests and exits with code 0.
 
 ### Configuration options
 
@@ -573,7 +576,8 @@ const result5 = run(prog, {});
 *This API is available since Optique 0.6.0.*
 
 Enable shell completion support for Bash, zsh, fish, PowerShell, and Nushell
-with simple configuration.  The `run()` function automatically handles
+with simple configuration.  When completion is enabled, the `run()` function
+automatically handles
 completion script generation and runtime completion requests:
 
 ~~~~ typescript twoslash
@@ -949,11 +953,11 @@ their original relative order.
 
 ### Error handling behavior
 
-The *@optique/run* `run()` function automatically:
+When the corresponding features are enabled, the *@optique/run* `run()`
+function automatically:
 
  -  Prints usage information and error messages to stderr
- -  Exits with code `0` for help requests
- -  Exits with code `0` for version requests
+ -  Exits with code `0` for help, version, and completion requests
  -  Exits with code `1` (or custom) for parse errors
  -  Never returns on errors by default (calls `process.exit()`)
 

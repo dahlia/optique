@@ -90,6 +90,12 @@ const port = valibot(
 const logLevel = valibot(v.picklist(["debug", "info", "warn", "error"]), { placeholder: "debug" });
 ~~~~
 
+> [!IMPORTANT]
+> The options object is required. In particular, `placeholder` must be a valid
+> stand-in value of the schema's output type. Optique uses it during deferred
+> prompt resolution, so it does not need to be meaningful user data, but it
+> must be safe for downstream transforms.
+
 
 Explicit transformations
 ------------------------
@@ -198,7 +204,7 @@ const config = object({
 Version compatibility
 ---------------------
 
-The `@optique/valibot` package supports Valibot version 0.42.0 and above.
+The `@optique/valibot` package currently targets Valibot 1.x.
 
 
 Limitations

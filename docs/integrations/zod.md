@@ -60,6 +60,12 @@ const port = zod(z.coerce.number().int().min(1024).max(65535), { placeholder: 10
 const logLevel = zod(z.enum(["debug", "info", "warn", "error"]), { placeholder: "debug" });
 ~~~~
 
+> [!IMPORTANT]
+> The options object is required. In particular, `placeholder` must be a valid
+> stand-in value of the schema's output type. Optique uses it during deferred
+> prompt resolution, so it does not need to be meaningful user data, but it
+> must be safe for downstream transforms.
+
 
 String coercion
 ---------------

@@ -14,6 +14,11 @@ a modern JavaScript proposal for working with dates and times. These parsers
 offer type-safe parsing of various temporal values including instants,
 durations, dates, times, and time zones.
 
+> [!IMPORTANT]
+> These parsers require `globalThis.Temporal` at runtime. If your runtime does
+> not ship the Temporal API yet, install and initialize a polyfill such as
+> `@js-temporal/polyfill` before parsing.
+
 ::: code-group
 
 ~~~~ bash [Deno]
@@ -277,8 +282,8 @@ The parser accepts month-day format:
 `timeZone()` parser
 -------------------
 
-The `timeZone()` parser validates IANA Time Zone Database identifiers and
-returns a branded `TimeZone` string type for type safety:
+The `timeZone()` parser validates timezone identifiers and returns the
+`TimeZone` union type exported by *@optique/temporal*:
 
 ~~~~ typescript twoslash
 import { timeZone } from "@optique/temporal";
@@ -290,18 +295,25 @@ const userTimezone = timeZone();
 const displayTimezone = timeZone({ metavar: "DISPLAY_TZ" });
 ~~~~
 
-The parser accepts valid IANA timezone identifiers:
+The parser accepts valid two-segment and three-segment IANA identifiers, plus
+a curated set of single-segment identifiers for cross-runtime compatibility:
 
 ~~~~ typescript
 // Valid timezone identifiers
 "UTC"                 // Coordinated Universal Time
+"GMT"                 // Greenwich Mean Time alias
+"EST"                 // POSIX-style single-segment identifier
+"Japan"               // Deprecated alias still accepted
+"Cuba"                // Deprecated alias still accepted
 "Asia/Seoul"          // South Korea
 "America/New_York"    // Eastern Time (US)
-"Europe/London"       // Greenwich Mean Time
-"Australia/Sydney"    // Australian Eastern Time
-"America/Los_Angeles" // Pacific Time (US)
-"Asia/Tokyo"          // Japan Standard Time
+"Europe/London"       // Europe/London
+"America/Argentina/Buenos_Aires" // Three-segment identifier
 ~~~~
+
+Single-segment identifiers are matched case-insensitively and normalized to
+their canonical casing, so inputs like `utc`, `gmt`, and `japan` parse as
+`"UTC"`, `"GMT"`, and `"Japan"`.
 
 
 Error messages
@@ -312,13 +324,13 @@ validation failures:
 
 ~~~~ bash
 $ myapp --timestamp "not-a-timestamp"
-Error: Invalid instant format: not-a-timestamp. Expected ISO 8601 format like 2023-12-25T10:30:00Z.
+Error: Invalid instant: not-a-timestamp. Expected ISO 8601 format like 2020-01-23T17:04:36Z.
 
 $ myapp --duration "invalid-duration"
-Error: Invalid duration format: invalid-duration. Expected ISO 8601 duration like PT30M or P1DT2H.
+Error: Invalid duration: invalid-duration. Expected ISO 8601 format like PT1H30M.
 
 $ myapp --timezone "Invalid/Timezone"
-Error: Invalid timezone identifier: Invalid/Timezone. Must be a valid IANA timezone like Asia/Seoul or UTC.
+Error: Invalid timezone identifier: Invalid/Timezone. Must be a valid IANA timezone like "Asia/Seoul" or "UTC".
 ~~~~
 
 

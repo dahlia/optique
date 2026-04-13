@@ -493,6 +493,8 @@ integration packages extend it for common use cases:
     references (branches, tags, commits, remotes).
  -  *[@optique/temporal](./integrations/temporal.md)*: Value parsers for
     Temporal date and time types.
+ -  *[@optique/man](./concepts/man.md)*: Generates Unix man pages from parser
+    definitions and program metadata.
  -  *[@optique/logtape](./integrations/logtape.md)*: Parsers for log level
     options that configure LogTape sinks.
 

@@ -3203,12 +3203,12 @@ const semanticError = message``;
 function correctFormat(input: string): boolean;
 function withinBounds(input: string): boolean;
 function semanticallyValid(input: string): boolean;
-function parser<T>(): ValueParser<"sync", T> {
+function parser<T>(placeholder: T): ValueParser<"sync", T> {
 return {
 mode: "sync",
 metavar: "VALUE",
-// Generic T has no concrete default; cast undefined to satisfy the type:
-placeholder: undefined as unknown as T,
+// Generic T has no intrinsic default, so accept a stand-in from the caller.
+placeholder,
 format() { return ""; },
 // ---cut-before---
 parse(input: string): ValueParserResult<T> {

@@ -321,7 +321,7 @@ const prog = defineProgram({
 });
 
 const config = run(prog, {
-  args: ["my-app", "--name", "test"]
+  args: ["--name", "test"]
 });
 
 // Optional properties need checking

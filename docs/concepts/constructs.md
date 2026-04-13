@@ -201,14 +201,11 @@ with different modes of operation, subcommands, or mutually exclusive option
 sets.
 
 > [!NOTE]
-> The `or()` parser requires that *at least one of its alternatives consumes
-> input* to determine which parser branch was “selected.” If no input is
-> provided and none of the alternatives match, `or()` returns an error.
-> This means `or(A, B)` semantically means “either A or B *must* match,”
-> not “optionally A or B.” If you want to allow the case where neither
-> alternative is provided, wrap the `or()` with
-> [`optional()`](./modifiers.md#optional-parser):
-> `optional(or(A, B))`.
+> `or()` can use a definitive non-consuming branch as a fallback. For example,
+> `or(constant("fallback"), option("-o", string()))` succeeds on empty input
+> and still prefers the consuming branch when `-o` is present. Wrap the whole
+> parser with [`optional()`](./modifiers.md#optional-parser) when you want
+> “no selection” to produce `undefined` instead of an explicit fallback value.
 
 > [!IMPORTANT]
 > TypeScript overload inference for `or()` supports up to 15 parser

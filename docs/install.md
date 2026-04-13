@@ -6,8 +6,8 @@ description: >-
 Installation
 ============
 
-Optique consists of two packages, each of which is both a JSR package and
-a npm package.  You would typically install both packages:
+Optique is a family of packages. Most users start with the two foundational
+packages, each of which is available on both JSR and npm:
 
 ::: code-group
 
@@ -32,6 +32,10 @@ bun add @optique/core @optique/run
 ~~~~
 
 :::
+
+Additional packages provide integrations for config files, environment
+variables, prompts, Temporal, Git, schema validators, LogTape, and man page
+generation.
 
 You may want to use Optique in a web browser, in which case you would only
 install the *@optique/core* package:

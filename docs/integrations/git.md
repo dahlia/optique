@@ -335,7 +335,7 @@ $ myapp --tag v999.0.0
 Error: Tag v999.0.0 does not exist. Available tags: v1.0.0, v2.0.0.
 
 $ myapp --commit abc
-Error: Commit abc does not exist. Provide a valid commit SHA.
+Error: Invalid commit SHA: abc. Provide an abbreviated (4+) or full (40) hexadecimal commit SHA.
 
 $ myapp --ref nonexistent-ref
 Error: Reference nonexistent-ref does not exist. Provide a valid branch, tag, or commit SHA.
@@ -374,6 +374,8 @@ The `errors` option supports the following error types:
     when the directory is not a valid git repository.
  -  `invalidFormat(input)` — Called for commit SHA validation failures
     when the input format is invalid (e.g., too short).
+ -  `remoteNotFound(remote, availableRemotes)` — Called by `gitRemoteBranch()`
+    when the named remote does not exist.
 
 ### Example with gitCommit
 
