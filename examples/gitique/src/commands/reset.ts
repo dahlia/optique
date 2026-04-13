@@ -175,7 +175,7 @@ function resetFiles(
   repo: Repository,
   files: readonly string[],
   quiet: boolean,
-): void {
+): boolean {
   if (!quiet) {
     console.log(`Resetting ${files.length} file(s) to HEAD...`);
   }
@@ -203,8 +203,9 @@ function resetFiles(
 
   if (hadError) {
     process.exitCode = 1;
-    return;
+    return false;
   }
+  return true;
 }
 
 /**
@@ -282,8 +283,8 @@ export async function executeReset(config: ResetConfig): Promise<void> {
     const repo = await getRepository();
 
     if (config.files.length > 0) {
-      // Reset specific files
-      resetFiles(repo, config.files, config.quiet);
+      // Reset specific files; bail out without the success banner on failure
+      if (!resetFiles(repo, config.files, config.quiet)) return;
     } else {
       // Reset to commit
       const targetCommit = config.commit ?? "HEAD";
