@@ -317,15 +317,30 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
       case "short": {
         // Merge staged and unstaged entries for the same path into one line
         // so a dual-state file shows "MM" instead of two separate lines.
+        // Exception: a staged deletion + new untracked file at the same path
+        // must stay as two separate lines ("D  foo" + "?? foo"), matching git.
         const seenShort = new Set<string>();
         for (const file of statuses) {
           if (seenShort.has(file.path)) continue;
           seenShort.add(file.path);
           const stagedEntry = stagedByPath.get(file.path);
           const unstagedEntry = unstagedByPath.get(file.path);
-          console.log(
-            formatStatusShortMerged(stagedEntry, unstagedEntry, file.path),
-          );
+          if (
+            stagedEntry?.status === "Deleted" &&
+            unstagedEntry?.status === "Untracked"
+          ) {
+            // Emit two separate lines rather than a merged "D?" line
+            console.log(
+              formatStatusShortMerged(stagedEntry, undefined, file.path),
+            );
+            console.log(
+              formatStatusShortMerged(undefined, unstagedEntry, file.path),
+            );
+          } else {
+            console.log(
+              formatStatusShortMerged(stagedEntry, unstagedEntry, file.path),
+            );
+          }
         }
         break;
       }
@@ -337,9 +352,30 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
           seenPorcelain.add(file.path);
           const stagedEntry = stagedByPath.get(file.path);
           const unstagedEntry = unstagedByPath.get(file.path);
-          console.log(
-            formatStatusPorcelainMerged(stagedEntry, unstagedEntry, file.path),
-          );
+          if (
+            stagedEntry?.status === "Deleted" &&
+            unstagedEntry?.status === "Untracked"
+          ) {
+            // Emit two separate lines rather than a merged "D?" line
+            console.log(
+              formatStatusPorcelainMerged(stagedEntry, undefined, file.path),
+            );
+            console.log(
+              formatStatusPorcelainMerged(
+                undefined,
+                unstagedEntry,
+                file.path,
+              ),
+            );
+          } else {
+            console.log(
+              formatStatusPorcelainMerged(
+                stagedEntry,
+                unstagedEntry,
+                file.path,
+              ),
+            );
+          }
         }
         break;
       }
