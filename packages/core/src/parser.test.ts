@@ -3068,6 +3068,47 @@ describe("Annotations system", () => {
     );
   });
 
+  it("should preserve annotations when synthesizing top-level command docs", () => {
+    const testKey = Symbol.for("@test/doc-command-root");
+    const parser = command("build", {
+      $valueType: [] as const,
+      $stateType: [] as const,
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: {},
+      parse(_context) {
+        return { success: false as const, consumed: 0, error: message`no` };
+      },
+      complete() {
+        return { success: true as const, value: "ok" };
+      },
+      *suggest() {},
+      getDocFragments(state) {
+        const annotations = state.kind === "available"
+          ? getAnnotations(state.state)
+          : undefined;
+        return {
+          fragments: [],
+          footer: [{
+            type: "text" as const,
+            text: String(annotations?.[testKey] ?? "none"),
+          }],
+        };
+      },
+    });
+
+    const doc = getDocPage(parser, { annotations: { [testKey]: "injected" } });
+
+    assert.ok(doc?.footer !== undefined);
+    assert.equal(
+      (doc.footer![0] as { type: "text"; text: string }).text,
+      "injected",
+    );
+  });
+
   it("should support annotations in getDocPageSync() with options as second argument", () => {
     const testKey = Symbol.for("@test/doc-sync-fn-options-as-2nd");
     const parser: Parser<"sync", string, Record<PropertyKey, unknown>> = {

@@ -17,6 +17,7 @@ import {
 import type { DeferredMap, ValueParserResult } from "../valueparser.ts";
 import {
   hasMeaningfulAnnotations,
+  inheritAnnotations,
   injectAnnotations,
   isInjectedAnnotationWrapper,
   type ParseOptions,
@@ -1671,8 +1672,12 @@ function buildDocPage(
     fragments[0].term.type === "command"
   ) {
     const cmdName = fragments[0].term.name;
+    const matchedState = inheritAnnotations(context.state, [
+      "matched",
+      cmdName,
+    ]);
     const matched = parser.getDocFragments(
-      { kind: "available", state: ["matched", cmdName] },
+      { kind: "available", state: matchedState },
       undefined,
     );
     ({ brief, description, fragments, footer } = matched);
