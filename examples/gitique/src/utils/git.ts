@@ -294,7 +294,14 @@ export function createCommit(
  */
 export function isIndexEmpty(repo: Repository): boolean {
   const index = repo.index();
-  const indexTreeOid = index.writeTree();
+  let indexTreeOid: string;
+  try {
+    indexTreeOid = index.writeTree();
+  } catch {
+    // Unmerged entries prevent writing the tree; treat the index as
+    // non-empty so the caller can surface a conflict-aware error.
+    return false;
+  }
   const indexTree = repo.getTree(indexTreeOid);
 
   let headTree;
@@ -689,7 +696,16 @@ export function getDiff(
         }
       }
       const index = repo.index();
-      const indexTreeOid = index.writeTree();
+      let indexTreeOid: string;
+      try {
+        indexTreeOid = index.writeTree();
+      } catch {
+        throw new Error(
+          "Cannot diff cached changes: the index contains unresolved " +
+            "merge conflicts. Resolve them before running " +
+            "'gitique diff --cached'.",
+        );
+      }
       const indexTree = repo.getTree(indexTreeOid);
       diff = repo.diffTreeToTree(baseTree, indexTree, esDiffOptions);
     } else if (options.commit && options.commit2) {
