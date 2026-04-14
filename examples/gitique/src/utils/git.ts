@@ -392,12 +392,10 @@ export function getCommitHistory(
 ): CommitWithOid[] {
   const commits: CommitWithOid[] = [];
 
-  // Check whether HEAD resolves; unborn repositories have no commits at
-  // all, so return an empty list rather than letting pushHead() throw an
-  // opaque internal error that we would have to recognise by string.
-  try {
-    repo.head();
-  } catch {
+  // Unborn repositories have no commits; return early rather than letting
+  // pushHead() throw.  Use isEmpty() so that real errors (corrupt refs,
+  // permission problems) still propagate instead of being silently swallowed.
+  if (repo.isEmpty()) {
     return commits;
   }
 
@@ -460,14 +458,19 @@ export function unstageFile(repo: Repository, filePath: string): void {
 }
 
 /**
- * Resets the index to match HEAD (unstages all changes).
+ * Best-effort approximation of unstaging all changes.
  *
  * Note: es-git does not expose `git_index_read_tree`, so we cannot
- * restore index entries from an arbitrary commit tree.  As an
- * approximation, reload the on-disk index (which reflects the last
- * commit) and then synchronize tracked entries with the working
- * tree.  This correctly unstages modifications but may leave deleted
- * tracked files as staged removals until the next hard reset.
+ * repopulate the index from the HEAD tree as `git reset --mixed` would.
+ * Instead, this reloads the current on-disk index (the persisted staging
+ * area, which already includes any staged changes written by prior
+ * `index.write()` calls) and then refreshes tracked entries from the
+ * working tree.
+ *
+ * This drops only unsaved in-memory index mutations; it does not guarantee
+ * that the resulting index matches HEAD or that all previously staged
+ * changes are removed.  A correct implementation would require an upstream
+ * es-git binding for `git_index_read_tree`.
  */
 export function resetIndex(repo: Repository): void {
   try {
