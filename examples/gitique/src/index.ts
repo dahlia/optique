@@ -1,14 +1,17 @@
 #!/usr/bin/env node
+import { fileURLToPath } from "node:url";
+import process from "node:process";
 import { or } from "@optique/core/constructs";
 import { defineProgram } from "@optique/core/program";
 import { commandLine, lineBreak, message, url } from "@optique/core/message";
-import { printError, run } from "@optique/run";
+import { run } from "@optique/run";
 import { addCommand, executeAdd } from "./commands/add.ts";
 import { commitCommand, executeCommit } from "./commands/commit.ts";
 import { diffCommand, executeDiff } from "./commands/diff.ts";
 import { executeLog, logCommand } from "./commands/log.ts";
 import { executeReset, resetCommand } from "./commands/reset.ts";
 import { executeStatus, statusCommand } from "./commands/status.ts";
+import { exitWithError } from "./utils/output.ts";
 import pkgJson from "../package.json" with { type: "json" };
 
 /**
@@ -23,7 +26,7 @@ import pkgJson from "../package.json" with { type: "json" };
  * - reset: group(), merge(), choice(), withDefault(), map()
  * - status: group(), merge(), choice(), withDefault(), map()
  */
-const parser = or(
+export const parser = or(
   addCommand,
   commitCommand,
   diffCommand,
@@ -37,7 +40,7 @@ const parser = or(
  * Demonstrates Optique's Program interface for defining a CLI application
  * with all its metadata in one place.
  */
-const program = defineProgram({
+export const program = defineProgram({
   parser,
   metadata: {
     name: "gitique",
@@ -85,9 +88,10 @@ ${commandLine("gitique completion zsh > ~/.zsh/completions/_gitique")}`,
  * - Process exit handling
  * - Shell completion script generation
  */
-async function main() {
+export async function main(args = process.argv.slice(2)) {
   try {
     const result = run(program, {
+      args,
       help: {
         command: { group: "Meta commands" },
         option: { group: "Meta commands" },
@@ -102,7 +106,6 @@ async function main() {
         option: { group: "Meta commands" },
       },
       aboveError: "usage", // Show usage information above error messages
-      colors: true, // Force colored output for better UX
       showDefault: true, // Display default values in help text
       showChoices: true, // Display possible choices in help text
     });
@@ -130,16 +133,16 @@ async function main() {
       default: {
         // TypeScript will ensure this is never reached if all cases are covered
         const _exhaustive: never = result;
-        printError(message`Unknown command.`, { exitCode: 1 });
+        exitWithError(new Error("Unknown command."));
       }
     }
   } catch (error) {
-    printError(
-      message`${error instanceof Error ? error.message : String(error)}.`,
-      { exitCode: 1 },
-    );
+    exitWithError(error);
   }
 }
 
-// Run the main function
-main();
+// Run main() when executed directly.
+const isMain: boolean = "main" in import.meta
+  ? import.meta.main
+  : process.argv[1] === fileURLToPath(import.meta.url);
+if (isMain) main();

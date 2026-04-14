@@ -11,10 +11,10 @@ import {
 } from "@optique/core/message";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { printError } from "@optique/run";
 import { getRepository, getStatus } from "../utils/git.ts";
 import type { FileStatus } from "../utils/git.ts";
-import { colors, formatError, formatStatusLong } from "../utils/formatters.ts";
+import { colors, formatStatusLong } from "../utils/formatters.ts";
+import { exitWithError } from "../utils/output.ts";
 
 type FileStatusEntry = Pick<FileStatus, "path" | "status" | "oldPath">;
 
@@ -381,11 +381,6 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
       }
     }
   } catch (error) {
-    printError(
-      message`${
-        formatError(error instanceof Error ? error.message : String(error))
-      }`,
-      { exitCode: 1 },
-    );
+    exitWithError(error);
   }
 }

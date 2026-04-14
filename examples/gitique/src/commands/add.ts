@@ -3,14 +3,10 @@ import { group, merge, object } from "@optique/core/constructs";
 import { multiple } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
-import { commandLine, lineBreak, message } from "@optique/core/message";
-import { path, printError } from "@optique/run";
+import { commandLine, lineBreak, message, text } from "@optique/core/message";
+import { path, print, printError } from "@optique/run";
 import { addAllFiles, addFile, getRepository } from "../utils/git.ts";
-import {
-  formatAddedFile,
-  formatError,
-  formatSuccess,
-} from "../utils/formatters.ts";
+import { exitWithError } from "../utils/output.ts";
 
 /**
  * Staging options for the add command.
@@ -103,13 +99,13 @@ export async function executeAdd(config: AddConfig): Promise<void> {
     if (config.all) {
       // Add all files (equivalent to `git add .`)
       if (config.verbose) {
-        console.log("Adding all files to the index...");
+        print(message`Adding all files to the index.`);
       }
 
       addAllFiles(repo, config.force);
 
       if (config.verbose) {
-        console.log(formatSuccess("Successfully added all files to the index"));
+        print(message`Added all files to the index.`);
       }
     } else if (config.files.length > 0) {
       // Add specific files; collect all per-file errors before failing.
@@ -119,16 +115,14 @@ export async function executeAdd(config: AddConfig): Promise<void> {
           addFile(repo, file, config.force);
 
           if (config.verbose) {
-            console.log(formatAddedFile(file));
+            print(message`Added ${file}.`);
           }
         } catch (error) {
           hadError = true;
           printError(
-            message`${
-              formatError(
-                `Failed to add '${file}': ${
-                  error instanceof Error ? error.message : String(error)
-                }`,
+            message`Failed to add ${file}: ${
+              text(
+                error instanceof Error ? error.message : String(error),
               )
             }`,
           );
@@ -141,10 +135,8 @@ export async function executeAdd(config: AddConfig): Promise<void> {
       }
 
       if (config.verbose) {
-        console.log(
-          formatSuccess(
-            `Successfully added ${config.files.length} file(s) to the index`,
-          ),
+        print(
+          message`Added ${String(config.files.length)} file(s) to the index.`,
         );
       }
     } else {
@@ -155,11 +147,6 @@ export async function executeAdd(config: AddConfig): Promise<void> {
       );
     }
   } catch (error) {
-    printError(
-      message`${
-        formatError(error instanceof Error ? error.message : String(error))
-      }`,
-      { exitCode: 1 },
-    );
+    exitWithError(error);
   }
 }

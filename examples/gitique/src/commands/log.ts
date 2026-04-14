@@ -9,14 +9,14 @@ import {
   message,
   optionName,
 } from "@optique/core/message";
-import { printError } from "@optique/run";
+import { print } from "@optique/run";
 import { getCommitHistory, getRepository } from "../utils/git.ts";
 import {
   formatCommitDetailed,
   formatCommitOneline,
-  formatError,
 } from "../utils/formatters.ts";
 import type { Commit } from "es-git";
+import { exitWithError } from "../utils/output.ts";
 
 /**
  * Output format choices for the log command.
@@ -274,7 +274,7 @@ export async function executeLog(config: LogConfig): Promise<void> {
     );
 
     if (allCommits.length === 0) {
-      console.log("No commits found in the repository.");
+      print(message`No commits found in the repository.`);
       return;
     }
 
@@ -285,7 +285,7 @@ export async function executeLog(config: LogConfig): Promise<void> {
     );
 
     if (filteredCommits.length === 0) {
-      console.log("No commits match the specified criteria.");
+      print(message`No commits match the specified criteria.`);
       return;
     }
 
@@ -307,11 +307,6 @@ export async function executeLog(config: LogConfig): Promise<void> {
       }
     }
   } catch (error) {
-    printError(
-      message`${
-        formatError(error instanceof Error ? error.message : String(error))
-      }`,
-      { exitCode: 1 },
-    );
+    exitWithError(error);
   }
 }

@@ -11,7 +11,7 @@ import {
   message,
   optionName,
 } from "@optique/core/message";
-import { printError } from "@optique/run";
+import { print } from "@optique/run";
 import {
   createCommit,
   createGitSignature,
@@ -19,11 +19,8 @@ import {
   isIndexEmpty,
   stageTrackedFiles,
 } from "../utils/git.ts";
-import {
-  formatCommitCreated,
-  formatError,
-  formatSuccess,
-} from "../utils/formatters.ts";
+import { formatCommitCreated } from "../utils/formatters.ts";
+import { exitWithError } from "../utils/output.ts";
 
 /**
  * Commit options for the commit command.
@@ -123,7 +120,7 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
     // Use stageTrackedFiles (index.updateAll) rather than addAllFiles so
     // that untracked files are not accidentally staged, matching git -a.
     if (config.all) {
-      console.log("Staging all modified and deleted files...");
+      print(message`Staging all modified and deleted files.`);
       stageTrackedFiles(repo);
     }
 
@@ -196,14 +193,9 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
     console.log(`Date: ${new Date(author.timestamp * 1000).toISOString()}`);
 
     if (config.all) {
-      console.log(formatSuccess("Changes automatically staged and committed"));
+      print(message`Changes were automatically staged and committed.`);
     }
   } catch (error) {
-    printError(
-      message`${
-        formatError(error instanceof Error ? error.message : String(error))
-      }`,
-      { exitCode: 1 },
-    );
+    exitWithError(error);
   }
 }

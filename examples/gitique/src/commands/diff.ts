@@ -10,15 +10,14 @@ import {
   metavar,
   optionName,
 } from "@optique/core/message";
-import { printError } from "@optique/run";
 import process from "node:process";
 import { getDiff, getRepository } from "../utils/git.ts";
 import {
   formatDiffNameOnly,
   formatDiffNameStatus,
   formatDiffStats,
-  formatError,
 } from "../utils/formatters.ts";
+import { exitWithError } from "../utils/output.ts";
 
 /**
  * Diff algorithm choices.
@@ -346,11 +345,6 @@ export async function executeDiff(config: DiffConfig): Promise<void> {
       }
     }
   } catch (error) {
-    printError(
-      message`${
-        formatError(error instanceof Error ? error.message : String(error))
-      }`,
-      { exitCode: 1 },
-    );
+    exitWithError(error);
   }
 }

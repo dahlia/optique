@@ -8,9 +8,10 @@ import {
   lineBreak,
   message,
   optionName,
+  text,
 } from "@optique/core/message";
 import process from "node:process";
-import { printError } from "@optique/run";
+import { print, printError } from "@optique/run";
 import {
   checkoutHead,
   getRepository,
@@ -20,11 +21,7 @@ import {
   unstageFile,
 } from "../utils/git.ts";
 import type { Repository } from "es-git";
-import {
-  formatError,
-  formatSuccess,
-  formatWarning,
-} from "../utils/formatters.ts";
+import { exitWithError } from "../utils/output.ts";
 
 /**
  * Reset mode choices.
@@ -178,7 +175,7 @@ function resetFiles(
   quiet: boolean,
 ): boolean {
   if (!quiet) {
-    console.log(`Unstaging ${files.length} file(s)...`);
+    print(message`Unstaging ${String(files.length)} file(s).`);
   }
 
   let hadError = false;
@@ -186,16 +183,14 @@ function resetFiles(
     try {
       unstageFile(repo, file);
       if (!quiet) {
-        console.log(`Unstaged '${file}'.`);
+        print(message`Unstaged ${file}.`);
       }
     } catch (error) {
       hadError = true;
       printError(
-        message`${
-          formatError(
-            `Failed to reset '${file}': ${
-              error instanceof Error ? error.message : String(error)
-            }`,
+        message`Failed to reset ${file}: ${
+          text(
+            error instanceof Error ? error.message : String(error),
           )
         }`,
       );
@@ -219,7 +214,7 @@ function resetToCommit(
   quiet: boolean,
 ): void {
   if (!quiet) {
-    console.log(`Performing ${mode} reset to ${commit}...`);
+    print(message`Performing ${text(mode)} reset to ${commit}.`);
   }
 
   try {
@@ -231,10 +226,9 @@ function resetToCommit(
       case "soft":
         // HEAD moved; index and working directory unchanged
         if (!quiet) {
-          console.log(
-            formatWarning(
-              "Soft reset: HEAD moved, index and working directory unchanged",
-            ),
+          print(
+            message`Soft reset: HEAD moved, index and working directory unchanged.`,
+            { stream: "stderr" },
           );
         }
         break;
@@ -243,10 +237,8 @@ function resetToCommit(
         // HEAD moved; reset index, keep working directory
         resetIndex(repo);
         if (!quiet) {
-          console.log(
-            formatSuccess(
-              "Mixed reset: HEAD and index reset, working directory unchanged",
-            ),
+          print(
+            message`Mixed reset: HEAD and index reset, working directory unchanged.`,
           );
         }
         break;
@@ -256,13 +248,13 @@ function resetToCommit(
         resetIndex(repo);
         checkoutHead(repo, { force: true });
         if (!quiet) {
-          console.log(
-            formatWarning(
-              "Hard reset: HEAD, index, and working directory reset",
-            ),
+          print(
+            message`Hard reset: HEAD, index, and working directory reset.`,
+            { stream: "stderr" },
           );
-          console.log(
-            formatWarning("All uncommitted changes have been lost!"),
+          print(
+            message`All uncommitted changes have been lost.`,
+            { stream: "stderr" },
           );
         }
         break;
@@ -291,10 +283,9 @@ export async function executeReset(config: ResetConfig): Promise<void> {
       const targetCommit = config.commit ?? "HEAD";
 
       if (config.mode === "hard" && !config.quiet) {
-        console.log(
-          formatWarning(
-            "Warning: Hard reset will permanently delete all uncommitted changes!",
-          ),
+        print(
+          message`Warning: Hard reset will permanently delete all uncommitted changes.`,
+          { stream: "stderr" },
         );
       }
 
@@ -302,14 +293,9 @@ export async function executeReset(config: ResetConfig): Promise<void> {
     }
 
     if (!config.quiet) {
-      console.log(formatSuccess("Reset operation completed successfully."));
+      print(message`Reset operation completed successfully.`);
     }
   } catch (error) {
-    printError(
-      message`${
-        formatError(error instanceof Error ? error.message : String(error))
-      }`,
-      { exitCode: 1 },
-    );
+    exitWithError(error);
   }
 }
