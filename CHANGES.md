@@ -10,24 +10,12 @@ To be released.
 
 ### @optique/core
 
+#### Breaking changes and public APIs
+
  -  *Breaking change:* Renamed the runtime `Parser.$mode` and
     `ValueParser.$mode` properties to `mode`.  Type-only markers such as
     `Parser.$valueType`, `Parser.$stateType`, and
     `SourceContext.$requiredOptions` keep the `$` prefix.
-
- -  Fixed duplicate option-name validation to include `hidden: true`
-    options in `object()`, `tuple()`, `merge()`, and wrapped `group()`
-    parsers. Hidden options still consume CLI syntax, so hidden-visible
-    and hidden-hidden collisions now throw `DuplicateOptionError` during
-    parser construction by default. [[#510], [#788]]
-
- -  Replaced the sentinel-based two-pass `SourceContext` contract with an
-    explicit `SourceContextRequest` object. `getAnnotations()` and
-    `getInternalAnnotations()` now receive `phase: "phase1"` / `"phase2"`
-    requests, so successful first-pass values of `undefined` are no longer
-    ambiguous. This removes the need for context-local `undefined` wrapping
-    workarounds and fixes custom two-pass contexts that previously could not
-    distinguish phase 1 from a real `undefined` parse result. [[#271], [#786]]
 
  -  *Breaking change:* Narrowed *@optique/core*'s public extension surface to
     the APIs Optique actually intends to support.  Internal dependency replay
@@ -42,6 +30,52 @@ To be released.
     `delegateSuggestNodes()`, and `mapSourceMetadata()`.  This intentionally
     removes previously leaked entry points so parser-internal refactors stop
     being semver-sensitive.  [[#790], [#792], [#793], [#794]]
+
+ -  *Breaking change:* Added `placeholder` property to `ValueParser` interface
+    (required) and `Parser` interface (optional).  Every value parser now
+    provides a type-appropriate stand-in value (e.g., `""` for `string()`, `1`
+    for `port()`) used during deferred prompt resolution.  `option()` and
+    `argument()` set `Parser.placeholder` from the value parser, and
+    combinators like `map()`, `optional()`, and `withDefault()` propagate it
+    through the parser chain.  [[#407], [#727]]
+
+ -  Added optional `placeholder` override to `string()`, `integer()`,
+    `float()`, and `port()` options.  This allows customizing the stand-in
+    value when downstream `map()` transforms or constraints require a
+    specific value.  `integer()` and `float()` automatically derive
+    placeholders from `min`/`max` constraints; `port()` defaults to `min`
+    (which itself defaults to `1`).  [[#407], [#727]]
+
+ -  Replaced the `DeferredPromptValue` sentinel with type-appropriate
+    placeholder values during two-phase parsing.  `prompt()` now uses
+    `Parser.placeholder` instead of a branded sentinel when deferring,
+    so `map()` transforms always receive valid values and two-pass contexts
+    observe structurally valid objects.  Note that `map()` intentionally
+    does not propagate `deferredKeys`, so mapped structured outputs may
+    still carry placeholder values for deferred fields.  This removes the
+    entire
+    sanitization machinery (~1000 lines of proxy-based stripping code)
+    from *@optique/core* and *@optique/config*.  [[#307], [#407], [#727]]
+
+ -  *Breaking change:* Removed `placeholder` symbol and `isPlaceholderValue()` from
+    `@optique/core/context`.  These were part of the sentinel-based
+    deferred prompt mechanism that has been replaced by the
+    `ValueParser.placeholder` approach.  [[#407], [#727]]
+
+ -  Redesigned meta command configuration (help, version, completion) in
+    `RunOptions` to use independent `command`/`option` sub-configs instead
+    of `mode: "command" | "option" | "both"`.  Each meta command now accepts
+    `{ command?: true | CommandSubConfig; option?: true | OptionSubConfig }`
+    where at least one must be specified (enforced at the type level).
+    `CommandSubConfig` supports `names` (first = display name, rest = hidden
+    aliases via `longestMatch()`), `group`, and `hidden`.  `OptionSubConfig`
+    supports `names` (all shown in help), `group`, and `hidden`.  This is
+    a breaking change.  [[#130]]
+
+ -  Removed `CompletionName`, `CompletionHelpVisibility`, `CompletionConfig`,
+    `CompletionConfigBoth`, `CompletionConfigSingular`, and
+    `CompletionConfigPlural` types.  Completion naming is now controlled via
+    `CommandSubConfig.names` and `OptionSubConfig.names`.  [[#130]]
 
  -  Added the optional `Parser.validateValue()` method, which lets a
     parser check whether an arbitrary value satisfies its underlying
@@ -59,6 +93,168 @@ To be released.
     forward this method.  Used by `bindEnv()` and `bindConfig()` to
     enforce parser constraints on fallback values.  [[#414], [#777]]
 
+ -  Added `ValueParser.normalize()` optional method for canonicalizing
+    values of type `T` (e.g., MAC address case/separator normalization,
+    domain lowercasing).  Built-in implementations delegate to `parse()`
+    internally, returning invalid values unchanged.  [[#318], [#742]]
+
+ -  Added `Parser.normalizeValue()` optional method.  Primitive parsers
+    (`option()`, `argument()`) implement this by delegating to
+    `ValueParser.normalize()`.  Value-preserving combinator wrappers
+    (including `optional()`, `withDefault()`, `nonEmpty()`, `group()`,
+    `command()`, `multiple()`, `object()`, `tuple()`) forward it from
+    inner parsers.  [[#318], [#742]]
+
+ -  `withDefault()` now normalizes default values through the inner
+    parser's `normalizeValue()` when available, so runtime defaults
+    match the representation that `parse()` would produce.  Exclusive
+    combinators (`or()`, `longestMatch()`) and multi-source combinators
+    (`merge()`) do not forward normalization because the active branch
+    or key ownership is unknown at default time.  [[#318], [#742]]
+
+ -  Added `leadingNames` and `acceptingAnyToken` properties to the `Parser`
+    interface.  Each combinator now reports which leading tokens (option
+    names, command names, and literal values) it could match at the first
+    buffer position, computed
+    from its structural semantics rather than the display-oriented `usage`
+    tree.  Shared-buffer compositions (`tuple()`, `object()`, `merge()`,
+    `concat()`) use priority ordering and `acceptingAnyToken` to exclude
+    names that are unreachable behind a catch-all parser like `argument()`.
+    `conditional()` with a default branch now includes the default branch's
+    leading names.  This replaces the usage-tree-based
+    `extractLeadingOptionNames()`, `extractLeadingCommandNames()`, and
+    `extractLeadingLiteralValues()`, which produced incorrect results for
+    `tuple()` (priority-based sorting), `command()` (inner usage
+    spreading), and `conditional()` (missing literal terms for argument
+    discriminators).  [[#735], [#741]]
+
+ -  Simplified `UserParserNames` interface: replaced `leadingOptions`,
+    `leadingCommands`, and `leadingLiterals` with a single `leadingNames`
+    set.  [[#735], [#741]]
+
+ -  Added `extractLiteralValues()` to *@optique/core/usage*.
+    `extractOptionNames()` and `extractCommandNames()` now accept an
+    optional `includeHidden` parameter for callers that need `hidden: true`
+    terms included in the result.  [[#227], [#736]]
+
+ -  Added optional `optionValue` property to the `literal` variant of
+    `UsageTerm`.  When `true`, the literal was derived from an option's
+    metavar by `conditional()` and represents an option value rather than
+    a standalone positional token.  [[#734], [#738]]
+
+ -  Added `fail<T>()` parser: always fails without consuming input, declared
+    to produce a value of type `T`.  Its primary use is as the inner parser
+    for `bindConfig(fail<T>(), { … })` when a value should come only from a
+    config file and has no corresponding CLI flag.  [[#120]]
+
+ -  Added support for equals-joined values on single-dash multi-character
+    options in `option()` (e.g., `-seed=42`, `-max_len=1000`), in addition to
+    existing `--option=value` and `/option:value` formats.  Single-character
+    short options (e.g., `-v`) remain excluded from this joined form to avoid
+    conflicts with short-option clustering.  `flag()` now also rejects this
+    joined form consistently for Boolean flags.  [[#134] by Maxwell Koo]
+
+ -  *Breaking change:* `valueSet()` now requires a second parameter: either
+    a fallback string or an options object with a `fallback` field.  When the
+    values array is empty, the fallback text is returned as a single text term
+    (an empty fallback string produces an empty `Message`).  This prevents
+    surrounding prose in `message` templates from collapsing into malformed
+    sentences (e.g., “Expected one of .”).  [[#492], [#747]]
+
+ -  `values()` now throws `TypeError` when given an empty array.
+    [[#492], [#747]]
+
+#### Parsing runtime, source contexts, and combinators
+
+ -  Added `SourceContextMode` type (`"static" | "dynamic"`) and optional
+    `mode` field to `SourceContext`.  When set, `isStaticContext()` reads this
+    field directly instead of calling `getAnnotations()`, preventing any side
+    effects that `getAnnotations()` might have (such as mutating a global
+    registry).  `createEnvContext()` sets `mode: "static"`;
+    `createConfigContext()` sets `mode: "dynamic"`.  Existing custom contexts
+    that omit the field are unaffected.
+
+ -  *Breaking change:* Replaced `SourceContext`'s inferred `mode`
+    contract with an explicit required `phase` field whose value must be
+    `"single-pass"` or `"two-pass"`.  `SourceContextMode`,
+    `SourceContext.mode`, and `isStaticContext()` have been removed.
+    `runWith()`, `runWithSync()`, and higher-level runners now decide
+    whether to perform phase 2 solely from `context.phase`, which fixes
+    contexts that emit non-empty phase-1 annotations and still need
+    phase-2 refinement.  `createEnvContext()` now declares
+    `phase: "single-pass"` and `createConfigContext()` declares
+    `phase: "two-pass"`.  Consumers must migrate custom contexts to this
+    new API contract.  [[#243], [#783]]
+
+ -  Replaced the sentinel-based two-pass `SourceContext` contract with an
+    explicit `SourceContextRequest` object. `getAnnotations()` and
+    `getInternalAnnotations()` now receive `phase: "phase1"` / `"phase2"`
+    requests, so successful first-pass values of `undefined` are no longer
+    ambiguous. This removes the need for context-local `undefined` wrapping
+    workarounds and fixes custom two-pass contexts that previously could not
+    distinguish phase 1 from a real `undefined` parse result. [[#271], [#786]]
+
+ -  Added generalized APIs to `SourceContext` and `Parser` interfaces so that
+    packages like *@optique/config* and *@optique/inquirer* can integrate with
+    core through public interfaces instead of `Symbol.for()` + `Reflect.get()`
+    duck typing:
+
+     -  `SourceContext.getInternalAnnotations()`: optional method for contexts
+        to inject additional annotations during collection
+     -  `SourceContextRequest`: explicit phase-1 / phase-2 request object for
+        `SourceContext.getAnnotations()` and
+        `SourceContext.getInternalAnnotations()`
+     -  `Parser.shouldDeferCompletion()`: optional method that combinators
+        (`optional()`, `withDefault()`, `group()`) forward from inner parsers
+
+    This removes core's hidden dependency on *@optique/config* and
+    *@optique/inquirer* implementation details, enabling third-party
+    alternative implementations.  [[#588]]
+
+ -  Added `options` parameter to `SourceContext.getAnnotations()`.  Contexts
+    now receive runtime options (e.g., `getConfigPath`, `load`) passed by
+    the runner, enabling config contexts to load files without a separate
+    `runWithConfig()` wrapper.  [[#110]]
+
+ -  Renamed `SourceContext._requiredOptions` to `$requiredOptions` to follow
+    the `$` prefix convention used by `ValueParser.$mode`, `Parser.$mode`,
+    etc.  [[#110]]
+
+ -  Added optional `Symbol.dispose` and `Symbol.asyncDispose` methods to
+    `SourceContext`.  Contexts that hold resources (e.g., global registries)
+    can now implement `Disposable` / `AsyncDisposable` for automatic cleanup.
+    `runWith()` and `runWithSync()` call dispose on all contexts in a
+    `finally` block.  [[#110]]
+
+ -  Context-required options passed to `runWith()`, `runWithSync()`, and
+    `runWithAsync()` must now be wrapped in a `contextOptions` property
+    instead of being passed as top-level keys.  This prevents name collisions
+    with runner options such as `args`, `help`, and `colors`.
+    [[#240], [#241], [#575], [#581]]
+
+ -  Documented and regression-tested `runWith()` cleanup ordering for async
+    parser completion.  `Symbol.dispose` / `Symbol.asyncDispose` now
+    explicitly guarantee that cleanup begins only after the full `runWith()`
+    promise settles, including later asynchronous `complete()` work.
+    [[#269]]
+
+ -  Added `ParseFrame`, `ExecutionContext`, and `ExecutionPhase` types to
+    support the separation of parser-local state from shared execution
+    context.  `ParserContext` now includes an optional `exec` field for
+    accessing the shared execution context.
+    [[#750], [#751], [#752], [#753], [#756], [#760], [#761]]
+
+ -  Added `createParserContext()` factory function for constructing
+    `ParserContext` from a `ParseFrame` and an `ExecutionContext`.
+    [[#750], [#751], [#752], [#756], [#760]]
+
+ -  `Parser.complete()` and `Parser.shouldDeferCompletion()` now accept an
+    optional `ExecutionContext` parameter.  All built-in parser
+    implementations (`option()`, `argument()`, `optional()`, `withDefault()`,
+    `map()`, `object()`, `tuple()`, `merge()`, `concat()`, etc.) forward
+    this parameter through the call chain.  Existing implementations without
+    the parameter continue to work.  [[#750], [#751], [#752], [#756], [#760]]
+
  -  Added `provisional` field to the success variant of `ParserResult`.
     When `true`, it indicates that the parse succeeded tentatively: the
     parser matched something (e.g., a zero-consuming discriminator resolved
@@ -66,12 +262,6 @@ To be released.
     yet.  Outer combinators like `or()` use this to avoid treating
     provisional successes as definitive zero-consumed fallback candidates.
     [[#232], [#773]]
-
- -  Added `ParseFrame`, `ExecutionContext`, and `ExecutionPhase` types to
-    support the separation of parser-local state from shared execution
-    context.  `ParserContext` now includes an optional `exec` field for
-    accessing the shared execution context.
-    [[#750], [#751], [#752], [#753], [#756], [#760], [#761]]
 
  -  Shared-buffer constructs (`object()`, `tuple()`, `concat()`, `merge()`)
     now use a centralized dependency runtime for source collection, default
@@ -127,27 +317,81 @@ To be released.
     mutable state) could see a second evaluation that rejected input the
     first evaluation accepted.  [[#750], [#754], [#764]]
 
- -  Fixed the public `parse()`, `parseSync()`, `parseAsync()`, `suggest()`,
-    `suggestSync()`, `suggestAsync()`, `getDocPage()`, `getDocPageSync()`, and
-    `getDocPageAsync()` entrypoints treating `annotations: {}` as a
-    state-wrapping operation instead of a no-op.  Previously, passing an
-    empty annotations object caused primitive parser states to be wrapped in
-    an injected annotation wrapper and non-primitive states (plain objects,
-    arrays, `Date`, `Map`, `Set`, `RegExp`, and class instances) to be
-    cloned, so custom parsers could observe a changed state shape or
-    identity even though there was no annotation data to carry.  An
-    annotations record with no own symbol keys now behaves identically to
-    omitting the `annotations` option entirely: `injectAnnotations()`
-    short-circuits, `injectAnnotationsIntoState()` bypasses injection, and
-    the top-level `parseSync()` / `parseAsync()` unwrap step is no longer
-    triggered.  [[#484], [#778]]
-
  -  Fixed `withDefault()` default thunks being evaluated more than once in
     nested `merge()` compositions.  When an outer `merge()` Phase 1 had
     already seeded a dependency source value, nested `object()`/`merge()`
     children would re-evaluate the same default thunk during their own
     Phase 1.  Non-idempotent thunks (e.g., with side effects) could produce
     inconsistent values.  [[#750], [#762], [#763]]
+
+ -  Fixed `merge()` and `concat()` dropping dependency-aware suggestions when
+    the dependency source and derived parser live in different sub-parsers.
+    The `suggest()` methods now build a `DependencyRegistry` from the full
+    composed state before delegating to child parsers, matching the behavior
+    that `object()` already had.  [[#178], [#520]]
+
+ -  Fixed `merge()` not pre-completing `bindEnv()`/`bindConfig()`-backed
+    dependency sources for cross-parser resolution.  When a dependency source
+    wrapped with `bindEnv()` or `bindConfig()` lived in one child parser of
+    `merge()`, derived parsers in a different child parser could not see the
+    resolved value.  The fix pre-completes dependency source fields from child
+    parsers before resolving deferred states, and preserves annotations when
+    extracting child parser states during completion.  [[#681], [#684]]
+
+ -  Fixed dependency-aware completion ignoring `withDefault()` source values.
+    When a dependency source was wrapped with `withDefault()` and no explicit
+    CLI value was provided, `suggest()` returned an empty array instead of
+    suggesting values based on the default.  [[#186], [#522]]
+
+ -  Fixed `deriveSync()`, `deriveAsync()`, `deriveFromSync()`, and
+    `deriveFromAsync()` so that errors thrown by the factory with default
+    dependency values during the initial parse no longer prevent deferred
+    resolution from succeeding with the actual dependency values.  Errors
+    from the default branch are now caught and produce a preliminary failure
+    result, which gets overridden when `parseWithDependency()` runs with
+    the actual values.  `deriveAsync()` also no longer calls the factory
+    during parser construction.  [[#225], [#524]]
+
+ -  Fixed `derive()` and `deriveFrom()` eagerly executing default factories
+    during parser construction to detect sync/async mode.  The factory is
+    no longer called at construction time; instead, callers must provide
+    a required `mode` field (`"sync"` or `"async"`) that declares the
+    factory's return mode.  Callers with async factories should pass
+    `mode: "async"` or use `deriveAsync()`/`deriveFromAsync()`.
+    [[#223], [#527]]
+
+ -  Fixed `derive()`, `deriveSync()`, `deriveAsync()`, `deriveFrom()`,
+    `deriveFromSync()`, and `deriveFromAsync()` so that `format()` and
+    `suggest()` no longer throw when the factory throws on the default
+    dependency value.  `format()` now falls back to `String(value)` and
+    `suggest()` yields empty suggestions instead of propagating the
+    exception.  [[#224], [#531]]
+
+ -  Fixed dependency-value collection for single-dependency derived parsers
+    (from `.derive()`) inside constructs like `object()`, `tuple()`, etc.
+    When the dependency source was absent from the registry,
+    `collectDependencyValues()` now falls back to stored default values,
+    matching the behavior that the multi-dependency path (from
+    `deriveFrom()`) already had.  [[#238], [#748]]
+
+ -  Fixed constructs dropping values from parsers that only produce results
+    in `complete()`.  `object()` now runs a zero-consumption pass after its
+    greedy loop so that purely non-interactive child parsers (e.g.,
+    `multiple(constant(...))`) can update their state even when they return
+    `consumed: []`.  `or()` now accepts a unique non-consuming,
+    non-interactive branch as a fallback when no branch consumed input
+    and the buffer is empty.  `conditional()` defers
+    zero-consuming discriminators to `complete()` in async mode, and
+    resolves them during `parse()` in sync mode.  [[#232], [#773]]
+
+ -  `conditional()` now speculatively parses named branches when the
+    discriminator is an async parser that succeeds without consuming input
+    (e.g., `prompt(option(...))`).  If exactly one branch can consume tokens,
+    it is tentatively selected during parse and verified against the resolved
+    discriminator during the complete phase.  This fixes the “Unexpected
+    option or argument” error that occurred when branch-specific tokens were
+    present but the discriminator was deferred to the complete phase.
+    [[#772], [#774]]
 
  -  Fixed `multiple()` continuing to open fresh item slots after reaching its
     `max` bound.  Once the bound is reached, `multiple()` now stops consuming
@@ -180,65 +424,79 @@ To be released.
     `multiple()` or wrap the result with `map()`, e.g.
     `map(multiple(p), xs => xs.length > 0 ? xs : fallback)`.  [[#408], [#776]]
 
- -  `Parser.complete()` and `Parser.shouldDeferCompletion()` now accept an
-    optional `ExecutionContext` parameter.  All built-in parser
-    implementations (`option()`, `argument()`, `optional()`, `withDefault()`,
-    `map()`, `object()`, `tuple()`, `merge()`, `concat()`, etc.) forward
-    this parameter through the call chain.  Existing implementations without
-    the parameter continue to work.  [[#750], [#751], [#752], [#756], [#760]]
+ -  Fixed `optional()` and `withDefault()` discarding values from parsers
+    whose useful result is produced during `complete()` rather than
+    `parse()` (e.g., `constant()`, `bindEnv()`, `bindConfig()`).  Wrappers
+    placed under these modifiers in `object()` constructs and at the top
+    level now correctly preserve completed values, and `withDefault()`
+    falls back to its configured default only when the wrapped parser
+    produces no value at all.  [[#233], [#775]]
 
- -  Documented and regression-tested `runWith()` cleanup ordering for async
-    parser completion.  `Symbol.dispose` / `Symbol.asyncDispose` now
-    explicitly guarantee that cleanup begins only after the full `runWith()`
-    promise settles, including later asynchronous `complete()` work.
-    [[#269]]
+ -  Removed the internal `optionalStyleWrapperKey` symbol.  `object()`'s
+    zero-consumption pass no longer needs a magic marker; interactive
+    wrappers like `prompt()` now distinguish completability probes from
+    real completion via `ExecutionContext.phase`.  [[#233], [#775]]
 
- -  Added `createParserContext()` factory function for constructing
-    `ParserContext` from a `ParseFrame` and an `ExecutionContext`.
-    [[#750], [#751], [#752], [#756], [#760]]
+ -  `optional()` and `withDefault()` now propagate annotations from the
+    outer state into the inner parser's initial state.  When the outer
+    state is an annotation wrapper (e.g., from
+    `parse(parser, args, { annotations })`), the inner parser's `parse()`
+    now receives an annotated initial state so that `bindEnv()` /
+    `bindConfig()` wrappers under `optional()` / `withDefault()` can
+    resolve their fallbacks at top level.  [[#233], [#775]]
 
- -  Added generalized APIs to `SourceContext` and `Parser` interfaces so that
-    packages like *@optique/config* and *@optique/inquirer* can integrate with
-    core through public interfaces instead of `Symbol.for()` + `Reflect.get()`
-    duck typing:
+ -  Fixed `optional()`, `withDefault()`, and `group()` dropping the
+    config-prompt deferral hook (`@optique/config/deferPromptUntilResolved`)
+    from inner parsers.  These combinators now forward the hook so that
+    `prompt(optional(bindConfig(...)))` and similar compositions correctly
+    defer interactive prompts until phase-two config resolution.
+    [[#385], [#535]]
 
-     -  `SourceContext.getInternalAnnotations()`: optional method for contexts
-        to inject additional annotations during collection
-     -  `SourceContextRequest`: explicit phase-1 / phase-2 request object for
-        `SourceContext.getAnnotations()` and
-        `SourceContext.getInternalAnnotations()`
-     -  `Parser.shouldDeferCompletion()`: optional method that combinators
-        (`optional()`, `withDefault()`, `group()`) forward from inner parsers
+ -  Fixed `shouldDeferCompletion` forwarding in `optional()` and
+    `withDefault()`: the forwarded hook now unwraps the outer state
+    (`[TState] | undefined`) to the inner `TState` before delegating to
+    the inner parser's hook, and propagates annotations from the outer
+    array to the inner element so annotation-based checks work correctly.
+    [[#590], [#592]]
 
-    This removes core's hidden dependency on *@optique/config* and
-    *@optique/inquirer* implementation details, enabling third-party
-    alternative implementations.  [[#588]]
+ -  Fixed `optional()` and `withDefault()` not propagating annotations from
+    outer state into inner parser elements during `complete()`, which prevented
+    `bindConfig()` from resolving config values through wrapper combinators.
+    [[#385], [#535]]
 
- -  Added `options` parameter to `SourceContext.getAnnotations()`.  Contexts
-    now receive runtime options (e.g., `getConfigPath`, `load`) passed by
-    the runner, enabling config contexts to load files without a separate
-    `runWithConfig()` wrapper.  [[#110]]
+ -  Fixed `optional()` and `withDefault()` still dropping outer annotations
+    for primitive and non-plain object inner states during `complete()` and
+    `shouldDeferCompletion()`. Primitive inner states now use the same
+    internal annotation carrier path as other annotation-enabled flows, and
+    non-plain objects now receive short-lived annotation views that preserve
+    class methods and private fields. This lets annotation-aware parsers and
+    `prompt(optional(...))` / `prompt(withDefault(...))` compositions observe
+    outer annotations consistently across all state shapes. [[#594], [#789]]
 
- -  Renamed `SourceContext._requiredOptions` to `$requiredOptions` to follow
-    the `$` prefix convention used by `ValueParser.$mode`, `Parser.$mode`,
-    etc.  [[#110]]
+ -  Fixed proxy-based sanitization of deferred prompt values breaking class
+    methods that access private fields.  Methods on non-plain objects are now
+    invoked with temporarily sanitized own properties on the original instance,
+    allowing private field access to work correctly through the sanitized
+    view.  [[#307], [#558]]
 
- -  Added optional `Symbol.dispose` and `Symbol.asyncDispose` methods to
-    `SourceContext`.  Contexts that hold resources (e.g., global registries)
-    can now implement `Disposable` / `AsyncDisposable` for automatic cleanup.
-    `runWith()` and `runWithSync()` call dispose on all contexts in a
-    `finally` block.  [[#110]]
+ -  Fixed `map()` applying transforms to deferred prompt placeholders during
+    phase-one parsing.  `map(prompt(bindConfig(…)), fn)` no longer throws
+    before config resolution runs.  [[#296], [#585]]
 
- -  Context-required options passed to `runWith()`, `runWithSync()`, and
-    `runWithAsync()` must now be wrapped in a `contextOptions` property
-    instead of being passed as top-level keys.  This prevents name collisions
-    with runner options such as `args`, `help`, and `colors`.
-    [[#240], [#241], [#575], [#581]]
-
- -  Added `fail<T>()` parser: always fails without consuming input, declared
-    to produce a value of type `T`.  Its primary use is as the inner parser
-    for `bindConfig(fail<T>(), { … })` when a value should come only from a
-    config file and has no corresponding CLI flag.  [[#120]]
+ -  Fixed the public `parse()`, `parseSync()`, `parseAsync()`, `suggest()`,
+    `suggestSync()`, `suggestAsync()`, `getDocPage()`, `getDocPageSync()`, and
+    `getDocPageAsync()` entrypoints treating `annotations: {}` as a
+    state-wrapping operation instead of a no-op.  Previously, passing an
+    empty annotations object caused primitive parser states to be wrapped in
+    an injected annotation wrapper and non-primitive states (plain objects,
+    arrays, `Date`, `Map`, `Set`, `RegExp`, and class instances) to be
+    cloned, so custom parsers could observe a changed state shape or
+    identity even though there was no annotation data to carry.  An
+    annotations record with no own symbol keys now behaves identically to
+    omitting the `annotations` option entirely: `injectAnnotations()`
+    short-circuits, `injectAnnotationsIntoState()` bypasses injection, and
+    the top-level `parseSync()` / `parseAsync()` unwrap step is no longer
+    triggered.  [[#484], [#778]]
 
  -  Fixed `runWith()`, `runWithSync()`, and the higher-level `run()` helpers
     aborting two-phase context collection too early when the first pass had
@@ -267,17 +525,43 @@ To be released.
     validation now also permits user parsers to reuse built-in meta names and
     aliases.  [[#230], [#784]]
 
- -  *Breaking change:* Replaced `SourceContext`'s inferred `mode`
-    contract with an explicit required `phase` field whose value must be
-    `"single-pass"` or `"two-pass"`.  `SourceContextMode`,
-    `SourceContext.mode`, and `isStaticContext()` have been removed.
-    `runWith()`, `runWithSync()`, and higher-level runners now decide
-    whether to perform phase 2 solely from `context.phase`, which fixes
-    contexts that emit non-empty phase-1 annotations and still need
-    phase-2 refinement.  `createEnvContext()` now declares
-    `phase: "single-pass"` and `createConfigContext()` declares
-    `phase: "two-pass"`.  Consumers must migrate custom contexts to this
-    new API contract.  [[#243], [#783]]
+ -  Fixed sync completion paths in `runParser()`, `runParserSync()`, and
+    `runWithSync()` silently returning `Promise` objects when a completion
+    callback (`onShow` or `onError`) returns a `Promise`.  These paths now
+    throw `RunParserError` consistently with the existing sync/async mismatch
+    guard on help and parse-error paths.  [[#264], [#673]]
+
+ -  Fixed `runParserSync()` and `runWithSync()` accepting async parser objects
+    at runtime and returning `Promise`s instead of throwing.  These sync-only
+    APIs now validate `parser.mode` at runtime and throw `TypeError` if the
+    parser is not synchronous.  [[#279], [#676]]
+
+ -  Fixed `runWith()`, `runWithSync()`, and `runWithAsync()` silently accepting
+    multiple source contexts with the same `id`.  Duplicate ids now throw a
+    `TypeError` instead of producing order-dependent results.  [[#495], [#746]]
+
+ -  Fixed `runWith()` and `runWithSync()` discarding the original parse error
+    when a source context's disposal also throws.  The disposal error now
+    wraps both failures in a `SuppressedError` (following TC39 conventions)
+    instead of silently replacing the parse error.  [[#246], [#771]]
+
+ -  Fixed source-context cleanup in `runWith()` and `runWithSync()`.
+    Disposal now continues across all contexts even if an earlier dispose
+    call throws, and `runWithSync()` no longer skips contexts that only
+    implement `Symbol.asyncDispose` when that cleanup completes
+    synchronously.  [[#154]]
+
+ -  Fixed phase-two source-context inputs when later integrations need to
+    inspect parsed values before the final parse completes.  During the
+    second pass of `runWith()` / `runWithSync()`, deferred prompt placeholders
+    are now scrubbed from parsed values before they reach later dynamic
+    contexts, while preserving earlier-context precedence and stable
+    parsed-value identity within the phase-two pass.  [[#177], [#490]]
+
+ -  Fixed `runWith()` and `runWithSync()` skipping context disposal
+    (`Symbol.dispose` / `Symbol.asyncDispose`) on early help, version,
+    and completion exits.  Contexts are now disposed on every exit path,
+    including early meta-command exits.  [[#226], [#733]]
 
  -  Fixed `or()` crashing with an internal `TypeError` when parsing started
     from an annotation-injected initial state.  Exclusive branch selection now
@@ -310,6 +594,27 @@ To be released.
     public `suggest()`, `suggestSync()`, and `suggestAsync()` entrypoints now
     preserve the wrapped parser's completion behavior for bare `multiple(...)`
     roots and forwarding wrappers like `group(multiple(...))`.  [[#189]]
+
+ -  Fixed `optional()` and `withDefault()` crashing when the parser's state
+    is an annotation-injected object instead of `undefined`.  The state
+    discrimination in `modifiers.ts` now uses `Array.isArray(state)` to
+    distinguish the wrapped inner state `[TState]` from the initial state,
+    instead of `typeof state === "undefined"`.  This allows annotation
+    injection to work correctly for parsers with `undefined` initial states
+    (e.g., `fail()` used with `bindConfig()`), which was broken by the
+    earlier 0.10.6 fix that skipped injection entirely.  [[#131]]
+
+ -  Fixed annotation injection for parsers with primitive initial states.
+    Annotations are now preserved without corrupting the parser result value
+    (e.g., `constant("ok")` remains `"ok"` instead of becoming an
+    annotation object).  This affects annotation-enabled parse/run paths,
+    including `runWith()` and `runWithSync()`.  [[#146]]
+
+ -  Fixed duplicate option-name validation to include `hidden: true`
+    options in `object()`, `tuple()`, `merge()`, and wrapped `group()`
+    parsers. Hidden options still consume CLI syntax, so hidden-visible
+    and hidden-hidden collisions now throw `DuplicateOptionError` during
+    parser construction by default. [[#510], [#788]]
 
  -  Expanded `or()`'s fully inferred overloads from 10 to 15 parser
     arguments, so large alternative sets keep precise union inference without
@@ -367,79 +672,29 @@ To be released.
     whitespace-only strings, strings with embedded whitespace, and strings
     with control characters.  [[#401], [#732]]
 
- -  Added meta name collision detection to `runParser()`.  The runner
-    rejects collisions among built-in meta features (help, version,
-    completion), including option aliases that shadow completion's
-    `name=value` prefix form.  User-defined parser names are no longer
-    rejected here; runner meta handling is now parser-aware, so ordinary
-    parser data may reuse built-in meta names and aliases when the parser
-    consumes them first.  [[#227], [#736], [#230], [#784]]
+ -  Added construction-time validation for labels in `object()`, `tuple()`,
+    `merge()`, and `group()`.  Labels that are empty, whitespace-only, or
+    contain control characters now throw `TypeError` immediately instead of
+    producing broken help output.  [[#404], [#737]]
 
- -  Added `leadingNames` and `acceptingAnyToken` properties to the `Parser`
-    interface.  Each combinator now reports which leading tokens (option
-    names, command names, and literal values) it could match at the first
-    buffer position, computed
-    from its structural semantics rather than the display-oriented `usage`
-    tree.  Shared-buffer compositions (`tuple()`, `object()`, `merge()`,
-    `concat()`) use priority ordering and `acceptingAnyToken` to exclude
-    names that are unreachable behind a catch-all parser like `argument()`.
-    `conditional()` with a default branch now includes the default branch's
-    leading names.  This replaces the usage-tree-based
-    `extractLeadingOptionNames()`, `extractLeadingCommandNames()`, and
-    `extractLeadingLiteralValues()`, which produced incorrect results for
-    `tuple()` (priority-based sorting), `command()` (inner usage
-    spreading), and `conditional()` (missing literal terms for argument
-    discriminators).  [[#735], [#741]]
+ -  `runParser()` and `defineProgram()` now validate program names up front,
+    rejecting empty strings, strings with control characters, and non-string
+    values with a `TypeError`.  Previously, invalid names were only caught
+    during help/error output formatting.  [[#428], [#743]]
 
- -  Simplified `UserParserNames` interface: replaced `leadingOptions`,
-    `leadingCommands`, and `leadingLiterals` with a single `leadingNames`
-    set.  [[#735], [#741]]
+ -  Fixed duplicate detection for equals-joined option syntax in `option()`
+    when the value parser produces deferred or dependency-source state
+    (for example, `DerivedValueParser` or `DependencySource`).  Repeated
+    `--option=value` inputs now report a duplicate-option error instead of
+    silently overwriting the earlier value.  [[#149]]
 
- -  Added `extractLiteralValues()` to *@optique/core/usage*.
-    `extractOptionNames()` and `extractCommandNames()` now accept an
-    optional `includeHidden` parameter for callers that need `hidden: true`
-    terms included in the result.  [[#227], [#736]]
+ -  Fixed `option()` missing-value errors to show the option's metavar
+    (e.g., `--author` requires `AUTHOR`) instead of a generic “requires a
+    value” message.  The same path now also honors `errors.endOfInput`
+    customization when the option name was present but its value token was
+    missing.
 
- -  Added optional `optionValue` property to the `literal` variant of
-    `UsageTerm`.  When `true`, the literal was derived from an option's
-    metavar by `conditional()` and represents an option value rather than
-    a standalone positional token.  [[#734], [#738]]
-
- -  *Breaking change:* Added `placeholder` property to `ValueParser` interface
-    (required) and `Parser` interface (optional).  Every value parser now
-    provides a type-appropriate stand-in value (e.g., `""` for `string()`, `1`
-    for `port()`) used during deferred prompt resolution.  `option()` and
-    `argument()` set `Parser.placeholder` from the value parser, and
-    combinators like `map()`, `optional()`, and `withDefault()` propagate it
-    through the parser chain.  [[#407], [#727]]
-
- -  Added optional `placeholder` override to `string()`, `integer()`,
-    `float()`, and `port()` options.  This allows customizing the stand-in
-    value when downstream `map()` transforms or constraints require a
-    specific value.  `integer()` and `float()` automatically derive
-    placeholders from `min`/`max` constraints; `port()` defaults to `min`
-    (which itself defaults to `1`).  [[#407], [#727]]
-
- -  Replaced the `DeferredPromptValue` sentinel with type-appropriate
-    placeholder values during two-phase parsing.  `prompt()` now uses
-    `Parser.placeholder` instead of a branded sentinel when deferring,
-    so `map()` transforms always receive valid values and two-pass contexts
-    observe structurally valid objects.  Note that `map()` intentionally
-    does not propagate `deferredKeys`, so mapped structured outputs may
-    still carry placeholder values for deferred fields.  This removes the
-    entire
-    sanitization machinery (~1000 lines of proxy-based stripping code)
-    from *@optique/core* and *@optique/config*.  [[#307], [#407], [#727]]
-
- -  *Breaking change:* Removed `placeholder` symbol and `isPlaceholderValue()` from
-    `@optique/core/context`.  These were part of the sentinel-based
-    deferred prompt mechanism that has been replaced by the
-    `ValueParser.placeholder` approach.  [[#407], [#727]]
-
- -  Changed `formatMessage()` to render double newlines (`\n\n`) in `text()`
-    terms as double newlines in the output, instead of collapsing them to
-    a single newline.  This makes paragraph breaks visually distinct from
-    explicit `lineBreak()` terms, which render as a single newline.
+#### Help, documentation, and completion
 
  -  Changed the default section ordering in help output to use a smart
     type-aware sort: sections containing only commands appear first, followed
@@ -467,6 +722,11 @@ To be released.
     This allows compact command help output such as
     `Usage: myapp config ...` without changing parse behavior or
     completion behavior.  [[#139]]
+
+ -  Changed `formatMessage()` to render double newlines (`\n\n`) in `text()`
+    terms as double newlines in the output, instead of collapsing them to
+    a single newline.  This makes paragraph breaks visually distinct from
+    explicit `lineBreak()` terms, which render as a single newline.
 
  -  Fixed `formatDocPage()` rendering empty `Message` arrays as blank sections
     and stray whitespace.  Empty `brief`, `description`, `examples`, `author`,
@@ -517,59 +777,293 @@ To be released.
  -  Fixed `or()` and `longestMatch()` duplicating visible terms in
     documentation when branches share the same surface syntax.  [[#432], [#698]]
 
- -  Fixed sync completion paths in `runParser()`, `runParserSync()`, and
-    `runWithSync()` silently returning `Promise` objects when a completion
-    callback (`onShow` or `onError`) returns a `Promise`.  These paths now
-    throw `RunParserError` consistently with the existing sync/async mismatch
-    guard on help and parse-error paths.  [[#264], [#673]]
+ -  `formatDocPage()` now throws `TypeError` when `programName` contains
+    a CR or LF character, or when a section title is empty, whitespace-only,
+    or contains a CR or LF character.  [[#429], [#479], [#580]]
 
- -  Fixed `runParserSync()` and `runWithSync()` accepting async parser objects
-    at runtime and returning `Promise`s instead of throwing.  These sync-only
-    APIs now validate `parser.mode` at runtime and throw `TypeError` if the
-    parser is not synchronous.  [[#279], [#676]]
+ -  Fixed `formatDocPage()` ignoring small `maxWidth` values.  When `maxWidth`
+    was smaller than the layout budget (`termIndent + termWidth + 2`), the
+    formatter produced lines far wider than requested.  The term column now
+    dynamically shrinks to share the available width with the description
+    column.  [[#513], [#669]]
 
- -  Fixed `runWith()`, `runWithSync()`, and `runWithAsync()` silently accepting
-    multiple source contexts with the same `id`.  Duplicate ids now throw a
-    `TypeError` instead of producing order-dependent results.  [[#495], [#746]]
+ -  Fixed `formatDocPage()` fixed-prefix sections exceeding `maxWidth`.
+    The `Usage:` label, `Examples:`/`Author:`/`Bugs:` section labels, and
+    `showDefault`/`showChoices` description prefixes were not covered by
+    the minimum `maxWidth` validation, allowing the formatter to silently
+    emit lines wider than requested.  `formatDocPage()` now raises the
+    minimum `maxWidth` to account for all fixed-width labels actually in
+    use.  [[#672], [#677]]
 
- -  Fixed `runWith()` and `runWithSync()` discarding the original parse error
-    when a source context's disposal also throws.  The disposal error now
-    wraps both failures in a `SuppressedError` (following TC39 conventions)
-    instead of silently replacing the parse error.  [[#246], [#771]]
+ -  Fixed `formatDocPage()` rendering blank or malformed rows for degenerate
+    entry terms (e.g., option with empty names, empty command/argument/literal,
+    empty exclusive branches) and hidden entries in custom `DocPage` input.
+    Such entries are now silently skipped.  [[#488], [#687]]
 
- -  Fixed constructs dropping values from parsers that only produce results
-    in `complete()`.  `object()` now runs a zero-consumption pass after its
-    greedy loop so that purely non-interactive child parsers (e.g.,
-    `multiple(constant(...))`) can update their state even when they return
-    `consumed: []`.  `or()` now accepts a unique non-consuming,
-    non-interactive branch as a fallback when no branch consumed input
-    and the buffer is empty.  `conditional()` defers
-    zero-consuming discriminators to `complete()` in async mode, and
-    resolves them during `parse()` in sync mode.  [[#232], [#773]]
+ -  Fixed `formatDocPage()` using the wrong hidden visibility check: it applied
+    usage-level filtering (`isUsageHidden()`) instead of doc-level filtering
+    (`isDocHidden()`).  As a result, `hidden: "doc"` terms leaked into doc
+    output, while `hidden: "usage"` terms were incorrectly omitted.
+    [[#488], [#687]]
 
- -  `conditional()` now speculatively parses named branches when the
-    discriminator is an async parser that succeeds without consuming input
-    (e.g., `prompt(option(...))`).  If exactly one branch can consume tokens,
-    it is tentatively selected during parse and verified against the resolved
-    discriminator during the complete phase.  This fixes the “Unexpected
-    option or argument” error that occurred when branch-specific tokens were
-    present but the discriminator was deferred to the complete phase.
-    [[#772], [#774]]
+ -  Added `context` option to `UsageTermFormatOptions` for `formatUsageTerm()`.
+    Set `context: "doc"` to apply doc-level hidden filtering instead of the
+    default usage-level filtering.  [[#488], [#687]]
 
- -  Fixed `optional()` and `withDefault()` crashing when the parser's state
-    is an annotation-injected object instead of `undefined`.  The state
-    discrimination in `modifiers.ts` now uses `Array.isArray(state)` to
-    distinguish the wrapped inner state `[TState]` from the initial state,
-    instead of `typeof state === "undefined"`.  This allows annotation
-    injection to work correctly for parsers with `undefined` initial states
-    (e.g., `fail()` used with `bindConfig()`), which was broken by the
-    earlier 0.10.6 fix that skipped injection entirely.  [[#131]]
+ -  Fixed `formatDocPage()` rendering empty `choices` and `default` messages
+    as malformed suffixes (e.g., `(choices: )`, `[]`) when the `Message`
+    array was empty.  Empty arrays are now treated as absent.  [[#469], [#692]]
 
- -  Fixed annotation injection for parsers with primitive initial states.
-    Annotations are now preserved without corrupting the parser result value
-    (e.g., `constant("ok")` remains `"ok"` instead of becoming an
-    annotation object).  This affects annotation-enabled parse/run paths,
-    including `runWith()` and `runWithSync()`.  [[#146]]
+ -  Fixed `formatDocPage()` producing malformed output `(choices: , ...)`
+    when `showChoices.maxItems` is `0`.  `maxItems` must now be at least `1`;
+    values below `1` throw a `RangeError`.  [[#471], [#694]]
+
+ -  Fixed `deduplicateSuggestions()` silently dropping `includeHidden: true`
+    when merging file suggestions that differ only in `includeHidden`.
+    Duplicates are now merged with `includeHidden: true` preferred, since
+    it is a superset of the non-hidden variant.  [[#518], [#693]]
+
+ -  Fixed `deduplicateSuggestions()` treating file suggestions with the same
+    `extensions` in different order as distinct.  Extensions are now compared
+    as a set, so `[".json", ".yaml"]` and `[".yaml", ".json"]` correctly
+    deduplicate to one suggestion.  [[#519], [#695]]
+
+ -  Fixed `getDocPage()` exposing parser-owned usage terms and doc fragments
+    by reference.  Mutating the returned `DocPage` or the `defaultUsageLine`
+    argument in a command's `usageLine` callback no longer corrupts the
+    parser definition.  [[#500], [#697]]
+
+ -  Added deep-clone utilities for parser structures:
+
+     -  `cloneUsageTerm()` and `cloneUsage()` in `@optique/core/usage`
+     -  `cloneDocEntry()` in `@optique/core/doc`
+     -  `cloneMessageTerm()` and `cloneMessage()` in `@optique/core/message`
+
+    These are used internally by `getDocPage()` to isolate returned
+    documentation pages from parser-owned state, and are also available
+    as public APIs for consumers who need to deep-copy these structures.
+    [[#500], [#697]]
+
+ -  Fixed `normalizeUsage()` to strip degenerate usage terms instead of
+    preserving them unchanged.  Empty-named options, empty-named commands,
+    empty-metavar arguments, and container terms (`optional`, `multiple`,
+    `exclusive`) whose terms array is empty after recursive normalization
+    are now removed.  Exclusive branches representing valid zero-token
+    alternatives and empty-value literals are preserved; branches that
+    become empty because all their content was malformed are removed.
+    [[#485], [#716]]
+
+ -  Fixed `message()` tagged template reusing interpolated `MessageTerm`
+    objects and `Message` arrays by reference, allowing mutation of the
+    returned message to corrupt the original interpolated values.
+    Interpolated terms are now deep-cloned via `cloneMessageTerm()`.
+    [[#505], [#718]]
+
+ -  Fixed `optionNames()`, `values()`, and `url()` message term constructors
+    storing caller-owned arrays and `URL` objects by reference, allowing
+    later caller-side mutations to corrupt already-created terms.
+    These constructors now defensively copy their inputs.  [[#506], [#719]]
+
+ -  Fixed `getDocPage()`/`getDocPageSync()`/`getDocPageAsync()` losing
+    inner option/argument documentation when called on a top-level `command()`
+    parser with no arguments.  [[#200], [#595]]
+
+ -  Fixed `withDefault().getDocFragments()` crashing when a function-based
+    default throws during help generation.  Help output now skips evaluating
+    doc-only defaults when a custom `message` is provided, and otherwise
+    omits the default display instead of throwing.  [[#150]]
+
+ -  Fixed nested `optional()` wrappers rendering double brackets (`[[...]]`)
+    in help usage output.  Parsers like `optional(optional(option(...)))` and
+    `withDefault(optional(option(...)), ...)` now correctly display single
+    brackets (`[...]`).  [[#290], [#745]]
+
+ -  Fixed `hidden: true` commands and options leaking through “Did you
+    mean?” typo suggestions.  Fully hidden terms are now excluded from
+    typo-suggestion candidates.  [[#516], [#690]]
+
+ -  Fixed `findSimilar()` preserving duplicate candidates, which could
+    generate duplicated “Did you mean?” suggestion entries.  [[#517], [#729]]
+
+ -  Extended `hidden` visibility controls from `boolean` to
+    `boolean | "usage" | "doc" | "help"` across primitive parsers:
+    `option()`, `flag()`, `argument()`, `command()`, and `passThrough()`.
+    `group()`, `object()`, and `merge()` now also support `hidden` with the
+    same values, and wrapper/parser `hidden` values are combined as a union.
+    `hidden: true` keeps the existing behavior (hidden from usage, docs,
+    and suggestions).  `"usage"` and `"doc"` allow partial hiding, and
+    `"help"` hides terms from usage and help listings while keeping them in
+    shell completions and suggestion candidates.  [[#113], [#141]]
+
+ -  Fixed option-value completion in `option()` so value-position suggestions
+    no longer leak option-name candidates when the value prefix starts with
+    `-` (for example, after `--mode --`).  This restores monotonic
+    prefix-filtering behavior for value suggestions and aligns with parse
+    context (option name consumed ⇒ value expected).
+
+ -  Tightened program name validation for shell completion to require names
+    to start with an alphanumeric character or underscore, rejecting names
+    like `-` or `.`.  Previously, running from stdin (`node -`, `deno eval`)
+    could infer `-` as the program name, producing broken completion
+    scripts.  [[#235], [#568]]
+
+ -  Fixed PowerShell file completion stripping directory prefixes from nested
+    path suggestions.  Completing `src/` now returns `src/alpha.txt` instead
+    of bare `alpha.txt`.  [[#253], [#632]]
+
+ -  Fixed Nushell file completion returning an empty list for non-empty path
+    prefixes.  Completing `src/` now correctly returns files under that
+    directory.  [[#254], [#636]]
+
+ -  Fixed zsh file completion passing literal `$ext_pattern` to `_files`
+    instead of expanding the variable, so extension filtering (e.g.,
+    `*.json`, `*.yaml`) now works correctly.  [[#256], [#639]]
+
+ -  Fixed `encodeSuggestions()` for zsh, fish, Nushell, and PowerShell not
+    escaping tabs and newlines in completion descriptions.  Descriptions
+    containing `lineBreak()` terms or tab characters now have those
+    characters replaced with spaces so the shell completion protocol is not
+    corrupted.  [[#247], [#642]]
+
+ -  Fixed shell completion for file-only `Suggestion.file` entries (`type: "file"`)
+    excluding directories entirely, which prevented users from descending into
+    subdirectories during path completion.  All five shell backends (Bash, zsh,
+    fish, Nushell, PowerShell) now include directories as navigation targets
+    alongside files.  [[#294], [#646]]
+
+ -  Fixed `encodeSuggestions()` not stripping leading dots from
+    `Suggestion.extensions`, which caused extension filtering to silently
+    fail in all five shell backends.  Extensions like `[".ts", ".json"]`
+    (as produced by `path()`) are now normalized to `["ts", "json"]` before
+    encoding.  [[#647], [#650]]
+
+ -  Fixed generated shell completion scripts not stripping leading dots from
+    extension filters, so that dot-prefixed extensions (e.g., `.json`) in the
+    transport protocol are handled correctly in Bash, fish, Nushell, and
+    PowerShell.  Also fixed a `Split-Path` error in PowerShell that caused
+    extension filtering to silently fail when the completion prefix was empty,
+    and rewrote the PowerShell extension matching to use the `-in` operator
+    instead of nested `ForEach-Object` pipelines.  [[#255], [#660]]
+
+ -  Fixed shell completion scripts ignoring `Suggestion.file.pattern`, which
+    caused file completions to enumerate the current directory instead of the
+    pattern-specified path.  All five shell backends (Bash, zsh, fish, Nushell,
+    PowerShell) now use the transported pattern as the glob base when it is
+    non-empty.  [[#251], [#656]]
+
+ -  Fixed `__FILE__` completion transport unable to represent `pattern` values
+    containing `:` (e.g., Windows drive-letter prefixes like `C:/...`).
+    Colons in the pattern field are now percent-encoded (`%3A`) so that the
+    colon-delimited field boundaries stay intact.  Users must regenerate or
+    re-source their shell completion script after upgrading for this fix to
+    take effect.  [[#252], [#616]]
+
+ -  Fixed Bash completion scripts using `compgen -z` which is unsupported on
+    macOS's default GNU Bash 3.2.  File and directory completions now use
+    glob-based iteration instead, matching the pattern already used for
+    extension-filtered completions.  [[#250], [#608]]
+
+ -  Fixed fish, Nushell, and PowerShell completion scripts ignoring
+    `includeHidden: true` for file suggestions.  The shell-side `__FILE__`
+    parsers now strip tab-delimited metadata before splitting by colon,
+    so the `hidden` field is compared correctly.  Users must regenerate or
+    re-source their shell completion script after upgrading for this fix to
+    take effect.  [[#618], [#619]]
+
+ -  Fixed fish, Nushell, and PowerShell completions not enumerating hidden
+    (dot-prefixed) files even when `includeHidden` is `true`.  The parsed
+    `hidden` flag only controlled the post-enumeration filter, but each
+    shell's native file listing command excluded hidden files by default.
+    Fish now additionally globs `$current.*`, Nushell uses `ls -a`, and
+    PowerShell passes `-Force` to `Get-ChildItem` when hidden files are
+    requested.  [[#623], [#624]]
+
+ -  Fixed zsh completion not including hidden (dot-prefixed) files when
+    `includeHidden` is `true`.  The zsh backend now temporarily enables
+    `glob_dots` before calling `_files` or `_directories` when hidden
+    files are requested.  [[#262], [#641]]
+
+ -  Fixed shell completion transports emitting raw tabs and newlines in
+    literal suggestion text, which corrupted shell-specific transport
+    framing.  Control characters in `Suggestion.text` are now replaced
+    with spaces, matching the existing description sanitization.
+    [[#337], [#663]]
+
+ -  Fixed `runParser()` missing-shell help for `--completion` rendering
+    in command form (`myapp completion [SHELL] [ARG...]`) instead of
+    option form.  When the user invokes `--completion` without a shell name,
+    the error message now shows option-form usage and respects custom option
+    names (e.g., `--completions`).  Previously, option-only mode showed no
+    follow-up help at all, and both-mode showed only the command form.
+    [[#275], [#668]]
+
+ -  Clarified that the `--completion` early-return scanner intentionally uses
+    first-match semantics: the first `--completion` is the meta option and
+    all subsequent arguments (including tokens that look like `--completion`)
+    are treated as opaque completion payload.  Added tests to document this
+    behavior.  [[#364], [#670]]
+
+ -  Fixed async `runParser()` help handling for `command --help` validation.
+    In the async validation path, `displayHelp` was referenced before
+    initialization, which could throw `ReferenceError` instead of showing help.
+    `displayHelp` is now defined before async validation is invoked.
+
+ -  Fixed `runParser()` duck-typing meta-command results based on field names
+    like `help` and `version`.  Internal meta results are now branded with a
+    private symbol, so custom parsers can safely return user data objects with
+    overlapping field names without being misclassified.  [[#152]]
+
+ -  Fixed `runParser()` swallowing legitimate callback exceptions from
+    `onError`, `help.onShow`, `version.onShow`, and `completion.onShow`
+    while trying to detect zero-argument handlers.  These callbacks now
+    always receive the numeric exit code, and any real exception they throw
+    is propagated unchanged.  [[#153]]
+
+ -  Fixed help output incorrectly interleaving meta items (`help`, `--help`,
+    `--version`) with user-defined commands when using `group: "…"` to
+    assign meta items to a named section that already exists in user-defined
+    parsers.  Same-named sections from different parsers are now merged into
+    a single section.  Additionally, when meta items are ungrouped and the
+    user's commands are in a titled section, the meta items now appear
+    *after* the user's section rather than before it.  [[#138]]
+
+ -  Added meta name collision detection to `runParser()`.  The runner
+    rejects collisions among built-in meta features (help, version,
+    completion), including option aliases that shadow completion's
+    `name=value` prefix form.  User-defined parser names are no longer
+    rejected here; runner meta handling is now parser-aware, so ordinary
+    parser data may reuse built-in meta names and aliases when the parser
+    consumes them first.  [[#227], [#736], [#230], [#784]]
+
+ -  `runParser()` now validates version values at runtime — empty strings,
+    strings containing control characters, and non-string values are rejected
+    with `TypeError`.  [[#439], [#645]]
+
+ -  `runParser()` now validates meta command and option names (for help,
+    version, and completion) eagerly at startup.  Empty arrays, empty
+    strings, whitespace-only names, and names containing whitespace or
+    control characters are rejected with `TypeError`.  Option names without
+    a valid prefix (`--`, `-`, `/`, or `+`) are also rejected.
+    [[#425], [#648]]
+
+ -  Fixed `--completion` option (and `--help`/`--version`) being recognized
+    after the `--` options terminator in `runParser()`, `runWith()`, and
+    `runWithSync()`.  Tokens after `--` are now correctly treated as positional
+    data and no longer trigger meta-option early-exit paths.  [[#228], [#686]]
+
+ -  Fixed `--completion` option bypassing `--help`/`--version` precedence in
+    `runParser()`.  When `--help` or `--version` appears *before* the
+    `--completion` option (e.g., `--help --completion bash`), the help or
+    version path now correctly takes precedence.  Tokens *after* `--completion`
+    remain opaque completion payload and are not re-interpreted as meta flags.
+    [[#229], [#689]]
+
+ -  Fixed `runParser()` crashing or showing help instead of handling completion
+    when help-option names (e.g., `--help`) appear inside completion payloads.
+    Help-option scanning now only checks the argument immediately after the
+    completion command name, not the entire `args` array.  [[#300], [#599]]
+
+#### Value parser and validation fixes
 
  -  Fixed `ip()` and `cidr()` with `version: "both"` allowing IPv4-mapped
     IPv6 addresses (e.g., `::ffff:192.168.0.1`) to bypass IPv4 restrictions
@@ -659,77 +1153,11 @@ To be released.
     `cidr()` value parsers to return the serialized value instead of the
     metavar placeholder (e.g., `"MAC"`, `"DOMAIN"`).  [[#318], [#742]]
 
- -  Added `ValueParser.normalize()` optional method for canonicalizing
-    values of type `T` (e.g., MAC address case/separator normalization,
-    domain lowercasing).  Built-in implementations delegate to `parse()`
-    internally, returning invalid values unchanged.  [[#318], [#742]]
-
- -  Added `Parser.normalizeValue()` optional method.  Primitive parsers
-    (`option()`, `argument()`) implement this by delegating to
-    `ValueParser.normalize()`.  Value-preserving combinator wrappers
-    (including `optional()`, `withDefault()`, `nonEmpty()`, `group()`,
-    `command()`, `multiple()`, `object()`, `tuple()`) forward it from
-    inner parsers.  [[#318], [#742]]
-
- -  `withDefault()` now normalizes default values through the inner
-    parser's `normalizeValue()` when available, so runtime defaults
-    match the representation that `parse()` would produce.  Exclusive
-    combinators (`or()`, `longestMatch()`) and multi-source combinators
-    (`merge()`) do not forward normalization because the active branch
-    or key ownership is unknown at default time.  [[#318], [#742]]
-
  -  Fixed `url()` parser's `suggest()` emitting `://` for non-hierarchical URL
     schemes like `mailto:` and `urn:`.  Suggestions now use `:` for
     non-hierarchical schemes and `://` only for special schemes (`http`,
     `https`, `ftp`, `ws`, `wss`, `file`) as defined by the WHATWG URL Standard.
     [[#342], [#678]]
-
- -  Fixed `hidden: true` commands and options leaking through “Did you
-    mean?” typo suggestions.  Fully hidden terms are now excluded from
-    typo-suggestion candidates.  [[#516], [#690]]
-
- -  Fixed `findSimilar()` preserving duplicate candidates, which could
-    generate duplicated “Did you mean?” suggestion entries.  [[#517], [#729]]
-
- -  Extended `hidden` visibility controls from `boolean` to
-    `boolean | "usage" | "doc" | "help"` across primitive parsers:
-    `option()`, `flag()`, `argument()`, `command()`, and `passThrough()`.
-    `group()`, `object()`, and `merge()` now also support `hidden` with the
-    same values, and wrapper/parser `hidden` values are combined as a union.
-    `hidden: true` keeps the existing behavior (hidden from usage, docs,
-    and suggestions).  `"usage"` and `"doc"` allow partial hiding, and
-    `"help"` hides terms from usage and help listings while keeping them in
-    shell completions and suggestion candidates.  [[#113], [#141]]
-
- -  Redesigned meta command configuration (help, version, completion) in
-    `RunOptions` to use independent `command`/`option` sub-configs instead
-    of `mode: "command" | "option" | "both"`.  Each meta command now accepts
-    `{ command?: true | CommandSubConfig; option?: true | OptionSubConfig }`
-    where at least one must be specified (enforced at the type level).
-    `CommandSubConfig` supports `names` (first = display name, rest = hidden
-    aliases via `longestMatch()`), `group`, and `hidden`.  `OptionSubConfig`
-    supports `names` (all shown in help), `group`, and `hidden`.  This is
-    a breaking change.  [[#130]]
-
- -  Removed `CompletionName`, `CompletionHelpVisibility`, `CompletionConfig`,
-    `CompletionConfigBoth`, `CompletionConfigSingular`, and
-    `CompletionConfigPlural` types.  Completion naming is now controlled via
-    `CommandSubConfig.names` and `OptionSubConfig.names`.  [[#130]]
-
- -  Added support for equals-joined values on single-dash multi-character
-    options in `option()` (e.g., `-seed=42`, `-max_len=1000`), in addition to
-    existing `--option=value` and `/option:value` formats.  Single-character
-    short options (e.g., `-v`) remain excluded from this joined form to avoid
-    conflicts with short-option clustering.  `flag()` now also rejects this
-    joined form consistently for Boolean flags.  [[#134] by Maxwell Koo]
-
- -  Added `SourceContextMode` type (`"static" | "dynamic"`) and optional
-    `mode` field to `SourceContext`.  When set, `isStaticContext()` reads this
-    field directly instead of calling `getAnnotations()`, preventing any side
-    effects that `getAnnotations()` might have (such as mutating a global
-    registry).  `createEnvContext()` sets `mode: "static"`;
-    `createConfigContext()` sets `mode: "dynamic"`.  Existing custom contexts
-    that omit the field are unaffected.
 
  -  Fixed `string({ pattern })` to avoid stateful `RegExp` behavior leaking
     across parse calls when the pattern uses `g` or `y` flags.  The parser now
@@ -740,174 +1168,6 @@ To be released.
     at construction time.  Previously, a non-`RegExp` value reaching the
     parser through an untyped path would silently produce an always-matching
     regular expression; it now throws a `TypeError`.  [[#388], [#512]]
-
- -  Fixed option-value completion in `option()` so value-position suggestions
-    no longer leak option-name candidates when the value prefix starts with
-    `-` (for example, after `--mode --`).  This restores monotonic
-    prefix-filtering behavior for value suggestions and aligns with parse
-    context (option name consumed ⇒ value expected).
-
- -  Tightened program name validation for shell completion to require names
-    to start with an alphanumeric character or underscore, rejecting names
-    like `-` or `.`.  Previously, running from stdin (`node -`, `deno eval`)
-    could infer `-` as the program name, producing broken completion
-    scripts.  [[#235], [#568]]
-
- -  Fixed PowerShell file completion stripping directory prefixes from nested
-    path suggestions.  Completing `src/` now returns `src/alpha.txt` instead
-    of bare `alpha.txt`.  [[#253], [#632]]
-
- -  Fixed Nushell file completion returning an empty list for non-empty path
-    prefixes.  Completing `src/` now correctly returns files under that
-    directory.  [[#254], [#636]]
-
- -  Fixed zsh file completion passing literal `$ext_pattern` to `_files`
-    instead of expanding the variable, so extension filtering (e.g.,
-    `*.json`, `*.yaml`) now works correctly.  [[#256], [#639]]
-
- -  Fixed `encodeSuggestions()` for zsh, fish, Nushell, and PowerShell not
-    escaping tabs and newlines in completion descriptions.  Descriptions
-    containing `lineBreak()` terms or tab characters now have those
-    characters replaced with spaces so the shell completion protocol is not
-    corrupted.  [[#247], [#642]]
-
- -  Fixed shell completion for file-only `Suggestion.file` entries (`type: "file"`)
-    excluding directories entirely, which prevented users from descending into
-    subdirectories during path completion.  All five shell backends (Bash, zsh,
-    fish, Nushell, PowerShell) now include directories as navigation targets
-    alongside files.  [[#294], [#646]]
-
- -  Fixed `encodeSuggestions()` not stripping leading dots from
-    `Suggestion.extensions`, which caused extension filtering to silently
-    fail in all five shell backends.  Extensions like `[".ts", ".json"]`
-    (as produced by `path()`) are now normalized to `["ts", "json"]` before
-    encoding.  [[#647], [#650]]
-
- -  Fixed generated shell completion scripts not stripping leading dots from
-    extension filters, so that dot-prefixed extensions (e.g., `.json`) in the
-    transport protocol are handled correctly in Bash, fish, Nushell, and
-    PowerShell.  Also fixed a `Split-Path` error in PowerShell that caused
-    extension filtering to silently fail when the completion prefix was empty,
-    and rewrote the PowerShell extension matching to use the `-in` operator
-    instead of nested `ForEach-Object` pipelines.  [[#255], [#660]]
-
- -  Fixed shell completion scripts ignoring `Suggestion.file.pattern`, which
-    caused file completions to enumerate the current directory instead of the
-    pattern-specified path.  All five shell backends (Bash, zsh, fish, Nushell,
-    PowerShell) now use the transported pattern as the glob base when it is
-    non-empty.  [[#251], [#656]]
-
- -  Fixed `runParser()` missing-shell help for `--completion` rendering
-    in command form (`myapp completion [SHELL] [ARG...]`) instead of
-    option form.  When the user invokes `--completion` without a shell name,
-    the error message now shows option-form usage and respects custom option
-    names (e.g., `--completions`).  Previously, option-only mode showed no
-    follow-up help at all, and both-mode showed only the command form.
-    [[#275], [#668]]
-
- -  Clarified that the `--completion` early-return scanner intentionally uses
-    first-match semantics: the first `--completion` is the meta option and
-    all subsequent arguments (including tokens that look like `--completion`)
-    are treated as opaque completion payload.  Added tests to document this
-    behavior.  [[#364], [#670]]
-
- -  Fixed duplicate detection for equals-joined option syntax in `option()`
-    when the value parser produces deferred or dependency-source state
-    (for example, `DerivedValueParser` or `DependencySource`).  Repeated
-    `--option=value` inputs now report a duplicate-option error instead of
-    silently overwriting the earlier value.  [[#149]]
-
- -  Fixed `withDefault().getDocFragments()` crashing when a function-based
-    default throws during help generation.  Help output now skips evaluating
-    doc-only defaults when a custom `message` is provided, and otherwise
-    omits the default display instead of throwing.  [[#150]]
-
- -  Fixed async `runParser()` help handling for `command --help` validation.
-    In the async validation path, `displayHelp` was referenced before
-    initialization, which could throw `ReferenceError` instead of showing help.
-    `displayHelp` is now defined before async validation is invoked.
-
- -  Fixed `runParser()` duck-typing meta-command results based on field names
-    like `help` and `version`.  Internal meta results are now branded with a
-    private symbol, so custom parsers can safely return user data objects with
-    overlapping field names without being misclassified.  [[#152]]
-
- -  Fixed `runParser()` swallowing legitimate callback exceptions from
-    `onError`, `help.onShow`, `version.onShow`, and `completion.onShow`
-    while trying to detect zero-argument handlers.  These callbacks now
-    always receive the numeric exit code, and any real exception they throw
-    is propagated unchanged.  [[#153]]
-
- -  Fixed source-context cleanup in `runWith()` and `runWithSync()`.
-    Disposal now continues across all contexts even if an earlier dispose
-    call throws, and `runWithSync()` no longer skips contexts that only
-    implement `Symbol.asyncDispose` when that cleanup completes
-    synchronously.  [[#154]]
-
- -  Fixed phase-two source-context inputs when later integrations need to
-    inspect parsed values before the final parse completes.  During the
-    second pass of `runWith()` / `runWithSync()`, deferred prompt placeholders
-    are now scrubbed from parsed values before they reach later dynamic
-    contexts, while preserving earlier-context precedence and stable
-    parsed-value identity within the phase-two pass.  [[#177], [#490]]
-
- -  Fixed help output incorrectly interleaving meta items (`help`, `--help`,
-    `--version`) with user-defined commands when using `group: "…"` to
-    assign meta items to a named section that already exists in user-defined
-    parsers.  Same-named sections from different parsers are now merged into
-    a single section.  Additionally, when meta items are ungrouped and the
-    user's commands are in a titled section, the meta items now appear
-    *after* the user's section rather than before it.  [[#138]]
-
- -  Fixed `merge()` and `concat()` dropping dependency-aware suggestions when
-    the dependency source and derived parser live in different sub-parsers.
-    The `suggest()` methods now build a `DependencyRegistry` from the full
-    composed state before delegating to child parsers, matching the behavior
-    that `object()` already had.  [[#178], [#520]]
-
- -  Fixed `merge()` not pre-completing `bindEnv()`/`bindConfig()`-backed
-    dependency sources for cross-parser resolution.  When a dependency source
-    wrapped with `bindEnv()` or `bindConfig()` lived in one child parser of
-    `merge()`, derived parsers in a different child parser could not see the
-    resolved value.  The fix pre-completes dependency source fields from child
-    parsers before resolving deferred states, and preserves annotations when
-    extracting child parser states during completion.  [[#681], [#684]]
-
- -  Fixed dependency-aware completion ignoring `withDefault()` source values.
-    When a dependency source was wrapped with `withDefault()` and no explicit
-    CLI value was provided, `suggest()` returned an empty array instead of
-    suggesting values based on the default.  [[#186], [#522]]
-
- -  Fixed `deriveSync()`, `deriveAsync()`, `deriveFromSync()`, and
-    `deriveFromAsync()` so that errors thrown by the factory with default
-    dependency values during the initial parse no longer prevent deferred
-    resolution from succeeding with the actual dependency values.  Errors
-    from the default branch are now caught and produce a preliminary failure
-    result, which gets overridden when `parseWithDependency()` runs with
-    the actual values.  `deriveAsync()` also no longer calls the factory
-    during parser construction.  [[#225], [#524]]
-
- -  Fixed `derive()` and `deriveFrom()` eagerly executing default factories
-    during parser construction to detect sync/async mode.  The factory is
-    no longer called at construction time; instead, callers must provide
-    a required `mode` field (`"sync"` or `"async"`) that declares the
-    factory's return mode.  Callers with async factories should pass
-    `mode: "async"` or use `deriveAsync()`/`deriveFromAsync()`.
-    [[#223], [#527]]
-
- -  Fixed `derive()`, `deriveSync()`, `deriveAsync()`, `deriveFrom()`,
-    `deriveFromSync()`, and `deriveFromAsync()` so that `format()` and
-    `suggest()` no longer throw when the factory throws on the default
-    dependency value.  `format()` now falls back to `String(value)` and
-    `suggest()` yields empty suggestions instead of propagating the
-    exception.  [[#224], [#531]]
-
- -  Fixed dependency-value collection for single-dependency derived parsers
-    (from `.derive()`) inside constructs like `object()`, `tuple()`, etc.
-    When the dependency source was absent from the registry,
-    `collectDependencyValues()` now falls back to stored default values,
-    matching the behavior that the multi-dependency path (from
-    `deriveFrom()`) already had.  [[#238], [#748]]
 
  -  The `integer()` parser in number mode now rejects values outside the safe
     integer range (`Number.MIN_SAFE_INTEGER` to `Number.MAX_SAFE_INTEGER`).
@@ -991,40 +1251,6 @@ To be released.
     `allowedDomains`, `allowedTLDs`, `allowedProtocols`) are frozen to
     prevent mutation through error callbacks.  [[#507], [#555]]
 
- -  Fixed `optional()`, `withDefault()`, and `group()` dropping the
-    config-prompt deferral hook (`@optique/config/deferPromptUntilResolved`)
-    from inner parsers.  These combinators now forward the hook so that
-    `prompt(optional(bindConfig(...)))` and similar compositions correctly
-    defer interactive prompts until phase-two config resolution.
-    [[#385], [#535]]
-
- -  Fixed `shouldDeferCompletion` forwarding in `optional()` and
-    `withDefault()`: the forwarded hook now unwraps the outer state
-    (`[TState] | undefined`) to the inner `TState` before delegating to
-    the inner parser's hook, and propagates annotations from the outer
-    array to the inner element so annotation-based checks work correctly.
-    [[#590], [#592]]
-
- -  Fixed `optional()` and `withDefault()` not propagating annotations from
-    outer state into inner parser elements during `complete()`, which prevented
-    `bindConfig()` from resolving config values through wrapper combinators.
-    [[#385], [#535]]
-
- -  Fixed `optional()` and `withDefault()` still dropping outer annotations
-    for primitive and non-plain object inner states during `complete()` and
-    `shouldDeferCompletion()`. Primitive inner states now use the same
-    internal annotation carrier path as other annotation-enabled flows, and
-    non-plain objects now receive short-lived annotation views that preserve
-    class methods and private fields. This lets annotation-aware parsers and
-    `prompt(optional(...))` / `prompt(withDefault(...))` compositions observe
-    outer annotations consistently across all state shapes. [[#594], [#789]]
-
- -  Fixed proxy-based sanitization of deferred prompt values breaking class
-    methods that access private fields.  Methods on non-plain objects are now
-    invoked with temporarily sanitized own properties on the original instance,
-    allowing private field access to work correctly through the sanitized
-    view.  [[#307], [#558]]
-
  -  Fixed `integer({ type: "bigint" })`, `port({ type: "bigint" })`, and
     `portRange({ type: "bigint" })` to reject empty strings, whitespace,
     signed-plus strings, and non-decimal literals (`0x`, `0b`, `0o`) that
@@ -1036,25 +1262,11 @@ To be released.
     now defaults to `PORT:PORT` instead of always using `PORT-PORT`).
     [[#323], [#579]]
 
- -  `formatDocPage()` now throws `TypeError` when `programName` contains
-    a CR or LF character, or when a section title is empty, whitespace-only,
-    or contains a CR or LF character.  [[#429], [#479], [#580]]
-
- -  Fixed `formatDocPage()` ignoring small `maxWidth` values.  When `maxWidth`
-    was smaller than the layout budget (`termIndent + termWidth + 2`), the
-    formatter produced lines far wider than requested.  The term column now
-    dynamically shrinks to share the available width with the description
-    column.  [[#513], [#669]]
-
  -  Numeric parsers (`integer()`, `float()`, `port()`, `portRange()`,
     `cidr()`) now throw `RangeError` at construction time when given
     contradictory range configurations (e.g., `min > max`).  Previously,
     these parsers silently created unsatisfiable parsers that rejected every
     input.  [[#349], [#583]]
-
- -  Fixed `map()` applying transforms to deferred prompt placeholders during
-    phase-one parsing.  `map(prompt(bindConfig(…)), fn)` no longer throws
-    before config resolution runs.  [[#296], [#585]]
 
  -  Numeric parsers (`integer()`, `float()`, `port()`, `cidr()`) now throw
     `RangeError` at construction time when given non-finite bound values
@@ -1065,15 +1277,6 @@ To be released.
     invalid runtime `type` discriminant values at construction time.
     Previously, unsupported values silently fell back to number mode.
     [[#368], [#589]]
-
- -  Fixed `getDocPage()`/`getDocPageSync()`/`getDocPageAsync()` losing
-    inner option/argument documentation when called on a top-level `command()`
-    parser with no arguments.  [[#200], [#595]]
-
- -  Fixed `runParser()` crashing or showing help instead of handling completion
-    when help-option names (e.g., `--help`) appear inside completion payloads.
-    Help-option scanning now only checks the argument immediately after the
-    completion command name, not the entire `args` array.  [[#300], [#599]]
 
  -  Fixed `email()` with `allowMultiple` splitting on commas inside quoted
     local parts and quoted display names.  [[#320], [#606]]
@@ -1138,55 +1341,6 @@ To be released.
     option is available for custom limits, and a `tooLong` entry in
     `errors` allows customizing the error message.  [[#395], [#635]]
 
- -  Fixed `__FILE__` completion transport unable to represent `pattern` values
-    containing `:` (e.g., Windows drive-letter prefixes like `C:/...`).
-    Colons in the pattern field are now percent-encoded (`%3A`) so that the
-    colon-delimited field boundaries stay intact.  Users must regenerate or
-    re-source their shell completion script after upgrading for this fix to
-    take effect.  [[#252], [#616]]
-
- -  Fixed Bash completion scripts using `compgen -z` which is unsupported on
-    macOS's default GNU Bash 3.2.  File and directory completions now use
-    glob-based iteration instead, matching the pattern already used for
-    extension-filtered completions.  [[#250], [#608]]
-
- -  Fixed fish, Nushell, and PowerShell completion scripts ignoring
-    `includeHidden: true` for file suggestions.  The shell-side `__FILE__`
-    parsers now strip tab-delimited metadata before splitting by colon,
-    so the `hidden` field is compared correctly.  Users must regenerate or
-    re-source their shell completion script after upgrading for this fix to
-    take effect.  [[#618], [#619]]
-
- -  Fixed fish, Nushell, and PowerShell completions not enumerating hidden
-    (dot-prefixed) files even when `includeHidden` is `true`.  The parsed
-    `hidden` flag only controlled the post-enumeration filter, but each
-    shell's native file listing command excluded hidden files by default.
-    Fish now additionally globs `$current.*`, Nushell uses `ls -a`, and
-    PowerShell passes `-Force` to `Get-ChildItem` when hidden files are
-    requested.  [[#623], [#624]]
-
- -  Fixed zsh completion not including hidden (dot-prefixed) files when
-    `includeHidden` is `true`.  The zsh backend now temporarily enables
-    `glob_dots` before calling `_files` or `_directories` when hidden
-    files are requested.  [[#262], [#641]]
-
- -  Fixed shell completion transports emitting raw tabs and newlines in
-    literal suggestion text, which corrupted shell-specific transport
-    framing.  Control characters in `Suggestion.text` are now replaced
-    with spaces, matching the existing description sanitization.
-    [[#337], [#663]]
-
- -  `runParser()` now validates version values at runtime — empty strings,
-    strings containing control characters, and non-string values are rejected
-    with `TypeError`.  [[#439], [#645]]
-
- -  `runParser()` now validates meta command and option names (for help,
-    version, and completion) eagerly at startup.  Empty arrays, empty
-    strings, whitespace-only names, and names containing whitespace or
-    control characters are rejected with `TypeError`.  Option names without
-    a valid prefix (`--`, `-`, `/`, or `+`) are also rejected.
-    [[#425], [#648]]
-
  -  Fixed `url()` not validating malformed `allowedProtocols` entries at
     construction time; entries like `"https"` (missing trailing colon),
     `"https://"`, or non-string values now throw a `TypeError`.
@@ -1202,14 +1356,6 @@ To be released.
  -  `uuid()` now validates `allowedVersions` at construction time: each
     version must be an integer between 1 and 8, and duplicates are
     automatically removed.  [[#357], [#675]]
-
- -  Fixed `formatDocPage()` fixed-prefix sections exceeding `maxWidth`.
-    The `Usage:` label, `Examples:`/`Author:`/`Bugs:` section labels, and
-    `showDefault`/`showChoices` description prefixes were not covered by
-    the minimum `maxWidth` validation, allowing the formatter to silently
-    emit lines wider than requested.  `formatDocPage()` now raises the
-    minimum `maxWidth` to account for all fixed-width labels actually in
-    use.  [[#672], [#677]]
 
  -  Fixed `cidr()` discarding specific nested IPv4/IPv6 validation errors
     (e.g., private network, loopback, multicast restrictions) behind a
@@ -1238,144 +1384,6 @@ To be released.
     options at construction time.  Unsupported runtime values now throw
     `TypeError` instead of silently falling through to arbitrary behavior.
     [[#347], [#685]]
-
- -  Fixed `--completion` option (and `--help`/`--version`) being recognized
-    after the `--` options terminator in `runParser()`, `runWith()`, and
-    `runWithSync()`.  Tokens after `--` are now correctly treated as positional
-    data and no longer trigger meta-option early-exit paths.  [[#228], [#686]]
-
- -  Fixed `--completion` option bypassing `--help`/`--version` precedence in
-    `runParser()`.  When `--help` or `--version` appears *before* the
-    `--completion` option (e.g., `--help --completion bash`), the help or
-    version path now correctly takes precedence.  Tokens *after* `--completion`
-    remain opaque completion payload and are not re-interpreted as meta flags.
-    [[#229], [#689]]
-
- -  Fixed `formatDocPage()` rendering blank or malformed rows for degenerate
-    entry terms (e.g., option with empty names, empty command/argument/literal,
-    empty exclusive branches) and hidden entries in custom `DocPage` input.
-    Such entries are now silently skipped.  [[#488], [#687]]
-
- -  Fixed `formatDocPage()` using the wrong hidden visibility check: it applied
-    usage-level filtering (`isUsageHidden()`) instead of doc-level filtering
-    (`isDocHidden()`).  As a result, `hidden: "doc"` terms leaked into doc
-    output, while `hidden: "usage"` terms were incorrectly omitted.
-    [[#488], [#687]]
-
- -  Added `context` option to `UsageTermFormatOptions` for `formatUsageTerm()`.
-    Set `context: "doc"` to apply doc-level hidden filtering instead of the
-    default usage-level filtering.  [[#488], [#687]]
-
- -  Fixed `formatDocPage()` rendering empty `choices` and `default` messages
-    as malformed suffixes (e.g., `(choices: )`, `[]`) when the `Message`
-    array was empty.  Empty arrays are now treated as absent.  [[#469], [#692]]
-
- -  Fixed `formatDocPage()` producing malformed output `(choices: , ...)`
-    when `showChoices.maxItems` is `0`.  `maxItems` must now be at least `1`;
-    values below `1` throw a `RangeError`.  [[#471], [#694]]
-
- -  Fixed `deduplicateSuggestions()` silently dropping `includeHidden: true`
-    when merging file suggestions that differ only in `includeHidden`.
-    Duplicates are now merged with `includeHidden: true` preferred, since
-    it is a superset of the non-hidden variant.  [[#518], [#693]]
-
- -  Fixed `deduplicateSuggestions()` treating file suggestions with the same
-    `extensions` in different order as distinct.  Extensions are now compared
-    as a set, so `[".json", ".yaml"]` and `[".yaml", ".json"]` correctly
-    deduplicate to one suggestion.  [[#519], [#695]]
-
- -  Fixed `getDocPage()` exposing parser-owned usage terms and doc fragments
-    by reference.  Mutating the returned `DocPage` or the `defaultUsageLine`
-    argument in a command's `usageLine` callback no longer corrupts the
-    parser definition.  [[#500], [#697]]
-
- -  Added deep-clone utilities for parser structures:
-
-     -  `cloneUsageTerm()` and `cloneUsage()` in `@optique/core/usage`
-     -  `cloneDocEntry()` in `@optique/core/doc`
-     -  `cloneMessageTerm()` and `cloneMessage()` in `@optique/core/message`
-
-    These are used internally by `getDocPage()` to isolate returned
-    documentation pages from parser-owned state, and are also available
-    as public APIs for consumers who need to deep-copy these structures.
-    [[#500], [#697]]
-
- -  Fixed `normalizeUsage()` to strip degenerate usage terms instead of
-    preserving them unchanged.  Empty-named options, empty-named commands,
-    empty-metavar arguments, and container terms (`optional`, `multiple`,
-    `exclusive`) whose terms array is empty after recursive normalization
-    are now removed.  Exclusive branches representing valid zero-token
-    alternatives and empty-value literals are preserved; branches that
-    become empty because all their content was malformed are removed.
-    [[#485], [#716]]
-
- -  Fixed `message()` tagged template reusing interpolated `MessageTerm`
-    objects and `Message` arrays by reference, allowing mutation of the
-    returned message to corrupt the original interpolated values.
-    Interpolated terms are now deep-cloned via `cloneMessageTerm()`.
-    [[#505], [#718]]
-
- -  Fixed `optionNames()`, `values()`, and `url()` message term constructors
-    storing caller-owned arrays and `URL` objects by reference, allowing
-    later caller-side mutations to corrupt already-created terms.
-    These constructors now defensively copy their inputs.  [[#506], [#719]]
-
- -  Fixed `runWith()` and `runWithSync()` skipping context disposal
-    (`Symbol.dispose` / `Symbol.asyncDispose`) on early help, version,
-    and completion exits.  Contexts are now disposed on every exit path,
-    including early meta-command exits.  [[#226], [#733]]
-
- -  Added construction-time validation for labels in `object()`, `tuple()`,
-    `merge()`, and `group()`.  Labels that are empty, whitespace-only, or
-    contain control characters now throw `TypeError` immediately instead of
-    producing broken help output.  [[#404], [#737]]
-
- -  `runParser()` and `defineProgram()` now validate program names up front,
-    rejecting empty strings, strings with control characters, and non-string
-    values with a `TypeError`.  Previously, invalid names were only caught
-    during help/error output formatting.  [[#428], [#743]]
-
- -  Fixed nested `optional()` wrappers rendering double brackets (`[[...]]`)
-    in help usage output.  Parsers like `optional(optional(option(...)))` and
-    `withDefault(optional(option(...)), ...)` now correctly display single
-    brackets (`[...]`).  [[#290], [#745]]
-
- -  *Breaking change:* `valueSet()` now requires a second parameter: either
-    a fallback string or an options object with a `fallback` field.  When the
-    values array is empty, the fallback text is returned as a single text term
-    (an empty fallback string produces an empty `Message`).  This prevents
-    surrounding prose in `message` templates from collapsing into malformed
-    sentences (e.g., “Expected one of .”).  [[#492], [#747]]
-
- -  `values()` now throws `TypeError` when given an empty array.
-    [[#492], [#747]]
-
- -  Fixed `optional()` and `withDefault()` discarding values from parsers
-    whose useful result is produced during `complete()` rather than
-    `parse()` (e.g., `constant()`, `bindEnv()`, `bindConfig()`).  Wrappers
-    placed under these modifiers in `object()` constructs and at the top
-    level now correctly preserve completed values, and `withDefault()`
-    falls back to its configured default only when the wrapped parser
-    produces no value at all.  [[#233], [#775]]
-
- -  Removed the internal `optionalStyleWrapperKey` symbol.  `object()`'s
-    zero-consumption pass no longer needs a magic marker; interactive
-    wrappers like `prompt()` now distinguish completability probes from
-    real completion via `ExecutionContext.phase`.  [[#233], [#775]]
-
- -  `optional()` and `withDefault()` now propagate annotations from the
-    outer state into the inner parser's initial state.  When the outer
-    state is an annotation wrapper (e.g., from
-    `parse(parser, args, { annotations })`), the inner parser's `parse()`
-    now receives an annotated initial state so that `bindEnv()` /
-    `bindConfig()` wrappers under `optional()` / `withDefault()` can
-    resolve their fallbacks at top level.  [[#233], [#775]]
-
- -  Fixed `option()` missing-value errors to show the option's metavar
-    (e.g., `--author` requires `AUTHOR`) instead of a generic “requires a
-    value” message.  The same path now also honors `errors.endOfInput`
-    customization when the option name was present but its value token was
-    missing.
 
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
@@ -1727,6 +1735,49 @@ To be released.
 
 ### @optique/config
 
+#### Breaking changes and context setup
+
+ -  Removed `runWithConfig()` and the `@optique/config/run` subpath export.
+    Config contexts are now used directly with `run()`, `runSync()`, or
+    `runAsync()` from *@optique/run* (or `runWith()` from
+    `@optique/core/facade`) via the `contexts` option.  Context-specific
+    options like `getConfigPath` and `load` are passed alongside the standard
+    runner options.  This is a breaking change.  [[#110]]
+
+ -  Moved `fileParser` option from `runWithConfig()` runtime options into
+    `createConfigContext()` options.  The file parser is now stored in the
+    context at creation time.  [[#110]]
+
+ -  Changed `ConfigContextRequiredOptions` to make both `getConfigPath` and
+    `load` optional fields (with runtime validation that at least one is
+    provided).  [[#110]]
+
+ -  Removed `configKey` symbol.  Each `ConfigContext` instance now stores
+    its data under its own unique `id` symbol (i.e., `context.id`) so that
+    multiple config contexts can coexist without overwriting each other in
+    merged annotations.  This is a breaking change for any code that accessed
+    annotations directly via `configKey`.  [[#136]]
+
+ -  Added `ConfigContext` implementation of `Symbol.dispose` for automatic
+    cleanup of the global config registry.  [[#110]]
+
+ -  Added config-source metadata support for `bindConfig()` key accessors.
+    Accessor callbacks now receive a second `meta` argument, and single-file
+    mode now provides default `ConfigMeta` values (`configPath`, `configDir`)
+    so path-like options can be resolved relative to the config file location.
+    [[#111]]
+
+ -  Changed `CustomLoadOptions.load` to return
+    `{ config, meta }` (`ConfigLoadResult<TConfigMeta>`) instead of raw config
+    data.  This makes metadata extensible for custom multi-file loaders and
+    allows `createConfigContext<T, TConfigMeta>()` to carry a custom metadata
+    type through to `bindConfig()` key callbacks.  [[#111]]
+
+ -  Fixed `bindConfig()` and `ConfigLoadResult` type signatures to reflect
+    that config metadata can be absent.  Key callbacks now receive
+    `TConfigMeta | undefined`, and `ConfigLoadResult.meta` is typed as
+    `TConfigMeta | undefined` to match runtime behavior.  [[#155]]
+
  -  Regression-tested and documented concurrent reuse of a shared
     `ConfigContext` instance.  `run()`, `runAsync()`, and `runWith()`
     now explicitly guarantee run-scoped annotation snapshots, so one
@@ -1735,6 +1786,8 @@ To be released.
     config integration docs also now spell out that manual
     `getAnnotations()` calls affect low-level parsing only when their
     returned annotations are passed back explicitly.  [[#270]]
+
+#### Fallback resolution and dependency handling
 
  -  Removed the hidden process-global fallback from `bindConfig()`.
     Calling `configContext.getAnnotations()` manually no longer affects
@@ -1760,60 +1813,15 @@ To be released.
     a behavior change for any code that relied on constraint-violating
     config values or defaults being accepted.  [[#414], [#777]]
 
- -  Removed `configKey` symbol.  Each `ConfigContext` instance now stores
-    its data under its own unique `id` symbol (i.e., `context.id`) so that
-    multiple config contexts can coexist without overwriting each other in
-    merged annotations.  This is a breaking change for any code that accessed
-    annotations directly via `configKey`.  [[#136]]
-
- -  Removed `runWithConfig()` and the `@optique/config/run` subpath export.
-    Config contexts are now used directly with `run()`, `runSync()`, or
-    `runAsync()` from *@optique/run* (or `runWith()` from
-    `@optique/core/facade`) via the `contexts` option.  Context-specific
-    options like `getConfigPath` and `load` are passed alongside the standard
-    runner options.  This is a breaking change.  [[#110]]
-
- -  Moved `fileParser` option from `runWithConfig()` runtime options into
-    `createConfigContext()` options.  The file parser is now stored in the
-    context at creation time.  [[#110]]
-
- -  Changed `ConfigContextRequiredOptions` to make both `getConfigPath` and
-    `load` optional fields (with runtime validation that at least one is
-    provided).  [[#110]]
-
- -  Added `ConfigContext` implementation of `Symbol.dispose` for automatic
-    cleanup of the global config registry.  [[#110]]
-
- -  Fixed `createConfigContext()` breaking sync runner flows.  When config
-    loading and schema validation complete synchronously, config contexts now
-    return annotations without a Promise so documented `runSync()` and
-    `runWithSync()` config fallbacks work again.  [[#159], [#162]]
+ -  Fixed `bindConfig()` not propagating dependency source values to derived
+    parsers.  When a `dependency()` option was wrapped with `bindConfig()`,
+    the config-resolved value was invisible to derived parsers, which fell
+    back to `defaultValue()` instead.  [[#179], [#680]]
 
  -  Fixed `bindConfig()` composition with `bindEnv()`: when no CLI token is
     consumed, `bindConfig()` no longer incorrectly marks the result as
     “CLI-provided”, which was causing `bindEnv(bindConfig(…))` to skip the
     environment-variable fallback even when the CLI option was absent.
-
- -  Fixed `bindConfig()` silently swallowing exceptions thrown by `key`
-    callbacks.  Errors now propagate to the caller instead of being
-    treated as a missing config value.  [[#259], [#549]]
-
- -  Added config-source metadata support for `bindConfig()` key accessors.
-    Accessor callbacks now receive a second `meta` argument, and single-file
-    mode now provides default `ConfigMeta` values (`configPath`, `configDir`)
-    so path-like options can be resolved relative to the config file location.
-    [[#111]]
-
- -  Changed `CustomLoadOptions.load` to return
-    `{ config, meta }` (`ConfigLoadResult<TConfigMeta>`) instead of raw config
-    data.  This makes metadata extensible for custom multi-file loaders and
-    allows `createConfigContext<T, TConfigMeta>()` to carry a custom metadata
-    type through to `bindConfig()` key callbacks.  [[#111]]
-
- -  Fixed `bindConfig()` and `ConfigLoadResult` type signatures to reflect
-    that config metadata can be absent.  Key callbacks now receive
-    `TConfigMeta | undefined`, and `ConfigLoadResult.meta` is typed as
-    `TConfigMeta | undefined` to match runtime behavior.  [[#155]]
 
  -  Fixed `createConfigContext()` treating falsy first-pass parse results
     such as `0`, `false`, and `""` as the phase-one sentinel.  Dynamic
@@ -1827,11 +1835,31 @@ To be released.
     `undefined`, while keeping the original parsed object identity when no
     sanitization is needed.  [[#177], [#490]]
 
+ -  Fixed custom `load()` mode being unable to represent “no config found”
+    without failing schema validation.  `load()` can now return `undefined`
+    or `null` directly to signal that no config data is available;
+    `bindConfig()` falls back to defaults, matching the behavior of
+    `getConfigPath` mode when the path is `undefined` or the file is
+    missing.  A `ConfigLoadResult` with `config: undefined` or
+    `config: null` is still validated against the schema as before.
+    [[#236], [#770]]
+
  -  Fixed proxy-based sanitization of deferred prompt values breaking class
     methods that access private fields.  Methods on non-plain objects are now
     invoked with temporarily sanitized own properties on the original instance,
     allowing private field access to work correctly through the sanitized
     view.  [[#307], [#558]]
+
+ -  Fixed `createConfigContext()` breaking sync runner flows.  When config
+    loading and schema validation complete synchronously, config contexts now
+    return annotations without a Promise so documented `runSync()` and
+    `runWithSync()` config fallbacks work again.  [[#159], [#162]]
+
+#### Validation and error handling
+
+ -  Fixed `bindConfig()` silently swallowing exceptions thrown by `key`
+    callbacks.  Errors now propagate to the caller instead of being
+    treated as a missing config value.  [[#259], [#549]]
 
  -  `createConfigContext()` now validates `schema` and `fileParser` at
     construction time, and `getAnnotations()` validates `load` and
@@ -1857,20 +1885,6 @@ To be released.
     plain thenables returned directly from `load()`, or Promise-valued
     `config`/`meta` fields) now throw `TypeError` instead of causing silent
     failures.  [[#411], [#655]]
-
- -  Fixed custom `load()` mode being unable to represent “no config found”
-    without failing schema validation.  `load()` can now return `undefined`
-    or `null` directly to signal that no config data is available;
-    `bindConfig()` falls back to defaults, matching the behavior of
-    `getConfigPath` mode when the path is `undefined` or the file is
-    missing.  A `ConfigLoadResult` with `config: undefined` or
-    `config: null` is still validated against the schema as before.
-    [[#236], [#770]]
-
- -  Fixed `bindConfig()` not propagating dependency source values to derived
-    parsers.  When a `dependency()` option was wrapped with `bindConfig()`,
-    the config-resolved value was invisible to derived parsers, which fell
-    back to `defaultValue()` instead.  [[#179], [#680]]
 
 [#111]: https://github.com/dahlia/optique/issues/111
 [#136]: https://github.com/dahlia/optique/issues/136
@@ -1905,6 +1919,25 @@ To be released.
 The *@optique/env* package was introduced in this release, providing
 environment variable integration via source contexts.  [[#86], [#135]]
 
+#### New APIs
+
+ -  Added `createEnvContext()` for creating static environment contexts with
+    optional key prefixes and custom source functions.
+
+ -  Added `bindEnv()` for parser fallback behavior with priority order
+    CLI > environment > default.
+
+ -  Added `bool()` value parser for common environment Boolean literals
+    (`true`, `false`, `1`, `0`, `yes`, `no`, `on`, `off`).
+
+ -  Added support for env-only values via `bindEnv(fail<T>(), ...)` when a
+    value should not be exposed as a CLI option.
+
+ -  `bool()` now provides value completion suggestions for all accepted
+    literals, not just the canonical `true`/`false`.  [[#268], [#562]]
+
+#### Behavior changes and dependency handling
+
  -  Removed the hidden process-global fallback from `bindEnv()`.
     Calling `envContext.getAnnotations()` manually no longer affects
     later plain parses unless the returned annotations are passed
@@ -1927,20 +1960,12 @@ environment variable integration via source contexts.  [[#86], [#135]]
     for any code that relied on constraint-violating environment values
     or defaults being accepted.  [[#414], [#777]]
 
- -  Added `createEnvContext()` for creating static environment contexts with
-    optional key prefixes and custom source functions.
+ -  Fixed `bindEnv()` not propagating dependency source values to derived
+    parsers.  When a `dependency()` option was wrapped with `bindEnv()`,
+    the env-resolved value was invisible to derived parsers, which fell
+    back to `defaultValue()` instead.  [[#179]]
 
- -  Added `bindEnv()` for parser fallback behavior with priority order
-    CLI > environment > default.
-
- -  Added `bool()` value parser for common environment Boolean literals
-    (`true`, `false`, `1`, `0`, `yes`, `no`, `on`, `off`).
-
- -  `bool()` now provides value completion suggestions for all accepted
-    literals, not just the canonical `true`/`false`.  [[#268], [#562]]
-
- -  Added support for env-only values via `bindEnv(fail<T>(), ...)` when a
-    value should not be exposed as a CLI option.
+#### Validation
 
  -  `createEnvContext()` now validates `prefix` at runtime, rejecting
     non-string values with a `TypeError`.  [[#384], [#652]]
@@ -1961,11 +1986,6 @@ environment variable integration via source contexts.  [[#86], [#135]]
     `ValueParser`, instead of deferring the crash to environment lookup
     time.  [[#415], [#637]]
 
- -  Fixed `bindEnv()` not propagating dependency source values to derived
-    parsers.  When a `dependency()` option was wrapped with `bindEnv()`,
-    the env-resolved value was invisible to derived parsers, which fell
-    back to `defaultValue()` instead.  [[#179]]
-
 [#86]: https://github.com/dahlia/optique/issues/86
 [#135]: https://github.com/dahlia/optique/pull/135
 [#268]: https://github.com/dahlia/optique/issues/268
@@ -1981,32 +2001,32 @@ environment variable integration via source contexts.  [[#86], [#135]]
 
 ### @optique/git
 
- -  Fixed `gitRef()` emitting duplicate completion suggestions when a branch
-    and tag share the same name.  [[#284], [#569]]
-
- -  Fixed `gitCommit()` and `gitRef()` suggesting abbreviated commit SHAs
-    shorter than the typed prefix, which caused shell completion frontends
-    to drop the suggestions.  Suggested OIDs are now at least as long as
-    the prefix.  [[#569]]
-
  -  `gitCommit()`, `gitRef()`, and other git parser functions now throw
     a `RangeError` when `suggestionDepth` is not a positive integer,
     instead of silently accepting invalid values.  [[#377], [#570]]
+
+ -  `gitRemoteBranch()` now validates the `remote` parameter at construction
+    time, rejecting empty, whitespace-only, control-character-containing,
+    multiline, or non-string values
+    with a `TypeError`.  [[#464], [#654]]
 
  -  Fixed `gitCommit()` and `gitRef()` suggesting ambiguous 7-character SHA
     prefixes when multiple recent commits share the same short prefix.
     Short SHAs are now lengthened until each suggestion is unique.
     [[#331], [#571]]
 
+ -  Fixed `gitCommit()` and `gitRef()` suggesting abbreviated commit SHAs
+    shorter than the typed prefix, which caused shell completion frontends
+    to drop the suggestions.  Suggested OIDs are now at least as long as
+    the prefix.  [[#569]]
+
+ -  Fixed `gitRef()` emitting duplicate completion suggestions when a branch
+    and tag share the same name.  [[#284], [#569]]
+
  -  Fixed `gitRemoteBranch()` reporting a misleading “branch not found” error
     when the specified remote does not exist.  The parser now correctly
     diagnoses the missing remote.  Added `remoteNotFound` to
     `GitParserErrors` for custom error messages in this case.  [[#308], [#603]]
-
- -  `gitRemoteBranch()` now validates the `remote` parameter at construction
-    time, rejecting empty, whitespace-only, control-character-containing,
-    multiline, or non-string values
-    with a `TypeError`.  [[#464], [#654]]
 
  -  Fixed error messages for `gitBranch()`, `gitRemoteBranch()`, `gitTag()`,
     and `gitRemote()` to omit the “Available …” suffix when the list is
@@ -2028,11 +2048,7 @@ environment variable integration via source contexts.  [[#86], [#135]]
 The *@optique/inquirer* package was introduced in this release, providing
 interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
- -  `prompt(bindEnv(...))` and `prompt(bindConfig(...))` no longer skip
-    prompts based on stale source state from earlier manual
-    `getAnnotations()` calls. Prompts are skipped only when the current
-    parse carries explicit annotations or runner-provided contexts.
-    [[#234], [#785]]
+#### Prompt APIs
 
  -  Added `prompt()` for wrapping any parser with an interactive prompt that
     fires when no CLI value is provided.  Supports ten prompt types:
@@ -2048,16 +2064,36 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     cleanly with `bindEnv()` and `bindConfig()` — the prompt is skipped
     whenever the CLI, environment variable, or config file supplies a value.
 
+ -  Added `validate` support to `SelectConfig`, `RawlistConfig`,
+    `ExpandConfig`, and `CheckboxConfig` prompt configurations.  Return
+    `true` to accept, or a string error message to reject and re-prompt.
+    [[#620], [#625]]
+
+#### Prompt resolution and wrapper behavior
+
+ -  *Behavioral change:* `prompt()` no longer re-validates prompted values
+    through the inner parser's constraint pipeline.  The CLI path and the
+    prompt path are now treated as independent value sources.  Previously,
+    prompted values were fed back through a synthetic parse, which caused
+    false rejections when value-transforming combinators like `map()` changed
+    the value domain.  This means prompted values are no longer checked
+    against constraints like `integer({ min, max })`, `string({ pattern })`,
+    or `choice()` — those constraints only apply to CLI input.  Use the
+    prompt config's `validate`, `min`/`max`/`step`, or `choices` options
+    to enforce equivalent constraints on prompted values.
+    [[#392], [#613], [#615], [#621]]
+
+ -  `prompt(bindEnv(...))` and `prompt(bindConfig(...))` no longer skip
+    prompts based on stale source state from earlier manual
+    `getAnnotations()` calls. Prompts are skipped only when the current
+    parse carries explicit annotations or runner-provided contexts.
+    [[#234], [#785]]
+
  -  Fixed `prompt(bindEnv(...))` and `prompt(bindConfig(...))` inside
     `tuple()` and `concat()`.  These shared-buffer compositions now skip the
     prompt when env/config fallback resolves the dependency source, and
     dependency-aware `suggest*()` calls now offer the correct derived values.
     [[#750], [#768], [#769]]
-
- -  Fixed `prompt()` leaving `ExitPromptError` uncaught when a user cancels an
-    Inquirer prompt with <kbd>^C</kbd>.  Prompt cancellation is now converted
-    into a normal parse failure (`Prompt cancelled.`) instead of surfacing as
-    an unhandled promise rejection.  [[#151]]
 
  -  Fixed `prompt()` not attempting inner parser completion when the CLI state
     is wrapped by `optional()` (array form).  When the inner parser carries a
@@ -2073,27 +2109,6 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     caused help usage to render `[[--name STRING]]` instead of
     `[--name STRING]`.  [[#289], [#582]]
 
- -  Fixed `prompt()` crashing with an internal `TypeError` when an unsupported
-    `type` value is passed at runtime through an untyped path.  It now throws
-    a clear `TypeError` with the invalid type name up front.  [[#386], [#612]]
-
- -  *Behavioral change:* `prompt()` no longer re-validates prompted values
-    through the inner parser's constraint pipeline.  The CLI path and the
-    prompt path are now treated as independent value sources.  Previously,
-    prompted values were fed back through a synthetic parse, which caused
-    false rejections when value-transforming combinators like `map()` changed
-    the value domain.  This means prompted values are no longer checked
-    against constraints like `integer({ min, max })`, `string({ pattern })`,
-    or `choice()` — those constraints only apply to CLI input.  Use the
-    prompt config's `validate`, `min`/`max`/`step`, or `choices` options
-    to enforce equivalent constraints on prompted values.
-    [[#392], [#613], [#615], [#621]]
-
- -  Added `validate` support to `SelectConfig`, `RawlistConfig`,
-    `ExpandConfig`, and `CheckboxConfig` prompt configurations.  Return
-    `true` to accept, or a string error message to reject and re-prompt.
-    [[#620], [#625]]
-
  -  Refactored `prompt()` to detect completability probes via
     `ExecutionContext.phase` instead of a sentinel `initialState`.  Prompts
     continue to fire only during the real completion phase, are still
@@ -2101,6 +2116,17 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     cancellation still surfaces as a parse failure.  This removes the
     dependency on *@optique/core*'s internal `optionalStyleWrapperKey`
     symbol.  [[#233], [#775]]
+
+#### Validation and cancellation handling
+
+ -  Fixed `prompt()` leaving `ExitPromptError` uncaught when a user cancels an
+    Inquirer prompt with <kbd>^C</kbd>.  Prompt cancellation is now converted
+    into a normal parse failure (`Prompt cancelled.`) instead of surfacing as
+    an unhandled promise rejection.  [[#151]]
+
+ -  Fixed `prompt()` crashing with an internal `TypeError` when an unsupported
+    `type` value is passed at runtime through an untyped path.  It now throws
+    a clear `TypeError` with the invalid type name up front.  [[#386], [#612]]
 
 [#87]: https://github.com/dahlia/optique/issues/87
 [#137]: https://github.com/dahlia/optique/pull/137
@@ -2126,15 +2152,21 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     passed via type assertions (e.g., `as never`) would silently leak into
     successful parse results.  [[#430], [#711]]
 
+ -  Fixed `loggingOptions()` not validating invalid runtime `level`
+    discriminants.  Previously, passing an unsupported `level` value (e.g.,
+    from untyped JavaScript) would cause an internal crash during parser
+    assembly.  Now it throws `TypeError` with a clear message.  [[#373], [#710]]
+
+ -  Fixed `logOutput()` not validating empty runtime `metavar` values.
+    Previously, passing an empty string as `metavar` would silently produce
+    malformed help output.  Now it throws `TypeError` like all other value
+    parsers.  [[#459], [#708]]
+
  -  Fixed `createSink()` misreporting `getFileSink()` factory errors as
     missing `@logtape/file` package.  Previously, any error thrown after the
     dynamic import (e.g., file permission errors) was caught and rewritten
     as an installation hint.  Now only actual import failures produce the
     installation message; factory errors propagate as-is.  [[#299], [#702]]
-
- -  Fixed `logOutput()` to request hidden-file completion for dot-prefixed
-    paths.  Previously, tab-completion for paths like `.` or `src/.` would
-    not suggest hidden files or directories.  [[#292], [#699]]
 
  -  Fixed `createSink()` failing on Deno when installed from JSR because
     `@logtape/file` was not declared in the package's import map.  The
@@ -2155,15 +2187,9 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
  -  `ConsoleSinkOptions.stream` now also accepts `null`, which is treated
     the same as `undefined` (defaults to `"stderr"`).  [[#379], [#707]]
 
- -  Fixed `logOutput()` not validating empty runtime `metavar` values.
-    Previously, passing an empty string as `metavar` would silently produce
-    malformed help output.  Now it throws `TypeError` like all other value
-    parsers.  [[#459], [#708]]
-
- -  Fixed `loggingOptions()` not validating invalid runtime `level`
-    discriminants.  Previously, passing an unsupported `level` value (e.g.,
-    from untyped JavaScript) would cause an internal crash during parser
-    assembly.  Now it throws `TypeError` with a clear message.  [[#373], [#710]]
+ -  Fixed `logOutput()` to request hidden-file completion for dot-prefixed
+    paths.  Previously, tab-completion for paths like `.` or `src/.` would
+    not suggest hidden files or directories.  [[#292], [#699]]
 
 [#292]: https://github.com/dahlia/optique/issues/292
 [#299]: https://github.com/dahlia/optique/issues/299
@@ -2189,10 +2215,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     This makes it clear that the runtime lacks Temporal support and a polyfill
     is needed.  [[#282], [#561]]
 
- -  Fixed `TimeZone` type to include single-segment IANA timezone identifiers
-    such as `"GMT"`, `"EST"`, and deprecated aliases like
-    `"Japan"` and `"Cuba"`.  These were already accepted at runtime by the
-    `timeZone()` parser but excluded from the static type.  [[#304], [#596]]
+ -  Temporal plain parsers now enforce strict input shapes matching their
+    advertised types, rejecting wider ISO forms that were previously silently
+    accepted.  For example, `plainDate()` no longer accepts datetime strings
+    like `"2020-01-23T17:04:36"`, and `plainDateTime()` no longer accepts
+    date-only strings like `"2020-01-23"`.  [[#314], [#649]]
 
  -  Changed the default metavar for `plainMonthDay()` from `"--MONTH-DAY"` to
     `"MONTH-DAY"`.  The previous metavar confused help text because it looked
@@ -2200,11 +2227,10 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     inconsistent with the canonical format `"01-23"` produced by
     `format()`.  [[#306], [#643]]
 
- -  Temporal plain parsers now enforce strict input shapes matching their
-    advertised types, rejecting wider ISO forms that were previously silently
-    accepted.  For example, `plainDate()` no longer accepts datetime strings
-    like `"2020-01-23T17:04:36"`, and `plainDateTime()` no longer accepts
-    date-only strings like `"2020-01-23"`.  [[#314], [#649]]
+ -  Fixed `TimeZone` type to include single-segment IANA timezone identifiers
+    such as `"GMT"`, `"EST"`, and deprecated aliases like
+    `"Japan"` and `"Cuba"`.  These were already accepted at runtime by the
+    `timeZone()` parser but excluded from the static type.  [[#304], [#596]]
 
 [#282]: https://github.com/dahlia/optique/issues/282
 [#304]: https://github.com/dahlia/optique/issues/304
@@ -2216,6 +2242,8 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#649]: https://github.com/dahlia/optique/pull/649
 
 ### @optique/run
+
+#### Runner APIs and breaking changes
 
  -  Added `stdout`, `stderr`, and `onExit` options to `run()`, `runSync()`,
     and `runAsync()` for dependency injection of process-integrated behavior.
@@ -2236,6 +2264,14 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `CompletionOptionsBoth`, `CompletionOptionsSingular`,
     `CompletionOptionsPlural`, and `CompletionOptions` types.  [[#130]]
 
+ -  Context-required options passed to `run()`, `runSync()`, and `runAsync()`
+    must now be wrapped in a `contextOptions` property instead of being
+    passed as top-level keys.  This prevents name collisions with runner
+    options such as `help`, `programName`, and `version`.
+    [[#240], [#241], [#575], [#581]]
+
+#### Program execution
+
  -  Fixed `run()`, `runSync()`, and `runAsync()` overload resolution for
     `Program` values used with `contexts`.  Context-aware `Program` calls
     now preserve the correct return type and accept context-specific runner
@@ -2255,6 +2291,8 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     requests still stop after phase 1 and bypass phase-two context
     refinement and process handling as before.
     [[#230], [#784]]
+
+#### Path parser fixes
 
  -  Fixed `path()` extension validation for dotfiles (e.g., `.env`,
     `.gitignore`) and multi-part extensions (e.g., `.tar.gz`, `.d.ts`).
@@ -2280,12 +2318,6 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
  -  Fixed `path()` to reject invalid runtime `type` values.  Previously,
     unsupported values like `"files"` were silently accepted, causing
     inconsistent behavior between parsing and suggestions.  [[#361], [#545]]
-
- -  Context-required options passed to `run()`, `runSync()`, and `runAsync()`
-    must now be wrapped in a `contextOptions` property instead of being
-    passed as top-level keys.  This prevents name collisions with runner
-    options such as `help`, `programName`, and `version`.
-    [[#240], [#241], [#575], [#581]]
 
  -  `path()` now throws `TypeError` at construction time when `mustExist`,
     `mustNotExist`, or `allowCreate` receive non-Boolean values.  Previously,
@@ -2319,23 +2351,33 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
 ### @optique/man
 
- -  Fixed `formatDateForMan()` to throw a `RangeError` for invalid `Date`
-    objects instead of formatting them as `"undefined NaN"`.  [[#266], [#607]]
+#### API validation
 
- -  Fixed `formatDocPageAsMan()` to include `DocEntry.choices` in man page
-    output.  Previously, available choices were silently dropped.
-    [[#265], [#604]]
+ -  `generateManPageSync()`, `generateManPageAsync()`, and `generateManPage()`
+    now validate that the input is a genuine Optique `Parser` or `Program`
+    up front, instead of accepting malformed objects and crashing with an
+    internal `getDocFragments is not a function` error.  [[#305], [#567]]
 
- -  Fixed `formatDocPageAsMan()` to fall back to `DocPage.examples`,
-    `DocPage.author`, and `DocPage.bugs` when the corresponding
-    `ManPageOptions` fields are absent.  Previously, those page-level
-    metadata fields were silently ignored unless duplicated in the options.
-    [[#263], [#602]]
+ -  Fixed `optique-man` accepting malformed parser-like or program-like
+    exports that pass shallow validation but crash later with internal
+    generation errors.  The `isParser()` guard now checks for the
+    `getDocFragments` method, and `isProgram()` now validates that
+    `metadata.name` is a string and that the nested `parser` passes
+    `isParser()`.  Both guards also catch exceptions from throwing
+    accessors.  [[#278], [#552]]
 
- -  Fixed `formatDocPageAsMan()` to respect command `usageLine` overrides
-    in the SYNOPSIS section.  Previously, the man page formatter always
-    rendered the default command usage, ignoring custom `usageLine` values.
-    [[#237], [#593]]
+ -  `generateManPageSync()` now throws `TypeError` at runtime when given an
+    async parser or program.  Previously it silently produced output; now
+    callers must use `generateManPageAsync()` or `generateManPage()` for async
+    parsers.  [[#291], [#584]]
+
+ -  `formatDocPageAsMan()` and the `generateManPage*()` functions now throw
+    a `TypeError` when `name` is an empty string, instead of generating
+    malformed man page output.  [[#286], [#556]]
+
+ -  `formatDocPageAsMan()` and the `generateManPage*()` functions now throw
+    a `RangeError` when `section` is not a valid man page section number
+    (1–8), instead of generating malformed man page output.  [[#287], [#557]]
 
  -  Changed `ManPageOptions.seeAlso[].section` type from `number` to
     `ManPageSection` and added runtime validation that rejects invalid section
@@ -2343,10 +2385,33 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     were silently serialized into malformed `.BR` cross-references.
     [[#380], [#578]]
 
- -  `generateManPageSync()`, `generateManPageAsync()`, and `generateManPage()`
-    now validate that the input is a genuine Optique `Parser` or `Program`
-    up front, instead of accepting malformed objects and crashing with an
-    internal `getDocFragments is not a function` error.  [[#305], [#567]]
+#### Generated man page output
+
+ -  Fixed `generateManPage*()` dropping `brief`, `description`, and `footer`
+    from `Program` metadata.  These fields are now forwarded to the man page
+    output.  Added `brief`, `description`, and `footer` to `ManPageOptions`
+    so they can also be passed as explicit overrides in both the parser-based
+    and program-based APIs.  [[#260], [#598]]
+
+ -  Fixed `formatDocPageAsMan()` to fall back to `DocPage.examples`,
+    `DocPage.author`, and `DocPage.bugs` when the corresponding
+    `ManPageOptions` fields are absent.  Previously, those page-level
+    metadata fields were silently ignored unless duplicated in the options.
+    [[#263], [#602]]
+
+ -  Fixed `formatDocPageAsMan()` to include `DocEntry.choices` in man page
+    output.  Previously, available choices were silently dropped.
+    [[#265], [#604]]
+
+ -  Fixed `formatDocPageAsMan()` to respect command `usageLine` overrides
+    in the SYNOPSIS section.  Previously, the man page formatter always
+    rendered the default command usage, ignoring custom `usageLine` values.
+    [[#237], [#593]]
+
+ -  Fixed `formatDocPageAsMan()` labeling untitled sections as `OPTIONS`
+    regardless of entry kinds.  Untitled command-only sections now render
+    as `COMMANDS`, and untitled argument-only sections render as `ARGUMENTS`.
+    [[#261], [#601]]
 
  -  Fixed `generateManPage()` leaving empty wrappers and dangling separators
     in SYNOPSIS when hidden terms are nested inside `optional`, `multiple`,
@@ -2359,18 +2424,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     (`hidden: true`, `"usage"`, `"help"`) are now suppressed.
     [[#221], [#222], [#526], [#529]]
 
- -  The `optique-man` CLI now rejects empty strings for `--name`, `--date`,
-    `--version-string`, and `--manual` options instead of generating malformed
-    `.TH` header lines.  [[#283], [#532]]
-
- -  Fixed `optique-man` not recognizing `.tsx` and `.jsx` input files as
-    needing the `tsx` loader on Node.js, causing `ERR_UNKNOWN_FILE_EXTENSION`
-    errors instead of the intended TypeScript-handling flow.  [[#280], [#534]]
-
- -  Fixed `optique-man` CLI not defaulting `--date` to the current date when
-    omitted.  The help text documented “defaults to the current date” but
-    `undefined` was passed through, producing an empty date field in the `.TH`
-    header.  [[#276], [#547]]
+ -  Fixed `formatUsageTermAsRoff()` rendering optional and Boolean options
+    with duplicated brackets (e.g., `[[--host STRING]]`) in the SYNOPSIS
+    section.  The `optional` and `multiple` wrappers now avoid adding
+    redundant brackets around inner `option` terms that already imply
+    optionality.  [[#197], [#586]]
 
  -  Fixed `formatDocPageAsMan()` not escaping hyphens and roff special
     characters (backslashes, line-start periods/quotes) in program names,
@@ -2379,26 +2437,6 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
  -  Fixed `formatMessageAsRoff()` not escaping double quotes inside
     `value()` and `values()` terms, which produced malformed roff output.
     [[#273], [#544]]
-
- -  Fixed `optique-man` inferring an empty program name for extensionless
-    input files.  `inferNameFromPath()` returned an empty string because
-    `base.slice(0, -0)` yields `""` in JavaScript.  [[#277], [#551]]
-
- -  Fixed `optique-man` accepting malformed parser-like or program-like
-    exports that pass shallow validation but crash later with internal
-    generation errors.  The `isParser()` guard now checks for the
-    `getDocFragments` method, and `isProgram()` now validates that
-    `metadata.name` is a string and that the nested `parser` passes
-    `isParser()`.  Both guards also catch exceptions from throwing
-    accessors.  [[#278], [#552]]
-
- -  `formatDocPageAsMan()` and the `generateManPage*()` functions now throw
-    a `TypeError` when `name` is an empty string, instead of generating
-    malformed man page output.  [[#286], [#556]]
-
- -  `formatDocPageAsMan()` and the `generateManPage*()` functions now throw
-    a `RangeError` when `section` is not a valid man page section number
-    (1–8), instead of generating malformed man page output.  [[#287], [#557]]
 
  -  Fixed `formatDocPageAsMan()` emitting `literal` usage/doc terms without
     roff line-start escaping.  Values starting with `.` or `'` (e.g., `.env`)
@@ -2425,27 +2463,27 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     spaces, backslashes, or quotes were corrupted by the renderer because
     roff parsed them as macro syntax.  [[#302], [#574]]
 
- -  `generateManPageSync()` now throws `TypeError` at runtime when given an
-    async parser or program.  Previously it silently produced output; now
-    callers must use `generateManPageAsync()` or `generateManPage()` for async
-    parsers.  [[#291], [#584]]
+ -  Fixed `formatDateForMan()` to throw a `RangeError` for invalid `Date`
+    objects instead of formatting them as `"undefined NaN"`.  [[#266], [#607]]
 
- -  Fixed `formatUsageTermAsRoff()` rendering optional and Boolean options
-    with duplicated brackets (e.g., `[[--host STRING]]`) in the SYNOPSIS
-    section.  The `optional` and `multiple` wrappers now avoid adding
-    redundant brackets around inner `option` terms that already imply
-    optionality.  [[#197], [#586]]
+#### CLI fixes
 
- -  Fixed `generateManPage*()` dropping `brief`, `description`, and `footer`
-    from `Program` metadata.  These fields are now forwarded to the man page
-    output.  Added `brief`, `description`, and `footer` to `ManPageOptions`
-    so they can also be passed as explicit overrides in both the parser-based
-    and program-based APIs.  [[#260], [#598]]
+ -  The `optique-man` CLI now rejects empty strings for `--name`, `--date`,
+    `--version-string`, and `--manual` options instead of generating malformed
+    `.TH` header lines.  [[#283], [#532]]
 
- -  Fixed `formatDocPageAsMan()` labeling untitled sections as `OPTIONS`
-    regardless of entry kinds.  Untitled command-only sections now render
-    as `COMMANDS`, and untitled argument-only sections render as `ARGUMENTS`.
-    [[#261], [#601]]
+ -  Fixed `optique-man` not recognizing `.tsx` and `.jsx` input files as
+    needing the `tsx` loader on Node.js, causing `ERR_UNKNOWN_FILE_EXTENSION`
+    errors instead of the intended TypeScript-handling flow.  [[#280], [#534]]
+
+ -  Fixed `optique-man` CLI not defaulting `--date` to the current date when
+    omitted.  The help text documented “defaults to the current date” but
+    `undefined` was passed through, producing an empty date field in the `.TH`
+    header.  [[#276], [#547]]
+
+ -  Fixed `optique-man` inferring an empty program name for extensionless
+    input files.  `inferNameFromPath()` returned an empty string because
+    `base.slice(0, -0)` yields `""` in JavaScript.  [[#277], [#551]]
 
 [#197]: https://github.com/dahlia/optique/issues/197
 [#221]: https://github.com/dahlia/optique/issues/221
@@ -2502,6 +2540,10 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
 ### @optique/valibot
 
+ -  *Breaking change:* `valibot()` now requires a `placeholder` option in
+    `ValibotParserOptions`.  This value is used as a type-appropriate stand-in
+    during deferred prompt resolution.  [[#407], [#727]]
+
  -  `valibot()` now exposes choice metadata for `v.picklist()`,
     string-valued `v.literal()` schemas, and `v.union()` schemas composed
     entirely of string literals.  Help text with `showChoices` enabled
@@ -2512,9 +2554,12 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `v.literal()` schemas with string values, and for `v.union()` schemas
     composed entirely of string literals.  [[#281], [#688]]
 
- -  `valibot()` now validates the `metavar` option at runtime and throws
-    a `TypeError` for empty strings.  Previously, an empty `metavar` would
-    silently produce malformed help output.  [[#460], [#691]]
+ -  `valibot()` now formats transformed non-primitive values intelligently
+    instead of producing `[object Object]`.  `Date` values use `.toISOString()`
+    for stable output.  Plain objects use `JSON.stringify()`, while arrays
+    use `String()` to preserve round-trip compatibility for common transforms.
+    A new `format` option in `ValibotParserOptions` allows custom formatting.
+    [[#285], [#706]]
 
  -  `valibot()` now throws a `TypeError` at construction time when given an
     async schema (e.g., `v.pipeAsync()` with `v.checkAsync()`).  Previously,
@@ -2526,16 +2571,9 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     wrapping an async schema (e.g., `v.pipeAsync()`) silently returned
     `{ success: true, value: undefined }`.  [[#461], [#731]]
 
- -  `valibot()` now formats transformed non-primitive values intelligently
-    instead of producing `[object Object]`.  `Date` values use `.toISOString()`
-    for stable output.  Plain objects use `JSON.stringify()`, while arrays
-    use `String()` to preserve round-trip compatibility for common transforms.
-    A new `format` option in `ValibotParserOptions` allows custom formatting.
-    [[#285], [#706]]
-
- -  *Breaking change:* `valibot()` now requires a `placeholder` option in
-    `ValibotParserOptions`.  This value is used as a type-appropriate stand-in
-    during deferred prompt resolution.  [[#407], [#727]]
+ -  `valibot()` now validates the `metavar` option at runtime and throws
+    a `TypeError` for empty strings.  Previously, an empty `metavar` would
+    silently produce malformed help output.  [[#460], [#691]]
 
 [#281]: https://github.com/dahlia/optique/issues/281
 [#285]: https://github.com/dahlia/optique/issues/285
@@ -2565,13 +2603,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `z.literal()` schemas with string values, and for `z.union()` schemas
     composed entirely of string literals.  [[#281], [#688]]
 
- -  `zod()` now validates the `metavar` option at runtime and throws
-    a `TypeError` for empty strings.  Previously, an empty `metavar` would
-    silently produce malformed help output.  [[#460], [#691]]
-
- -  `zod()` now throws a `TypeError` when an async Zod schema (e.g., async
-    refinements) is used.  Previously, the raw Zod error was propagated
-    unhandled.  [[#462], [#701]]
+ -  `zod()` now uses CLI-friendly Boolean parsing for `z.boolean()` and
+    `z.coerce.boolean()` schemas instead of JavaScript truthiness semantics.
+    Accepted literals (case-insensitive): `true`/`false`, `1`/`0`, `yes`/`no`,
+    `on`/`off`.  Recognized boolean schemas expose CLI-friendly completion
+    metadata (`choices`/`suggest()`) when applicable.  [[#295], [#712]]
 
  -  `zod()` now formats transformed non-primitive values intelligently
     instead of producing `[object Object]`.  `Date` values use `.toISOString()`
@@ -2580,11 +2616,13 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     A new `format` option in `ZodParserOptions` allows custom formatting.
     [[#285], [#706]]
 
- -  `zod()` now uses CLI-friendly Boolean parsing for `z.boolean()` and
-    `z.coerce.boolean()` schemas instead of JavaScript truthiness semantics.
-    Accepted literals (case-insensitive): `true`/`false`, `1`/`0`, `yes`/`no`,
-    `on`/`off`.  Recognized boolean schemas expose CLI-friendly completion
-    metadata (`choices`/`suggest()`) when applicable.  [[#295], [#712]]
+ -  `zod()` now throws a `TypeError` when an async Zod schema (e.g., async
+    refinements) is used.  Previously, the raw Zod error was propagated
+    unhandled.  [[#462], [#701]]
+
+ -  `zod()` now validates the `metavar` option at runtime and throws
+    a `TypeError` for empty strings.  Previously, an empty `metavar` would
+    silently produce malformed help output.  [[#460], [#691]]
 
 [#295]: https://github.com/dahlia/optique/issues/295
 [#712]: https://github.com/dahlia/optique/pull/712
