@@ -412,10 +412,16 @@ export function getCommitHistory(
 }
 
 /**
- * Unstages a single file by reverting the index entry to match HEAD.
- * For tracked files, the HEAD version is restored in the index (the
- * working tree is not touched).  For files that are new in the index
- * (not in HEAD), the entry is removed from the index entirely.
+ * Best-effort approximation of unstaging a single file.
+ *
+ * The current index entry is removed.  If the path exists in HEAD the
+ * file is then re-added from the working tree so that it remains tracked
+ * rather than appearing as a staged deletion.  This does *not* truly
+ * restore the HEAD blob into the index — es-git does not expose an API
+ * to add index entries by OID — so a tracked file that was staged after
+ * modification may remain staged with the modified content.  Files not
+ * present in HEAD are removed from the index entirely (unstage an
+ * addition).
  */
 export function unstageFile(repo: Repository, filePath: string): void {
   const index = repo.index();
