@@ -355,7 +355,7 @@ export const zsh: ShellCompletion = {
     validateProgramName(programName);
     const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "'\\''")}'`)
       .join(" ");
-    return `
+    return `#compdef ${programName}
 function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
   local current="\$words[CURRENT]"
   local -a prev

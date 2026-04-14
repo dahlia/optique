@@ -712,6 +712,12 @@ To be released.
     the default smart sort to give full control over section ordering in
     help output.  [[#115]]
 
+ -  Fixed generated zsh completion scripts missing the required `#compdef`
+    header on the first line.  Scripts saved under
+    `~/.zsh/completions/_myapp` are now recognized by `compinit` as
+    autoloaded completion files while still working when sourced directly.
+    [[#766]]
+
  -  Added display-oriented command usage customization:
 
      -  `UsageTerm` now supports an `ellipsis` term for concise usage
@@ -1709,6 +1715,7 @@ To be released.
 [#763]: https://github.com/dahlia/optique/pull/763
 [#764]: https://github.com/dahlia/optique/pull/764
 [#765]: https://github.com/dahlia/optique/pull/765
+[#766]: https://github.com/dahlia/optique/pull/766
 [#768]: https://github.com/dahlia/optique/issues/768
 [#769]: https://github.com/dahlia/optique/pull/769
 [#771]: https://github.com/dahlia/optique/pull/771

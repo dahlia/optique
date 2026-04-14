@@ -1690,6 +1690,12 @@ fi
       deepStrictEqual(script.includes("compdef _myapp myapp"), true);
     });
 
+    it("should start autoloaded scripts with a compdef header", () => {
+      const script = zsh.generateScript("myapp");
+
+      ok(script.startsWith("#compdef myapp\n"));
+    });
+
     it("should expand extensions variable in ext_pattern assignment", () => {
       const script = zsh.generateScript("myapp");
 
