@@ -935,14 +935,14 @@ describe("bindEnv()", () => {
     // bindEnv must propagate this failure, not silently fall back to env/default.
     const result = parse(parser, ["--port"]);
     assert.ok(!result.success);
-    // Should show the specific "requires a value" error, not a generic
+    // Should show the specific "requires <METAVAR>" error, not a generic
     // "Unexpected option or argument" message:
     const errorText = result.error
       .map((s) => "text" in s ? s.text : "")
       .join("");
     assert.ok(
-      errorText.includes("requires a value"),
-      `Expected "requires a value" error, got: ${JSON.stringify(result.error)}`,
+      errorText.includes("requires"),
+      `Expected "requires" error, got: ${JSON.stringify(result.error)}`,
     );
   });
 

@@ -451,10 +451,8 @@ describe("prompt()", () => {
         .map((s: Record<string, unknown>) => "text" in s ? s.text : "")
         .join("");
       assert.ok(
-        errorText.includes("requires a value"),
-        `Expected "requires a value" in error, got: ${
-          JSON.stringify(result.error)
-        }`,
+        errorText.includes("requires"),
+        `Expected "requires" in error, got: ${JSON.stringify(result.error)}`,
       );
     });
 

@@ -712,7 +712,7 @@ describe("optional", () => {
     const result = parse(optionalParser, ["-n"]);
     assert.ok(!result.success);
     if (!result.success) {
-      assertErrorIncludes(result.error, "value");
+      assertErrorIncludes(result.error, "requires");
     }
   });
 
@@ -1880,7 +1880,7 @@ describe("withDefault", () => {
     const result = parse(defaultParser, ["-n"]);
     assert.ok(!result.success);
     if (!result.success) {
-      assertErrorIncludes(result.error, "value");
+      assertErrorIncludes(result.error, "requires");
     }
   });
 
@@ -4888,7 +4888,7 @@ describe("multiple", () => {
       );
       assert.ok(!result.success);
       if (!result.success) {
-        assertErrorIncludes(result.error, "requires a value");
+        assertErrorIncludes(result.error, "requires");
       }
     });
 
