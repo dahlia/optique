@@ -579,7 +579,7 @@ describe("option", () => {
     });
 
     it("should fail when value is missing", () => {
-      const parser = option("--port", integer());
+      const parser = option("--port", integer({ metavar: "PORT" }));
       const context = {
         buffer: ["--port"] as readonly string[],
         state: parser.initialState,
@@ -591,7 +591,8 @@ describe("option", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(result.consumed, 1);
-        assertErrorIncludes(result.error, "requires a value");
+        assertErrorIncludes(result.error, "--port");
+        assertErrorIncludes(result.error, "PORT");
       }
     });
 
@@ -6877,6 +6878,24 @@ describe("branch coverage: primitives edge cases", () => {
     assert.ok(!endOfInputCustom.success);
     if (!endOfInputCustom.success) {
       assert.equal(formatMessage(endOfInputCustom.error), "custom end");
+    }
+
+    const missingValueCustom = option(
+      "--mode",
+      string({ metavar: "MODE" }),
+      { errors: { endOfInput: message`custom missing value` } },
+    ).parse({
+      buffer: ["--mode"] as readonly string[],
+      state: undefined,
+      optionsTerminated: false,
+      usage: [],
+    });
+    assert.ok(!missingValueCustom.success);
+    if (!missingValueCustom.success) {
+      assert.equal(
+        formatMessage(missingValueCustom.error),
+        "custom missing value",
+      );
     }
 
     const boolComplete = option("--enabled").complete(undefined);

@@ -1371,6 +1371,12 @@ To be released.
     `bindConfig()` wrappers under `optional()` / `withDefault()` can
     resolve their fallbacks at top level.  [[#233], [#775]]
 
+ -  Fixed `option()` missing-value errors to show the option's metavar
+    (e.g., `--author` requires `AUTHOR`) instead of a generic “requires a
+    value” message.  The same path now also honors `errors.endOfInput`
+    customization when the option name was present but its value token was
+    missing.
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113

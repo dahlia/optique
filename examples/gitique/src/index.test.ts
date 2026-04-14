@@ -75,6 +75,13 @@ describe("gitique CLI", () => {
     );
   });
 
+  it("shows AUTHOR metavar when --author is missing a value", () => {
+    const result = runGitique(["commit", "--author"]);
+
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /Error: `--author` requires `AUTHOR`\./);
+  });
+
   it("rejects impossible ISO dates before execution", () => {
     const result = runGitique(["log", "--since", "2024-02-31"]);
 

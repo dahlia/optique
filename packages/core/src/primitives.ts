@@ -1023,9 +1023,10 @@ export function option<M extends Mode, T>(
           return {
             success: false,
             consumed: 1,
-            error: message`Option ${
-              eOptionName(context.buffer[0])
-            } requires a value, but got no value.`,
+            error: options.errors?.endOfInput ??
+              message`${eOptionName(context.buffer[0])} requires ${
+                metavar(valueParser.metavar)
+              }.`,
           };
         }
         const rawInput = context.buffer[1];
