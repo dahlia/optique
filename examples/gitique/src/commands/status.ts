@@ -8,6 +8,7 @@ import {
   lineBreak,
   message,
   optionName,
+  valueSet,
 } from "@optique/core/message";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -101,6 +102,14 @@ function formatStatusPorcelainMerged(
  */
 const outputFormats = ["long", "short", "porcelain"] as const;
 
+function outputFormatChoices(values: readonly string[]) {
+  return valueSet(values, {
+    fallback: "",
+    locale: "en-US",
+    type: "disjunction",
+  });
+}
+
 /**
  * Display options for the status command.
  * Demonstrates Optique's group() combinator for organizing help text.
@@ -109,10 +118,21 @@ const displayOptions = group(
   "Display Options",
   object({
     format: optional(
-      option("--format", choice(outputFormats, { metavar: "FORMAT" }), {
-        description:
-          message`Output format: long (default), short, or porcelain`,
-      }),
+      option(
+        "--format",
+        choice(outputFormats, {
+          metavar: "FORMAT",
+          errors: {
+            invalidChoice: (input, choices) =>
+              message`Unknown status format ${input}. Choose ${
+                outputFormatChoices(choices)
+              }.`,
+          },
+        }),
+        {
+          description: message`Output format`,
+        },
+      ),
     ),
     short: option("-s", "--short", {
       description: message`Shorthand for ${optionName("--format")}=short`,

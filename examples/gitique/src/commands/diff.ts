@@ -9,6 +9,8 @@ import {
   message,
   metavar,
   optionName,
+  text,
+  valueSet,
 } from "@optique/core/message";
 import process from "node:process";
 import { getDiff, getRepository } from "../utils/git.ts";
@@ -24,6 +26,14 @@ import { exitWithError } from "../utils/output.ts";
  * Demonstrates Optique's choice() value parser.
  */
 const algorithms = ["default", "minimal", "patience"] as const;
+
+function choiceList(values: readonly string[]) {
+  return valueSet(values, {
+    fallback: "",
+    locale: "en-US",
+    type: "disjunction",
+  });
+}
 
 /**
  * Display options for the diff command.
@@ -64,10 +74,21 @@ const contextOptions = group(
       3,
     ),
     algorithm: withDefault(
-      option("--diff-algorithm", choice(algorithms, { metavar: "ALGORITHM" }), {
-        description:
-          message`Choose a diff algorithm (default, minimal, patience)`,
-      }),
+      option(
+        "--diff-algorithm",
+        choice(algorithms, {
+          metavar: "ALGORITHM",
+          errors: {
+            invalidChoice: (input, choices) =>
+              message`Unknown diff algorithm ${input}. Choose ${
+                choiceList(choices)
+              }.`,
+          },
+        }),
+        {
+          description: message`Choose a diff algorithm`,
+        },
+      ),
       "default" as const,
     ),
   }),
@@ -112,7 +133,15 @@ const diffOptionsParser = map(
         argument(string({ metavar: "COMMIT" }), {
           description: message`Commits to compare (0, 1, or 2)`,
         }),
-        { max: 2 },
+        {
+          max: 2,
+          errors: {
+            tooMany: (count, max) =>
+              message`Expected at most ${
+                text(String(max))
+              } commit references, got ${text(String(count))}.`,
+          },
+        },
       ),
     }),
   ),

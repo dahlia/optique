@@ -2,12 +2,20 @@ import { group, merge, object } from "@optique/core/constructs";
 import { map, optional, withDefault } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { command, constant, option } from "@optique/core/primitives";
-import { choice, integer, string } from "@optique/core/valueparser";
+import {
+  choice,
+  integer,
+  string,
+  type ValueParser,
+  type ValueParserResult,
+} from "@optique/core/valueparser";
 import {
   commandLine,
   lineBreak,
   message,
   optionName,
+  text,
+  valueSet,
 } from "@optique/core/message";
 import { print } from "@optique/run";
 import { getCommitHistory, getRepository } from "../utils/git.ts";
@@ -23,6 +31,53 @@ import { exitWithError } from "../utils/output.ts";
  * Demonstrates Optique's choice() value parser.
  */
 const formatChoices = ["oneline", "short", "medium", "full"] as const;
+const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+function formatChoicesMessage(values: readonly string[]) {
+  return valueSet(values, {
+    fallback: "",
+    locale: "en-US",
+    type: "disjunction",
+  });
+}
+
+function parseLocalDate(input: string): ValueParserResult<Date> {
+  if (!isoDatePattern.test(input)) {
+    return {
+      success: false,
+      error: message`Invalid date ${input}. Use ${text("YYYY-MM-DD")}.`,
+    };
+  }
+
+  const [year, month, day] = input.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year || date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return {
+      success: false,
+      error: message`Invalid date ${input}. Use a real calendar date in ${
+        text("YYYY-MM-DD")
+      } format.`,
+    };
+  }
+
+  return { success: true, value: date };
+}
+
+const localDateParser: ValueParser<"sync", Date> = {
+  mode: "sync",
+  metavar: "DATE",
+  placeholder: new Date(1970, 0, 1),
+  parse: parseLocalDate,
+  format(value: Date): string {
+    const year = value.getFullYear().toString().padStart(4, "0");
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  },
+};
 
 /**
  * Display options for the log command.
@@ -32,9 +87,21 @@ const displayOptions = group(
   "Display Options",
   object({
     format: optional(
-      option("--format", choice(formatChoices, { metavar: "FORMAT" }), {
-        description: message`Output format: oneline, short, medium, or full`,
-      }),
+      option(
+        "--format",
+        choice(formatChoices, {
+          metavar: "FORMAT",
+          errors: {
+            invalidChoice: (input, choices) =>
+              message`Unknown log format ${input}. Choose ${
+                formatChoicesMessage(choices)
+              }.`,
+          },
+        }),
+        {
+          description: message`Output format`,
+        },
+      ),
     ),
     oneline: option("--oneline", {
       description: message`Shorthand for ${optionName("--format")}=oneline`,
@@ -56,13 +123,13 @@ const filterOptions = group(
   "Filter Options",
   object({
     since: optional(
-      option("--since", string({ metavar: "DATE" }), {
-        description: message`Show commits after the specified date`,
+      option("--since", localDateParser, {
+        description: message`Show commits on or after the specified ISO date`,
       }),
     ),
     until: optional(
-      option("--until", string({ metavar: "DATE" }), {
-        description: message`Show commits before the specified date`,
+      option("--until", localDateParser, {
+        description: message`Show commits on or before the specified ISO date`,
       }),
     ),
     author: optional(
@@ -140,35 +207,6 @@ export const logCommand = command("log", logOptionsParser, {
 export type LogConfig = InferValue<typeof logCommand>;
 
 /**
- * Parses a date string into a Date object.
- * Accepts any format understood by `new Date(string)`, such as ISO 8601
- * dates.  Relative phrases like "2 days ago" are not supported.
- *
- * Bare `YYYY-MM-DD` strings are treated as local-time midnight to avoid
- * UTC-offset surprises (e.g. "2024-01-01" meaning 2023-12-31 for UTC-8).
- */
-function parseDate(dateString: string): Date {
-  // ISO date-only: treat as local midnight, not UTC midnight.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-    const [year, month, day] = dateString.split("-").map(Number);
-    const d = new Date(year, month - 1, day);
-    // new Date() normalises impossible dates (e.g. Feb 31 → Mar 2); reject them.
-    if (
-      d.getFullYear() !== year || d.getMonth() !== month - 1 ||
-      d.getDate() !== day
-    ) {
-      throw new Error(`Invalid date: "${dateString}"`);
-    }
-    return d;
-  }
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) {
-    throw new Error(`Invalid date format: "${dateString}"`);
-  }
-  return date;
-}
-
-/**
  * Filters commits based on the provided criteria.
  */
 function filterCommits(
@@ -179,18 +217,18 @@ function filterCommits(
 
   // Filter by date range
   if (config.since) {
-    const sinceDate = parseDate(config.since);
+    const since = config.since;
     filtered = filtered.filter(({ commit }) => {
       const authorDate = new Date(commit.author().timestamp * 1000);
-      return authorDate >= sinceDate;
+      return authorDate >= since;
     });
   }
 
   if (config.until) {
-    const untilDate = parseDate(config.until);
+    const until = config.until;
     filtered = filtered.filter(({ commit }) => {
       const authorDate = new Date(commit.author().timestamp * 1000);
-      return authorDate <= untilDate;
+      return authorDate <= until;
     });
   }
 

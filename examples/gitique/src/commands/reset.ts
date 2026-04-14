@@ -9,9 +9,10 @@ import {
   message,
   optionName,
   text,
+  valueSet,
 } from "@optique/core/message";
 import process from "node:process";
-import { print, printError } from "@optique/run";
+import { path, print, printError } from "@optique/run";
 import {
   checkoutHead,
   getRepository,
@@ -29,6 +30,14 @@ import { exitWithError } from "../utils/output.ts";
  */
 const resetModes = ["soft", "mixed", "hard"] as const;
 
+function resetModeChoices(values: readonly string[]) {
+  return valueSet(values, {
+    fallback: "",
+    locale: "en-US",
+    type: "disjunction",
+  });
+}
+
 /**
  * Mode options for the reset command.
  * Demonstrates Optique's group() combinator for organizing help text.
@@ -37,10 +46,25 @@ const modeOptions = group(
   "Reset Mode",
   object({
     mode: optional(
-      option("--mode", choice(resetModes, { metavar: "MODE" }), {
-        description:
-          message`Reset mode: ${"soft"} (keep changes staged), ${"mixed"} (unstage changes), ${"hard"} (discard all)`,
-      }),
+      option(
+        "--mode",
+        choice(resetModes, {
+          metavar: "MODE",
+          errors: {
+            invalidChoice: (input, choices) =>
+              message`Unknown reset mode ${input}. Choose ${
+                resetModeChoices(choices)
+              }.`,
+          },
+        }),
+        {
+          description: message`Reset mode: ${
+            text("soft")
+          } keeps changes staged, ${text("mixed")} unstages changes, ${
+            text("hard")
+          } discards all changes`,
+        },
+      ),
     ),
     soft: option("--soft", {
       description: message`Shorthand for ${commandLine("--mode=soft")}`,
@@ -89,7 +113,7 @@ const resetOptionsParser = map(
       // avoid ambiguity between commit refs and file paths, which Optique
       // cannot disambiguate via "--" for positional parsers.
       files: multiple(
-        option("-f", "--file", string({ metavar: "FILE" }), {
+        option("-f", "--file", path({ metavar: "FILE" }), {
           description: message`Unstage specific files (can be repeated)`,
         }),
       ),

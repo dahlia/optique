@@ -4,12 +4,19 @@ import { group, merge, object } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { command, constant, option } from "@optique/core/primitives";
-import { string } from "@optique/core/valueparser";
+import {
+  string,
+  type ValueParser,
+  type ValueParserResult,
+} from "@optique/core/valueparser";
 import {
   commandLine,
   lineBreak,
   message,
+  metavar,
   optionName,
+  optionNames,
+  text,
 } from "@optique/core/message";
 import { print } from "@optique/run";
 import {
@@ -22,6 +29,36 @@ import {
 import { formatCommitCreated } from "../utils/formatters.ts";
 import { exitWithError } from "../utils/output.ts";
 
+export interface AuthorIdentity {
+  readonly name: string;
+  readonly email: string;
+}
+
+const authorPattern = /^([^<]+)\s*<([^>]+)>$/;
+
+function parseAuthorIdentity(input: string): ValueParserResult<AuthorIdentity> {
+  const match = input.match(authorPattern);
+  const name = match?.[1]?.trim() ?? "";
+  const email = match?.[2]?.trim() ?? "";
+  if (!name || !email) {
+    return {
+      success: false,
+      error: message`Invalid author ${input}. Use ${text("Name <email>")}.`,
+    };
+  }
+  return { success: true, value: { name, email } };
+}
+
+const authorParser: ValueParser<"sync", AuthorIdentity> = {
+  mode: "sync",
+  metavar: "AUTHOR",
+  placeholder: { name: "Jane Doe", email: "jane@example.com" },
+  parse: parseAuthorIdentity,
+  format(value: AuthorIdentity): string {
+    return `${value.name} <${value.email}>`;
+  },
+};
+
 /**
  * Commit options for the commit command.
  * Demonstrates Optique's group() combinator for organizing help text.
@@ -29,9 +66,28 @@ import { exitWithError } from "../utils/output.ts";
 const commitOptions = group(
   "Commit Options",
   object({
-    message: option("-m", "--message", string({ metavar: "MESSAGE" }), {
-      description: message`Commit message`,
-    }),
+    message: option(
+      "-m",
+      "--message",
+      string({
+        metavar: "MESSAGE",
+        pattern: /\S/,
+        errors: {
+          patternMismatch:
+            message`Commit message must contain non-whitespace characters.`,
+        },
+      }),
+      {
+        description: message`Commit message`,
+        errors: {
+          missing: (names) =>
+            message`Use ${optionNames(names)} to provide a commit message.`,
+          endOfInput: message`${optionNames(["-m", "--message"])} requires ${
+            metavar("MESSAGE")
+          }.`,
+        },
+      },
+    ),
     all: option("-a", "--all", {
       description:
         message`Automatically stage all modified and deleted files before committing`,
@@ -49,9 +105,16 @@ const authorOptions = group(
   "Author Options",
   object({
     author: optional(
-      option("--author", string({ metavar: "AUTHOR" }), {
+      option("--author", authorParser, {
         description:
           message`Override the commit author (format: "Name <email>")`,
+        errors: {
+          endOfInput: message`${optionName("--author")} requires ${
+            metavar("AUTHOR")
+          }.`,
+          invalidValue: (error) =>
+            message`${optionName("--author")} is invalid: ${error}`,
+        },
       }),
     ),
   }),
@@ -95,21 +158,6 @@ export const commitCommand = command("commit", commitOptionsParser, {
 export type CommitConfig = InferValue<typeof commitCommand>;
 
 /**
- * Parses author string in the format "Name <email>".
- */
-function parseAuthor(authorString: string): { name: string; email: string } {
-  const match = authorString.match(/^([^<]+)\s*<([^>]+)>$/);
-  const name = match?.[1]?.trim() ?? "";
-  const email = match?.[2]?.trim() ?? "";
-  if (!name || !email) {
-    throw new Error(
-      `Invalid author format: "${authorString}". Expected format: "Name <email>".`,
-    );
-  }
-  return { name, email };
-}
-
-/**
  * Executes the git commit command with the parsed configuration.
  */
 export async function executeCommit(config: CommitConfig): Promise<void> {
@@ -141,8 +189,11 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
     // Create author signature; pass repo so local config is checked first.
     let authorSignature;
     if (config.author) {
-      const { name, email } = parseAuthor(config.author.trim());
-      authorSignature = createGitSignature(name, email, repo);
+      authorSignature = createGitSignature(
+        config.author.name,
+        config.author.email,
+        repo,
+      );
     } else {
       authorSignature = createGitSignature(undefined, undefined, repo);
     }
