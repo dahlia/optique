@@ -54,7 +54,7 @@
       ],
       "command": "deno cache packages/*/src/**/*.ts examples/*/src/**/*.ts && pnpm install"
     },
-    "test": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net --env-file=.env.test",
+    "test": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net --allow-sys --allow-ffi --env-file=.env.test",
     "test:node": "pnpm run -r test",
     "test:bun": "pnpm run -r test:bun",
     "test-all": {
