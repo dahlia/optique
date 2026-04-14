@@ -144,7 +144,7 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
     // Create author signature; pass repo so local config is checked first.
     let authorSignature;
     if (config.author) {
-      const { name, email } = parseAuthor(config.author);
+      const { name, email } = parseAuthor(config.author.trim());
       authorSignature = createGitSignature(name, email, repo);
     } else {
       authorSignature = createGitSignature(undefined, undefined, repo);
