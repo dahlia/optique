@@ -1,15 +1,23 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { group, merge, object } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { command, constant, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
-import { commandLine, message, optionName } from "@optique/core/message";
+import {
+  commandLine,
+  lineBreak,
+  message,
+  optionName,
+} from "@optique/core/message";
 import { printError } from "@optique/run";
 import {
-  addAllFiles,
   createCommit,
   createGitSignature,
   getRepository,
+  isIndexEmpty,
+  stageTrackedFiles,
 } from "../utils/git.ts";
 import {
   formatCommitCreated,
@@ -24,11 +32,9 @@ import {
 const commitOptions = group(
   "Commit Options",
   object({
-    message: optional(
-      option("-m", "--message", string({ metavar: "MESSAGE" }), {
-        description: message`Commit message to use for this commit`,
-      }),
-    ),
+    message: option("-m", "--message", string({ metavar: "MESSAGE" }), {
+      description: message`Commit message`,
+    }),
     all: option("-a", "--all", {
       description:
         message`Automatically stage all modified and deleted files before committing`,
@@ -75,14 +81,14 @@ export const commitCommand = command("commit", commitOptionsParser, {
   description: message`Record changes to the repository with a commit. Use ${
     optionName("-m")
   } to provide a commit message.`,
-  footer: message`Examples:
-  ${commandLine('gitique commit -m "Initial commit"')}
-  ${commandLine('gitique commit -a -m "Fix bug"')}
+  footer: message`Examples:${lineBreak()}
+  ${commandLine('gitique commit -m "Initial commit"')}${lineBreak()}
+  ${commandLine('gitique commit -a -m "Fix bug"')}${lineBreak()}
   ${
     commandLine(
       'gitique commit --author "John <john@example.com>" -m "Co-authored"',
     )
-  }
+  }${lineBreak()}
   ${commandLine('gitique commit --allow-empty -m "Empty commit"')}`,
 });
 
@@ -95,34 +101,15 @@ export type CommitConfig = InferValue<typeof commitCommand>;
  * Parses author string in the format "Name <email>".
  */
 function parseAuthor(authorString: string): { name: string; email: string } {
-  const match = authorString.match(/^(.+?)\s*<(.+?)>$/);
-  if (!match) {
+  const match = authorString.match(/^([^<]+)\s*<([^>]+)>$/);
+  const name = match?.[1]?.trim() ?? "";
+  const email = match?.[2]?.trim() ?? "";
+  if (!name || !email) {
     throw new Error(
-      `Invalid author format: "${authorString}". Expected format: "Name <email>"`,
+      `Invalid author format: "${authorString}". Expected format: "Name <email>".`,
     );
   }
-
-  return {
-    name: match[1].trim(),
-    email: match[2].trim(),
-  };
-}
-
-/**
- * Prompts user for commit message if not provided via -m option.
- * In a real implementation, this would open an editor.
- */
-function getCommitMessage(providedMessage?: string): string {
-  if (providedMessage) {
-    return providedMessage;
-  }
-
-  // In a real implementation, we would open an editor like vim/nano
-  // For this example, we'll require the message to be provided via -m
-  throw new Error(
-    "Aborting commit due to empty commit message.\n" +
-      "Please use 'gitique commit -m \"your message\"' to provide a commit message.",
-  );
+  return { name, email };
 }
 
 /**
@@ -132,40 +119,81 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
   try {
     const repo = await getRepository();
 
-    // Stage all files if --all option is used
+    // Stage tracked (modified/deleted) files if --all option is used.
+    // Use stageTrackedFiles (index.updateAll) rather than addAllFiles so
+    // that untracked files are not accidentally staged, matching git -a.
     if (config.all) {
       console.log("Staging all modified and deleted files...");
-      await addAllFiles(repo);
+      stageTrackedFiles(repo);
     }
 
-    // Get commit message
-    const commitMessage = getCommitMessage(config.message);
+    // Reject empty commits unless --allow-empty is set
+    if (!config.allowEmpty && isIndexEmpty(repo)) {
+      throw new Error(
+        "nothing to commit (create/copy files and use 'gitique add' to track).",
+      );
+    }
 
-    // Create author signature
+    const commitMessage = config.message.trim();
+    if (!commitMessage) {
+      throw new Error(
+        "Aborting commit due to empty commit message.",
+      );
+    }
+
+    // Create author signature; pass repo so local config is checked first.
     let authorSignature;
     if (config.author) {
-      const { name, email } = parseAuthor(config.author);
-      authorSignature = createGitSignature(name, email);
+      const { name, email } = parseAuthor(config.author.trim());
+      authorSignature = createGitSignature(name, email, repo);
     } else {
-      authorSignature = createGitSignature();
+      authorSignature = createGitSignature(undefined, undefined, repo);
     }
+
+    // Committer is always the default identity; only the author can be
+    // overridden with --author.
+    const committerSignature = createGitSignature(undefined, undefined, repo);
 
     // Create the commit
     const commitOid = createCommit(
       repo,
       commitMessage,
       authorSignature,
-      authorSignature, // Use same signature for committer
+      committerSignature,
     );
 
-    // Output success message
-    console.log(formatCommitCreated(commitOid, commitMessage));
+    // Resolve branch name for the commit header.
+    // After creating a root commit on an unborn branch, repo.head() may
+    // still fail to resolve if it isn't cached yet; read .git/HEAD directly
+    // as a fallback so the output shows the real branch name.
+    let branchName = "(detached)";
+    if (!repo.headDetached()) {
+      try {
+        branchName = repo.head().name().replace("refs/heads/", "");
+      } catch {
+        // Unborn/just-created branch — read from .git/HEAD directly
+        try {
+          const headContent = readFileSync(
+            resolve(repo.path(), "HEAD"),
+            "utf-8",
+          ).trim();
+          if (headContent.startsWith("ref: refs/heads/")) {
+            branchName = headContent.slice("ref: refs/heads/".length);
+          }
+        } catch {
+          // Unable to determine branch name
+        }
+      }
+    }
 
-    // Show commit details
+    // Output success message
+    console.log(formatCommitCreated(commitOid, commitMessage, branchName));
+
+    // Show commit details using the actual commit timestamp
     const commit = repo.getCommit(commitOid);
     const author = commit.author();
     console.log(`Author: ${author.name} <${author.email}>`);
-    console.log(`Date: ${new Date().toISOString()}`);
+    console.log(`Date: ${new Date(author.timestamp * 1000).toISOString()}`);
 
     if (config.all) {
       console.log(formatSuccess("Changes automatically staged and committed"));

@@ -1,8 +1,9 @@
+import process from "node:process";
 import { group, merge, object } from "@optique/core/constructs";
 import { multiple } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
-import { commandLine, message } from "@optique/core/message";
+import { commandLine, lineBreak, message } from "@optique/core/message";
 import { path, printError } from "@optique/run";
 import { addAllFiles, addFile, getRepository } from "../utils/git.ts";
 import {
@@ -23,7 +24,7 @@ const stagingOptions = group(
     }),
     force: option("-f", "--force", {
       description:
-        message`Force adding files, even if they would normally be ignored`,
+        message`Allow adding gitignore-excluded files by skipping ignore rules`,
     }),
   }),
 );
@@ -66,14 +67,14 @@ const addOptionsParser = merge(
 export const addCommand = command("add", addOptionsParser, {
   brief: message`Add file contents to the index`,
   description: message`Add file contents to the index for the next commit`,
-  footer: message`Examples:
+  footer: message`Examples:${lineBreak()}
   ${
     commandLine("gitique add .")
-  }              Add all files in current directory
+  }              Add all files in current directory${lineBreak()}
   ${
     commandLine("gitique add -A")
-  }             Add all files (including deletions)
-  ${commandLine("gitique add file1.ts")}       Add a specific file
+  }             Add all files (including deletions)${lineBreak()}
+  ${commandLine("gitique add file1.ts")}       Add a specific file${lineBreak()}
   ${commandLine("gitique add -v *.ts")}        Add files with verbose output`,
 });
 
@@ -92,27 +93,36 @@ export async function executeAdd(config: AddConfig): Promise<void> {
   try {
     const repo = await getRepository();
 
+    if (config.all && config.files.length > 0) {
+      throw new Error(
+        "Cannot combine --all with explicit file paths. Use --all alone " +
+          "or specify files without --all.",
+      );
+    }
+
     if (config.all) {
       // Add all files (equivalent to `git add .`)
       if (config.verbose) {
         console.log("Adding all files to the index...");
       }
 
-      addAllFiles(repo);
+      addAllFiles(repo, config.force);
 
       if (config.verbose) {
         console.log(formatSuccess("Successfully added all files to the index"));
       }
     } else if (config.files.length > 0) {
-      // Add specific files
+      // Add specific files; collect all per-file errors before failing.
+      let hadError = false;
       for (const file of config.files) {
         try {
-          addFile(repo, file);
+          addFile(repo, file, config.force);
 
           if (config.verbose) {
             console.log(formatAddedFile(file));
           }
         } catch (error) {
+          hadError = true;
           printError(
             message`${
               formatError(
@@ -121,9 +131,13 @@ export async function executeAdd(config: AddConfig): Promise<void> {
                 }`,
               )
             }`,
-            config.force ? undefined : { exitCode: 1 },
           );
         }
+      }
+
+      if (hadError) {
+        process.exitCode = 1;
+        return;
       }
 
       if (config.verbose) {
@@ -136,7 +150,8 @@ export async function executeAdd(config: AddConfig): Promise<void> {
     } else {
       // No files specified and --all not used
       throw new Error(
-        "Nothing specified, nothing added.\nMaybe you wanted to say 'gitique add .'?",
+        "Nothing specified, nothing added.\n" +
+          "Maybe you wanted to say 'gitique add .' or 'gitique add -A'?",
       );
     }
   } catch (error) {

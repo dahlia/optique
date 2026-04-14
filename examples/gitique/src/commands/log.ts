@@ -3,7 +3,12 @@ import { map, optional, withDefault } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { command, constant, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
-import { commandLine, message, optionName } from "@optique/core/message";
+import {
+  commandLine,
+  lineBreak,
+  message,
+  optionName,
+} from "@optique/core/message";
 import { printError } from "@optique/run";
 import { getCommitHistory, getRepository } from "../utils/git.ts";
 import {
@@ -26,11 +31,10 @@ const formatChoices = ["oneline", "short", "medium", "full"] as const;
 const displayOptions = group(
   "Display Options",
   object({
-    format: withDefault(
+    format: optional(
       option("--format", choice(formatChoices, { metavar: "FORMAT" }), {
         description: message`Output format: oneline, short, medium, or full`,
       }),
-      "medium" as const,
     ),
     oneline: option("--oneline", {
       description: message`Shorthand for ${optionName("--format")}=oneline`,
@@ -90,11 +94,17 @@ const logOptionsParser = map(
     displayOptions,
     filterOptions,
   ),
-  (result) => ({
-    ...result,
-    // Handle --oneline shorthand by overriding format
-    format: result.oneline ? ("oneline" as const) : result.format,
-  }),
+  (result) => {
+    if (result.oneline && result.format !== undefined) {
+      throw new Error("Cannot use --oneline together with --format.");
+    }
+    return {
+      ...result,
+      format: result.oneline
+        ? ("oneline" as const)
+        : (result.format ?? ("medium" as const)),
+    };
+  },
 );
 
 /**
@@ -108,13 +118,19 @@ export const logCommand = command("log", logOptionsParser, {
     } for compact output or ${
       optionName("--format")
     } to customize the display.`,
-  footer: message`Examples:
-  ${commandLine("gitique log")}                     Show recent commits
+  footer: message`Examples:${lineBreak()}
+  ${
+    commandLine("gitique log")
+  }                     Show recent commits${lineBreak()}
   ${
     commandLine("gitique log --oneline -n 5")
-  }      Show 5 commits in one-line format
-  ${commandLine("gitique log --format=full")}       Show full commit details
-  ${commandLine("gitique log --author=john")}       Filter by author
+  }      Show 5 commits in one-line format${lineBreak()}
+  ${
+    commandLine("gitique log --format=full")
+  }       Show full commit details${lineBreak()}
+  ${
+    commandLine("gitique log --author=john")
+  }       Filter by author${lineBreak()}
   ${commandLine('gitique log --since="2024-01-01"')}  Show commits since date`,
 });
 
@@ -125,10 +141,26 @@ export type LogConfig = InferValue<typeof logCommand>;
 
 /**
  * Parses a date string into a Date object.
- * Supports various formats like "2024-01-01", "2 days ago", etc.
+ * Accepts any format understood by `new Date(string)`, such as ISO 8601
+ * dates.  Relative phrases like "2 days ago" are not supported.
+ *
+ * Bare `YYYY-MM-DD` strings are treated as local-time midnight to avoid
+ * UTC-offset surprises (e.g. "2024-01-01" meaning 2023-12-31 for UTC-8).
  */
 function parseDate(dateString: string): Date {
-  // Simple implementation - in a real scenario, you'd want more robust date parsing
+  // ISO date-only: treat as local midnight, not UTC midnight.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    const [year, month, day] = dateString.split("-").map(Number);
+    const d = new Date(year, month - 1, day);
+    // new Date() normalises impossible dates (e.g. Feb 31 → Mar 2); reject them.
+    if (
+      d.getFullYear() !== year || d.getMonth() !== month - 1 ||
+      d.getDate() !== day
+    ) {
+      throw new Error(`Invalid date: "${dateString}"`);
+    }
+    return d;
+  }
   const date = new Date(dateString);
   if (isNaN(date.getTime())) {
     throw new Error(`Invalid date format: "${dateString}"`);
@@ -149,16 +181,16 @@ function filterCommits(
   if (config.since) {
     const sinceDate = parseDate(config.since);
     filtered = filtered.filter(({ commit }) => {
-      const commitDate = commit.time();
-      return commitDate >= sinceDate;
+      const authorDate = new Date(commit.author().timestamp * 1000);
+      return authorDate >= sinceDate;
     });
   }
 
   if (config.until) {
     const untilDate = parseDate(config.until);
     filtered = filtered.filter(({ commit }) => {
-      const commitDate = commit.time();
-      return commitDate <= untilDate;
+      const authorDate = new Date(commit.author().timestamp * 1000);
+      return authorDate <= untilDate;
     });
   }
 
@@ -203,13 +235,16 @@ function formatCommitShort(oid: string, commit: Commit): string {
 function formatCommitFull(oid: string, commit: Commit): string {
   const author = commit.author();
   const committer = commit.committer();
-  const commitTime = commit.time();
+  // Use author timestamp for the Date line; use committer timestamp for Commit.
+  const authorDate = new Date(author.timestamp * 1000);
+  const committerDate = new Date(committer.timestamp * 1000);
 
   const lines = [
     `commit ${oid}`,
     `Author: ${author.name} <${author.email}>`,
+    `AuthorDate: ${authorDate.toISOString()}`,
     `Commit: ${committer.name} <${committer.email}>`,
-    `Date:   ${commitTime.toDateString()}`,
+    `CommitDate: ${committerDate.toISOString()}`,
     "",
     ...commit.message().split("\n").map((line: string) => `    ${line}`),
     "",
@@ -225,16 +260,29 @@ export async function executeLog(config: LogConfig): Promise<void> {
   try {
     const repo = await getRepository();
 
-    // Get commit history
-    const commits = getCommitHistory(repo, config.maxCount);
+    // When no commit filters are active we can cap the fetch upfront,
+    // avoiding a full-history walk just to take the first N entries.
+    // When filters are set we must fetch everything first because
+    // matching commits may be scattered anywhere in history.
+    const hasFilters = config.since !== undefined ||
+      config.until !== undefined ||
+      config.author !== undefined ||
+      config.grep !== undefined;
+    const allCommits = getCommitHistory(
+      repo,
+      hasFilters ? undefined : config.maxCount,
+    );
 
-    if (commits.length === 0) {
+    if (allCommits.length === 0) {
       console.log("No commits found in the repository.");
       return;
     }
 
-    // Apply filters
-    const filteredCommits = filterCommits(commits, config);
+    // Apply filters, then honour --max-count
+    const filteredCommits = filterCommits(allCommits, config).slice(
+      0,
+      config.maxCount,
+    );
 
     if (filteredCommits.length === 0) {
       console.log("No commits match the specified criteria.");

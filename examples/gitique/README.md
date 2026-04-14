@@ -119,7 +119,7 @@ gitique commit -a -m "Update documentation"
 **Viewing history:**
 
 ~~~~ bash
-# Show all commits (detailed)
+# Show recent commits (default: last 10)
 gitique log
 
 # Show commits in one line format
@@ -216,7 +216,7 @@ gitique completion zsh > ~/.zsh/completions/_gitique
 # Test completion
 gitique <TAB>                    # Shows: add, commit, diff, log, ...
 gitique add --<TAB>              # Shows: --all, --force, --verbose, --help
-gitique commit --author <TAB>    # Shows available author suggestions
+gitique commit --author <TAB>    # No completions (plain string option)
 ~~~~
 
 
@@ -301,8 +301,9 @@ This example demonstrates key Optique patterns in a realistic CLI application:
 
 ~~~~ typescript
 import { run } from "@optique/run";
-import { command, constant, option } from "@optique/core/primitives";
 import { object, or } from "@optique/core/constructs";
+import { multiple, optional } from "@optique/core/modifiers";
+import { argument, command, constant, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 
 const parser = or(

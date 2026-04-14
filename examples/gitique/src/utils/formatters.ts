@@ -36,12 +36,13 @@ export function formatCommitOneline(oid: string, commit: Commit): string {
 export function formatCommitDetailed(oid: string, commit: Commit): string {
   const author = commit.author();
   const message = commit.message();
-  const commitTime = commit.time();
+  // Use author timestamp (when the change was authored), not committer time.
+  const authorDate = new Date(author.timestamp * 1000);
 
   const lines = [
     `${colors.yellow}commit ${oid}${colors.reset}`,
     `Author: ${author.name} <${author.email}>`,
-    `Date:   ${commitTime.toDateString()}`,
+    `Date:   ${authorDate.toISOString()}`,
     "",
     ...message.split("\n").map((line: string) => `    ${line}`),
     "",
@@ -60,10 +61,14 @@ export function formatAddedFile(filePath: string): string {
 /**
  * Formats commit creation message
  */
-export function formatCommitCreated(oid: string, message: string): string {
+export function formatCommitCreated(
+  oid: string,
+  message: string,
+  branchName: string,
+): string {
   const shortOid = oid.substring(0, 7);
   const summary = message.split("\n")[0];
-  return `[main ${colors.yellow}${shortOid}${colors.reset}] ${summary}`;
+  return `[${branchName} ${colors.yellow}${shortOid}${colors.reset}] ${summary}`;
 }
 
 /**
@@ -131,6 +136,8 @@ const statusIndicators: Record<string, string> = {
   Renamed: "R",
   Copied: "C",
   Untracked: "?",
+  Typechange: "T",
+  Conflicted: "U",
 };
 
 /**
@@ -149,46 +156,6 @@ export function formatStatusLong(
     return `${statusColor}        ${statusText}:   ${oldPath} -> ${path}${colors.reset}`;
   }
   return `${statusColor}        ${statusText}:   ${path}${colors.reset}`;
-}
-
-/**
- * Formats a file status line for status command output (short format)
- */
-export function formatStatusShort(
-  path: string,
-  status: string,
-  staged: boolean,
-  oldPath?: string,
-): string {
-  const indicator = statusIndicators[status] || "?";
-  const stagedCol = staged ? indicator : " ";
-  const unstagedCol = staged ? " " : indicator;
-  const stagedColor = staged ? colors.green : "";
-  const unstagedColor = staged ? "" : colors.red;
-
-  if (oldPath) {
-    return `${stagedColor}${stagedCol}${colors.reset}${unstagedColor}${unstagedCol}${colors.reset} ${oldPath} -> ${path}`;
-  }
-  return `${stagedColor}${stagedCol}${colors.reset}${unstagedColor}${unstagedCol}${colors.reset} ${path}`;
-}
-
-/**
- * Formats a file status line for status command output (porcelain format)
- */
-export function formatStatusPorcelain(
-  path: string,
-  status: string,
-  staged: boolean,
-  oldPath?: string,
-): string {
-  const indicator = statusIndicators[status] || "?";
-  const stagedCol = staged ? indicator : " ";
-  const unstagedCol = staged ? " " : indicator;
-
-  if (oldPath) {
-    return `${stagedCol}${unstagedCol} ${oldPath} -> ${path}`;
-  }
-  return `${stagedCol}${unstagedCol} ${path}`;
 }
 
 /**

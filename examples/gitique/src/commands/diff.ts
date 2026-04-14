@@ -5,11 +5,12 @@ import { argument, command, constant, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import {
   commandLine,
+  lineBreak,
   message,
   metavar,
   optionName,
 } from "@optique/core/message";
-import { path, printError } from "@optique/run";
+import { printError } from "@optique/run";
 import process from "node:process";
 import { getDiff, getRepository } from "../utils/git.ts";
 import {
@@ -23,7 +24,7 @@ import {
  * Diff algorithm choices.
  * Demonstrates Optique's choice() value parser.
  */
-const algorithms = ["default", "minimal", "patience", "histogram"] as const;
+const algorithms = ["default", "minimal", "patience"] as const;
 
 /**
  * Display options for the diff command.
@@ -66,7 +67,7 @@ const contextOptions = group(
     algorithm: withDefault(
       option("--diff-algorithm", choice(algorithms, { metavar: "ALGORITHM" }), {
         description:
-          message`Choose a diff algorithm (default, minimal, patience, histogram)`,
+          message`Choose a diff algorithm (default, minimal, patience)`,
       }),
       "default" as const,
     ),
@@ -104,6 +105,9 @@ const diffOptionsParser = map(
     displayOptions,
     contextOptions,
     filterOptions,
+    // Path filtering via positional arguments is not supported because
+    // Optique cannot disambiguate commit refs from file paths without a
+    // "--" separator.  All positionals are consumed as commit arguments.
     object({
       commits: multiple(
         argument(string({ metavar: "COMMIT" }), {
@@ -111,18 +115,23 @@ const diffOptionsParser = map(
         }),
         { max: 2 },
       ),
-      paths: multiple(
-        argument(path({ metavar: "PATH" }), {
-          description: message`Limit diff to these paths`,
-        }),
-      ),
     }),
   ),
-  (result) => ({
-    ...result,
+  (result) => {
     // Treat --staged as alias for --cached
-    cached: result.cached || result.staged,
-  }),
+    const displayModes = [
+      result.stat,
+      result.numstat,
+      result.nameOnly,
+      result.nameStatus,
+    ].filter(Boolean).length;
+    if (displayModes > 1) {
+      throw new Error(
+        "Only one of --stat, --numstat, --name-only, --name-status may be used at a time.",
+      );
+    }
+    return { ...result, cached: result.cached || result.staged };
+  },
 );
 
 /**
@@ -134,11 +143,19 @@ export const diffCommand = command("diff", diffOptionsParser, {
     message`Show changes between commits, commit and working tree, etc. Use ${
       optionName("--cached")
     } to view staged changes.`,
-  footer: message`Examples:
-  ${commandLine("gitique diff")}                    Show unstaged changes
-  ${commandLine("gitique diff --cached")}           Show staged changes
-  ${commandLine("gitique diff HEAD~1")}             Compare with previous commit
-  ${commandLine("gitique diff --stat")}             Show change statistics
+  footer: message`Examples:${lineBreak()}
+  ${
+    commandLine("gitique diff")
+  }                    Show unstaged changes${lineBreak()}
+  ${
+    commandLine("gitique diff --cached")
+  }           Show staged changes${lineBreak()}
+  ${
+    commandLine("gitique diff HEAD~1")
+  }             Compare with previous commit${lineBreak()}
+  ${
+    commandLine("gitique diff --stat")
+  }             Show change statistics${lineBreak()}
   ${
     commandLine("gitique diff --name-only")
   }        Show only changed file names`,
@@ -148,6 +165,88 @@ export const diffCommand = command("diff", diffOptionsParser, {
  * Type inference for the diff command configuration.
  */
 export type DiffConfig = InferValue<typeof diffCommand>;
+
+/**
+ * Parses per-file insertion/deletion counts from unified diff text.
+ * Uses a state machine to distinguish file-header lines from hunk content,
+ * so that content lines whose text starts with '+' or '-' are never
+ * mistaken for file headers.
+ */
+function parseNumstat(
+  diffText: string,
+): Map<string, { readonly ins: number | null; readonly del: number | null }> {
+  const result = new Map<
+    string,
+    { readonly ins: number | null; readonly del: number | null }
+  >();
+  let currentPath: string | null = null;
+  let pendingOldPath: string | null = null;
+  let inHunk = false;
+  let isBinary = false;
+  let ins = 0;
+  let del = 0;
+
+  const flush = () => {
+    if (currentPath !== null) {
+      // Binary files have no hunk lines; represent them as null (git uses "-").
+      result.set(currentPath, {
+        ins: isBinary ? null : ins,
+        del: isBinary ? null : del,
+      });
+      currentPath = null;
+      ins = 0;
+      del = 0;
+      isBinary = false;
+    }
+  };
+
+  for (const line of diffText.split(/\r?\n/)) {
+    if (line.startsWith("diff --git ")) {
+      // Start of a new file patch — flush previous file and reset hunk state.
+      flush();
+      inHunk = false;
+      pendingOldPath = null;
+    } else if (line.startsWith("@@")) {
+      // Hunk header — from here on, +/- lines are content, not file headers.
+      inHunk = true;
+    } else if (!inHunk && line.startsWith("Binary files ")) {
+      // Binary patch — no textual hunk lines; mark as binary so we emit "-".
+      isBinary = true;
+      // Some diff generators omit the --- / +++ headers for binary files,
+      // leaving currentPath null.  Extract the path from the "Binary files"
+      // line directly so we still record the entry.
+      if (currentPath === null) {
+        const m = line.match(
+          /^Binary files (?:a\/(.+)|\/dev\/null) and (?:b\/(.+)|\/dev\/null) differ$/,
+        );
+        if (m) {
+          currentPath = m[2] ?? m[1] ?? null;
+        }
+      }
+    } else if (!inHunk && line.startsWith("GIT binary patch")) {
+      // git-format binary patch — path already captured from --- / +++ lines.
+      isBinary = true;
+    } else if (!inHunk && line.startsWith("--- a/")) {
+      pendingOldPath = line.slice(6);
+    } else if (!inHunk && line.startsWith("--- /dev/null")) {
+      pendingOldPath = null; // New file — path comes from the +++ line
+    } else if (!inHunk && line.startsWith("+++ b/")) {
+      currentPath = line.slice(6);
+      pendingOldPath = null;
+    } else if (!inHunk && line.startsWith("+++ /dev/null")) {
+      // Deletion — use the old path captured from --- line
+      currentPath = pendingOldPath;
+      pendingOldPath = null;
+    } else if (inHunk && line.startsWith("+")) {
+      if (currentPath !== null) ins++;
+    } else if (inHunk && line.startsWith("-")) {
+      if (currentPath !== null) del++;
+    }
+  }
+  flush();
+
+  return result;
+}
 
 /**
  * Determines the output mode based on display options.
@@ -171,11 +270,14 @@ export async function executeDiff(config: DiffConfig): Promise<void> {
 
     // Determine what to diff
     const commit = config.commits.length > 0 ? config.commits[0] : undefined;
+    const commit2 = config.commits.length > 1 ? config.commits[1] : undefined;
 
     const diffResult = getDiff(repo, {
       cached: config.cached,
       commit,
-      paths: config.paths.length > 0 ? [...config.paths] : undefined,
+      commit2,
+      unified: config.unified,
+      algorithm: config.algorithm,
     });
 
     const outputMode = getOutputMode(config);
@@ -193,14 +295,15 @@ export async function executeDiff(config: DiffConfig): Promise<void> {
       }
 
       case "stat": {
-        // Print stat-style summary for each file
+        // Print stat-style summary for each file.
+        // Per-file insertion/deletion counts are not available from es-git,
+        // so only file names are shown; totals are approximate.
         for (const delta of diffResult.deltas) {
-          // Note: We don't have per-file stats, so just show file names with status
           console.log(` ${delta.path}`);
         }
         console.log("");
         console.log(
-          formatDiffStats(
+          "(approximate) " + formatDiffStats(
             diffResult.stats.filesChanged,
             diffResult.stats.insertions,
             diffResult.stats.deletions,
@@ -210,13 +313,18 @@ export async function executeDiff(config: DiffConfig): Promise<void> {
       }
 
       case "numstat": {
-        // Print numstat format (insertions deletions filename)
-        // Note: We don't have per-file stats, showing totals
-        console.log(
-          `${diffResult.stats.insertions}\t${diffResult.stats.deletions}\ttotal`,
-        );
+        // Parse per-file counts from the diff text.
+        const fileStats = parseNumstat(diffResult.text);
         for (const delta of diffResult.deltas) {
-          console.log(`-\t-\t${delta.path}`);
+          const stats = fileStats.get(delta.path) ?? { ins: 0, del: 0 };
+          // Binary files have null counts; git numstat uses "-" for these.
+          const insCol = stats.ins === null ? "-" : String(stats.ins);
+          const delCol = stats.del === null ? "-" : String(stats.del);
+          // For renames/copies, git numstat uses "{old => new}" path notation.
+          const displayPath = delta.oldPath
+            ? `${delta.oldPath} => ${delta.path}`
+            : delta.path;
+          console.log(`${insCol}\t${delCol}\t${displayPath}`);
         }
         break;
       }
