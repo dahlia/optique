@@ -1710,6 +1710,131 @@ fi
       ok(!script.includes('_files -g "\\$ext_pattern"'));
     });
 
+    it("should disable sh_glob around native file completion", () => {
+      const script = zsh.generateScript("myapp");
+
+      ok(script.includes("local __was_sh_glob=0"));
+      ok(script.includes("[[ -o sh_glob ]] && __was_sh_glob=1"));
+      ok(script.includes("unsetopt sh_glob"));
+      ok(
+        script.includes(
+          'if [[ "$__was_sh_glob" == "1" ]]; then setopt sh_glob; else unsetopt sh_glob; fi',
+        ),
+      );
+    });
+
+    it("should filter files by dot-prefixed extensions in zsh", (t) => {
+      if (!isShellAvailable("zsh")) {
+        t.skip("zsh not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "zsh-ext-dot-filter-"),
+      );
+
+      try {
+        const directive = Array.from(zsh.encodeSuggestions([
+          {
+            kind: "file",
+            type: "file",
+            extensions: [".json", ".yaml"],
+            includeHidden: false,
+          },
+        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+
+        // Emit the encoded zsh transport so the test exercises both
+        // dot-prefix normalization and the native file completion branch.
+        const cliScript = `#!/bin/bash
+printf '${directive}'
+`;
+        const cliPath = join(tempDir, "extapp");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        writeFileSync(join(tempDir, "data.json"), "");
+        writeFileSync(join(tempDir, "config.yaml"), "");
+        writeFileSync(join(tempDir, "readme.txt"), "");
+        const subDir = join(tempDir, "subdir");
+        mkdirSync(subDir);
+
+        const script = zsh.generateScript("extapp");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+autoload -U compinit && compinit -D 2>/dev/null
+
+# Completion functions should use zsh's native glob syntax regardless of
+# the caller's option state.  SH_GLOB disables bare grouping, which would
+# otherwise break patterns like *.(json|yaml).
+setopt sh_glob
+
+function _files() {
+  local pattern="*"
+  if [[ "$1" == "-g" && -n "$2" ]]; then
+    pattern="$2"
+  fi
+
+  setopt localoptions null_glob
+  local item
+  for item in \${~pattern}; do
+    [[ -f "$item" ]] && print -r -- "$item"
+  done
+}
+
+function _directories() {
+  setopt localoptions null_glob
+  local dir
+  for dir in */; do
+    [[ -d "$dir" ]] && print -r -- "\${dir%/}/"
+  done
+}
+
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+
+cd "${tempDir}"
+words=("extapp" "")
+CURRENT=2
+_extapp 2>/dev/null
+`;
+
+        const result = runCommand("zsh", ["-c", testScript], {
+          cwd: tempDir,
+        });
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+
+        ok(
+          completions.some((c) => c.includes("data.json")),
+          `Expected data.json in completions, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+        ok(
+          completions.some((c) => c.includes("config.yaml")),
+          `Expected config.yaml in completions, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+        ok(
+          !completions.some((c) => c.includes("readme.txt")),
+          `Should not include readme.txt in completions, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+        ok(
+          completions.some((c) => c.includes("subdir/")),
+          `Expected subdir/ in completions for navigation, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should work with actual zsh shell", {
       timeout: 10000,
     }, (t) => {

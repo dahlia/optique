@@ -718,6 +718,12 @@ To be released.
     autoloaded completion files while still working when sourced directly.
     [[#766]]
 
+ -  Fixed zsh file completion inheriting the caller's `sh_glob` option,
+    which broke extension-filtered native completion patterns like
+    `*.(json|yaml)`.  The generated zsh script now saves and restores
+    `sh_glob` around `_files`/`_directories` so file completion keeps
+    working even in shells configured for POSIX-style globbing.  [[#767]]
+
  -  Added display-oriented command usage customization:
 
      -  `UsageTerm` now supports an `ellipsis` term for concise usage
@@ -1716,6 +1722,7 @@ To be released.
 [#764]: https://github.com/dahlia/optique/pull/764
 [#765]: https://github.com/dahlia/optique/pull/765
 [#766]: https://github.com/dahlia/optique/pull/766
+[#767]: https://github.com/dahlia/optique/issues/767
 [#768]: https://github.com/dahlia/optique/issues/768
 [#769]: https://github.com/dahlia/optique/pull/769
 [#771]: https://github.com/dahlia/optique/pull/771

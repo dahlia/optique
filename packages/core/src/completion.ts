@@ -395,6 +395,12 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
         pattern="\${pattern//%3A/:}"; pattern="\${pattern//%25/%}"
         has_file_completion=1
 
+        # Native completion helpers expect normal zsh glob grouping even if
+        # the caller enabled SH_GLOB in their shell options.
+        local __was_sh_glob=0
+        [[ -o sh_glob ]] && __was_sh_glob=1
+        unsetopt sh_glob
+
         # Enable glob_dots when hidden files are requested so that
         # _files and _directories include dot-prefixed entries
         local __was_glob_dots=0
@@ -450,6 +456,7 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
 
         # Restore PREFIX and glob_dots to their previous state
         PREFIX="\$__saved_prefix"
+        if [[ "\$__was_sh_glob" == "1" ]]; then setopt sh_glob; else unsetopt sh_glob; fi
         if [[ "\$__was_glob_dots" == "1" ]]; then setopt glob_dots; else unsetopt glob_dots; fi
       else
         # Regular literal completion
