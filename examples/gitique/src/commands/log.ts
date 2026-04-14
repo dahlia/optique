@@ -260,9 +260,18 @@ export async function executeLog(config: LogConfig): Promise<void> {
   try {
     const repo = await getRepository();
 
-    // Fetch all commits first, then filter, then limit.  Limiting before
-    // filtering would incorrectly exclude matching commits deeper in history.
-    const allCommits = getCommitHistory(repo);
+    // When no commit filters are active we can cap the fetch upfront,
+    // avoiding a full-history walk just to take the first N entries.
+    // When filters are set we must fetch everything first because
+    // matching commits may be scattered anywhere in history.
+    const hasFilters = config.since !== undefined ||
+      config.until !== undefined ||
+      config.author !== undefined ||
+      config.grep !== undefined;
+    const allCommits = getCommitHistory(
+      repo,
+      hasFilters ? undefined : config.maxCount,
+    );
 
     if (allCommits.length === 0) {
       console.log("No commits found in the repository.");
