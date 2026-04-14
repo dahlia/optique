@@ -6,7 +6,12 @@ Optique changelog
 Version 1.0.0
 -------------
 
-To be released.
+Released on April 14, 2026.
+
+This is the first stable release of Optique, following a lengthy 0.x unstable
+development period.  The 1.0.0 release includes a number of breaking changes,
+which are detailed in the sections below.  Consumers should review the breaking
+changes and migration notes carefully when upgrading from 0.x versions.
 
 ### @optique/core
 
