@@ -10,6 +10,8 @@
   "scripts": {
     "build": "tsdown",
     "start": "pnpm build && node dist/index.js",
+    "test": "node --test src/**/*.test.ts",
+    "test:bun": "bun test ./src",
     "prepack": "tsdown",
     "prepublish": "tsdown"
   },
