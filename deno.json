@@ -23,6 +23,7 @@
     "temporal"
   ],
   "exclude": [
+    ".agents/",
     ".claude/",
     ".github/",
     "docs"
