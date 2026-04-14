@@ -392,28 +392,22 @@ export function getCommitHistory(
 ): CommitWithOid[] {
   const commits: CommitWithOid[] = [];
 
+  // Check whether HEAD resolves; unborn repositories have no commits at
+  // all, so return an empty list rather than letting pushHead() throw an
+  // opaque internal error that we would have to recognise by string.
   try {
-    const revwalk = repo.revwalk().setSorting(RevwalkSort.Time).pushHead();
+    repo.head();
+  } catch {
+    return commits;
+  }
 
-    let count = 0;
-    for (const oid of revwalk) {
-      if (maxCount && count >= maxCount) break;
-
-      const commit = repo.getCommit(oid);
-      commits.push({ oid, commit });
-      count++;
-    }
-  } catch (error) {
-    // An unborn repository has no HEAD — treat it as empty history.
-    // Rethrow any other unexpected error.
-    const msg = error instanceof Error ? error.message : String(error);
-    if (
-      !msg.includes("reference") &&
-      !msg.includes("HEAD") &&
-      !msg.includes("unborn")
-    ) {
-      throw error;
-    }
+  const revwalk = repo.revwalk().setSorting(RevwalkSort.Time).pushHead();
+  let count = 0;
+  for (const oid of revwalk) {
+    if (maxCount && count >= maxCount) break;
+    const commit = repo.getCommit(oid);
+    commits.push({ oid, commit });
+    count++;
   }
 
   return commits;
