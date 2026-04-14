@@ -218,3 +218,12 @@ The following is a list of the available packages:
 [jsr:@optique/inquirer]: https://jsr.io/@optique/inquirer
 [npm:@optique/inquirer]: https://www.npmjs.com/package/@optique/inquirer
 [Inquirer.js]: https://github.com/SBoudrias/Inquirer.js
+
+
+Contributing
+------------
+
+Contributions are welcome!  Please read our [AI usage policy] before
+submitting a pull request.
+
+[AI usage policy]: ./AI_POLICY.md

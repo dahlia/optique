@@ -4,6 +4,12 @@ Guidance for LLM-based code agents
 This file provides guidance to LLM-based code agents (e.g., Claude Code,
 OpenCode) when working with code in this repository.
 
+> [!IMPORTANT]
+> Before performing any tasks, you must read and adhere to the
+> [AI usage policy].
+
+[AI usage policy]: ./AI_POLICY.md
+
 
 Project overview
 ----------------
@@ -194,8 +200,9 @@ This project follows test-driven development (TDD) practices:
     - Fixed bar
     ~~~~
 
- -  When using LLMs or coding agents, include credit via `Co-Authored-By:`.
-    Include a permalink to the agent session if available.
+ -  When using LLMs or coding agents, follow the rules in the [AI usage policy]
+    regarding disclosure of AI usage.  Include credit via `Assisted-by:`
+    and include a permalink to the agent session if available.
 
 ### Before committing
 
