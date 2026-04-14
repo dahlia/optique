@@ -1048,3 +1048,11 @@ myapp --verbose
 The *@optique/config* package provides a clean, type-safe way to manage
 configuration files in your CLI applications while maintaining the flexibility
 of command-line arguments.
+
+> [!TIP]
+> See the [cookbook](../cookbook.md#config-file-integration) for additional
+> patterns, including
+> [combining config with env variables](../cookbook.md#combining-with-environment-variables),
+> [combining with interactive prompts](../cookbook.md#combining-with-interactive-prompts),
+> and
+> [config-only values with `fail()`](../cookbook.md#config-only-and-env-only-values-with-fail).

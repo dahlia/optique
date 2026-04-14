@@ -69,32 +69,32 @@ const INTEGRATIONS = {
   items: [
     { text: "Config files", link: "/integrations/config" },
     { text: "Environment variables", link: "/integrations/env" },
+    { text: "Interactive prompts", link: "/integrations/inquirer" },
     { text: "Git", link: "/integrations/git" },
     { text: "LogTape", link: "/integrations/logtape" },
     { text: "Temporal", link: "/integrations/temporal" },
     { text: "Valibot", link: "/integrations/valibot" },
     { text: "Zod", link: "/integrations/zod" },
-    { text: "Interactive prompts", link: "/integrations/inquirer" },
   ],
 };
 
 const REFERENCES = {
   text: "References",
   items: [
-    { text: "@optique/config", link: "https://jsr.io/@optique/config/doc" },
     { text: "@optique/core", link: "https://jsr.io/@optique/core/doc" },
-    { text: "@optique/env", link: "https://jsr.io/@optique/env/doc" },
-    { text: "@optique/git", link: "https://jsr.io/@optique/git/doc" },
-    { text: "@optique/logtape", link: "https://jsr.io/@optique/logtape/doc" },
-    { text: "@optique/man", link: "https://jsr.io/@optique/man/doc" },
     { text: "@optique/run", link: "https://jsr.io/@optique/run/doc" },
-    { text: "@optique/temporal", link: "https://jsr.io/@optique/temporal/doc" },
-    { text: "@optique/valibot", link: "https://jsr.io/@optique/valibot/doc" },
-    { text: "@optique/zod", link: "https://jsr.io/@optique/zod/doc" },
+    { text: "@optique/man", link: "https://jsr.io/@optique/man/doc" },
+    { text: "@optique/env", link: "https://jsr.io/@optique/env/doc" },
+    { text: "@optique/config", link: "https://jsr.io/@optique/config/doc" },
     {
       text: "@optique/inquirer",
       link: "https://jsr.io/@optique/inquirer/doc",
     },
+    { text: "@optique/git", link: "https://jsr.io/@optique/git/doc" },
+    { text: "@optique/logtape", link: "https://jsr.io/@optique/logtape/doc" },
+    { text: "@optique/temporal", link: "https://jsr.io/@optique/temporal/doc" },
+    { text: "@optique/valibot", link: "https://jsr.io/@optique/valibot/doc" },
+    { text: "@optique/zod", link: "https://jsr.io/@optique/zod/doc" },
   ],
 };
 

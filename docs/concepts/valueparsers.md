@@ -20,11 +20,39 @@ mysterious errors later, value parsers validate input immediately when parsing
 occurs. When validation fails, they provide clear, actionable error messages
 that help users understand what went wrong and how to fix it.
 
-Every value parser implements the `ValueParser<T>` interface, which defines how
-to parse strings into values of type `T` and how to format those values back
-into strings for help text. This consistent interface makes value parsers
+Every value parser implements the `ValueParser<M, T>` interface, which defines
+how to parse strings into values of type `T` and how to format those values
+back into strings for help text. This consistent interface makes value parsers
 composable and allows you to create custom parsers that integrate seamlessly
 with Optique's type system.
+
+### Parser catalog
+
+| Parser                           | Module              | Return type                    | Description                                         |
+| -------------------------------- | ------------------- | ------------------------------ | --------------------------------------------------- |
+| `string()`                       | *@optique/core*     | `string`                       | Any string, with optional pattern validation        |
+| `integer()`                      | *@optique/core*     | `number` or `bigint`           | Integer with range validation                       |
+| `float()`                        | *@optique/core*     | `number`                       | Floating-point number                               |
+| `choice()`                       | *@optique/core*     | string or number literal union | Enumerated values                                   |
+| `url()`                          | *@optique/core*     | `URL`                          | URL with protocol filtering                         |
+| `locale()`                       | *@optique/core*     | `Intl.Locale`                  | BCP 47 locale identifier                            |
+| `uuid()`                         | *@optique/core*     | `string`                       | UUID with RFC 9562 validation                       |
+| `port()`                         | *@optique/core*     | `number` or `bigint`           | TCP/UDP port number                                 |
+| `ipv4()`                         | *@optique/core*     | `string`                       | IPv4 address with restrictions                      |
+| `ipv6()`                         | *@optique/core*     | `string`                       | IPv6 address                                        |
+| `ip()`                           | *@optique/core*     | `string`                       | IPv4 or IPv6 address                                |
+| `cidr()`                         | *@optique/core*     | `string`                       | CIDR notation                                       |
+| `hostname()`                     | *@optique/core*     | `string`                       | DNS hostname                                        |
+| `domain()`                       | *@optique/core*     | `string`                       | DNS domain with TLD validation                      |
+| `email()`                        | *@optique/core*     | `string`                       | Email address                                       |
+| `socketAddress()`                | *@optique/core*     | `{ host, port }`               | Host:port pair                                      |
+| `portRange()`                    | *@optique/core*     | `{ start, end }`               | Port range                                          |
+| `macAddress()`                   | *@optique/core*     | `string`                       | MAC-48 address                                      |
+| `path()`                         | *@optique/run*      | `string`                       | File/directory path with existence checks           |
+| `gitBranch()`, `gitTag()`, etc.  | *@optique/git*      | `string`                       | [Git references](../integrations/git.md)            |
+| `instant()`, `plainDate()`, etc. | *@optique/temporal* | Temporal types                 | [Temporal dates/times](../integrations/temporal.md) |
+| `zod()`                          | *@optique/zod*      | schema output                  | [Zod schema](../integrations/zod.md)                |
+| `valibot()`                      | *@optique/valibot*  | schema output                  | [Valibot schema](../integrations/valibot.md)        |
 
 
 `string()` parser
@@ -585,6 +613,10 @@ messages for format violations, version mismatches, and variant violations.
 `port()` parser
 ---------------
 
+> [!TIP]
+> See also: [`portRange()`](#portrange-parser),
+> [`socketAddress()`](#socketaddress-parser).
+
 The `port()` parser validates TCP/UDP port numbers with support for both
 `number` and `bigint` types, range validation, and well-known port restrictions.
 Port numbers are commonly used in network applications for server addresses,
@@ -687,8 +719,13 @@ restrictions.
 `ipv4()` parser
 ---------------
 
+> [!TIP]
+> See also: [`ipv6()`](#ipv6-parser), [`ip()`](#ip-parser) (accepts both),
+> [`cidr()`](#cidr-parser), [`hostname()`](#hostname-parser),
+> [`socketAddress()`](#socketaddress-parser).
+
 The `ipv4()` parser validates IPv4 addresses in dotted-decimal notation with
-comprehensive filtering options for different IP address types. It's commonly
+comprehensive filtering options for different IP address types. It is commonly
 used for network configuration, server addresses, and IP allowlists/blocklists.
 
 ~~~~ typescript twoslash
@@ -846,6 +883,11 @@ IPv4 address as a string (e.g., “192.168.1.1”).
 
 `hostname()` parser
 -------------------
+
+> [!TIP]
+> See also: [`domain()`](#domain-parser), [`email()`](#email-parser),
+> [`socketAddress()`](#socketaddress-parser),
+> [`ipv4()`](#ipv4-parser) / [`ipv6()`](#ipv6-parser).
 
 The `hostname()` parser validates DNS hostnames according to RFC 1123. It
 supports flexible options for wildcard hostnames, underscores, localhost

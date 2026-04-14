@@ -1,6 +1,14 @@
 Extending Optique with runtime context
 ======================================
 
+> [!NOTE]
+> Most users do not need this page. If you are using
+> *[@optique/env](../integrations/env.md)*,
+> *[@optique/config](../integrations/config.md)*, or
+> *[@optique/inquirer](../integrations/inquirer.md)*, those packages handle
+> source context integration for you. This page is for developers who want to
+> build custom integrations or understand the internals.
+
 This guide explains how to extend Optique parsers with runtime context.
 Optique provides two complementary systems for this purpose:
 
@@ -36,6 +44,15 @@ Optique solves this with two systems:
     data flows through parsers
  -  Use *source context* and `runWith()` when you need to compose multiple data
     sources with clear priority ordering
+
+### Which system to use
+
+If you are building a new data source (for example, a remote key-value store
+or a secrets manager), start with *source contexts*. They handle two-phase
+parsing, priority ordering, and cleanup automatically. Use *annotations*
+directly only if you need to inject runtime data into a parser without the
+source context lifecycle, or if you are implementing a source context
+yourself.
 
 
 The annotations system

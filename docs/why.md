@@ -498,18 +498,50 @@ integration packages extend it for common use cases:
  -  *[@optique/logtape](./integrations/logtape.md)*: Parsers for log level
     options that configure LogTape sinks.
 
-Each package integrates with the same composition model as the core.  A
-`bindEnv()`-wrapped parser composes with `object()` and `merge()` the same
-way as any other parser.
+Because every integration returns a regular parser, they compose with each
+other. Wrapping order determines fallback priority:
+
+~~~~ typescript twoslash
+import { z } from "zod";
+import { bindConfig, createConfigContext } from "@optique/config";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { bindEnv, createEnvContext } from "@optique/env";
+import { prompt } from "@optique/inquirer";
+
+const envContext = createEnvContext({ prefix: "MYAPP_" });
+const configContext = createConfigContext({
+  schema: z.object({ host: z.string().optional() }),
+});
+
+// CLI > env > config > interactive prompt
+const host = prompt(
+  bindEnv(
+    bindConfig(option("--host", string()), {
+      context: configContext,
+      key: "host",
+    }),
+    { context: envContext, key: "HOST", parser: string() },
+  ),
+  { type: "input", message: "Host:", default: "localhost" },
+);
+~~~~
+
+The parser produced by this chain works the same way everywhere: inside
+`object()`, `merge()`, `or()`, or any other combinator.
 
 
 When Optique makes sense
 ------------------------
 
 Optique shines in scenarios where CLI complexity grows over time and where
-consistency across related tools matters. If you're building a single simple
-script, the configuration approach of other libraries might serve you better.
-The functional programming concepts in Optique add value when you need the
+consistency across related tools matters. Beyond argument parsing, Optique
+handles the full value resolution lifecycle: CLI arguments, environment
+variables, configuration files, and interactive prompts, all through the
+same composition model. If you're building a single simple script, the
+configuration approach of other libraries might serve you better. The
+functional programming concepts in Optique add value when you need the
 flexibility and reusability they enable.
 
 Choose Optique when you're building CLI applications that will evolve, when
@@ -521,22 +553,17 @@ Consider alternatives when you're building straightforward, one-off tools, when
 your team strongly prefers configuration over composition, or when you need to
 integrate with existing CLI frameworks that follow different patterns.
 
-The future of CLI development increasingly demands the kind of modularity and
-reusability that functional composition enables. Optique brings these
-capabilities to TypeScript CLI development, opening possibilities that simply
-aren't available with configuration-based approaches.
-
 
 Starting with Optique
 ---------------------
 
 Understanding Optique means understanding that CLI parsers can be more than
-configurations—they can be composable functions that naturally combine to
-create sophisticated interfaces. This shift in perspective, from configuring
-to composing, unlocks new levels of reusability and maintainability in CLI
+configurations: they are composable functions that naturally combine to create
+sophisticated interfaces. This shift in perspective, from configuring to
+composing, unlocks new levels of reusability and maintainability in CLI
 development.
 
-The patterns you learn with Optique apply beyond CLI parsing. They're the same
+The patterns you learn with Optique apply beyond CLI parsing. They are the same
 functional composition techniques that make libraries like Zod so powerful for
 validation and that enable the kind of type-safe, composable APIs that make
 TypeScript development productive and reliable.

@@ -67,13 +67,12 @@ features:
     that drives parsing.
   link: /concepts/man
   linkText: Man page docs
-- icon: 📦
-  title: Integration packages
+- icon: 🔗
+  title: Multi-source value resolution
   details: >-
-    Packages for config files (<em>@optique/config</em>), environment
-    variables (<em>@optique/env</em>), interactive prompts
-    (<em>@optique/inquirer</em>), Zod and Valibot schemas, Git references,
-    and Temporal dates.
+    Layer CLI arguments, environment variables, config files, and interactive
+    prompts with clear priority ordering. Integration packages compose with
+    the same combinators as core parsers.
   link: /integrations/config
   linkText: Browse integrations
 ---

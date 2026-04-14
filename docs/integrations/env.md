@@ -532,7 +532,14 @@ Limitations
  -  *No schema validation* — Unlike *@optique/config*, there is no schema that
     validates the set of environment variables as a whole.  Each binding is
     validated independently.
- -  *Synchronous reads* — `createEnvContext()` reads environment variables
+ -  *Synchronous reads*: `createEnvContext()` reads environment variables
     synchronously via `Deno.env.get` or `process.env`.  The context itself
     does not add async overhead, but if the `parser` used in `bindEnv()` is
     async, the overall parsing becomes async.
+
+> [!TIP]
+> See the [cookbook](../cookbook.md#environment-variable-fallbacks) for
+> additional patterns, including
+> [combining env with config files](../cookbook.md#combining-with-environment-variables)
+> and
+> [env-only values with `fail()`](../cookbook.md#config-only-and-env-only-values-with-fail).

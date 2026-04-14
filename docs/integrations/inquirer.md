@@ -644,6 +644,11 @@ Limitations
     are used.
  -  *Single prompt per field* — Each `prompt()` call runs the prompter
     exactly once per parse, even when used inside `object()`.
- -  *TTY required* — Inquirer.js requires an interactive terminal (TTY).
+ -  *TTY required*: Inquirer.js requires an interactive terminal (TTY).
     In non-interactive environments (CI pipelines, piped input), prompts
     will error.  Use the `prompter` override for non-interactive testing.
+
+> [!TIP]
+> See the [cookbook](../cookbook.md#combining-with-interactive-prompts) for
+> a complete example combining interactive prompts with environment variables
+> and configuration files.

@@ -18,8 +18,14 @@ command-line tools: handling mutually exclusive options, implementing dependent
 flags, parsing key-value pairs, and organizing complex subcommand structures.
 
 
-Subcommands with distinct behaviors
------------------------------------
+Core patterns
+-------------
+
+These recipes use only *@optique/core* and *@optique/run*.
+
+### Subcommands with distinct behaviors
+
+   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Many CLI tools organize functionality into subcommands, where each subcommand
 has its own set of options and arguments. This pattern is essential for tools
@@ -139,9 +145,7 @@ if (result.action === "add") {
 This pattern scales well because adding new subcommands only requires extending
 the `or()` combinator with new command parsers.
 
-
-Mutually exclusive options
---------------------------
+### Mutually exclusive options
 
 Sometimes you need to accept different sets of options that cannot be used
 together. This pattern is common in tools that can operate in different modes,
@@ -213,9 +217,7 @@ ensures that optional fields have sensible defaults, but only within their
 respective modes. The client mode doesn't get a default host because
 it doesn't use one.
 
-
-Mutually exclusive flags
-------------------------
+### Mutually exclusive flags
 
 For simpler cases where you need exactly one of several flags, you can use
 mutually exclusive flags that map to different values.
@@ -260,9 +262,7 @@ This is different from the previous pattern because:
  -  *Simpler structure*: Returns a simple string rather than an object
  -  *Default handling*: Has a meaningful fallback when no options are given
 
-
-Optional mutually exclusive flags
----------------------------------
+### Optional mutually exclusive flags
 
 Sometimes you want mutually exclusive options where *none* of them need to be
 provided. For example, a verbosity setting where you can specify `--verbose`
@@ -322,9 +322,7 @@ Choose based on your needs:
     (e.g., “use system default”)
  -  Use `withDefault(or(...), fallback)` when you always want a concrete value
 
-
-Dependent options
------------------
+### Dependent options
 
 Some CLI tools have options that only make sense when another option is
 present. This creates a dependency relationship where certain options are
@@ -388,9 +386,7 @@ options that are always available.
 The key insight is that dependent options are often about context: when certain
 features are enabled, additional configuration becomes relevant.
 
-
-Inter-option value dependencies
--------------------------------
+### Inter-option value dependencies
 
 *This API is available since Optique 0.10.0.*
 
@@ -489,9 +485,7 @@ completions for `--server`, they see suggestions appropriate for the current
 For more details, see the
 [*Inter-option dependencies*](./concepts/dependencies.md) concept guide.
 
-
-Conditional options based on discriminator
-------------------------------------------
+### Conditional options based on discriminator
 
 *This API is available since Optique 0.8.0.*
 
@@ -639,9 +633,7 @@ is ideal when your CLI has a discriminator option that determines which set of
 additional options becomes valid. It provides better type inference and clearer
 error messages than manually building discriminated unions with `or()`.
 
-
-Key–value pair options
-----------------------
+### Key–value pair options
 
 Many CLI tools accept configuration as key–value pairs, similar to environment
 variables or configuration files. This pattern is common in containerization
@@ -775,9 +767,7 @@ and type safety.
 This pattern is powerful because it bridges the gap between command-line
 interfaces and structured configuration data.
 
-
-Verbosity levels
-----------------
+### Verbosity levels
 
 Command-line tools often need different levels of output detail. The traditional
 Unix approach uses repeated flags: `-v` for verbose, `-vv` for very verbose,
@@ -843,9 +833,7 @@ This pattern is elegant because it:
 [`Array.at()`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/at
 [`Math.min()`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/min
 
-
-Grouped mutually exclusive options
-----------------------------------
+### Grouped mutually exclusive options
 
 When you have many mutually exclusive options, grouping them in help output
 improves usability while maintaining the same parsing logic.
@@ -897,9 +885,7 @@ The `group()` combinator is purely cosmetic for help generation—it doesn't
 change parsing behavior. This separation of concerns allows you to optimize
 for both code clarity and user experience independently.
 
-
-Negatable Boolean options
--------------------------
+### Negatable Boolean options
 
 Linux CLI tools commonly support `--no-` prefix options that negate default
 behavior. This pattern allows users to explicitly disable features that are
@@ -971,9 +957,7 @@ This pattern is particularly useful for configuration-heavy tools where users
 need fine-grained control over default behaviors, following the Unix tradition
 of sensible defaults with explicit override capabilities.
 
-
-Conditional defaults based on input consumption
------------------------------------------------
+### Conditional defaults based on input consumption
 
 *This API is available since Optique 0.10.0.*
 
@@ -1069,9 +1053,615 @@ This pattern is ideal for development tools, build systems, or any CLI where
 you want to guide users to provide at least some configuration while still
 supporting sensible defaults once they start configuring.
 
+### Pass-through options for wrapper CLIs
 
-Environment variable fallbacks
-------------------------------
+*This API is available since Optique 0.8.0.*
+
+When building wrapper tools that need to forward unknown options to an
+underlying command, the
+[`passThrough()`](./concepts/primitives.md#passthrough-parser) parser captures
+unrecognized options without validation errors.
+
+> [!NOTE]
+> By default, `passThrough()` uses the `"equalsOnly"` format, which
+> only captures `--opt=val` style options. Options like `--foo bar` will fail.
+> See [Choosing the right format](#choosing-the-right-format) below for
+> alternatives.
+
+#### Basic wrapper pattern
+
+A common use case is wrapping another CLI tool while adding your own options:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { argument, option, passThrough } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+const parser = object({
+  debug: option("--debug"),
+  config: option("-c", "--config", string({ metavar: "FILE" })),
+  // Default format is "equalsOnly", captures --opt=val only
+  extraOpts: passThrough(),
+});
+
+const result = run(parser);
+//    ^?
+
+
+
+
+// Use result.extraOpts to pass through to the underlying tool
+~~~~
+
+The key insight is that `passThrough()` has the *lowest priority* (−10), so
+your explicit options are always matched first. Only truly unrecognized options
+are captured in the pass-through array.
+
+#### Subcommand-specific pass-through
+
+For tools that delegate entire subcommands to other processes:
+
+~~~~ typescript twoslash
+import { object, or } from "@optique/core/constructs";
+import { argument, command, constant, option, passThrough } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+const parser = or(
+  // Local command with known options
+  command("local", object({
+    action: constant("local"),
+    port: option("-p", "--port", integer()),
+    host: option("-h", "--host", string()),
+  })),
+  // Exec command passes everything through
+  command("exec", object({
+    action: constant("exec"),
+    container: argument(string({ metavar: "CONTAINER" })),
+    args: passThrough({ format: "greedy" }),
+  })),
+);
+
+const result = run(parser);
+
+if (result.action === "exec") {
+  // result.args contains all remaining tokens
+  // Pass them to the container: ["--verbose", "-it", "bash"]
+}
+~~~~
+
+The `"greedy"` format is crucial here: once the container name is captured, all
+remaining tokens (including those that look like options) go into `args`.
+
+#### Choosing the right format
+
+The `passThrough()` parser supports three capture formats:
+
+`"equalsOnly"` (default)
+:   Only captures `--opt=val` format. The safest choice when you need to
+    distinguish between options and positional arguments:
+
+    ~~~~ typescript twoslash
+    import { passThrough } from "@optique/core/primitives";
+    // ---cut-before---
+    const parser = passThrough({ format: "equalsOnly" });
+    // Captures: --foo=bar, --baz=123
+    // Rejects: --foo bar, --verbose
+    ~~~~
+
+`"nextToken"`
+:   Captures `--opt val` as two tokens when the value doesn't look like
+    an option. Good for wrapping tools that use space-separated values:
+
+    ~~~~ typescript twoslash
+    import { passThrough } from "@optique/core/primitives";
+    // ---cut-before---
+    const parser = passThrough({ format: "nextToken" });
+    // --foo bar → ["--foo", "bar"]
+    // --foo --bar → ["--foo", "--bar"] (--bar is a separate option)
+    ~~~~
+
+`"greedy"`
+:   Captures *all* remaining tokens. Use for proxy/wrapper tools where
+    everything after a certain point should pass through:
+
+    ~~~~ typescript twoslash
+    import { passThrough } from "@optique/core/primitives";
+    // ---cut-before---
+    const parser = passThrough({ format: "greedy" });
+    // git commit -m "message" → ["git", "commit", "-m", "message"]
+    ~~~~
+
+> [!CAUTION]
+> The `"greedy"` format can shadow explicit parsers. Place it carefully,
+> typically as the last field in a subcommand-specific `object()`.
+
+### Shell completion patterns
+
+*This API is available since Optique 0.6.0.*
+
+Modern CLI applications benefit from intelligent shell completion that helps
+users discover available options and reduces typing errors. Optique provides
+built-in completion support that integrates seamlessly with your parser
+definitions.
+
+#### Basic completion setup
+
+Enable completion for any CLI application by adding the `completion` option:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { argument, option } from "@optique/core/primitives";
+import { string, choice } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+const parser = object({
+  format: option("-f", "--format", choice(["json", "yaml", "xml"])),
+  output: option("-o", "--output", string({ metavar: "FILE" })),
+  verbose: option("-v", "--verbose"),
+  input: argument(string({ metavar: "INPUT" })),
+});
+
+const config = run(parser, { completion: "both" });
+~~~~
+
+This automatically provides intelligent completion for:
+
+ -  Option names: `--format`, `--output`, `--verbose`
+ -  Choice values: `--format json`, `--format yaml`
+ -  Help integration: `--help` is included in completions
+
+#### Custom value parser suggestions
+
+Create value parsers with domain-specific completion suggestions:
+
+~~~~ typescript twoslash
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import type { Suggestion } from "@optique/core/parser";
+import { message } from "@optique/core/message";
+
+// Custom parser for log levels with intelligent completion
+function logLevel(): ValueParser<"sync", string> {
+  const levels = ["error", "warn", "info", "debug", "trace"];
+
+  return {
+    mode: "sync",
+    metavar: "LEVEL",
+    placeholder: "",
+    parse(input: string): ValueParserResult<string> {
+      if (levels.includes(input.toLowerCase())) {
+        return { success: true, value: input.toLowerCase() };
+      }
+      return {
+        success: false,
+        // Note: For proper formatting of choice lists, see the "Formatting choice lists"
+        // section in the Concepts guide on Messages
+        error: message`Invalid log level: ${input}. Valid levels: ${levels.join(", ")}.`,
+      };
+    },
+    format(value: string): string {
+      return value;
+    },
+    *suggest(prefix: string): Iterable<Suggestion> {
+      for (const level of levels) {
+        if (level.startsWith(prefix.toLowerCase())) {
+          yield {
+            kind: "literal",
+            text: level,
+            description: message`Set log level to ${level}`
+          };
+        }
+      }
+    },
+  };
+}
+~~~~
+
+#### Multi-command CLI with rich completion
+
+Complex CLI tools with subcommands benefit greatly from completion:
+
+~~~~ typescript twoslash
+import { object, or } from "@optique/core/constructs";
+import { optional } from "@optique/core/modifiers";
+import { argument, command, constant, option } from "@optique/core/primitives";
+import { string, choice } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+const serverCommand = command("server", object({
+  action: constant("server"),
+  port: optional(option("-p", "--port", string())),
+  host: optional(option("-h", "--host", string())),
+  env: optional(option("--env", choice(["dev", "staging", "prod"]))),
+}));
+
+const buildCommand = command("build", object({
+  action: constant("build"),
+  target: argument(choice(["web", "mobile", "desktop"])),
+  mode: optional(option("--mode", choice(["debug", "release"]))),
+  output: optional(option("-o", "--output", string())),
+}));
+
+const parser = or(serverCommand, buildCommand);
+
+const config = run(parser, { completion: "both" });
+~~~~
+
+This provides completion for:
+
+ -  Command names: `server`, `build`
+ -  Command-specific options: `--port` only for server, `--mode` only for build
+ -  Enum values: `--env dev`, `--mode release`
+ -  Context-aware suggestions based on the current command
+
+#### File path completion integration
+
+For file and directory arguments, Optique delegates to native shell completion:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { argument, option } from "@optique/core/primitives";
+import { path } from "@optique/run/valueparser";
+import { run } from "@optique/run";
+
+const parser = object({
+  config: option("-c", "--config", path({
+    extensions: [".json", ".yaml"],
+    type: "file"
+  })),
+  outputDir: option("-o", "--output", path({
+    type: "directory"
+  })),
+  input: argument(path({
+    extensions: [".md", ".txt"],
+    type: "file"
+  })),
+});
+
+const config = run(parser, { completion: "both" });
+~~~~
+
+The `path()` value parser automatically provides:
+
+ -  Native file system completion using shell built-ins
+ -  Extension filtering (*.json*, *.yaml* files only)
+ -  Type filtering (files vs directories)
+ -  Proper handling of spaces, special characters, and symlinks
+
+#### Installation and usage
+
+Once completion is enabled, users install it with simple commands:
+
+::: code-group
+
+~~~~ bash [Bash]
+# Generate and install Bash completion
+myapp completion bash > ~/.bashrc.d/myapp.bash
+source ~/.bashrc.d/myapp.bash
+~~~~
+
+~~~~ zsh [zsh]
+# Generate and install zsh completion
+myapp completion zsh > ~/.zsh/completions/_myapp
+~~~~
+
+~~~~ fish [fish]
+# Generate and install fish completion
+myapp completion fish > ~/.config/fish/completions/myapp.fish
+~~~~
+
+~~~~ powershell [PowerShell]
+# Generate and install PowerShell completion
+myapp completion pwsh > myapp-completion.ps1
+~~~~
+
+:::
+
+The completion system leverages the same parser structure used for argument
+validation, ensuring suggestions always stay synchronized with your CLI's
+actual behavior without requiring separate maintenance.
+
+Users then benefit from intelligent completion:
+
+~~~~ bash
+myapp <TAB>                    # Shows: server, build, help
+myapp server --<TAB>           # Shows: --port, --host, --env, --help
+myapp server --env <TAB>       # Shows: dev, staging, prod
+myapp build <TAB>              # Shows: web, mobile, desktop
+~~~~
+
+### Hidden and deprecated options
+
+As CLIs evolve, you may need to deprecate old options while maintaining
+backward compatibility, or add internal debugging options that shouldn't
+appear in user-facing documentation. The `hidden` option lets you keep
+parsers functional while controlling visibility. Hidden options still consume
+input normally, so they also still participate in duplicate option-name
+validation:
+
+ -  `hidden: true`: hide from usage, help entries, completions, and
+    “Did you mean?” suggestions
+ -  `hidden: "usage"`: hide from usage only
+ -  `hidden: "doc"`: hide from help entries only
+ -  `hidden: "help"`: hide from usage and help entries, but keep completions
+    and “Did you mean?” suggestions
+
+#### Deprecation pattern
+
+When renaming or replacing options, keep the old form working but hide it:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { optional } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const parser = object({
+  // The new, preferred option name
+  output: optional(option("-o", "--output", string(), {
+    description: message`Output file path`,
+  })),
+  // Legacy option name - still works but hidden from help
+  outputLegacy: optional(option("--out", string(), {
+    hidden: true,
+  })),
+});
+// Later, merge the values: output ?? outputLegacy
+~~~~
+
+This approach ensures existing scripts using `--out` continue to work
+while new users learn the preferred `--output` form.
+
+If you keep a hidden legacy option, it still reserves that option name inside
+the same combinator. A visible parser using the same name is still treated as a
+duplicate unless you explicitly opt out with `allowDuplicates: true`.
+
+#### Internal debugging options
+
+Add options for debugging or development that shouldn't clutter the help:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { withDefault } from "@optique/core/modifiers";
+import { flag, option } from "@optique/core/primitives";
+import { integer } from "@optique/core/valueparser";
+
+const parser = object({
+  verbose: flag("-v", "--verbose", {
+    description: message`Enable verbose output`,
+  }),
+  // Developer-only options
+  traceRequests: flag("--trace-requests", { hidden: true }),
+  mockDelay: withDefault(option("--mock-delay", integer(), { hidden: true }), 0),
+});
+~~~~
+
+Developers who know about these options can use them, but they won't
+appear in `--help` output or shell completions.
+
+#### Undocumented but completion-discoverable flags
+
+Use `hidden: "help"` when you want to keep an option out of usage/help text
+without removing it from shell completion:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const parser = object({
+  profile: option("--profile", string()),
+  // Not shown in usage/help, but still suggested by completion
+  debugTransport: option("--debug-transport", string(), { hidden: "help" }),
+});
+~~~~
+
+#### Experimental features
+
+Hide features that aren't ready for general use:
+
+~~~~ typescript twoslash
+import { object, or } from "@optique/core/constructs";
+import { argument, command, constant, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const commands = or(
+  command("build", object({
+    type: constant("build"),
+    target: option("--target", string()),
+  })),
+  command("test", object({
+    type: constant("test"),
+    pattern: argument(string()),
+  })),
+  // Experimental - not yet documented
+  command("experimental-watch", object({
+    type: constant("watch"),
+    paths: argument(string()),
+  }), { hidden: true }),
+);
+~~~~
+
+Hidden commands work normally but don't appear in command listings or
+get suggested in “Did you mean?” errors.
+
+### Advanced patterns
+
+The cookbook patterns can be combined to create sophisticated CLI interfaces:
+
+~~~~ typescript twoslash
+import { merge, object } from "@optique/core/constructs";
+import { multiple, withDefault } from "@optique/core/modifiers";
+import { argument, command, constant, flag, option } from "@optique/core/primitives";
+import { string, type ValueParser,
+         type ValueParserResult } from "@optique/core/valueparser";
+function keyValue(separator = "="): ValueParser<"sync", [string, string]> {
+  return {
+    mode: "sync",
+    metavar: `KEY${separator}VALUE`,
+    placeholder: ["", ""] as [string, string],
+    parse(input: string): ValueParserResult<[string, string]> {
+      return { success: true, value: ["", ""] };
+    },
+    format([key, value]: [string, string]): string {
+      return "";
+    },
+  };
+}
+// ---cut-before---
+// Combining subcommands with dependent options and key-value pairs
+const deployCommand = command("deploy", merge(
+  object({
+    action: constant("deploy"),
+    environment: argument(string()),
+  }),
+  withDefault(
+    object({
+      dryRun: flag("--dry-run"),
+      vars: multiple(option("--var", keyValue())),
+      confirm: option("--confirm"),
+    }),
+    { dryRun: false }
+  )
+));
+~~~~
+
+This creates a deploy command that:
+
+ -  Requires an environment argument
+ -  Supports key-value variables
+ -  Has optional dry-run mode
+ -  Uses dependent confirmation when not in dry-run mode
+
+### Custom value parser with `normalize()`
+
+*This API is available since Optique 1.0.0.*
+
+When a value has multiple valid representations, implement `normalize()` on
+your value parser so that `withDefault()` can canonicalize default values.
+This example creates a parser for hexadecimal color codes that normalizes
+case and optional `#` prefixes:
+
+~~~~ typescript twoslash
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+
+function hexColor(): ValueParser<"sync", string> {
+  const pattern = /^#?([0-9a-f]{6})$/i;
+
+  return {
+    mode: "sync",
+    metavar: "COLOR",
+    placeholder: "#000000",
+    parse(input: string): ValueParserResult<string> {
+      const match = input.match(pattern);
+      if (match) {
+        return { success: true, value: `#${match[1].toLowerCase()}` };
+      }
+      return {
+        success: false,
+        error: message`Expected a hex color like #ff0000, but got ${input}.`,
+      };
+    },
+    format(value: string): string {
+      return value;
+    },
+    normalize(value: string): string {
+      const match = value.match(pattern);
+      return match ? `#${match[1].toLowerCase()}` : value;
+    },
+  };
+}
+~~~~
+
+With `normalize()` in place, `withDefault()` automatically canonicalizes the
+default value:
+
+~~~~ typescript twoslash
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+function hexColor(): ValueParser<"sync", string> {
+  const pattern = /^#?([0-9a-f]{6})$/i;
+  return {
+    mode: "sync",
+    metavar: "COLOR",
+    placeholder: "#000000",
+    parse(input: string): ValueParserResult<string> {
+      const match = input.match(pattern);
+      if (match) return { success: true, value: `#${match[1].toLowerCase()}` };
+      return { success: false, error: message`Invalid.` };
+    },
+    format(v: string): string { return v; },
+    normalize(value: string): string {
+      const match = value.match(pattern);
+      return match ? `#${match[1].toLowerCase()}` : value;
+    },
+  };
+}
+// ---cut-before---
+import { withDefault } from "@optique/core/modifiers";
+import { parse } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+
+const parser = withDefault(
+  option("--bg-color", hexColor()),
+  "FF8800",  // no "#" prefix, uppercase
+);
+
+const result = parse(parser, []);
+// result.value is "#ff8800", normalized from "FF8800"
+~~~~
+
+### Design principles
+
+These patterns demonstrate several key principles for designing CLI parsers:
+
+#### Composition over configuration
+
+Instead of complex configuration objects, combine simple parsers using
+combinators like [`or()`](./concepts/constructs.md#or-parser),
+[`merge()`](./concepts/constructs.md#merge-parser), and
+[`multiple()`](./concepts/modifiers.md#multiple-parser). Each combinator has
+a single, well-defined purpose.
+
+#### Type-driven design
+
+Use TypeScript's type system to enforce correct usage. Discriminated unions,
+conditional types, and literal types prevent runtime errors by catching
+mistakes at compile time.
+
+#### Separation of concerns
+
+Separate parsing logic from presentation logic.
+Use [`group()`](./concepts/constructs.md#group-parser) for help organization,
+[`withDefault()`](./concepts/modifiers.md#withdefault-parser) for fallback
+behavior, and [`map()`](./concepts/modifiers.md#map-parser) for data
+transformation.
+
+#### Progressive disclosure
+
+Start with simple parsers and add complexity through composition. A basic
+flag becomes a mutually exclusive choice, which becomes a grouped set of
+options, which becomes part of a larger command structure.
+
+#### Fail-safe defaults
+
+Always consider what happens when optional inputs are missing. Use
+[`withDefault()`](./concepts/modifiers.md#withdefault-parser) to provide
+sensible fallbacks and [`optional()`](./concepts/modifiers.md#optional-parser)
+when absence is meaningful.
+
+
+Integration patterns
+--------------------
+
+These recipes use integration packages like *@optique/env*, *@optique/config*,
+and *@optique/inquirer*.
+
+### Environment variable fallbacks
 
 *This API is available since Optique 1.0.0.*
 
@@ -1114,9 +1704,7 @@ With the `MYAPP_` prefix, the parser reads `MYAPP_HOST`, `MYAPP_PORT`, and
 For more details, see the
 [environment variable guide](./integrations/env.md).
 
-
-Config file integration
------------------------
+### Config file integration
 
 *This API is available since Optique 0.10.0.*
 
@@ -1461,546 +2049,63 @@ For more details, see the
 [config file integration guide](./integrations/config.md), and
 [interactive prompt guide](./integrations/inquirer.md).
 
+### Config-only and env-only values with `fail()`
 
-Design principles
------------------
-
-These patterns demonstrate several key principles for designing CLI parsers:
-
-### Composition over configuration
-
-Instead of complex configuration objects, combine simple parsers using
-combinators like [`or()`](./concepts/constructs.md#or-parser),
-[`merge()`](./concepts/constructs.md#merge-parser), and
-[`multiple()`](./concepts/modifiers.md#multiple-parser). Each combinator has
-a single, well-defined purpose.
-
-### Type-driven design
-
-Use TypeScript's type system to enforce correct usage. Discriminated unions,
-conditional types, and literal types prevent runtime errors by catching
-mistakes at compile time.
-
-### Separation of concerns
-
-Separate parsing logic from presentation logic.
-Use [`group()`](./concepts/constructs.md#group-parser) for help organization,
-[`withDefault()`](./concepts/modifiers.md#withdefault-parser) for fallback
-behavior, and [`map()`](./concepts/modifiers.md#map-parser) for data
-transformation.
-
-### Progressive disclosure
-
-Start with simple parsers and add complexity through composition. A basic
-flag becomes a mutually exclusive choice, which becomes a grouped set of
-options, which becomes part of a larger command structure.
-
-### Fail-safe defaults
-
-Always consider what happens when optional inputs are missing. Use
-[`withDefault()`](./concepts/modifiers.md#withdefault-parser) to provide
-sensible fallbacks and [`optional()`](./concepts/modifiers.md#optional-parser)
-when absence is meaningful.
-
-
-Pass-through options for wrapper CLIs
--------------------------------------
-
-*This API is available since Optique 0.8.0.*
-
-When building wrapper tools that need to forward unknown options to an
-underlying command, the
-[`passThrough()`](./concepts/primitives.md#passthrough-parser) parser captures
-unrecognized options without validation errors.
-
-> [!NOTE]
-> By default, `passThrough()` uses the `"equalsOnly"` format, which
-> only captures `--opt=val` style options. Options like `--foo bar` will fail.
-> See [Choosing the right format](#choosing-the-right-format) below for
-> alternatives.
-
-### Basic wrapper pattern
-
-A common use case is wrapping another CLI tool while adding your own options:
+Some configuration values should never be exposed as CLI flags. For example,
+an API secret might come only from an environment variable or config file.
+The [`fail()`](./concepts/primitives.md#fail-parser) parser always fails
+without consuming input, so wrapping it with `bindConfig()` or `bindEnv()`
+forces the value to come from the external source:
 
 ~~~~ typescript twoslash
+import { z } from "zod";
+import { bindConfig, createConfigContext } from "@optique/config";
 import { object } from "@optique/core/constructs";
-import { argument, option, passThrough } from "@optique/core/primitives";
-import { string } from "@optique/core/valueparser";
-import { run } from "@optique/run";
-
-const parser = object({
-  debug: option("--debug"),
-  config: option("-c", "--config", string({ metavar: "FILE" })),
-  // Default format is "equalsOnly", captures --opt=val only
-  extraOpts: passThrough(),
-});
-
-const result = run(parser);
-//    ^?
-
-
-
-
-
-
-
-
-// Use result.extraOpts to pass through to the underlying tool
-~~~~
-
-The key insight is that `passThrough()` has the *lowest priority* (−10), so
-your explicit options are always matched first. Only truly unrecognized options
-are captured in the pass-through array.
-
-### Subcommand-specific pass-through
-
-For tools that delegate entire subcommands to other processes:
-
-~~~~ typescript twoslash
-import { object, or } from "@optique/core/constructs";
-import { argument, command, constant, option, passThrough } from "@optique/core/primitives";
+import { option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
-import { run } from "@optique/run";
-
-const parser = or(
-  // Local command with known options
-  command("local", object({
-    action: constant("local"),
-    port: option("-p", "--port", integer()),
-    host: option("-h", "--host", string()),
-  })),
-  // Exec command passes everything through
-  command("exec", object({
-    action: constant("exec"),
-    container: argument(string({ metavar: "CONTAINER" })),
-    args: passThrough({ format: "greedy" }),
-  })),
-);
-
-const result = run(parser);
-
-if (result.action === "exec") {
-  // result.args contains all remaining tokens
-  // Pass them to the container: ["--verbose", "-it", "bash"]
-}
-~~~~
-
-The `"greedy"` format is crucial here: once the container name is captured, all
-remaining tokens (including those that look like options) go into `args`.
-
-### Choosing the right format
-
-The `passThrough()` parser supports three capture formats:
-
-`"equalsOnly"` (default)
-:   Only captures `--opt=val` format. The safest choice when you need to
-    distinguish between options and positional arguments:
-
-    ~~~~ typescript twoslash
-    import { passThrough } from "@optique/core/primitives";
-    // ---cut-before---
-    const parser = passThrough({ format: "equalsOnly" });
-    // Captures: --foo=bar, --baz=123
-    // Rejects: --foo bar, --verbose
-    ~~~~
-
-`"nextToken"`
-:   Captures `--opt val` as two tokens when the value doesn't look like
-    an option. Good for wrapping tools that use space-separated values:
-
-    ~~~~ typescript twoslash
-    import { passThrough } from "@optique/core/primitives";
-    // ---cut-before---
-    const parser = passThrough({ format: "nextToken" });
-    // --foo bar → ["--foo", "bar"]
-    // --foo --bar → ["--foo", "--bar"] (--bar is a separate option)
-    ~~~~
-
-`"greedy"`
-:   Captures *all* remaining tokens. Use for proxy/wrapper tools where
-    everything after a certain point should pass through:
-
-    ~~~~ typescript twoslash
-    import { passThrough } from "@optique/core/primitives";
-    // ---cut-before---
-    const parser = passThrough({ format: "greedy" });
-    // git commit -m "message" → ["git", "commit", "-m", "message"]
-    ~~~~
-
-> [!CAUTION]
-> The `"greedy"` format can shadow explicit parsers. Place it carefully,
-> typically as the last field in a subcommand-specific `object()`.
-
-
-Advanced patterns
------------------
-
-The cookbook patterns can be combined to create sophisticated CLI interfaces:
-
-~~~~ typescript twoslash
-import { merge, object } from "@optique/core/constructs";
-import { multiple, withDefault } from "@optique/core/modifiers";
-import { argument, command, constant, flag, option } from "@optique/core/primitives";
-import { string, type ValueParser,
-         type ValueParserResult } from "@optique/core/valueparser";
-function keyValue(separator = "="): ValueParser<"sync", [string, string]> {
-  return {
-    mode: "sync",
-    metavar: `KEY${separator}VALUE`,
-    placeholder: ["", ""] as [string, string],
-    parse(input: string): ValueParserResult<[string, string]> {
-      return { success: true, value: ["", ""] };
-    },
-    format([key, value]: [string, string]): string {
-      return "";
-    },
-  };
-}
-// ---cut-before---
-// Combining subcommands with dependent options and key-value pairs
-const deployCommand = command("deploy", merge(
-  object({
-    action: constant("deploy"),
-    environment: argument(string()),
-  }),
-  withDefault(
-    object({
-      dryRun: flag("--dry-run"),
-      vars: multiple(option("--var", keyValue())),
-      confirm: option("--confirm"),
-    }),
-    { dryRun: false }
-  )
-));
-~~~~
-
-This creates a deploy command that:
-
- -  Requires an environment argument
- -  Supports key-value variables
- -  Has optional dry-run mode
- -  Uses dependent confirmation when not in dry-run mode
-
-
-Shell completion patterns
--------------------------
-
-*This API is available since Optique 0.6.0.*
-
-Modern CLI applications benefit from intelligent shell completion that helps
-users discover available options and reduces typing errors. Optique provides
-built-in completion support that integrates seamlessly with your parser
-definitions.
-
-### Basic completion setup
-
-Enable completion for any CLI application by adding the `completion` option:
-
-~~~~ typescript twoslash
-import { object } from "@optique/core/constructs";
-import { argument, option } from "@optique/core/primitives";
-import { string, choice } from "@optique/core/valueparser";
-import { run } from "@optique/run";
-
-const parser = object({
-  format: option("-f", "--format", choice(["json", "yaml", "xml"])),
-  output: option("-o", "--output", string({ metavar: "FILE" })),
-  verbose: option("-v", "--verbose"),
-  input: argument(string({ metavar: "INPUT" })),
-});
-
-const config = run(parser, { completion: "both" });
-~~~~
-
-This automatically provides intelligent completion for:
-
- -  Option names: `--format`, `--output`, `--verbose`
- -  Choice values: `--format json`, `--format yaml`
- -  Help integration: `--help` is included in completions
-
-### Custom value parser suggestions
-
-Create value parsers with domain-specific completion suggestions:
-
-~~~~ typescript twoslash
-import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
-import type { Suggestion } from "@optique/core/parser";
-import { message } from "@optique/core/message";
-
-// Custom parser for log levels with intelligent completion
-function logLevel(): ValueParser<"sync", string> {
-  const levels = ["error", "warn", "info", "debug", "trace"];
-
-  return {
-    mode: "sync",
-    metavar: "LEVEL",
-    placeholder: "",
-    parse(input: string): ValueParserResult<string> {
-      if (levels.includes(input.toLowerCase())) {
-        return { success: true, value: input.toLowerCase() };
-      }
-      return {
-        success: false,
-        // Note: For proper formatting of choice lists, see the "Formatting choice lists"
-        // section in the Concepts guide on Messages
-        error: message`Invalid log level: ${input}. Valid levels: ${levels.join(", ")}.`,
-      };
-    },
-    format(value: string): string {
-      return value;
-    },
-    *suggest(prefix: string): Iterable<Suggestion> {
-      for (const level of levels) {
-        if (level.startsWith(prefix.toLowerCase())) {
-          yield {
-            kind: "literal",
-            text: level,
-            description: message`Set log level to ${level}`
-          };
-        }
-      }
-    },
-  };
-}
-~~~~
-
-### Multi-command CLI with rich completion
-
-Complex CLI tools with subcommands benefit greatly from completion:
-
-~~~~ typescript twoslash
-import { object, or } from "@optique/core/constructs";
-import { optional } from "@optique/core/modifiers";
-import { argument, command, constant, option } from "@optique/core/primitives";
-import { string, choice } from "@optique/core/valueparser";
-import { run } from "@optique/run";
-
-const serverCommand = command("server", object({
-  action: constant("server"),
-  port: optional(option("-p", "--port", string())),
-  host: optional(option("-h", "--host", string())),
-  env: optional(option("--env", choice(["dev", "staging", "prod"]))),
-}));
-
-const buildCommand = command("build", object({
-  action: constant("build"),
-  target: argument(choice(["web", "mobile", "desktop"])),
-  mode: optional(option("--mode", choice(["debug", "release"]))),
-  output: optional(option("-o", "--output", string())),
-}));
-
-const parser = or(serverCommand, buildCommand);
-
-const config = run(parser, { completion: "both" });
-~~~~
-
-This provides completion for:
-
- -  Command names: `server`, `build`
- -  Command-specific options: `--port` only for server, `--mode` only for build
- -  Enum values: `--env dev`, `--mode release`
- -  Context-aware suggestions based on the current command
-
-### File path completion integration
-
-For file and directory arguments, Optique delegates to native shell completion:
-
-~~~~ typescript twoslash
-import { object } from "@optique/core/constructs";
-import { argument, option } from "@optique/core/primitives";
-import { path } from "@optique/run/valueparser";
-import { run } from "@optique/run";
-
-const parser = object({
-  config: option("-c", "--config", path({
-    extensions: [".json", ".yaml"],
-    type: "file"
-  })),
-  outputDir: option("-o", "--output", path({
-    type: "directory"
-  })),
-  input: argument(path({
-    extensions: [".md", ".txt"],
-    type: "file"
-  })),
-});
-
-const config = run(parser, { completion: "both" });
-~~~~
-
-The `path()` value parser automatically provides:
-
- -  Native file system completion using shell built-ins
- -  Extension filtering (*.json*, *.yaml* files only)
- -  Type filtering (files vs directories)
- -  Proper handling of spaces, special characters, and symlinks
-
-### Installation and usage
-
-Once completion is enabled, users install it with simple commands:
-
-::: code-group
-
-~~~~ bash [Bash]
-# Generate and install Bash completion
-myapp completion bash > ~/.bashrc.d/myapp.bash
-source ~/.bashrc.d/myapp.bash
-~~~~
-
-~~~~ zsh [zsh]
-# Generate and install zsh completion
-myapp completion zsh > ~/.zsh/completions/_myapp
-~~~~
-
-~~~~ fish [fish]
-# Generate and install fish completion
-myapp completion fish > ~/.config/fish/completions/myapp.fish
-~~~~
-
-~~~~ powershell [PowerShell]
-# Generate and install PowerShell completion
-myapp completion pwsh > myapp-completion.ps1
-~~~~
-
-:::
-
-The completion system leverages the same parser structure used for argument
-validation, ensuring suggestions always stay synchronized with your CLI's
-actual behavior without requiring separate maintenance.
-
-Users then benefit from intelligent completion:
-
-~~~~ bash
-myapp <TAB>                    # Shows: server, build, help
-myapp server --<TAB>           # Shows: --port, --host, --env, --help
-myapp server --env <TAB>       # Shows: dev, staging, prod
-myapp build <TAB>              # Shows: web, mobile, desktop
-~~~~
-
-
-Hidden and deprecated options
------------------------------
-
-As CLIs evolve, you may need to deprecate old options while maintaining
-backward compatibility, or add internal debugging options that shouldn't
-appear in user-facing documentation. The `hidden` option lets you keep
-parsers functional while controlling visibility. Hidden options still consume
-input normally, so they also still participate in duplicate option-name
-validation:
-
- -  `hidden: true`: hide from usage, help entries, completions, and
-    “Did you mean?” suggestions
- -  `hidden: "usage"`: hide from usage only
- -  `hidden: "doc"`: hide from help entries only
- -  `hidden: "help"`: hide from usage and help entries, but keep completions
-    and “Did you mean?” suggestions
-
-### Deprecation pattern
-
-When renaming or replacing options, keep the old form working but hide it:
-
-~~~~ typescript twoslash
-import { object } from "@optique/core/constructs";
-import { message } from "@optique/core/message";
-import { optional } from "@optique/core/modifiers";
-import { option } from "@optique/core/primitives";
-import { string } from "@optique/core/valueparser";
-
-const parser = object({
-  // The new, preferred option name
-  output: optional(option("-o", "--output", string(), {
-    description: message`Output file path`,
-  })),
-  // Legacy option name - still works but hidden from help
-  outputLegacy: optional(option("--out", string(), {
-    hidden: true,
-  })),
-});
-// Later, merge the values: output ?? outputLegacy
-~~~~
-
-This approach ensures existing scripts using `--out` continue to work
-while new users learn the preferred `--output` form.
-
-If you keep a hidden legacy option, it still reserves that option name inside
-the same combinator. A visible parser using the same name is still treated as a
-duplicate unless you explicitly opt out with `allowDuplicates: true`.
-
-### Internal debugging options
-
-Add options for debugging or development that shouldn't clutter the help:
-
-~~~~ typescript twoslash
-import { object } from "@optique/core/constructs";
-import { message } from "@optique/core/message";
+import { bindEnv, createEnvContext } from "@optique/env";
+import { fail } from "@optique/core/primitives";
+import { runAsync } from "@optique/run";
 import { withDefault } from "@optique/core/modifiers";
-import { flag, option } from "@optique/core/primitives";
-import { integer } from "@optique/core/valueparser";
+
+const configSchema = z.object({
+  timeout: z.number().optional(),
+  apiSecret: z.string().optional(),
+});
+
+const envContext = createEnvContext({ prefix: "MYAPP_" });
+const configContext = createConfigContext({ schema: configSchema });
 
 const parser = object({
-  verbose: flag("-v", "--verbose", {
-    description: message`Enable verbose output`,
+  config: withDefault(option("--config", string()), "config.json"),
+  // Visible CLI option
+  host: option("--host", string()),
+  // Config-only: no CLI flag, falls back to config or default
+  timeout: bindConfig(fail<number>(), {
+    context: configContext,
+    key: "timeout",
+    default: 30,
   }),
-  // Developer-only options
-  traceRequests: flag("--trace-requests", { hidden: true }),
-  mockDelay: withDefault(option("--mock-delay", integer(), { hidden: true }), 0),
+  // Env-only: no CLI flag, falls back to env or default
+  apiSecret: bindEnv(fail<string>(), {
+    context: envContext,
+    key: "API_SECRET",
+    parser: string(),
+    default: "",
+  }),
+});
+
+const result = await runAsync(parser, {
+  contexts: [envContext, configContext],
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
 });
 ~~~~
 
-Developers who know about these options can use them, but they won't
-appear in `--help` output or shell completions.
-
-### Undocumented but completion-discoverable flags
-
-Use `hidden: "help"` when you want to keep an option out of usage/help text
-without removing it from shell completion:
-
-~~~~ typescript twoslash
-import { object } from "@optique/core/constructs";
-import { option } from "@optique/core/primitives";
-import { string } from "@optique/core/valueparser";
-
-const parser = object({
-  profile: option("--profile", string()),
-  // Not shown in usage/help, but still suggested by completion
-  debugTransport: option("--debug-transport", string(), { hidden: "help" }),
-});
-~~~~
-
-### Experimental features
-
-Hide features that aren't ready for general use:
-
-~~~~ typescript twoslash
-import { object, or } from "@optique/core/constructs";
-import { argument, command, constant, option } from "@optique/core/primitives";
-import { string } from "@optique/core/valueparser";
-
-const commands = or(
-  command("build", object({
-    type: constant("build"),
-    target: option("--target", string()),
-  })),
-  command("test", object({
-    type: constant("test"),
-    pattern: argument(string()),
-  })),
-  // Experimental - not yet documented
-  command("experimental-watch", object({
-    type: constant("watch"),
-    paths: argument(string()),
-  }), { hidden: true }),
-);
-~~~~
-
-Hidden commands work normally but don't appear in command listings or
-get suggested in “Did you mean?” errors.
-
-   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-The patterns in this cookbook provide the building blocks for creating
-CLI interfaces that are both powerful and type-safe, with clear separation
-between parsing logic, type safety, and user experience.
+Because `fail()` never succeeds on its own, `bindConfig()` and `bindEnv()`
+always use the external source (or fall back to the configured default).
+This keeps the help output clean while still allowing values to flow in
+from configuration files and environment variables.
 
 <!-- cSpell: ignore myapp -->

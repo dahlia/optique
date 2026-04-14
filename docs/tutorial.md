@@ -14,60 +14,32 @@ rely on configuration objects, Optique uses composable functions that
 automatically infer TypeScript types.
 
 
-What makes Optique different?
------------------------------
+How Optique works
+-----------------
 
-Most CLI parsing libraries ask you to describe your command-line interface
-using configuration objects or imperative APIs. You define options, set up
-handlers, and hope everything works correctly at runtime. Type safety, if it
-exists at all, is often an afterthought requiring manual type annotations.
+Instead of describing your CLI with configuration objects, you *build* it
+using small, composable functions called *parser combinators*. TypeScript
+automatically infers the exact type of data your parser will produce.
+For a deeper look at this approach and how it compares to other CLI libraries,
+see [Why Optique?](./why.md).
 
-Optique takes a fundamentally different approach inspired by functional
-programming languages like Haskell. Instead of describing what your CLI looks
-like, you *build* it using small, composable functions called *parser
-combinators*. These functions can be combined in powerful ways to create
-complex argument structures, and TypeScript automatically infers the exact
-type of data your parser will produce.
+The core building blocks are:
 
-This approach has several key advantages:
-
- -  *Composability*: Small parsers combine into larger ones naturally
- -  *Type safety*: TypeScript knows exactly what data you'll get back
- -  *Reusability*: Parser components can be shared across different commands
- -  *Expressiveness*: Complex CLI patterns become simple to express
- -  *Compile-time verification*: Many errors are caught before your code runs
-
-
-The philosophy behind parser combinators
-----------------------------------------
-
-Parser combinators might seem unfamiliar if you're used to traditional CLI
-libraries, but the concept is powerful and elegant. Think of each combinator
-as a building block:
-
- -  An [`option()`](./concepts/primitives.md#option-parser) parser handles
-    a single command-line option
- -  An [`argument()`](./concepts/primitives.md#argument-parser) parser handles
-    a positional argument
- -  An [`object()`](./concepts/constructs.md#object-parser) combinator groups
-    multiple parsers into a structured result
- -  An [`or()`](./concepts/constructs.md#or-parser) combinator creates
-    alternatives between different parsers
-
-These building blocks compose naturally. You can take any parser and make it
-optional with [`optional()`](./concepts/modifiers.md#optional-parser),
-or repeatable with [`multiple()`](./concepts/modifiers.md#multiple-parser).
-You can combine unrelated parsers with
-[`merge()`](./concepts/constructs.md#merge-parser), or create complex
-alternatives with `or()`.
-The type system tracks these combinations automatically, ensuring that your
-parsed data always matches what your code expects.
+ -  [`option()`](./concepts/primitives.md#option-parser) and
+    [`argument()`](./concepts/primitives.md#argument-parser) for individual
+    CLI elements
+ -  [`object()`](./concepts/constructs.md#object-parser) to group parsers
+    into structured results
+ -  [`or()`](./concepts/constructs.md#or-parser) for mutually exclusive
+    alternatives
+ -  [`optional()`](./concepts/modifiers.md#optional-parser),
+    [`multiple()`](./concepts/modifiers.md#multiple-parser), and
+    [`merge()`](./concepts/constructs.md#merge-parser) for flexible
+    composition
 
 In this tutorial, we'll build progressively more complex CLI applications,
-starting with simple options and building up to sophisticated multi-command
-interfaces with full type safety. By the end, you'll understand not just how
-to use each combinator, but when and why to choose different patterns for your
-CLI applications.
+starting with simple options and building up to production-ready tools with
+integration support.
 
 
 Getting started
@@ -1220,39 +1192,167 @@ $ build-tool help build
 ~~~~
 
 
-Conclusion
+Integrating external data sources
+---------------------------------
+
+Real CLI applications often get values from multiple sources beyond command-line
+arguments. Optique's integration packages let you layer these sources with a
+clear priority order, all while preserving the same composition model.
+
+### Environment variables with *@optique/env*
+
+Use `bindEnv()` to fall back to an environment variable when a CLI option is
+not provided:
+
+~~~~ typescript twoslash
+import { bindEnv, createEnvContext } from "@optique/env";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+import { runAsync } from "@optique/run";
+
+const envContext = createEnvContext({ prefix: "MYAPP_" });
+
+const parser = object({
+  host: bindEnv(option("--host", string()), {
+    context: envContext,
+    key: "HOST",
+    parser: string(),
+    default: "localhost",
+  }),
+  port: bindEnv(option("--port", integer()), {
+    context: envContext,
+    key: "PORT",
+    parser: integer(),
+    default: 3000,
+  }),
+});
+
+// Pass the context to the runner
+const result = await runAsync(parser, {
+  contexts: [envContext],
+});
+~~~~
+
+Priority order: CLI argument > environment variable > default value.  With
+the `MYAPP_` prefix, the parser reads `MYAPP_HOST` and `MYAPP_PORT`.
+
+See the [environment variable guide](./integrations/env.md) for more details.
+
+### Config files with *@optique/config*
+
+Use `bindConfig()` to fall back to a configuration file. The schema is
+validated using any [Standard Schema]-compatible
+library (Zod, Valibot, ArkType):
+
+~~~~ typescript twoslash
+import { z } from "zod";
+import { bindConfig, createConfigContext } from "@optique/config";
+import { object } from "@optique/core/constructs";
+import { withDefault } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+import { runAsync } from "@optique/run";
+
+const configSchema = z.object({
+  host: z.string().optional(),
+  port: z.number().optional(),
+});
+
+const configContext = createConfigContext({ schema: configSchema });
+
+const parser = object({
+  config: withDefault(option("--config", string()), "config.json"),
+  host: bindConfig(option("--host", string()), {
+    context: configContext,
+    key: "host",
+    default: "localhost",
+  }),
+  port: bindConfig(option("--port", integer()), {
+    context: configContext,
+    key: "port",
+    default: 3000,
+  }),
+});
+
+const result = await runAsync(parser, {
+  contexts: [configContext],
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
+});
+~~~~
+
+Priority order: CLI argument > config file value > default value.
+
+See the [config file guide](./integrations/config.md) for more details.
+
+[Standard Schema]: https://standardschema.dev/
+
+### Interactive prompts with *@optique/inquirer*
+
+Use `prompt()` to show an interactive prompt when a value is not provided on
+the command line:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+import { prompt } from "@optique/inquirer";
+import { run } from "@optique/run";
+
+const parser = object({
+  name: prompt(option("--name", string()), {
+    type: "input",
+    message: "Project name:",
+  }),
+  port: prompt(option("--port", integer()), {
+    type: "number",
+    message: "Port number:",
+    default: 3000,
+  }),
+});
+
+await run(parser);
+~~~~
+
+When `--name` and `--port` are provided, the prompts are skipped. Otherwise,
+the user sees interactive prompts.
+
+See the [interactive prompt guide](./integrations/inquirer.md) for more
+details.
+
+### Composing multiple sources
+
+These integrations compose naturally. Wrapping order determines fallback
+priority:
+
+~~~~ typescript
+// CLI > environment > config > interactive prompt
+prompt(bindEnv(bindConfig(option("--host", string()), { ... }), { ... }), { ... })
+~~~~
+
+See the [cookbook](./cookbook.md#combining-with-interactive-prompts) for a
+complete example.
+
+
+Next steps
 ----------
 
-Congratulations! You've learned how to build type-safe, composable CLI
-applications with Optique. Here's what we covered:
+You now have a solid foundation for building CLI applications with Optique.
+Here are some directions to explore next:
 
- -  *Primitive parsers*: [`option()`](./concepts/primitives.md#option-parser),
-    [`argument()`](./concepts/primitives.md#argument-parser),
-    [`command()`](./concepts/primitives.md#command-parser) for CLI fundamentals
- -  *Value parsers*: [`string()`](./concepts/valueparsers.md#string-parser),
-    [`integer()`](./concepts/valueparsers.md#integer-parser),
-    [`path()`](./concepts/valueparsers.md#path-parser),
-    [`url()`](./concepts/valueparsers.md#url-parser),
-    [`choice()`](./concepts/valueparsers.md#choice-parser)
-    with rich validation
- -  *Combinators*: [`object()`](./concepts/constructs.md#object-parser),
-    [`or()`](./concepts/constructs.md#or-parser),
-    [`optional()`](./concepts/modifiers.md#optional-parser),
-    [`multiple()`](./concepts/modifiers.md#multiple-parser),
-    [`merge()`](./concepts/constructs.md#merge-parser)
-    for composition
- -  *Type discrimination*: [`constant()`](./concepts/primitives.md#constant-parser)
-    for discriminated unions and type narrowing
- -  *Advanced patterns*: Nested subcommands, reusable option groups, complex CLIs
- -  *Process integration*: *@optique/run* for production-ready CLI applications
-
-### Key benefits of Optique
-
- -  *Type safety*: Automatic TypeScript inference eliminates runtime surprises
- -  *Composability*: Build complex CLIs from simple, reusable components
- -  *Validation*: Rich value parsers with built-in constraint checking
- -  *Error messages*: Clear, helpful error messages for users
- -  *Flexibility*: Works in any JavaScript environment
-    (Node.js, Bun, Deno, browsers)
+ -  [Cookbook](./cookbook.md): Practical recipes for common patterns like
+    mutually exclusive options, dependent flags, and integration examples
+ -  [Concept guides](./concepts/primitives.md): Deep dives into primitives,
+    value parsers, combinators, shell completion, and man page generation
+ -  Integration packages:
+    [environment variables](./integrations/env.md),
+    [config files](./integrations/config.md),
+    [interactive prompts](./integrations/inquirer.md),
+    [Zod](./integrations/zod.md) / [Valibot](./integrations/valibot.md),
+    [Git references](./integrations/git.md),
+    [Temporal dates](./integrations/temporal.md)
+ -  [Why Optique?](./why.md): The design philosophy behind parser combinators
 
 <!-- cSpell: ignore myapp mydb -->
