@@ -6,7 +6,7 @@ Optique changelog
 Version 1.0.1
 -------------
 
-To be released.
+Released on April 22, 2026.
 
 ### @optique/inquirer
 
