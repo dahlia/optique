@@ -622,6 +622,57 @@ describe("prompt()", () => {
   });
 
   describe("object() composition", () => {
+    it("runs prompt fields sequentially inside object()", async () => {
+      const events: string[] = [];
+      let releaseFirstPrompt!: () => void;
+      const firstPromptGate = new Promise<void>((resolve) => {
+        releaseFirstPrompt = resolve;
+      });
+
+      const parser = object({
+        number: prompt(option("--number", integer({ metavar: "number" })), {
+          type: "number",
+          message: "Enter number:",
+          prompter: async () => {
+            events.push("number:start");
+            await firstPromptGate;
+            events.push("number:end");
+            return 42;
+          },
+        }),
+        choice: prompt(option("--choice", choice(["A", "B"] as const)), {
+          type: "select",
+          message: "Choose:",
+          choices: ["A", "B"],
+          prompter: () => {
+            events.push("choice:start");
+            events.push("choice:end");
+            return Promise.resolve("B");
+          },
+        }),
+      });
+
+      const parsePromise = parseAsync(parser, []);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      assert.deepEqual(events, ["number:start"]);
+
+      releaseFirstPrompt();
+
+      const result = await parsePromise;
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.number, 42);
+        assert.equal(result.value.choice, "B");
+      }
+      assert.deepEqual(events, [
+        "number:start",
+        "number:end",
+        "choice:start",
+        "choice:end",
+      ]);
+    });
+
     it("handles multiple prompt fields in object()", async () => {
       let promptCallCount = 0;
       const nameParser = prompt(option("--name", string()), {
