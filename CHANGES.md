@@ -9,6 +9,21 @@ Version 1.1.0
 To be released.
 
 
+Version 1.0.1
+-------------
+
+Released on April 22, 2026.
+
+### @optique/inquirer
+
+ -  Fixed `prompt()` fields inside `object()` being completed in parallel when
+    multiple CLI values were missing.  Interactive fallback prompts now defer
+    to `object()`'s sequential completion pass, so users are prompted one field
+    at a time instead of seeing overlapping Inquirer.js sessions.  [[#797]]
+
+[#797]: https://github.com/dahlia/optique/issues/797
+
+
 Version 1.0.0
 -------------
 

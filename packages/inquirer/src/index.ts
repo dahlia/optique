@@ -925,6 +925,12 @@ export function prompt<M extends Mode, TValue, TState>(
       : [{ type: "optional", terms: parser.usage }],
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
+    // Missing-CLI prompt completion must run in the outer parser's deferred
+    // pass so shared-buffer combinators like object() do not start multiple
+    // interactive prompts concurrently.
+    shouldDeferCompletion(state: TState): boolean {
+      return !isPromptBindState(state) || !state.hasCliValue;
+    },
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
       const innerState = isPromptBindState(state)
         ? (state.cliState === undefined
