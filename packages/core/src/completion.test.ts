@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import { deepStrictEqual, ok, throws } from "node:assert/strict";
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -177,6 +178,7 @@ function testInteractiveZshCompletion(
     }
   )[],
   options: {
+    readonly withInsecureFpath?: boolean;
     readonly setup?: string;
   } = {},
 ): string {
@@ -219,9 +221,19 @@ printf '${directive}'
     const actionDoneMarker = "__OPTIQUE_ZSH_ACTION_DONE__";
     const initPath = join(binDir, ".session.init");
     const actionPath = join(binDir, ".session.action");
+    const insecureFpathDir = join(tempDir, "insecure-fpath");
+    if (options.withInsecureFpath === true) {
+      mkdirSync(insecureFpathDir);
+      chmodSync(insecureFpathDir, 0o777);
+    }
     const init = `PS1='PROMPT> '
 unsetopt zle_bracketed_paste 2>/dev/null || true
-autoload -U compinit && compinit -D
+${
+      options.withInsecureFpath === true
+        ? `fpath=(${JSON.stringify(insecureFpathDir)} $fpath)`
+        : ""
+    }
+autoload -U compinit && compinit -i -D
 zmodload zsh/complist
 setopt auto_list list_ambiguous
 unsetopt list_beep
@@ -2421,6 +2433,55 @@ _extapp 2>/dev/null
         ok(
           !output.includes("readme.txt"),
           `readme.txt should not appear in zsh completions when file-patterns force all-files, got:\n${output}`,
+        );
+      },
+    );
+
+    it(
+      "should keep filtered actual zsh completion working when compinit ignores insecure fpath entries",
+      {
+        skip: !isInteractiveZshCompletionAvailable(),
+        timeout: 10000,
+      },
+      (t) => {
+        if (!isInteractiveZshCompletionAvailable()) {
+          t.skip("interactive zsh completion not available");
+          return;
+        }
+
+        const directive = Array.from(zsh.encodeSuggestions([
+          {
+            kind: "file",
+            type: "file",
+            extensions: [".json"],
+            includeHidden: false,
+          },
+        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          directive,
+          [
+            { path: "data.json" },
+            { path: "readme.txt" },
+            { path: "subdir", type: "directory" },
+          ],
+          {
+            withInsecureFpath: true,
+          },
+        );
+
+        ok(
+          output.includes("data.json"),
+          `Expected data.json in actual zsh completions when compinit ignores insecure fpath entries, got:\n${output}`,
+        );
+        ok(
+          output.includes("subdir/"),
+          `Expected subdir/ in actual zsh completions when compinit ignores insecure fpath entries, got:\n${output}`,
+        );
+        ok(
+          !output.includes("readme.txt"),
+          `readme.txt should not appear when compinit ignores insecure fpath entries, got:\n${output}`,
         );
       },
     );
