@@ -81,12 +81,9 @@ function isShellAvailable(shell: string): boolean {
 
 function isInteractiveZshCompletionAvailable(): boolean {
   if (!isShellAvailable("zsh")) return false;
-  if (!isShellAvailable("script")) return false;
 
   try {
-    // Probe required capabilities without spawning an interactive shell.
-    // The old `script ... zsh -fi` check can linger in CI when multiple
-    // runtimes execute this file concurrently.
+    // Probe required capabilities without spawning a long-lived child shell.
     runCommand(
       "zsh",
       [
@@ -193,8 +190,11 @@ printf '${directive}'
 
     const startMarker = "\x1eOPTIQUE_ZSH_COMPLETION_START\x1e";
     const endMarker = "\x1eOPTIQUE_ZSH_COMPLETION_END\x1e";
-    const inputPath = join(binDir, ".session.input");
-    const input = `PS1='PROMPT> '
+    const initReadyMarker = "__OPTIQUE_ZSH_INIT_READY__";
+    const actionDoneMarker = "__OPTIQUE_ZSH_ACTION_DONE__";
+    const initPath = join(binDir, ".session.init");
+    const actionPath = join(binDir, ".session.action");
+    const init = `PS1='PROMPT> '
 unsetopt zle_bracketed_paste 2>/dev/null || true
 autoload -U compinit && compinit -D
 zmodload zsh/complist
@@ -205,23 +205,60 @@ ${options.setup ?? ""}
 export PATH=${JSON.stringify(binDir)}:$PATH
 source ${JSON.stringify(scriptPath)}
 cd ${JSON.stringify(workDir)}
+print -r -- ${JSON.stringify(initReadyMarker)}
 print -rn -- $'\\x1eOPTIQUE_ZSH_COMPLETION_START\\x1e\\n'
-extapp \t\t
+`;
+    const action = `extapp \t\t
 print -rn -- $'\\x1eOPTIQUE_ZSH_COMPLETION_END\\x1e\\n'
+print -r -- ${JSON.stringify(actionDoneMarker)}
 exit
 `;
-    writeFileSync(inputPath, input);
+    writeFileSync(initPath, init);
+    writeFileSync(actionPath, action);
 
-    const rawOutput = runCommand(
-      "bash",
-      [
-        "-c",
-        `script -qfec 'env TERM=xterm-256color ZDOTDIR=/nonexistent zsh -fi' /dev/null < "$1"`,
-        "bash",
-        inputPath,
-      ],
-      { cwd: tempDir },
-    );
+    const driver = `
+zmodload zsh/zpty
+
+function __optique_drain_zpty() {
+  local sentinel="$1"
+  local buffer=""
+  local chunk=""
+  local idle=0
+
+  while (( idle < 80 )); do
+    if zpty -r -t child; then
+      if zpty -r child chunk; then
+        buffer+="\${chunk}"
+        if [[ -n "\${sentinel}" && "\${buffer}" == *"\${sentinel}"* ]]; then
+          break
+        fi
+        idle=0
+      else
+        break
+      fi
+    else
+      sleep 0.05
+      (( idle++ ))
+    fi
+  done
+
+  print -rn -- "\${buffer}"
+}
+
+zpty -b child env TERM=xterm-256color ZDOTDIR=/nonexistent zsh -fi
+zpty -w child "$(<${JSON.stringify(initPath)})"
+sleep 0.5
+local __output="$(__optique_drain_zpty ${JSON.stringify(initReadyMarker)})"
+zpty -w child "$(<${JSON.stringify(actionPath)})"
+sleep 0.8
+__output+="$(__optique_drain_zpty ${JSON.stringify(actionDoneMarker)})"
+print -rn -- "$__output"
+zpty -d child 2>/dev/null || true
+`;
+
+    const rawOutput = runCommand("zsh", ["-fc", driver], {
+      cwd: tempDir,
+    });
 
     const startIndex = rawOutput.indexOf(startMarker);
     const endIndex = rawOutput.indexOf(
