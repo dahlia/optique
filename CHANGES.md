@@ -16,6 +16,11 @@ To be released.
     result, including when users customize zsh's `file-patterns` style.
     [[#799]]
 
+ -  Fixed zsh completion scripts being unsafe to source before `compinit`
+    has loaded `compdef`.  Generated scripts now guard the registration call
+    so they can be sourced in non-interactive and pre-`compinit` contexts
+    without failing.
+
 [#799]: https://github.com/dahlia/optique/issues/799
 
 

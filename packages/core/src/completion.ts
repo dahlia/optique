@@ -501,7 +501,9 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
   fi
 }
 
-compdef _${programName.replace(/[^a-zA-Z0-9]/g, "_")} ${programName}
+if (( $+functions[compdef] )); then
+  compdef _${programName.replace(/[^a-zA-Z0-9]/g, "_")} ${programName}
+fi
     `;
   },
   *encodeSuggestions(suggestions: readonly Suggestion[]): Iterable<string> {

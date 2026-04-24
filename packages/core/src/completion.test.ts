@@ -81,13 +81,17 @@ function isShellAvailable(shell: string): boolean {
 
 function isInteractiveZshCompletionAvailable(): boolean {
   if (!isShellAvailable("zsh")) return false;
+  if (!isShellAvailable("script")) return false;
 
   try {
+    // Probe required capabilities without spawning an interactive shell.
+    // The old `script ... zsh -fi` check can linger in CI when multiple
+    // runtimes execute this file concurrently.
     runCommand(
-      "bash",
+      "zsh",
       [
-        "-c",
-        "script -qfec 'env TERM=xterm-256color ZDOTDIR=/nonexistent zsh -fi' /dev/null < /dev/null",
+        "-fc",
+        "autoload -U compinit && zmodload zsh/complist && zmodload zsh/zpty",
       ],
       { stdio: "ignore" },
     );
@@ -1858,6 +1862,13 @@ fi
       ok(script.startsWith("#compdef myapp\n"));
     });
 
+    it("should guard compdef registration when compinit is not loaded", () => {
+      const script = zsh.generateScript("myapp");
+
+      ok(script.includes("if (( $+functions[compdef] )); then"));
+      ok(script.includes("compdef _myapp myapp"));
+    });
+
     it("should build single-extension and grouped extension globs in zsh", () => {
       const script = zsh.generateScript("myapp");
 
@@ -2021,6 +2032,30 @@ _extapp 2>/dev/null
         // For zsh, we verify that the completion function can be loaded
         // and executed without errors
         deepStrictEqual(result.includes("success"), true);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should not fail when sourced before compinit in zsh", (t) => {
+      if (!isShellAvailable("zsh")) {
+        t.skip("zsh not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "zsh-source-without-compinit-"),
+      );
+
+      try {
+        const scriptPath = join(tempDir, "completion.zsh");
+        writeFileSync(scriptPath, zsh.generateScript("myapp"));
+
+        runCommand(
+          "zsh",
+          ["-fc", 'source "$1"', "zsh", scriptPath],
+          { cwd: tempDir, stdio: "ignore" },
+        );
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }
