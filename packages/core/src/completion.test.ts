@@ -46,6 +46,7 @@ function runCommand(
   args: readonly string[],
   options: {
     readonly cwd?: string;
+    readonly input?: string;
     readonly stdio?: "pipe" | "ignore";
   } = {},
 ): string {
@@ -53,6 +54,7 @@ function runCommand(
     return execFileSync(command, [...args], {
       encoding: "utf8",
       cwd: options.cwd,
+      input: options.input,
       stdio: options.stdio,
     }) ?? "";
   } catch (error) {
@@ -74,6 +76,166 @@ function isShellAvailable(shell: string): boolean {
     } catch {
       return false;
     }
+  }
+}
+
+function isInteractiveZshCompletionAvailable(): boolean {
+  if (!isShellAvailable("zsh")) return false;
+
+  try {
+    runCommand(
+      "bash",
+      [
+        "-c",
+        "script -qfec 'env TERM=xterm-256color ZDOTDIR=/nonexistent zsh -fi' /dev/null < /dev/null",
+      ],
+      { stdio: "ignore" },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeTerminalOutput(output: string): string {
+  let normalized = output
+    .replaceAll("\0", "")
+    .replaceAll("\r\n", "\n")
+    .replaceAll("\r", "\n")
+    .replaceAll("\u0007", "");
+
+  let withoutAnsi = "";
+  for (let index = 0; index < normalized.length; index++) {
+    if (normalized[index] !== "\u001b") {
+      withoutAnsi += normalized[index];
+      continue;
+    }
+
+    if (index + 1 >= normalized.length) break;
+    if (normalized[index + 1] === "[") {
+      index += 2;
+      while (index < normalized.length) {
+        const code = normalized.charCodeAt(index);
+        if (code >= 0x40 && code <= 0x7e) break;
+        index++;
+      }
+      continue;
+    }
+
+    const nextCode = normalized.charCodeAt(index + 1);
+    if (nextCode >= 0x40 && nextCode <= 0x5f) {
+      index++;
+      continue;
+    }
+
+    withoutAnsi += normalized[index];
+  }
+  normalized = withoutAnsi;
+
+  while (normalized.includes("\b")) {
+    let next = "";
+    for (const character of normalized) {
+      if (character === "\b") {
+        next = next.slice(0, -1);
+      } else {
+        next += character;
+      }
+    }
+    normalized = next;
+  }
+
+  return normalized;
+}
+
+function testInteractiveZshCompletion(
+  script: string,
+  directive: string,
+  files: readonly {
+    readonly path: string;
+    readonly type?: "file" | "directory";
+  }[],
+  options: {
+    readonly setup?: string;
+  } = {},
+): string {
+  const tempDir = mkdtempSync(join(tmpdir(), "zsh-completion-integration-"));
+
+  try {
+    const binDir = join(tempDir, "bin");
+    const workDir = join(tempDir, "work");
+    mkdirSync(binDir);
+    mkdirSync(workDir);
+
+    const cliPath = join(binDir, "extapp");
+    writeFileSync(
+      cliPath,
+      `#!/bin/bash
+printf '${directive}'
+`,
+      { mode: 0o755 },
+    );
+
+    for (const entry of files) {
+      const fullPath = join(workDir, entry.path);
+      if (entry.type === "directory") {
+        mkdirSync(fullPath, { recursive: true });
+      } else {
+        writeFileSync(fullPath, "");
+      }
+    }
+
+    const scriptPath = join(binDir, ".completion.zsh");
+    writeFileSync(scriptPath, script);
+
+    const startMarker = "\x1eOPTIQUE_ZSH_COMPLETION_START\x1e";
+    const endMarker = "\x1eOPTIQUE_ZSH_COMPLETION_END\x1e";
+    const inputPath = join(binDir, ".session.input");
+    const input = `PS1='PROMPT> '
+unsetopt zle_bracketed_paste 2>/dev/null || true
+autoload -U compinit && compinit -D
+zmodload zsh/complist
+setopt auto_list list_ambiguous
+unsetopt list_beep
+LISTMAX=0
+${options.setup ?? ""}
+export PATH=${JSON.stringify(binDir)}:$PATH
+source ${JSON.stringify(scriptPath)}
+cd ${JSON.stringify(workDir)}
+print -rn -- $'\\x1eOPTIQUE_ZSH_COMPLETION_START\\x1e\\n'
+extapp \t\t
+print -rn -- $'\\x1eOPTIQUE_ZSH_COMPLETION_END\\x1e\\n'
+exit
+`;
+    writeFileSync(inputPath, input);
+
+    const rawOutput = runCommand(
+      "bash",
+      [
+        "-c",
+        `script -qfec 'env TERM=xterm-256color ZDOTDIR=/nonexistent zsh -fi' /dev/null < "$1"`,
+        "bash",
+        inputPath,
+      ],
+      { cwd: tempDir },
+    );
+
+    const startIndex = rawOutput.indexOf(startMarker);
+    const endIndex = rawOutput.indexOf(
+      endMarker,
+      startIndex + startMarker.length,
+    );
+    ok(
+      startIndex >= 0 && endIndex >= 0,
+      `Missing completion markers in output:\n${
+        normalizeTerminalOutput(rawOutput)
+      }`,
+    );
+
+    return normalizeTerminalOutput(
+      rawOutput.slice(startIndex + startMarker.length, endIndex),
+    );
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
   }
 }
 
@@ -1696,18 +1858,17 @@ fi
       ok(script.startsWith("#compdef myapp\n"));
     });
 
-    it("should expand extensions variable in ext_pattern assignment", () => {
+    it("should build single-extension and grouped extension globs in zsh", () => {
       const script = zsh.generateScript("myapp");
 
-      // ext_pattern must use a real zsh parameter expansion so extensions
-      // like "json,yaml" are turned into the glob "*(json|yaml)".
-      // A backslash before ${ would prevent expansion and leave the literal
-      // text "${extensions//,/|}" in the variable value.
-      // https://github.com/dahlia/optique/issues/256
+      // A single extension must avoid grouped-glob syntax because *.(json)
+      // does not work in zsh completion, while multiple extensions still
+      // need grouped globbing.  https://github.com/dahlia/optique/issues/799
+      ok(script.includes('if [[ "$extensions" == *,* ]]; then'));
       ok(script.includes('ext_pattern="*.(${extensions//,/|})"'));
+      ok(script.includes('ext_pattern="*.$extensions"'));
       ok(!script.includes('ext_pattern="*.(\\${extensions//,/|})"'));
-      ok(script.includes('_files -g "$ext_pattern"'));
-      ok(!script.includes('_files -g "\\$ext_pattern"'));
+      ok(!script.includes('ext_pattern="*.\\$extensions"'));
     });
 
     it("should disable sh_glob around native file completion", () => {
@@ -1777,15 +1938,16 @@ function _files() {
   setopt localoptions null_glob
   local item
   for item in \${~pattern}; do
-    [[ -f "$item" ]] && print -r -- "$item"
+    if [[ -f "$item" ]]; then
+      print -r -- "$item"
+    fi
   done
-}
 
-function _directories() {
-  setopt localoptions null_glob
   local dir
   for dir in */; do
-    [[ -d "$dir" ]] && print -r -- "\${dir%/}/"
+    if [[ -d "$dir" ]]; then
+      print -r -- "\${dir%/}/"
+    fi
   done
 }
 
@@ -1863,6 +2025,149 @@ _extapp 2>/dev/null
         rmSync(tempDir, { recursive: true, force: true });
       }
     });
+
+    it("should complete single-extension file suggestions in actual zsh", {
+      skip: !isInteractiveZshCompletionAvailable(),
+      timeout: 10000,
+    }, (t) => {
+      if (!isInteractiveZshCompletionAvailable()) {
+        t.skip("interactive zsh completion not available");
+        return;
+      }
+
+      const directive = Array.from(zsh.encodeSuggestions([
+        {
+          kind: "file",
+          type: "file",
+          extensions: [".json"],
+          includeHidden: false,
+        },
+      ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+
+      const output = testInteractiveZshCompletion(
+        zsh.generateScript("extapp"),
+        directive,
+        [
+          { path: "data.json" },
+          { path: "readme.txt" },
+          { path: "subdir", type: "directory" },
+        ],
+      );
+
+      ok(
+        output.includes("data.json"),
+        `Expected data.json in actual zsh completions, got:\n${output}`,
+      );
+      ok(
+        output.includes("subdir/"),
+        `Expected subdir/ in actual zsh completions, got:\n${output}`,
+      );
+      ok(
+        !output.includes("readme.txt"),
+        `readme.txt should not appear in single-extension zsh completions, got:\n${output}`,
+      );
+    });
+
+    it(
+      "should preserve extension filtering while keeping directories in actual zsh",
+      {
+        skip: !isInteractiveZshCompletionAvailable(),
+        timeout: 10000,
+      },
+      (t) => {
+        if (!isInteractiveZshCompletionAvailable()) {
+          t.skip("interactive zsh completion not available");
+          return;
+        }
+
+        const directive = Array.from(zsh.encodeSuggestions([
+          {
+            kind: "file",
+            type: "file",
+            extensions: [".json", ".yaml"],
+            includeHidden: false,
+          },
+        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          directive,
+          [
+            { path: "data.json" },
+            { path: "config.yaml" },
+            { path: "readme.txt" },
+            { path: "subdir", type: "directory" },
+          ],
+        );
+
+        ok(
+          output.includes("data.json"),
+          `Expected data.json in actual zsh completions, got:\n${output}`,
+        );
+        ok(
+          output.includes("config.yaml"),
+          `Expected config.yaml in actual zsh completions, got:\n${output}`,
+        );
+        ok(
+          output.includes("subdir/"),
+          `Expected subdir/ in actual zsh completions, got:\n${output}`,
+        );
+        ok(
+          !output.includes("readme.txt"),
+          `readme.txt should not appear in filtered zsh completions, got:\n${output}`,
+        );
+      },
+    );
+
+    it(
+      "should preserve directory navigation with custom file-patterns in actual zsh",
+      {
+        skip: !isInteractiveZshCompletionAvailable(),
+        timeout: 10000,
+      },
+      (t) => {
+        if (!isInteractiveZshCompletionAvailable()) {
+          t.skip("interactive zsh completion not available");
+          return;
+        }
+
+        const directive = Array.from(zsh.encodeSuggestions([
+          {
+            kind: "file",
+            type: "file",
+            extensions: [".json"],
+            includeHidden: false,
+          },
+        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          directive,
+          [
+            { path: "data.json" },
+            { path: "readme.txt" },
+            { path: "subdir", type: "directory" },
+          ],
+          {
+            setup:
+              "zstyle ':completion:*' file-patterns '%p:globbed-files' '*:all-files'",
+          },
+        );
+
+        ok(
+          output.includes("data.json"),
+          `Expected data.json in actual zsh completions, got:\n${output}`,
+        );
+        ok(
+          output.includes("subdir/"),
+          `Expected subdir/ in actual zsh completions with custom file-patterns, got:\n${output}`,
+        );
+        ok(
+          !output.includes("readme.txt"),
+          `readme.txt should not appear in zsh completions with custom file-patterns, got:\n${output}`,
+        );
+      },
+    );
 
     it("should generate script with completion command args", () => {
       const script = zsh.generateScript("myapp", ["completion", "zsh"]);
@@ -2178,29 +2483,37 @@ _nohidden_cli 2>/dev/null
       ]);
     });
 
-    it("should include directories for navigation in file type completion", () => {
-      const script = zsh.generateScript("filedir-cli");
+    it(
+      "should restore directory navigation when file-patterns are customized",
+      () => {
+        const script = zsh.generateScript("filedir-cli");
 
-      // Extract the file case block from the zsh script
-      const fileCase = script.substring(
-        script.indexOf('case "$type" in'),
-        script.indexOf("esac"),
-      );
-      const fileCaseBlock = fileCase.substring(
-        fileCase.indexOf("file)"),
-        fileCase.indexOf("directory)"),
-      );
-      // Should include _directories to allow directory navigation
-      ok(
-        fileCaseBlock.includes("_directories"),
-        "zsh file) case should include _directories for navigation.",
-      );
-      // _directories must run unconditionally (semicolon, not &&)
-      ok(
-        !fileCaseBlock.includes("&& _directories"),
-        "zsh file) case should use unconditional _directories (not &&).",
-      );
-    });
+        // Extract the file case block from the zsh script
+        const fileCase = script.substring(
+          script.indexOf('case "$type" in'),
+          script.indexOf("esac"),
+        );
+        const fileCaseBlock = fileCase.substring(
+          fileCase.indexOf("file)"),
+          fileCase.indexOf("directory)"),
+        );
+        ok(
+          script.includes(
+            'zstyle -a ":completion:${curcontext}:" file-patterns __file_patterns',
+          ),
+          "zsh script should detect custom file-patterns before restoring directories.",
+        );
+        ok(
+          fileCaseBlock.includes('_files -g "$ext_pattern"') ||
+            fileCaseBlock.includes("_files"),
+          "zsh file) case should use _files for native navigation.",
+        );
+        ok(
+          fileCaseBlock.includes("_directories"),
+          "zsh file) case should restore directories when file-patterns suppress them.",
+        );
+      },
+    );
   });
 
   describe("pwsh shell completion", () => {

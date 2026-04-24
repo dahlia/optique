@@ -429,13 +429,29 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
           fi
         fi
 
+        local ext_pattern=""
+        if [[ -n "\$extensions" ]]; then
+          if [[ "\$extensions" == *,* ]]; then
+            ext_pattern="*.(\${extensions//,/|})"
+          else
+            ext_pattern="*.\$extensions"
+          fi
+        fi
+        local __has_custom_file_patterns=0
+        local -a __file_patterns
+        if zstyle -a ":completion:\${curcontext}:" file-patterns __file_patterns; then
+          __has_custom_file_patterns=1
+        fi
+
         # Use zsh's native file completion
         case "\$type" in
           file)
-            if [[ -n "\$extensions" ]]; then
-              # Complete files with extension filtering + directories for navigation
-              local ext_pattern="*.(\$\{extensions//,/|\})"
-              _files -g "\$ext_pattern"; _directories
+            if [[ -n "\$ext_pattern" ]]; then
+              _files -g "\$ext_pattern"
+              # Custom file-patterns can suppress the default directories tag.
+              if [[ "\$__has_custom_file_patterns" == "1" ]]; then
+                _directories
+              fi
             else
               _files
             fi
@@ -444,10 +460,11 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
             _directories
             ;;
           any)
-            if [[ -n "\$extensions" ]]; then
-              # Complete both files and directories, with extension filtering for files
-              local ext_pattern="*.(\$\{extensions//,/|\})"
-              _files -g "\$ext_pattern"; _directories
+            if [[ -n "\$ext_pattern" ]]; then
+              _files -g "\$ext_pattern"
+              if [[ "\$__has_custom_file_patterns" == "1" ]]; then
+                _directories
+              fi
             else
               _files
             fi
