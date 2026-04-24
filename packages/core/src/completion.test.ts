@@ -1954,10 +1954,20 @@ fi
       ok(script.includes('ext_pattern="*.(${extensions//,/|})"'));
       ok(script.includes('ext_pattern="*.$extensions"'));
       ok(
-        fileCaseBlock.includes('_path_files -g "${ext_pattern}(#q-.)"'),
+        fileCaseBlock.includes('local file_pattern="${ext_pattern}(#q-.)"'),
       );
       ok(
-        anyCaseBlock.includes('_path_files -g "${ext_pattern}(#q^-/)"'),
+        fileCaseBlock.includes(
+          '"files:file:_path_files -g ${(q)file_pattern}"',
+        ),
+      );
+      ok(
+        anyCaseBlock.includes('local file_pattern="${ext_pattern}(#q^-/)"'),
+      );
+      ok(
+        anyCaseBlock.includes(
+          '"files:file:_path_files -g ${(q)file_pattern}"',
+        ),
       );
       ok(!script.includes('_path_files -g "${ext_pattern}(-.)"'));
     });
@@ -2023,6 +2033,18 @@ setopt sh_glob
 function _wanted() {
   shift 3
   "$@"
+}
+
+function _description() {
+  eval "$2=()"
+}
+
+function _alternative() {
+  local spec action
+  for spec in "$@"; do
+    action="\${spec#*:*:}"
+    eval "$action"
+  done
 }
 
 function _path_files() {
@@ -2303,6 +2325,104 @@ _extapp 2>/dev/null
         ok(
           !output.includes("readme.txt"),
           `readme.txt should not appear in zsh completions when file-patterns force all-files, got:\n${output}`,
+        );
+      },
+    );
+
+    it(
+      "should respect files-tag ignored-patterns in filtered actual zsh completion",
+      {
+        skip: !isInteractiveZshCompletionAvailable(),
+        timeout: 10000,
+      },
+      (t) => {
+        if (!isInteractiveZshCompletionAvailable()) {
+          t.skip("interactive zsh completion not available");
+          return;
+        }
+
+        const directive = Array.from(zsh.encodeSuggestions([
+          {
+            kind: "file",
+            type: "file",
+            extensions: [".json"],
+            includeHidden: false,
+          },
+        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          directive,
+          [
+            { path: "data.json" },
+            { path: "config.json" },
+            { path: "subdir", type: "directory" },
+          ],
+          {
+            setup: "zstyle ':completion:*:files' ignored-patterns 'data.json'",
+          },
+        );
+
+        ok(
+          output.includes("config.json"),
+          `Expected config.json in actual zsh completions with files-tag ignored-patterns, got:\n${output}`,
+        );
+        ok(
+          output.includes("subdir/"),
+          `Expected subdir/ in actual zsh completions with files-tag ignored-patterns, got:\n${output}`,
+        );
+        ok(
+          !output.includes("data.json"),
+          `data.json should respect files-tag ignored-patterns in actual zsh completions, got:\n${output}`,
+        );
+      },
+    );
+
+    it(
+      "should respect tag-order when filtered actual zsh completion prefers directories",
+      {
+        skip: !isInteractiveZshCompletionAvailable(),
+        timeout: 10000,
+      },
+      (t) => {
+        if (!isInteractiveZshCompletionAvailable()) {
+          t.skip("interactive zsh completion not available");
+          return;
+        }
+
+        const directive = Array.from(zsh.encodeSuggestions([
+          {
+            kind: "file",
+            type: "file",
+            extensions: [".json"],
+            includeHidden: false,
+          },
+        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          directive,
+          [
+            { path: "data.json" },
+            { path: "config.json" },
+            { path: "subdir", type: "directory" },
+          ],
+          {
+            setup: "zstyle ':completion:*' tag-order 'directories' -",
+          },
+        );
+
+        ok(
+          output.includes("subdir/") || output.includes("extapp subdir"),
+          `Expected directory-only actual zsh completions when tag-order prefers directories, got:\n${output}`,
+        );
+        ok(
+          !output.includes("data.json"),
+          `data.json should be suppressed when tag-order prefers directories in actual zsh completions, got:\n${output}`,
+        );
+        ok(
+          !output.includes("config.json"),
+          `config.json should be suppressed when tag-order prefers directories in actual zsh completions, got:\n${output}`,
         );
       },
     );
@@ -2790,16 +2910,26 @@ _nohidden_cli 2>/dev/null
           fileCase.indexOf("directory)"),
         );
         ok(
-          fileCaseBlock.includes('_path_files -g "${ext_pattern}(#q-.)"'),
-          "zsh file) case should use _path_files with a #q-qualified regular-file glob that preserves symlinked files.",
+          fileCaseBlock.includes('local file_pattern="${ext_pattern}(#q-.)"'),
+          "zsh file) case should derive a #q-qualified regular-file pattern that preserves symlinked files.",
         );
         ok(
-          fileCaseBlock.includes("_path_files -/"),
-          "zsh file) case should add directory navigation with _path_files -/.",
+          fileCaseBlock.includes(
+            '"files:file:_path_files -g ${(q)file_pattern}"',
+          ),
+          "zsh file) case should route filtered file completions through the standard files tag.",
+        );
+        ok(
+          fileCaseBlock.includes("'directories:directory:_path_files -/'"),
+          "zsh file) case should add directory navigation via the directories tag.",
         );
         ok(
           !fileCaseBlock.includes('_files -g "$ext_pattern"'),
           "zsh file) case should not rely on _files -g for extension-filtered navigation.",
+        );
+        ok(
+          fileCaseBlock.includes("_alternative"),
+          "zsh file) case should use zsh's alternative tag selection for filtered file completion.",
         );
       },
     );
