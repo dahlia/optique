@@ -13,7 +13,8 @@ To be released.
  -  Fixed zsh path completion with extension filters.  Generated scripts now
     use `*.json` instead of `*.(json)` when only one extension is allowed, and
     preserve directory navigation without leaking unrelated files into the
-    result, including when users customize zsh's `file-patterns` style.
+    result, including when zsh `file-patterns` styles would otherwise force
+    `all-files` fallbacks.
     [[#799]]
 
  -  Fixed zsh completion scripts being unsafe to source before `compinit`

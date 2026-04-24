@@ -437,21 +437,14 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
             ext_pattern="*.\$extensions"
           fi
         fi
-        local __has_custom_file_patterns=0
-        local -a __file_patterns
-        if zstyle -a ":completion:\${curcontext}:" file-patterns __file_patterns; then
-          __has_custom_file_patterns=1
-        fi
-
         # Use zsh's native file completion
         case "\$type" in
           file)
             if [[ -n "\$ext_pattern" ]]; then
-              _files -g "\$ext_pattern"
-              # Custom file-patterns can suppress the default directories tag.
-              if [[ "\$__has_custom_file_patterns" == "1" ]]; then
-                _directories
-              fi
+              # Use _path_files directly so file-patterns styles cannot
+              # override the requested extension filter with all-files.
+              _wanted files expl file _path_files -g "\${ext_pattern}(-.)"
+              _wanted directories expl directory _path_files -/
             else
               _files
             fi
@@ -461,10 +454,8 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
             ;;
           any)
             if [[ -n "\$ext_pattern" ]]; then
-              _files -g "\$ext_pattern"
-              if [[ "\$__has_custom_file_patterns" == "1" ]]; then
-                _directories
-              fi
+              _wanted files expl file _path_files -g "\${ext_pattern}(-.)"
+              _wanted directories expl directory _path_files -/
             else
               _files
             fi

@@ -1940,26 +1940,45 @@ autoload -U compinit && compinit -D 2>/dev/null
 # otherwise break patterns like *.(json|yaml).
 setopt sh_glob
 
-function _files() {
+function _wanted() {
+  shift 3
+  "$@"
+}
+
+function _path_files() {
   local pattern="*"
-  if [[ "$1" == "-g" && -n "$2" ]]; then
-    pattern="$2"
-  fi
+  local want_dirs=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -g)
+        pattern="$2"
+        shift 2
+        ;;
+      -/)
+        want_dirs=1
+        shift
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
 
   setopt localoptions null_glob
   local item
-  for item in \${~pattern}; do
-    if [[ -f "$item" ]]; then
-      print -r -- "$item"
-    fi
-  done
-
-  local dir
-  for dir in */; do
-    if [[ -d "$dir" ]]; then
-      print -r -- "\${dir%/}/"
-    fi
-  done
+  if [[ "$want_dirs" == "1" ]]; then
+    for item in */; do
+      if [[ -d "$item" ]]; then
+        print -r -- "\${item%/}/"
+      fi
+    done
+  else
+    for item in \${~pattern}; do
+      if [[ -f "$item" ]]; then
+        print -r -- "$item"
+      fi
+    done
+  fi
 }
 
 source /dev/stdin <<'COMPLETION_SCRIPT'
@@ -2155,7 +2174,7 @@ _extapp 2>/dev/null
     );
 
     it(
-      "should preserve directory navigation with custom file-patterns in actual zsh",
+      "should preserve extension filtering when file-patterns force all-files in actual zsh",
       {
         skip: !isInteractiveZshCompletionAvailable(),
         timeout: 10000,
@@ -2184,8 +2203,7 @@ _extapp 2>/dev/null
             { path: "subdir", type: "directory" },
           ],
           {
-            setup:
-              "zstyle ':completion:*' file-patterns '%p:globbed-files' '*:all-files'",
+            setup: "zstyle ':completion:*' file-patterns '*:all-files'",
           },
         );
 
@@ -2195,11 +2213,11 @@ _extapp 2>/dev/null
         );
         ok(
           output.includes("subdir/"),
-          `Expected subdir/ in actual zsh completions with custom file-patterns, got:\n${output}`,
+          `Expected subdir/ in actual zsh completions when file-patterns force all-files, got:\n${output}`,
         );
         ok(
           !output.includes("readme.txt"),
-          `readme.txt should not appear in zsh completions with custom file-patterns, got:\n${output}`,
+          `readme.txt should not appear in zsh completions when file-patterns force all-files, got:\n${output}`,
         );
       },
     );
@@ -2519,7 +2537,7 @@ _nohidden_cli 2>/dev/null
     });
 
     it(
-      "should restore directory navigation when file-patterns are customized",
+      "should use _path_files for extension-filtered zsh completion",
       () => {
         const script = zsh.generateScript("filedir-cli");
 
@@ -2533,19 +2551,16 @@ _nohidden_cli 2>/dev/null
           fileCase.indexOf("directory)"),
         );
         ok(
-          script.includes(
-            'zstyle -a ":completion:${curcontext}:" file-patterns __file_patterns',
-          ),
-          "zsh script should detect custom file-patterns before restoring directories.",
+          fileCaseBlock.includes('_path_files -g "${ext_pattern}(-.)"'),
+          "zsh file) case should use _path_files with a regular-file qualifier for filtered files.",
         );
         ok(
-          fileCaseBlock.includes('_files -g "$ext_pattern"') ||
-            fileCaseBlock.includes("_files"),
-          "zsh file) case should use _files for native navigation.",
+          fileCaseBlock.includes("_path_files -/"),
+          "zsh file) case should add directory navigation with _path_files -/.",
         );
         ok(
-          fileCaseBlock.includes("_directories"),
-          "zsh file) case should restore directories when file-patterns suppress them.",
+          !fileCaseBlock.includes('_files -g "$ext_pattern"'),
+          "zsh file) case should not rely on _files -g for extension-filtered navigation.",
         );
       },
     );
