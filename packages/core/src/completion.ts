@@ -429,13 +429,25 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
           fi
         fi
 
+        local ext_pattern=""
+        if [[ -n "\$extensions" ]]; then
+          if [[ "\$extensions" == *,* ]]; then
+            ext_pattern="*.(\${extensions//,/|})"
+          else
+            ext_pattern="*.\$extensions"
+          fi
+        fi
         # Use zsh's native file completion
         case "\$type" in
           file)
-            if [[ -n "\$extensions" ]]; then
-              # Complete files with extension filtering + directories for navigation
-              local ext_pattern="*.(\$\{extensions//,/|\})"
-              _files -g "\$ext_pattern"; _directories
+            if [[ -n "\$ext_pattern" ]]; then
+              # Route filtered files through zsh's standard files/directories
+              # tags so files-tag styles and tag-order still apply, while
+              # avoiding _files' all-files fallback for extension-filtered
+              # matches.
+              local file_pattern="\${ext_pattern}(#q-.)"
+              _wanted files expl file _path_files -g "\${file_pattern}"
+              _wanted directories expl directory _path_files -/
             else
               _files
             fi
@@ -444,10 +456,10 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
             _directories
             ;;
           any)
-            if [[ -n "\$extensions" ]]; then
-              # Complete both files and directories, with extension filtering for files
-              local ext_pattern="*.(\$\{extensions//,/|\})"
-              _files -g "\$ext_pattern"; _directories
+            if [[ -n "\$ext_pattern" ]]; then
+              local file_pattern="\${ext_pattern}(#q^-/)"
+              _wanted files expl file _path_files -g "\${file_pattern}"
+              _wanted directories expl directory _path_files -/
             else
               _files
             fi
@@ -484,7 +496,9 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
   fi
 }
 
-compdef _${programName.replace(/[^a-zA-Z0-9]/g, "_")} ${programName}
+if (( $+functions[compdef] )); then
+  compdef _${programName.replace(/[^a-zA-Z0-9]/g, "_")} ${programName}
+fi
     `;
   },
   *encodeSuggestions(suggestions: readonly Suggestion[]): Iterable<string> {

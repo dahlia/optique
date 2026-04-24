@@ -9,6 +9,33 @@ Version 1.1.0
 To be released.
 
 
+Version 1.0.2
+-------------
+
+Released on April 24, 2026.
+
+### @optique/core
+
+ -  Fixed zsh path completion with extension filters.  Generated scripts now
+    use `*.json` instead of `*.(json)` when only one extension is allowed, and
+    preserve directory navigation without leaking unrelated files into the
+    result, including when zsh `file-patterns` styles would otherwise force
+    `all-files` fallbacks.
+    [[#799]]
+
+ -  Fixed zsh path completion with extension filters when the shell has
+    `bareglobqual` unset.  Generated scripts now use `#q`-qualified glob
+    filters so extension-restricted completion keeps excluding unrelated files
+    in those environments as well.
+
+ -  Fixed zsh completion scripts being unsafe to source before `compinit`
+    has loaded `compdef`.  Generated scripts now guard the registration call
+    so they can be sourced in non-interactive and pre-`compinit` contexts
+    without failing.
+
+[#799]: https://github.com/dahlia/optique/issues/799
+
+
 Version 1.0.1
 -------------
 
