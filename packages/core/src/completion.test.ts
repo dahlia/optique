@@ -1958,7 +1958,7 @@ fi
       );
       ok(
         fileCaseBlock.includes(
-          '"files:file:_path_files -g ${(q)file_pattern}"',
+          '_wanted files expl file _path_files -g "${file_pattern}"',
         ),
       );
       ok(
@@ -1966,11 +1966,107 @@ fi
       );
       ok(
         anyCaseBlock.includes(
-          '"files:file:_path_files -g ${(q)file_pattern}"',
+          '_wanted files expl file _path_files -g "${file_pattern}"',
         ),
       );
       ok(!script.includes('_path_files -g "${ext_pattern}(-.)"'));
     });
+
+    it(
+      "should not forward stale expl arguments between _wanted zsh tags",
+      (t) => {
+        if (!isShellAvailable("zsh")) {
+          t.skip("zsh not available");
+          return;
+        }
+
+        const tempDir = mkdtempSync(join(tmpdir(), "zsh-wanted-expl-"));
+
+        try {
+          const directive = Array.from(zsh.encodeSuggestions([
+            {
+              kind: "file",
+              type: "file",
+              extensions: [".json"],
+              includeHidden: false,
+            },
+          ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+
+          const cliPath = join(tempDir, "extapp");
+          writeFileSync(
+            cliPath,
+            `#!/bin/bash
+printf '${directive}'
+`,
+            { mode: 0o755 },
+          );
+
+          const script = zsh.generateScript("extapp");
+          const testScript = `
+export PATH="${tempDir}:$PATH"
+autoload -U compinit && compinit -D 2>/dev/null
+
+function _wanted() {
+  local tag="$1" expl_name="$2" descr="$3"
+  shift 3
+  print -r -- "$tag:$#:$*"
+  eval "$expl_name=(--tag $tag)"
+  return 0
+}
+
+function _path_files() {
+  return 0
+}
+
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+
+words=("extapp" "")
+CURRENT=2
+_extapp 2>/dev/null
+`;
+
+          const output = runCommand("zsh", ["-c", testScript], {
+            cwd: tempDir,
+          });
+          const calls = output.trim().split("\n").filter((line) =>
+            line.length > 0
+          );
+          const fileCall = calls.find((line) => line.startsWith("files:"));
+          const directoryCall = calls.find((line) =>
+            line.startsWith("directories:")
+          );
+
+          ok(
+            fileCall?.includes("_path_files -g *.json(#q-.)"),
+            `Expected files _wanted call to include filtered _path_files args, got: ${
+              JSON.stringify(calls)
+            }`,
+          );
+          ok(
+            directoryCall?.includes("_path_files -/"),
+            `Expected directories _wanted call to include directory navigation args, got: ${
+              JSON.stringify(calls)
+            }`,
+          );
+          ok(
+            directoryCall?.startsWith("directories:2:"),
+            `directories _wanted call should not receive stale expl arguments from files, got: ${
+              JSON.stringify(calls)
+            }`,
+          );
+          ok(
+            !directoryCall?.includes("--tag files"),
+            `directories _wanted call should not inherit the files tag's expl array, got: ${
+              JSON.stringify(calls)
+            }`,
+          );
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      },
+    );
 
     it("should disable sh_glob around native file completion", () => {
       const script = zsh.generateScript("myapp");
@@ -2915,12 +3011,14 @@ _nohidden_cli 2>/dev/null
         );
         ok(
           fileCaseBlock.includes(
-            '"files:file:_path_files -g ${(q)file_pattern}"',
+            '_wanted files expl file _path_files -g "${file_pattern}"',
           ),
           "zsh file) case should route filtered file completions through the standard files tag.",
         );
         ok(
-          fileCaseBlock.includes("'directories:directory:_path_files -/'"),
+          fileCaseBlock.includes(
+            "_wanted directories expl directory _path_files -/",
+          ),
           "zsh file) case should add directory navigation via the directories tag.",
         );
         ok(
@@ -2928,8 +3026,8 @@ _nohidden_cli 2>/dev/null
           "zsh file) case should not rely on _files -g for extension-filtered navigation.",
         );
         ok(
-          fileCaseBlock.includes("_alternative"),
-          "zsh file) case should use zsh's alternative tag selection for filtered file completion.",
+          fileCaseBlock.includes("_wanted files expl file"),
+          "zsh file) case should use zsh's standard tag selection for filtered file completion.",
         );
       },
     );

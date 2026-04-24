@@ -441,13 +441,13 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
         case "\$type" in
           file)
             if [[ -n "\$ext_pattern" ]]; then
-              # Route filtered files through zsh's standard tag selection so
-              # files-tag styles and tag-order still apply, while avoiding
-              # _files' all-files fallback for extension-filtered matches.
+              # Route filtered files through zsh's standard files/directories
+              # tags so files-tag styles and tag-order still apply, while
+              # avoiding _files' all-files fallback for extension-filtered
+              # matches.
               local file_pattern="\${ext_pattern}(#q-.)"
-              _alternative \
-                "files:file:_path_files -g \${(q)file_pattern}" \
-                'directories:directory:_path_files -/'
+              _wanted files expl file _path_files -g "\${file_pattern}"
+              _wanted directories expl directory _path_files -/
             else
               _files
             fi
@@ -458,9 +458,8 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
           any)
             if [[ -n "\$ext_pattern" ]]; then
               local file_pattern="\${ext_pattern}(#q^-/)"
-              _alternative \
-                "files:file:_path_files -g \${(q)file_pattern}" \
-                'directories:directory:_path_files -/'
+              _wanted files expl file _path_files -g "\${file_pattern}"
+              _wanted directories expl directory _path_files -/
             else
               _files
             fi
