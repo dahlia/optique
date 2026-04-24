@@ -1,6 +1,12 @@
 import { describe, it } from "node:test";
 import { deepStrictEqual, ok, throws } from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -151,10 +157,25 @@ function normalizeTerminalOutput(output: string): string {
 function testInteractiveZshCompletion(
   script: string,
   directive: string,
-  files: readonly {
-    readonly path: string;
-    readonly type?: "file" | "directory";
-  }[],
+  files: readonly (
+    | {
+      readonly path: string;
+      readonly type?: "file";
+    }
+    | {
+      readonly path: string;
+      readonly type: "directory";
+    }
+    | {
+      readonly path: string;
+      readonly type: "fifo";
+    }
+    | {
+      readonly path: string;
+      readonly type: "symlink";
+      readonly target: string;
+    }
+  )[],
   options: {
     readonly setup?: string;
   } = {},
@@ -180,6 +201,10 @@ printf '${directive}'
       const fullPath = join(workDir, entry.path);
       if (entry.type === "directory") {
         mkdirSync(fullPath, { recursive: true });
+      } else if (entry.type === "fifo") {
+        runCommand("mkfifo", [fullPath]);
+      } else if (entry.type === "symlink") {
+        symlinkSync(entry.target, fullPath);
       } else {
         writeFileSync(fullPath, "");
       }
@@ -1906,17 +1931,35 @@ fi
       ok(script.includes("compdef _myapp myapp"));
     });
 
-    it("should build single-extension and grouped extension globs in zsh", () => {
+    it("should build #q-qualified extension globs in zsh", () => {
       const script = zsh.generateScript("myapp");
+      const fileCase = script.substring(
+        script.indexOf('case "$type" in'),
+        script.indexOf("esac"),
+      );
+      const fileCaseBlock = fileCase.substring(
+        fileCase.indexOf("file)"),
+        fileCase.indexOf("directory)"),
+      );
+      const anyCaseBlock = fileCase.substring(
+        fileCase.indexOf("any)"),
+      );
 
       // A single extension must avoid grouped-glob syntax because *.(json)
       // does not work in zsh completion, while multiple extensions still
-      // need grouped globbing.  https://github.com/dahlia/optique/issues/799
+      // need grouped globbing.  The resulting qualifier must also avoid bare
+      // glob-qualifier syntax so it still works when bareglobqual is unset.
+      // https://github.com/dahlia/optique/issues/799
       ok(script.includes('if [[ "$extensions" == *,* ]]; then'));
       ok(script.includes('ext_pattern="*.(${extensions//,/|})"'));
       ok(script.includes('ext_pattern="*.$extensions"'));
-      ok(!script.includes('ext_pattern="*.(\\${extensions//,/|})"'));
-      ok(!script.includes('ext_pattern="*.\\$extensions"'));
+      ok(
+        fileCaseBlock.includes('_path_files -g "${ext_pattern}(#q-.)"'),
+      );
+      ok(
+        anyCaseBlock.includes('_path_files -g "${ext_pattern}(#q^-/)"'),
+      );
+      ok(!script.includes('_path_files -g "${ext_pattern}(-.)"'));
     });
 
     it("should disable sh_glob around native file completion", () => {
@@ -2010,6 +2053,11 @@ function _path_files() {
       fi
     done
   else
+    # The generated script uses a #q-qualified suffix so filtered globbing
+    # works even when bareglobqual is unset.  This lightweight test double
+    # only needs the raw glob because it already filters candidates with -f.
+    pattern="\${pattern%\\(#q^-/\\)}"
+    pattern="\${pattern%\\(#q-.\\)}"
     for item in \${~pattern}; do
       if [[ -f "$item" ]]; then
         print -r -- "$item"
@@ -2255,6 +2303,160 @@ _extapp 2>/dev/null
         ok(
           !output.includes("readme.txt"),
           `readme.txt should not appear in zsh completions when file-patterns force all-files, got:\n${output}`,
+        );
+      },
+    );
+
+    it(
+      "should preserve extension filtering when bareglobqual is unset in actual zsh",
+      {
+        skip: !isInteractiveZshCompletionAvailable(),
+        timeout: 10000,
+      },
+      (t) => {
+        if (!isInteractiveZshCompletionAvailable()) {
+          t.skip("interactive zsh completion not available");
+          return;
+        }
+
+        const directive = Array.from(zsh.encodeSuggestions([
+          {
+            kind: "file",
+            type: "file",
+            extensions: [".json"],
+            includeHidden: false,
+          },
+        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          directive,
+          [
+            { path: "data.json" },
+            { path: "readme.txt" },
+            { path: "subdir", type: "directory" },
+          ],
+          {
+            setup: "unsetopt bareglobqual",
+          },
+        );
+
+        ok(
+          output.includes("data.json"),
+          `Expected data.json in actual zsh completions when bareglobqual is unset, got:\n${output}`,
+        );
+        ok(
+          output.includes("subdir/"),
+          `Expected subdir/ in actual zsh completions when bareglobqual is unset, got:\n${output}`,
+        );
+        ok(
+          !output.includes("readme.txt"),
+          `readme.txt should not appear in zsh completions when bareglobqual is unset, got:\n${output}`,
+        );
+      },
+    );
+
+    it(
+      "should exclude FIFOs from file completion when bareglobqual is unset in actual zsh",
+      {
+        skip: !isInteractiveZshCompletionAvailable(),
+        timeout: 10000,
+      },
+      (t) => {
+        if (!isInteractiveZshCompletionAvailable()) {
+          t.skip("interactive zsh completion not available");
+          return;
+        }
+
+        try {
+          runCommand("which", ["mkfifo"], { stdio: "pipe" });
+        } catch {
+          t.skip("mkfifo not available");
+          return;
+        }
+
+        const directive = Array.from(zsh.encodeSuggestions([
+          {
+            kind: "file",
+            type: "file",
+            extensions: [".json"],
+            includeHidden: false,
+          },
+        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          directive,
+          [
+            { path: "data.json" },
+            { path: "pipe.json", type: "fifo" },
+            { path: "subdir", type: "directory" },
+          ],
+          {
+            setup: "unsetopt bareglobqual",
+          },
+        );
+
+        ok(
+          output.includes("data.json"),
+          `Expected data.json in actual zsh completions when bareglobqual is unset, got:\n${output}`,
+        );
+        ok(
+          output.includes("subdir/"),
+          `Expected subdir/ in actual zsh completions when bareglobqual is unset, got:\n${output}`,
+        );
+        ok(
+          !output.includes("pipe.json"),
+          `pipe.json should not appear in zsh file completions when bareglobqual is unset, got:\n${output}`,
+        );
+      },
+    );
+
+    it(
+      "should include symlinked regular files when bareglobqual is unset in actual zsh",
+      {
+        skip: !isInteractiveZshCompletionAvailable(),
+        timeout: 10000,
+      },
+      (t) => {
+        if (!isInteractiveZshCompletionAvailable()) {
+          t.skip("interactive zsh completion not available");
+          return;
+        }
+
+        const directive = Array.from(zsh.encodeSuggestions([
+          {
+            kind: "file",
+            type: "file",
+            extensions: [".json"],
+            includeHidden: false,
+          },
+        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          directive,
+          [
+            { path: "data.json" },
+            { path: "config.json", type: "symlink", target: "data.json" },
+            { path: "subdir", type: "directory" },
+          ],
+          {
+            setup: "unsetopt bareglobqual",
+          },
+        );
+
+        ok(
+          output.includes("data.json"),
+          `Expected data.json in actual zsh completions when bareglobqual is unset, got:\n${output}`,
+        );
+        ok(
+          output.includes("config.json"),
+          `Expected config.json symlink in actual zsh completions when bareglobqual is unset, got:\n${output}`,
+        );
+        ok(
+          output.includes("subdir/"),
+          `Expected subdir/ in actual zsh completions when bareglobqual is unset, got:\n${output}`,
         );
       },
     );
@@ -2588,8 +2790,8 @@ _nohidden_cli 2>/dev/null
           fileCase.indexOf("directory)"),
         );
         ok(
-          fileCaseBlock.includes('_path_files -g "${ext_pattern}(-.)"'),
-          "zsh file) case should use _path_files with a regular-file qualifier for filtered files.",
+          fileCaseBlock.includes('_path_files -g "${ext_pattern}(#q-.)"'),
+          "zsh file) case should use _path_files with a #q-qualified regular-file glob that preserves symlinked files.",
         );
         ok(
           fileCaseBlock.includes("_path_files -/"),

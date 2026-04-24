@@ -443,7 +443,7 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
             if [[ -n "\$ext_pattern" ]]; then
               # Use _path_files directly so file-patterns styles cannot
               # override the requested extension filter with all-files.
-              _wanted files expl file _path_files -g "\${ext_pattern}(-.)"
+              _wanted files expl file _path_files -g "\${ext_pattern}(#q-.)"
               _wanted directories expl directory _path_files -/
             else
               _files
@@ -454,7 +454,7 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
             ;;
           any)
             if [[ -n "\$ext_pattern" ]]; then
-              _wanted files expl file _path_files -g "\${ext_pattern}(-.)"
+              _wanted files expl file _path_files -g "\${ext_pattern}(#q^-/)"
               _wanted directories expl directory _path_files -/
             else
               _files
