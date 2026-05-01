@@ -74,7 +74,7 @@ Why? Often, asserting the number of calls is not something critical for the user
 **❌ Don't** rely on network call, stub it with `msw`
 
 **✅ Do** reset globals and mocks in `beforeEach` if any `it` plays with mocks or spies or alter globals
-Alternatively, when using vitest you could check if flags `mockReset`, `unstubEnvs` and `unstubGlobals` have been enabled in the configuration, in such case resetting globals is done by default
+Prefer explicit cleanup that works across Node.js, Deno, and Bun.
 
 **👍 Prefer** realistic data for documentation-like tests
 Eg.: use real names if you have to build instances of users
@@ -89,10 +89,12 @@ Why? Snapshots tests tend to capture too many details in the snapshot, making th
 **✅ Do** warn developer when the code under tests requires too many parameters and/or too many mocks/stubs to be forged (more than 10)
 Why? Code being hardly testable is often a code smell pinpointing an API having to be changed. Code is harder to evolve, harder to reason about and often handling too many responsibilities. Recommend the single-responsibility principle (SRP)
 
-**✅ Do** try to make tests shorter and faster to read by factorizing recurrent logics into helper functions
+**✅ Do** extract helper functions only when repetition is substantial or expresses a distinct behavioral intent
 
-**✅ Do** group shared logics under a function having a clear and explicit name, follow SRP for these helpers
-Eg.: avoid functions with lots of optional parameters, doing several things
+**✅ Do** keep small repeated assertion patterns inline in Optique tests unless a helper would clarify behavior
+
+**✅ Do** group substantial shared logic under a function having a clear and explicit name, follow SRP for these helpers
+Eg.: avoid functions with many optional parameters or several responsibilities
 
 **❌ Don't** write a big `prepare` function re-used by all tests in their act part, but make the name clearer and eventually split it into multiple functions
 
@@ -112,52 +114,63 @@ const age = computeAge(user);
 //...
 ```
 
-**👍 Prefer** leveraging `@fast-check/vitest`, if installed
+**👍 Prefer** leveraging `fast-check` with `node:test`
 
 ```ts
-import { describe } from 'vitest';
-import { it, fc } from '@fast-check/vitest';
+import assert from "node:assert/strict";
+import * as fc from "fast-check";
+import { describe, it } from "node:test";
 
 describe('computeAge', () => {
-  it('should compute a positive age', ({ g }) => {
-    // Arrange
-    const user: User = {
-      name: g(fc.string), // unused
-      birthday: '2010-02-03',
-    };
+  it('should compute a positive age', () => {
+    fc.assert(
+      fc.property(fc.string(), (name) => {
+        const user: User = {
+          name, // unused
+          birthday: '2010-02-03',
+        };
 
-    // Act
-    const age = computeAge(user);
+        const age = computeAge(user, new Date('2020-02-03'));
 
-    // Assert
-    expect(age).toBeGreaterThan(0);
+        assert.ok(age > 0);
+      }),
+    );
   });
 });
 ```
 
-**👍 Prefer** leveraging `fast-check`, if installed but not `@fast-check/vitest`
+**👍 Prefer** leveraging `fast-check` for property-based tests
 
 **👎 Avoid** writing tests depending on unstable values
 Eg.: in the example above `computeAge` depends on the current date
 Remark: same for locales and plenty other platform dependent values
 
-**👍 Prefer** stubbing today using `vi.setSystemTime`
+**👍 Prefer** passing today as an explicit dependency when the API allows it
 
-**👍 Prefer** controlling today using `@fast-check/vitest`
-Why? Contrary to `vi.setSystemTime` alone you check the code against one new today at each run, but if it happens to fail one day you will be reported with the exact date causing the problem
+**👍 Prefer** controlling today with a generated date in a `fast-check` property
+Why? You check the code against one new today at each run, but if it happens to fail one day you will be reported with the exact date causing the problem
 
 ```ts
-// Arrange
-vi.setSystemTime(g(fc.date, { min: new Date('2010-02-04'), noInvalidDate: true }));
-const user: User = {
-  name: g(fc.string), // unused
-  birthday: '2010-02-03',
-};
+fc.assert(
+  fc.property(
+    fc.date({ min: new Date('2010-02-04'), noInvalidDate: true }),
+    (today) => {
+      const user: User = {
+        name: "Paul", // unused
+        birthday: '2010-02-03',
+      };
+
+      const age = computeAge(user, today);
+
+      assert.ok(age >= 0);
+    },
+  ),
+);
 ```
 
 **👎 Avoid** writing tests depending on random values or entities
 
-**👍 Prefer** controlling randomly generated values by relying on `@fast-check/vitest` if installed, or `fast-check` otherwise
+**👍 Prefer** controlling randomly generated values by relying on `fast-check`
 
 **✅ Do** use property based tests for any test with a notion of always or never
 Eg.: name being "should always do x when y" or "should never do x when y"
@@ -171,16 +184,20 @@ Why? Property-based testing and example-based testing are complementary. Propert
 ```ts
 // for all a, b, c strings
 // b is a substring of a + b + c
-it.prop([fc.string(), fc.string(), fc.string()])('should detect the substring', (a, b, c) => {
-  // Arrange
-  const text = a + b + c;
-  const pattern = b;
+it('should detect the substring', () => {
+  fc.assert(
+    fc.property(fc.string(), fc.string(), fc.string(), (a, b, c) => {
+      // Arrange
+      const text = a + b + c;
+      const pattern = b;
 
-  // Act
-  const result = isSubstring(text, pattern);
+      // Act
+      const result = isSubstring(text, pattern);
 
-  // Assert
-  expect(result).toBe(true);
+      // Assert
+      assert.ok(result);
+    }),
+  );
 });
 ```
 
@@ -201,9 +218,7 @@ it.prop([fc.string(), fc.string(), fc.string()])('should detect the substring', 
 
 All this section considers that we are in the context of property based tests!
 
-**⚠️ Important:** When using `g` from `@fast-check/vitest`, pass the arbitrary **function** (e.g., `fc.string`, `fc.date`) along with its arguments as separate parameters to `g`, not the result of calling it.
-Correct: `g(fc.string)`, `g(fc.date, { min: new Date('2010-01-01') })`
-Incorrect: `g(fc.string())`, `g(fc.date({ min: new Date('2010-01-01') }))`
+**⚠️ Important:** In Optique tests, use `fc.assert` with `fc.property` or `fc.asyncProperty` directly.
 
 **❌ Don't** generate inputs directly
 The risk being that you may end up rewriting the code being tested in the test
@@ -254,14 +269,14 @@ Turn:
 it('should resolve in call order', async () => {
   // Arrange
   const seenAnswers = [];
-  const call = vi.fn().mockImplementation((v) => Promise.resolve(v));
+  const call = (v) => Promise.resolve(v);
 
   // Act
   const queued = queue(call);
   await Promise.all([queued(1).then((v) => seenAnswers.push(v)), queued(2).then((v) => seenAnswers.push(v))]);
 
   // Assert
-  expect(seenAnswers).toEqual([1, 2]);
+  assert.deepEqual(seenAnswers, [1, 2]);
 });
 ```
 
@@ -273,7 +288,7 @@ it('should resolve in call order', async () => {
     fc.asyncProperty(fc.scheduler(), async (s) => {
       // Arrange
       const seenAnswers = [];
-      const call = vi.fn().mockImplementation((v) => Promise.resolve(v));
+      const call = (v) => Promise.resolve(v);
 
       // Act
       const queued = queue(s.scheduleFunction(call));
@@ -282,7 +297,7 @@ it('should resolve in call order', async () => {
       );
 
       // Assert
-      expect(seenAnswers).toEqual([1, 2]);
+      assert.deepEqual(seenAnswers, [1, 2]);
     }),
   );
 });
@@ -336,23 +351,17 @@ fc.assert(
 );
 ```
 
-## Equivalence `fast-check` and `@fast-check/vitest`
+## Using `fast-check` with `node:test`
 
 Example 1.
 
 ```ts
-// with @fast-check/vitest
-import { it, fc } from '@fast-check/vitest';
-it('...', ({ g }) => {
-  //...
-});
+import * as fc from "fast-check";
+import { it } from "node:test";
 
-// with fast-check
-import { it } from 'vitest';
-import fc from 'fast-check';
-it('...', () => {
+it("...", () => {
   fc.assert(
-    fc.property(fc.gen(), (g) => {
+    fc.property(fc.string(), (value) => {
       //...
     }),
   );
@@ -362,16 +371,10 @@ it('...', () => {
 Example 2.
 
 ```ts
-// with @fast-check/vitest
-import { it, fc } from '@fast-check/vitest';
-it.prop([...arbitraries])('...', (...values) => {
-  //...
-});
+import * as fc from "fast-check";
+import { it } from "node:test";
 
-// with fast-check
-import { it } from 'vitest';
-import fc from 'fast-check';
-it('...', () => {
+it("...", () => {
   fc.assert(
     fc.property(...arbitraries, (...values) => {
       //...
@@ -380,19 +383,13 @@ it('...', () => {
 });
 ```
 
-Example 3. If the predicate of `it` or `it.prop` is asynchronous, when using only `fast-check` the property has to be instantiated via `asyncProperty` and `assert` has to be awaited.
+Example 3. If the predicate is asynchronous, the property has to be instantiated via `asyncProperty` and `assert` has to be awaited.
 
 ```ts
-// with @fast-check/vitest
-import { it, fc } from '@fast-check/vitest';
-it.prop([...arbitraries])('...', async (...values) => {
-  //...
-});
+import * as fc from "fast-check";
+import { it } from "node:test";
 
-// with fast-check
-import { it } from 'vitest';
-import fc from 'fast-check';
-it('...', async () => {
+it("...", async () => {
   await fc.assert(
     fc.asyncProperty(...arbitraries, async (...values) => {
       //...
