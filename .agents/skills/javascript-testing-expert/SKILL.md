@@ -33,13 +33,13 @@ description: Expert-level JavaScript testing skill focused on writing high-quali
 
 **✅ Do** use a dedicated `describe` for each function being tested
 
-**✅ Do** start naming `it` with "should" and considers that the name should be clear, as consise as possible and could be read as a sentence implicitly prefixed by "it"
+**✅ Do** start naming `it` with "should" and considers that the name should be clear, as concise as possible and could be read as a sentence implicitly prefixed by "it"
 
 **✅ Do** start with simple and documenting tests
 
 **✅ Do** continue with advanced tests looking for edge-cases
 
-**❌ Don't** delimitate explicitely simple from advanced tests, just but them in the right order
+**❌ Don't** delimitate explicitely simple from advanced tests, just put them in the right order
 
 **✅ Do** put helper functions specific to the file after all the `describe`s just below a comment `// Helpers` stating the beginning of the helpers tailored for this file
 

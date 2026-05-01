@@ -32,47 +32,20 @@ const safeIntegerArbitrary = fc.integer({
   min: Number.MIN_SAFE_INTEGER,
   max: Number.MAX_SAFE_INTEGER,
 });
-const smallIntegerArbitrary = fc.integer({ min: -1000, max: 1000 });
 const nonEmptyChoiceStringArbitrary = fc.string({ minLength: 1 });
 const stringChoicesArbitrary = fc.uniqueArray(nonEmptyChoiceStringArbitrary, {
   minLength: 1,
-  maxLength: 12,
+  selector: (value) => value.toLowerCase(),
 });
-const numberChoicesArbitrary = fc.uniqueArray(smallIntegerArbitrary, {
+const numberChoicesArbitrary = fc.uniqueArray(safeIntegerArbitrary, {
   minLength: 1,
-  maxLength: 12,
 });
-const lowercaseWordArbitrary = fc.array(
-  fc.constantFrom(
-    "a",
-    "b",
-    "c",
-    "d",
-    "e",
-    "f",
-    "g",
-    "h",
-    "i",
-    "j",
-    "k",
-    "l",
-    "m",
-    "n",
-    "o",
-    "p",
-    "q",
-    "r",
-    "s",
-    "t",
-    "u",
-    "v",
-    "w",
-    "x",
-    "y",
-    "z",
+const lowercaseWordArbitrary = fc.string({
+  unit: fc.integer({ min: 0x61, max: 0x7a }).map((codePoint) =>
+    String.fromCharCode(codePoint)
   ),
-  { minLength: 1, maxLength: 20 },
-).map((letters) => letters.join(""));
+  minLength: 1,
+});
 
 describe("isValueParser", () => {
   it("should return true for valid ValueParser objects", () => {
@@ -235,9 +208,9 @@ describe("property-based parser laws", () => {
   it("integer() should enforce generated min and max bounds", () => {
     fc.assert(
       fc.property(
-        smallIntegerArbitrary,
-        smallIntegerArbitrary,
-        smallIntegerArbitrary,
+        safeIntegerArbitrary,
+        safeIntegerArbitrary,
+        safeIntegerArbitrary,
         (a, b, value) => {
           const min = Math.min(a, b);
           const max = Math.max(a, b);
@@ -339,7 +312,6 @@ describe("property-based parser laws", () => {
       fc.property(
         fc.uniqueArray(lowercaseWordArbitrary, {
           minLength: 1,
-          maxLength: 12,
         }),
         (words) => {
           const choices = words.map((word) => word.toUpperCase());

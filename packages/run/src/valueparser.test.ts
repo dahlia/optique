@@ -8,9 +8,13 @@ import { describe, it } from "node:test";
 import { basename, join } from "node:path";
 
 const propertyParameters = { numRuns: 200 } as const;
-const nonEmptyPathArbitrary = fc.string().filter((input) =>
-  input.trim() !== ""
-);
+const nonWhitespacePathCharArbitrary = fc.integer({ min: 0x21, max: 0x7e })
+  .map((codePoint) => String.fromCharCode(codePoint));
+const nonBlankPathArbitrary = fc.tuple(
+  fc.string(),
+  nonWhitespacePathCharArbitrary,
+  fc.string(),
+).map((parts) => parts.join(""));
 const extensionArbitrary = fc
   .stringMatching(/^[a-z][a-z0-9]*$/u)
   .map((extension) => `.${extension}`);
@@ -49,7 +53,7 @@ describe("path", () => {
       const parser = path();
 
       fc.assert(
-        fc.property(nonEmptyPathArbitrary, (input) => {
+        fc.property(nonBlankPathArbitrary, (input) => {
           const result = parser.parse(input);
 
           assert.ok(result.success);

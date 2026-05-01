@@ -4,12 +4,11 @@ import { describe, it } from "node:test";
 import { getDisplayWidth } from "./displaywidth.ts";
 
 const propertyParameters = { numRuns: 200 } as const;
-const printableAsciiArbitrary = fc.array(
-  fc.integer({ min: 0x20, max: 0x7e }),
-  { maxLength: 100 },
-).map((codePoints) =>
-  codePoints.map((codePoint) => String.fromCharCode(codePoint)).join("")
-);
+const printableAsciiArbitrary = fc.string({
+  unit: fc.integer({ min: 0x20, max: 0x7e }).map((codePoint) =>
+    String.fromCharCode(codePoint)
+  ),
+});
 
 describe("getDisplayWidth", () => {
   describe("ASCII", () => {
@@ -263,7 +262,7 @@ describe("getDisplayWidth", () => {
       fc.assert(
         fc.property(
           printableAsciiArbitrary,
-          fc.integer({ min: 0, max: 255 }),
+          fc.nat(),
           (text, color) => {
             assert.equal(
               getDisplayWidth(`\x1b[${color}m${text}\x1b[0m`),
