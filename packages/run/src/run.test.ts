@@ -21,6 +21,7 @@ import type { DocSection } from "@optique/core/doc";
 import type { RunOptions } from "@optique/run/run";
 import { run, runAsync, runSync } from "@optique/run/run";
 import assert from "node:assert/strict";
+import * as fc from "fast-check";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";
@@ -29,6 +30,8 @@ import { bindConfig, createConfigContext } from "../../config/src/index.ts";
 import { bindEnv, createEnvContext } from "../../env/src/index.ts";
 
 const TEST_DIR = join(import.meta.dirname ?? ".", "test-configs");
+const propertyParameters = { numRuns: 200 } as const;
+const cliArgumentArbitrary = fc.string().map((value) => `arg${value}`);
 
 function isPhase1ContextRequest(request: unknown): boolean {
   return request === undefined ||
@@ -166,6 +169,24 @@ describe("run", () => {
       assert.deepEqual(result, { name: "Alice" });
     });
 
+    it("should parse every explicit argument without reading process.argv", () => {
+      fc.assert(
+        fc.property(cliArgumentArbitrary, (name) => {
+          const parser = object({
+            name: argument(string()),
+          });
+
+          const result = run(parser, {
+            args: [name],
+            programName: "test",
+          });
+
+          assert.deepEqual(result, { name });
+        }),
+        propertyParameters,
+      );
+    });
+
     it("should not crash or() with annotated initial state in runSync()", () => {
       const { parser, context } = createIssue183RunFixture();
       const result = runSync(parser, {
@@ -246,6 +267,37 @@ describe("run", () => {
         count: 42,
         name: "Alice",
       });
+    });
+
+    it("should preserve option and argument values for generated inputs", () => {
+      fc.assert(
+        fc.property(
+          fc.boolean(),
+          fc.integer(),
+          cliArgumentArbitrary,
+          (verbose, count, name) => {
+            const parser = object({
+              verbose: option("--verbose"),
+              count: option("--count", integer()),
+              name: argument(string()),
+            });
+            const args = [
+              ...(verbose ? ["--verbose"] : []),
+              "--count",
+              String(count),
+              name,
+            ];
+
+            const result = run(parser, {
+              args,
+              programName: "test",
+            });
+
+            assert.deepEqual(result, { verbose, count, name });
+          },
+        ),
+        propertyParameters,
+      );
     });
 
     it("should parse commands", () => {
