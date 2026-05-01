@@ -24,7 +24,55 @@ import {
 } from "@optique/core/valueparser";
 import { formatMessage, message, text, values } from "@optique/core/message";
 import assert from "node:assert/strict";
+import * as fc from "fast-check";
 import { describe, it } from "node:test";
+
+const propertyParameters = { numRuns: 200 } as const;
+const safeIntegerArbitrary = fc.integer({
+  min: Number.MIN_SAFE_INTEGER,
+  max: Number.MAX_SAFE_INTEGER,
+});
+const smallIntegerArbitrary = fc.integer({ min: -1000, max: 1000 });
+const nonEmptyChoiceStringArbitrary = fc.string({ minLength: 1 });
+const stringChoicesArbitrary = fc.uniqueArray(nonEmptyChoiceStringArbitrary, {
+  minLength: 1,
+  maxLength: 12,
+});
+const numberChoicesArbitrary = fc.uniqueArray(smallIntegerArbitrary, {
+  minLength: 1,
+  maxLength: 12,
+});
+const lowercaseWordArbitrary = fc.array(
+  fc.constantFrom(
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f",
+    "g",
+    "h",
+    "i",
+    "j",
+    "k",
+    "l",
+    "m",
+    "n",
+    "o",
+    "p",
+    "q",
+    "r",
+    "s",
+    "t",
+    "u",
+    "v",
+    "w",
+    "x",
+    "y",
+    "z",
+  ),
+  { minLength: 1, maxLength: 20 },
+).map((letters) => letters.join(""));
 
 describe("isValueParser", () => {
   it("should return true for valid ValueParser objects", () => {
@@ -139,6 +187,173 @@ describe("isValueParser", () => {
     assert.ok(isValueParser(urlParser));
     assert.ok(isValueParser(localeParser));
     assert.ok(isValueParser(uuidParser));
+  });
+});
+
+describe("property-based parser laws", () => {
+  it("string() should parse and format arbitrary strings unchanged", () => {
+    const parser = string();
+
+    fc.assert(
+      fc.property(fc.string(), (value) => {
+        const result = parser.parse(value);
+        assert.ok(result.success);
+        assert.equal(result.value, value);
+        assert.equal(parser.format(result.value), value);
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("string() should accept every generated value matching its pattern", () => {
+    const parser = string({ pattern: /^[a-z]+$/ });
+
+    fc.assert(
+      fc.property(lowercaseWordArbitrary, (value) => {
+        const result = parser.parse(value);
+        assert.ok(result.success);
+        assert.equal(result.value, value);
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("integer() should round-trip safe integers through format and parse", () => {
+    const parser = integer({});
+
+    fc.assert(
+      fc.property(safeIntegerArbitrary, (value) => {
+        const formatted = parser.format(value);
+        const result = parser.parse(formatted);
+        assert.ok(result.success);
+        assert.equal(result.value, value);
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("integer() should enforce generated min and max bounds", () => {
+    fc.assert(
+      fc.property(
+        smallIntegerArbitrary,
+        smallIntegerArbitrary,
+        smallIntegerArbitrary,
+        (a, b, value) => {
+          const min = Math.min(a, b);
+          const max = Math.max(a, b);
+          const parser = integer({ min, max });
+          const result = parser.parse(String(value));
+
+          if (value >= min && value <= max) {
+            assert.ok(result.success);
+            assert.equal(result.value, value);
+          } else {
+            assert.ok(!result.success);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it('integer({ type: "bigint" }) should round-trip generated bigints', () => {
+    const parser = integer({ type: "bigint" });
+
+    fc.assert(
+      fc.property(fc.bigInt({ min: -1_000_000n, max: 1_000_000n }), (value) => {
+        const formatted = parser.format(value);
+        const result = parser.parse(formatted);
+        assert.ok(result.success);
+        assert.equal(result.value, value);
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("float() should round-trip finite numbers through format and parse", () => {
+    const parser = float();
+
+    fc.assert(
+      fc.property(
+        fc.double({ noNaN: true, noDefaultInfinity: true }),
+        (value) => {
+          const formatted = parser.format(value);
+          const result = parser.parse(formatted);
+          assert.ok(result.success);
+          assert.equal(result.value, Number(formatted));
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("choice() should parse and suggest generated string choices", () => {
+    fc.assert(
+      fc.property(stringChoicesArbitrary, (choices) => {
+        const parser = choice(choices);
+        const selected = choices[0];
+        const prefix = selected.slice(0, Math.floor(selected.length / 2));
+
+        for (const value of choices) {
+          const result = parser.parse(value);
+          assert.ok(result.success);
+          assert.equal(result.value, value);
+          assert.equal(parser.format(result.value), value);
+        }
+
+        const suggestions = [...parser.suggest!(prefix)].filter((
+          suggestion,
+        ) => suggestion.kind === "literal");
+        assert.ok(
+          suggestions.some((suggestion) => suggestion.text === selected),
+        );
+        assert.ok(
+          suggestions.every((suggestion) =>
+            choices.includes(suggestion.text) &&
+            suggestion.text.startsWith(prefix)
+          ),
+        );
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("choice() should parse and format generated number choices", () => {
+    fc.assert(
+      fc.property(numberChoicesArbitrary, (choices) => {
+        const parser = choice(choices);
+
+        for (const value of choices) {
+          const formatted = parser.format(value);
+          const result = parser.parse(formatted);
+          assert.ok(result.success);
+          assert.equal(result.value, value);
+        }
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("case-insensitive choice() should return canonical generated choices", () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(lowercaseWordArbitrary, {
+          minLength: 1,
+          maxLength: 12,
+        }),
+        (words) => {
+          const choices = words.map((word) => word.toUpperCase());
+          const parser = choice(choices, { caseInsensitive: true });
+
+          for (let i = 0; i < words.length; i++) {
+            const result = parser.parse(words[i]);
+            assert.ok(result.success);
+            assert.equal(result.value, choices[i]);
+          }
+        },
+      ),
+      propertyParameters,
+    );
   });
 });
 
