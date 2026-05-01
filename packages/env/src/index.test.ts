@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import * as fc from "fast-check";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
+import type { Annotations } from "@optique/core/context";
 import { injectAnnotations } from "@optique/core/extension";
 import {
   concat,
@@ -33,6 +35,13 @@ import {
 import { bindEnv, bool, createEnvContext } from "./index.ts";
 
 const sourcePath = fileURLToPath(new URL("./index.ts", import.meta.url));
+const propertyParameters = { numRuns: 200 } as const;
+
+const trueBoolLiterals = ["true", "1", "yes", "on"] as const;
+const falseBoolLiterals = ["false", "0", "no", "off"] as const;
+const boolLiterals = [...trueBoolLiterals, ...falseBoolLiterals] as const;
+const trueBoolLiteralSet = new Set<string>(trueBoolLiterals);
+const boolLiteralSet = new Set<string>(boolLiterals);
 
 function asyncChoice<const T extends readonly string[]>(
   choices: T,
@@ -63,6 +72,22 @@ function getJsDocFor(sourceText: string, functionName: string): string {
   const match = prefix.match(/(\/\*\*[\s\S]*?\*\/)\s*$/u);
   assert.ok(match, `Expected an adjacent JSDoc block for ${functionName}().`);
   return match[1];
+}
+
+function applyCasing(input: string, uppercaseAt: readonly boolean[]): string {
+  return [...input].map((character, index) =>
+    uppercaseAt[index] ? character.toUpperCase() : character.toLowerCase()
+  ).join("");
+}
+
+function getSyncAnnotations(context: {
+  getAnnotations(): Annotations | Promise<Annotations>;
+}): Annotations {
+  const annotations = context.getAnnotations();
+  if (annotations instanceof Promise) {
+    throw new TypeError("Expected synchronous annotations.");
+  }
+  return annotations;
 }
 
 describe("bool()", () => {
@@ -118,6 +143,56 @@ describe("bool()", () => {
         assert.ok(!result.success, `Expected ${literal} to be invalid`);
       }
     });
+
+    it("should parse accepted literals regardless of surrounding whitespace and case", () => {
+      const parser = bool();
+
+      fc.assert(
+        fc.property(
+          fc.constantFrom(...boolLiterals).chain((literal) =>
+            fc.tuple(
+              fc.constant(literal),
+              fc.array(fc.boolean(), {
+                minLength: literal.length,
+                maxLength: literal.length,
+              }),
+            )
+          ),
+          fc.stringMatching(/^\s*$/u),
+          fc.stringMatching(/^\s*$/u),
+          ([literal, casing], leading, trailing) => {
+            const casedLiteral = applyCasing(literal, casing);
+
+            const result = parser.parse(`${leading}${casedLiteral}${trailing}`);
+
+            assert.ok(result.success);
+            assert.equal(
+              result.value,
+              trueBoolLiteralSet.has(literal),
+            );
+          },
+        ),
+        propertyParameters,
+      );
+    });
+
+    it("should reject strings outside accepted boolean literals", () => {
+      const parser = bool();
+
+      fc.assert(
+        fc.property(
+          fc.string().filter((input) =>
+            !boolLiteralSet.has(input.trim().toLowerCase())
+          ),
+          (input) => {
+            const result = parser.parse(input);
+
+            assert.ok(!result.success);
+          },
+        ),
+        propertyParameters,
+      );
+    });
   });
 
   describe("format", () => {
@@ -129,6 +204,22 @@ describe("bool()", () => {
     it("formats false as false", () => {
       const parser = bool();
       assert.equal(parser.format(false), "false");
+    });
+
+    it("should format values as parseable canonical literals", () => {
+      const parser = bool();
+
+      fc.assert(
+        fc.property(fc.boolean(), (value) => {
+          const formatted = parser.format(value);
+
+          const result = parser.parse(formatted);
+
+          assert.ok(result.success);
+          assert.equal(result.value, value);
+        }),
+        propertyParameters,
+      );
     });
   });
 
@@ -187,6 +278,34 @@ describe("bool()", () => {
     it("returns empty array for unmatched prefix", () => {
       const parser = bool();
       assert.deepEqual([...parser.suggest?.("xyz") ?? []], []);
+    });
+
+    it("should only suggest accepted literals matching the prefix", () => {
+      const parser = bool();
+
+      fc.assert(
+        fc.property(
+          fc.constantFrom(...boolLiterals).chain((literal) =>
+            fc.integer({ min: 0, max: literal.length }).map((length) =>
+              literal.slice(0, length)
+            )
+          ),
+          fc.boolean(),
+          (prefix, uppercase) => {
+            const query = uppercase ? prefix.toUpperCase() : prefix;
+
+            const suggestions = [...parser.suggest?.(query) ?? []];
+
+            assert.deepEqual(
+              suggestions,
+              boolLiterals
+                .filter((literal) => literal.startsWith(prefix))
+                .map((literal) => ({ kind: "literal", text: literal })),
+            );
+          },
+        ),
+        propertyParameters,
+      );
     });
 
     it("rejects an empty metavar", () => {
@@ -515,6 +634,83 @@ describe("bindEnv()", () => {
     const result = parse(parser, []);
     assert.ok(result.success);
     assert.equal(result.value, 3000);
+  });
+
+  it("should always prefer CLI over env and default values", () => {
+    fc.assert(
+      fc.property(
+        fc.integer(),
+        fc.integer(),
+        fc.integer(),
+        (cliValue, envValue, defaultValue) => {
+          const context = createEnvContext({
+            source: (key) => key === "PORT" ? String(envValue) : undefined,
+          });
+          const parser = bindEnv(option("--port", integer()), {
+            context,
+            key: "PORT",
+            parser: integer(),
+            default: defaultValue,
+          });
+
+          const result = parse(parser, ["--port", String(cliValue)], {
+            annotations: getSyncAnnotations(context),
+          });
+
+          assert.ok(result.success);
+          assert.equal(result.value, cliValue);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("should always prefer env over default when CLI is absent", () => {
+    fc.assert(
+      fc.property(fc.integer(), fc.integer(), (envValue, defaultValue) => {
+        const context = createEnvContext({
+          source: (key) => key === "PORT" ? String(envValue) : undefined,
+        });
+        const parser = bindEnv(option("--port", integer()), {
+          context,
+          key: "PORT",
+          parser: integer(),
+          default: defaultValue,
+        });
+
+        const result = parse(parser, [], {
+          annotations: getSyncAnnotations(context),
+        });
+
+        assert.ok(result.success);
+        assert.equal(result.value, envValue);
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("should use the default for every missing env value", () => {
+    fc.assert(
+      fc.property(fc.integer(), (defaultValue) => {
+        const context = createEnvContext({
+          source: () => undefined,
+        });
+        const parser = bindEnv(option("--port", integer()), {
+          context,
+          key: "PORT",
+          parser: integer(),
+          default: defaultValue,
+        });
+
+        const result = parse(parser, [], {
+          annotations: getSyncAnnotations(context),
+        });
+
+        assert.ok(result.success);
+        assert.equal(result.value, defaultValue);
+      }),
+      propertyParameters,
+    );
   });
 
   it("fails when CLI, env, and default are all missing", () => {

@@ -1,2 +1,7 @@
 include = ["*.md", "**/*.md"]
-exclude = [".git/**", "**/node_modules/**", "**/dist/**"]
+exclude = [
+  ".agents/skills/javascript-testing-expert/SKILL.md",
+  ".git/**",
+  "**/node_modules/**",
+  "**/dist/**",
+]

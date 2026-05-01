@@ -2,9 +2,22 @@ import { formatMessage, message, values } from "@optique/core/message";
 import type { NonEmptyString } from "@optique/core/valueparser";
 import { path } from "@optique/run/valueparser";
 import assert from "node:assert/strict";
+import * as fc from "fast-check";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+
+const propertyParameters = { numRuns: 200 } as const;
+const nonWhitespacePathCharArbitrary = fc.integer({ min: 0x21, max: 0x7e })
+  .map((codePoint) => String.fromCharCode(codePoint));
+const nonBlankPathArbitrary = fc.tuple(
+  fc.string(),
+  nonWhitespacePathCharArbitrary,
+  fc.string(),
+).map((parts) => parts.join(""));
+const extensionArbitrary = fc
+  .stringMatching(/^[a-z][a-z0-9]*$/u)
+  .map((extension) => `.${extension}`);
 
 function createTempDir() {
   const tempDir = `/tmp/optique-test-${Date.now()}-${
@@ -36,6 +49,20 @@ describe("path", () => {
       }
     });
 
+    it("should parse every non-empty path without existence checks", () => {
+      const parser = path();
+
+      fc.assert(
+        fc.property(nonBlankPathArbitrary, (input) => {
+          const result = parser.parse(input);
+
+          assert.ok(result.success);
+          assert.equal(result.value, input);
+        }),
+        propertyParameters,
+      );
+    });
+
     it("should use default metavar PATH", () => {
       const parser = path();
       assert.equal(parser.metavar, "PATH");
@@ -49,6 +76,19 @@ describe("path", () => {
     it("should format path values correctly", () => {
       const parser = path();
       assert.equal(parser.format("/some/path/file.txt"), "/some/path/file.txt");
+    });
+
+    it("should format every path as itself", () => {
+      const parser = path();
+
+      fc.assert(
+        fc.property(fc.string(), (input) => {
+          const formatted = parser.format(input);
+
+          assert.equal(formatted, input);
+        }),
+        propertyParameters,
+      );
     });
   });
 
@@ -75,6 +115,19 @@ describe("path", () => {
       const parser = path();
       const result = parser.parse("\t\n");
       assert.ok(!result.success);
+    });
+
+    it("should reject every whitespace-only path", () => {
+      const parser = path();
+
+      fc.assert(
+        fc.property(fc.stringMatching(/^\s*$/u), (input) => {
+          const result = parser.parse(input);
+
+          assert.ok(!result.success);
+        }),
+        propertyParameters,
+      );
     });
 
     it("should reject empty string with allowCreate", () => {
@@ -465,6 +518,25 @@ describe("path", () => {
 
       const ymlResult = parser.parse("config.yml");
       assert.equal(ymlResult.success, true);
+    });
+
+    it("should accept paths ending with any configured extension", () => {
+      fc.assert(
+        fc.property(
+          fc.string(),
+          extensionArbitrary,
+          (stem, extension) => {
+            const parser = path({ extensions: [extension] });
+            const input = `${stem}${extension}`;
+
+            const result = parser.parse(input);
+
+            assert.ok(result.success);
+            assert.equal(result.value, input);
+          },
+        ),
+        propertyParameters,
+      );
     });
 
     it("should fail when file has unaccepted extension", () => {
@@ -1136,6 +1208,33 @@ describe("path", () => {
         type: "text",
         text: "File or directory",
       }]);
+    });
+
+    it("should describe every file suggestion from parser options", () => {
+      fc.assert(
+        fc.property(
+          fc.string(),
+          fc.constantFrom("file", "directory", "either" as const),
+          fc.array(extensionArbitrary),
+          (prefix, type, extensions) => {
+            const parser = path({ type, extensions });
+
+            const suggestions = Array.from(parser.suggest!(prefix));
+
+            assert.equal(suggestions.length, 1);
+            const suggestion = suggestions[0];
+            assert.ok(suggestion.kind === "file");
+            assert.equal(suggestion.pattern, prefix);
+            assert.equal(suggestion.type, type === "either" ? "any" : type);
+            assert.deepEqual(suggestion.extensions, extensions);
+            assert.equal(
+              suggestion.includeHidden,
+              basename(prefix).startsWith(".") && basename(prefix) !== "..",
+            );
+          },
+        ),
+        propertyParameters,
+      );
     });
 
     it("should handle empty prefix gracefully", () => {

@@ -1,5 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
+import * as fc from "fast-check";
 import { z } from "zod";
 import { getDocPage, parse, suggestSync } from "@optique/core/parser";
 import type { Parser } from "@optique/core/parser";
@@ -36,6 +37,9 @@ type IsExact<T, U> = (<V>() => V extends T ? 1 : 2) extends
     : false)
   : false;
 
+const propertyParameters = { numRuns: 200 } as const;
+const cliStringValueArbitrary = fc.string().map((value) => `value${value}`);
+
 function requireValue<T>(value: T | undefined, message: string): T {
   if (value === undefined) {
     throw new TypeError(message);
@@ -46,6 +50,15 @@ function requireValue<T>(value: T | undefined, message: string): T {
 
 function phase2<T>(parsed: T): SourceContextRequest {
   return { phase: "phase2", parsed };
+}
+
+function getSyncAnnotations(
+  annotations: Annotations | Promise<Annotations>,
+): Annotations {
+  if (annotations instanceof Promise) {
+    throw new TypeError("Expected synchronous annotations.");
+  }
+  return annotations;
 }
 
 describe("createConfigContext", () => {
@@ -88,6 +101,44 @@ describe("createConfigContext", () => {
 
     assert.ok(annotations);
     assert.deepEqual(Object.getOwnPropertySymbols(annotations).length, 0);
+  });
+
+  test("should annotate every synchronously loaded valid config value", () => {
+    fc.assert(
+      fc.property(
+        fc.string(),
+        fc.integer(),
+        fc.string(),
+        (host, port, parsedValue) => {
+          const schema = z.object({
+            host: z.string(),
+            port: z.number(),
+          });
+          const context = createConfigContext({ schema });
+          const meta = {
+            configDir: "/app",
+            configPath: "/app/config.json",
+          } satisfies ConfigMeta;
+
+          const annotations = getSyncAnnotations(
+            context.getAnnotations(phase2(parsedValue), {
+              load: (parsed: unknown) => {
+                assert.equal(parsed, parsedValue);
+                return { config: { host, port }, meta };
+              },
+            }),
+          );
+
+          const contextAnnotation = annotations[context.id] as
+            | { readonly data: unknown; readonly meta?: unknown }
+            | undefined;
+          assert.ok(contextAnnotation != null);
+          assert.deepEqual(contextAnnotation.data, { host, port });
+          assert.deepEqual(contextAnnotation.meta, meta);
+        },
+      ),
+      propertyParameters,
+    );
   });
 
   for (
@@ -343,6 +394,109 @@ describe("bindConfig", () => {
     const result = parse(parser, []);
     assert.ok(result.success);
     assert.equal(result.value, "localhost");
+  });
+
+  test("should always prefer CLI over config and default values", () => {
+    fc.assert(
+      fc.property(
+        cliStringValueArbitrary,
+        fc.string(),
+        fc.string(),
+        (cliHost, configHost, defaultHost) => {
+          const context = createConfigContext({
+            schema: z.object({ host: z.string() }),
+          });
+          const parser = bindConfig(option("--host", string()), {
+            context,
+            key: "host",
+            default: defaultHost,
+          });
+          const annotations: Annotations = {
+            [context.id]: { data: { host: configHost } },
+          };
+
+          const result = parse(parser, ["--host", cliHost], { annotations });
+
+          assert.ok(result.success);
+          assert.equal(result.value, cliHost);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  test("should always prefer config over default when CLI is absent", () => {
+    fc.assert(
+      fc.property(fc.string(), fc.string(), (configHost, defaultHost) => {
+        const context = createConfigContext({
+          schema: z.object({ host: z.string() }),
+        });
+        const parser = bindConfig(option("--host", string()), {
+          context,
+          key: "host",
+          default: defaultHost,
+        });
+        const annotations: Annotations = {
+          [context.id]: { data: { host: configHost } },
+        };
+
+        const result = parse(parser, [], { annotations });
+
+        assert.ok(result.success);
+        assert.equal(result.value, configHost);
+      }),
+      propertyParameters,
+    );
+  });
+
+  test("should use the default for every missing config value", () => {
+    fc.assert(
+      fc.property(fc.string(), (defaultHost) => {
+        const context = createConfigContext({
+          schema: z.object({ host: z.string().optional() }),
+        });
+        const parser = bindConfig(option("--host", string()), {
+          context,
+          key: "host",
+          default: defaultHost,
+        });
+        const annotations: Annotations = {
+          [context.id]: { data: {} },
+        };
+
+        const result = parse(parser, [], { annotations });
+
+        assert.ok(result.success);
+        assert.equal(result.value, defaultHost);
+      }),
+      propertyParameters,
+    );
+  });
+
+  test("should pass annotation metadata to key callbacks", () => {
+    fc.assert(
+      fc.property(fc.string(), fc.string(), (host, configPath) => {
+        const context = createConfigContext({
+          schema: z.object({ host: z.string() }),
+        });
+        const parser = bindConfig(option("--host", string()), {
+          context,
+          key: (config, meta) => `${config.host}:${meta?.configPath ?? ""}`,
+        });
+        const annotations: Annotations = {
+          [context.id]: {
+            data: { host },
+            meta: { configDir: "/app", configPath },
+          },
+        };
+
+        const result = parse(parser, [], { annotations });
+
+        assert.ok(result.success);
+        assert.equal(result.value, `${host}:${configPath}`);
+      }),
+      propertyParameters,
+    );
   });
 
   // Regression tests for issue #414: bindConfig() must revalidate fallback

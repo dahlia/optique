@@ -65,6 +65,7 @@
     "@optique/env": "workspace:*",
     "@standard-schema/spec": "catalog:",
     "@types/node": "catalog:",
+    "fast-check": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "zod": "catalog:"

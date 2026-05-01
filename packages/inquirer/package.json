@@ -61,6 +61,7 @@
   "devDependencies": {
     "@optique/env": "workspace:*",
     "@types/node": "catalog:",
+    "fast-check": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },

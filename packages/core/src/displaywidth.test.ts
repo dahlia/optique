@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
+import * as fc from "fast-check";
 import { describe, it } from "node:test";
 import { getDisplayWidth } from "./displaywidth.ts";
+
+const propertyParameters = { numRuns: 200 } as const;
+const printableAsciiArbitrary = fc.string({
+  unit: fc.integer({ min: 0x20, max: 0x7e }).map((codePoint) =>
+    String.fromCharCode(codePoint)
+  ),
+});
 
 describe("getDisplayWidth", () => {
   describe("ASCII", () => {
@@ -15,6 +23,15 @@ describe("getDisplayWidth", () => {
 
     it("should return 1 for a single space", () => {
       assert.equal(getDisplayWidth(" "), 1);
+    });
+
+    it("should match string length for printable ASCII text", () => {
+      fc.assert(
+        fc.property(printableAsciiArbitrary, (text) => {
+          assert.equal(getDisplayWidth(text), text.length);
+        }),
+        propertyParameters,
+      );
     });
   });
 
@@ -240,6 +257,22 @@ describe("getDisplayWidth", () => {
       assert.equal(getDisplayWidth("\x1b]0;My Title\x07hello"), 5);
       assert.equal(getDisplayWidth("\x1b]2;My Title\x1b\\hello"), 5);
     });
+
+    it("should ignore generated SGR wrappers around printable ASCII", () => {
+      fc.assert(
+        fc.property(
+          printableAsciiArbitrary,
+          fc.nat(),
+          (text, color) => {
+            assert.equal(
+              getDisplayWidth(`\x1b[${color}m${text}\x1b[0m`),
+              getDisplayWidth(text),
+            );
+          },
+        ),
+        propertyParameters,
+      );
+    });
   });
 
   describe("zero-width characters", () => {
@@ -312,6 +345,32 @@ describe("getDisplayWidth", () => {
 
     it("should handle ANSI + CJK", () => {
       assert.equal(getDisplayWidth("\x1b[1m한글\x1b[0m"), 4);
+    });
+  });
+
+  describe("properties", () => {
+    it("should never produce negative widths", () => {
+      fc.assert(
+        fc.property(fc.string(), (text) => {
+          assert.ok(getDisplayWidth(text) >= 0);
+        }),
+        propertyParameters,
+      );
+    });
+
+    it("should be additive across printable ASCII concatenation", () => {
+      fc.assert(
+        fc.property(printableAsciiArbitrary, printableAsciiArbitrary, (
+          left,
+          right,
+        ) => {
+          assert.equal(
+            getDisplayWidth(left + right),
+            getDisplayWidth(left) + getDisplayWidth(right),
+          );
+        }),
+        propertyParameters,
+      );
     });
   });
 });

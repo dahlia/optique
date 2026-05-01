@@ -24,7 +24,28 @@ import {
 } from "@optique/core/valueparser";
 import { formatMessage, message, text, values } from "@optique/core/message";
 import assert from "node:assert/strict";
+import * as fc from "fast-check";
 import { describe, it } from "node:test";
+
+const propertyParameters = { numRuns: 200 } as const;
+const safeIntegerArbitrary = fc.integer({
+  min: Number.MIN_SAFE_INTEGER,
+  max: Number.MAX_SAFE_INTEGER,
+});
+const nonEmptyChoiceStringArbitrary = fc.string({ minLength: 1 });
+const stringChoicesArbitrary = fc.uniqueArray(nonEmptyChoiceStringArbitrary, {
+  minLength: 1,
+  selector: (value) => value.toLowerCase(),
+});
+const numberChoicesArbitrary = fc.uniqueArray(safeIntegerArbitrary, {
+  minLength: 1,
+});
+const lowercaseWordArbitrary = fc.string({
+  unit: fc.integer({ min: 0x61, max: 0x7a }).map((codePoint) =>
+    String.fromCharCode(codePoint)
+  ),
+  minLength: 1,
+});
 
 describe("isValueParser", () => {
   it("should return true for valid ValueParser objects", () => {
@@ -139,6 +160,179 @@ describe("isValueParser", () => {
     assert.ok(isValueParser(urlParser));
     assert.ok(isValueParser(localeParser));
     assert.ok(isValueParser(uuidParser));
+  });
+});
+
+describe("property-based parser laws", () => {
+  it("string() should parse and format arbitrary strings unchanged", () => {
+    const parser = string();
+
+    fc.assert(
+      fc.property(fc.string(), (value) => {
+        const result = parser.parse(value);
+        assert.ok(result.success);
+        assert.equal(result.value, value);
+        assert.equal(parser.format(result.value), value);
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("string() should accept every generated value matching its pattern", () => {
+    const parser = string({ pattern: /^[a-z]+$/ });
+
+    fc.assert(
+      fc.property(lowercaseWordArbitrary, (value) => {
+        const result = parser.parse(value);
+        assert.ok(result.success);
+        assert.equal(result.value, value);
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("integer() should round-trip safe integers through format and parse", () => {
+    const parser = integer({});
+
+    fc.assert(
+      fc.property(safeIntegerArbitrary, (value) => {
+        const formatted = parser.format(value);
+        const result = parser.parse(formatted);
+        assert.ok(result.success);
+        assert.equal(result.value, value);
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("integer() should enforce generated min and max bounds", () => {
+    fc.assert(
+      fc.property(
+        safeIntegerArbitrary,
+        safeIntegerArbitrary,
+        safeIntegerArbitrary,
+        (a, b, value) => {
+          const min = Math.min(a, b);
+          const max = Math.max(a, b);
+          const parser = integer({ min, max });
+          const result = parser.parse(String(value));
+
+          if (value >= min && value <= max) {
+            assert.ok(result.success);
+            assert.equal(result.value, value);
+          } else {
+            assert.ok(!result.success);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it('integer({ type: "bigint" }) should round-trip generated bigints', () => {
+    const parser = integer({ type: "bigint" });
+
+    fc.assert(
+      fc.property(fc.bigInt(), (value) => {
+        const formatted = parser.format(value);
+        const result = parser.parse(formatted);
+        assert.ok(result.success);
+        assert.equal(result.value, value);
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("float() should round-trip finite numbers through format and parse", () => {
+    const parser = float();
+
+    fc.assert(
+      fc.property(
+        fc.double({ noNaN: true, noDefaultInfinity: true }),
+        (value) => {
+          const formatted = parser.format(value);
+          const result = parser.parse(formatted);
+          assert.ok(result.success);
+          if (Object.is(value, -0)) {
+            assert.ok(Object.is(result.value, 0));
+          } else {
+            assert.equal(result.value, value);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("choice() should parse and suggest generated string choices", () => {
+    fc.assert(
+      fc.property(stringChoicesArbitrary, (choices) => {
+        const parser = choice(choices);
+        const selected = choices[0];
+        const selectedChars = Array.from(selected);
+        const prefix = selectedChars
+          .slice(0, Math.max(1, Math.floor(selectedChars.length / 2)))
+          .join("");
+
+        for (const value of choices) {
+          const result = parser.parse(value);
+          assert.ok(result.success);
+          assert.equal(result.value, value);
+          assert.equal(parser.format(result.value), value);
+        }
+
+        const suggestions = [...parser.suggest!(prefix)].filter((
+          suggestion,
+        ) => suggestion.kind === "literal");
+        assert.ok(
+          suggestions.some((suggestion) => suggestion.text === selected),
+        );
+        assert.ok(
+          suggestions.every((suggestion) =>
+            choices.includes(suggestion.text) &&
+            suggestion.text.startsWith(prefix)
+          ),
+        );
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("choice() should parse and format generated number choices", () => {
+    fc.assert(
+      fc.property(numberChoicesArbitrary, (choices) => {
+        const parser = choice(choices);
+
+        for (const value of choices) {
+          const formatted = parser.format(value);
+          const result = parser.parse(formatted);
+          assert.ok(result.success);
+          assert.equal(result.value, value);
+        }
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("case-insensitive choice() should return canonical generated choices", () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(lowercaseWordArbitrary, {
+          minLength: 1,
+        }),
+        (words) => {
+          const choices = words.map((word) => word.toUpperCase());
+          const parser = choice(choices, { caseInsensitive: true });
+
+          for (let i = 0; i < words.length; i++) {
+            const result = parser.parse(words[i]);
+            assert.ok(result.success);
+            assert.equal(result.value, choices[i]);
+          }
+        },
+      ),
+      propertyParameters,
+    );
   });
 });
 

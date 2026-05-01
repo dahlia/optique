@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import * as fc from "fast-check";
 import { describe, it } from "node:test";
 import { type Annotations, getAnnotations } from "@optique/core/annotations";
 import { injectAnnotations } from "@optique/core/extension";
@@ -31,6 +32,8 @@ const promptFunctionsOverrideSymbol = Symbol.for(
   "@optique/inquirer/prompt-functions",
 );
 const annotationKey = Symbol.for("@optique/core/parser/annotation");
+const propertyParameters = { numRuns: 120 } as const;
+const cliStringValueArbitrary = fc.string().map((value) => `value${value}`);
 
 let promptFunctionsOverrideQueue = Promise.resolve();
 
@@ -173,6 +176,33 @@ describe("prompt()", () => {
       assert.ok(result.success);
       assert.deepEqual(result.value, ["a", "c"]);
     });
+
+    it("should always prefer CLI string values over prompted values", async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          cliStringValueArbitrary,
+          fc.string(),
+          async (cliValue, promptValue) => {
+            let promptCalled = false;
+            const parser = prompt(option("--name", string()), {
+              type: "input",
+              message: "Enter name:",
+              prompter: () => {
+                promptCalled = true;
+                return Promise.resolve(promptValue);
+              },
+            });
+
+            const result = await parseAsync(parser, ["--name", cliValue]);
+
+            assert.ok(result.success);
+            assert.equal(result.value, cliValue);
+            assert.ok(!promptCalled);
+          },
+        ),
+        propertyParameters,
+      );
+    });
   });
 
   describe("prompt fallback", () => {
@@ -290,6 +320,42 @@ describe("prompt()", () => {
       const result = await parseAsync(parser, []);
       assert.ok(result.success);
       assert.deepEqual(result.value, ["a", "c"]);
+    });
+
+    it("should use every prompted input value when CLI is absent", async () => {
+      await fc.assert(
+        fc.asyncProperty(fc.string(), async (promptValue) => {
+          const parser = prompt(option("--name", string()), {
+            type: "input",
+            message: "Enter name:",
+            prompter: () => Promise.resolve(promptValue),
+          });
+
+          const result = await parseAsync(parser, []);
+
+          assert.ok(result.success);
+          assert.equal(result.value, promptValue);
+        }),
+        propertyParameters,
+      );
+    });
+
+    it("should use every prompted confirm value when CLI is absent", async () => {
+      await fc.assert(
+        fc.asyncProperty(fc.boolean(), async (promptValue) => {
+          const parser = prompt(flag("--verbose"), {
+            type: "confirm",
+            message: "Verbose?",
+            prompter: () => Promise.resolve(promptValue),
+          });
+
+          const result = await parseAsync(parser, []);
+
+          assert.ok(result.success);
+          assert.equal(result.value, promptValue);
+        }),
+        propertyParameters,
+      );
     });
   });
 
