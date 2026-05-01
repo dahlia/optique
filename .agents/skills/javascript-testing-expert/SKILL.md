@@ -231,9 +231,9 @@ The risk being that you may end up rewriting the code being tested in the test
 
 **✅ Do** expect some aspects and characteristics of the returned value
 
-**❌ NEVER** specify any `maxLength` on an arbitrary if it is a not a requirement of the algorithm
+**❌ NEVER** specify any `maxLength` on an arbitrary if it is not a requirement of the algorithm
 **👍 Prefer** specifying a `size: '-1'` if you feel that the algorithm will take very long on large inputs (by default fast-check generates up to 10 items, so only use `size` when clearly required)
-Eg.: No `fc.string({maxLength: 5})` or `fc.array(arb, {maxLength: 8})` except being a string requirement
+Eg.: No `fc.string({maxLength: 5})` or `fc.array(arb, {maxLength: 8})` except when it is a strict requirement
 
 **❌ NEVER** specify any constraint on an arbitrary if it is not a requirement of the arbitrary, use defaults as much as possible
 Eg.: if the algorithm should accept any integer just ask an integer without specifying any min and max
@@ -261,9 +261,9 @@ Some classical properties:
 
 ## Guidelines for race conditions
 
-**✅ Do** write tests checking for race conditions and playing with resolution order — _automatically handled by `fast-check`_ — when an algorithm accepts asynchronous functions as input
+**✅ Do** write tests checking for race conditions and exploring resolution order when an algorithm accepts asynchronous functions as input
 
-**✅ Do** leverage `fast-check` and its `fc.scheduler()` arbitrary to test asynchronous code depending on asynchronous functions
+**✅ Do** leverage `fast-check` and its `fc.scheduler()` arbitrary, together with `s.scheduleFunction` and `s.waitFor`, to explore ordering deterministically
 
 Turn:
 
@@ -274,6 +274,7 @@ it('should resolve in call order', async () => {
   const call = (v) => Promise.resolve(v);
 
   // Act
+  // `queue` is a helper that serializes async calls.
   const queued = queue(call);
   await Promise.all([queued(1).then((v) => seenAnswers.push(v)), queued(2).then((v) => seenAnswers.push(v))]);
 
@@ -293,6 +294,7 @@ it('should resolve in call order', async () => {
       const call = (v) => Promise.resolve(v);
 
       // Act
+      // `queue` is a helper that serializes scheduled async calls.
       const queued = queue(s.scheduleFunction(call));
       await s.waitFor(
         Promise.all([queued(1).then((v) => seenAnswers.push(v)), queued(2).then((v) => seenAnswers.push(v))]),
