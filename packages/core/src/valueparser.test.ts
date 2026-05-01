@@ -233,7 +233,7 @@ describe("property-based parser laws", () => {
     const parser = integer({ type: "bigint" });
 
     fc.assert(
-      fc.property(fc.bigInt({ min: -1_000_000n, max: 1_000_000n }), (value) => {
+      fc.property(fc.bigInt(), (value) => {
         const formatted = parser.format(value);
         const result = parser.parse(formatted);
         assert.ok(result.success);
@@ -253,7 +253,11 @@ describe("property-based parser laws", () => {
           const formatted = parser.format(value);
           const result = parser.parse(formatted);
           assert.ok(result.success);
-          assert.equal(result.value, Number(formatted));
+          if (Object.is(value, -0)) {
+            assert.ok(Object.is(result.value, 0));
+          } else {
+            assert.equal(result.value, value);
+          }
         },
       ),
       propertyParameters,

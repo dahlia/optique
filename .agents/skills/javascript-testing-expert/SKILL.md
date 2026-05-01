@@ -3,6 +3,8 @@ name: javascript-testing-expert
 description: Expert-level JavaScript testing skill focused on writing high-quality tests that find bugs, serve as documentation, and prevent regressions. Advocates for property-based testing with fast-check and protects against indeterministic code in tests. Does not cover black-box e2e testing.
 ---
 
+# JavaScript testing expert
+
 > **⚠️ Scope:** Testing functions and components, not black-box e2e.
 
 **🏅 Main objectives:** use tests as a way to...
@@ -33,13 +35,13 @@ description: Expert-level JavaScript testing skill focused on writing high-quali
 
 **✅ Do** use a dedicated `describe` for each function being tested
 
-**✅ Do** start naming `it` with "should" and considers that the name should be clear, as concise as possible and could be read as a sentence implicitly prefixed by "it"
+**✅ Do** start `it` names with "should"; keep them clear, concise, and readable as a sentence implicitly prefixed by "it"
 
 **✅ Do** start with simple and documenting tests
 
 **✅ Do** continue with advanced tests looking for edge-cases
 
-**❌ Don't** delimitate explicitely simple from advanced tests, just put them in the right order
+**❌ Don't** explicitly separate simple from advanced tests; just put them in the right order
 
 **✅ Do** put helper functions specific to the file after all the `describe`s just below a comment `// Helpers` stating the beginning of the helpers tailored for this file
 
@@ -216,7 +218,7 @@ it('should detect the substring', () => {
 
 ## Guidelines for properties
 
-All this section considers that we are in the context of property based tests!
+This section assumes the context is property-based tests.
 
 **⚠️ Important:** In Optique tests, use `fc.assert` with `fc.property` or `fc.asyncProperty` directly.
 
