@@ -28,12 +28,12 @@ The Optique project has the following rules for AI usage:
     being overly verbose and including noise that distracts from the main
     point.  Humans must do their research and trim this down.
 
-5.  *AI-generated media (images, diagrams, etc.) is allowed only in documentation,
-    and must be clearly labeled as AI-generated.* Text and code are acceptable
-    AI-generated content per the other rules in this policy.  For documentation
-    visuals like diagrams or illustrations, AI-generated content is permitted
-    but must include clear attribution (e.g., “Diagram generated with DALL-E”
-    or “Created using Midjourney”).
+5.  *AI-generated media (images, diagrams, etc.) is allowed only in
+    documentation, and must be clearly labeled as AI-generated.* Text and code
+    are acceptable AI-generated content per the other rules in this policy.
+    For documentation visuals like diagrams or illustrations, AI-generated
+    content is permitted but must include clear attribution (e.g., “Diagram
+    generated with DALL-E” or “Created using Midjourney”).
 
 6.  *Violations of this policy may result in being banned from contributing.*
     We want to help contributors learn and grow, but repeated or intentional

@@ -97,7 +97,8 @@ to use an older version.
 > be added to *both* configuration files:
 >
 >  -  *deno.json*: Add to the `imports` field (for Deno)
->  -  *package.json*: Add to `dependencies` or `devDependencies` (for Node.js/Bun)
+>  -  *package.json*: Add to `dependencies` or `devDependencies` (for
+>     Node.js/Bun)
 >
 > For workspace packages, use the pnpm catalog (*pnpm-workspace.yaml*) to manage
 > versions centrally.  In *package.json*, reference catalog versions with
@@ -162,8 +163,8 @@ When adding a new package to the monorepo, update the following files:
 
  -  *README.md* (root): Add the package to the Packages table
  -  *AGENTS.md*: Add the package to the Package structure list (if applicable)
- -  *docs/package.json*: Add `"@optique/<name>": "workspace:"` to `devDependencies`
-    (required for Twoslash type checking in documentation)
+ -  *docs/package.json*: Add `"@optique/<name>": "workspace:"` to
+    `devDependencies` (required for Twoslash type checking in documentation)
 
 
 Development practices
@@ -223,10 +224,10 @@ Code style
     `readonly` modifier to all interface fields.
  -  Use the nullish coalescing operator (`??`) instead of the logical OR
     operator (`||`) for default values.
- -  The library emphasizes compile-time type safety with automatic type inference
-    for parser results.  When working with parsers, the TypeScript compiler will
-    infer complex union types and optional fields based on the combinator
-    composition.
+ -  The library emphasizes compile-time type safety with automatic type
+    inference for parser results.  When working with parsers, the TypeScript
+    compiler will infer complex union types and optional fields based on the
+    combinator composition.
 
 ### Internal mode dispatch patterns
 

@@ -437,7 +437,8 @@ Checklist summary
  -  [ ] Push tag and branch
  -  [ ] Cascade merge to newer maintenance branches (if any):
      -  [ ] Merge tag into newer branch
-     -  [ ] Copy changelog entries to unreleased version (above existing entries)
+     -  [ ] Copy changelog entries to unreleased version (above existing
+        entries)
      -  [ ] Run tests and complete merge commit
      -  [ ] Create patch release for that branch
  -  [ ] Merge to `main` (if no newer maintenance branches)

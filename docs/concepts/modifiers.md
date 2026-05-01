@@ -416,7 +416,8 @@ The `withDefault()` modifier is ideal when:
  -  You're building conditional CLI structures with dependent options
  -  The default value is meaningful and commonly used
  -  You want to customize how defaults are displayed in help text
- -  You need to show descriptive text for environment variables or computed defaults
+ -  You need to show descriptive text for environment variables or computed
+    defaults
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";

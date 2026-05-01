@@ -31,7 +31,8 @@ Gitique implements core Git commands with full type safety:
 
  -  **`add`** — Stage files for commit with `--all` and `--force` options
  -  **`commit`** — Create commits with messages, custom authors, and staging
- -  **`diff`** — Show changes with various display modes (patch, stat, name-only)
+ -  **`diff`** — Show changes with various display modes (patch, stat,
+    name-only)
  -  **`log`** — View commit history with filtering, formatting, and search
  -  **`reset`** — Reset repository state with soft/mixed/hard modes
  -  **`status`** — Show working tree status in long, short, or porcelain format
@@ -45,7 +46,8 @@ This example demonstrates Optique's key capabilities:
  -  *Default values*: `withDefault()` with automatic help text display
  -  *Result transformation*: `map()` for shorthand flag handling
  -  *Help generation*: Automatic `--help` and `help` command support
- -  *Shell completion*: Built-in completion support for Bash, zsh, fish, and Nushell
+ -  *Shell completion*: Built-in completion support for Bash, zsh, fish, and
+    Nushell
  -  *Error handling*: User-friendly error messages with usage information
 
 

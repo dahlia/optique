@@ -531,9 +531,9 @@ This pattern is different from using
 
  -  *Explicit discriminator*: The user provides `--reporter junit` rather than
     inferring mode from which options are present
- -  *Clear error messages*: If `--reporter junit` is provided but `--output-file`
-    is missing, the error clearly states that `--output-file` is required when
-    using the junit reporter
+ -  *Clear error messages*: If `--reporter junit` is provided but
+    `--output-file` is missing, the error clearly states that `--output-file`
+    is required when using the junit reporter
  -  *Tuple result*: The result is `["junit", { outputFile: "..." }]` rather than
     a merged object, making the discriminator value easily accessible
 

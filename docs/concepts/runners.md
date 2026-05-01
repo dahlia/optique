@@ -1341,11 +1341,13 @@ see [*Bundling parsers with metadata*](#bundling-parsers-with-metadata).
  -  *Library development*: Building CLI libraries for other applications
  -  *Custom I/O*: You need non-standard input/output handling
  -  *Controlled exit*: The application manages its own lifecycle
- -  *Non-CLI contexts*: Building tools that embed a CLI interface in a larger app
+ -  *Non-CLI contexts*: Building tools that embed a CLI interface in a larger
+    app
 
 ### Use `run()` from `@optique/run` when:
 
- -  *Standalone CLIs*: Building command-line applications for Node.js, Bun, or Deno
+ -  *Standalone CLIs*: Building command-line applications for Node.js, Bun, or
+    Deno
  -  *Rapid prototyping*: You want to get a CLI running quickly
  -  *Standard behavior*: Your application follows typical CLI conventions
  -  *Batteries-included*: You want automatic argument extraction, terminal

@@ -922,8 +922,8 @@ The parser validates hostnames according to RFC 1123:
 For example:
 
  -  Valid: `"example.com"`, `"sub.example.com"`, `"server-01.local"`
- -  Invalid: `"-example.com"` (starts with hyphen), `"example..com"` (empty label),
-    `"a".repeat(64) + ".com"` (label too long)
+ -  Invalid: `"-example.com"` (starts with hyphen), `"example..com"` (empty
+    label), `"a".repeat(64) + ".com"` (label too long)
 
 ### Wildcard hostnames
 

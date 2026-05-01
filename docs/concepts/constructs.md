@@ -1844,7 +1844,8 @@ const applicationConfig = group("Application Configuration", object({
 Use `group()` when you need:
 
  -  *Section organization*: Grouping related options under meaningful headers
- -  *Parser flexibility*: Labeling parsers that don't have built-in label support
+ -  *Parser flexibility*: Labeling parsers that don't have built-in label
+    support
  -  *Help text clarity*: Making complex CLIs more user-friendly
  -  *Clean code structure*: Maintaining modular parser composition
 

@@ -343,7 +343,8 @@ Nushell completion scripts use the `$env.config.completions.external.completer`
 system to provide completions for external commands. The generated script
 provides:
 
- -  Custom completer registration that integrates with Nushell's completion system
+ -  Custom completer registration that integrates with Nushell's completion
+    system
  -  Context-aware completion using custom argument parsing
  -  Structured data return values with `value` and `description` fields
  -  Native file completion using Nushell's `ls` command and `match` expressions

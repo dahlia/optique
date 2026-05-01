@@ -62,8 +62,9 @@ Features
     UUIDs, networking types (`port()`, `ipv4()`, `hostname()`, `email()`, etc.),
     Temporal types (via *@optique/temporal*), Zod schemas (via *@optique/zod*),
     and Valibot schemas (via *@optique/valibot*)
- -  *Config file support*: Load config from files with Standard Schema validation
-    (via *@optique/config*), supporting Zod, Valibot, ArkType, and more
+ -  *Config file support*: Load config from files with Standard Schema
+    validation (via *@optique/config*), supporting Zod, Valibot, ArkType, and
+    more
  -  *Environment variable support*: Bind options to environment variables
     with type-safe parsing and fallback behavior (via *@optique/env*)
  -  *Interactive prompts*: Prompt users for missing values via Inquirer.js

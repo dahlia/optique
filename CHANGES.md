@@ -110,8 +110,8 @@ changes and migration notes carefully when upgrading from 0.x versions.
     sanitization machinery (~1000 lines of proxy-based stripping code)
     from *@optique/core* and *@optique/config*.  [[#307], [#407], [#727]]
 
- -  *Breaking change:* Removed `placeholder` symbol and `isPlaceholderValue()` from
-    `@optique/core/context`.  These were part of the sentinel-based
+ -  *Breaking change:* Removed `placeholder` symbol and `isPlaceholderValue()`
+    from `@optique/core/context`.  These were part of the sentinel-based
     deferred prompt mechanism that has been replaced by the
     `ValueParser.placeholder` approach.  [[#407], [#727]]
 
@@ -990,11 +990,11 @@ changes and migration notes carefully when upgrading from 0.x versions.
     characters replaced with spaces so the shell completion protocol is not
     corrupted.  [[#247], [#642]]
 
- -  Fixed shell completion for file-only `Suggestion.file` entries (`type: "file"`)
-    excluding directories entirely, which prevented users from descending into
-    subdirectories during path completion.  All five shell backends (Bash, zsh,
-    fish, Nushell, PowerShell) now include directories as navigation targets
-    alongside files.  [[#294], [#646]]
+ -  Fixed shell completion for file-only `Suggestion.file` entries
+    (`type: "file"`) excluding directories entirely, which prevented users from
+    descending into subdirectories during path completion.  All five shell
+    backends (Bash, zsh, fish, Nushell, PowerShell) now include directories as
+    navigation targets alongside files.  [[#294], [#646]]
 
  -  Fixed `encodeSuggestions()` not stripping leading dots from
     `Suggestion.extensions`, which caused extension filtering to silently
@@ -3145,8 +3145,10 @@ Released on February 15, 2026.
 
     New exports:
 
-     -  `dependency()`: Creates a dependency source from an existing value parser.
-     -  `deriveFrom()`: Creates a derived parser from multiple dependency sources.
+     -  `dependency()`: Creates a dependency source from an existing value
+        parser.
+     -  `deriveFrom()`: Creates a derived parser from multiple dependency
+        sources.
      -  `DependencySource<M, T>`: A value parser that can be referenced by other
         parsers.
      -  `DerivedValueParser<M, T>`: A value parser whose behavior depends on
@@ -3712,9 +3714,9 @@ to generate Unix man pages that stay synchronized with parser definitions.
     const manPage = generateManPage(prog, { section: 1 });
     ~~~~
 
- -  Added `optique-man` CLI tool for generating man pages from TypeScript/JavaScript
-    files that export a `Program` or `Parser`.  This enables automated man page
-    generation as part of build processes.  [[#77]]
+ -  Added `optique-man` CLI tool for generating man pages from
+    TypeScript/JavaScript files that export a `Program` or `Parser`.  This
+    enables automated man page generation as part of build processes.  [[#77]]
 
     ~~~~ bash
     # Generate man page from a Program export
@@ -4001,8 +4003,10 @@ Released on January 6, 2026.
      -  `suggestSync()`: Gets suggestions from a sync-only parser.
      -  `suggestAsync()`: Gets suggestions from any parser as a Promise.
      -  `getDocPageSync()`: Gets documentation page from a sync-only parser.
-     -  `getDocPageAsync()`: Gets documentation page from any parser as a Promise.
-     -  `runParserSync()`: Runs a sync-only parser, returning the result directly.
+     -  `getDocPageAsync()`: Gets documentation page from any parser as a
+        Promise.
+     -  `runParserSync()`: Runs a sync-only parser, returning the result
+        directly.
      -  `runParserAsync()`: Runs any parser, returning a Promise of the result.
 
     This change is backward compatible.  Existing code continues to work
@@ -4062,12 +4066,12 @@ Released on January 6, 2026.
     `runParser()` rename.  The old `RunError` export is still available but
     deprecated and will be removed in a future major version.  [[#54]]
 
- -  Added support for `optional()` and `withDefault()` wrappers inside `merge()`.
-    Previously, `merge(optional(or(...)), object({...}))` would fail when the
-    optional parser didn't match any input.  Now, parsers that succeed without
-    consuming input (like `optional()` when nothing matches) are handled
-    correctly, allowing the next parser in the merge to process remaining
-    arguments.  [[#57]]
+ -  Added support for `optional()` and `withDefault()` wrappers inside
+    `merge()`. Previously, `merge(optional(or(...)), object({...}))` would fail
+    when the optional parser didn't match any input.  Now, parsers that succeed
+    without consuming input (like `optional()` when nothing matches) are
+    handled correctly, allowing the next parser in the merge to process
+    remaining arguments.  [[#57]]
 
     ~~~~ typescript
     // Now works correctly
@@ -5285,12 +5289,12 @@ Released on November 25, 2025.
     });
     ~~~~
 
-    This allows CLI tools to match their preferred style guide or exist alongside
-    other commands. The help text examples automatically reflect the configured
-    naming style. [[#42]]
+    This allows CLI tools to match their preferred style guide or exist
+    alongside other commands. The help text examples automatically reflect the
+    configured naming style. [[#42]]
 
-     -  Added `name` option to `RunOptions.completion` configuration (`"singular"`,
-        `"plural"`, or `"both"`).
+     -  Added `name` option to `RunOptions.completion` configuration
+        (`"singular"`, `"plural"`, or `"both"`).
 
 [#37]: https://github.com/dahlia/optique/issues/37
 [#38]: https://github.com/dahlia/optique/issues/38
@@ -5633,8 +5637,8 @@ Released on September 23, 2025.
 
 ### @optique/core
 
- -  Refactored parser modules for better code organization by splitting the large
-    `@optique/core/parser` module into focused, specialized modules. This
+ -  Refactored parser modules for better code organization by splitting the
+    large `@optique/core/parser` module into focused, specialized modules. This
     improves maintainability, reduces module size, and provides clearer
     separation of concerns. All changes maintain full backward compatibility
     through re-exports.
