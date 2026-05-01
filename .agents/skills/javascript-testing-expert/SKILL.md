@@ -12,9 +12,9 @@ description: Expert-level JavaScript testing skill focused on writing high-quali
 3. avoid regressions
 4. challenge the code
 
-**🔧 Recommended tooling:** `vitest`, `fast-check`, `@fast-check/vitest`, `@testing-library/*`, `@vitest/browser-playwright`, `msw` installed as devDependencies.  
-**✅ Do** try to install missing and relevant tooling, only recommend for `@fast-check/vitest` and browser testing.  
-**✅ Do** highly recommend user to install missing and relevant tooling.  
+**🔧 Recommended tooling:** `vitest`, `fast-check`, `@fast-check/vitest`, `@testing-library/*`, `@vitest/browser-playwright`, `msw` installed as devDependencies.
+**✅ Do** try to install missing and relevant tooling, only recommend for `@fast-check/vitest` and browser testing.
+**✅ Do** highly recommend user to install missing and relevant tooling.
 **✅ Do** adapt yourself to missing tools.
 
 ## File and code layout
@@ -68,35 +68,35 @@ it('should...', () => {
 
 **❌ Don't** test internal details
 
-**👍 Prefer** stubs over mocks, the first one provides an alternate implementation, the second one helps to assert on calls being done or not  
+**👍 Prefer** stubs over mocks, the first one provides an alternate implementation, the second one helps to assert on calls being done or not
 Why? Often, asserting the number of calls is not something critical for the user of the function but purely an internal detail
 
 **❌ Don't** rely on network call, stub it with `msw`
 
-**✅ Do** reset globals and mocks in `beforeEach` if any `it` plays with mocks or spies or alter globals  
+**✅ Do** reset globals and mocks in `beforeEach` if any `it` plays with mocks or spies or alter globals
 Alternatively, when using vitest you could check if flags `mockReset`, `unstubEnvs` and `unstubGlobals` have been enabled in the configuration, in such case resetting globals is done by default
 
-**👍 Prefer** realistic data for documentation-like tests  
+**👍 Prefer** realistic data for documentation-like tests
 Eg.: use real names if you have to build instances of users
 
-**❌ Don't** overuse snapshot tests; only snapshot things when the "what is expected to be seen in the snapshot" is clear  
+**❌ Don't** overuse snapshot tests; only snapshot things when the "what is expected to be seen in the snapshot" is clear
 Why? Snapshots tests tend to capture too many details in the snapshot, making them hard to update given future reader is lost on what was the real thing being tested
 
 **👍 Prefer** snapshots when shape and structure are important (component hierarchy, attributes, non-regression on output structure)
 
 **👍 Prefer** screenshots when final render is important (visual styling, layout)
 
-**✅ Do** warn developer when the code under tests requires too many parameters and/or too many mocks/stubs to be forged (more than 10)  
+**✅ Do** warn developer when the code under tests requires too many parameters and/or too many mocks/stubs to be forged (more than 10)
 Why? Code being hardly testable is often a code smell pinpointing an API having to be changed. Code is harder to evolve, harder to reason about and often handling too many responsibilities. Recommend the single-responsibility principle (SRP)
 
 **✅ Do** try to make tests shorter and faster to read by factorizing recurrent logics into helper functions
 
-**✅ Do** group shared logics under a function having a clear and explicit name, follow SRP for these helpers  
+**✅ Do** group shared logics under a function having a clear and explicit name, follow SRP for these helpers
 Eg.: avoid functions with lots of optional parameters, doing several things
 
 **❌ Don't** write a big `prepare` function re-used by all tests in their act part, but make the name clearer and eventually split it into multiple functions
 
-**✅ Do** make sure your test breaks if you drop the thing supposed to make it pass  
+**✅ Do** make sure your test breaks if you drop the thing supposed to make it pass
 Eg.: When your test says "should do X when Y" makes sure that if you don't have Y it fails before keeping it.
 
 **👎 Avoid** writing tests with entities specifying hardcoded values on unused fields
@@ -137,13 +137,13 @@ describe('computeAge', () => {
 
 **👍 Prefer** leveraging `fast-check`, if installed but not `@fast-check/vitest`
 
-**👎 Avoid** writing tests depending on unstable values  
-Eg.: in the example above `computeAge` depends on the current date  
+**👎 Avoid** writing tests depending on unstable values
+Eg.: in the example above `computeAge` depends on the current date
 Remark: same for locales and plenty other platform dependent values
 
 **👍 Prefer** stubbing today using `vi.setSystemTime`
 
-**👍 Prefer** controlling today using `@fast-check/vitest`  
+**👍 Prefer** controlling today using `@fast-check/vitest`
 Why? Contrary to `vi.setSystemTime` alone you check the code against one new today at each run, but if it happens to fail one day you will be reported with the exact date causing the problem
 
 ```ts
@@ -159,8 +159,8 @@ const user: User = {
 
 **👍 Prefer** controlling randomly generated values by relying on `@fast-check/vitest` if installed, or `fast-check` otherwise
 
-**✅ Do** use property based tests for any test with a notion of always or never  
-Eg.: name being "should always do x when y" or "should never do x when y"  
+**✅ Do** use property based tests for any test with a notion of always or never
+Eg.: name being "should always do x when y" or "should never do x when y"
 Remark: consider these tests as advanced and put them after the documentation tests and not with them
 
 **👍 Prefer** using property based testing for edge case detection instead of writing all cases one by one
@@ -194,18 +194,18 @@ it.prop([fc.string(), fc.string(), fc.string()])('should detect the substring', 
 
 **👍 Prefer** querying by accessible attributes and user-visible text by relying on `getByRole`, `getByLabelText`, `getByText` over `getByTestId` whenever possible for testing-library and browser testing
 
-**✅ Do** ensure non visual regression of Design System components and more generally visual components by leveraging screenshot tests in browser when available  
+**✅ Do** ensure non visual regression of Design System components and more generally visual components by leveraging screenshot tests in browser when available
 **✅ Do** fallback to snapshot tests capturing the DOM structure if screenshot tests cannot be ran
 
 ## Guidelines for properties
 
 All this section considers that we are in the context of property based tests!
 
-**⚠️ Important:** When using `g` from `@fast-check/vitest`, pass the arbitrary **function** (e.g., `fc.string`, `fc.date`) along with its arguments as separate parameters to `g`, not the result of calling it.  
-Correct: `g(fc.string)`, `g(fc.date, { min: new Date('2010-01-01') })`  
+**⚠️ Important:** When using `g` from `@fast-check/vitest`, pass the arbitrary **function** (e.g., `fc.string`, `fc.date`) along with its arguments as separate parameters to `g`, not the result of calling it.
+Correct: `g(fc.string)`, `g(fc.date, { min: new Date('2010-01-01') })`
 Incorrect: `g(fc.string())`, `g(fc.date({ min: new Date('2010-01-01') }))`
 
-**❌ Don't** generate inputs directly  
+**❌ Don't** generate inputs directly
 The risk being that you may end up rewriting the code being tested in the test
 
 **✅ Do** construct values to build some inputs where you know the expected outcome
@@ -214,22 +214,22 @@ The risk being that you may end up rewriting the code being tested in the test
 
 **✅ Do** expect some aspects and characteristics of the returned value
 
-**❌ NEVER** specify any `maxLength` on an arbitrary if it is a not a requirement of the algorithm  
-**👍 Prefer** specifying a `size: '-1'` if you feel that the algorithm will take very long on large inputs (by default fast-check generates up to 10 items, so only use `size` when clearly required)  
+**❌ NEVER** specify any `maxLength` on an arbitrary if it is a not a requirement of the algorithm
+**👍 Prefer** specifying a `size: '-1'` if you feel that the algorithm will take very long on large inputs (by default fast-check generates up to 10 items, so only use `size` when clearly required)
 Eg.: No `fc.string({maxLength: 5})` or `fc.array(arb, {maxLength: 8})` except being a string requirement
 
-**❌ NEVER** specify any constraint on an arbitrary if it is not a requirement of the arbitrary, use defaults as much as possible  
+**❌ NEVER** specify any constraint on an arbitrary if it is not a requirement of the arbitrary, use defaults as much as possible
 Eg.: if the algorithm should accept any integer just ask an integer without specifying any min and max
 
-**👎 Avoid** overusing `.filter` and `fc.pre`  
+**👎 Avoid** overusing `.filter` and `fc.pre`
 Why? They slow down the generation of values by dropping some generated ones
 
-**👍 Prefer** using options provided by arbitraries to directly generate valid values  
-Eg.: use `fc.string({ minLength: 2 })` instead of `fc.string().filter(s => s.length >= 2)`  
+**👍 Prefer** using options provided by arbitraries to directly generate valid values
+Eg.: use `fc.string({ minLength: 2 })` instead of `fc.string().filter(s => s.length >= 2)`
 Eg.: use `fc.integer({ min: 1 })` instead of `fc.integer().filter(n => n >= 1)`, or use `fc.nat()` instead of `fc.integer().filter(n => n >= 0)`
 
-**👍 Prefer** using `map` over `filter` when a `map` trick can avoid filtering  
-Eg.: use `fc.nat().map(n => n * 2)` for even numbers  
+**👍 Prefer** using `map` over `filter` when a `map` trick can avoid filtering
+Eg.: use `fc.nat().map(n => n * 2)` for even numbers
 Eg.: use `fc.tuple(fc.string(), fc.string()).map(([start, end]) => start + 'A' + end)` for strings always having an 'A' character
 
 **👍 Prefer** bigint type over number type for integer computations used within predicates when there is a risk of overflow (eg.: when running pow, multiply.. on generated values)
