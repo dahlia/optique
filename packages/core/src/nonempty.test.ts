@@ -3,8 +3,11 @@ import {
   isNonEmptyString,
   type NonEmptyString,
 } from "./nonempty.ts";
+import * as fc from "fast-check";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+
+const propertyParameters = { numRuns: 200 } as const;
 
 describe("isNonEmptyString", () => {
   it("should return true for non-empty strings", () => {
@@ -36,6 +39,15 @@ describe("isNonEmptyString", () => {
     const nonEmpty = values.filter(isNonEmptyString);
     assert.deepEqual(nonEmpty, ["hello", "world"]);
   });
+
+  it("should match string length for arbitrary strings", () => {
+    fc.assert(
+      fc.property(fc.string(), (value) => {
+        assert.equal(isNonEmptyString(value), value.length > 0);
+      }),
+      propertyParameters,
+    );
+  });
 });
 
 describe("ensureNonEmptyString", () => {
@@ -62,5 +74,24 @@ describe("ensureNonEmptyString", () => {
     // Type should be narrowed to NonEmptyString after assertion
     const narrowed: NonEmptyString = value;
     assert.equal(narrowed, "test");
+  });
+
+  it("should accept exactly the same arbitrary strings as the type guard", () => {
+    fc.assert(
+      fc.property(fc.string(), (value) => {
+        if (isNonEmptyString(value)) {
+          assert.doesNotThrow(() => ensureNonEmptyString(value));
+        } else {
+          assert.throws(
+            () => ensureNonEmptyString(value),
+            {
+              name: "TypeError",
+              message: "Expected a non-empty string.",
+            },
+          );
+        }
+      }),
+      propertyParameters,
+    );
   });
 });
