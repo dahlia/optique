@@ -265,7 +265,10 @@ describe("property-based parser laws", () => {
       fc.property(stringChoicesArbitrary, (choices) => {
         const parser = choice(choices);
         const selected = choices[0];
-        const prefix = selected.slice(0, Math.floor(selected.length / 2));
+        const selectedChars = Array.from(selected);
+        const prefix = selectedChars
+          .slice(0, Math.max(1, Math.floor(selectedChars.length / 2)))
+          .join("");
 
         for (const value of choices) {
           const result = parser.parse(value);

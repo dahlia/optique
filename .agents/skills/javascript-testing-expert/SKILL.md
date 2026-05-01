@@ -12,9 +12,9 @@ description: Expert-level JavaScript testing skill focused on writing high-quali
 3. avoid regressions
 4. challenge the code
 
-**🔧 Recommended tooling:** `vitest`, `fast-check`, `@fast-check/vitest`, `@testing-library/*`, `@vitest/browser-playwright`, `msw` installed as devDependencies.
-**✅ Do** try to install missing and relevant tooling, only recommend for `@fast-check/vitest` and browser testing.
-**✅ Do** highly recommend user to install missing and relevant tooling.
+**🔧 Recommended tooling for Optique:** `node:test`, `node:assert/strict`, and `fast-check`.
+**✅ Do** try to install only missing and relevant tooling.
+**✅ Do** recommend Node's built-in test libraries for Optique tests.
 **✅ Do** adapt yourself to missing tools.
 
 ## File and code layout
@@ -23,7 +23,7 @@ description: Expert-level JavaScript testing skill focused on writing high-quali
 
 **✅ Do** use one test file per code file
 
-**👍 Prefer** using `.spec.ts` extension (e.g., `fileName.ts` → `fileName.spec.ts`) and colocated with the source file if no existing test structure is present
+**👍 Prefer** using `.test.ts` extension (e.g., `fileName.ts` → `fileName.test.ts`) and colocating tests with the source file, matching the project's existing examples
 
 **✅ Do** put `it` within `describe`, when using `it`
 
