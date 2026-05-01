@@ -101,7 +101,7 @@ Eg.: avoid functions with many optional parameters or several responsibilities
 **❌ Don't** write a big `prepare` function re-used by all tests in their act part, but make the name clearer and eventually split it into multiple functions
 
 **✅ Do** make sure your test breaks if you drop the thing supposed to make it pass
-Eg.: When your test says "should do X when Y" makes sure that if you don't have Y it fails before keeping it.
+Eg.: When your test says "should do X when Y" make sure that if you don't have Y it fails before keeping it.
 
 **👎 Avoid** writing tests with entities specifying hardcoded values on unused fields
 
