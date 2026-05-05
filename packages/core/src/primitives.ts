@@ -2166,14 +2166,15 @@ export function negatableFlag(
         );
       }
 
-      const prefixes = optionNames
-        .filter((name) =>
-          name.startsWith("--") ||
-          name.startsWith("/") ||
-          (name.startsWith("-") && name.length > 2)
-        )
-        .map((name) => name.startsWith("/") ? `${name}:` : `${name}=`);
-      for (const prefix of prefixes) {
+      for (const name of optionNames) {
+        if (
+          !name.startsWith("--") &&
+          !name.startsWith("/") &&
+          !(name.startsWith("-") && name.length > 2)
+        ) {
+          continue;
+        }
+        const prefix = name.startsWith("/") ? `${name}:` : `${name}=`;
         if (context.buffer[0].startsWith(prefix)) {
           const value = context.buffer[0].slice(prefix.length);
           return {
@@ -2188,8 +2189,8 @@ export function negatableFlag(
         }
       }
 
-      const shortOptions = optionNames.filter((name) => name.match(/^-[^-]$/));
-      for (const shortOption of shortOptions) {
+      for (const shortOption of optionNames) {
+        if (!shortOption.match(/^-[^-]$/)) continue;
         if (!context.buffer[0].startsWith(shortOption)) continue;
         return parseMatchedNegatableFlag(
           context,
@@ -2294,6 +2295,23 @@ export function negatableFlag(
       return `negatableFlag({ ${args.join(", ")} })`;
     },
   };
+  Object.defineProperty(result, "validateValue", {
+    value(v: boolean): ValueParserResult<boolean> {
+      if (typeof v !== "boolean") {
+        const actualType = v === null ? "null" : typeof v;
+        return {
+          success: false,
+          error: message`${
+            eOptionNames(optionNames)
+          }: Expected a boolean value, but received ${actualType}.`,
+        };
+      }
+      return { success: true, value: v };
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false,
+  });
   Object.defineProperty(result, "placeholder", {
     value: false,
     configurable: true,

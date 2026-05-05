@@ -7968,6 +7968,76 @@ describe("validateValue on primitives (#414)", () => {
     });
   });
 
+  describe("negatableFlag()", () => {
+    it("accepts boolean fallback values", () => {
+      const parser = negatableFlag({
+        positive: "--color",
+        negative: "--no-color",
+      });
+
+      assert.ok(typeof parser.validateValue === "function");
+      assert.ok(!Object.keys(parser).includes("validateValue"));
+
+      const trueResult = parser.validateValue!(true);
+      assert.ok(
+        trueResult && typeof trueResult === "object" &&
+          "success" in trueResult,
+      );
+      assert.ok(trueResult.success);
+      if (trueResult.success) {
+        assert.ok(trueResult.value);
+      }
+
+      const falseResult = parser.validateValue!(false);
+      assert.ok(
+        falseResult && typeof falseResult === "object" &&
+          "success" in falseResult,
+      );
+      assert.ok(falseResult.success);
+      if (falseResult.success) {
+        assert.ok(!falseResult.value);
+      }
+    });
+
+    it("rejects non-boolean fallback values", () => {
+      const parser = negatableFlag({
+        positive: "--color",
+        negative: "--no-color",
+      });
+
+      assert.ok(typeof parser.validateValue === "function");
+
+      const stringResult = parser.validateValue!("yes" as never);
+      assert.ok(
+        stringResult && typeof stringResult === "object" &&
+          "success" in stringResult,
+      );
+      assert.ok(!stringResult.success);
+      if (!stringResult.success) {
+        const formatted = formatMessage(stringResult.error);
+        assert.ok(
+          formatted.includes("--color"),
+          `expected error to mention the positive option, got: ${formatted}`,
+        );
+        assert.ok(
+          formatted.includes("--no-color"),
+          `expected error to mention the negative option, got: ${formatted}`,
+        );
+        assert.ok(
+          formatted.toLowerCase().includes("boolean"),
+          `expected error to mention "boolean", got: ${formatted}`,
+        );
+      }
+
+      const nullResult = parser.validateValue!(null as never);
+      assert.ok(
+        nullResult && typeof nullResult === "object" &&
+          "success" in nullResult,
+      );
+      assert.ok(!nullResult.success);
+    });
+  });
+
   describe("argument()", () => {
     it("accepts values passing the inner pattern", () => {
       const parser = argument(string({ pattern: /^[A-Z]+$/ }));
