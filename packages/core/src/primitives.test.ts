@@ -2228,6 +2228,28 @@ describe("negatableFlag()", () => {
     ]);
   });
 
+  it("should suggest plus-prefixed positive and negative names", () => {
+    const parser = negatableFlag({
+      positive: "+color",
+      negative: "+no-color",
+    });
+
+    const suggestions = Array.from(parser.suggest(
+      {
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      },
+      "+",
+    ));
+
+    assert.deepEqual(suggestions, [
+      { kind: "literal", text: "+color" },
+      { kind: "literal", text: "+no-color" },
+    ]);
+  });
+
   it("should always parse generated positive and negative names by polarity", () => {
     fc.assert(
       fc.property(

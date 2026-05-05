@@ -2268,7 +2268,7 @@ export function negatableFlag(
       const suggestions: Suggestion[] = [];
       if (
         prefix.startsWith("--") || prefix.startsWith("-") ||
-        prefix.startsWith("/")
+        prefix.startsWith("/") || prefix.startsWith("+")
       ) {
         for (const optionName of optionNames) {
           if (optionName.startsWith(prefix)) {
