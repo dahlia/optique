@@ -1982,17 +1982,23 @@ describe("negatableFlag()", () => {
 
   it("should reject values joined to positive and negative flags", () => {
     const parser = negatableFlag({
-      positive: "--color",
+      positive: ["--color", "+color"],
       negative: "/color",
     });
 
     const positive = parseSync(parser, ["--color=true"]);
+    const plusPositive = parseSync(parser, ["+color=true"]);
     const negative = parseSync(parser, ["/color:false"]);
 
     assert.ok(!positive.success);
     if (!positive.success) {
       assertErrorIncludes(positive.error, "does not accept a value");
       assertErrorIncludes(positive.error, "true");
+    }
+    assert.ok(!plusPositive.success);
+    if (!plusPositive.success) {
+      assertErrorIncludes(plusPositive.error, "does not accept a value");
+      assertErrorIncludes(plusPositive.error, "true");
     }
     assert.ok(!negative.success);
     if (!negative.success) {

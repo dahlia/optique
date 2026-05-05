@@ -2170,6 +2170,7 @@ export function negatableFlag(
         if (
           !name.startsWith("--") &&
           !name.startsWith("/") &&
+          !name.startsWith("+") &&
           !(name.startsWith("-") && name.length > 2)
         ) {
           continue;
