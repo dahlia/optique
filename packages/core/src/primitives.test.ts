@@ -21,6 +21,7 @@ import {
   constant,
   fail,
   flag,
+  negatableFlag,
   option,
   passThrough,
 } from "@optique/core/primitives";
@@ -1665,6 +1666,195 @@ describe("flag", () => {
         names: ["-f", "--force"],
       }]);
     });
+  });
+});
+
+describe("negatableFlag()", () => {
+  it("should parse the positive flag as true", () => {
+    const parser = negatableFlag({
+      positive: "--color",
+      negative: "--no-color",
+    });
+
+    const result = parseSync(parser, ["--color"]);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, true);
+    }
+  });
+
+  it("should parse the negative flag as false", () => {
+    const parser = negatableFlag({
+      positive: "--color",
+      negative: "--no-color",
+    });
+
+    const result = parseSync(parser, ["--no-color"]);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, false);
+    }
+  });
+
+  it("should fail when neither flag is provided", () => {
+    const parser = negatableFlag({
+      positive: "--color",
+      negative: "--no-color",
+    });
+
+    const result = parseSync(parser, []);
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Expected an option");
+    }
+  });
+
+  it("should report all names when completed without a flag", () => {
+    const parser = negatableFlag({
+      positive: "--color",
+      negative: "--no-color",
+    });
+
+    const result = parser.complete(undefined);
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Required flag");
+      assertErrorIncludes(result.error, "--color");
+      assertErrorIncludes(result.error, "--no-color");
+    }
+  });
+
+  it("should return undefined when wrapped in optional", () => {
+    const parser = optional(negatableFlag({
+      positive: "--color",
+      negative: "--no-color",
+    }));
+
+    const result = parseSync(parser, []);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, undefined);
+    }
+  });
+
+  it("should use a default when wrapped in withDefault", () => {
+    const parser = withDefault(
+      negatableFlag({
+        positive: "--color",
+        negative: "--no-color",
+      }),
+      () => true,
+    );
+
+    const result = parseSync(parser, []);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, true);
+    }
+  });
+
+  it("should support positive and negative aliases", () => {
+    const parser = negatableFlag({
+      positive: ["-c", "--color"],
+      negative: ["-C", "--no-color"],
+    });
+
+    const positive = parseSync(parser, ["-c"]);
+    const negative = parseSync(parser, ["-C"]);
+
+    assert.ok(positive.success);
+    if (positive.success) {
+      assert.equal(positive.value, true);
+    }
+    assert.ok(negative.success);
+    if (negative.success) {
+      assert.equal(negative.value, false);
+    }
+  });
+
+  it("should expose all names in one documentation entry", () => {
+    const parser = negatableFlag({
+      positive: ["--color"],
+      negative: ["--no-color"],
+    }, {
+      description: message`Control colored output.`,
+    });
+
+    const fragments = parser.getDocFragments(
+      { kind: "unavailable" },
+      undefined,
+    );
+
+    assert.equal(fragments.fragments.length, 1);
+    assert.equal(fragments.fragments[0].type, "entry");
+    if (fragments.fragments[0].type === "entry") {
+      assert.equal(fragments.fragments[0].term.type, "option");
+      if (fragments.fragments[0].term.type === "option") {
+        assert.deepEqual(fragments.fragments[0].term.names, [
+          "--color",
+          "--no-color",
+        ]);
+      }
+      assert.ok(fragments.fragments[0].description);
+      assert.equal(
+        formatMessage(fragments.fragments[0].description),
+        "Control colored output.",
+      );
+    }
+  });
+
+  it("should suggest matching positive and negative names", () => {
+    const parser = negatableFlag({
+      positive: ["-c", "--color"],
+      negative: ["-C", "--no-color"],
+    });
+
+    const suggestions = Array.from(parser.suggest(
+      {
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      },
+      "--",
+    ));
+
+    assert.deepEqual(suggestions, [
+      { kind: "literal", text: "--color" },
+      { kind: "literal", text: "--no-color" },
+    ]);
+  });
+
+  it("should respect hidden options in docs and suggestions", () => {
+    const parser = negatableFlag({
+      positive: "--color",
+      negative: "--no-color",
+    }, {
+      hidden: true,
+    });
+
+    const fragments = parser.getDocFragments(
+      { kind: "unavailable" },
+      undefined,
+    );
+    const suggestions = Array.from(parser.suggest(
+      {
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      },
+      "--",
+    ));
+
+    assert.deepEqual(fragments.fragments, []);
+    assert.deepEqual(suggestions, []);
   });
 });
 
