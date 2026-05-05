@@ -341,6 +341,129 @@ The `flag()` parser has the same priority (10) as `option()` to ensure
 consistent option handling.
 
 
+`negatableFlag()` parser
+------------------------
+
+*This API is available since Optique 1.1.0.*
+
+The `negatableFlag()` parser creates a required Boolean choice between a
+positive flag and a negative flag. It returns `true` when the positive flag is
+provided and `false` when the negative flag is provided. If neither flag is
+present, parsing fails unless you wrap it with `optional()` or `withDefault()`.
+
+This is useful for settings whose default can vary at runtime, but where users
+still need an explicit command-line override in either direction:
+
+~~~~ typescript twoslash
+import { withDefault } from "@optique/core/modifiers";
+import { message } from "@optique/core/message";
+import { negatableFlag } from "@optique/core/primitives";
+declare function detectColorSupport(): boolean;
+// ---cut-before---
+const color = withDefault(
+  negatableFlag({
+    positive: "--color",
+    negative: "--no-color",
+  }, {
+    description: message`Force-enable or force-disable colored output.`,
+  }),
+  () => detectColorSupport(),
+  { message: message`auto` },
+);
+~~~~
+
+When used without a wrapper, one of the two flags is required:
+
+~~~~ typescript twoslash
+import { parse } from "@optique/core/parser";
+import { negatableFlag } from "@optique/core/primitives";
+
+const parser = negatableFlag({
+  positive: "--color",
+  negative: "--no-color",
+});
+
+parse(parser, ["--color"]);    // => { success: true, value: true }
+parse(parser, ["--no-color"]); // => { success: true, value: false }
+parse(parser, []);             // => { success: false, ... }
+~~~~
+
+### Aliases and help output
+
+Each side can have aliases. In help output, Optique renders the positive and
+negative names in one entry because they control the same Boolean value:
+
+~~~~ typescript twoslash
+import { message } from "@optique/core/message";
+import { negatableFlag } from "@optique/core/primitives";
+// ---cut-before---
+const color = negatableFlag({
+  positive: ["-c", "--color"],
+  negative: "--no-color",
+}, {
+  description: message`Control colored output.`,
+});
+~~~~
+
+The same option name cannot appear twice, or appear on both sides. Repeating
+the same side on the command line is treated as a duplicate, while using both
+the positive and negative flags is treated as a conflict.
+
+### Optional and defaulted negatable flags
+
+Wrap `negatableFlag()` with `optional()` when absence should mean “no explicit
+override”:
+
+~~~~ typescript twoslash
+import { optional } from "@optique/core/modifiers";
+import { negatableFlag } from "@optique/core/primitives";
+
+const colorOverride = optional(negatableFlag({
+  positive: "--color",
+  negative: "--no-color",
+}));
+~~~~
+
+Use `withDefault()` when you always want a concrete Boolean. The default value
+can be computed lazily, which makes runtime-dependent defaults explicit:
+
+~~~~ typescript twoslash
+import { withDefault } from "@optique/core/modifiers";
+import { negatableFlag } from "@optique/core/primitives";
+declare function shouldUseColor(): boolean;
+// ---cut-before---
+const color = withDefault(
+  negatableFlag({
+    positive: "--color",
+    negative: "--no-color",
+  }),
+  () => shouldUseColor(),
+);
+~~~~
+
+### Custom errors
+
+`negatableFlag()` accepts custom error messages for missing flags, duplicate
+uses, conflicts, unexpected joined values, and no-match suggestions:
+
+~~~~ typescript twoslash
+import { message, text } from "@optique/core/message";
+import { negatableFlag } from "@optique/core/primitives";
+// ---cut-before---
+const color = negatableFlag({
+  positive: "--color",
+  negative: "--no-color",
+}, {
+  errors: {
+    missing: (positive, negative) =>
+      message`Pass ${text(positive[0])} or ${text(negative[0])}.`,
+    conflict: (previous, next) =>
+      message`${text(previous)} and ${text(next)} cannot be used together.`,
+  },
+});
+~~~~
+
+
 `argument()` parser
 -------------------
 
@@ -678,7 +801,7 @@ The `passThrough()` parser has the *lowest priority* (−10) among all parsers
 to ensure explicit parsers always match first:
 
  -  *Priority 15*: `command()` parsers
- -  *Priority 10*: `option()` and `flag()` parsers
+ -  *Priority 10*: `option()`, `flag()`, and `negatableFlag()` parsers
  -  *Priority 5*: `argument()` parsers
  -  *Priority 0*: `constant()` and `fail()` parsers
  -  *Priority −10*: `passThrough()` parsers
@@ -723,7 +846,7 @@ applied when multiple parsers are available. This ensures that more specific
 parsers (like commands) are tried before more general ones (like arguments):
 
  -  *Priority 15*: `command()` parsers
- -  *Priority 10*: `option()` and `flag()` parsers
+ -  *Priority 10*: `option()`, `flag()`, and `negatableFlag()` parsers
  -  *Priority 5*: `argument()` parsers
  -  *Priority 0*: `constant()` and `fail()` parsers
  -  *Priority −10*: `passThrough()` parsers
@@ -868,8 +991,8 @@ const parser = object({
 Hidden parsers
 --------------
 
-All primitive parsers—`option()`, `flag()`, `argument()`, `command()`,
-and `passThrough()`—support a `hidden` option:
+All primitive parsers—`option()`, `flag()`, `negatableFlag()`, `argument()`,
+`command()`, and `passThrough()`—support a `hidden` option:
 
  -  `true`: hide from usage, help entries, shell completions, and
     “Did you mean?” suggestions

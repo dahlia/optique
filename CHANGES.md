@@ -8,6 +8,20 @@ Version 1.1.0
 
 To be released.
 
+### @optique/core
+
+ -  Added `negatableFlag()` for paired Boolean options such as `--color` and
+    `--no-color`.  The parser returns `true` for positive flags and `false`
+    for negative flags, fails when neither side is provided, and composes with
+    `optional()` and `withDefault()` for explicit override and runtime-default
+    use cases.  It supports aliases, help text, shell suggestions, hidden
+    visibility, duplicate/conflict diagnostics, and custom error messages.
+    Documentation and the negatable Boolean options pattern example now show
+    the new primitive.  [[#801], [#802]]
+
+[#801]: https://github.com/dahlia/optique/issues/801
+[#802]: https://github.com/dahlia/optique/pull/802
+
 
 Version 1.0.2
 -------------

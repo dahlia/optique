@@ -1863,6 +1863,466 @@ export function flag(
 }
 
 /**
+ * A non-empty list of option names, or a single option name.
+ * @since 1.1.0
+ */
+export type NegatableFlagNameList =
+  | OptionName
+  | readonly [OptionName, ...readonly OptionName[]];
+
+/**
+ * Option names for the {@link negatableFlag} parser.
+ * @since 1.1.0
+ */
+export interface NegatableFlagNames {
+  /**
+   * Option names that produce `true`.
+   */
+  readonly positive: NegatableFlagNameList;
+
+  /**
+   * Option names that produce `false`.
+   */
+  readonly negative: NegatableFlagNameList;
+}
+
+/**
+ * Options for the {@link negatableFlag} parser.
+ * @since 1.1.0
+ */
+export interface NegatableFlagOptions {
+  /**
+   * The description of the flag pair, which can be used for help messages.
+   */
+  readonly description?: Message;
+
+  /**
+   * Controls flag visibility:
+   *
+   * - `true`: hide from usage, docs, and suggestions
+   * - `"usage"`: hide from usage only
+   * - `"doc"`: hide from docs only
+   * - `"help"`: hide from usage and docs, keep suggestions
+   */
+  readonly hidden?: HiddenVisibility;
+
+  /**
+   * Error message customization options.
+   */
+  readonly errors?: NegatableFlagErrorOptions;
+}
+
+/**
+ * Options for customizing error messages in the {@link negatableFlag} parser.
+ * @since 1.1.0
+ */
+export interface NegatableFlagErrorOptions {
+  /**
+   * Custom error message when neither flag is provided.
+   * Can be a static message or a function that receives the positive and
+   * negative option names.
+   */
+  readonly missing?:
+    | Message
+    | ((
+      positiveNames: readonly string[],
+      negativeNames: readonly string[],
+    ) => Message);
+
+  /**
+   * Custom error message when options are terminated (after --).
+   */
+  readonly optionsTerminated?: Message;
+
+  /**
+   * Custom error message when input is empty but a flag is expected.
+   */
+  readonly endOfInput?: Message;
+
+  /**
+   * Custom error message when the same polarity is used multiple times.
+   */
+  readonly duplicate?: Message | ((token: string) => Message);
+
+  /**
+   * Custom error message when both positive and negative flags are used.
+   */
+  readonly conflict?:
+    | Message
+    | ((previousToken: string, token: string) => Message);
+
+  /**
+   * Custom error message when a flag receives an unexpected value.
+   */
+  readonly unexpectedValue?:
+    | Message
+    | ((optionName: string, value: string) => Message);
+
+  /**
+   * Custom error message when no matching flag is found.
+   */
+  readonly noMatch?:
+    | Message
+    | ((invalidOption: string, suggestions: readonly string[]) => Message);
+}
+
+/**
+ * State stored by the {@link negatableFlag} parser.
+ * @since 1.1.0
+ */
+export interface NegatableFlagState {
+  readonly value: boolean;
+  readonly token: string;
+}
+
+function normalizeNegatableFlagNameList(
+  names: NegatableFlagNameList,
+): readonly OptionName[] {
+  return typeof names === "string" ? [names] : names;
+}
+
+function validateNoDuplicateOptionNames(
+  names: readonly OptionName[],
+  label: string,
+): void {
+  const seen = new Set<string>();
+  for (const name of names) {
+    if (seen.has(name)) {
+      throw new TypeError(`${label} has a duplicate name: "${name}".`);
+    }
+    seen.add(name);
+  }
+}
+
+function validateNoNegatableFlagNameCollision(
+  positiveNames: readonly OptionName[],
+  negativeNames: readonly OptionName[],
+): void {
+  const positiveSet = new Set<string>(positiveNames);
+  for (const name of negativeNames) {
+    if (positiveSet.has(name)) {
+      throw new TypeError(
+        `Negatable flag name is both positive and negative: "${name}".`,
+      );
+    }
+  }
+}
+
+function formatNegatableFlagDuplicateError(
+  options: NegatableFlagOptions,
+  token: string,
+): Message {
+  return options.errors?.duplicate
+    ? (typeof options.errors.duplicate === "function"
+      ? options.errors.duplicate(token)
+      : options.errors.duplicate)
+    : message`${eOptionName(token)} cannot be used multiple times.`;
+}
+
+function formatNegatableFlagConflictError(
+  options: NegatableFlagOptions,
+  previousToken: string,
+  token: string,
+): Message {
+  return options.errors?.conflict
+    ? (typeof options.errors.conflict === "function"
+      ? options.errors.conflict(previousToken, token)
+      : options.errors.conflict)
+    : message`${eOptionName(previousToken)} and ${
+      eOptionName(token)
+    } cannot be used together.`;
+}
+
+function formatNegatableFlagUnexpectedValueError(
+  options: NegatableFlagOptions,
+  optionName: string,
+  value: string,
+): Message {
+  return options.errors?.unexpectedValue
+    ? (typeof options.errors.unexpectedValue === "function"
+      ? options.errors.unexpectedValue(optionName, value)
+      : options.errors.unexpectedValue)
+    : message`Flag ${
+      eOptionName(optionName)
+    } does not accept a value, but got: ${value}.`;
+}
+
+function parseMatchedNegatableFlag(
+  context: ParserContext<NegatableFlagState | undefined>,
+  token: string,
+  value: boolean,
+  consumed: readonly string[],
+  consumedOnFailure: number,
+  buffer: readonly string[],
+  options: NegatableFlagOptions,
+): ParserResult<NegatableFlagState> {
+  if (context.state != null) {
+    return {
+      success: false,
+      consumed: consumedOnFailure,
+      error: context.state.value === value
+        ? formatNegatableFlagDuplicateError(options, token)
+        : formatNegatableFlagConflictError(options, context.state.token, token),
+    };
+  }
+  return {
+    success: true,
+    next: {
+      ...context,
+      state: { value, token },
+      buffer,
+    },
+    consumed,
+  };
+}
+
+/**
+ * Creates a parser for a pair of command-line flags that explicitly enable or
+ * disable a Boolean value.
+ *
+ * The positive names produce `true`; the negative names produce `false`.
+ * Unlike {@link option}, this parser fails when neither side is present,
+ * matching {@link flag} semantics. Wrap it in {@link optional} for a
+ * tri-state override or {@link withDefault} for a concrete fallback.
+ *
+ * @param names The positive and negative option names to parse.
+ * @param options Optional metadata and error customization.
+ * @returns A {@link Parser} that produces `true` for positive names and
+ *          `false` for negative names.
+ * @throws {TypeError} If any option name is invalid, duplicated within one
+ *         side, or shared by the positive and negative sides.
+ * @since 1.1.0
+ */
+export function negatableFlag(
+  names: NegatableFlagNames,
+  options: NegatableFlagOptions = {},
+): Parser<"sync", boolean, NegatableFlagState | undefined> {
+  const positiveNames = normalizeNegatableFlagNameList(names.positive);
+  const negativeNames = normalizeNegatableFlagNameList(names.negative);
+  validateOptionNames(positiveNames, "Positive flag");
+  validateOptionNames(negativeNames, "Negative flag");
+  validateNoDuplicateOptionNames(positiveNames, "Positive flag");
+  validateNoDuplicateOptionNames(negativeNames, "Negative flag");
+  validateNoNegatableFlagNameCollision(positiveNames, negativeNames);
+
+  const optionNames = [...positiveNames, ...negativeNames];
+  const valueByName = new Map<string, boolean>();
+  for (const name of positiveNames) valueByName.set(name, true);
+  for (const name of negativeNames) valueByName.set(name, false);
+
+  const result: Parser<"sync", boolean, NegatableFlagState | undefined> = {
+    $valueType: [],
+    $stateType: [],
+    mode: "sync",
+    priority: 10,
+    usage: [{
+      type: "option",
+      names: optionNames,
+      ...(options.hidden != null && { hidden: options.hidden }),
+    }],
+    leadingNames: new Set<string>(optionNames),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse(context) {
+      if (context.optionsTerminated) {
+        return {
+          success: false,
+          consumed: 0,
+          error: options.errors?.optionsTerminated ??
+            message`No more options can be parsed.`,
+        };
+      } else if (context.buffer.length < 1) {
+        return {
+          success: false,
+          consumed: 0,
+          error: options.errors?.endOfInput ??
+            message`Expected an option, but got end of input.`,
+        };
+      }
+
+      if (context.buffer[0] === "--") {
+        return {
+          success: true,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: context.state,
+            optionsTerminated: true,
+          },
+          consumed: context.buffer.slice(0, 1),
+        };
+      }
+
+      const directValue = valueByName.get(context.buffer[0]);
+      if (directValue != null) {
+        return parseMatchedNegatableFlag(
+          context,
+          context.buffer[0],
+          directValue,
+          context.buffer.slice(0, 1),
+          1,
+          context.buffer.slice(1),
+          options,
+        );
+      }
+
+      for (const name of optionNames) {
+        if (
+          !name.startsWith("--") &&
+          !name.startsWith("/") &&
+          !name.startsWith("+") &&
+          !(name.startsWith("-") && name.length > 2)
+        ) {
+          continue;
+        }
+        const prefix = name.startsWith("/") ? `${name}:` : `${name}=`;
+        if (context.buffer[0].startsWith(prefix)) {
+          const value = context.buffer[0].slice(prefix.length);
+          return {
+            success: false,
+            consumed: 1,
+            error: formatNegatableFlagUnexpectedValueError(
+              options,
+              prefix.slice(0, -1),
+              value,
+            ),
+          };
+        }
+      }
+
+      for (const shortOption of optionNames) {
+        if (!shortOption.match(/^-[^-]$/)) continue;
+        if (!context.buffer[0].startsWith(shortOption)) continue;
+        return parseMatchedNegatableFlag(
+          context,
+          shortOption,
+          valueByName.get(shortOption)!,
+          [context.buffer[0].slice(0, 2)],
+          1,
+          [`-${context.buffer[0].slice(2)}`, ...context.buffer.slice(1)],
+          options,
+        );
+      }
+
+      const invalidOption = context.buffer[0];
+      if (options.errors?.noMatch) {
+        const candidates = new Set<string>();
+        for (const name of extractOptionNames(context.usage)) {
+          candidates.add(name);
+        }
+        const suggestions = findSimilar(
+          invalidOption,
+          candidates,
+          DEFAULT_FIND_SIMILAR_OPTIONS,
+        );
+        return {
+          success: false,
+          consumed: 0,
+          error: typeof options.errors.noMatch === "function"
+            ? options.errors.noMatch(invalidOption, suggestions)
+            : options.errors.noMatch,
+        };
+      }
+
+      const baseError = message`No matched option for ${
+        eOptionName(invalidOption)
+      }.`;
+      return {
+        success: false,
+        consumed: 0,
+        error: createErrorWithSuggestions(
+          baseError,
+          invalidOption,
+          context.usage,
+          "option",
+        ),
+      };
+    },
+    complete(state, _exec?: ExecutionContext) {
+      if (state == null) {
+        return {
+          success: false,
+          error: options.errors?.missing
+            ? (typeof options.errors.missing === "function"
+              ? options.errors.missing(positiveNames, negativeNames)
+              : options.errors.missing)
+            : message`Required flag ${eOptionNames(optionNames)} is missing.`,
+        };
+      }
+      return { success: true, value: state.value };
+    },
+    suggest(_context, prefix) {
+      if (isSuggestionHidden(options.hidden)) {
+        return [];
+      }
+      const suggestions: Suggestion[] = [];
+      if (
+        prefix.startsWith("--") || prefix.startsWith("-") ||
+        prefix.startsWith("/") || prefix.startsWith("+")
+      ) {
+        for (const optionName of optionNames) {
+          if (optionName.startsWith(prefix)) {
+            if (prefix === "-" && optionName.length !== 2) {
+              continue;
+            }
+            suggestions.push({ kind: "literal", text: optionName });
+          }
+        }
+      }
+      return suggestions;
+    },
+    getDocFragments(
+      _state: DocState<NegatableFlagState | undefined>,
+      _defaultValue?,
+    ) {
+      if (isDocHidden(options.hidden)) {
+        return { fragments: [], description: options.description };
+      }
+      const fragments: readonly DocFragment[] = [{
+        type: "entry",
+        term: {
+          type: "option",
+          names: optionNames,
+        },
+        description: options.description,
+      }];
+      return { fragments, description: options.description };
+    },
+    [Symbol.for("Deno.customInspect")]() {
+      const args = [
+        `positive: ${JSON.stringify(positiveNames)}`,
+        `negative: ${JSON.stringify(negativeNames)}`,
+      ];
+      return `negatableFlag({ ${args.join(", ")} })`;
+    },
+  };
+  Object.defineProperty(result, "validateValue", {
+    value(v: boolean): ValueParserResult<boolean> {
+      if (typeof v !== "boolean") {
+        const actualType = v === null ? "null" : typeof v;
+        return {
+          success: false,
+          error: message`${
+            eOptionNames(optionNames)
+          }: Expected a boolean value, but received ${actualType}.`,
+        };
+      }
+      return { success: true, value: v };
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false,
+  });
+  Object.defineProperty(result, "placeholder", {
+    value: false,
+    configurable: true,
+    enumerable: false,
+    writable: false,
+  });
+  return result;
+}
+
+/**
  * Options for the {@link argument} parser.
  */
 export interface ArgumentOptions {
