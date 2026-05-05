@@ -953,6 +953,9 @@ negative flag. By itself it requires one of the two flags, so the example wraps
 each parser with [`withDefault()`](./concepts/modifiers.md#withdefault-parser)
 to keep the defaults explicit.
 
+The `message` option on `withDefault()` only changes the displayed default
+label; `detectColorSupport()` still returns the Boolean fallback value.
+
 When `--code-fence` is provided
 :   `negatableFlag()` produces `true`
 
@@ -975,7 +978,8 @@ const codeFence = map(option("--no-code-fence"), (provided) => !provided);
 ### Usage examples
 
 ~~~~ bash
-# All defaults: codeFence=true, lineNumbers=false, colors=auto, syntax=true
+# All defaults: codeFence=true, lineNumbers=false,
+# colors follow auto-detection, syntax=true
 myapp
 
 # Disable colors and syntax, enable line numbers explicitly

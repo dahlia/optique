@@ -1682,7 +1682,7 @@ describe("negatableFlag()", () => {
 
     assert.ok(result.success);
     if (result.success) {
-      assert.equal(result.value, true);
+      assert.ok(result.value);
     }
   });
 
@@ -1696,7 +1696,7 @@ describe("negatableFlag()", () => {
 
     assert.ok(result.success);
     if (result.success) {
-      assert.equal(result.value, false);
+      assert.ok(!result.value);
     }
   });
 
@@ -1757,7 +1757,7 @@ describe("negatableFlag()", () => {
 
     assert.ok(result.success);
     if (result.success) {
-      assert.equal(result.value, true);
+      assert.ok(result.value);
     }
   });
 
@@ -1772,11 +1772,11 @@ describe("negatableFlag()", () => {
 
     assert.ok(positive.success);
     if (positive.success) {
-      assert.equal(positive.value, true);
+      assert.ok(positive.value);
     }
     assert.ok(negative.success);
     if (negative.success) {
-      assert.equal(negative.value, false);
+      assert.ok(!negative.value);
     }
   });
 
@@ -2022,18 +2022,18 @@ describe("negatableFlag()", () => {
 
     assert.ok(positive.success);
     if (positive.success) {
-      assert.equal(positive.next.state?.success, true);
+      assert.ok(positive.next.state?.success);
       if (positive.next.state?.success) {
-        assert.equal(positive.next.state.value, true);
+        assert.ok(positive.next.state.value);
       }
       assert.deepEqual(positive.next.buffer, ["-v"]);
       assert.deepEqual(positive.consumed, ["-c"]);
     }
     assert.ok(negative.success);
     if (negative.success) {
-      assert.equal(negative.next.state?.success, true);
+      assert.ok(negative.next.state?.success);
       if (negative.next.state?.success) {
-        assert.equal(negative.next.state.value, false);
+        assert.ok(!negative.next.state.value);
       }
       assert.deepEqual(negative.next.buffer, ["-v"]);
       assert.deepEqual(negative.consumed, ["-C"]);
@@ -2055,7 +2055,7 @@ describe("negatableFlag()", () => {
 
     assert.ok(result.success);
     if (result.success) {
-      assert.equal(result.next.optionsTerminated, true);
+      assert.ok(result.next.optionsTerminated);
       assert.deepEqual(result.next.buffer, ["--color"]);
       assert.deepEqual(result.consumed, ["--"]);
     }
@@ -2253,14 +2253,14 @@ describe("negatableFlag()", () => {
             const result = parseSync(parser, [name]);
             assert.ok(result.success);
             if (result.success) {
-              assert.equal(result.value, true);
+              assert.ok(result.value);
             }
           }
           for (const name of negativeNames) {
             const result = parseSync(parser, [name]);
             assert.ok(result.success);
             if (result.success) {
-              assert.equal(result.value, false);
+              assert.ok(!result.value);
             }
           }
         },

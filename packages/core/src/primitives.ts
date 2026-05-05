@@ -2095,6 +2095,8 @@ function parseMatchedNegatableFlag(
  * @param options Optional metadata and error customization.
  * @returns A {@link Parser} that produces `true` for positive names and
  *          `false` for negative names.
+ * @throws {TypeError} If any option name is invalid, duplicated within one
+ *         side, or shared by the positive and negative sides.
  * @since 1.1.0
  */
 export function negatableFlag(
