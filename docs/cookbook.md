@@ -887,29 +887,52 @@ for both code clarity and user experience independently.
 
 ### Negatable Boolean options
 
-Linux CLI tools commonly support `--no-` prefix options that negate default
-behavior. This pattern allows users to explicitly disable features that are
-enabled by default.
+Linux CLI tools commonly support positive and negative option pairs such as
+`--color` and `--no-color`. Use
+[`negatableFlag()`](./concepts/primitives.md#negatableflag-parser) when users
+should be able to override a Boolean setting in either direction.
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
-import { map } from "@optique/core/modifiers";
-import { option } from "@optique/core/primitives";
+import { withDefault } from "@optique/core/modifiers";
+import { negatableFlag, option } from "@optique/core/primitives";
 import { message } from "@optique/core/message";
 import { print, run } from "@optique/run";
+declare function detectColorSupport(): boolean;
 // ---cut-before---
 const configParser = object({
-  // Code fence is enabled by default, --no-code-fence disables it
-  codeFence: map(option("--no-code-fence"), (o) => !o),
+  codeFence: withDefault(
+    negatableFlag({
+      positive: "--code-fence",
+      negative: "--no-code-fence",
+    }, {
+      description: message`Enable or disable Markdown code fences.`,
+    }),
+    true,
+  ),
 
-  // Line numbers are disabled by default, --line-numbers enables it
   lineNumbers: option("--line-numbers"),
 
-  // Colors are enabled by default, --no-colors disables them
-  colors: map(option("--no-colors"), (o) => !o),
+  colors: withDefault(
+    negatableFlag({
+      positive: "--colors",
+      negative: "--no-colors",
+    }, {
+      description: message`Enable or disable colored output.`,
+    }),
+    () => detectColorSupport(),
+    { message: message`auto` },
+  ),
 
-  // Syntax highlighting is enabled by default, --no-syntax disables it
-  syntax: map(option("--no-syntax"), (o) => !o),
+  syntax: withDefault(
+    negatableFlag({
+      positive: "--syntax",
+      negative: "--no-syntax",
+    }, {
+      description: message`Enable or disable syntax highlighting.`,
+    }),
+    true,
+  ),
 });
 
 const result = run(configParser);
@@ -925,37 +948,46 @@ const result = run(configParser);
 console.debug(result);
 ~~~~
 
-This pattern leverages the fact that
-[`option()`](./concepts/primitives.md#option-parser) without a value parser
-creates a Boolean flag that produces `false` when absent and `true` when
-present. The [`map()`](./concepts/modifiers.md#map-parser) combinator inverts
-this behavior:
+`negatableFlag()` returns `true` for the positive flag and `false` for the
+negative flag. By itself it requires one of the two flags, so the example wraps
+each parser with [`withDefault()`](./concepts/modifiers.md#withdefault-parser)
+to keep the defaults explicit.
+
+When `--code-fence` is provided
+:   `negatableFlag()` produces `true`
+
+When neither flag is provided
+:   `withDefault()` uses the default value `true`
 
 When `--no-code-fence` is provided
-:   `option()` produces `true` → `map()` inverts to `false`
+:   `negatableFlag()` produces `false`
 
-When `--no-code-fence` is not provided
-:   `option()` produces `false` → `map()` inverts to `true`
+If a CLI only supports a negative form, keep the simpler `option()` and `map()`
+pattern:
 
-This creates the expected Linux CLI behavior where features are enabled by
-default and can be explicitly disabled with `--no-` prefixed options.
+~~~~ typescript twoslash
+import { map } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+
+const codeFence = map(option("--no-code-fence"), (provided) => !provided);
+~~~~
 
 ### Usage examples
 
 ~~~~ bash
-# All defaults: codeFence=true, lineNumbers=false, colors=true, syntax=true
+# All defaults: codeFence=true, lineNumbers=false, colors=auto, syntax=true
 myapp
 
-# Disable colors and syntax, enable line numbers
+# Disable colors and syntax, enable line numbers explicitly
 myapp --no-colors --no-syntax --line-numbers
 
-# Disable code fence only
-myapp --no-code-fence
+# Enable colors explicitly when auto-detection would disable them
+myapp --colors
 ~~~~
 
 This pattern is particularly useful for configuration-heavy tools where users
-need fine-grained control over default behaviors, following the Unix tradition
-of sensible defaults with explicit override capabilities.
+need fine-grained control over defaults that may come from configuration files,
+environment variables, or runtime detection.
 
 ### Conditional defaults based on input consumption
 
