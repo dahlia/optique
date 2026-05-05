@@ -14,6 +14,7 @@ import {
   message,
   text,
 } from "@optique/core/message";
+import { formatDocPage } from "@optique/core/doc";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
   argument,
@@ -52,6 +53,7 @@ import {
   type Suggestion,
 } from "@optique/core/parser";
 import type { Usage } from "@optique/core/usage";
+import * as fc from "fast-check";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -1855,6 +1857,450 @@ describe("negatableFlag()", () => {
 
     assert.deepEqual(fragments.fragments, []);
     assert.deepEqual(suggestions, []);
+  });
+
+  it("should render positive and negative flags on one help line", () => {
+    const parser = negatableFlag({
+      positive: "--color",
+      negative: "--no-color",
+    }, {
+      description: message`Control colored output.`,
+    });
+    const fragments = parser.getDocFragments(
+      { kind: "unavailable" },
+      undefined,
+    );
+
+    const output = formatDocPage("myapp", {
+      sections: [{
+        entries: fragments.fragments.filter((f) => f.type === "entry"),
+      }],
+    });
+
+    assert.match(output, /--color, --no-color\s+Control colored output\./);
+  });
+
+  it("should reject duplicate positive names", () => {
+    assert.throws(
+      () =>
+        negatableFlag({
+          positive: ["--color", "--color"],
+          negative: "--no-color",
+        }),
+      {
+        name: "TypeError",
+        message: 'Positive flag has a duplicate name: "--color".',
+      },
+    );
+  });
+
+  it("should reject duplicate negative names", () => {
+    assert.throws(
+      () =>
+        negatableFlag({
+          positive: "--color",
+          negative: ["--no-color", "--no-color"],
+        }),
+      {
+        name: "TypeError",
+        message: 'Negative flag has a duplicate name: "--no-color".',
+      },
+    );
+  });
+
+  it("should reject names shared by positive and negative sets", () => {
+    assert.throws(
+      () =>
+        negatableFlag({
+          positive: ["--color", "--colour"],
+          negative: ["--no-color", "--colour"],
+        }),
+      {
+        name: "TypeError",
+        message:
+          'Negatable flag name is both positive and negative: "--colour".',
+      },
+    );
+  });
+
+  it("should reject empty positive and negative name lists", () => {
+    assert.throws(
+      () =>
+        negatableFlag({
+          // @ts-expect-error Testing runtime validation for non-TypeScript callers.
+          positive: [],
+          negative: "--no-color",
+        }),
+      {
+        name: "TypeError",
+        message: "Expected at least one positive flag name.",
+      },
+    );
+    assert.throws(
+      () =>
+        negatableFlag({
+          positive: "--color",
+          // @ts-expect-error Testing runtime validation for non-TypeScript callers.
+          negative: [],
+        }),
+      {
+        name: "TypeError",
+        message: "Expected at least one negative flag name.",
+      },
+    );
+  });
+
+  it("should fail duplicate same-polarity flags", () => {
+    const parser = negatableFlag({
+      positive: ["-c", "--color"],
+      negative: "--no-color",
+    });
+
+    const result = parseSync(parser, ["-c", "--color"]);
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "cannot be used multiple times");
+    }
+  });
+
+  it("should fail conflicting positive and negative flags", () => {
+    const parser = negatableFlag({
+      positive: "--color",
+      negative: "--no-color",
+    });
+
+    const result = parseSync(parser, ["--color", "--no-color"]);
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "--color");
+      assertErrorIncludes(result.error, "--no-color");
+      assertErrorIncludes(result.error, "cannot be used together");
+    }
+  });
+
+  it("should reject values joined to positive and negative flags", () => {
+    const parser = negatableFlag({
+      positive: "--color",
+      negative: "/color",
+    });
+
+    const positive = parseSync(parser, ["--color=true"]);
+    const negative = parseSync(parser, ["/color:false"]);
+
+    assert.ok(!positive.success);
+    if (!positive.success) {
+      assertErrorIncludes(positive.error, "does not accept a value");
+      assertErrorIncludes(positive.error, "true");
+    }
+    assert.ok(!negative.success);
+    if (!negative.success) {
+      assertErrorIncludes(negative.error, "does not accept a value");
+      assertErrorIncludes(negative.error, "false");
+    }
+  });
+
+  it("should consume bundled short positive and negative flags", () => {
+    const parser = negatableFlag({
+      positive: "-c",
+      negative: "-C",
+    });
+
+    const positive = parser.parse({
+      buffer: ["-cv"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    const negative = parser.parse({
+      buffer: ["-Cv"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(positive.success);
+    if (positive.success) {
+      assert.equal(positive.next.state?.success, true);
+      if (positive.next.state?.success) {
+        assert.equal(positive.next.state.value, true);
+      }
+      assert.deepEqual(positive.next.buffer, ["-v"]);
+      assert.deepEqual(positive.consumed, ["-c"]);
+    }
+    assert.ok(negative.success);
+    if (negative.success) {
+      assert.equal(negative.next.state?.success, true);
+      if (negative.next.state?.success) {
+        assert.equal(negative.next.state.value, false);
+      }
+      assert.deepEqual(negative.next.buffer, ["-v"]);
+      assert.deepEqual(negative.consumed, ["-C"]);
+    }
+  });
+
+  it("should handle the options terminator", () => {
+    const parser = negatableFlag({
+      positive: "--color",
+      negative: "--no-color",
+    });
+
+    const result = parser.parse({
+      buffer: ["--", "--color"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.next.optionsTerminated, true);
+      assert.deepEqual(result.next.buffer, ["--color"]);
+      assert.deepEqual(result.consumed, ["--"]);
+    }
+  });
+
+  it("should customize every error branch", () => {
+    const parser = negatableFlag({
+      positive: "--color",
+      negative: "--no-color",
+    }, {
+      errors: {
+        missing: (positiveNames, negativeNames) =>
+          message`missing ${text(positiveNames.join(","))} ${
+            text(negativeNames.join(","))
+          }`,
+        optionsTerminated: message`terminated`,
+        endOfInput: message`empty`,
+        duplicate: (token) => message`duplicate ${text(token)}`,
+        conflict: (previous, token) =>
+          message`conflict ${text(previous)} ${text(token)}`,
+        unexpectedValue: (name, value) =>
+          message`unexpected ${text(name)} ${text(value)}`,
+        noMatch: (invalid, suggestions) =>
+          message`nomatch ${text(invalid)} ${text(suggestions.join(","))}`,
+      },
+    });
+
+    const missing = parser.complete(undefined);
+    const terminated = parser.parse({
+      buffer: ["--color"],
+      state: parser.initialState,
+      optionsTerminated: true,
+      usage: parser.usage,
+    });
+    const empty = parser.parse({
+      buffer: [],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    const duplicate = parser.parse({
+      buffer: ["--color"],
+      state: { success: true, value: true, token: "--color" },
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    const conflict = parser.parse({
+      buffer: ["--no-color"],
+      state: { success: true, value: true, token: "--color" },
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    const unexpected = parser.parse({
+      buffer: ["--color=true"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    const noMatch = parser.parse({
+      buffer: ["--colr"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(!missing.success);
+    if (!missing.success) {
+      assert.equal(formatMessage(missing.error), "missing --color --no-color");
+    }
+    assert.ok(!terminated.success);
+    if (!terminated.success) {
+      assert.equal(formatMessage(terminated.error), "terminated");
+    }
+    assert.ok(!empty.success);
+    if (!empty.success) {
+      assert.equal(formatMessage(empty.error), "empty");
+    }
+    assert.ok(!duplicate.success);
+    if (!duplicate.success) {
+      assert.equal(formatMessage(duplicate.error), "duplicate --color");
+    }
+    assert.ok(!conflict.success);
+    if (!conflict.success) {
+      assert.equal(
+        formatMessage(conflict.error),
+        "conflict --color --no-color",
+      );
+    }
+    assert.ok(!unexpected.success);
+    if (!unexpected.success) {
+      assert.equal(formatMessage(unexpected.error), "unexpected --color true");
+    }
+    assert.ok(!noMatch.success);
+    if (!noMatch.success) {
+      assert.equal(formatMessage(noMatch.error), "nomatch --colr --color");
+    }
+  });
+
+  it('should keep docs and suggestions for hidden: "usage"', () => {
+    const parser = negatableFlag({
+      positive: "--color",
+      negative: "--no-color",
+    }, {
+      hidden: "usage",
+    });
+
+    const fragments = parser.getDocFragments(
+      { kind: "unavailable" },
+      undefined,
+    );
+    const suggestions = Array.from(parser.suggest(
+      {
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      },
+      "--",
+    ));
+
+    assert.equal(fragments.fragments.length, 1);
+    assert.equal(suggestions.length, 2);
+  });
+
+  it('should hide docs but keep suggestions for hidden: "help"', () => {
+    const parser = negatableFlag({
+      positive: "--color",
+      negative: "--no-color",
+    }, {
+      hidden: "help",
+    });
+
+    const fragments = parser.getDocFragments(
+      { kind: "unavailable" },
+      undefined,
+    );
+    const suggestions = Array.from(parser.suggest(
+      {
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      },
+      "--",
+    ));
+
+    assert.deepEqual(fragments.fragments, []);
+    assert.equal(suggestions.length, 2);
+  });
+
+  it("should only suggest short options for a bare dash prefix", () => {
+    const parser = negatableFlag({
+      positive: ["-c", "--color"],
+      negative: ["-C", "--no-color"],
+    });
+
+    const suggestions = Array.from(parser.suggest(
+      {
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      },
+      "-",
+    ));
+
+    assert.deepEqual(suggestions, [
+      { kind: "literal", text: "-c" },
+      { kind: "literal", text: "-C" },
+    ]);
+  });
+
+  it("should always parse generated positive and negative names by polarity", () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(fc.stringMatching(/^[a-z][a-z0-9]{0,6}$/), {
+          minLength: 4,
+          maxLength: 4,
+        }),
+        ([positive, positiveAlias, negative, negativeAlias]) => {
+          const positiveNames = [
+            `--${positive}`,
+            `--${positiveAlias}`,
+          ] as const;
+          const negativeNames = [
+            `--${negative}`,
+            `--${negativeAlias}`,
+          ] as const;
+          const parser = negatableFlag({
+            positive: positiveNames,
+            negative: negativeNames,
+          });
+
+          for (const name of positiveNames) {
+            const result = parseSync(parser, [name]);
+            assert.ok(result.success);
+            if (result.success) {
+              assert.equal(result.value, true);
+            }
+          }
+          for (const name of negativeNames) {
+            const result = parseSync(parser, [name]);
+            assert.ok(result.success);
+            if (result.success) {
+              assert.equal(result.value, false);
+            }
+          }
+        },
+      ),
+    );
+  });
+
+  it("should always classify repeated generated flags", () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(fc.stringMatching(/^[a-z][a-z0-9]{0,6}$/), {
+          minLength: 2,
+          maxLength: 2,
+        }),
+        fc.boolean(),
+        ([positive, negative], repeatSamePolarity) => {
+          const positiveName = `--${positive}` as const;
+          const negativeName = `--${negative}` as const;
+          const parser = negatableFlag({
+            positive: positiveName,
+            negative: negativeName,
+          });
+          const input = repeatSamePolarity
+            ? [positiveName, positiveName]
+            : [positiveName, negativeName];
+
+          const result = parseSync(parser, input);
+
+          assert.ok(!result.success);
+          if (!result.success) {
+            const formatted = formatMessage(result.error);
+            if (repeatSamePolarity) {
+              assert.ok(formatted.includes("multiple times"));
+            } else {
+              assert.ok(formatted.includes("used together"));
+            }
+          }
+        },
+      ),
+    );
   });
 });
 
