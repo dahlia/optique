@@ -2022,8 +2022,8 @@ describe("negatableFlag()", () => {
 
     assert.ok(positive.success);
     if (positive.success) {
-      assert.ok(positive.next.state?.success);
-      if (positive.next.state?.success) {
+      assert.ok(positive.next.state != null);
+      if (positive.next.state != null) {
         assert.ok(positive.next.state.value);
       }
       assert.deepEqual(positive.next.buffer, ["-v"]);
@@ -2031,8 +2031,8 @@ describe("negatableFlag()", () => {
     }
     assert.ok(negative.success);
     if (negative.success) {
-      assert.ok(negative.next.state?.success);
-      if (negative.next.state?.success) {
+      assert.ok(negative.next.state != null);
+      if (negative.next.state != null) {
         assert.ok(!negative.next.state.value);
       }
       assert.deepEqual(negative.next.buffer, ["-v"]);
@@ -2098,13 +2098,13 @@ describe("negatableFlag()", () => {
     });
     const duplicate = parser.parse({
       buffer: ["--color"],
-      state: { success: true, value: true, token: "--color" },
+      state: { value: true, token: "--color" },
       optionsTerminated: false,
       usage: parser.usage,
     });
     const conflict = parser.parse({
       buffer: ["--no-color"],
-      state: { success: true, value: true, token: "--color" },
+      state: { value: true, token: "--color" },
       optionsTerminated: false,
       usage: parser.usage,
     });

@@ -1970,16 +1970,10 @@ export interface NegatableFlagErrorOptions {
  * State stored by the {@link negatableFlag} parser.
  * @since 1.1.0
  */
-export type NegatableFlagState =
-  | {
-    readonly success: true;
-    readonly value: boolean;
-    readonly token: string;
-  }
-  | {
-    readonly success: false;
-    readonly error: Message;
-  };
+export interface NegatableFlagState {
+  readonly value: boolean;
+  readonly token: string;
+}
 
 function normalizeNegatableFlagNameList(
   names: NegatableFlagNameList,
@@ -2062,7 +2056,7 @@ function parseMatchedNegatableFlag(
   buffer: readonly string[],
   options: NegatableFlagOptions,
 ): ParserResult<NegatableFlagState> {
-  if (context.state?.success) {
+  if (context.state != null) {
     return {
       success: false,
       consumed: consumedOnFailure,
@@ -2075,7 +2069,7 @@ function parseMatchedNegatableFlag(
     success: true,
     next: {
       ...context,
-      state: { success: true, value, token },
+      state: { value, token },
       buffer,
     },
     consumed,
@@ -2253,13 +2247,7 @@ export function negatableFlag(
             : message`Required flag ${eOptionNames(optionNames)} is missing.`,
         };
       }
-      if (state.success) {
-        return { success: true, value: state.value };
-      }
-      return {
-        success: false,
-        error: message`${eOptionNames(optionNames)}: ${state.error}`,
-      };
+      return { success: true, value: state.value };
     },
     suggest(_context, prefix) {
       if (isSuggestionHidden(options.hidden)) {
