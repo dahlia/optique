@@ -1922,7 +1922,7 @@ export interface NegatableFlagErrorOptions {
    * Can be a static message or a function that receives the positive and
    * negative option names.
    */
-  missing?:
+  readonly missing?:
     | Message
     | ((
       positiveNames: readonly string[],
@@ -1932,36 +1932,36 @@ export interface NegatableFlagErrorOptions {
   /**
    * Custom error message when options are terminated (after --).
    */
-  optionsTerminated?: Message;
+  readonly optionsTerminated?: Message;
 
   /**
    * Custom error message when input is empty but a flag is expected.
    */
-  endOfInput?: Message;
+  readonly endOfInput?: Message;
 
   /**
    * Custom error message when the same polarity is used multiple times.
    */
-  duplicate?: Message | ((token: string) => Message);
+  readonly duplicate?: Message | ((token: string) => Message);
 
   /**
    * Custom error message when both positive and negative flags are used.
    */
-  conflict?:
+  readonly conflict?:
     | Message
     | ((previousToken: string, token: string) => Message);
 
   /**
    * Custom error message when a flag receives an unexpected value.
    */
-  unexpectedValue?:
+  readonly unexpectedValue?:
     | Message
     | ((optionName: string, value: string) => Message);
 
   /**
    * Custom error message when no matching flag is found.
    */
-  noMatch?:
+  readonly noMatch?:
     | Message
     | ((invalidOption: string, suggestions: readonly string[]) => Message);
 }
