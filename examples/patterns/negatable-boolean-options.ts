@@ -1,25 +1,54 @@
-// This example demonstrates how to implement --no- prefix boolean options
-// commonly found in Linux CLI tools, where --no-option negates a default
-// behavior.
+// This example demonstrates how to implement positive and negative Boolean
+// option pairs commonly found in Linux CLI tools, such as --color and
+// --no-color.
 import { object } from "@optique/core/constructs";
-import { map } from "@optique/core/modifiers";
-import { option } from "@optique/core/primitives";
-import { run } from "@optique/run";
+import { message } from "@optique/core/message";
+import { withDefault } from "@optique/core/modifiers";
+import { negatableFlag, option } from "@optique/core/primitives";
+import { print, run } from "@optique/run";
+
+function detectColorSupport(): boolean {
+  return true;
+}
 
 const configParser = object({
-  // Code fence is enabled by default, --no-code-fence disables it
-  codeFence: map(option("--no-code-fence"), (o) => !o),
+  codeFence: withDefault(
+    negatableFlag({
+      positive: "--code-fence",
+      negative: "--no-code-fence",
+    }, {
+      description: message`Enable or disable Markdown code fences.`,
+    }),
+    true,
+  ),
 
-  // Line numbers are disabled by default, --line-numbers enables it
   lineNumbers: option("--line-numbers"),
 
-  // Colors are enabled by default, --no-colors disables them
-  colors: map(option("--no-colors"), (o) => !o),
+  colors: withDefault(
+    negatableFlag({
+      positive: "--colors",
+      negative: "--no-colors",
+    }, {
+      description: message`Enable or disable colored output.`,
+    }),
+    () => detectColorSupport(),
+    { message: message`auto` },
+  ),
 
-  // Syntax highlighting is enabled by default, --no-syntax disables it
-  syntax: map(option("--no-syntax"), (o) => !o),
+  syntax: withDefault(
+    negatableFlag({
+      positive: "--syntax",
+      negative: "--no-syntax",
+    }, {
+      description: message`Enable or disable syntax highlighting.`,
+    }),
+    true,
+  ),
 });
 
 const result = run(configParser);
 
-console.log(result);
+print(message`Code fences: ${String(result.codeFence)}.`);
+print(message`Line numbers: ${String(result.lineNumbers)}.`);
+print(message`Colors: ${String(result.colors)}.`);
+print(message`Syntax highlighting: ${String(result.syntax)}.`);
