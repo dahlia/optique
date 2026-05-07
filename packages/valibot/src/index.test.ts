@@ -523,6 +523,33 @@ describe("valibot()", () => {
       );
       assert.equal(parser.format({ raw: "hello" }), "hello");
     });
+
+    it("should use custom toString() for class instances", () => {
+      // Non-plain object whose String() is not "[object Object]" uses the
+      // toString() result directly (line 746 branch).
+      class NamedValue {
+        constructor(private name: string) {}
+        toString() {
+          return this.name;
+        }
+      }
+      const parser = valibot(
+        v.pipe(v.string(), v.transform((s) => new NamedValue(s) as never)),
+        { placeholder: new NamedValue("default") as never },
+      );
+      assert.equal(parser.format(new NamedValue("hello") as never), "hello");
+    });
+
+    it("should fall back to [object Object] for class without custom toString", () => {
+      // Non-plain object with proto !== Object.prototype and no custom
+      // toString returns "[object Object]" (line 748 false branch).
+      class Opaque {}
+      const parser = valibot(
+        v.pipe(v.string(), v.transform(() => new Opaque() as never)),
+        { placeholder: new Opaque() as never },
+      );
+      assert.equal(parser.format(new Opaque() as never), "[object Object]");
+    });
   });
 
   describe("error customization", () => {
@@ -856,6 +883,48 @@ describe("valibot()", () => {
         { placeholder: "dev" },
       );
       assert.equal(parser.metavar, "CHOICE");
+    });
+
+    it("should not expose choices for v.picklist() with numeric values", () => {
+      // Non-string picklist items: inferChoices returns undefined (line 508-509).
+      // The metavar is still CHOICE (picklist → CHOICE regardless of item types).
+      const parser = valibot(v.picklist([1, 2, 3] as never), {
+        placeholder: 1 as never,
+      });
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.metavar, "CHOICE");
+    });
+
+    it("should not expose choices for an empty v.picklist()", () => {
+      // Empty picklist: inferChoices returns undefined via the empty result
+      // path (line 512)
+      const parser = valibot(v.picklist([] as never), {
+        placeholder: "" as never,
+      });
+      assert.equal(parser.choices, undefined);
+    });
+
+    it("should infer VALUE metavar for v.variant() discriminated union", () => {
+      // v.variant() schemas are object-level discriminated unions, not
+      // suitable for choices; inferMetavar returns "VALUE" (line 464).
+      const schema = v.variant("type", [
+        v.object({ type: v.literal("a"), value: v.string() }),
+        v.object({ type: v.literal("b"), count: v.number() }),
+      ]);
+      const parser = valibot(schema as never, {
+        placeholder: { type: "a", value: "" } as never,
+      });
+      assert.equal(parser.metavar, "VALUE");
+    });
+
+    it("should not expose choices for v.union() where an option has no type", () => {
+      // Union option without a `type` field causes inferChoices to bail out
+      // (line 542).
+      const parser = valibot(
+        v.union([v.literal("a"), {} as never]) as never,
+        { placeholder: "a" as never },
+      );
+      assert.equal(parser.choices, undefined);
     });
   });
 
@@ -1358,6 +1427,45 @@ describe("valibot()", () => {
         () => valibot(asyncSchema as never, { placeholder: "" as never }),
         expectedError,
       );
+    });
+
+    it("should throw TypeError for union with v.pipe(v.unknown(), validation) arm", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // v.pipe(v.unknown(), v.minLength(1)) has a validation action so it is
+      // NOT a catch-all: the async arm is reachable and must be rejected.
+      // This exercises the `a.kind === "validation"` branch (line 147) in
+      // the isCatchAllSchema callback for the unknown/any path.
+      const asyncSchema = v.union([
+        v.pipe(v.unknown(), v.minLength(1) as never),
+        asyncInner,
+      ] as never);
+      assert.throws(
+        () => valibot(asyncSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
+    });
+
+    it("should not throw for union with v.pipe(v.unknown(), nested-string-schema) arm", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // v.pipe(v.unknown(), v.string()) has a nested schema (kind="schema")
+      // that is itself a catch-all, so the whole pipe is catch-all.  The
+      // async arm is unreachable.  This exercises the `a.kind === "schema"`
+      // recursive branch (line 148) in isCatchAllSchema for unknown/any.
+      const asyncSchema = v.union([
+        v.pipe(v.unknown(), v.string() as never),
+        asyncInner,
+      ] as never);
+      const parser = valibot(asyncSchema as never, { placeholder: "" });
+      const result = parser.parse("hello");
+      assert.ok(result.success);
     });
   });
 });

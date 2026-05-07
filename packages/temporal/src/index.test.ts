@@ -1569,3 +1569,67 @@ describe("default error messages include the input value", () => {
     }
   });
 });
+
+describe("placeholder values", () => {
+  it("instant() returns a valid Temporal.Instant placeholder", () => {
+    const parser = instant();
+    const p = parser.placeholder;
+    assert.ok(p instanceof Temporal.Instant);
+    assert.equal(p.epochMilliseconds, 0);
+  });
+
+  it("duration() returns a valid Temporal.Duration placeholder", () => {
+    const parser = duration();
+    const p = parser.placeholder;
+    assert.ok(p instanceof Temporal.Duration);
+    assert.equal(p.total("seconds"), 0);
+  });
+
+  it("zonedDateTime() returns a valid Temporal.ZonedDateTime placeholder", () => {
+    const parser = zonedDateTime();
+    const p = parser.placeholder;
+    assert.ok(p instanceof Temporal.ZonedDateTime);
+    assert.equal(p.timeZoneId, "UTC");
+  });
+
+  it("plainDate() returns a valid Temporal.PlainDate placeholder", () => {
+    const parser = plainDate();
+    const p = parser.placeholder;
+    assert.ok(p instanceof Temporal.PlainDate);
+    assert.equal(p.year, 1970);
+    assert.equal(p.month, 1);
+    assert.equal(p.day, 1);
+  });
+
+  it("plainTime() returns a valid Temporal.PlainTime placeholder", () => {
+    const parser = plainTime();
+    const p = parser.placeholder;
+    assert.ok(p instanceof Temporal.PlainTime);
+    assert.equal(p.hour, 0);
+    assert.equal(p.minute, 0);
+  });
+
+  it("plainDateTime() returns a valid Temporal.PlainDateTime placeholder", () => {
+    const parser = plainDateTime();
+    const p = parser.placeholder;
+    assert.ok(p instanceof Temporal.PlainDateTime);
+    assert.equal(p.year, 1970);
+    assert.equal(p.hour, 0);
+  });
+
+  it("plainYearMonth() returns a valid Temporal.PlainYearMonth placeholder", () => {
+    const parser = plainYearMonth();
+    const p = parser.placeholder;
+    assert.ok(p instanceof Temporal.PlainYearMonth);
+    assert.equal(p.year, 1970);
+    assert.equal(p.month, 1);
+  });
+
+  it("plainMonthDay() returns a valid Temporal.PlainMonthDay placeholder", () => {
+    const parser = plainMonthDay();
+    const p = parser.placeholder;
+    assert.ok(p instanceof Temporal.PlainMonthDay);
+    assert.equal(p.monthCode, "M01");
+    assert.equal(p.day, 1);
+  });
+});

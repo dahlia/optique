@@ -37,6 +37,8 @@
     "npm:tsdown@0.13": "0.13.0_typescript@5.8.3_rolldown@1.0.0-beta.29",
     "npm:tsx@^4.21.0": "4.21.0",
     "npm:typescript@^5.8.3": "5.8.3",
+    "npm:valibot@*": "1.4.0_typescript@5.8.3",
+    "npm:valibot@1.4.0": "1.4.0_typescript@5.8.3",
     "npm:zod@*": "3.25.76",
     "npm:zod@3.25.76": "3.25.76",
     "npm:zod@4": "4.1.12",
@@ -1397,7 +1399,6 @@
         "@esbuild/win32-ia32@0.27.2",
         "@esbuild/win32-x64@0.27.2"
       ],
-      "scripts": true,
       "bin": true
     },
     "event-target-shim@5.0.1": {
@@ -1466,8 +1467,7 @@
     },
     "fsevents@2.3.3": {
       "integrity": "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==",
-      "os": ["darwin"],
-      "scripts": true
+      "os": ["darwin"]
     },
     "function-bind@1.1.2": {
       "integrity": "sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA=="
@@ -2386,6 +2386,15 @@
     },
     "unicorn-magic@0.3.0": {
       "integrity": "sha512-+QBBXBCvifc56fsbuxZQ6Sic3wqqc3WWaqxs58gvJrcOuN83HGTCwz3oS5phzU9LthRNE9VrJCFCLUgHeeFnfA=="
+    },
+    "valibot@1.4.0_typescript@5.8.3": {
+      "integrity": "sha512-iC/x7fVcSyOwlm/VSt7RlHnzNGLGvR9GnxdifUeWoCJo0q4ZZvrVkIHC6faTlkxG47I2Y4UrFquPuVHCrOnrLg==",
+      "dependencies": [
+        "typescript"
+      ],
+      "optionalPeers": [
+        "typescript"
+      ]
     },
     "which-typed-array@1.1.19": {
       "integrity": "sha512-rEvr90Bck4WZt9HHFC4DJMsjvu7x+r6bImz0/BrbWb7A2djJ8hnZMrWnHo9F8ssv0OMErasDhftrfROTyqSDrw==",
