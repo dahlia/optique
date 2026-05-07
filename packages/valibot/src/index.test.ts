@@ -917,11 +917,12 @@ describe("valibot()", () => {
       assert.equal(parser.metavar, "VALUE");
     });
 
-    it("should not expose choices for v.union() where an option has no type", () => {
-      // Union option without a `type` field causes inferChoices to bail out
-      // (line 542).
+    it("should not expose choices for v.union() with a catch-all v.any() member", () => {
+      // When a union contains a catch-all schema (v.any()), inferChoices
+      // detects it via isCatchAllSchema and returns undefined — no choices
+      // are exposed because the union can accept any value.
       const parser = valibot(
-        v.union([v.literal("a"), {} as never]) as never,
+        v.union([v.literal("a"), v.any()]) as never,
         { placeholder: "a" as never },
       );
       assert.equal(parser.choices, undefined);

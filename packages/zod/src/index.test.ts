@@ -1443,29 +1443,24 @@ describe("analyzeBooleanInner() — cycle detection via z.lazy()", () => {
   });
 });
 
-describe("inferChoices() — empty literal values array", () => {
-  it("should return undefined for a literal schema with empty values array", () => {
-    // A synthetic schema whose _def.values is [] — the guard
-    //   result.length > 0 ? result : undefined
-    // should yield undefined, so no choices are exposed.
-    const emptyLiteralSchema = {
-      _def: { type: "literal", values: [] as string[] },
-      safeParse: (input: unknown) => ({ success: true, data: input }),
-    } as unknown as z.Schema<string>;
-    const parser = zod(emptyLiteralSchema, { placeholder: "" as unknown });
+describe("inferChoices() — non-string literal values", () => {
+  it("should return undefined for a z.literal(42) (numeric literal, no string choices)", () => {
+    // z.literal(42) has _def.values = [42].  inferChoices filters to string
+    // values only, producing stringValues = [], so the guard
+    //   stringValues.length > 0 ? stringValues : undefined
+    // yields undefined — no choices are exposed.
+    const parser = zod(z.literal(42), { placeholder: 42 });
     assert.equal(parser.choices, undefined);
-    assert.equal(parser.suggest, undefined);
     assert.equal(parser.metavar, "VALUE");
   });
 
-  it("should return undefined for a nativeEnum schema with empty values object", () => {
-    // A synthetic nativeEnum-like schema with an empty entries/values object.
-    // result.size > 0 ? [...result] : undefined should yield undefined.
-    const emptyNativeEnum = {
-      _def: { typeName: "ZodNativeEnum", values: {} },
-      safeParse: (input: unknown) => ({ success: true, data: input }),
-    } as unknown as z.Schema<string>;
-    const parser = zod(emptyNativeEnum, { placeholder: "" as unknown });
+  it("should return undefined for a z.nativeEnum({}) with empty values object", () => {
+    // z.nativeEnum({}) is a real Zod v4 schema with _def.entries = {},
+    // so inferChoices loops over an empty object and result.size === 0 →
+    // result.size > 0 ? [...result] : undefined yields undefined.
+    const parser = zod(z.nativeEnum({}) as z.Schema<never>, {
+      placeholder: "" as never,
+    });
     assert.equal(parser.choices, undefined);
   });
 

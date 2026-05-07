@@ -2383,9 +2383,9 @@ describe("doc-level usage term formatting (nested terms)", () => {
       ],
     };
     const result = formatDocPageAsMan(page, minimalOptions);
-    // The optional term renders as "" when all nested terms are doc-hidden
-    // and should not appear in the output
-    assert.ok(!result.includes("[") || result.includes(".TH"));
+    // When all inner terms are doc-hidden, the optional renders to "",
+    // which causes the entire entry to be skipped — no "[" in the output.
+    assert.ok(!result.includes("["));
   });
 
   it("filters doc-hidden entries from doc sections", () => {
@@ -2434,7 +2434,10 @@ describe("doc-level usage term formatting (nested terms)", () => {
       }],
     };
     const result = formatDocPageAsMan(page, minimalOptions);
-    assert.ok(typeof result === "string");
+    // Both A and B are doc-hidden, so the entry is skipped entirely —
+    // neither roff-formatted metavar should appear.
+    assert.ok(!result.includes("\\fIA\\fR"));
+    assert.ok(!result.includes("\\fIB\\fR"));
   });
 
   it("formats exclusive term with exactly one non-empty alternative", () => {
@@ -2455,8 +2458,10 @@ describe("doc-level usage term formatting (nested terms)", () => {
       }],
     };
     const result = formatDocPageAsMan(page, minimalOptions);
-    assert.ok(result.includes("FILE"));
-    assert.ok(!result.includes("(FILE |"));
+    // FILE is visible; it renders as \fIFILE\fR in roff.
+    assert.ok(result.includes("\\fIFILE\\fR"));
+    // Only one non-empty alternative, so it is not wrapped in parens.
+    assert.ok(!result.includes("(\\fIFILE\\fR"));
   });
 
   it("formats multiple term with all-hidden inner terms as empty string", () => {
@@ -2475,6 +2480,8 @@ describe("doc-level usage term formatting (nested terms)", () => {
       }],
     };
     const result = formatDocPageAsMan(page, minimalOptions);
-    assert.ok(typeof result === "string");
+    // All inner terms are doc-hidden, so multiple renders to "" and the
+    // entry is skipped entirely — ARG should not appear in the output.
+    assert.ok(!result.includes("ARG"));
   });
 });
