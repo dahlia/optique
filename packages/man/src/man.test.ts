@@ -2315,7 +2315,8 @@ describe("doc-level usage term formatting (nested terms)", () => {
       ],
     };
     const result = formatDocPageAsMan(page, minimalOptions);
-    assert.ok(result.includes("[...]"));
+    // passthrough renders as "[...]", so optional(passthrough) is "[[...]]".
+    assert.ok(result.includes("[[...]]"));
   });
 
   it("formats ellipsis term nested inside optional doc entry", () => {
@@ -2335,9 +2336,10 @@ describe("doc-level usage term formatting (nested terms)", () => {
       ],
     };
     const result = formatDocPageAsMan(page, minimalOptions);
-    // The ellipsis term nested inside optional should render as "[...]"
-    // (optional wraps with "[...]" and ellipsis renders as "...").
+    // ellipsis renders as "...", so optional(ellipsis) → "[...]".
+    // Distinct from optional(passthrough) which would render as "[[...]]".
     assert.ok(result.includes("[...]"));
+    assert.ok(!result.includes("[[...]]"));
   });
 
   it("throws for unknown term type in doc usage formatting", () => {

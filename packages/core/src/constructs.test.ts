@@ -1237,6 +1237,15 @@ describe("or() inside object() — zero-input complete path", () => {
     // Fails because the only branch is a named option with no zero-consumed
     // fallback, so the async no-match/no-candidate path fires.
     assert.ok(!result.success);
+    if (!result.success) {
+      // The error should come from the no-match path (argument/option not
+      // provided) — not from the inner parser's "no value" complete error.
+      const msg = formatMessage(result.error);
+      assert.ok(
+        !msg.includes("no value"),
+        `Expected no-match error, not inner parser error: ${msg}`,
+      );
+    }
   });
 });
 

@@ -1631,24 +1631,27 @@ describe("fillMissingSourceDefaults — failure result", () => {
 
 describe("DependencyRuntimeContext — FailedAwareRegistry clone with FailedAwareRegistry inner", () => {
   test("clone() rebinds failed sources when inner clone is itself a FailedAwareRegistry", () => {
-    // Create a runtime, mark a source as failed, then clone the registry.
-    // When the inner registry also wraps a FailedAwareRegistry (because the
-    // original registry was already a FailedAwareRegistry), clone() must use
-    // rebindFailedSources rather than wrapping again.
-    const sourceId = Symbol("env");
+    // markSourceFailed() wraps the current registry in a new
+    // FailedAwareRegistry each time it is called.  After two calls with
+    // different IDs, the outer FailedAwareRegistry has another
+    // FailedAwareRegistry as its inner.  Cloning the outer one triggers
+    // the `innerClone instanceof FailedAwareRegistry` branch which calls
+    // rebindFailedSources() instead of wrapping again.
+    const sourceA = Symbol("envA");
+    const sourceB = Symbol("envB");
     const runtime = createDependencyRuntimeContext();
-    runtime.registerSource(sourceId, "prod", "cli");
-    runtime.markSourceFailed(sourceId);
+    runtime.registerSource(sourceA, "prod", "cli");
+    runtime.markSourceFailed(sourceA);
+    // Second markSourceFailed wraps the FailedAwareRegistry from above,
+    // so clone().inner will itself be a FailedAwareRegistry.
+    runtime.markSourceFailed(sourceB);
 
-    // Clone the underlying registry (which is a FailedAwareRegistry)
-    // and wrap it in a new context — this exercises the
-    // `innerClone instanceof FailedAwareRegistry` branch in clone().
     const clonedRegistry = runtime.registry.clone();
     const cloned = createDependencyRuntimeContext(clonedRegistry);
 
-    // The clone must carry the failed-source state from the original
-    assert.ok(cloned.isSourceFailed(sourceId));
-    assert.ok(!cloned.hasSource(sourceId));
-    assert.equal(cloned.getSource(sourceId), undefined);
+    // Both failed sources must be propagated through the clone
+    assert.ok(cloned.isSourceFailed(sourceA));
+    assert.ok(cloned.isSourceFailed(sourceB));
+    assert.ok(!cloned.hasSource(sourceA));
   });
 });
