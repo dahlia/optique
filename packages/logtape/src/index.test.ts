@@ -890,6 +890,21 @@ describe("createConsoleSink()", () => {
     );
   });
 
+  it("should throw TypeError for cyclic object stream (JSON.stringify throws)", () => {
+    // When JSON.stringify throws (cyclic object), the catch block falls back
+    // to String(value) = "[object Object]" (lines 238–240 in output.ts).
+    const cyclic: { self?: unknown } = {};
+    cyclic.self = cyclic;
+    assert.throws(
+      () => createConsoleSink({ stream: cyclic as never }),
+      {
+        name: "TypeError",
+        message:
+          'Invalid stream: expected "stdout" or "stderr", got [object Object].',
+      },
+    );
+  });
+
   it("should treat null stream as default stderr", () => {
     const sink = createConsoleSink({ stream: null });
     const originalError = console.error;

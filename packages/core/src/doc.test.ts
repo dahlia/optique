@@ -2415,6 +2415,50 @@ describe("formatDocPage", () => {
       });
       assertLinesWithinMaxWidth(result, 13);
     });
+
+    it("uses fallback prefix ' [' when showDefault has no prefix (maxWidth path)", () => {
+      // The ?? fallback for showDefault.prefix at line 631 is only reached
+      // when maxWidth is set and needsDescColumn is true.
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "X" },
+            description: [{ type: "text", text: "d" }],
+            default: [{ type: "text", text: "0" }],
+          }],
+        }],
+      };
+      // showDefault has suffix but no prefix → uses default " [" (2 chars).
+      // minDescWidth = 2, minimum = termIndent(2) + max(4, 2*2+1) = 2 + 5 = 7
+      const result = formatDocPage("app", page, {
+        maxWidth: 40,
+        showDefault: { suffix: "]" },
+      });
+      assertLinesWithinMaxWidth(result, 40);
+      assert.ok(result.includes("[0]"));
+    });
+
+    it("uses fallback label 'choices: ' when showChoices has no label (maxWidth path)", () => {
+      // The ?? fallback for showChoices.label at line 643 is only reached
+      // when maxWidth is set and needsDescColumn is true.
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "X" },
+            description: [{ type: "text", text: "d" }],
+            choices: valueSet(["a", "b"], { fallback: "", type: "unit" }),
+          }],
+        }],
+      };
+      // showChoices has prefix but no label → uses default "choices: " (8 chars).
+      // minDescWidth = prefix_width + label_width = 2 + 8 = 10
+      const result = formatDocPage("app", page, {
+        maxWidth: 60,
+        showChoices: { prefix: " (" },
+      });
+      assertLinesWithinMaxWidth(result, 60);
+      assert.ok(result.includes("(choices: a, b)"));
+    });
   });
 
   describe("Unicode display width", () => {
