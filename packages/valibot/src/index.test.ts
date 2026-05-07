@@ -1172,5 +1172,192 @@ describe("valibot()", () => {
       assert.ok(result.success);
       if (result.success) assert.equal(result.value, "hello");
     });
+
+    it("should not reject union with v.any() catch-all arm", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // v.any() accepts every value of any type — async arm is unreachable
+      const asyncSchema = v.union([v.any(), asyncInner] as never);
+      const parser = valibot(asyncSchema as never, {
+        placeholder: "" as never,
+      });
+      const result = parser.parse("hello");
+      assert.ok(result.success);
+    });
+
+    it("should not reject union with v.fallback() catch-all arm", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // v.fallback() always succeeds (returns fallback value on failure)
+      const asyncSchema = v.union([
+        v.fallback(v.string(), "default"),
+        asyncInner,
+      ] as never);
+      const parser = valibot(asyncSchema as never, {
+        placeholder: "" as never,
+      });
+      const result = parser.parse("hello");
+      assert.ok(result.success);
+    });
+
+    it("should not reject union with v.pipe(v.unknown(), safe-transform) arm", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // v.pipe(v.unknown(), trim) is still a catch-all: unknown accepts
+      // every value and the safe transformation never rejects.
+      // Use `as never` to bypass TS strictness on the pipe argument types.
+      const asyncSchema = v.union([
+        // deno-lint-ignore no-explicit-any
+        v.pipe(v.unknown(), v.trim() as any),
+        asyncInner,
+      ] as never);
+      const parser = valibot(asyncSchema as never, {
+        placeholder: "" as never,
+      });
+      const result = parser.parse("  hello  ");
+      assert.ok(result.success);
+    });
+
+    it("should not reject union with nested schema in string pipe catch-all", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // A string pipe whose second element is itself a catch-all schema —
+      // the string pipe is still catch-all because every action accepts.
+      const innerCatchAll = v.optional(v.string());
+      const asyncSchema = v.union([
+        // deno-lint-ignore no-explicit-any
+        v.pipe(v.string(), innerCatchAll as any),
+        asyncInner,
+      ] as never);
+      const parser = valibot(asyncSchema as never, {
+        placeholder: "" as never,
+      });
+      const result = parser.parse("hello");
+      assert.ok(result.success);
+    });
+
+    it("should reject union whose string pipe arm has a validation action", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // v.email() is a validation — it can reject input, so the string pipe
+      // is NOT a catch-all and the async arm may be reached.
+      const asyncSchema = v.union([
+        v.pipe(v.string(), v.email()),
+        asyncInner,
+      ] as never);
+      assert.throws(
+        () => valibot(asyncSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
+    });
+
+    it("should reject async items inside containers after transform", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // After JSON.parse, array schema's item schema becomes reachable.
+      const asyncSchema = v.pipe(
+        v.string(),
+        v.transform(JSON.parse),
+        v.array(asyncInner as never),
+      );
+      assert.throws(
+        () => valibot(asyncSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
+    });
+
+    it("should reject async tuple items after transform", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const asyncSchema = v.pipe(
+        v.string(),
+        v.transform(JSON.parse),
+        v.tuple([asyncInner] as never),
+      );
+      assert.throws(
+        () => valibot(asyncSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
+    });
+
+    it("should reject async promise inner after transform", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const asyncSchema = v.pipe(
+        v.string(),
+        v.transform(JSON.parse),
+        v.promise(asyncInner as never),
+      );
+      assert.throws(
+        () => valibot(asyncSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
+    });
+
+    it("should not reject direct containers with async items (string never reaches them)", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // Without a preceding transform, CLI input is always a string.
+      // v.array(), v.tuple() and v.record() reject strings before visiting
+      // their members, so async members are unreachable at top level.
+      const arrParser = valibot(v.array(asyncInner as never), {
+        placeholder: "" as never,
+      });
+      assert.ok(!arrParser.parse("hello").success);
+
+      const recParser = valibot(
+        v.record(v.string(), asyncInner as never),
+        { placeholder: "" as never },
+      );
+      assert.ok(!recParser.parse("hello").success);
+    });
+
+    it("should reject variant with async arms after transform", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // After transform the input is no longer a string, so variant arms
+      // become reachable.
+      const asyncSchema = v.pipe(
+        v.string(),
+        v.transform(JSON.parse),
+        v.variant("type", [
+          v.object({ type: v.literal("a"), value: asyncInner as never }),
+        ]),
+      );
+      assert.throws(
+        () => valibot(asyncSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
+    });
   });
 });
