@@ -1158,14 +1158,7 @@ describe("or() inside object() — zero-input complete path", () => {
     const result = parseSync(parser, []);
     assert.ok(!result.success);
     if (!result.success) {
-      // Should produce a no-match error, not a value-related parse error.
-      const msg = formatMessage(result.error);
-      assert.ok(
-        msg.toLowerCase().includes("option") ||
-          msg.toLowerCase().includes("match") ||
-          msg.toLowerCase().includes("action"),
-        `Expected no-match error but got: ${msg}`,
-      );
+      assert.deepEqual(result.error, message`No matching option found.`);
     }
   });
 
@@ -1178,7 +1171,7 @@ describe("or() inside object() — zero-input complete path", () => {
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
-      usage: [{ type: "argument", metavar: "FILE", hidden: false }],
+      usage: [{ type: "option", names: ["--file"], metavar: "FILE" }],
       leadingNames: new Set(["--file"]),
       acceptingAnyToken: false,
       initialState: "",
@@ -1213,7 +1206,7 @@ describe("or() inside object() — zero-input complete path", () => {
       $valueType: [] as readonly string[],
       $stateType: [] as readonly string[],
       priority: 0,
-      usage: [{ type: "argument", metavar: "FILE", hidden: false }],
+      usage: [{ type: "option", names: ["--file"], metavar: "FILE" }],
       leadingNames: new Set(["--file"]),
       acceptingAnyToken: false,
       initialState: "",
