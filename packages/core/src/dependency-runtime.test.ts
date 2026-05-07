@@ -1353,3 +1353,298 @@ describe("buildRuntimeNodesFromArray", () => {
     assert.deepStrictEqual(nodes[0].path, ["parent", 0]);
   });
 });
+
+// =============================================================================
+// Additional branch coverage
+// =============================================================================
+
+describe("collectExplicitSourceValues — undefined return from extractSourceValue", () => {
+  test("skips registration when extractSourceValue returns undefined", () => {
+    // This exercises registerExplicitSourceValue() with result == null.
+    // The extractor returns undefined because the state doesn't contain
+    // a source result yet (unpopulated / initial state).
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            // Always returns undefined — state is unpopulated
+            extractSourceValue: (_state: unknown) => undefined,
+            preservesSourceValue: true,
+          },
+        },
+      },
+      state: { some: "initial-state" },
+    }];
+
+    collectExplicitSourceValues(nodes, runtime);
+
+    // Nothing registered, nothing failed
+    assert.ok(!runtime.hasSource(sourceId));
+    assert.ok(!runtime.isSourceFailed(sourceId));
+  });
+});
+
+describe("replayDerivedParser — additional branches", () => {
+  test("returns undefined when partial dependencies", () => {
+    // Two deps, only one registered → resolution.kind === "partial"
+    const runtime = createDependencyRuntimeContext();
+    const id1 = Symbol("a");
+    const id2 = Symbol("b");
+    runtime.registerSource(id1, "present", "cli");
+    // id2 is missing with no defaults
+
+    const metadata: ParserDependencyMetadata = {
+      derived: {
+        kind: "derived",
+        dependencyIds: [id1, id2],
+        replayParse: (_raw: string, deps: readonly unknown[]) => ({
+          success: true as const,
+          value: deps,
+        }),
+      },
+    };
+
+    const result = replayDerivedParser(
+      { path: ["x"], parser: { dependencyMetadata: metadata }, state: {} },
+      "input",
+      runtime,
+    );
+    assert.equal(result, undefined);
+  });
+
+  test("returns undefined when getDefaultDependencyValues thunk throws", () => {
+    // The node has no snapshotted defaults and the thunk throws —
+    // replayDerivedParser must return undefined rather than propagating.
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    // Source is NOT registered so defaults are needed
+
+    const metadata: ParserDependencyMetadata = {
+      derived: {
+        kind: "derived",
+        dependencyIds: [sourceId],
+        getDefaultDependencyValues: () => {
+          throw new Error("thunk blew up");
+        },
+        replayParse: (_raw: string, deps: readonly unknown[]) => ({
+          success: true as const,
+          value: `parsed-${deps[0]}`,
+        }),
+      },
+    };
+
+    // No defaultDependencyValues on the node → thunk is called
+    const result = replayDerivedParser(
+      { path: ["level"], parser: { dependencyMetadata: metadata }, state: {} },
+      "warn",
+      runtime,
+    );
+    assert.equal(result, undefined);
+  });
+
+  test("returns undefined for node with no derived metadata", () => {
+    const runtime = createDependencyRuntimeContext();
+    const result = replayDerivedParser(
+      {
+        path: ["x"],
+        parser: { dependencyMetadata: undefined },
+        state: {},
+      },
+      "input",
+      runtime,
+    );
+    assert.equal(result, undefined);
+  });
+});
+
+describe("replayDerivedParserAsync — additional branches", () => {
+  test("returns undefined when dependencies are missing", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    // No source registered, no defaults
+
+    const metadata: ParserDependencyMetadata = {
+      derived: {
+        kind: "derived",
+        dependencyIds: [sourceId],
+        replayParse: (_raw: string, deps: readonly unknown[]) =>
+          Promise.resolve({
+            success: true as const,
+            value: `async-${deps[0]}`,
+          }),
+      },
+    };
+
+    const result = await replayDerivedParserAsync(
+      { path: ["level"], parser: { dependencyMetadata: metadata }, state: {} },
+      "warn",
+      runtime,
+    );
+    assert.equal(result, undefined);
+  });
+
+  test("returns undefined when partial dependencies", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const id1 = Symbol("a");
+    const id2 = Symbol("b");
+    runtime.registerSource(id1, "present", "cli");
+    // id2 missing → partial
+
+    const metadata: ParserDependencyMetadata = {
+      derived: {
+        kind: "derived",
+        dependencyIds: [id1, id2],
+        replayParse: () =>
+          Promise.resolve({ success: true as const, value: 1 }),
+      },
+    };
+
+    const result = await replayDerivedParserAsync(
+      { path: ["x"], parser: { dependencyMetadata: metadata }, state: {} },
+      "input",
+      runtime,
+    );
+    assert.equal(result, undefined);
+  });
+
+  test("returns undefined when getDefaultDependencyValues thunk throws", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+
+    const metadata: ParserDependencyMetadata = {
+      derived: {
+        kind: "derived",
+        dependencyIds: [sourceId],
+        getDefaultDependencyValues: () => {
+          throw new Error("async thunk blew up");
+        },
+        replayParse: () =>
+          Promise.resolve({ success: true as const, value: 0 }),
+      },
+    };
+
+    const result = await replayDerivedParserAsync(
+      { path: ["level"], parser: { dependencyMetadata: metadata }, state: {} },
+      "warn",
+      runtime,
+    );
+    assert.equal(result, undefined);
+  });
+
+  test("uses snapshotted defaults instead of thunk", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    let thunkCalls = 0;
+
+    const metadata: ParserDependencyMetadata = {
+      derived: {
+        kind: "derived",
+        dependencyIds: [sourceId],
+        getDefaultDependencyValues: () => {
+          thunkCalls++;
+          return ["thunk-dev"];
+        },
+        replayParse: (_raw: string, deps: readonly unknown[]) =>
+          Promise.resolve({
+            success: true as const,
+            value: `async-${deps[0]}`,
+          }),
+      },
+    };
+
+    const result = await replayDerivedParserAsync(
+      {
+        path: ["level"],
+        parser: { dependencyMetadata: metadata },
+        state: {},
+        defaultDependencyValues: ["snapshotted-dev"],
+      },
+      "warn",
+      runtime,
+    );
+
+    assert.equal(thunkCalls, 0);
+    assert.ok(result !== undefined);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "async-snapshotted-dev");
+    }
+  });
+
+  test("returns undefined for node with no derived metadata", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const result = await replayDerivedParserAsync(
+      {
+        path: ["x"],
+        parser: { dependencyMetadata: undefined },
+        state: {},
+      },
+      "input",
+      runtime,
+    );
+    assert.equal(result, undefined);
+  });
+});
+
+describe("fillMissingSourceDefaults — failure result", () => {
+  test("propagates failure when getMissingSourceValue returns { success: false }", () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const errorMsg = message`env is required`;
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            extractSourceValue: bareExtract,
+            preservesSourceValue: true,
+            getMissingSourceValue: () => ({
+              success: false as const,
+              error: errorMsg,
+            }),
+          },
+        },
+      },
+      state: undefined,
+    }];
+
+    const failures = fillMissingSourceDefaults(nodes, runtime);
+
+    assert.equal(failures.length, 1);
+    assert.equal(failures[0].sourceId, sourceId);
+    assert.ok(!failures[0].error.success);
+    // Source should not be registered
+    assert.ok(!runtime.hasSource(sourceId));
+  });
+});
+
+describe("DependencyRuntimeContext — FailedAwareRegistry clone with FailedAwareRegistry inner", () => {
+  test("clone() rebinds failed sources when inner clone is itself a FailedAwareRegistry", () => {
+    // Create a runtime, mark a source as failed, then clone the registry.
+    // When the inner registry also wraps a FailedAwareRegistry (because the
+    // original registry was already a FailedAwareRegistry), clone() must use
+    // rebindFailedSources rather than wrapping again.
+    const sourceId = Symbol("env");
+    const runtime = createDependencyRuntimeContext();
+    runtime.registerSource(sourceId, "prod", "cli");
+    runtime.markSourceFailed(sourceId);
+
+    // Clone the underlying registry (which is a FailedAwareRegistry)
+    // and wrap it in a new context — this exercises the
+    // `innerClone instanceof FailedAwareRegistry` branch in clone().
+    const clonedRegistry = runtime.registry.clone();
+    const cloned = createDependencyRuntimeContext(clonedRegistry);
+
+    // The clone must carry the failed-source state from the original
+    assert.ok(cloned.isSourceFailed(sourceId));
+    assert.ok(!cloned.hasSource(sourceId));
+    assert.equal(cloned.getSource(sourceId), undefined);
+  });
+});
