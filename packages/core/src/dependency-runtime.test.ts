@@ -1619,7 +1619,11 @@ describe("fillMissingSourceDefaults — failure result", () => {
 
     assert.equal(failures.length, 1);
     assert.equal(failures[0].sourceId, sourceId);
+    // The failure result should carry the exact error message we provided.
     assert.ok(!failures[0].error.success);
+    if (!failures[0].error.success) {
+      assert.deepEqual(failures[0].error.error, errorMsg);
+    }
     // Source should not be registered
     assert.ok(!runtime.hasSource(sourceId));
   });

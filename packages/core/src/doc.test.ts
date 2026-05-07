@@ -912,16 +912,16 @@ describe("formatDocPage", () => {
         entries: [{
           term: { type: "option", names: ["--port"] },
           description: [{ type: "text", text: "Port number" }],
-          default: valueSet(["3000"], { fallback: "", type: "unit" }),
+          default: message`3000`,
         }],
       }],
     };
     const result = formatDocPage("myapp", page, {
       showDefault: { suffix: "]" },
     });
-    // Uses the default prefix " [" since no prefix is specified
-    assert.ok(result.includes("["));
-    assert.ok(result.includes("]"));
+    // Uses the fallback prefix " [" since no prefix is specified;
+    // the plain-text default value "3000" should appear as "[3000]".
+    assert.ok(result.includes("[3000]"));
     assert.ok(result.includes("Port number"));
   });
 

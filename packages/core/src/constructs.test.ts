@@ -1157,6 +1157,16 @@ describe("or() inside object() — zero-input complete path", () => {
 
     const result = parseSync(parser, []);
     assert.ok(!result.success);
+    if (!result.success) {
+      // Should produce a no-match error, not a value-related parse error.
+      const msg = formatMessage(result.error);
+      assert.ok(
+        msg.toLowerCase().includes("option") ||
+          msg.toLowerCase().includes("match") ||
+          msg.toLowerCase().includes("action"),
+        `Expected no-match error but got: ${msg}`,
+      );
+    }
   });
 
   it("async: completes a sync constant() branch when the async or() field was never parsed", async () => {
@@ -1224,6 +1234,8 @@ describe("or() inside object() — zero-input complete path", () => {
     });
 
     const result = await parseAsync(parser, []);
+    // Fails because the only branch is a named option with no zero-consumed
+    // fallback, so the async no-match/no-candidate path fires.
     assert.ok(!result.success);
   });
 });

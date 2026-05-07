@@ -2335,7 +2335,9 @@ describe("doc-level usage term formatting (nested terms)", () => {
       ],
     };
     const result = formatDocPageAsMan(page, minimalOptions);
-    assert.ok(result.includes("[...]") || result.includes("..."));
+    // The ellipsis term nested inside optional should render as "[...]"
+    // (optional wraps with "[...]" and ellipsis renders as "...").
+    assert.ok(result.includes("[...]"));
   });
 
   it("throws for unknown term type in doc usage formatting", () => {
@@ -2384,8 +2386,10 @@ describe("doc-level usage term formatting (nested terms)", () => {
     };
     const result = formatDocPageAsMan(page, minimalOptions);
     // When all inner terms are doc-hidden, the optional renders to "",
-    // which causes the entire entry to be skipped — no "[" in the output.
+    // which causes the entire entry to be skipped — no "[" and no
+    // description text in the output.
     assert.ok(!result.includes("["));
+    assert.ok(!result.includes("Hidden arg."));
   });
 
   it("filters doc-hidden entries from doc sections", () => {
@@ -2435,9 +2439,10 @@ describe("doc-level usage term formatting (nested terms)", () => {
     };
     const result = formatDocPageAsMan(page, minimalOptions);
     // Both A and B are doc-hidden, so the entry is skipped entirely —
-    // neither roff-formatted metavar should appear.
+    // neither roff-formatted metavar nor the description should appear.
     assert.ok(!result.includes("\\fIA\\fR"));
     assert.ok(!result.includes("\\fIB\\fR"));
+    assert.ok(!result.includes("A choice."));
   });
 
   it("formats exclusive term with exactly one non-empty alternative", () => {
@@ -2481,7 +2486,8 @@ describe("doc-level usage term formatting (nested terms)", () => {
     };
     const result = formatDocPageAsMan(page, minimalOptions);
     // All inner terms are doc-hidden, so multiple renders to "" and the
-    // entry is skipped entirely — ARG should not appear in the output.
+    // entry is skipped entirely — neither ARG nor the description appear.
     assert.ok(!result.includes("ARG"));
+    assert.ok(!result.includes("A repeatable."));
   });
 });
