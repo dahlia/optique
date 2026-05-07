@@ -920,7 +920,7 @@ describe("formatDocPage", () => {
       showDefault: { suffix: "]" },
     });
     // Uses the fallback prefix " [" since no prefix is specified;
-    // the plain-text default value "3000" should appear as "[3000]".
+    // the plain-text default value "3000" should appear as " [3000]".
     assert.ok(result.includes(" [3000]"));
     assert.ok(result.includes("Port number"));
   });
@@ -2435,7 +2435,7 @@ describe("formatDocPage", () => {
         showDefault: { suffix: "]" },
       });
       assertLinesWithinMaxWidth(result, 40);
-      assert.ok(result.includes("[0]"));
+      assert.ok(result.includes(" [0]"));
     });
 
     it("uses fallback label 'choices: ' when showChoices has no label (maxWidth path)", () => {

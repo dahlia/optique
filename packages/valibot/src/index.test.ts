@@ -916,6 +916,8 @@ describe("valibot()", () => {
       const parser = valibot(schema as never, {
         placeholder: { type: "a", value: "" } as never,
       });
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
       assert.equal(parser.metavar, "VALUE");
     });
 
