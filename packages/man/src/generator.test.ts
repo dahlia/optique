@@ -279,6 +279,20 @@ describe("generateManPageSync()", () => {
     );
   });
 
+  it("rejects null as parser", () => {
+    assert.throws(
+      () => generateManPageSync(null as never, { name: "x", section: 1 }),
+      { name: "TypeError", message: /not a valid.*Parser/ },
+    );
+  });
+
+  it("rejects a primitive (number) as parser", () => {
+    assert.throws(
+      () => generateManPageSync(42 as never, { name: "x", section: 1 }),
+      { name: "TypeError", message: /not a valid.*Parser/ },
+    );
+  });
+
   it("rejects a malformed parser-like object", () => {
     const fakeParser = {};
     assert.throws(

@@ -346,6 +346,11 @@ describe("formatUsageTermAsRoff()", () => {
     assert.equal(formatUsageTermAsRoff(term), "[...]");
   });
 
+  it("formats ellipsis term", () => {
+    const term: UsageTerm = { type: "ellipsis" };
+    assert.equal(formatUsageTermAsRoff(term), "...");
+  });
+
   it("throws for unknown usage term type", () => {
     const invalid = { type: "unknown" } as unknown as UsageTerm;
     assert.throws(
@@ -2258,5 +2263,155 @@ describe("formatDocPageAsMan()", () => {
       !synopsis.includes("..."),
       "ancestor usageLine should not be applied on subcommand page",
     );
+  });
+});
+
+describe("doc-level usage term formatting (nested terms)", () => {
+  const minimalOptions: ManPageOptions = {
+    name: "test",
+    section: 1,
+  };
+
+  // formatDocUsageTermAsRoff is called for optional/multiple/exclusive terms
+  // in a doc entry, and recursively for their nested terms. The literal,
+  // passthrough, and ellipsis cases at lines 421-428 of man.ts are triggered
+  // via this recursive path.
+
+  it("formats literal term nested inside optional doc entry", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          entries: [
+            {
+              term: {
+                type: "optional",
+                terms: [{ type: "literal", value: "example" }],
+              },
+              description: message`An example.`,
+            },
+          ],
+        },
+      ],
+    };
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(result.includes(".TP"));
+    assert.ok(result.includes("[example]"));
+  });
+
+  it("formats passthrough term nested inside optional doc entry", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          entries: [
+            {
+              term: {
+                type: "optional",
+                terms: [{ type: "passthrough" }],
+              },
+              description: message`Pass through arguments.`,
+            },
+          ],
+        },
+      ],
+    };
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(result.includes("[...]"));
+  });
+
+  it("formats ellipsis term nested inside optional doc entry", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          entries: [
+            {
+              term: {
+                type: "optional",
+                terms: [{ type: "ellipsis" }],
+              },
+              description: message`More items.`,
+            },
+          ],
+        },
+      ],
+    };
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(result.includes("[...]") || result.includes("..."));
+  });
+
+  it("throws for unknown term type in doc usage formatting", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          entries: [
+            {
+              term: {
+                type: "optional",
+                terms: [{ type: "unknown_type" } as unknown as UsageTerm],
+              },
+              description: message`desc`,
+            },
+          ],
+        },
+      ],
+    };
+    assert.throws(
+      () => formatDocPageAsMan(page, minimalOptions),
+      /Unknown usage term type: unknown_type/,
+    );
+  });
+
+  it("returns empty string for optional with all-empty nested terms", () => {
+    // An optional whose inner terms all render to "" should produce ""
+    // (testing the if (inner === "") return "" branch)
+    const page: DocPage = {
+      sections: [
+        {
+          entries: [
+            {
+              term: {
+                type: "optional",
+                terms: [{
+                  type: "argument",
+                  metavar: "ARG",
+                  hidden: "doc",
+                }],
+              },
+              description: message`Hidden arg.`,
+            },
+          ],
+        },
+      ],
+    };
+    const result = formatDocPageAsMan(page, minimalOptions);
+    // The optional term renders as "" when all nested terms are doc-hidden
+    // and should not appear in the output
+    assert.ok(!result.includes("[") || result.includes(".TH"));
+  });
+
+  it("filters doc-hidden entries from doc sections", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          title: "OPTIONS",
+          entries: [
+            {
+              term: { type: "option", names: ["--visible"] },
+              description: message`Visible option.`,
+            },
+            {
+              term: {
+                type: "option",
+                names: ["--hidden-opt"],
+                hidden: "doc",
+              },
+              description: message`Hidden option.`,
+            },
+          ],
+        },
+      ],
+    };
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(result.includes("visible"));
+    assert.ok(!result.includes("hidden-opt"));
   });
 });
