@@ -618,6 +618,21 @@ describe("integer", () => {
         assert.equal(typeof result.value, "bigint");
       }
     });
+
+    it("should use min as default placeholder when min > 0n", () => {
+      const parser = integer({ type: "bigint", min: 5n });
+      assert.equal(parser.placeholder, 5n);
+    });
+
+    it("should use max as default placeholder when max < 0n", () => {
+      const parser = integer({ type: "bigint", max: -3n });
+      assert.equal(parser.placeholder, -3n);
+    });
+
+    it("should use 0n as default placeholder when range includes 0", () => {
+      const parser = integer({ type: "bigint", min: -5n, max: 10n });
+      assert.equal(parser.placeholder, 0n);
+    });
   });
 
   describe("error messages", () => {
@@ -879,6 +894,18 @@ describe("integer", () => {
 
     it("should not throw when min equals max (bigint mode)", () => {
       assert.doesNotThrow(() => integer({ type: "bigint", min: 5n, max: 5n }));
+    });
+
+    it("should throw RangeError when fractional bounds leave no integer in range", () => {
+      // 1.5 <= 1.9 so the earlier min>max check passes, but Math.ceil(1.5)=2
+      // and Math.floor(1.9)=1, leaving no safe integer in [1.5, 1.9].
+      assert.throws(
+        () => integer({ min: 1.5, max: 1.9 }),
+        {
+          name: "RangeError",
+          message: /contains no safe integers/u,
+        },
+      );
     });
   });
 
@@ -1863,6 +1890,14 @@ describe("choice", () => {
       assert.throws(
         () => choice([] as number[]),
         TypeError,
+      );
+    });
+
+    it("should throw TypeError when any choice is NaN", () => {
+      // NaN in number choices is caught at construction time, not at parse time.
+      assert.throws(
+        () => choice([NaN]),
+        { name: "TypeError", message: "NaN is not allowed in number choices." },
       );
     });
 
@@ -2859,6 +2894,28 @@ describe("float", () => {
       if (result2.success) {
         assert.equal(result2.value, 0.123456789012345);
       }
+    });
+  });
+
+  describe("placeholder", () => {
+    it("should use min as default placeholder when min > 0", () => {
+      const parser = float({ min: 5 });
+      assert.equal(parser.placeholder, 5);
+    });
+
+    it("should use max as default placeholder when max < 0", () => {
+      const parser = float({ max: -3 });
+      assert.equal(parser.placeholder, -3);
+    });
+
+    it("should use 0 as default placeholder when range includes 0", () => {
+      const parser = float({ min: -5, max: 10 });
+      assert.equal(parser.placeholder, 0);
+    });
+
+    it("should use 0 as default placeholder when no bounds given", () => {
+      const parser = float({});
+      assert.equal(parser.placeholder, 0);
     });
   });
 
