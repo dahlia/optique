@@ -865,6 +865,31 @@ describe("createConsoleSink()", () => {
     );
   });
 
+  it("should throw TypeError for numeric stream option", () => {
+    // Non-string, non-object invalid stream uses String(value) for repr
+    // (line 233–234 in output.ts: `value === null || typeof value !== "object"`).
+    assert.throws(
+      () => createConsoleSink({ stream: 42 as never }),
+      {
+        name: "TypeError",
+        message: 'Invalid stream: expected "stdout" or "stderr", got 42.',
+      },
+    );
+  });
+
+  it("should throw TypeError for object stream option", () => {
+    // Non-null object stream uses JSON.stringify for repr
+    // (line 235–241 in output.ts: the else branch).
+    assert.throws(
+      () => createConsoleSink({ stream: { custom: true } as never }),
+      {
+        name: "TypeError",
+        message:
+          'Invalid stream: expected "stdout" or "stderr", got {"custom":true}.',
+      },
+    );
+  });
+
   it("should treat null stream as default stderr", () => {
     const sink = createConsoleSink({ stream: null });
     const originalError = console.error;

@@ -350,6 +350,22 @@ describe("generateManPageSync()", () => {
     );
   });
 
+  it("rejects a Proxy that throws on property access", () => {
+    // isParser() and isProgram() each have a try/catch so that Proxies with
+    // throwing traps are treated as "not a parser" rather than propagating
+    // the exception.
+    const throwingProxy = new Proxy({}, {
+      has(_target, _prop) {
+        throw new Error("property access denied");
+      },
+    });
+    assert.throws(
+      () =>
+        generateManPageSync(throwingProxy as never, { name: "x", section: 1 }),
+      { name: "TypeError", message: /not a valid.*Parser/ },
+    );
+  });
+
   it("rejects empty name", () => {
     const parser = object({});
     assert.throws(
