@@ -1120,6 +1120,122 @@ describe("or", () => {
   });
 });
 
+describe("or() inside object() — zero-input complete path", () => {
+  it("completes a zero-consumed constant() branch when the field was never parsed", () => {
+    // When or() is nested inside object(), its complete() is called with
+    // state=undefined for fields that were never touched.  The zero-input
+    // candidate path (lines 1167-1180 in constructs.ts) fires when there is
+    // exactly one branch that succeeds with 0 consumed tokens.
+    const parser = object({
+      mode: or(constant("default"), option("--mode", string())),
+    });
+
+    const result = parseSync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "default");
+    }
+  });
+
+  it("selects non-constant branch when a consuming branch has already been matched", () => {
+    const parser = object({
+      mode: or(constant("default"), option("--mode", string())),
+    });
+
+    const result = parseSync(parser, ["--mode", "fast"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "fast");
+    }
+  });
+
+  it("returns no-match error when no zero-input candidate exists in undefined state", () => {
+    // or(option(...), option(...)) has no zero-consumed fallback.
+    const parser = object({
+      action: or(option("-a", string()), option("-b", string())),
+    });
+
+    const result = parseSync(parser, []);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(result.error, message`No matching option found.`);
+    }
+  });
+
+  it("async: completes a sync constant() branch when the async or() field was never parsed", async () => {
+    // The async or() zero-input complete path fires when or() contains
+    // an async parser, the state is undefined, and there is exactly one
+    // sync zero-consumed candidate.
+    const asyncOption: Parser<"async", string, string> = {
+      mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [{ type: "option", names: ["--file"], metavar: "FILE" }],
+      leadingNames: new Set(["--file"]),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse: () =>
+        Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`no match`,
+        }),
+      complete: () =>
+        Promise.resolve({ success: false as const, error: message`no value` }),
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = object({
+      mode: or(constant("async-default"), asyncOption),
+    });
+
+    const result = await parseAsync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "async-default");
+    }
+  });
+
+  it("async: returns no-match error when async or() has no zero-input candidate", async () => {
+    // When or() is async and has no zero-consumed fallback branch, the
+    // no-match error path (lines 1214-1218 in constructs.ts) fires.
+    const asyncOption: Parser<"async", string, string> = {
+      mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [{ type: "option", names: ["--file"], metavar: "FILE" }],
+      leadingNames: new Set(["--file"]),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse: () =>
+        Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`no match`,
+        }),
+      complete: () =>
+        Promise.resolve({ success: false as const, error: message`no value` }),
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = object({
+      action: or(asyncOption),
+    });
+
+    const result = await parseAsync(parser, []);
+    // Fails because the only branch is a named option with no zero-consumed
+    // fallback, so the async no-match/no-candidate path fires.
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(result.error, message`No matching option found.`);
+    }
+  });
+});
+
 describe("or() - duplicate option handling", () => {
   it("should allow duplicate option names in different branches", () => {
     // or() allows duplicates because branches are mutually exclusive

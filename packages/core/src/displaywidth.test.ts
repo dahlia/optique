@@ -373,4 +373,26 @@ describe("getDisplayWidth", () => {
       );
     });
   });
+
+  describe("rare Unicode double-width ranges", () => {
+    it("should count U+1F250 (🉐) as width 2", () => {
+      assert.equal(getDisplayWidth("\u{1F250}"), 2);
+    });
+
+    it("should count U+1F251 (🉑) as width 2", () => {
+      assert.equal(getDisplayWidth("\u{1F251}"), 2);
+    });
+
+    it("should count U+1F260 as width 2", () => {
+      assert.equal(getDisplayWidth("\u{1F260}"), 2);
+    });
+
+    it("should count CJK Extension B U+20000 (𠀀) as width 2", () => {
+      assert.equal(getDisplayWidth("\u{20000}"), 2);
+    });
+
+    it("should count rare CJK U+30000 (𰀀) as width 2 if in font", () => {
+      assert.equal(getDisplayWidth("\u{30000}"), 2);
+    });
+  });
 });

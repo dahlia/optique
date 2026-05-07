@@ -890,6 +890,41 @@ describe("formatDocPage", () => {
     assert.ok(result.includes("(choices: debug, info, warn)"));
   });
 
+  it("should use default label when showChoices object has no label", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--format"] },
+          description: [{ type: "text", text: "Output format" }],
+          choices: valueSet(["json", "yaml"], { fallback: "", type: "unit" }),
+        }],
+      }],
+    };
+    const result = formatDocPage("myapp", page, {
+      showChoices: {},
+    });
+    assert.ok(result.includes(" (choices: json, yaml)"));
+  });
+
+  it("should use default prefix when showDefault object has no prefix", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--port"] },
+          description: [{ type: "text", text: "Port number" }],
+          default: message`3000`,
+        }],
+      }],
+    };
+    const result = formatDocPage("myapp", page, {
+      showDefault: { suffix: "]" },
+    });
+    // Uses the fallback prefix " [" since no prefix is specified;
+    // the plain-text default value "3000" should appear as " [3000]".
+    assert.ok(result.includes(" [3000]"));
+    assert.ok(result.includes("Port number"));
+  });
+
   it("should not show choices when entry has no choices field", () => {
     const page: DocPage = {
       sections: [{
@@ -2379,6 +2414,50 @@ describe("formatDocPage", () => {
         showChoices: { label: "v: " },
       });
       assertLinesWithinMaxWidth(result, 13);
+    });
+
+    it("uses fallback prefix ' [' when showDefault has no prefix (maxWidth path)", () => {
+      // The ?? fallback for showDefault.prefix at line 631 is only reached
+      // when maxWidth is set and needsDescColumn is true.
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "X" },
+            description: [{ type: "text", text: "d" }],
+            default: [{ type: "text", text: "0" }],
+          }],
+        }],
+      };
+      // showDefault has suffix but no prefix → uses default " [" (2 chars).
+      // minDescWidth = 2, minimum = termIndent(2) + max(4, 2*2+1) = 2 + 5 = 7
+      const result = formatDocPage("app", page, {
+        maxWidth: 40,
+        showDefault: { suffix: "]" },
+      });
+      assertLinesWithinMaxWidth(result, 40);
+      assert.ok(result.includes(" [0]"));
+    });
+
+    it("uses fallback label 'choices: ' when showChoices has no label (maxWidth path)", () => {
+      // The ?? fallback for showChoices.label at line 643 is only reached
+      // when maxWidth is set and needsDescColumn is true.
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "X" },
+            description: [{ type: "text", text: "d" }],
+            choices: valueSet(["a", "b"], { fallback: "", type: "unit" }),
+          }],
+        }],
+      };
+      // showChoices has prefix but no label → uses default "choices: " (9 chars).
+      // minDescWidth = prefix_width + label_width = 2 + 9 = 11
+      const result = formatDocPage("app", page, {
+        maxWidth: 60,
+        showChoices: { prefix: " (" },
+      });
+      assertLinesWithinMaxWidth(result, 60);
+      assert.ok(result.includes(" (choices: a, b)"));
     });
   });
 

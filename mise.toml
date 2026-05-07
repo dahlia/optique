@@ -47,3 +47,11 @@ depends = ["check", "test:*"]
 [tasks.build]
 description = "Build all packages for npm publishing"
 run = "pnpm run --filter '!{docs}' -r build"
+
+[tasks.coverage]
+description = "Measure test coverage"
+run = """
+deno test --allow-read --allow-write --allow-run --allow-env --allow-net --allow-sys --allow-ffi --env-file=.env.test --coverage=coverage/raw
+deno coverage coverage/raw --lcov --include="packages/" > coverage/lcov.info
+deno coverage coverage/raw --include="packages/"
+"""

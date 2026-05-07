@@ -754,4 +754,111 @@ describe("annotation-state", () => {
       assert.strictEqual(normalized.self, cyclic);
     },
   );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() preserves non-plain objects (Date, RegExp) as-is at the top level",
+    () => {
+      // Date and RegExp are non-plain objects whose prototype is not
+      // Object.prototype/null — they are neither Array nor Map nor Set.
+      // normalizeNestedDelegatedAnnotationState() should return them
+      // unchanged rather than treating them as structured plain objects.
+      const date = new Date(2024, 0, 1);
+      const re = /hello/g;
+
+      assert.strictEqual(normalizeNestedDelegatedAnnotationState(date), date);
+      assert.strictEqual(normalizeNestedDelegatedAnnotationState(re), re);
+    },
+  );
+
+  it(
+    "getWrappedChildState() falls back to annotation-view proxy when inheritance is disabled",
+    () => {
+      // When parser does NOT have inheritParentAnnotationsKey set (no
+      // defineInheritedAnnotationParser() call), getWrappedChildState() must
+      // still propagate annotations — but only via withAnnotationView(), not
+      // via injectAnnotations().  This is the branch where
+      // shouldInheritAnnotations is false and childState is an object.
+      const marker = Symbol.for(
+        "@test/getWrappedChildState-no-inherit-object",
+      );
+      const annotations = { [marker]: true } satisfies Annotations;
+      const parentState = injectAnnotations(undefined, annotations);
+
+      // Plain parser that does NOT opt in to annotation inheritance.
+      const parser: Parser<"sync", unknown, unknown> = {
+        mode: "sync",
+        $valueType: [] as readonly unknown[],
+        $stateType: [] as readonly unknown[],
+        priority: 1,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`unused parse: ${String(context.state)}`,
+          };
+        },
+        complete() {
+          return { success: true as const, value: undefined };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      // Deliberately do NOT call defineInheritedAnnotationParser(parser).
+
+      const childState = { value: "seed" };
+      const wrapped = getWrappedChildState(parentState, childState, parser);
+
+      // wrapped must carry the parent annotations via annotation-view proxy
+      assert.ok(
+        getAnnotations(wrapped)?.[marker],
+        "annotations should be surfaced via the annotation-view proxy",
+      );
+      // The proxy must preserve the original object shape
+      assert.equal(
+        (wrapped as typeof childState).value,
+        "seed",
+        "wrapped child state should preserve original value",
+      );
+      // normalizeDelegatedAnnotationState must unwrap back to childState
+      assert.strictEqual(
+        normalizeDelegatedAnnotationState(wrapped),
+        childState,
+      );
+    },
+  );
+
+  it(
+    "getDelegatedAnnotationState() returns child unchanged when already a tracked carrier with same annotations",
+    () => {
+      // This exercises the short-circuit branch:
+      //   getAnnotations(childState) === annotations &&
+      //   (delegatedAnnotationCloneTargets.has(...) || annotationViewTargets.has(...))
+      const marker = Symbol.for(
+        "@test/getDelegatedAnnotationState-idempotent",
+      );
+      const annotations = { [marker]: true } satisfies Annotations;
+      const parentState = injectAnnotations(undefined, annotations);
+
+      // First delegation creates a tracked clone
+      const original = { value: "seed" };
+      const delegated = getDelegatedAnnotationState(parentState, original);
+
+      // Second delegation on the already-delegated object should be a no-op
+      const reDelegated = getDelegatedAnnotationState(parentState, delegated);
+
+      assert.strictEqual(
+        reDelegated,
+        delegated,
+        "re-delegating an already-tracked carrier with same annotations should return it unchanged",
+      );
+    },
+  );
 });

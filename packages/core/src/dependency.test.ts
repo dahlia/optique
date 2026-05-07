@@ -344,6 +344,51 @@ describe("derive()", () => {
     assert.equal(derived.format("test.txt"), "test.txt");
   });
 
+  test("placeholder returns undefined when factory throws", () => {
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = modeParser.derive<string>({
+      metavar: "VALUE",
+      mode: "sync",
+      factory: (value: "safe" | "broken") => {
+        if (value === "broken") {
+          throw new Error("derive sync factory exploded");
+        }
+        return string({ metavar: "VALUE" });
+      },
+      defaultValue: () => "broken" as const,
+    });
+
+    // When the factory throws, the placeholder getter catches it and returns
+    // undefined cast to the value type.
+    assert.equal(derived.placeholder, undefined);
+  });
+
+  test("parse() returns error result when factory throws", () => {
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = modeParser.derive<string>({
+      metavar: "VALUE",
+      mode: "sync",
+      factory: (value: "safe" | "broken") => {
+        if (value === "broken") {
+          throw new Error("derive sync factory exploded");
+        }
+        return string({ metavar: "VALUE" });
+      },
+      defaultValue: () => "broken" as const,
+    });
+
+    const result = derived.parse("anyInput");
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(
+        result.error,
+        message`Derived parser error: ${"derive sync factory exploded"}`,
+      );
+    }
+  });
+
   test("format() should not throw when factory throws on default value", () => {
     const modeParser = dependency(choice(["safe", "broken"] as const));
 
@@ -1432,6 +1477,49 @@ describe("derive() with async factory", () => {
       name: "TypeError",
       message: "Parser exploded.",
     });
+  });
+
+  test("async factory: placeholder returns undefined when factory throws", () => {
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = modeParser.derive({
+      metavar: "VALUE",
+      mode: "async",
+      factory: (value: "safe" | "broken") => {
+        if (value === "broken") {
+          throw new Error("derive async factory exploded");
+        }
+        return asyncChoice(["a", "b"]);
+      },
+      defaultValue: () => "broken" as const,
+    });
+
+    assert.equal(derived.placeholder, undefined);
+  });
+
+  test("async factory: parse() resolves to error when factory throws", async () => {
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = modeParser.derive({
+      metavar: "VALUE",
+      mode: "async",
+      factory: (value: "safe" | "broken") => {
+        if (value === "broken") {
+          throw new Error("derive async factory exploded");
+        }
+        return asyncChoice(["a", "b"]);
+      },
+      defaultValue: () => "broken" as const,
+    });
+
+    const result = await derived.parse("anyInput");
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(
+        result.error,
+        message`Derived parser error: ${"derive async factory exploded"}`,
+      );
+    }
   });
 
   test("format() should not throw when factory throws on default value", () => {
@@ -4435,6 +4523,24 @@ describe("coverage-guided dependency parser tests", () => {
       await collectSuggestions(singleAsyncSourceSuggest("v", "boom")),
       [],
     );
+  });
+
+  test("suggestWithDependency returns empty when sync derived parser has no suggest method", () => {
+    // string() has no suggest() method, so suggestWithDependency should skip
+    const envParser = dependency(choice(["dev", "prod"] as const));
+    const derived = deriveFrom({
+      metavar: "VALUE",
+      mode: "sync",
+      dependencies: [envParser] as const,
+      factory: (_env: "dev" | "prod") => string({ metavar: "FILE" }),
+      defaultValues: () => ["dev"] as const,
+    });
+    const suggestFn = derived[suggestWithDependency];
+    assert.ok(suggestFn != null);
+    const suggestions = [
+      ...(suggestFn("v", ["prod"] as const) as Iterable<Suggestion>),
+    ];
+    assert.deepEqual(suggestions, []);
   });
 
   test("suggestWithDependency should fall back to defaults for deriveFromAsync", async () => {

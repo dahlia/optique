@@ -1370,6 +1370,39 @@ describe("runSync", () => {
       assert.ok(helpOutput.includes("myapp-sync"));
       assert.equal(exitCode, 0);
     });
+
+    it("should use explicit programName over program metadata name", () => {
+      // When programName is provided in options alongside a Program object,
+      // the explicit programName is used instead of program.metadata.name.
+      // This exercises the `options.programName == null ? ... : options`
+      // branch in run.ts (line 400).
+      const parser = option("--verbose");
+      const prog: Program<"sync", boolean> = {
+        parser,
+        metadata: { name: "metadata-name" },
+      };
+
+      let helpOutput = "";
+
+      assert.throws(
+        () =>
+          runSync(prog, {
+            args: ["--help"],
+            programName: "override-name",
+            help: "option",
+            stdout: (text) => {
+              helpOutput += `${text}\n`;
+            },
+            onExit: () => {
+              throw new Error("exit");
+            },
+          }),
+        /exit/,
+      );
+
+      assert.ok(helpOutput.includes("override-name"));
+      assert.ok(!helpOutput.includes("metadata-name"));
+    });
   });
 });
 

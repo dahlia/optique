@@ -578,6 +578,30 @@ describe("git parsers", () => {
         },
       );
     });
+
+    it("should reject null remote", () => {
+      assert.throws(
+        () => gitRemoteBranch(null as never, { dir: "/tmp/dummy" }),
+        {
+          name: "TypeError",
+          message:
+            "Expected remote to be a non-empty string without whitespace " +
+            "or control characters, but got: null.",
+        },
+      );
+    });
+
+    it("should reject array remote", () => {
+      assert.throws(
+        () => gitRemoteBranch(["origin"] as never, { dir: "/tmp/dummy" }),
+        {
+          name: "TypeError",
+          message:
+            "Expected remote to be a non-empty string without whitespace " +
+            "or control characters, but got: array.",
+        },
+      );
+    });
   });
 
   describe("gitCommit()", () => {

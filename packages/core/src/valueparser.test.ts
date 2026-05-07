@@ -618,6 +618,21 @@ describe("integer", () => {
         assert.equal(typeof result.value, "bigint");
       }
     });
+
+    it("should use min as default placeholder when min > 0n", () => {
+      const parser = integer({ type: "bigint", min: 5n });
+      assert.equal(parser.placeholder, 5n);
+    });
+
+    it("should use max as default placeholder when max < 0n", () => {
+      const parser = integer({ type: "bigint", max: -3n });
+      assert.equal(parser.placeholder, -3n);
+    });
+
+    it("should use 0n as default placeholder when range includes 0", () => {
+      const parser = integer({ type: "bigint", min: -5n, max: 10n });
+      assert.equal(parser.placeholder, 0n);
+    });
   });
 
   describe("error messages", () => {
@@ -879,6 +894,18 @@ describe("integer", () => {
 
     it("should not throw when min equals max (bigint mode)", () => {
       assert.doesNotThrow(() => integer({ type: "bigint", min: 5n, max: 5n }));
+    });
+
+    it("should throw RangeError when fractional bounds leave no integer in range", () => {
+      // 1.5 <= 1.9 so the earlier min>max check passes, but Math.ceil(1.5)=2
+      // and Math.floor(1.9)=1, leaving no safe integer in [1.5, 1.9].
+      assert.throws(
+        () => integer({ min: 1.5, max: 1.9 }),
+        {
+          name: "RangeError",
+          message: /contains no safe integers/u,
+        },
+      );
     });
   });
 
@@ -1797,6 +1824,13 @@ describe("choice", () => {
       assert.equal(parser.format(12), "12");
     });
 
+    it('should format -0 as "-0" not "0"', () => {
+      const parser = choice([0, -0, 1]);
+      assert.equal(parser.format(0), "0");
+      assert.equal(parser.format(-0), "-0");
+      assert.equal(parser.format(1), "1");
+    });
+
     it("should provide suggestions for number choices", () => {
       const parser = choice([8, 10, 12]);
 
@@ -1856,6 +1890,14 @@ describe("choice", () => {
       assert.throws(
         () => choice([] as number[]),
         TypeError,
+      );
+    });
+
+    it("should throw TypeError when any choice is NaN", () => {
+      // NaN in number choices is caught at construction time, not at parse time.
+      assert.throws(
+        () => choice([NaN]),
+        { name: "TypeError", message: "NaN is not allowed in number choices." },
       );
     });
 
@@ -2115,6 +2157,26 @@ describe("choice", () => {
 
       const result2 = parser.parse("2");
       assert.ok(result2.success);
+    });
+
+    it("should deduplicate repeated 0 and -0 in number choices", () => {
+      // Providing [0, -0, 0, -0, 1] should produce exactly [0, -0, 1]
+      // after deduplication. The second 0 and second -0 hit the `continue`
+      // branches for hasPositiveZero and hasNegativeZero respectively.
+      const parser = choice([0, -0, 0, -0, 1]);
+      assert.deepEqual(parser.choices, [0, -0, 1]);
+
+      const posResult = parser.parse("0");
+      assert.ok(posResult.success);
+      if (posResult.success) assert.ok(Object.is(posResult.value, 0));
+
+      const negResult = parser.parse("-0");
+      assert.ok(negResult.success);
+      if (negResult.success) assert.ok(Object.is(negResult.value, -0));
+
+      const oneResult = parser.parse("1");
+      assert.ok(oneResult.success);
+      if (oneResult.success) assert.equal(oneResult.value, 1);
     });
   });
 
@@ -2832,6 +2894,28 @@ describe("float", () => {
       if (result2.success) {
         assert.equal(result2.value, 0.123456789012345);
       }
+    });
+  });
+
+  describe("placeholder", () => {
+    it("should use min as default placeholder when min > 0", () => {
+      const parser = float({ min: 5 });
+      assert.equal(parser.placeholder, 5);
+    });
+
+    it("should use max as default placeholder when max < 0", () => {
+      const parser = float({ max: -3 });
+      assert.equal(parser.placeholder, -3);
+    });
+
+    it("should use 0 as default placeholder when range includes 0", () => {
+      const parser = float({ min: -5, max: 10 });
+      assert.equal(parser.placeholder, 0);
+    });
+
+    it("should use 0 as default placeholder when no bounds given", () => {
+      const parser = float({});
+      assert.equal(parser.placeholder, 0);
     });
   });
 
@@ -6181,6 +6265,38 @@ describe("port", () => {
         TypeError,
       );
     });
+
+    it("should throw RangeError when disallowWellKnown range covers only well-known ports (number)", () => {
+      // When both min and max are below 1024 and disallowWellKnown is true,
+      // every port in the range would be rejected, so construction must fail.
+      assert.throws(
+        () => port({ min: 80, max: 443, disallowWellKnown: true }),
+        {
+          name: "RangeError",
+          message:
+            "disallowWellKnown is incompatible with the configured port range: " +
+            "all ports 80..443 are well-known.",
+        },
+      );
+    });
+
+    it("should throw RangeError when disallowWellKnown range covers only well-known ports (bigint)", () => {
+      assert.throws(
+        () =>
+          port({
+            type: "bigint",
+            min: 80n,
+            max: 443n,
+            disallowWellKnown: true,
+          }),
+        {
+          name: "RangeError",
+          message:
+            "disallowWellKnown is incompatible with the configured port range: " +
+            "all ports 80..443 are well-known.",
+        },
+      );
+    });
   });
 
   describe("type discriminant validation", () => {
@@ -7021,6 +7137,23 @@ describe("hostname()", () => {
 
       const result = parser.parse("*.localhost");
       assert.ok(result.success);
+    });
+
+    it("should use function callback for wildcard localhost error", () => {
+      const parser = hostname({
+        allowLocalhost: false,
+        allowWildcard: true,
+        errors: {
+          localhostNotAllowed: (input) => message`blocked: ${input}`,
+        },
+      });
+
+      const result = parser.parse("*.localhost");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "blocked: " },
+        { type: "value", value: "*.localhost" },
+      ]);
     });
   });
 

@@ -469,6 +469,28 @@ describe("bindEnv()", () => {
         },
       );
     });
+
+    it("throws TypeError for any non-string key", () => {
+      const context = createEnvContext();
+
+      fc.assert(
+        fc.property(
+          fc.anything().filter((v) => typeof v !== "string"),
+          (invalidKey) => {
+            assert.throws(
+              () =>
+                bindEnv(option("--name", string()), {
+                  context,
+                  key: invalidKey as never,
+                  parser: string(),
+                }),
+              { name: "TypeError", message: /Expected key to be a string/ },
+            );
+          },
+        ),
+        propertyParameters,
+      );
+    });
   });
 
   describe("parser validation", () => {
@@ -549,6 +571,39 @@ describe("bindEnv()", () => {
           name: "TypeError",
           message: "Expected parser to be a ValueParser, but got: array.",
         },
+      );
+    });
+
+    it("throws TypeError for any non-ValueParser parser value", () => {
+      const context = createEnvContext();
+
+      fc.assert(
+        fc.property(
+          fc.oneof(
+            fc.integer(),
+            fc.float(),
+            fc.boolean(),
+            fc.string(),
+            fc.constant(null),
+            fc.constant([]),
+            fc.record({}),
+          ),
+          (invalidParser) => {
+            assert.throws(
+              () =>
+                bindEnv(option("--name", string()), {
+                  context,
+                  key: "NAME",
+                  parser: invalidParser as never,
+                }),
+              {
+                name: "TypeError",
+                message: /Expected parser to be a ValueParser/,
+              },
+            );
+          },
+        ),
+        propertyParameters,
       );
     });
   });

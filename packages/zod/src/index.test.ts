@@ -1371,3 +1371,174 @@ describe("zod()", () => {
     });
   });
 });
+
+describe("inferMetavar() — non-coerce schemas", () => {
+  it("should infer BOOLEAN for z.boolean() (non-coerce)", () => {
+    // z.boolean() has typeName/type "ZodBoolean"/"boolean" — same branch as coerce
+    const parser = zod(z.boolean(), { placeholder: false });
+    assert.equal(parser.metavar, "BOOLEAN");
+  });
+
+  it("should infer DATE for z.date() (non-coerce)", () => {
+    const parser = zod(
+      z.date(),
+      // z.date() rejects strings, so we only test metavar inference here
+      { placeholder: new Date(0) },
+    );
+    assert.equal(parser.metavar, "DATE");
+  });
+
+  it("should infer NUMBER for z.number() (non-coerce)", () => {
+    const parser = zod(z.number(), { placeholder: 0 });
+    assert.equal(parser.metavar, "NUMBER");
+  });
+
+  it("should infer INTEGER for z.number().int() (non-coerce)", () => {
+    const parser = zod(z.number().int(), { placeholder: 0 });
+    assert.equal(parser.metavar, "INTEGER");
+  });
+});
+
+describe("analyzeBooleanInner() — cycle detection via z.lazy()", () => {
+  it("should not infinite-loop on a self-referential lazy schema", () => {
+    // Create a lazy schema that refers to itself — the WeakSet in
+    // analyzeBooleanInner must break the cycle and return isBoolean=false.
+    // deno-lint-ignore prefer-const
+    let lazySchema: z.ZodType<unknown>;
+    lazySchema = z.lazy(() => lazySchema);
+    // If cycle detection is broken this would recurse infinitely.
+    // Just constructing the parser is enough to exercise the guard.
+    const parser = zod(
+      lazySchema as z.Schema<unknown>,
+      { placeholder: null as unknown },
+    );
+    // The schema is not recognized as boolean, so no boolean-specific metavar.
+    assert.notEqual(parser.metavar, "BOOLEAN");
+  });
+
+  it("should resolve a non-cyclic lazy boolean schema as boolean", () => {
+    const lazyBool = z.lazy(() => z.boolean());
+    const parser = zod(lazyBool as z.Schema<boolean>, { placeholder: false });
+    assert.equal(parser.metavar, "BOOLEAN");
+    // Should parse boolean literals correctly
+    const trueResult = parser.parse("true");
+    assert.ok(trueResult.success);
+    assert.ok(trueResult.value);
+    const falseResult = parser.parse("false");
+    assert.ok(falseResult.success);
+    assert.ok(!falseResult.value);
+  });
+
+  it("should handle optional wrapping a self-referential lazy schema", () => {
+    // deno-lint-ignore prefer-const
+    let lazySchema: z.ZodType<unknown>;
+    lazySchema = z.lazy(() => lazySchema);
+    // optional unwraps to the lazy schema, which cycles back to itself
+    const wrapped = lazySchema.optional();
+    const parser = zod(
+      wrapped as z.Schema<unknown>,
+      { placeholder: null as unknown },
+    );
+    assert.notEqual(parser.metavar, "BOOLEAN");
+  });
+});
+
+describe("inferChoices() — non-string literal values", () => {
+  it("should return undefined for a z.literal(42) (numeric literal, no string choices)", () => {
+    // z.literal(42) has _def.values = [42].  inferChoices filters to string
+    // values only, producing stringValues = [], so the guard
+    //   stringValues.length > 0 ? stringValues : undefined
+    // yields undefined — no choices are exposed.
+    const parser = zod(z.literal(42), { placeholder: 42 });
+    assert.equal(parser.choices, undefined);
+    assert.equal(parser.metavar, "VALUE");
+  });
+
+  it("should return undefined for a z.nativeEnum({}) with empty values object", () => {
+    // z.nativeEnum({}) is a real Zod v4 schema with _def.entries = {},
+    // so inferChoices loops over an empty object and result.size === 0 →
+    // result.size > 0 ? [...result] : undefined yields undefined.
+    const parser = zod(z.nativeEnum({}) as z.Schema<never>, {
+      placeholder: "" as never,
+    });
+    assert.equal(parser.choices, undefined);
+  });
+
+  it("should return undefined for a z.enum([]) with empty entries object", () => {
+    // z.enum([]) in Zod v4 has _def.entries = {} (empty object), so
+    // inferChoices loops over Object.values({}) producing an empty Set,
+    // and result.size > 0 ? [...result] : undefined yields undefined
+    // (branch 10 at line 482).
+    const parser = zod(z.enum([] as never), { placeholder: "" as never });
+    assert.equal(parser.choices, undefined);
+  });
+});
+
+describe("format() — class instance branch", () => {
+  it("should use String() for class instances whose toString returns [object Object]", () => {
+    // A class whose toString returns the default "[object Object]" string.
+    // The format() function should fall through to `return str` (line 827)
+    // rather than attempting JSON.stringify (which applies only to plain objects).
+    class MyValue {
+      readonly n: number;
+      constructor(n: number) {
+        this.n = n;
+      }
+      // No custom toString — default "[object Object]"
+    }
+    const parser = zod(
+      z.string().transform(() => new MyValue(42)),
+      { placeholder: new MyValue(0) },
+    );
+    // String(new MyValue(42)) === "[object Object]" but
+    // Object.getPrototypeOf(new MyValue(42)) !== Object.prototype,
+    // so the JSON.stringify branch is skipped and str ("[object Object]") is returned.
+    assert.equal(parser.format(new MyValue(42)), "[object Object]");
+  });
+
+  it("should use String() for class instances with a custom toString", () => {
+    // A class with a custom toString returns something other than "[object Object]",
+    // so format() returns it directly via the `if (str !== "[object Object]")` branch.
+    class NamedValue {
+      readonly name: string;
+      constructor(name: string) {
+        this.name = name;
+      }
+      toString() {
+        return `NamedValue(${this.name})`;
+      }
+    }
+    const parser = zod(
+      z.string().transform((s) => new NamedValue(s)),
+      { placeholder: new NamedValue("") },
+    );
+    assert.equal(parser.format(new NamedValue("hello")), "NamedValue(hello)");
+  });
+});
+
+describe("parse() — non-async errors are re-thrown", () => {
+  it("should propagate non-async errors thrown inside safeParse", () => {
+    // A schema whose transform throws a plain non-async error.
+    // The try/catch in doSafeParse re-throws it because isZodAsyncError()
+    // returns false for regular errors.
+    const schema = z.string().transform((s) => {
+      throw new RangeError(`out of range: ${s}`);
+    });
+    const parser = zod(schema, { placeholder: "" });
+    assert.throws(
+      () => parser.parse("hello"),
+      { name: "RangeError", message: "out of range: hello" },
+    );
+  });
+
+  it("should propagate TypeError thrown inside safeParse", () => {
+    const schema = z.string().transform(() => {
+      throw new TypeError("bad type");
+    });
+    const parser = zod(schema, { placeholder: "" });
+    assert.throws(
+      () => parser.parse("value"),
+      { name: "TypeError", message: "bad type" },
+    );
+  });
+});
