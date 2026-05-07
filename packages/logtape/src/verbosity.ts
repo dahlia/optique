@@ -49,11 +49,6 @@ const VERBOSITY_LEVELS: readonly LogLevel[] = [
 ];
 
 /**
- * Index of "warning" in VERBOSITY_LEVELS (the default base level).
- */
-const WARNING_INDEX = 2;
-
-/**
  * Creates a parser for verbosity flags (`-v`, `-vv`, `-vvv`, etc.).
  *
  * This parser accumulates `-v` flags to determine the log level.
@@ -108,9 +103,8 @@ export function verbosity(
 
   validateLogLevel(baseLevel, "baseLevel");
 
-  // Find the index of the base level
-  const baseIndex = VERBOSITY_LEVELS.indexOf(baseLevel);
-  const effectiveBaseIndex = baseIndex >= 0 ? baseIndex : WARNING_INDEX;
+  // validateLogLevel() above guarantees baseLevel is in VERBOSITY_LEVELS
+  const effectiveBaseIndex = VERBOSITY_LEVELS.indexOf(baseLevel);
 
   const flagParser = flag(short, long, {
     description: options.description ??

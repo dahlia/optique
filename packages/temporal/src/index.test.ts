@@ -1408,3 +1408,164 @@ describe("Temporal API unavailability", () => {
     });
   }
 });
+
+describe("default error messages include the input value", () => {
+  const invalidInputs = [
+    "not-valid",
+    "2020/01/23",
+    "garbage",
+    "123abc",
+    "2020-01-23T",
+  ] as const;
+
+  it("instant default error message references the invalid input as a value term", () => {
+    const parser = instant();
+    for (const input of invalidInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success);
+      assert.ok(
+        result.error.some((term) =>
+          term.type === "value" && term.value === input
+        ),
+        `Expected input ${
+          JSON.stringify(input)
+        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+      );
+    }
+  });
+
+  it("duration default error message references the invalid input as a value term", () => {
+    const parser = duration();
+    for (const input of invalidInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success);
+      assert.ok(
+        result.error.some((term) =>
+          term.type === "value" && term.value === input
+        ),
+        `Expected input ${
+          JSON.stringify(input)
+        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+      );
+    }
+  });
+
+  it("zonedDateTime default error message references the invalid input as a value term", () => {
+    const parser = zonedDateTime();
+    for (const input of invalidInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success);
+      assert.ok(
+        result.error.some((term) =>
+          term.type === "value" && term.value === input
+        ),
+        `Expected input ${
+          JSON.stringify(input)
+        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+      );
+    }
+  });
+
+  it("plainDate default error message references the invalid input as a value term", () => {
+    const parser = plainDate();
+    for (const input of invalidInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success);
+      assert.ok(
+        result.error.some((term) =>
+          term.type === "value" && term.value === input
+        ),
+        `Expected input ${
+          JSON.stringify(input)
+        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+      );
+    }
+  });
+
+  it("plainTime default error message references the invalid input as a value term", () => {
+    const parser = plainTime();
+    const timeInvalidInputs = [
+      "not-valid",
+      "garbage",
+      "99:99:99",
+      "2020-01-23",
+    ];
+    for (const input of timeInvalidInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success);
+      assert.ok(
+        result.error.some((term) =>
+          term.type === "value" && term.value === input
+        ),
+        `Expected input ${
+          JSON.stringify(input)
+        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+      );
+    }
+  });
+
+  it("plainDateTime default error message references the invalid input as a value term", () => {
+    const parser = plainDateTime();
+    for (const input of invalidInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success);
+      assert.ok(
+        result.error.some((term) =>
+          term.type === "value" && term.value === input
+        ),
+        `Expected input ${
+          JSON.stringify(input)
+        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+      );
+    }
+  });
+
+  it("plainYearMonth default error message references the invalid input as a value term", () => {
+    const parser = plainYearMonth();
+    for (const input of invalidInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success);
+      assert.ok(
+        result.error.some((term) =>
+          term.type === "value" && term.value === input
+        ),
+        `Expected input ${
+          JSON.stringify(input)
+        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+      );
+    }
+  });
+
+  it("plainMonthDay default error message references the invalid input as a value term", () => {
+    const parser = plainMonthDay();
+    for (const input of invalidInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success);
+      assert.ok(
+        result.error.some((term) =>
+          term.type === "value" && term.value === input
+        ),
+        `Expected input ${
+          JSON.stringify(input)
+        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+      );
+    }
+  });
+
+  it("timeZone default error message references the invalid input as a value term", () => {
+    const parser = timeZone();
+    const tzInvalidInputs = ["not-valid", "garbage", "Fake/Zone", "123/456"];
+    for (const input of tzInvalidInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success);
+      assert.ok(
+        result.error.some((term) =>
+          term.type === "value" && term.value === input
+        ),
+        `Expected input ${
+          JSON.stringify(input)
+        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+      );
+    }
+  });
+});

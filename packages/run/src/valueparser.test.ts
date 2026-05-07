@@ -1403,4 +1403,161 @@ describe("path", () => {
       assert.equal(parser.metavar, "FILE");
     });
   });
+
+  describe("property-based validation", () => {
+    // Arbitrary for "safe" non-boolean primitive values: values that are
+    // neither boolean nor undefined and whose String() conversion does not
+    // itself throw (which would produce an unrelated error).
+    const nonBooleanPrimitiveArbitrary = fc.oneof(
+      fc.string(),
+      fc.integer(),
+      fc.float().filter((v) => !Number.isNaN(v)),
+      fc.bigInt(),
+      fc.constant(null),
+    );
+
+    it("should throw TypeError for any non-allowed type value", () => {
+      // Use primitive-like values that JSON.stringify handles predictably.
+      // fc.anything() can produce Symbols which JSON.stringify silently
+      // converts to undefined, making the type check pass unexpectedly.
+      const invalidTypeArbitrary = fc.oneof(
+        fc.string().filter(
+          (v) => v !== "file" && v !== "directory" && v !== "either",
+        ),
+        fc.integer(),
+        fc.boolean(),
+        fc.constant(null),
+      );
+
+      fc.assert(
+        fc.property(
+          invalidTypeArbitrary,
+          (invalidType) => {
+            assert.throws(
+              // @ts-expect-error intentional runtime validation test
+              () => path({ type: invalidType }),
+              {
+                name: "TypeError",
+                message: /Expected "file", "directory", or "either"/,
+              },
+            );
+          },
+        ),
+        propertyParameters,
+      );
+    });
+
+    it("should throw TypeError for any extension that is not a dot-prefixed string", () => {
+      // Covers both non-string values and strings not starting with "."
+      const invalidExtArbitrary = fc.oneof(
+        fc.string().filter((v) => !v.startsWith(".")),
+        fc.integer(),
+        fc.boolean(),
+        fc.constant(null),
+      );
+
+      fc.assert(
+        fc.property(
+          invalidExtArbitrary,
+          (invalidExt) => {
+            assert.throws(
+              // @ts-expect-error intentional runtime validation test
+              () => path({ extensions: [invalidExt] }),
+              {
+                name: "TypeError",
+                message: /must start with a dot/,
+              },
+            );
+          },
+        ),
+        propertyParameters,
+      );
+    });
+
+    it("should throw TypeError for any non-boolean non-undefined allowCreate value", () => {
+      fc.assert(
+        fc.property(
+          nonBooleanPrimitiveArbitrary,
+          (invalidValue) => {
+            assert.throws(
+              // @ts-expect-error intentional runtime validation test
+              () => path({ allowCreate: invalidValue }),
+              {
+                name: "TypeError",
+                message: /Expected allowCreate to be a boolean/,
+              },
+            );
+          },
+        ),
+        propertyParameters,
+      );
+    });
+
+    it("should throw TypeError for any non-boolean non-undefined mustExist value", () => {
+      fc.assert(
+        fc.property(
+          nonBooleanPrimitiveArbitrary,
+          (invalidValue) => {
+            assert.throws(
+              // @ts-expect-error intentional runtime validation test
+              () => path({ mustExist: invalidValue }),
+              {
+                name: "TypeError",
+                message: /Expected mustExist to be a boolean/,
+              },
+            );
+          },
+        ),
+        propertyParameters,
+      );
+    });
+
+    it("should throw TypeError for any non-boolean non-undefined mustNotExist value", () => {
+      fc.assert(
+        fc.property(
+          nonBooleanPrimitiveArbitrary,
+          (invalidValue) => {
+            assert.throws(
+              // @ts-expect-error intentional runtime validation test
+              () => path({ mustNotExist: invalidValue }),
+              {
+                name: "TypeError",
+                message: /Expected mustNotExist to be a boolean/,
+              },
+            );
+          },
+        ),
+        propertyParameters,
+      );
+    });
+
+    it("should throw TypeError for any non-string non-undefined placeholder value", () => {
+      // placeholder only validates that the value is a string when provided —
+      // use a non-string-containing arbitrary to avoid false negatives.
+      const nonStringNonUndefinedArbitrary = fc.oneof(
+        fc.integer(),
+        fc.float(),
+        fc.bigInt(),
+        fc.boolean(),
+        fc.constant(null),
+      );
+
+      fc.assert(
+        fc.property(
+          nonStringNonUndefinedArbitrary,
+          (invalidValue) => {
+            assert.throws(
+              // @ts-expect-error intentional runtime validation test
+              () => path({ placeholder: invalidValue }),
+              {
+                name: "TypeError",
+                message: /Expected placeholder to be a string/,
+              },
+            );
+          },
+        ),
+        propertyParameters,
+      );
+    });
+  });
 });
