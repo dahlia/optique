@@ -1194,6 +1194,38 @@ describe("or() inside object() — zero-input complete path", () => {
       assert.equal(result.value.mode, "async-default");
     }
   });
+
+  it("async: returns no-match error when async or() has no zero-input candidate", async () => {
+    // When or() is async and has no zero-consumed fallback branch, the
+    // no-match error path (lines 1214-1218 in constructs.ts) fires.
+    const asyncOption: Parser<"async", string, string> = {
+      mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [{ type: "argument", metavar: "FILE", hidden: false }],
+      leadingNames: new Set(["--file"]),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse: () =>
+        Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`no match`,
+        }),
+      complete: () =>
+        Promise.resolve({ success: false as const, error: message`no value` }),
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = object({
+      action: or(asyncOption),
+    });
+
+    const result = await parseAsync(parser, []);
+    assert.ok(!result.success);
+  });
 });
 
 describe("or() - duplicate option handling", () => {
