@@ -1286,8 +1286,7 @@ describe("valibot()", () => {
       // every value and the safe transformation never rejects.
       // Use `as never` to bypass TS strictness on the pipe argument types.
       const asyncSchema = v.union([
-        // deno-lint-ignore no-explicit-any
-        v.pipe(v.unknown(), v.trim() as any),
+        v.pipe(v.unknown(), v.trim() as never),
         asyncInner,
       ] as never);
       const parser = valibot(asyncSchema as never, {
@@ -1307,8 +1306,7 @@ describe("valibot()", () => {
       // the string pipe is still catch-all because every action accepts.
       const innerCatchAll = v.optional(v.string());
       const asyncSchema = v.union([
-        // deno-lint-ignore no-explicit-any
-        v.pipe(v.string(), innerCatchAll as any),
+        v.pipe(v.string(), innerCatchAll as never),
         asyncInner,
       ] as never);
       const parser = valibot(asyncSchema as never, {

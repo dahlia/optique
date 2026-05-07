@@ -2350,7 +2350,7 @@ describe("doc-level usage term formatting (nested terms)", () => {
             {
               term: {
                 type: "optional",
-                terms: [{ type: "unknown_type" } as unknown as UsageTerm],
+                terms: [{ type: "unknown_type" } as never],
               },
               description: message`desc`,
             },
@@ -2418,7 +2418,7 @@ describe("doc-level usage term formatting (nested terms)", () => {
     };
     const result = formatDocPageAsMan(page, minimalOptions);
     assert.ok(result.includes("visible"));
-    assert.ok(!result.includes("hidden-opt"));
+    assert.ok(!result.includes("Hidden option."));
   });
 
   it("formats exclusive term with all-empty alternatives as empty string", () => {

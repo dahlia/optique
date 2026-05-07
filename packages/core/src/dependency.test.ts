@@ -382,13 +382,9 @@ describe("derive()", () => {
     const result = derived.parse("anyInput");
     assert.ok(!result.success);
     if (!result.success) {
-      const errorText = result.error.map((part) =>
-        part.type === "text" ? part.text : ""
-      ).join("");
-      assert.ok(
-        errorText.includes("Derived parser error") ||
-          errorText.includes("factory exploded"),
-        `Unexpected error message: ${errorText}`,
+      assert.deepEqual(
+        result.error,
+        message`Derived parser error: ${"derive sync factory exploded"}`,
       );
     }
   });
@@ -1519,13 +1515,9 @@ describe("derive() with async factory", () => {
     const result = await derived.parse("anyInput");
     assert.ok(!result.success);
     if (!result.success) {
-      const errorText = result.error.map((part) =>
-        part.type === "text" ? part.text : ""
-      ).join("");
-      assert.ok(
-        errorText.includes("Derived parser error") ||
-          errorText.includes("factory exploded"),
-        `Unexpected error message: ${errorText}`,
+      assert.deepEqual(
+        result.error,
+        message`Derived parser error: ${"derive async factory exploded"}`,
       );
     }
   });
@@ -4540,7 +4532,7 @@ describe("coverage-guided dependency parser tests", () => {
       metavar: "VALUE",
       mode: "sync",
       dependencies: [envParser] as const,
-      factory: (_env: "dev" | "prod") => string({ metavar: "FILE" }) as never,
+      factory: (_env: "dev" | "prod") => string({ metavar: "FILE" }),
       defaultValues: () => ["dev"] as const,
     });
     const suggestFn = derived[suggestWithDependency];
