@@ -2414,4 +2414,67 @@ describe("doc-level usage term formatting (nested terms)", () => {
     assert.ok(result.includes("visible"));
     assert.ok(!result.includes("hidden-opt"));
   });
+
+  it("formats exclusive term with all-empty alternatives as empty string", () => {
+    // When all branches of an exclusive term produce empty strings (all
+    // terms inside each branch are doc-hidden), formatDocUsageAsRoff returns
+    // "" for the exclusive — line 400 in man.ts.
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: {
+            type: "exclusive",
+            terms: [
+              [{ type: "argument", metavar: "A", hidden: "doc" }],
+              [{ type: "argument", metavar: "B", hidden: "doc" }],
+            ],
+          },
+          description: message`A choice.`,
+        }],
+      }],
+    };
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(typeof result === "string");
+  });
+
+  it("formats exclusive term with exactly one non-empty alternative", () => {
+    // When only one alternative is non-empty, the result is unwrapped
+    // (no surrounding parens) — line 401 in man.ts.
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: {
+            type: "exclusive",
+            terms: [
+              [{ type: "argument", metavar: "FILE" }],
+              [{ type: "argument", metavar: "HIDDEN", hidden: "doc" }],
+            ],
+          },
+          description: message`A choice.`,
+        }],
+      }],
+    };
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(result.includes("FILE"));
+    assert.ok(!result.includes("(FILE |"));
+  });
+
+  it("formats multiple term with all-hidden inner terms as empty string", () => {
+    // When all inner terms of a multiple are doc-hidden,
+    // formatDocUsageAsRoff returns "" — line 389 in man.ts.
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: {
+            type: "multiple",
+            min: 0,
+            terms: [{ type: "argument", metavar: "ARG", hidden: "doc" }],
+          },
+          description: message`A repeatable.`,
+        }],
+      }],
+    };
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(typeof result === "string");
+  });
 });
