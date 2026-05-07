@@ -903,7 +903,7 @@ describe("formatDocPage", () => {
     const result = formatDocPage("myapp", page, {
       showChoices: {},
     });
-    assert.ok(result.includes("choices: json, yaml)"));
+    assert.ok(result.includes(" (choices: json, yaml)"));
   });
 
   it("should use default prefix when showDefault object has no prefix", () => {
@@ -921,7 +921,7 @@ describe("formatDocPage", () => {
     });
     // Uses the fallback prefix " [" since no prefix is specified;
     // the plain-text default value "3000" should appear as "[3000]".
-    assert.ok(result.includes("[3000]"));
+    assert.ok(result.includes(" [3000]"));
     assert.ok(result.includes("Port number"));
   });
 

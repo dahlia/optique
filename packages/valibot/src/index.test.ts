@@ -1462,7 +1462,9 @@ describe("valibot()", () => {
         v.pipe(v.unknown(), v.string() as never),
         asyncInner,
       ] as never);
-      const parser = valibot(asyncSchema as never, { placeholder: "" });
+      const parser = valibot(asyncSchema as never, {
+        placeholder: "" as never,
+      });
       const result = parser.parse("hello");
       assert.ok(result.success);
     });

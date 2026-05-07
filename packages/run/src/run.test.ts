@@ -1384,21 +1384,21 @@ describe("runSync", () => {
 
       let helpOutput = "";
 
-      try {
-        runSync(prog, {
-          args: ["--help"],
-          programName: "override-name",
-          help: "option",
-          stdout: (text) => {
-            helpOutput += `${text}\n`;
-          },
-          onExit: () => {
-            throw new Error("exit");
-          },
-        });
-      } catch {
-        // Expected exit
-      }
+      assert.throws(
+        () =>
+          runSync(prog, {
+            args: ["--help"],
+            programName: "override-name",
+            help: "option",
+            stdout: (text) => {
+              helpOutput += `${text}\n`;
+            },
+            onExit: () => {
+              throw new Error("exit");
+            },
+          }),
+        /exit/,
+      );
 
       assert.ok(helpOutput.includes("override-name"));
       assert.ok(!helpOutput.includes("metadata-name"));
