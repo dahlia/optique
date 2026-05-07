@@ -2450,8 +2450,8 @@ describe("formatDocPage", () => {
           }],
         }],
       };
-      // showChoices has prefix but no label → uses default "choices: " (8 chars).
-      // minDescWidth = prefix_width + label_width = 2 + 8 = 10
+      // showChoices has prefix but no label → uses default "choices: " (9 chars).
+      // minDescWidth = prefix_width + label_width = 2 + 9 = 11
       const result = formatDocPage("app", page, {
         maxWidth: 60,
         showChoices: { prefix: " (" },

@@ -892,6 +892,7 @@ describe("valibot()", () => {
         placeholder: 1 as never,
       });
       assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
       assert.equal(parser.metavar, "CHOICE");
     });
 
@@ -902,6 +903,7 @@ describe("valibot()", () => {
         placeholder: "" as never,
       });
       assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
     });
 
     it("should infer VALUE metavar for v.variant() discriminated union", () => {
@@ -926,6 +928,7 @@ describe("valibot()", () => {
         { placeholder: "a" as never },
       );
       assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
     });
   });
 
@@ -1264,16 +1267,20 @@ describe("valibot()", () => {
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
-      // v.fallback() always succeeds (returns fallback value on failure)
+      // v.fallback() always succeeds (returns fallback value on failure).
+      // Use a rejecting inner schema so the fallback branch actually fires.
       const asyncSchema = v.union([
-        v.fallback(v.string(), "default"),
+        v.fallback(v.pipe(v.string(), v.email()), "default"),
         asyncInner,
       ] as never);
       const parser = valibot(asyncSchema as never, {
         placeholder: "" as never,
       });
-      const result = parser.parse("hello");
+      const result = parser.parse("not-an-email");
       assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "default");
+      }
     });
 
     it("should not reject union with v.pipe(v.unknown(), safe-transform) arm", () => {
