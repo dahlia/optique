@@ -890,6 +890,41 @@ describe("formatDocPage", () => {
     assert.ok(result.includes("(choices: debug, info, warn)"));
   });
 
+  it("should use default label when showChoices object has no label", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--format"] },
+          description: [{ type: "text", text: "Output format" }],
+          choices: valueSet(["json", "yaml"], { fallback: "", type: "unit" }),
+        }],
+      }],
+    };
+    const result = formatDocPage("myapp", page, {
+      showChoices: {},
+    });
+    assert.ok(result.includes("choices: json, yaml)"));
+  });
+
+  it("should use default prefix when showDefault object has no prefix", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--port"] },
+          description: [{ type: "text", text: "Port number" }],
+          default: valueSet(["3000"], { fallback: "", type: "unit" }),
+        }],
+      }],
+    };
+    const result = formatDocPage("myapp", page, {
+      showDefault: { suffix: "]" },
+    });
+    // Uses the default prefix " [" since no prefix is specified
+    assert.ok(result.includes("["));
+    assert.ok(result.includes("]"));
+    assert.ok(result.includes("Port number"));
+  });
+
   it("should not show choices when entry has no choices field", () => {
     const page: DocPage = {
       sections: [{
