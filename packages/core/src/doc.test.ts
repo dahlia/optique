@@ -2457,7 +2457,7 @@ describe("formatDocPage", () => {
         showChoices: { prefix: " (" },
       });
       assertLinesWithinMaxWidth(result, 60);
-      assert.ok(result.includes("(choices: a, b)"));
+      assert.ok(result.includes(" (choices: a, b)"));
     });
   });
 
