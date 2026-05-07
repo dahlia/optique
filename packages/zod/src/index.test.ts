@@ -1468,6 +1468,15 @@ describe("inferChoices() — empty literal values array", () => {
     const parser = zod(emptyNativeEnum, { placeholder: "" as unknown });
     assert.equal(parser.choices, undefined);
   });
+
+  it("should return undefined for a z.enum([]) with empty entries object", () => {
+    // z.enum([]) in Zod v4 has _def.entries = {} (empty object), so
+    // inferChoices loops over Object.values({}) producing an empty Set,
+    // and result.size > 0 ? [...result] : undefined yields undefined
+    // (branch 10 at line 482).
+    const parser = zod(z.enum([] as never), { placeholder: "" as never });
+    assert.equal(parser.choices, undefined);
+  });
 });
 
 describe("format() — class instance branch", () => {
