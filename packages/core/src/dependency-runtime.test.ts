@@ -1629,21 +1629,15 @@ describe("fillMissingSourceDefaults — failure result", () => {
   });
 });
 
-describe("DependencyRuntimeContext — FailedAwareRegistry clone with FailedAwareRegistry inner", () => {
-  test("clone() rebinds failed sources when inner clone is itself a FailedAwareRegistry", () => {
-    // markSourceFailed() wraps the current registry in a new
-    // FailedAwareRegistry each time it is called.  After two calls with
-    // different IDs, the outer FailedAwareRegistry has another
-    // FailedAwareRegistry as its inner.  Cloning the outer one triggers
-    // the `innerClone instanceof FailedAwareRegistry` branch which calls
-    // rebindFailedSources() instead of wrapping again.
+describe("DependencyRuntimeContext — FailedAwareRegistry clone", () => {
+  test("clone() preserves all failed-source state across multiple failures", () => {
+    // Mark two distinct sources as failed and verify that both IDs are
+    // preserved when the registry is cloned and wrapped in a new context.
     const sourceA = Symbol("envA");
     const sourceB = Symbol("envB");
     const runtime = createDependencyRuntimeContext();
     runtime.registerSource(sourceA, "prod", "cli");
     runtime.markSourceFailed(sourceA);
-    // Second markSourceFailed wraps the FailedAwareRegistry from above,
-    // so clone().inner will itself be a FailedAwareRegistry.
     runtime.markSourceFailed(sourceB);
 
     const clonedRegistry = runtime.registry.clone();
