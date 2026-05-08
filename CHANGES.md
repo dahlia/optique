@@ -10,6 +10,17 @@ To be released.
 
 ### @optique/core
 
+ -  When an `object()` parser expects no CLI input (no options, commands, or
+    arguments in its usage) and a required field fails the empty-buffer
+    completion probe, the specific error from that field's `complete()` is now
+    surfaced instead of the generic “No matching option, command, or argument
+    found.” message.  [[#803]]
+
+ -  Fixed the fallback message in `generateNoMatchError` for the case where a
+    parser expects no CLI input at all.  The message is now “No value
+    provided.” instead of the misleading “No matching option, command, or
+    argument found.”  [[#803]]
+
  -  Added `negatableFlag()` for paired Boolean options such as `--color` and
     `--no-color`.  The parser returns `true` for positive flags and `false`
     for negative flags, fails when neither side is provided, and composes with
@@ -21,6 +32,7 @@ To be released.
 
 [#801]: https://github.com/dahlia/optique/issues/801
 [#802]: https://github.com/dahlia/optique/pull/802
+[#803]: https://github.com/dahlia/optique/issues/803
 
 
 Version 1.0.2

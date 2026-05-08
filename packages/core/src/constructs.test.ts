@@ -3311,6 +3311,79 @@ describe("object", () => {
       assert.equal(result.value.val, "x");
     }
   });
+
+  it("should propagate specific error from failing complete probe (sync)", () => {
+    // A field whose complete() always fails with a specific message.  Without
+    // the probe error propagation fix the caller would only see the generic
+    // "No value provided." message instead of the field-specific error.
+    const specificError = message`Specific field error.`;
+    const alwaysFailParser: Parser<"sync", string, undefined> = {
+      $valueType: [],
+      $stateType: [],
+      mode: "sync",
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(_ctx) {
+        return { success: true, consumed: [], next: _ctx };
+      },
+      complete(_state) {
+        return { success: false, error: specificError };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = object({ field: alwaysFailParser });
+    const result = parseSync(parser, []);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(result.error, specificError);
+    }
+  });
+
+  it("should propagate specific error from failing complete probe (async)", async () => {
+    const specificError = message`Specific async field error.`;
+    const alwaysFailParser: Parser<"async", string, undefined> = {
+      $valueType: [],
+      $stateType: [],
+      mode: "async",
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(_ctx) {
+        return Promise.resolve({ success: true, consumed: [], next: _ctx });
+      },
+      complete(_state) {
+        return Promise.resolve({ success: false, error: specificError });
+      },
+      suggest() {
+        return {
+          async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+            yield* [];
+          },
+        };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = object({ field: alwaysFailParser });
+    const result = await parseAsync(parser, []);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(result.error, specificError);
+    }
+  });
 });
 
 describe("object() error customization", () => {
@@ -11234,6 +11307,100 @@ describe("branch coverage: generateNoMatchError variants", () => {
       assert.ok(
         formatted.includes("command") || formatted.includes("argument"),
       );
+    }
+  });
+
+  it("no options, commands, or arguments (all-false case) via or(fail(), fail())", () => {
+    // or() with two fail() branches has usage: [] on all branches, so
+    // noMatchContext is all-false.  When no input is given, generateNoMatchError
+    // should return "No value provided." rather than the old misleading message.
+    const parser = or(fail<string>(), fail<string>());
+    const result = parseSync(parser, []);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const formatted = formatMessage(result.error);
+      assert.equal(formatted, "No value provided.");
+    }
+  });
+
+  it("all-false case with custom endOfInput keeps the custom message over probe error", () => {
+    // With a custom endOfInput, the probe error should NOT override it even
+    // when noMatchContext is all-false.  This verifies the precedence is correct.
+    const noCliParser: Parser<"sync", string, undefined> = {
+      $valueType: [],
+      $stateType: [],
+      mode: "sync",
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(_ctx) {
+        return { success: true, consumed: [], next: _ctx };
+      },
+      complete(_state) {
+        return { success: false, error: message`Field-level error.` };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const customMsg = message`Custom end-of-input message.`;
+    const parser = object(
+      { field: noCliParser },
+      { errors: { endOfInput: customMsg } },
+    );
+    const result = parseSync(parser, []);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(result.error, customMsg);
+    }
+  });
+
+  it("async: all-false case with custom endOfInput keeps the custom message over probe error", async () => {
+    const noCliParser: Parser<"async", string, undefined> = {
+      $valueType: [],
+      $stateType: [],
+      mode: "async",
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(_ctx) {
+        return Promise.resolve({ success: true, consumed: [], next: _ctx });
+      },
+      complete(_state) {
+        return Promise.resolve({
+          success: false,
+          error: message`Field-level error.`,
+        });
+      },
+      suggest() {
+        return {
+          async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+            yield* [];
+          },
+        };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const customMsg = message`Custom end-of-input message.`;
+    const parser = object(
+      { field: noCliParser },
+      { errors: { endOfInput: customMsg } },
+    );
+    const result = await parseAsync(parser, []);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(result.error, customMsg);
     }
   });
 });
