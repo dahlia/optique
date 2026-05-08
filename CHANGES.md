@@ -41,6 +41,11 @@ To be released.
     genuinely unset environment variable.  Previously both cases produced
     “Missing required environment variable: KEY”.  [[#803]]
 
+### @optique/config
+
+ -  `bindConfig()` now emits a distinct error message when its config context
+    was not passed to `run()`'s `contexts` option.  [[#803]]
+
 
 Version 1.0.2
 -------------

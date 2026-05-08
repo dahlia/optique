@@ -945,6 +945,11 @@ function getConfigOrDefault<
   // See: https://github.com/dahlia/optique/issues/136
   const annotations = getAnnotations(state);
   const contextId = options.context.id;
+  // Use a key-presence check rather than a value check: a registered config
+  // context can write `undefined` into its annotation slot (e.g. when no
+  // config file was found), which is distinct from the context never having
+  // been registered at all (key absent from annotations).
+  const contextRegistered = annotations != null && contextId in annotations;
   const annotationValue = annotations?.[contextId] as
     | { readonly data: T; readonly meta?: TConfigMeta | undefined }
     | undefined;
@@ -984,7 +989,17 @@ function getConfigOrDefault<
     return validateFallbackValue(mode, innerParser, options.default);
   }
 
-  // No value available
+  // Distinguish between the config context not being registered at all
+  // (key absent from annotations) and a registered context with no matching
+  // value (file not found, key absent in config data, etc.).
+  if (!contextRegistered) {
+    return wrapForMode(mode, {
+      success: false,
+      error:
+        message`Configuration value could not be read: the config context was not passed to run()'s contexts option.`,
+    });
+  }
+
   return wrapForMode(mode, {
     success: false,
     error: message`Missing required configuration value.`,
