@@ -304,6 +304,14 @@ function validateWithSchema<T>(
 /**
  * Creates a config context for use with Optique parsers.
  *
+ * Pass the returned context to `run()`'s `contexts` option so that
+ * `bindConfig()` can read configuration values during parsing:
+ *
+ * ```typescript
+ * const configContext = createConfigContext({ schema });
+ * run(parser, { contexts: [configContext], contextOptions: { load } });
+ * ```
+ *
  * The config context implements the `SourceContext` interface and can be used
  * with `runWith()` from *@optique/core* or `run()`/`runAsync()` from
  * *@optique/run* to provide configuration file support. Each runner call
@@ -607,6 +615,17 @@ export interface BindConfigOptions<T, TValue, TConfigMeta = ConfigMeta> {
  * 2. Config file value (if available)
  * 3. Default value (if specified)
  * 4. Error (if none of the above)
+ *
+ * > **Important:** `bindConfig()` only reads configuration values when its
+ * > `ConfigContext` is registered with the runner via the `contexts` option:
+ * >
+ * > ```typescript
+ * > run(parser, { contexts: [configContext], contextOptions: { load } });
+ * > ```
+ * >
+ * > Omitting `contexts` causes `bindConfig()` to skip the config lookup and
+ * > fall through to the default or an error with a message indicating the
+ * > context was not registered.
  *
  * @template M The parser mode (sync or async).
  * @template TValue The parser value type.
