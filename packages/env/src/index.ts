@@ -95,6 +95,14 @@ function defaultEnvSource(key: string): string | undefined {
 /**
  * Creates an environment context for use with Optique runners.
  *
+ * Pass the returned context to `run()`'s `contexts` option so that
+ * `bindEnv()` can read environment variables during parsing:
+ *
+ * ```typescript
+ * const envContext = createEnvContext({ prefix: "MYAPP_" });
+ * run(parser, { contexts: [envContext] });
+ * ```
+ *
  * When calling `context.getAnnotations()` manually, pass the returned
  * annotations to low-level APIs such as `parse()`, `parseAsync()`,
  * `parser.complete()`, `suggest()`, or `getDocPage()`. Since environment
@@ -198,6 +206,17 @@ export interface BindEnvOptions<M extends Mode, TValue> {
  *  2. Environment variable value
  *  3. Default value
  *  4. Error
+ *
+ * > **Important:** `bindEnv()` only reads environment variables when its
+ * > `EnvContext` is registered with the runner via the `contexts` option:
+ * >
+ * > ```typescript
+ * > run(parser, { contexts: [envContext] });
+ * > ```
+ * >
+ * > Omitting `contexts` causes `bindEnv()` to skip the env lookup and fall
+ * > through to the default or an error with a message indicating the context
+ * > was not registered.
  *
  * @param parser Parser that reads CLI values.
  * @param options Environment binding options.
