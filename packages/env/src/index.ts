@@ -677,7 +677,7 @@ function getEnvOrDefault<M extends Mode, TValue>(
         (r) => (r.success ? r : unregisteredError),
       );
     }
-    return innerResult;
+    return wrapForMode(mode, innerResult);
   }
 
   if (envContextAbsent) {
