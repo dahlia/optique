@@ -978,7 +978,6 @@ function getConfigOrDefault<
   // to avoid misleading low-level callers.
   const configContextAbsent = annotations != null &&
     !(contextId in annotations);
-  const contextRegistered = !configContextAbsent;
   const annotationValue = annotations?.[contextId] as
     | { readonly data: T; readonly meta?: TConfigMeta | undefined }
     | undefined;
@@ -1021,7 +1020,7 @@ function getConfigOrDefault<
   // Distinguish between the config context not being registered at all
   // (key absent from annotations) and a registered context with no matching
   // value (file not found, key absent in config data, etc.).
-  if (!contextRegistered) {
+  if (configContextAbsent) {
     return wrapForMode(mode, {
       success: false,
       error:
