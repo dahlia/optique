@@ -104,6 +104,12 @@ const portParser = bindConfig(option("--port", integer()), {
 
 Pass the config context to `runAsync()` (or `run()`) via the `contexts` option:
 
+> [!WARNING]
+> `bindConfig()` only reads configuration values when its context is registered
+> with the runner.  Omitting `contexts: [configContext]` from the `run()` call
+> causes the config lookup to be silently skipped and the parser falls back to
+> the default or fails with an error indicating the context was not registered.
+
 ~~~~ typescript twoslash
 import { z } from "zod";
 import { createConfigContext, bindConfig } from "@optique/config";
