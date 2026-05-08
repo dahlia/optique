@@ -623,9 +623,16 @@ function getEnvOrDefault<M extends Mode, TValue>(
   // When the env variable is absent and no default is provided, fall back
   // to the inner parser's complete() so that downstream wrappers (e.g.,
   // bindConfig) can still supply their own value.  Without this, composing
-  // bindEnv(bindConfig(...)) would always fail with "Missing required
-  // environment variable" when the env var is unset, even if the config
+  // bindEnv(bindConfig(...)) would always fail with a bare "Missing required
+  // environment variable" error when the env var is unset but the config
   // layer has a value.
+  //
+  // If the env context was never registered (sourceData === undefined) and
+  // the inner parser also fails, replace its generic error with a targeted
+  // "contexts option" message so the caller knows what went wrong.  When the
+  // context IS registered, propagate the inner parser's own failure so that
+  // meaningful errors from downstream wrappers (e.g. config validation
+  // failures) are not masked.
   if (innerParser != null) {
     const completeState = innerState ??
       (annotations != null &&
@@ -633,7 +640,32 @@ function getEnvOrDefault<M extends Mode, TValue>(
           getTraits(innerParser).inheritsAnnotations === true
         ? injectAnnotations(innerParser.initialState, annotations)
         : innerParser.initialState);
-    return wrapForMode(mode, innerParser.complete(completeState, exec));
+    const innerResult = innerParser.complete(completeState, exec);
+    if (sourceData === undefined) {
+      const unregisteredError: Result<TValue> = {
+        success: false,
+        error: message`Environment variable ${
+          envVar(fullKey)
+        } could not be read: the env context was not passed to run()'s contexts option.`,
+      };
+      return mapModeValue(
+        mode,
+        innerResult,
+        (r) => (r.success ? r : unregisteredError),
+      );
+    }
+    return wrapForMode(mode, innerResult);
+  }
+
+  // Distinguish between the env context not being registered at all
+  // (sourceData === undefined) and the env var being genuinely absent.
+  if (sourceData === undefined) {
+    return wrapForMode(mode, {
+      success: false as const,
+      error: message`Environment variable ${
+        envVar(fullKey)
+      } could not be read: the env context was not passed to run()'s contexts option.`,
+    });
   }
 
   return wrapForMode(mode, {

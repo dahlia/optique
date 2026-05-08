@@ -34,6 +34,13 @@ To be released.
 [#802]: https://github.com/dahlia/optique/pull/802
 [#803]: https://github.com/dahlia/optique/issues/803
 
+### @optique/env
+
+ -  `bindEnv()` now emits a distinct error message when its env context was not
+    passed to `run()`'s `contexts` option, distinguishing this case from a
+    genuinely unset environment variable.  Previously both cases produced
+    “Missing required environment variable: KEY”.  [[#803]]
+
 
 Version 1.0.2
 -------------

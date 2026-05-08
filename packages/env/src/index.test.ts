@@ -3571,3 +3571,115 @@ describe("or(bindEnv(...), constant(...))", () => {
     assert.equal(result.value, "fallback");
   });
 });
+
+describe("bindEnv() error messages for unregistered context", () => {
+  it("emits a specific error when the env context was not registered", () => {
+    const context = createEnvContext({ prefix: "" });
+    const parser = object({
+      editor: bindEnv(fail<string>(), {
+        context,
+        key: "EDITOR",
+        parser: string(),
+      }),
+    });
+
+    // No annotations injected (context not registered with run())
+    const result = parse(parser, []);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const formatted = formatMessage(result.error);
+      assert.ok(
+        formatted.includes("contexts option"),
+        `Expected "contexts option" in: ${formatted}`,
+      );
+    }
+  });
+
+  it("does NOT emit the contexts-option error when context is registered but var is unset", () => {
+    // When the env context IS registered but the var is absent, we propagate
+    // the inner parser's own error rather than the "contexts option" message so
+    // that downstream composition errors (e.g. from bindConfig) are not masked.
+    const context = createEnvContext({
+      prefix: "",
+      source: (_key) => undefined, // env var not set
+    });
+    const parser = object({
+      editor: bindEnv(fail<string>(), {
+        context,
+        key: "EDITOR",
+        parser: string(),
+      }),
+    });
+
+    const annotations = getSyncAnnotations(context);
+    const result = parse(parser, [], { annotations });
+    assert.ok(!result.success);
+    if (!result.success) {
+      const formatted = formatMessage(result.error);
+      assert.ok(
+        !formatted.includes("contexts option"),
+        `Should NOT include "contexts option" in: ${formatted}`,
+      );
+      // The inner fail() parser's error propagates unchanged.
+      assert.ok(
+        formatted.includes("No value provided."),
+        `Expected inner parser's "No value provided." in: ${formatted}`,
+      );
+    }
+  });
+
+  it("async: emits a specific error when the env context was not registered (using async inner parser)", async () => {
+    // Uses a genuinely async inner parser to exercise the async mapModeValue branch.
+    const context = createEnvContext({ prefix: "" });
+    const asyncFail: Parser<"async", string, undefined> = {
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      mode: "async",
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(_ctx) {
+        return Promise.resolve({
+          success: false,
+          consumed: 0,
+          error: message`No value provided.`,
+        });
+      },
+      complete(_state) {
+        return Promise.resolve({
+          success: false,
+          error: message`No value provided.`,
+        });
+      },
+      suggest() {
+        return {
+          async *[Symbol.asyncIterator]() {
+            yield* [];
+          },
+        };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = object({
+      editor: bindEnv(asyncFail, {
+        context,
+        key: "EDITOR",
+        parser: string(),
+      }),
+    });
+
+    const result = await parseAsync(parser, []);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const formatted = formatMessage(result.error);
+      assert.ok(
+        formatted.includes("contexts option"),
+        `Expected "contexts option" in: ${formatted}`,
+      );
+    }
+  });
+});
