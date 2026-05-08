@@ -215,8 +215,9 @@ export interface BindEnvOptions<M extends Mode, TValue> {
  * > ```
  * >
  * > Omitting `contexts` causes `bindEnv()` to skip the env lookup and fall
- * > through to the default or an error with a message indicating the context
- * > was not registered.
+ * > through to the default or an error.  When other contexts are registered
+ * > but this env context is not, the error explicitly names the `contexts`
+ * > option to aid diagnosis.
  *
  * @param parser Parser that reads CLI values.
  * @param options Environment binding options.

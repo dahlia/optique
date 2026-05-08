@@ -36,15 +36,15 @@ To be released.
 
 ### @optique/env
 
- -  `bindEnv()` now emits a distinct error message when its env context was not
-    passed to `run()`'s `contexts` option, distinguishing this case from a
-    genuinely unset environment variable.  Previously both cases produced
-    “Missing required environment variable: KEY”.  [[#803]]
+ -  `bindEnv()` now emits a distinct error message when other source contexts
+    are registered via `run()`'s `contexts` option but the env context is not
+    included, making this misconfiguration easier to diagnose.  [[#803]]
 
 ### @optique/config
 
- -  `bindConfig()` now emits a distinct error message when its config context
-    was not passed to `run()`'s `contexts` option.  [[#803]]
+ -  `bindConfig()` now emits a distinct error message when other source
+    contexts are registered via `run()`'s `contexts` option but the config
+    context is not included.  [[#803]]
 
 
 Version 1.0.2

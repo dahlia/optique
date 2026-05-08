@@ -624,8 +624,9 @@ export interface BindConfigOptions<T, TValue, TConfigMeta = ConfigMeta> {
  * > ```
  * >
  * > Omitting `contexts` causes `bindConfig()` to skip the config lookup and
- * > fall through to the default or an error with a message indicating the
- * > context was not registered.
+ * > fall through to the default or an error.  When other contexts are
+ * > registered but this config context is not, the error explicitly names the
+ * > `contexts` option to aid diagnosis.
  *
  * @template M The parser mode (sync or async).
  * @template TValue The parser value type.
