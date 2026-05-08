@@ -95,6 +95,14 @@ function defaultEnvSource(key: string): string | undefined {
 /**
  * Creates an environment context for use with Optique runners.
  *
+ * Pass the returned context to `run()`'s `contexts` option so that
+ * `bindEnv()` can read environment variables during parsing:
+ *
+ * ```typescript
+ * const envContext = createEnvContext({ prefix: "MYAPP_" });
+ * run(parser, { contexts: [envContext] });
+ * ```
+ *
  * When calling `context.getAnnotations()` manually, pass the returned
  * annotations to low-level APIs such as `parse()`, `parseAsync()`,
  * `parser.complete()`, `suggest()`, or `getDocPage()`. Since environment
@@ -198,6 +206,18 @@ export interface BindEnvOptions<M extends Mode, TValue> {
  *  2. Environment variable value
  *  3. Default value
  *  4. Error
+ *
+ * > **Important:** `bindEnv()` only reads environment variables when its
+ * > `EnvContext` is registered with the runner via the `contexts` option:
+ * >
+ * > ```typescript
+ * > run(parser, { contexts: [envContext] });
+ * > ```
+ * >
+ * > Omitting `contexts` causes `bindEnv()` to skip the env lookup and fall
+ * > through to the default or an error.  When other contexts are registered
+ * > but this env context is not, the error explicitly names the `contexts`
+ * > option to aid diagnosis.
  *
  * @param parser Parser that reads CLI values.
  * @param options Environment binding options.
@@ -623,9 +643,19 @@ function getEnvOrDefault<M extends Mode, TValue>(
   // When the env variable is absent and no default is provided, fall back
   // to the inner parser's complete() so that downstream wrappers (e.g.,
   // bindConfig) can still supply their own value.  Without this, composing
-  // bindEnv(bindConfig(...)) would always fail with "Missing required
-  // environment variable" when the env var is unset, even if the config
+  // bindEnv(bindConfig(...)) would always fail with a bare "Missing required
+  // environment variable" error when the env var is unset but the config
   // layer has a value.
+  //
+  // When the env context is detectably absent from annotations (the caller
+  // passed SOME annotations via run()'s contexts option but did not include
+  // this env context), replace a failing inner parser's error with a targeted
+  // "contexts option" message.  When annotations are null (low-level parse()
+  // call without any annotations, or run() without any contexts), we cannot
+  // distinguish "context forgotten" from "no contexts at all", so we preserve
+  // the inner parser's own error to avoid misleading low-level callers.
+  const envContextAbsent = annotations != null &&
+    !(options.context.id in annotations);
   if (innerParser != null) {
     const completeState = innerState ??
       (annotations != null &&
@@ -633,7 +663,30 @@ function getEnvOrDefault<M extends Mode, TValue>(
           getTraits(innerParser).inheritsAnnotations === true
         ? injectAnnotations(innerParser.initialState, annotations)
         : innerParser.initialState);
-    return wrapForMode(mode, innerParser.complete(completeState, exec));
+    const innerResult = innerParser.complete(completeState, exec);
+    if (envContextAbsent) {
+      const unregisteredError: Result<TValue> = {
+        success: false,
+        error: message`Environment variable ${
+          envVar(fullKey)
+        } could not be read: the env context was not passed to run()'s contexts option.`,
+      };
+      return mapModeValue(
+        mode,
+        innerResult,
+        (r) => (r.success ? r : unregisteredError),
+      );
+    }
+    return wrapForMode(mode, innerResult);
+  }
+
+  if (envContextAbsent) {
+    return wrapForMode(mode, {
+      success: false as const,
+      error: message`Environment variable ${
+        envVar(fullKey)
+      } could not be read: the env context was not passed to run()'s contexts option.`,
+    });
   }
 
   return wrapForMode(mode, {

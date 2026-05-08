@@ -304,6 +304,14 @@ function validateWithSchema<T>(
 /**
  * Creates a config context for use with Optique parsers.
  *
+ * Pass the returned context to `run()`'s `contexts` option so that
+ * `bindConfig()` can read configuration values during parsing:
+ *
+ * ```typescript
+ * const configContext = createConfigContext({ schema });
+ * run(parser, { contexts: [configContext], contextOptions: { load } });
+ * ```
+ *
  * The config context implements the `SourceContext` interface and can be used
  * with `runWith()` from *@optique/core* or `run()`/`runAsync()` from
  * *@optique/run* to provide configuration file support. Each runner call
@@ -607,6 +615,18 @@ export interface BindConfigOptions<T, TValue, TConfigMeta = ConfigMeta> {
  * 2. Config file value (if available)
  * 3. Default value (if specified)
  * 4. Error (if none of the above)
+ *
+ * > **Important:** `bindConfig()` only reads configuration values when its
+ * > `ConfigContext` is registered with the runner via the `contexts` option:
+ * >
+ * > ```typescript
+ * > run(parser, { contexts: [configContext], contextOptions: { load } });
+ * > ```
+ * >
+ * > Omitting `contexts` causes `bindConfig()` to skip the config lookup and
+ * > fall through to the default or an error.  When other contexts are
+ * > registered but this config context is not, the error explicitly names the
+ * > `contexts` option to aid diagnosis.
  *
  * @template M The parser mode (sync or async).
  * @template TValue The parser value type.
@@ -945,6 +965,19 @@ function getConfigOrDefault<
   // See: https://github.com/dahlia/optique/issues/136
   const annotations = getAnnotations(state);
   const contextId = options.context.id;
+  // Use a key-presence check rather than a value check: a registered config
+  // context can write `undefined` into its annotation slot (e.g. when no
+  // config file was found), which is distinct from the context never having
+  // been registered at all (key absent from annotations).
+  //
+  // We only treat the context as "detectably absent" when some annotations
+  // exist (the caller passed at least one context to run()) but this specific
+  // context id is missing.  When annotations is null entirely — meaning either
+  // run() was called without any contexts or parse() was called directly — we
+  // fall through to the generic "Missing required configuration value" message
+  // to avoid misleading low-level callers.
+  const configContextAbsent = annotations != null &&
+    !(contextId in annotations);
   const annotationValue = annotations?.[contextId] as
     | { readonly data: T; readonly meta?: TConfigMeta | undefined }
     | undefined;
@@ -984,7 +1017,17 @@ function getConfigOrDefault<
     return validateFallbackValue(mode, innerParser, options.default);
   }
 
-  // No value available
+  // Distinguish between the config context not being registered at all
+  // (key absent from annotations) and a registered context with no matching
+  // value (file not found, key absent in config data, etc.).
+  if (configContextAbsent) {
+    return wrapForMode(mode, {
+      success: false,
+      error:
+        message`Configuration value could not be read: the config context was not passed to run()'s contexts option.`,
+    });
+  }
+
   return wrapForMode(mode, {
     success: false,
     error: message`Missing required configuration value.`,

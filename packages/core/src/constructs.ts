@@ -1054,9 +1054,11 @@ function generateNoMatchError(context: NoMatchContext): Message {
     return message`No matching option or argument found.`;
   } else if (hasArguments && hasCommands && !hasOptions) {
     return message`No matching command or argument found.`;
-  } else {
-    // All three types present
+  } else if (hasOptions && hasCommands && hasArguments) {
     return message`No matching option, command, or argument found.`;
+  } else {
+    // No required CLI input is described by usage.
+    return message`No value provided.`;
   }
 }
 
@@ -5856,12 +5858,14 @@ export function object<
           trace: undefined,
           phase: "parse" as const,
         };
+      let probeError: { consumed: number; error: Message } | undefined;
       for (const [field, parser] of parserPairs) {
         const fieldState = getFieldState(field, parser);
         const completeResult = (parser as Parser<"sync", unknown, unknown>)
           .complete(fieldState, withChildExecPath(probeExec, field));
         if (!completeResult.success) {
           allCanComplete = false;
+          probeError = { consumed: 0, error: completeResult.error };
           break;
         }
       }
@@ -5872,6 +5876,19 @@ export function object<
           next: currentContext,
           consumed: [],
         };
+      }
+      // When no required CLI input is described by usage and the caller has
+      // not supplied a custom endOfInput error, the initial "no match" message
+      // is uninformative.  Surface the specific field error from the probe so
+      // callers get an actionable diagnosis.
+      if (
+        probeError !== undefined &&
+        options.errors?.endOfInput === undefined &&
+        !noMatchContext.hasOptions &&
+        !noMatchContext.hasCommands &&
+        !noMatchContext.hasArguments
+      ) {
+        return { ...probeError, success: false };
       }
     }
 
@@ -6027,6 +6044,7 @@ export function object<
           trace: undefined,
           phase: "parse" as const,
         };
+      let probeError: { consumed: number; error: Message } | undefined;
       for (const [field, parser] of parserPairs) {
         const fieldState = getFieldState(field, parser);
         const completeResult = await parser.complete(
@@ -6035,6 +6053,7 @@ export function object<
         );
         if (!completeResult.success) {
           allCanComplete = false;
+          probeError = { consumed: 0, error: completeResult.error };
           break;
         }
       }
@@ -6045,6 +6064,15 @@ export function object<
           next: currentContext,
           consumed: [],
         };
+      }
+      if (
+        probeError !== undefined &&
+        options.errors?.endOfInput === undefined &&
+        !noMatchContext.hasOptions &&
+        !noMatchContext.hasCommands &&
+        !noMatchContext.hasArguments
+      ) {
+        return { ...probeError, success: false };
       }
     }
 

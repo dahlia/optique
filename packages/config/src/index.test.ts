@@ -3810,3 +3810,91 @@ describe("or(bindConfig(...), constant(...))", () => {
     assert.equal(result.value, "fallback");
   });
 });
+
+describe("bindConfig() error messages for unregistered context", () => {
+  test("emits a specific error when the config context was not registered but other contexts were", () => {
+    // Simulates run() where another context was passed but configContext was
+    // omitted.  When annotations is non-null but the config context id is absent,
+    // bindConfig() surfaces a targeted error pointing to the contexts option.
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    const parser = object({
+      host: bindConfig(fail<string>(), {
+        context,
+        key: (c) => c.host,
+      }),
+    });
+
+    // Inject annotations from a different context (simulates forgetting configContext).
+    const otherContextId = Symbol("other-context");
+    const result = parse(parser, [], {
+      annotations: { [otherContextId]: {} },
+    });
+    assert.ok(!result.success);
+    if (!result.success) {
+      const formatted = formatMessage(result.error);
+      assert.ok(
+        formatted.includes("contexts option"),
+        `Expected "contexts option" in: ${formatted}`,
+      );
+    }
+  });
+
+  test("emits 'Missing required configuration value' when context is registered but key is absent", () => {
+    const schema = z.object({ host: z.string().optional() });
+    const context = createConfigContext({ schema });
+    const parser = object({
+      host: bindConfig(fail<string>(), {
+        context,
+        key: (c) => c.host,
+      }),
+    });
+
+    // Inject annotations with empty config data (key absent)
+    const annotations: Annotations = {
+      [context.id]: { data: { host: undefined } },
+    };
+    const result = parse(parser, [], { annotations });
+    assert.ok(!result.success);
+    if (!result.success) {
+      const formatted = formatMessage(result.error);
+      assert.ok(
+        formatted.includes("Missing required configuration value"),
+        `Expected "Missing required configuration value" in: ${formatted}`,
+      );
+      assert.ok(
+        !formatted.includes("contexts option"),
+        `Should NOT include "contexts option" in: ${formatted}`,
+      );
+    }
+  });
+
+  test("emits 'Missing required configuration value' when context is registered but config file not loaded (undefined annotation)", () => {
+    // Simulates the case where the config context is registered (key present in
+    // annotations) but no config file was found (annotation value is undefined).
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    const parser = object({
+      host: bindConfig(fail<string>(), {
+        context,
+        key: (c) => c.host,
+      }),
+    });
+
+    // Key present but value is undefined = registered, no config data
+    const annotations: Annotations = { [context.id]: undefined };
+    const result = parse(parser, [], { annotations });
+    assert.ok(!result.success);
+    if (!result.success) {
+      const formatted = formatMessage(result.error);
+      assert.ok(
+        formatted.includes("Missing required configuration value"),
+        `Expected "Missing required configuration value" in: ${formatted}`,
+      );
+      assert.ok(
+        !formatted.includes("contexts option"),
+        `Should NOT include "contexts option" in: ${formatted}`,
+      );
+    }
+  });
+});
