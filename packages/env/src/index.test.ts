@@ -3573,7 +3573,10 @@ describe("or(bindEnv(...), constant(...))", () => {
 });
 
 describe("bindEnv() error messages for unregistered context", () => {
-  it("emits a specific error when the env context was not registered", () => {
+  it("emits a specific error when the env context was not registered but other contexts were", () => {
+    // Simulates run() where another context was passed but envContext was
+    // omitted.  When annotations is non-null but the env context id is absent,
+    // bindEnv() surfaces a targeted error pointing to the contexts option.
     const context = createEnvContext({ prefix: "" });
     const parser = object({
       editor: bindEnv(fail<string>(), {
@@ -3583,8 +3586,11 @@ describe("bindEnv() error messages for unregistered context", () => {
       }),
     });
 
-    // No annotations injected (context not registered with run())
-    const result = parse(parser, []);
+    // Inject annotations from a different context (simulates forgetting envContext).
+    const otherContextId = Symbol("other-context");
+    const result = parse(parser, [], {
+      annotations: { [otherContextId]: {} },
+    });
     assert.ok(!result.success);
     if (!result.success) {
       const formatted = formatMessage(result.error);
@@ -3672,7 +3678,11 @@ describe("bindEnv() error messages for unregistered context", () => {
       }),
     });
 
-    const result = await parseAsync(parser, []);
+    // Inject a different context annotation to simulate forgetting envContext.
+    const otherContextId = Symbol("other-context");
+    const result = await parseAsync(parser, [], {
+      annotations: { [otherContextId]: {} },
+    });
     assert.ok(!result.success);
     if (!result.success) {
       const formatted = formatMessage(result.error);

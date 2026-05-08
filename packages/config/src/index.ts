@@ -968,7 +968,16 @@ function getConfigOrDefault<
   // context can write `undefined` into its annotation slot (e.g. when no
   // config file was found), which is distinct from the context never having
   // been registered at all (key absent from annotations).
-  const contextRegistered = annotations != null && contextId in annotations;
+  //
+  // We only treat the context as "detectably absent" when some annotations
+  // exist (the caller passed at least one context to run()) but this specific
+  // context id is missing.  When annotations is null entirely — meaning either
+  // run() was called without any contexts or parse() was called directly — we
+  // fall through to the generic "Missing required configuration value" message
+  // to avoid misleading low-level callers.
+  const configContextAbsent = annotations != null &&
+    !(contextId in annotations);
+  const contextRegistered = !configContextAbsent;
   const annotationValue = annotations?.[contextId] as
     | { readonly data: T; readonly meta?: TConfigMeta | undefined }
     | undefined;

@@ -646,12 +646,15 @@ function getEnvOrDefault<M extends Mode, TValue>(
   // environment variable" error when the env var is unset but the config
   // layer has a value.
   //
-  // If the env context was never registered (sourceData === undefined) and
-  // the inner parser also fails, replace its generic error with a targeted
-  // "contexts option" message so the caller knows what went wrong.  When the
-  // context IS registered, propagate the inner parser's own failure so that
-  // meaningful errors from downstream wrappers (e.g. config validation
-  // failures) are not masked.
+  // When the env context is detectably absent from annotations (the caller
+  // passed SOME annotations via run()'s contexts option but did not include
+  // this env context), replace a failing inner parser's error with a targeted
+  // "contexts option" message.  When annotations are null (low-level parse()
+  // call without any annotations, or run() without any contexts), we cannot
+  // distinguish "context forgotten" from "no contexts at all", so we preserve
+  // the inner parser's own error to avoid misleading low-level callers.
+  const envContextAbsent = annotations != null &&
+    !(options.context.id in annotations);
   if (innerParser != null) {
     const completeState = innerState ??
       (annotations != null &&
@@ -660,7 +663,7 @@ function getEnvOrDefault<M extends Mode, TValue>(
         ? injectAnnotations(innerParser.initialState, annotations)
         : innerParser.initialState);
     const innerResult = innerParser.complete(completeState, exec);
-    if (sourceData === undefined) {
+    if (envContextAbsent) {
       const unregisteredError: Result<TValue> = {
         success: false,
         error: message`Environment variable ${
@@ -676,9 +679,7 @@ function getEnvOrDefault<M extends Mode, TValue>(
     return wrapForMode(mode, innerResult);
   }
 
-  // Distinguish between the env context not being registered at all
-  // (sourceData === undefined) and the env var being genuinely absent.
-  if (sourceData === undefined) {
+  if (envContextAbsent) {
     return wrapForMode(mode, {
       success: false as const,
       error: message`Environment variable ${

@@ -3812,7 +3812,10 @@ describe("or(bindConfig(...), constant(...))", () => {
 });
 
 describe("bindConfig() error messages for unregistered context", () => {
-  test("emits a specific error when the config context was not registered", () => {
+  test("emits a specific error when the config context was not registered but other contexts were", () => {
+    // Simulates run() where another context was passed but configContext was
+    // omitted.  When annotations is non-null but the config context id is absent,
+    // bindConfig() surfaces a targeted error pointing to the contexts option.
     const schema = z.object({ host: z.string() });
     const context = createConfigContext({ schema });
     const parser = object({
@@ -3822,8 +3825,11 @@ describe("bindConfig() error messages for unregistered context", () => {
       }),
     });
 
-    // No annotations injected (context not registered with run())
-    const result = parse(parser, []);
+    // Inject annotations from a different context (simulates forgetting configContext).
+    const otherContextId = Symbol("other-context");
+    const result = parse(parser, [], {
+      annotations: { [otherContextId]: {} },
+    });
     assert.ok(!result.success);
     if (!result.success) {
       const formatted = formatMessage(result.error);
