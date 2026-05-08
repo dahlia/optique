@@ -108,6 +108,12 @@ const verbose = bindEnv(option("--verbose"), {
 Use `run()`, `runSync()`, or `runAsync()` from *@optique/run* with
 `contexts: [envContext]`.
 
+> [!WARNING]
+> `bindEnv()` only reads environment variables when its context is registered
+> with the runner.  If you omit `contexts: [envContext]` from the `run()` call,
+> the env lookup is silently skipped and the parser falls back to the default
+> or fails with an error indicating the context was not registered.
+
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
