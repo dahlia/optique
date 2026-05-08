@@ -14,12 +14,12 @@ To be released.
     arguments in its usage) and a required field fails the empty-buffer
     completion probe, the specific error from that field's `complete()` is now
     surfaced instead of the generic “No matching option, command, or argument
-    found.” message.  [[#803]]
+    found.” message.  [[#803], [#805]]
 
  -  Fixed the fallback message in `generateNoMatchError` for the case where a
     parser expects no CLI input at all.  The message is now “No value
     provided.” instead of the misleading “No matching option, command, or
-    argument found.”  [[#803]]
+    argument found.”  [[#803], [#805]]
 
  -  Added `negatableFlag()` for paired Boolean options such as `--color` and
     `--no-color`.  The parser returns `true` for positive flags and `false`
@@ -33,18 +33,19 @@ To be released.
 [#801]: https://github.com/dahlia/optique/issues/801
 [#802]: https://github.com/dahlia/optique/pull/802
 [#803]: https://github.com/dahlia/optique/issues/803
+[#805]: https://github.com/dahlia/optique/pull/805
 
 ### @optique/env
 
  -  `bindEnv()` now emits a distinct error message when other source contexts
     are registered via `run()`'s `contexts` option but the env context is not
-    included, making this misconfiguration easier to diagnose.  [[#803]]
+    included, making this misconfiguration easier to diagnose.  [[#803], [#805]]
 
 ### @optique/config
 
  -  `bindConfig()` now emits a distinct error message when other source
     contexts are registered via `run()`'s `contexts` option but the config
-    context is not included.  [[#803]]
+    context is not included.  [[#803], [#805]]
 
 
 Version 1.0.2
