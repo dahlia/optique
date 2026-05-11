@@ -2651,6 +2651,104 @@ describe("bindEnv() with dependency sources", () => {
     );
   });
 
+  it("reports non-string env source values during source extraction", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: ["prod"] as never })[key],
+    });
+    const parser = bindEnv(option("--mode", mode), {
+      context: envContext,
+      key: "MODE",
+      parser: choice(["dev", "prod"] as const),
+    });
+    const state = injectAnnotations(
+      parser.initialState,
+      envContext.getAnnotations() as Record<symbol, unknown>,
+    );
+
+    const result = parser.dependencyMetadata?.source?.extractSourceValue(state);
+
+    assert.ok(result != null && "success" in result);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.match(
+        formatMessage(result.error),
+        /Environment variable .*APP_MODE.* must be a string, but got: .*array/,
+      );
+    }
+  });
+
+  it("validates default source values through preserving inner parsers", () => {
+    const sourceId = Symbol("mode");
+    const innerParser = {
+      mode: "sync" as const,
+      $valueType: [] as readonly ("dev" | "prod")[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`No CLI value.`,
+        };
+      },
+      complete() {
+        return { success: false as const, error: message`No value.` };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+      validateValue(value: "dev" | "prod") {
+        return value === "dev" || value === "prod"
+          ? { success: true as const, value }
+          : {
+            success: false as const,
+            error: message`Invalid mode default.`,
+          };
+      },
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue() {
+            return undefined;
+          },
+        },
+      },
+    } satisfies Parser<"sync", "dev" | "prod", undefined> & {
+      readonly dependencyMetadata: {
+        readonly source: {
+          readonly kind: "source";
+          readonly sourceId: typeof sourceId;
+          readonly preservesSourceValue: true;
+          readonly extractSourceValue: () => undefined;
+        };
+      };
+    };
+    const parser = bindEnv(innerParser, {
+      context: createEnvContext({ source: () => undefined }),
+      key: "MODE",
+      parser: choice(["dev", "prod", "test"] as const),
+      default: "test" as never,
+    });
+
+    const result = parser.dependencyMetadata?.source?.getMissingSourceValue?.();
+
+    assert.ok(result != null && "success" in result);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(formatMessage(result.error), "Invalid mode default.");
+    }
+  });
+
   it("propagates env value as dependency to derived parser (suggest)", () => {
     const { parser, annotations } = createParser(
       (key) => ({ APP_MODE: "prod" })[key],

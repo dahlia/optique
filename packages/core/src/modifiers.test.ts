@@ -10234,6 +10234,58 @@ describe("acceptingAnyToken", () => {
 });
 
 describe("multiple() dependency source extraction", () => {
+  it("delegates raw non-array source states to the inner source", () => {
+    const sourceId = Symbol("mode");
+    const rawState = Symbol("raw");
+    const visited: unknown[] = [];
+    const inner: Parser<"sync", string, symbol | null> = {
+      mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No parse.`,
+      }),
+      complete: () => ({
+        success: false as const,
+        error: message`No completion.`,
+      }),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    Object.defineProperty(inner, "dependencyMetadata", {
+      value: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue(state: unknown) {
+            visited.push(state);
+            return state === rawState
+              ? { success: true as const, value: "prod" }
+              : undefined;
+          },
+        },
+      },
+      configurable: true,
+      enumerable: false,
+    });
+    const parser = multiple(inner);
+
+    const result = parser.dependencyMetadata?.source?.extractSourceValue(
+      rawState,
+    );
+
+    assert.deepEqual(result, { success: true, value: "prod" });
+    assert.deepEqual(visited, [rawState]);
+  });
+
   it("keeps scanning when the newest async source is thenable", async () => {
     const sourceId = Symbol("mode");
     const earlier = Symbol("earlier");
@@ -10293,6 +10345,59 @@ describe("multiple() dependency source extraction", () => {
     ]);
     assert.deepEqual(result, { success: true, value: "prod" });
     assert.deepEqual(visited, [latest, earlier]);
+  });
+});
+
+describe("multiple() value helpers", () => {
+  it("returns an empty placeholder when the inner placeholder throws", () => {
+    const inner = option("--item", string());
+    Object.defineProperty(inner, "placeholder", {
+      get() {
+        throw new TypeError("Placeholder unavailable.");
+      },
+      configurable: true,
+    });
+    const parser = multiple(inner, { min: 2 });
+
+    assert.deepEqual(parser.placeholder, []);
+  });
+
+  it("keeps elements that fail inner normalization", () => {
+    const inner: Parser<"sync", string, string> = {
+      mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete(state) {
+        return { success: true as const, value: state };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+      normalizeValue(value) {
+        if (value === "sentinel") {
+          throw new TypeError("Sentinel cannot be normalized.");
+        }
+        return value.toUpperCase();
+      },
+    };
+    const parser = multiple(inner);
+
+    assert.deepEqual(parser.normalizeValue?.(["dev", "sentinel", "prod"]), [
+      "DEV",
+      "sentinel",
+      "PROD",
+    ]);
   });
 });
 
@@ -10657,6 +10762,15 @@ describe("map() phase-two seed extraction", () => {
     );
   });
 
+  it("returns null when the inner parser has no phase-two seed", () => {
+    const parser = mapLocal(
+      createExtractOnlyParser(null),
+      (value) => value * 2,
+    );
+
+    assert.equal(completeOrExtractPhase2Seed(parser, 1), null);
+  });
+
   it("keeps deferred transform failures as placeholders", () => {
     const parser = mapLocal(
       createExtractOnlyParser({ value: 1, deferred: true }),
@@ -10687,6 +10801,111 @@ describe("map() phase-two seed extraction", () => {
     });
 
     assert.equal(parser.placeholder, undefined);
+  });
+
+  it("passes failed dependency replays through unchanged", () => {
+    const sourceId = Symbol("mode");
+    const inner: Parser<"sync", string, string> = {
+      mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete() {
+        return { success: false as const, error: message`Missing value.` };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    Object.defineProperty(inner, "dependencyMetadata", {
+      value: {
+        derived: {
+          kind: "derived" as const,
+          dependencyIds: [sourceId],
+          replayParse() {
+            return {
+              success: false as const,
+              error: message`Replay failed.`,
+            };
+          },
+        },
+      },
+      configurable: true,
+    });
+    const parser = mapLocal(inner, (value) => value.toUpperCase());
+
+    assert.deepEqual(
+      parser.dependencyMetadata?.derived?.replayParse("json", ["mode"]),
+      { success: false, error: message`Replay failed.` },
+    );
+  });
+
+  it("keeps deferred dependency replay transform failures as placeholders", () => {
+    const sourceId = Symbol("mode");
+    const inner: Parser<"sync", string, string> = {
+      mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete() {
+        return { success: false as const, error: message`Missing value.` };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    Object.defineProperty(inner, "dependencyMetadata", {
+      value: {
+        derived: {
+          kind: "derived" as const,
+          dependencyIds: [sourceId],
+          replayParse() {
+            return {
+              success: true as const,
+              value: "json",
+              deferred: true as const,
+            };
+          },
+        },
+      },
+      configurable: true,
+    });
+    const parser = mapLocal(inner, () => {
+      throw new TypeError("Cannot map deferred placeholder.");
+    });
+
+    assert.deepEqual(
+      parser.dependencyMetadata?.derived?.replayParse("json", ["mode"]),
+      {
+        success: true,
+        value: undefined,
+        deferred: true,
+      },
+    );
   });
 
   it("maps promise-like dependency replays", async () => {

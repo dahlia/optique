@@ -265,6 +265,24 @@ describe("git parsers", () => {
       }
     });
 
+    it("should list available tags in the default missing-tag error", async () => {
+      const testRepoDir = await createTestRepoWithBranchesAndTags();
+      try {
+        const parser = gitTag({ dir: testRepoDir });
+        const result = await parser.parse("v9.9.9");
+
+        assert.ok(!result.success);
+        if (!result.success) {
+          const text = formatMessage(result.error);
+          assert.match(text, /Tag "v9\.9\.9" does not exist/);
+          assert.match(text, /Available tags:/);
+          assert.match(text, /v1\.0\.0/);
+        }
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
     it("should parse tags with prerelease versions", async () => {
       const testRepoDir = await createTestRepoWithBranchesAndTags();
       try {
@@ -497,6 +515,47 @@ describe("git parsers", () => {
           const msg = formatMessage(result.error);
           assert.match(msg, /Remote branch/);
           assert.match(msg, /nonexistent/);
+        }
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
+    it("should list available remote branches in the default error", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        await isomorphicGit.addRemote({
+          fs,
+          dir: testRepoDir,
+          remote: "origin",
+          url: "https://example.com/repo.git",
+          force: true,
+        });
+        const head = await isomorphicGit.resolveRef({
+          fs,
+          dir: testRepoDir,
+          ref: "HEAD",
+        });
+        await fs.mkdir(join(testRepoDir, ".git", "refs", "remotes", "origin"), {
+          recursive: true,
+        });
+        await fs.writeFile(
+          join(testRepoDir, ".git", "refs", "remotes", "origin", "main"),
+          `${head}\n`,
+        );
+
+        const parser = gitRemoteBranch("origin", { dir: testRepoDir });
+        const result = await parser.parse("release");
+
+        assert.ok(!result.success);
+        if (!result.success) {
+          const text = formatMessage(result.error);
+          assert.match(
+            text,
+            /Remote branch "release" does not exist on remote "origin"/,
+          );
+          assert.match(text, /Available branches:/);
+          assert.match(text, /main/);
         }
       } finally {
         await cleanupTestRepo(testRepoDir);

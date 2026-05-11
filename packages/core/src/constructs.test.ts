@@ -165,6 +165,20 @@ function toAsyncParser<TValue, TState>(
   return asyncParser;
 }
 
+function getPhase2SeedExtractor<TValue, TState>(
+  parser: Parser<Mode, TValue, TState>,
+): Phase2SeedExtractor<Mode, TState, TValue> {
+  const extract = (parser as Parser<Mode, TValue, TState> & {
+    readonly [extractPhase2SeedKey]?: Phase2SeedExtractor<
+      Mode,
+      TState,
+      TValue
+    >;
+  })[extractPhase2SeedKey];
+  assert.ok(extract != null);
+  return extract;
+}
+
 function describeDuplicateSourceState(
   context: ParserContext<unknown>,
   sourceId: symbol,
@@ -20984,6 +20998,299 @@ describe("merge()/concat() suggest with cross-parser dependencies", () => {
       suggestions.filter((s) => s.kind === "literal").map((s) => s.text),
       ["worker"],
     );
+  });
+});
+
+describe("completion metadata contracts", () => {
+  function createSyncCompletingParser<TValue>(
+    valueResult: ValueParserResult<TValue>,
+  ): Parser<"sync", TValue, undefined> {
+    return {
+      mode: "sync",
+      $valueType: [] as readonly TValue[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete() {
+        return valueResult;
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+  }
+
+  function createAsyncCompletingParser<TValue>(
+    valueResult: ValueParserResult<TValue>,
+    deferCompletion = false,
+    onComplete?: () => void,
+  ): Parser<"async", TValue, undefined> {
+    const parser = {
+      mode: "async" as const,
+      $valueType: [] as readonly TValue[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        onComplete?.();
+        return Promise.resolve(valueResult);
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+      ...(deferCompletion
+        ? {
+          shouldDeferCompletion() {
+            return true;
+          },
+        }
+        : {}),
+    };
+    return parser;
+  }
+
+  it("or() complete should use the unique zero-input branch", () => {
+    const parser = or(
+      constant("fallback"),
+      option("--name", string()),
+    );
+
+    const completed = parser.complete(undefined);
+
+    assert.deepEqual(completed, {
+      success: true,
+      value: "fallback",
+    });
+  });
+
+  it("or() async complete should avoid async fallback probes during suggest", async () => {
+    const parser = or(
+      toAsyncParser(constant("fallback")),
+      toAsyncParser(option("--name", string())),
+    );
+
+    const completed = await parser.complete(undefined);
+    const probed = await parser.complete(undefined, {
+      usage: parser.usage,
+      phase: "suggest",
+      path: [],
+      trace: undefined,
+    });
+
+    assert.deepEqual(completed, {
+      success: true,
+      value: "fallback",
+    });
+    assert.ok(!probed.success);
+  });
+
+  it("or() phase-two seeds should follow zero-input fallback state", () => {
+    const parser = orLocal(
+      constant("fallback"),
+      optionLocal("--name", string()),
+    );
+    const extract = getPhase2SeedExtractor(parser);
+
+    const seed = extract(undefined);
+    const failedSeed = extract([
+      0,
+      {
+        success: false as const,
+        consumed: 0,
+        error: message`selected branch failed.`,
+      },
+    ]);
+
+    assert.deepEqual(seed, { value: "fallback" });
+    assert.equal(failedSeed, null);
+  });
+
+  it("object() complete should preserve opaque and scalar deferred fields", () => {
+    const parser = objectLocal({
+      opaque: createSyncCompletingParser({
+        success: true,
+        value: { token: "", stable: "kept" },
+        deferred: true,
+      }),
+      scalar: createSyncCompletingParser({
+        success: true,
+        value: "",
+        deferred: true,
+      }),
+    });
+
+    const completed = parser.complete(parser.initialState);
+
+    assert.deepEqual(completed, {
+      success: true,
+      value: {
+        opaque: { token: "", stable: "kept" },
+        scalar: "",
+      },
+      deferred: true,
+      deferredKeys: new Map<PropertyKey, DeferredMap | null>([
+        ["scalar", null],
+      ]),
+    });
+  });
+
+  it("object() async complete should run deferred fields after eager fields", async () => {
+    const calls: string[] = [];
+    const parser = objectLocal({
+      eager: createAsyncCompletingParser(
+        {
+          success: true,
+          value: "ready",
+        },
+        false,
+        () => calls.push("eager"),
+      ),
+      late: createAsyncCompletingParser(
+        {
+          success: true,
+          value: "",
+          deferred: true,
+        },
+        true,
+        () => calls.push("late"),
+      ),
+    });
+
+    const completed = await parser.complete(parser.initialState);
+
+    assert.deepEqual(calls, ["eager", "late"]);
+    assert.deepEqual(completed, {
+      success: true,
+      value: {
+        eager: "ready",
+        late: "",
+      },
+      deferred: true,
+      deferredKeys: new Map<PropertyKey, DeferredMap | null>([
+        ["late", null],
+      ]),
+    });
+  });
+
+  it("merge() complete should keep opaque deferred child results", () => {
+    const deferredObject = createSyncCompletingParser({
+      success: true,
+      value: { token: "", stable: "kept" },
+      deferred: true,
+    });
+    const parser = mergeLocal(
+      deferredObject,
+      objectLocal({ mode: constant("fast") }),
+    );
+
+    const completed = parser.complete(parser.initialState);
+
+    assert.deepEqual(completed, {
+      success: true,
+      value: {
+        token: "",
+        stable: "kept",
+        mode: "fast",
+      },
+      deferred: true,
+    });
+  });
+
+  it("merge() async complete should keep opaque deferred child results", async () => {
+    const deferredObject = createAsyncCompletingParser({
+      success: true,
+      value: { token: "", stable: "kept" },
+      deferred: true,
+    });
+    const parser = mergeLocal(
+      deferredObject,
+      objectLocal({ mode: toAsyncParser(constant("fast")) }),
+    );
+
+    const completed = await parser.complete(parser.initialState);
+
+    assert.deepEqual(completed, {
+      success: true,
+      value: {
+        token: "",
+        stable: "kept",
+        mode: "fast",
+      },
+      deferred: true,
+    });
+  });
+
+  it("concat() complete should remap numeric and symbolic deferred keys", () => {
+    const nestedKeys: DeferredMap = new Map<PropertyKey, DeferredMap | null>([
+      ["token", null],
+    ]);
+    const arrayChild = createSyncCompletingParser({
+      success: true,
+      value: ["", "stable"] as readonly string[],
+      deferred: true,
+      deferredKeys: new Map<PropertyKey, DeferredMap | null>([
+        ["1", null],
+        ["nested", nestedKeys],
+      ]),
+    }) as unknown as Parser<"sync", readonly string[], readonly unknown[]>;
+    const parser = concatLocal(
+      arrayChild,
+      tupleLocal([constant("tail")] as const),
+    );
+
+    const completed = parser.complete(parser.initialState);
+
+    assert.deepEqual(completed, {
+      success: true,
+      value: ["", "stable", "tail"],
+      deferred: true,
+      deferredKeys: new Map<PropertyKey, DeferredMap | null>([
+        [1, null],
+        ["nested", nestedKeys],
+      ]),
+    });
+  });
+
+  it("concat() async complete should preserve opaque deferred arrays", async () => {
+    const arrayChild = createAsyncCompletingParser({
+      success: true,
+      value: ["", "stable"] as readonly string[],
+      deferred: true,
+    }) as unknown as Parser<"async", readonly string[], readonly unknown[]>;
+    const parser = concatLocal(
+      arrayChild,
+      tupleLocal([toAsyncParser(constant("tail"))] as const),
+    );
+
+    const completed = await parser.complete(parser.initialState);
+
+    assert.deepEqual(completed, {
+      success: true,
+      value: ["", "stable", "tail"],
+      deferred: true,
+    });
   });
 });
 
