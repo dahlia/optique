@@ -60,6 +60,7 @@ import {
 import { extractLiteralValues, formatUsage } from "@optique/core/usage";
 import {
   choice,
+  type DeferredMap,
   integer,
   string,
   type ValueParser,
@@ -13806,6 +13807,102 @@ describe("branch coverage: constructs.ts edge cases", () => {
         };
       }
 
+      function createSyncDeferredCompleteParser(
+        value: unknown,
+        deferredKeys?: DeferredMap,
+      ): Parser<"sync", unknown, undefined> {
+        return {
+          mode: "sync",
+          $valueType: [] as readonly unknown[],
+          $stateType: [] as readonly undefined[],
+          priority: 0,
+          usage: [],
+          leadingNames: new Set(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context) {
+            return {
+              success: true as const,
+              next: context,
+              consumed: [],
+            };
+          },
+          complete() {
+            return {
+              success: true as const,
+              value,
+              deferred: true as const,
+              ...(deferredKeys == null ? {} : { deferredKeys }),
+            };
+          },
+          *suggest() {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        };
+      }
+
+      function createAsyncDeferredCompleteParser(
+        value: unknown,
+        deferredKeys?: DeferredMap,
+      ): Parser<"async", unknown, undefined> {
+        const syncParser = createSyncDeferredCompleteParser(
+          value,
+          deferredKeys,
+        );
+        return {
+          mode: "async",
+          $valueType: [] as readonly unknown[],
+          $stateType: [] as readonly undefined[],
+          priority: 0,
+          usage: [],
+          leadingNames: new Set(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context) {
+            return Promise.resolve(syncParser.parse(context));
+          },
+          complete(state, exec) {
+            return Promise.resolve(syncParser.complete(state, exec));
+          },
+          async *suggest(context, prefix) {
+            yield* syncParser.suggest(context, prefix);
+          },
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        };
+      }
+
+      function assertDeferredComposite(
+        result: unknown,
+        expectedValue: unknown,
+        expectedKeys: DeferredMap,
+      ): void {
+        assert.ok(result != null && typeof result === "object");
+        assert.ok(!("then" in result), "deferred result must be resolved");
+        assert.ok(!("success" in result) || result.success === true);
+        assert.equal(
+          (result as { readonly deferred?: unknown }).deferred,
+          true,
+        );
+        assert.deepEqual(
+          (result as { readonly value?: unknown }).value,
+          expectedValue,
+        );
+        assert.deepEqual(
+          (result as { readonly deferredKeys?: unknown }).deferredKeys,
+          expectedKeys,
+        );
+      }
+
+      const nestedDeferredKeys: DeferredMap = new Map<
+        PropertyKey,
+        DeferredMap | null
+      >([
+        ["inner", null],
+      ]);
+
       it("object() reuses sync pre-completed defaults", () => {
         const { parser: modeParser, getCallCount } =
           createCountingSourceParser();
@@ -14098,6 +14195,190 @@ describe("branch coverage: constructs.ts edge cases", () => {
         assert.equal(childExec?.phase, "complete");
         assert.equal(childExec?.usage, parser.usage);
         assert.deepEqual(childExec?.path, [0]);
+      });
+
+      it("object() complete preserves deferred field metadata", () => {
+        const parser = objectLocal({
+          scalar: createSyncDeferredCompleteParser(""),
+          structured: createSyncDeferredCompleteParser({ ready: false }),
+          partial: createSyncDeferredCompleteParser(
+            { inner: "", stable: "kept" },
+            nestedDeferredKeys,
+          ),
+        });
+
+        assertDeferredComposite(
+          parser.complete(parser.initialState),
+          {
+            scalar: "",
+            structured: { ready: false },
+            partial: { inner: "", stable: "kept" },
+          },
+          new Map<PropertyKey, DeferredMap | null>([
+            ["scalar", null],
+            ["partial", nestedDeferredKeys],
+          ]),
+        );
+      });
+
+      it("object() async complete preserves deferred field metadata", async () => {
+        const parser = objectLocal({
+          scalar: createAsyncDeferredCompleteParser(""),
+          structured: createAsyncDeferredCompleteParser({ ready: false }),
+          partial: createAsyncDeferredCompleteParser(
+            { inner: "", stable: "kept" },
+            nestedDeferredKeys,
+          ),
+        });
+
+        assertDeferredComposite(
+          await parser.complete(parser.initialState),
+          {
+            scalar: "",
+            structured: { ready: false },
+            partial: { inner: "", stable: "kept" },
+          },
+          new Map<PropertyKey, DeferredMap | null>([
+            ["scalar", null],
+            ["partial", nestedDeferredKeys],
+          ]),
+        );
+      });
+
+      it("object() phase-two seed preserves deferred field metadata", () => {
+        const parser = objectLocal({
+          scalar: createSyncDeferredCompleteParser(""),
+          structured: createSyncDeferredCompleteParser({ ready: false }),
+          partial: createSyncDeferredCompleteParser(
+            { inner: "", stable: "kept" },
+            nestedDeferredKeys,
+          ),
+        });
+
+        assertDeferredComposite(
+          getLocalPhase2SeedExtractor(parser)(parser.initialState),
+          {
+            scalar: "",
+            structured: { ready: false },
+            partial: { inner: "", stable: "kept" },
+          },
+          new Map<PropertyKey, DeferredMap | null>([
+            ["scalar", null],
+            ["partial", nestedDeferredKeys],
+          ]),
+        );
+      });
+
+      it("object() async phase-two seed preserves deferred field metadata", async () => {
+        const parser = objectLocal({
+          scalar: createAsyncDeferredCompleteParser(""),
+          structured: createAsyncDeferredCompleteParser({ ready: false }),
+          partial: createAsyncDeferredCompleteParser(
+            { inner: "", stable: "kept" },
+            nestedDeferredKeys,
+          ),
+        });
+
+        assertDeferredComposite(
+          await getLocalPhase2SeedExtractor(parser)(parser.initialState),
+          {
+            scalar: "",
+            structured: { ready: false },
+            partial: { inner: "", stable: "kept" },
+          },
+          new Map<PropertyKey, DeferredMap | null>([
+            ["scalar", null],
+            ["partial", nestedDeferredKeys],
+          ]),
+        );
+      });
+
+      it("tuple() complete preserves deferred element metadata", () => {
+        const parser = tupleLocal(
+          [
+            createSyncDeferredCompleteParser(""),
+            createSyncDeferredCompleteParser({ ready: false }),
+            createSyncDeferredCompleteParser(
+              { inner: "", stable: "kept" },
+              nestedDeferredKeys,
+            ),
+          ] as const,
+        );
+
+        assertDeferredComposite(
+          parser.complete(parser.initialState),
+          ["", { ready: false }, { inner: "", stable: "kept" }],
+          new Map<PropertyKey, DeferredMap | null>([
+            [0, null],
+            [2, nestedDeferredKeys],
+          ]),
+        );
+      });
+
+      it("tuple() async complete preserves deferred element metadata", async () => {
+        const parser = tupleLocal(
+          [
+            createAsyncDeferredCompleteParser(""),
+            createAsyncDeferredCompleteParser({ ready: false }),
+            createAsyncDeferredCompleteParser(
+              { inner: "", stable: "kept" },
+              nestedDeferredKeys,
+            ),
+          ] as const,
+        );
+
+        assertDeferredComposite(
+          await parser.complete(parser.initialState),
+          ["", { ready: false }, { inner: "", stable: "kept" }],
+          new Map<PropertyKey, DeferredMap | null>([
+            [0, null],
+            [2, nestedDeferredKeys],
+          ]),
+        );
+      });
+
+      it("tuple() phase-two seed preserves deferred element metadata", () => {
+        const parser = tupleLocal(
+          [
+            createSyncDeferredCompleteParser(""),
+            createSyncDeferredCompleteParser({ ready: false }),
+            createSyncDeferredCompleteParser(
+              { inner: "", stable: "kept" },
+              nestedDeferredKeys,
+            ),
+          ] as const,
+        );
+
+        assertDeferredComposite(
+          getLocalPhase2SeedExtractor(parser)(parser.initialState),
+          ["", { ready: false }, { inner: "", stable: "kept" }],
+          new Map<PropertyKey, DeferredMap | null>([
+            [0, null],
+            [2, nestedDeferredKeys],
+          ]),
+        );
+      });
+
+      it("tuple() async phase-two seed preserves deferred element metadata", async () => {
+        const parser = tupleLocal(
+          [
+            createAsyncDeferredCompleteParser(""),
+            createAsyncDeferredCompleteParser({ ready: false }),
+            createAsyncDeferredCompleteParser(
+              { inner: "", stable: "kept" },
+              nestedDeferredKeys,
+            ),
+          ] as const,
+        );
+
+        assertDeferredComposite(
+          await getLocalPhase2SeedExtractor(parser)(parser.initialState),
+          ["", { ready: false }, { inner: "", stable: "kept" }],
+          new Map<PropertyKey, DeferredMap | null>([
+            [0, null],
+            [2, nestedDeferredKeys],
+          ]),
+        );
       });
 
       for (

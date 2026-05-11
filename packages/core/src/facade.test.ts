@@ -44,7 +44,7 @@ import {
 } from "@optique/core/primitives";
 import type { Program } from "@optique/core/program";
 import type { OptionName } from "@optique/core/usage";
-import type { ValueParser } from "@optique/core/valueparser";
+import type { DeferredMap, ValueParser } from "@optique/core/valueparser";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -82,6 +82,93 @@ function getRuntimeExtractPhase2SeedKey(): symbol {
   );
   assert.ok(key, "expected command() to expose extractPhase2SeedKey");
   return key;
+}
+
+function createPhaseTwoSeedParser(
+  tokenKey: symbol,
+  seed: {
+    readonly value: unknown;
+    readonly deferred?: true;
+    readonly deferredKeys?: DeferredMap;
+  },
+): Parser<"sync", unknown, undefined> {
+  return {
+    mode: "sync",
+    $valueType: [] as readonly unknown[],
+    $stateType: [] as readonly undefined[],
+    priority: 0,
+    usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse(context) {
+      return {
+        success: true as const,
+        next: context,
+        consumed: [],
+      };
+    },
+    complete(state) {
+      const token = getAnnotations(state)?.[tokenKey];
+      if (typeof token === "string") {
+        return {
+          success: true as const,
+          value: `phase2:${token}`,
+        };
+      }
+      return {
+        success: true as const,
+        value: seed.value,
+        ...(seed.deferred ? { deferred: true as const } : {}),
+        ...(seed.deferredKeys == null
+          ? {}
+          : { deferredKeys: seed.deferredKeys }),
+      };
+    },
+    *suggest() {},
+    getDocFragments() {
+      return { fragments: [] };
+    },
+  };
+}
+
+function createPhaseTwoCaptureContext(
+  tokenKey: symbol,
+  getToken: (parsed: unknown) => string,
+): SourceContext {
+  return {
+    id: tokenKey,
+    phase: "two-pass",
+    getAnnotations(request?: unknown) {
+      if (isPhase1ContextRequest(request)) return {};
+      return { [tokenKey]: getToken(getPhase2ContextParsed(request)) };
+    },
+  };
+}
+
+type PhaseTwoScrubbedConfig = {
+  readonly config: string;
+  readonly prompt: unknown;
+  readonly nested: {
+    readonly source: string;
+    readonly prompt: unknown;
+  };
+  readonly list: readonly unknown[];
+  readonly [key: symbol]: unknown;
+};
+
+function isPhaseTwoScrubbedConfig(
+  value: unknown,
+): value is PhaseTwoScrubbedConfig {
+  return value != null &&
+    typeof value === "object" &&
+    "config" in value &&
+    (value as { readonly config?: unknown }).config === "optique.json" &&
+    "nested" in value &&
+    (value as { readonly nested?: unknown }).nested != null &&
+    typeof (value as { readonly nested?: unknown }).nested === "object" &&
+    "list" in value &&
+    Array.isArray((value as { readonly list?: unknown }).list);
 }
 
 describe("runParser", () => {
@@ -5777,6 +5864,145 @@ describe("runWith", () => {
 
       assert.ok(reusedIdentity);
       assert.deepEqual(result, { name: "default" });
+    });
+
+    it("should hide deferred non-plain phase-two seed values from contexts", async () => {
+      const tokenKey = Symbol.for("@test/phase-two-hide-non-plain-leaf");
+      let phase2Parsed: unknown = "not-called";
+      const parser = createPhaseTwoSeedParser(tokenKey, {
+        value: new URL("https://example.com/config.json"),
+        deferred: true,
+        deferredKeys: new Map(),
+      });
+      const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
+        phase2Parsed = parsed;
+        return parsed === undefined ? "hidden" : "visible";
+      });
+
+      const result = await runWith(parser, "test", [context], { args: [] });
+
+      assert.equal(phase2Parsed, undefined);
+      assert.equal(result, "phase2:hidden");
+    });
+
+    it("should hide deferred class instance seed values from contexts", async () => {
+      class DeferredSecret {
+        constructor(readonly token: string) {}
+      }
+
+      const tokenKey = Symbol.for("@test/phase-two-hide-class-leaf");
+      let phase2Parsed: unknown = "not-called";
+      const parser = createPhaseTwoSeedParser(tokenKey, {
+        value: new DeferredSecret("prompt-placeholder"),
+        deferred: true,
+        deferredKeys: new Map<PropertyKey, DeferredMap | null>([
+          ["token", null],
+        ]),
+      });
+      const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
+        phase2Parsed = parsed;
+        return parsed === undefined ? "hidden" : "visible";
+      });
+
+      const result = await runWith(parser, "test", [context], { args: [] });
+
+      assert.equal(phase2Parsed, undefined);
+      assert.equal(result, "phase2:hidden");
+    });
+
+    it("should scrub only deferred fields from structured phase-two seed values", async () => {
+      const tokenKey = Symbol.for("@test/phase-two-scrub-structured");
+      const symbolKey = Symbol("source");
+      const seedValue = {
+        config: "optique.json",
+        prompt: "prompt-placeholder",
+        nested: {
+          source: "env",
+          prompt: "prompt-placeholder",
+        },
+        list: ["prompt-placeholder", "kept"],
+        [symbolKey]: "symbol-value",
+      };
+      const deferredKeys = new Map<PropertyKey, DeferredMap | null>([
+        ["prompt", null],
+        [
+          "nested",
+          new Map<PropertyKey, DeferredMap | null>([
+            ["prompt", null],
+          ]),
+        ],
+        [
+          "list",
+          new Map<PropertyKey, DeferredMap | null>([
+            [0, null],
+          ]),
+        ],
+      ]);
+      let phase2Parsed: unknown;
+      const parser = createPhaseTwoSeedParser(tokenKey, {
+        value: seedValue,
+        deferred: true,
+        deferredKeys,
+      });
+      const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
+        phase2Parsed = parsed;
+        return isPhaseTwoScrubbedConfig(parsed) ? parsed.config : "missing";
+      });
+
+      const result = await runWith(parser, "test", [context], { args: [] });
+
+      assert.ok(isPhaseTwoScrubbedConfig(phase2Parsed));
+      assert.equal(phase2Parsed.config, "optique.json");
+      assert.equal(phase2Parsed.prompt, undefined);
+      assert.deepEqual(phase2Parsed.nested, {
+        source: "env",
+        prompt: undefined,
+      });
+      assert.deepEqual(phase2Parsed.list, [undefined, "kept"]);
+      assert.equal(phase2Parsed[symbolKey], "symbol-value");
+      assert.equal(result, "phase2:optique.json");
+    });
+
+    it("should hide phase-two seed object shells when every data field is deferred", async () => {
+      const tokenKey = Symbol.for("@test/phase-two-hide-object-shell");
+      let phase2Parsed: unknown = "not-called";
+      const parser = createPhaseTwoSeedParser(tokenKey, {
+        value: { prompt: "prompt-placeholder" },
+        deferred: true,
+        deferredKeys: new Map<PropertyKey, DeferredMap | null>([
+          ["prompt", null],
+        ]),
+      });
+      const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
+        phase2Parsed = parsed;
+        return parsed === undefined ? "hidden" : "visible";
+      });
+
+      const result = await runWith(parser, "test", [context], { args: [] });
+
+      assert.equal(phase2Parsed, undefined);
+      assert.equal(result, "phase2:hidden");
+    });
+
+    it("should hide phase-two seed values when deferred metadata is stale", async () => {
+      const tokenKey = Symbol.for("@test/phase-two-hide-stale-keys");
+      let phase2Parsed: unknown = "not-called";
+      const parser = createPhaseTwoSeedParser(tokenKey, {
+        value: { config: "optique.json" },
+        deferred: true,
+        deferredKeys: new Map<PropertyKey, DeferredMap | null>([
+          ["removed", null],
+        ]),
+      });
+      const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
+        phase2Parsed = parsed;
+        return parsed === undefined ? "hidden" : "visible";
+      });
+
+      const result = await runWith(parser, "test", [context], { args: [] });
+
+      assert.equal(phase2Parsed, undefined);
+      assert.equal(result, "phase2:hidden");
     });
 
     it("should handle mixed single-pass and two-pass contexts", async () => {

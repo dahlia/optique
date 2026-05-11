@@ -59,6 +59,7 @@ import {
 } from "@optique/core/primitives";
 import {
   choice,
+  type DeferredMap,
   domain,
   integer,
   macAddress,
@@ -9912,6 +9913,128 @@ describe("multiple() dependency source extraction", () => {
 });
 
 describe("multiple() phase-two seed extraction", () => {
+  const nestedDeferredKeys: DeferredMap = new Map<
+    PropertyKey,
+    DeferredMap | null
+  >(
+    [["inner", null]],
+  );
+
+  function createSyncDeferredItemParser(): Parser<"sync", unknown, string> {
+    return {
+      mode: "sync",
+      $valueType: [] as readonly unknown[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete(state) {
+        if (state === "partial") {
+          return {
+            success: true as const,
+            value: { inner: "", stable: "kept" },
+            deferred: true as const,
+            deferredKeys: nestedDeferredKeys,
+          };
+        }
+        return {
+          success: true as const,
+          value: state === "structured" ? { ready: false } : "",
+          deferred: true as const,
+        };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+  }
+
+  function createAsyncDeferredItemParser(): Parser<"async", unknown, string> {
+    const syncParser = createSyncDeferredItemParser();
+    return {
+      mode: "async",
+      $valueType: [] as readonly unknown[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return Promise.resolve(syncParser.parse(context));
+      },
+      complete(state, exec) {
+        return Promise.resolve(syncParser.complete(state, exec));
+      },
+      async *suggest(context, prefix) {
+        yield* syncParser.suggest(context, prefix);
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+  }
+
+  function assertDeferredItems(result: unknown): void {
+    assert.ok(result != null && typeof result === "object");
+    assert.ok(!("then" in result), "deferred result must be resolved");
+    assert.ok(!("success" in result) || result.success === true);
+    assert.deepEqual(
+      (result as { readonly value?: unknown }).value,
+      ["", { ready: false }, { inner: "", stable: "kept" }],
+    );
+    assert.equal((result as { readonly deferred?: unknown }).deferred, true);
+    assert.deepEqual(
+      (result as { readonly deferredKeys?: unknown }).deferredKeys,
+      new Map<PropertyKey, DeferredMap | null>([
+        [0, null],
+        [2, nestedDeferredKeys],
+      ]),
+    );
+  }
+
+  it("preserves deferred item metadata during sync completion", () => {
+    const parser = multipleLocal(createSyncDeferredItemParser());
+    assertDeferredItems(
+      parser.complete(["scalar", "structured", "partial"]),
+    );
+  });
+
+  it("preserves deferred item metadata during async completion", async () => {
+    const parser = multipleLocal(createAsyncDeferredItemParser());
+    assertDeferredItems(
+      await parser.complete(["scalar", "structured", "partial"]),
+    );
+  });
+
+  it("preserves deferred item metadata during sync seed extraction", () => {
+    const parser = multipleLocal(createSyncDeferredItemParser());
+    assertDeferredItems(
+      completeOrExtractPhase2Seed(parser, ["scalar", "structured", "partial"]),
+    );
+  });
+
+  it("preserves deferred item metadata during async seed extraction", async () => {
+    const parser = multipleLocal(createAsyncDeferredItemParser());
+    assertDeferredItems(
+      await completeOrExtractPhase2Seed(parser, [
+        "scalar",
+        "structured",
+        "partial",
+      ]),
+    );
+  });
+
   it("unwraps injected annotation wrappers before extracting item seeds", () => {
     const marker = Symbol.for("@test/multiple-phase-two-seed");
     const child: Parser<"sync", string, string> = {

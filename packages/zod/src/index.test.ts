@@ -1,4 +1,4 @@
-import { message } from "@optique/core/message";
+import { formatMessage, message } from "@optique/core/message";
 import { zod } from "@optique/zod";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -1542,3 +1542,171 @@ describe("parse() — non-async errors are re-thrown", () => {
     );
   });
 });
+
+describe("Zod internal compatibility branches", () => {
+  it("should detect legacy async parse error messages", () => {
+    const messages = [
+      "Async refinement encountered during synchronous parse operation. Use .parseAsync instead.",
+      "Asynchronous transform encountered during synchronous parse operation. Use .parseAsync instead.",
+      "Synchronous parse encountered promise.",
+    ];
+
+    for (const asyncMessage of messages) {
+      const parser = zod(
+        fakeZodSchema<string>({ typeName: "ZodString" }, () => {
+          throw new Error(asyncMessage);
+        }),
+        { placeholder: "" },
+      );
+
+      assert.throws(
+        () => parser.parse("value"),
+        {
+          name: "TypeError",
+          message:
+            "Async Zod schemas (e.g., async refinements) are not supported by zod(). Use synchronous schemas instead.",
+        },
+      );
+    }
+  });
+
+  it("should infer choices from Zod v3 enum internals", () => {
+    const parser = zod(
+      fakeZodSchema<string>(
+        { typeName: "ZodEnum", values: ["debug", "info"] },
+        (input) => (
+          input === "debug" || input === "info"
+            ? { success: true, data: input }
+            : zodFailure("Invalid enum value.")
+        ),
+      ),
+      { placeholder: "debug" },
+    );
+
+    assert.deepEqual(parser.choices, ["debug", "info"]);
+    assert.deepEqual([...parser.suggest?.("i") ?? []], [
+      { kind: "literal", text: "info" },
+    ]);
+  });
+
+  it("should infer choices from Zod v3 native enum internals", () => {
+    const parser = zod(
+      fakeZodSchema<string>(
+        { typeName: "ZodNativeEnum", values: { Debug: "debug", Info: "info" } },
+        (input) => (
+          input === "debug" || input === "info"
+            ? { success: true, data: input }
+            : zodFailure("Invalid native enum value.")
+        ),
+      ),
+      { placeholder: "debug" },
+    );
+
+    assert.deepEqual(parser.choices, ["debug", "info"]);
+  });
+
+  it("should infer choices from legacy literal and union internals", () => {
+    const prod = fakeZodSchema<string>(
+      { typeName: "ZodLiteral", value: "prod" },
+      (input) =>
+        input === "prod"
+          ? { success: true, data: "prod" }
+          : zodFailure("Invalid literal value."),
+    );
+    const dev = fakeZodSchema<string>(
+      { typeName: "ZodLiteral", values: ["dev"] },
+      (input) =>
+        input === "dev"
+          ? { success: true, data: "dev" }
+          : zodFailure("Invalid literal value."),
+    );
+    const parser = zod(
+      fakeZodSchema<string>(
+        { typeName: "ZodUnion", options: [prod, dev] },
+        (input) =>
+          input === "prod" || input === "dev"
+            ? { success: true, data: input }
+            : zodFailure("Invalid union value."),
+      ),
+      { placeholder: "prod" },
+    );
+
+    assert.deepEqual(parser.choices, ["prod", "dev"]);
+  });
+
+  it("should reject non-string legacy choice internals", () => {
+    const numericNativeEnum = zod(
+      fakeZodSchema<number>(
+        { typeName: "ZodNativeEnum", values: { A: 0, 0: "A" } },
+        () => zodFailure("Invalid native enum value."),
+      ),
+      { placeholder: 0 },
+    );
+    const numericLiteral = zod(
+      fakeZodSchema<number>(
+        { typeName: "ZodLiteral", values: [1] },
+        () => zodFailure("Invalid literal value."),
+      ),
+      { placeholder: 1 },
+    );
+    const malformedUnion = zod(
+      fakeZodSchema<string>(
+        { typeName: "ZodUnion", options: "not-array" },
+        () => zodFailure("Invalid union value."),
+      ),
+      { placeholder: "" },
+    );
+
+    assert.equal(numericNativeEnum.choices, undefined);
+    assert.equal(numericLiteral.choices, undefined);
+    assert.equal(malformedUnion.choices, undefined);
+  });
+
+  it("should use default validation message when a fake schema has no issues", () => {
+    const parser = zod(
+      fakeZodSchema<string>(
+        { typeName: "ZodString" },
+        () => ({ success: false, error: new z.ZodError([]) }),
+      ),
+      { placeholder: "" },
+    );
+
+    const result = parser.parse("bad");
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(formatMessage(result.error), '"Validation failed"');
+    }
+  });
+});
+
+// Helpers
+
+type FakeZodResult<T> =
+  | { readonly success: true; readonly data: T }
+  | { readonly success: false; readonly error: z.ZodError };
+
+function fakeZodSchema<T>(
+  def: Record<string, unknown>,
+  safeParse: (input: unknown) => FakeZodResult<T>,
+): z.Schema<T> {
+  const schema = {} as z.Schema<T>;
+  return new Proxy(schema, {
+    get(target, key, receiver): unknown {
+      if (key === "_def") return def;
+      if (key === "safeParse") return safeParse;
+      return Reflect.get(target, key, receiver);
+    },
+  });
+}
+
+function zodFailure(message: string): FakeZodResult<never> {
+  return {
+    success: false,
+    error: new z.ZodError([{
+      code: "custom",
+      message,
+      path: [],
+    }]),
+  };
+}

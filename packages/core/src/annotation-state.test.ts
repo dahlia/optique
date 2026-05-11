@@ -861,4 +861,81 @@ describe("annotation-state", () => {
       );
     },
   );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() falls back when an array subclass slice throws",
+    () => {
+      class BrokenSliceArray<T> extends Array<T> {
+        override slice(): T[] {
+          throw new TypeError("slice disabled.");
+        }
+      }
+      const marker = Symbol.for("@test/array-slice-fallback");
+      const annotations = { [marker]: true } satisfies Annotations;
+      const parentState = injectAnnotations(undefined, annotations);
+      const original = { value: "entry" };
+      const delegated = getDelegatedAnnotationState(parentState, original);
+      const source = new BrokenSliceArray<typeof delegated>();
+      source.push(delegated);
+
+      const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+      assert.ok(Array.isArray(normalized));
+      assert.ok(!(normalized instanceof BrokenSliceArray));
+      assert.strictEqual(normalized[0], original);
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() unwraps delegated Map own properties",
+    () => {
+      const marker = Symbol.for("@test/map-own-property");
+      const annotations = { [marker]: true } satisfies Annotations;
+      const parentState = injectAnnotations(undefined, annotations);
+      const original = { value: "metadata" };
+      const delegated = getDelegatedAnnotationState(parentState, original);
+      const source = new Map<string, string>([["mode", "prod"]]);
+      Object.defineProperty(source, "metadata", {
+        value: delegated,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+      assert.notStrictEqual(normalized, source);
+      assert.equal(normalized.get("mode"), "prod");
+      assert.strictEqual(
+        (normalized as Map<string, string> & { readonly metadata: unknown })
+          .metadata,
+        original,
+      );
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() unwraps delegated Set own properties",
+    () => {
+      const marker = Symbol.for("@test/set-own-property");
+      const annotations = { [marker]: true } satisfies Annotations;
+      const parentState = injectAnnotations(undefined, annotations);
+      const original = { value: "metadata" };
+      const delegated = getDelegatedAnnotationState(parentState, original);
+      const source = new Set<string>(["prod"]);
+      Object.defineProperty(source, "metadata", {
+        value: delegated,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+      assert.notStrictEqual(normalized, source);
+      assert.ok(normalized.has("prod"));
+      assert.strictEqual(
+        (normalized as Set<string> & { readonly metadata: unknown }).metadata,
+        original,
+      );
+    },
+  );
 });

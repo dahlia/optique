@@ -14867,6 +14867,22 @@ describe("branch coverage regressions", () => {
     }
   });
 
+  it("accepts equivalent scientific notation for numeric choices", () => {
+    const parser = choice([1e21, -0]);
+
+    const exponential = parser.parse("1e21");
+    assert.ok(exponential.success);
+    if (exponential.success) {
+      assert.equal(exponential.value, 1e21);
+    }
+
+    const negativeZero = parser.parse("-0");
+    assert.ok(negativeZero.success);
+    if (negativeZero.success) {
+      assert.ok(Object.is(negativeZero.value, -0));
+    }
+  });
+
   it("covers static custom invalidChoice for numeric choice parser", () => {
     const parser = choice([1, 2, 3], {
       errors: {
@@ -14917,6 +14933,49 @@ describe("branch coverage regressions", () => {
 
     assert.ok(!parser.parse("9").success);
     assert.ok(!parser.parse("21").success);
+  });
+
+  it("rejects invalid UUID allowedVersions values by value type", () => {
+    assert.throws(
+      () => uuid({ allowedVersions: [Symbol("version")] as never }),
+      {
+        name: "TypeError",
+        message:
+          'Expected every element of allowedVersions to be an integer, but got value "Symbol(version)" of type "symbol".',
+      },
+    );
+    assert.throws(
+      () => uuid({ allowedVersions: [[4]] as never }),
+      {
+        name: "TypeError",
+        message:
+          'Expected every element of allowedVersions to be an integer, but got value "4" of type "array".',
+      },
+    );
+  });
+
+  it("uses UUID version policy errors for otherwise well-formed UUIDs", () => {
+    const strictParser = uuid({
+      errors: {
+        disallowedVersion: (version, allowedVersions) =>
+          message`version ${text(String(version))} not in ${
+            text(allowedVersions.join(","))
+          }`,
+      },
+    });
+    const strictResult = strictParser.parse(
+      "550e8400-e29b-91d4-a716-446655440000",
+    );
+
+    assert.ok(!strictResult.success);
+    if (!strictResult.success) {
+      assert.deepEqual(strictResult.error, [
+        { type: "text", text: "version " },
+        { type: "text", text: "9" },
+        { type: "text", text: " not in " },
+        { type: "text", text: "1,2,3,4,5,6,7,8" },
+      ]);
+    }
   });
 
   it("covers port number static and function error branches", () => {
@@ -15074,6 +15133,20 @@ describe("ValueParser.normalize()", () => {
     assert.equal(mac.format("local"), "local");
   });
 
+  it("macAddress().format() falls back for non-string and throwing validation", () => {
+    const basic = macAddress();
+    assert.equal(basic.format(42 as never), "MAC");
+
+    const throwing = macAddress({
+      errors: {
+        invalidMacAddress: () => {
+          throw new TypeError("bad mac callback.");
+        },
+      },
+    });
+    assert.equal(throwing.format("not-a-mac"), "not-a-mac");
+  });
+
   it("domain().normalize() applies lowercase when configured", () => {
     const dom = domain({ lowercase: true });
     assert.equal(dom.normalize!("Example.COM"), "example.com");
@@ -15088,6 +15161,21 @@ describe("ValueParser.normalize()", () => {
   it("domain() has no normalize when lowercase is false", () => {
     const dom = domain();
     assert.equal(dom.normalize, undefined);
+  });
+
+  it("domain().format() falls back for non-string and throwing validation", () => {
+    const basic = domain({ lowercase: true });
+    assert.equal(basic.format(42 as never), "DOMAIN");
+
+    const throwing = domain({
+      lowercase: true,
+      errors: {
+        invalidDomain: () => {
+          throw new TypeError("bad domain callback.");
+        },
+      },
+    });
+    assert.equal(throwing.format("not a domain"), "not a domain");
   });
 
   it("ipv6().normalize() compresses non-canonical addresses", () => {
@@ -15205,6 +15293,17 @@ describe("checkEnumOption", () => {
       {
         name: "TypeError",
         message: 'Expected foo to be one of "a", "b", "c", but got number: 42.',
+      },
+    );
+  });
+
+  it("should render symbol values in TypeError messages", () => {
+    assert.throws(
+      () => checkEnumOption({ foo: Symbol("x") }, "foo", allowed),
+      {
+        name: "TypeError",
+        message:
+          'Expected foo to be one of "a", "b", "c", but got symbol: Symbol(x).',
       },
     );
   });

@@ -932,6 +932,35 @@ describe("valibot()", () => {
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
     });
+
+    it("should not expose choices from malformed internal choice metadata", () => {
+      const malformedPicklist = valibot({
+        type: "picklist",
+        options: "not-array",
+      } as never, { placeholder: "" });
+      assert.equal(malformedPicklist.metavar, "CHOICE");
+      assert.equal(malformedPicklist.choices, undefined);
+      assert.equal(malformedPicklist.suggest, undefined);
+
+      const malformedUnionOptions = valibot({
+        type: "union",
+        options: "not-array",
+      } as never, { placeholder: "" });
+      assert.equal(malformedUnionOptions.metavar, "VALUE");
+      assert.equal(malformedUnionOptions.choices, undefined);
+      assert.equal(malformedUnionOptions.suggest, undefined);
+
+      const malformedUnionMember = valibot({
+        type: "union",
+        options: [
+          { type: "literal", literal: "dev" },
+          "prod",
+        ],
+      } as never, { placeholder: "" });
+      assert.equal(malformedUnionMember.metavar, "VALUE");
+      assert.equal(malformedUnionMember.choices, undefined);
+      assert.equal(malformedUnionMember.suggest, undefined);
+    });
   });
 
   describe("async schema rejection", () => {
