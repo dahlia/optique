@@ -2160,6 +2160,79 @@ describe("negatableFlag()", () => {
     }
   });
 
+  it("should support static custom errors for every error branch", () => {
+    const parser = negatableFlag({
+      positive: "--color",
+      negative: "--no-color",
+    }, {
+      errors: {
+        missing: message`static missing`,
+        optionsTerminated: message`static terminated`,
+        endOfInput: message`static empty`,
+        duplicate: message`static duplicate`,
+        conflict: message`static conflict`,
+        unexpectedValue: message`static unexpected`,
+        noMatch: message`static no match`,
+      },
+    });
+
+    const cases = [
+      parser.complete(undefined),
+      parser.parse({
+        buffer: ["--color"],
+        state: parser.initialState,
+        optionsTerminated: true,
+        usage: parser.usage,
+      }),
+      parser.parse({
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }),
+      parser.parse({
+        buffer: ["--color"],
+        state: { value: true, token: "--color" },
+        optionsTerminated: false,
+        usage: parser.usage,
+      }),
+      parser.parse({
+        buffer: ["--no-color"],
+        state: { value: true, token: "--color" },
+        optionsTerminated: false,
+        usage: parser.usage,
+      }),
+      parser.parse({
+        buffer: ["--color=true"],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }),
+      parser.parse({
+        buffer: ["--unknown"],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }),
+    ] as const;
+
+    assert.deepEqual(
+      cases.map((result) => {
+        assert.ok(!result.success);
+        return result.success ? "" : formatMessage(result.error);
+      }),
+      [
+        "static missing",
+        "static terminated",
+        "static empty",
+        "static duplicate",
+        "static conflict",
+        "static unexpected",
+        "static no match",
+      ],
+    );
+  });
+
   it('should keep docs and suggestions for hidden: "usage"', () => {
     const parser = negatableFlag({
       positive: "--color",

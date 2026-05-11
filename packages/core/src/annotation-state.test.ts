@@ -243,6 +243,33 @@ describe("annotation-state", () => {
   );
 
   it(
+    "getDelegatedAnnotationState() delegates built-in objects without annotation views",
+    () => {
+      const marker = Symbol.for(
+        "@test/getDelegatedAnnotationState-built-ins",
+      );
+      const annotations = { [marker]: true } satisfies Annotations;
+      const parentState = injectAnnotations(undefined, annotations);
+
+      for (
+        const state of [
+          [],
+          new Date(0),
+          new Map([["key", "value"]]),
+          new Set(["value"]),
+          /value/u,
+        ] as const
+      ) {
+        const delegated = getDelegatedAnnotationState(parentState, state);
+
+        assert.ok(hasDelegatedAnnotationCarrier(delegated));
+        assert.ok(getAnnotations(delegated)?.[marker]);
+        assert.equal(normalizeDelegatedAnnotationState(delegated), state);
+      }
+    },
+  );
+
+  it(
     "getDelegatedAnnotationState() tracks delegated plain-object clones",
     () => {
       const marker = Symbol.for(
@@ -756,6 +783,32 @@ describe("annotation-state", () => {
   );
 
   it(
+    "normalizeNestedDelegatedAnnotationState() preserves Map self references",
+    () => {
+      const map = new Map<unknown, unknown>();
+      map.set(map, map);
+
+      const normalized = normalizeNestedDelegatedAnnotationState(map);
+
+      assert.strictEqual(normalized, map);
+      assert.strictEqual(normalized.get(map), map);
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() preserves Set self references",
+    () => {
+      const set = new Set<unknown>();
+      set.add(set);
+
+      const normalized = normalizeNestedDelegatedAnnotationState(set);
+
+      assert.strictEqual(normalized, set);
+      assert.ok(normalized.has(set));
+    },
+  );
+
+  it(
     "normalizeNestedDelegatedAnnotationState() preserves non-plain objects (Date, RegExp) as-is at the top level",
     () => {
       // Date and RegExp are non-plain objects whose prototype is not
@@ -767,6 +820,32 @@ describe("annotation-state", () => {
 
       assert.strictEqual(normalizeNestedDelegatedAnnotationState(date), date);
       assert.strictEqual(normalizeNestedDelegatedAnnotationState(re), re);
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() ignores accessor-only properties",
+    () => {
+      const marker = Symbol.for("@test/accessor-only-property-parent");
+      const parentState = injectAnnotations(undefined, { [marker]: true });
+      const source = {
+        nested: getDelegatedAnnotationState(parentState, "seed"),
+        get computed() {
+          return "derived";
+        },
+      };
+
+      const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+      assert.notStrictEqual(normalized, source);
+      assert.deepEqual(normalized, {
+        nested: "seed",
+        computed: "derived",
+      });
+      assert.equal(
+        Object.getOwnPropertyDescriptor(normalized, "computed")?.get,
+        Object.getOwnPropertyDescriptor(source, "computed")?.get,
+      );
     },
   );
 

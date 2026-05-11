@@ -224,6 +224,46 @@ function tokenParserMetadata<TState>(
   };
 }
 
+function createAsyncFailingTokenParser(
+  token: string,
+): Parser<"async", string, undefined> {
+  return {
+    $valueType: [] as readonly string[],
+    $stateType: [] as readonly undefined[],
+    mode: "async",
+    priority: 0,
+    usage: [{ type: "option", names: [token as OptionName] }],
+    leadingNames: new Set([token]),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse(context: ParserContext<undefined>) {
+      if (context.buffer[0] === token) {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 1,
+          error: message`Missing value for ${token}.`,
+        });
+      }
+      return Promise.resolve({
+        success: false as const,
+        consumed: 0,
+        error: message`Expected ${token}.`,
+      });
+    },
+    complete() {
+      return Promise.resolve({ success: true as const, value: token });
+    },
+    async *suggest(_context: ParserContext<undefined>, prefix: string) {
+      if (token.startsWith(prefix)) {
+        yield { kind: "literal" as const, text: token };
+      }
+    },
+    getDocFragments() {
+      return { fragments: [] };
+    },
+  };
+}
+
 function createAsyncDeferredDiscriminator(
   result: ValueParserResult<string>,
 ): Parser<"async", string, string> {
@@ -13967,6 +14007,157 @@ describe("branch coverage: constructs.ts edge cases", () => {
     ]);
   });
 
+  it("object() normalizeValue normalizes changed fields only", () => {
+    const parser = objectLocal({
+      host: optionLocal("--host", domain({ lowercase: true })),
+      port: optionLocal("--port", integer()),
+    });
+    assert.ok(typeof parser.normalizeValue === "function");
+
+    const unchanged = { host: "example.com", port: 443 } as const;
+    assert.equal(parser.normalizeValue(unchanged), unchanged);
+    assert.deepEqual(
+      parser.normalizeValue({ host: "EXAMPLE.COM", port: 443 }),
+      {
+        host: "example.com",
+        port: 443,
+      },
+    );
+    assert.deepEqual(
+      parser.normalizeValue({ host: "not a domain", port: 443 }),
+      {
+        host: "not a domain",
+        port: 443,
+      },
+    );
+    assert.equal(parser.normalizeValue("not-object" as never), "not-object");
+  });
+
+  it("object() normalizeValue preserves fields whose normalizer throws", () => {
+    const throwingParser: Parser<"sync", string, undefined> = {
+      mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete() {
+        return { success: true as const, value: "fallback" };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    Object.defineProperty(throwingParser, "normalizeValue", {
+      value() {
+        throw new Error("object normalization failed.");
+      },
+    });
+    const parser = objectLocal({
+      host: optionLocal("--host", domain({ lowercase: true })),
+      sentinel: throwingParser,
+    });
+
+    assert.deepEqual(
+      parser.normalizeValue!({ host: "EXAMPLE.COM", sentinel: "keep" }),
+      {
+        host: "example.com",
+        sentinel: "keep",
+      },
+    );
+  });
+
+  it("group() forwards placeholder, normalization, and validation", () => {
+    const inner = optionLocal("--host", domain({ lowercase: true }));
+    const parser = group("Network", inner);
+
+    assert.equal(parser.placeholder, "example.com");
+    assert.equal(parser.normalizeValue?.("EXAMPLE.COM"), "example.com");
+    const validation = parser.validateValue?.("not a domain");
+    assert.ok(validation && typeof validation === "object");
+    assert.ok(!validation.success);
+  });
+
+  it("longestMatch() prefers a definitive result over an equal provisional result", () => {
+    const provisional = createProvisionalTokenParser("--mode", "provisional");
+    const definitive = createSyncBranchParser(
+      "initial",
+      (context) =>
+        context.buffer[0] === "--mode"
+          ? {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: "definitive",
+            },
+            consumed: ["--mode"],
+          }
+          : {
+            success: false as const,
+            consumed: 0,
+            error: message`missing definitive token.`,
+          },
+      "definitive",
+      tokenParserMetadata("--mode"),
+    );
+    const parser = longestMatch(provisional, definitive);
+
+    const result = parseSync(parser, ["--mode"]);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "definitive");
+    }
+  });
+
+  it("longestMatch() async prefers a definitive result over an equal provisional result", async () => {
+    const provisional = toAsyncParser(
+      createProvisionalTokenParser("--mode", "provisional"),
+    );
+    const definitive = toAsyncParser(
+      createSyncBranchParser(
+        "initial",
+        (context) =>
+          context.buffer[0] === "--mode"
+            ? {
+              success: true as const,
+              next: {
+                ...context,
+                buffer: context.buffer.slice(1),
+                state: "definitive",
+              },
+              consumed: ["--mode"],
+            }
+            : {
+              success: false as const,
+              consumed: 0,
+              error: message`missing definitive token.`,
+            },
+        "definitive",
+        tokenParserMetadata("--mode"),
+      ),
+    );
+    const parser = longestMatch(provisional, definitive);
+
+    const result = await parseAsync(parser, ["--mode"]);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "definitive");
+    }
+  });
+
   // ----- merge() extractParserState: object initialState fields (lines 5188-5195) -----
   it("merge() extractParserState extracts matching fields from context state", () => {
     const p1 = object({
@@ -14514,6 +14705,76 @@ describe("branch coverage: constructs.ts edge cases", () => {
       asyncSuggestions.push(suggestion);
     }
     assert.ok(Array.isArray(asyncSuggestions));
+  });
+
+  it("tuple() async suggest advances past parsed options before suggesting", async () => {
+    const parser = tuple([
+      option("--first", asyncStringValue()),
+      option("--second", asyncStringValue()),
+    ]);
+
+    const suggestions: Suggestion[] = [];
+    for await (
+      const suggestion of parser.suggest({
+        buffer: ["--first", "ready"],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "--")
+    ) {
+      suggestions.push(suggestion);
+    }
+
+    assert.ok(
+      suggestions.some((suggestion) =>
+        suggestion.kind === "literal" && suggestion.text === "--second"
+      ),
+    );
+  });
+
+  it("tuple() async suggest advances past zero-consuming fields", async () => {
+    const parser = tuple([
+      toAsyncParser(constant("implicit")),
+      option("--next", asyncStringValue()),
+    ]);
+
+    const suggestions: Suggestion[] = [];
+    for await (
+      const suggestion of parser.suggest({
+        buffer: ["--unknown"],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "--")
+    ) {
+      suggestions.push(suggestion);
+    }
+
+    assert.ok(
+      suggestions.some((suggestion) =>
+        suggestion.kind === "literal" && suggestion.text === "--next"
+      ),
+    );
+  });
+
+  it("tuple() async suggest preserves context after consumed failures", async () => {
+    const first = createAsyncFailingTokenParser("--first");
+    const second = createAsyncFailingTokenParser("--first");
+    const parser = tuple([first, second], { allowDuplicates: true });
+
+    const suggestions: Suggestion[] = [];
+    for await (
+      const suggestion of parser.suggest({
+        buffer: ["--first"],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "--")
+    ) {
+      suggestions.push(suggestion);
+    }
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "--first" }]);
   });
 
   it("concat() suggest handles non-array state in async mode", async () => {
@@ -15850,6 +16111,152 @@ describe("branch coverage: constructs.ts edge cases", () => {
         assert.equal(getCallCount(), 1);
       });
 
+      it("conditional() extracts a discriminator-only sync seed", () => {
+        const parser = conditionalLocal(constant("missing"), {
+          cfg: optionLocal("--config", string()),
+        });
+
+        const seed = getLocalPhase2SeedExtractor(parser)(parser.initialState);
+
+        assert.deepEqual(seed, {
+          value: ["missing", undefined],
+        });
+      });
+
+      it("conditional() extracts a discriminator-only async seed", async () => {
+        const parser = conditionalLocal(toAsyncParser(constant("missing")), {
+          cfg: toAsyncParser(optionLocal("--config", string())),
+        });
+
+        const seed = await getLocalPhase2SeedExtractor(parser)(
+          parser.initialState,
+        );
+
+        assert.deepEqual(seed, {
+          value: ["missing", undefined],
+        });
+      });
+
+      it("conditional() extracts a selected sync default-branch seed", () => {
+        const parser = conditionalLocal(
+          optionLocal("--mode", choice(["cfg"] as const)),
+          { cfg: optionLocal("--config", string()) },
+          withDefaultLocal(optionLocal("--fallback", string()), "alpha"),
+        );
+
+        const seed = getLocalPhase2SeedExtractor(parser)({
+          ...parser.initialState,
+          selectedBranch: { kind: "default" as const },
+        });
+
+        assert.deepEqual(seed, {
+          value: [undefined, "alpha"],
+        });
+      });
+
+      it("conditional() extracts a selected async default-branch seed", async () => {
+        const parser = conditionalLocal(
+          toAsyncParser(optionLocal("--mode", choice(["cfg"] as const))),
+          { cfg: toAsyncParser(optionLocal("--config", string())) },
+          toAsyncParser(
+            withDefaultLocal(optionLocal("--fallback", string()), "alpha"),
+          ),
+        );
+
+        const seed = await getLocalPhase2SeedExtractor(parser)({
+          ...parser.initialState,
+          selectedBranch: { kind: "default" as const },
+        });
+
+        assert.deepEqual(seed, {
+          value: [undefined, "alpha"],
+        });
+      });
+
+      it("conditional() reuses a matching selected discriminator seed", () => {
+        let completeCalls = 0;
+        const discriminator: Parser<"sync", string, undefined> = {
+          mode: "sync",
+          $valueType: [] as readonly string[],
+          $stateType: [] as readonly undefined[],
+          priority: 0,
+          usage: [],
+          leadingNames: new Set(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context) {
+            return { success: true as const, next: context, consumed: [] };
+          },
+          complete() {
+            completeCalls++;
+            return { success: true as const, value: "cfg" };
+          },
+          *suggest() {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        };
+        const parser = conditionalLocal(discriminator, {
+          cfg: withDefaultLocal(optionLocal("--config", string()), "alpha"),
+        });
+
+        const seed = getLocalPhase2SeedExtractor(parser)({
+          ...parser.initialState,
+          discriminatorValue: "cfg",
+          selectedBranch: { kind: "branch" as const, key: "cfg" },
+        });
+
+        assert.deepEqual(seed, {
+          value: ["cfg", "alpha"],
+        });
+        assert.equal(completeCalls, 0);
+      });
+
+      it("conditional() reuses a matching selected async discriminator seed", async () => {
+        let completeCalls = 0;
+        const discriminator: Parser<"async", string, undefined> = {
+          mode: "async",
+          $valueType: [] as readonly string[],
+          $stateType: [] as readonly undefined[],
+          priority: 0,
+          usage: [],
+          leadingNames: new Set(),
+          acceptingAnyToken: false,
+          initialState: undefined,
+          parse(context) {
+            return Promise.resolve({
+              success: true as const,
+              next: context,
+              consumed: [],
+            });
+          },
+          complete() {
+            completeCalls++;
+            return Promise.resolve({ success: true as const, value: "cfg" });
+          },
+          async *suggest() {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        };
+        const parser = conditionalLocal(discriminator, {
+          cfg: toAsyncParser(
+            withDefaultLocal(optionLocal("--config", string()), "alpha"),
+          ),
+        });
+
+        const seed = await getLocalPhase2SeedExtractor(parser)({
+          ...parser.initialState,
+          discriminatorValue: "cfg",
+          selectedBranch: { kind: "branch" as const, key: "cfg" },
+        });
+
+        assert.deepEqual(seed, {
+          value: ["cfg", "alpha"],
+        });
+        assert.equal(completeCalls, 0);
+      });
+
       it("conditional() sync complete replays a deferred discriminator branch", () => {
         const parser = conditionalLocal(constant("cfg"), {
           cfg: createSyncDeferredCompleteParser(""),
@@ -16565,6 +16972,38 @@ describe("branch coverage: constructs.ts edge cases", () => {
         );
       });
 
+      it("concat() complete preserves opaque deferred array children", () => {
+        const parser = concatLocal(
+          createSyncDeferredCompleteParser(["head", "tail"]) as never,
+          constant("done") as never,
+        );
+
+        const result = parser.complete(parser.initialState);
+
+        assert.ok(result.success);
+        if (result.success) {
+          assert.equal(result.deferred, true);
+          assert.deepEqual(result.value, ["head", "tail", "done"]);
+          assert.equal(result.deferredKeys, undefined);
+        }
+      });
+
+      it("concat() async complete preserves opaque deferred array children", async () => {
+        const parser = concatLocal(
+          createAsyncDeferredCompleteParser(["head", "tail"]) as never,
+          toAsyncParser(constant("done")) as never,
+        );
+
+        const result = await parser.complete(parser.initialState);
+
+        assert.ok(result.success);
+        if (result.success) {
+          assert.equal(result.deferred, true);
+          assert.deepEqual(result.value, ["head", "tail", "done"]);
+          assert.equal(result.deferredKeys, undefined);
+        }
+      });
+
       it("concat() phase-two seed preserves opaque deferred scalar children", () => {
         const parser = concatLocal(
           createSyncDeferredCompleteParser({ ready: false }) as never,
@@ -16576,6 +17015,36 @@ describe("branch coverage: constructs.ts edge cases", () => {
           [{ ready: false }, "tail"],
           new Map<PropertyKey, DeferredMap | null>([[1, null]]),
         );
+      });
+
+      it("concat() phase-two seed preserves opaque deferred array children", () => {
+        const parser = concatLocal(
+          createSyncDeferredCompleteParser(["head", "tail"]) as never,
+          constant("done") as never,
+        );
+
+        const seed = getLocalPhase2SeedExtractor(parser)(parser.initialState);
+
+        assert.deepEqual(seed, {
+          value: ["head", "tail", "done"],
+          deferred: true,
+        });
+      });
+
+      it("concat() async phase-two seed preserves opaque deferred array children", async () => {
+        const parser = concatLocal(
+          createAsyncDeferredCompleteParser(["head", "tail"]) as never,
+          toAsyncParser(constant("done")) as never,
+        );
+
+        const seed = await getLocalPhase2SeedExtractor(parser)(
+          parser.initialState,
+        );
+
+        assert.deepEqual(seed, {
+          value: ["head", "tail", "done"],
+          deferred: true,
+        });
       });
 
       it("concat() async phase-two seed preserves opaque deferred scalar children", async () => {

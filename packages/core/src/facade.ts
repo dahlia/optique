@@ -927,246 +927,61 @@ interface MetaCommandGroups {
   readonly completionOptionGroup?: string;
 }
 
+function createMetaOptionDocParser(
+  source: Parser<"sync", unknown, unknown>,
+): Parser<"sync", null, null> {
+  return {
+    mode: "sync",
+    $valueType: [],
+    $stateType: [],
+    priority: 200,
+    usage: source.usage,
+    leadingNames: source.leadingNames,
+    acceptingAnyToken: false,
+    initialState: null,
+    parse: () => ({
+      success: false,
+      error: message`Documentation-only meta option.`,
+      consumed: 0,
+    }),
+    complete: (state) => ({ success: true, value: state }),
+    suggest: function* () {},
+    getDocFragments: (state) => source.getDocFragments(state),
+  };
+}
+
 function combineWithHelpVersion(
   originalParser: Parser<Mode, unknown, unknown>,
   helpParsers: HelpParsers,
   versionParsers: VersionParsers,
   completionParsers: CompletionParsers,
   groups?: MetaCommandGroups,
-  helpOptionNames?: readonly string[],
-  versionOptionNames?: readonly string[],
 ): Parser<Mode, unknown, unknown> {
   const parsers: Parser<Mode, unknown, unknown>[] = [];
-
-  const effectiveHelpOptionNames = helpOptionNames ?? ["--help"];
-  const effectiveVersionOptionNames = versionOptionNames ?? ["--version"];
 
   // Add options FIRST - they are more specific and should have priority
 
   // Add help option (standalone) - accepts any mix of options and arguments
   if (helpParsers.helpOption) {
-    // Create a lenient help parser that accepts help flag anywhere
-    // and ignores all other options/arguments
-    const lenientHelpParser: Parser<"sync", unknown, unknown> = {
-      mode: "sync",
-      $valueType: [],
-      $stateType: [],
-      priority: 200, // Very high priority
-      usage: helpParsers.helpOption.usage,
-      leadingNames: helpParsers.helpOption.leadingNames,
-      acceptingAnyToken: false,
-      initialState: null,
-
-      parse(context) {
-        const { buffer, optionsTerminated } = context;
-
-        // If options are terminated (after --), don't match
-        if (optionsTerminated) {
-          return {
-            success: false,
-            error: message`Options terminated.`,
-            consumed: 0,
-          };
-        }
-
-        let helpFound = false;
-        let helpIndex = -1;
-
-        // Look for help option names and version option names to implement
-        // last-option-wins
-        let versionIndex = -1;
-        for (let i = 0; i < buffer.length; i++) {
-          if (buffer[i] === "--") break; // Stop at options terminator
-          if (effectiveHelpOptionNames.includes(buffer[i])) {
-            helpFound = true;
-            helpIndex = i;
-          }
-          if (effectiveVersionOptionNames.includes(buffer[i])) {
-            versionIndex = i;
-          }
-        }
-
-        // If both help and version options are present, but version comes
-        // last, don't match
-        if (helpFound && versionIndex > helpIndex) {
-          return {
-            success: false,
-            error: message`Version option wins.`,
-            consumed: 0,
-          };
-        }
-
-        // Multiple help options is OK - just show help
-
-        if (helpFound) {
-          // Extract command names that appear before the help option
-          const commands: string[] = [];
-          for (let i = 0; i < helpIndex; i++) {
-            const arg = buffer[i];
-            // Include non-option arguments as commands (don't start with -)
-            if (!arg.startsWith("-")) {
-              commands.push(arg);
-            }
-          }
-
-          // Consume all remaining arguments and return success
-          return {
-            success: true,
-            next: {
-              ...context,
-              buffer: [],
-              state: {
-                [metaResultBrand]: true,
-                help: true,
-                version: false,
-                completion: false,
-                commands,
-                helpFlag: true,
-              },
-            },
-            consumed: buffer.slice(0),
-          };
-        }
-
-        // Help option not found
-        return {
-          success: false,
-          error: message`Flag ${
-            optionName(effectiveHelpOptionNames[0])
-          } not found.`,
-          consumed: 0,
-        };
-      },
-
-      complete(state) {
-        return { success: true, value: state };
-      },
-
-      *suggest(_context, prefix) {
-        for (const name of effectiveHelpOptionNames) {
-          if (name.startsWith(prefix)) {
-            yield { kind: "literal", text: name } as const;
-          }
-        }
-      },
-
-      getDocFragments(state) {
-        return helpParsers.helpOption?.getDocFragments(state) ??
-          { fragments: [] };
-      },
-    };
+    const helpOptionDocParser = createMetaOptionDocParser(
+      helpParsers.helpOption,
+    );
 
     const wrappedHelp = groups?.helpOptionGroup
-      ? group(groups.helpOptionGroup, lenientHelpParser)
-      : lenientHelpParser;
+      ? group(groups.helpOptionGroup, helpOptionDocParser)
+      : helpOptionDocParser;
     parsers.push(wrappedHelp);
   }
 
   // Add version option (standalone) - accepts any mix of options and arguments
   if (versionParsers.versionOption) {
-    // Create a lenient version parser that accepts version flag anywhere
-    // and ignores all other options/arguments
-    const lenientVersionParser: Parser<"sync", unknown, unknown> = {
-      mode: "sync",
-      $valueType: [],
-      $stateType: [],
-      priority: 200, // Very high priority
-      usage: versionParsers.versionOption.usage,
-      leadingNames: versionParsers.versionOption.leadingNames,
-      acceptingAnyToken: false,
-      initialState: null,
-
-      parse(context) {
-        const { buffer, optionsTerminated } = context;
-
-        // If options are terminated (after --), don't match
-        if (optionsTerminated) {
-          return {
-            success: false,
-            error: message`Options terminated.`,
-            consumed: 0,
-          };
-        }
-
-        let versionFound = false;
-        let versionIndex = -1;
-
-        // Look for version option names and help option names to implement
-        // last-option-wins
-        let helpIndex = -1;
-        for (let i = 0; i < buffer.length; i++) {
-          if (buffer[i] === "--") break; // Stop at options terminator
-          if (effectiveVersionOptionNames.includes(buffer[i])) {
-            versionFound = true;
-            versionIndex = i;
-          }
-          if (effectiveHelpOptionNames.includes(buffer[i])) {
-            helpIndex = i;
-          }
-        }
-
-        // If both version and help options are present, but help comes last,
-        // don't match
-        if (versionFound && helpIndex > versionIndex) {
-          return {
-            success: false,
-            error: message`Help option wins.`,
-            consumed: 0,
-          };
-        }
-
-        // Multiple version options is OK - just show version
-
-        if (versionFound) {
-          // Consume all remaining arguments and return success
-          return {
-            success: true,
-            next: {
-              ...context,
-              buffer: [],
-              state: {
-                [metaResultBrand]: true,
-                help: false,
-                version: true,
-                completion: false,
-                versionFlag: true,
-              },
-            },
-            consumed: buffer.slice(0),
-          };
-        }
-
-        // Version option not found
-        return {
-          success: false,
-          error: message`Flag ${
-            optionName(effectiveVersionOptionNames[0])
-          } not found.`,
-          consumed: 0,
-        };
-      },
-
-      complete(state) {
-        return { success: true, value: state };
-      },
-
-      *suggest(_context, prefix) {
-        for (const name of effectiveVersionOptionNames) {
-          if (name.startsWith(prefix)) {
-            yield { kind: "literal", text: name } as const;
-          }
-        }
-      },
-
-      getDocFragments(state) {
-        return versionParsers.versionOption?.getDocFragments(state) ??
-          { fragments: [] };
-      },
-    };
+    const versionOptionDocParser = createMetaOptionDocParser(
+      versionParsers.versionOption,
+    );
 
     const wrappedVersion = groups?.versionOptionGroup
-      ? group(groups.versionOptionGroup, lenientVersionParser)
-      : lenientVersionParser;
+      ? group(groups.versionOptionGroup, versionOptionDocParser)
+      : versionOptionDocParser;
     parsers.push(wrappedVersion);
   }
 
@@ -2150,8 +1965,6 @@ export function runParser<
         completionCommandGroup: completionCommandConfig?.group,
         completionOptionGroup: completionOptionConfig?.group,
       },
-      helpOptionConfig ? [...helpOptionNames] : undefined,
-      versionOptionConfig ? [...versionOptionNames] : undefined,
     );
 
   // Helper function to handle parsed result

@@ -1544,6 +1544,17 @@ describe("choice", () => {
       }
     });
 
+    it("should accept equivalent scientific notation for numeric choices", () => {
+      const parser = choice([1e21]);
+
+      const result = parser.parse("1.0e+21");
+
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, 1e21);
+      }
+    });
+
     it("should allow exact duplicate choices with caseInsensitive", () => {
       const parser = choice(["json", "json", "yaml"], {
         caseInsensitive: true,
@@ -11259,6 +11270,42 @@ describe("socketAddress()", () => {
       ]);
     });
 
+    it("should keep IP-shaped split errors over earlier generic host errors", () => {
+      const parser = socketAddress({
+        requirePort: true,
+        host: {
+          type: "both",
+          ip: { allowPrivate: false },
+        },
+      });
+
+      const result = parser.parse("192.168.1.1:abc:80");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "192.168.1.1" },
+        { type: "text", text: " is a private IP address." },
+      ]);
+    });
+
+    it("should prefer custom invalidFormat for invalid trailing hosts", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: {
+          type: "both",
+          ip: { allowPrivate: false },
+        },
+        errors: {
+          invalidFormat: message`Custom trailing host error`,
+        },
+      });
+
+      const result = parser.parse("192.168.1.1:");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Custom trailing host error" },
+      ]);
+    });
+
     it("should return socket-level format error for non-numeric port suffix", () => {
       // "abc" does not match the /^[0-9]+$/ gate, so port() is
       // never consulted.  The generic format error is the correct
@@ -11695,6 +11742,24 @@ describe("macAddress()", () => {
     it("should return custom metavar", () => {
       const parser = macAddress({ metavar: "MAC_ADDR" });
       assert.strictEqual(parser.metavar, "MAC_ADDR");
+    });
+  });
+
+  describe("placeholder", () => {
+    it("should reflect the selected output separator", () => {
+      assert.strictEqual(macAddress().placeholder, "00:00:00:00:00:00");
+      assert.strictEqual(
+        macAddress({ separator: "." }).placeholder,
+        "0000.0000.0000",
+      );
+      assert.strictEqual(
+        macAddress({ separator: "none" }).placeholder,
+        "000000000000",
+      );
+      assert.strictEqual(
+        macAddress({ separator: "none", outputSeparator: "-" }).placeholder,
+        "00-00-00-00-00-00",
+      );
     });
   });
 
@@ -14026,6 +14091,50 @@ describe("cidr()", () => {
         { type: "text", text: "." },
       ]);
     });
+
+    it("should use custom prefixBelowMinimum over restriction error", () => {
+      const parser = cidr({
+        ipv4: { allowPrivate: false },
+        minPrefix: 16,
+        errors: {
+          prefixBelowMinimum: (actual, minimum) =>
+            message`prefix ${text(String(actual))} below ${
+              text(String(minimum))
+            }.`,
+        },
+      });
+      const result = parser.parse("192.168.0.0/8");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "prefix " },
+        { type: "text", text: "8" },
+        { type: "text", text: " below " },
+        { type: "text", text: "16" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should use custom prefixAboveMaximum over restriction error", () => {
+      const parser = cidr({
+        ipv4: { allowLoopback: false },
+        maxPrefix: 24,
+        errors: {
+          prefixAboveMaximum: (actual, maximum) =>
+            message`prefix ${text(String(actual))} above ${
+              text(String(maximum))
+            }.`,
+        },
+      });
+      const result = parser.parse("127.0.0.0/32");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "prefix " },
+        { type: "text", text: "32" },
+        { type: "text", text: " above " },
+        { type: "text", text: "24" },
+        { type: "text", text: "." },
+      ]);
+    });
   });
 
   describe("IPv4-mapped IPv6 CIDR restrictions", () => {
@@ -15390,6 +15499,36 @@ describe("ValueParser.normalize()", () => {
       },
     });
     assert.equal(throwing.format("not-a-mac"), "not-a-mac");
+  });
+
+  it("macAddress().format() and normalize() avoid recursive validation", () => {
+    const formatParser = macAddress({
+      errors: {
+        invalidMacAddress: (input) =>
+          message`invalid after ${text(formatParser.format(input))}`,
+      },
+    });
+    assert.equal(formatParser.format("not-a-mac"), "not-a-mac");
+
+    const normalizeParser = macAddress({
+      errors: {
+        invalidMacAddress: (input) =>
+          message`invalid after ${text(normalizeParser.normalize!(input))}`,
+      },
+    });
+    assert.equal(normalizeParser.normalize!("not-a-mac"), "not-a-mac");
+  });
+
+  it("macAddress().normalize() preserves values when validation throws", () => {
+    const throwing = macAddress({
+      errors: {
+        invalidMacAddress: () => {
+          throw new TypeError("bad mac callback.");
+        },
+      },
+    });
+
+    assert.equal(throwing.normalize!("not-a-mac"), "not-a-mac");
   });
 
   it("domain().normalize() applies lowercase when configured", () => {

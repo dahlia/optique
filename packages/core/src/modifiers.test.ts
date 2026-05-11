@@ -9720,6 +9720,224 @@ describe(
       );
 
       it(
+        `${name} phase-two seed extraction retries null delegated seeds`,
+        () => {
+          let completeCalls = 0;
+          let extractCalls = 0;
+          const inner: Parser<"sync", string, string> = {
+            mode: "sync",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly string[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context) {
+              return {
+                success: true as const,
+                next: context,
+                consumed: [],
+              };
+            },
+            complete() {
+              completeCalls++;
+              return {
+                success: false as const,
+                error: message`Missing value.`,
+              };
+            },
+            suggest() {
+              return [];
+            },
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          Object.defineProperty(inner, extractPhase2SeedKey, {
+            value(state: string | object) {
+              extractCalls++;
+              return typeof state === "string"
+                ? { value: state.toUpperCase() }
+                : null;
+            },
+          });
+          const parser = wrap(inner);
+          const outerState = injectAnnotations(["live"] as [string], {
+            [Symbol.for(`@test/issue-594/${name}/phase2-null-retry`)]: true,
+          });
+
+          const seed = extractPhase2Seed(parser, outerState);
+
+          assert.deepEqual(seed, { value: "LIVE" });
+          assert.equal(completeCalls, 1);
+          assert.equal(extractCalls, 2);
+        },
+      );
+
+      it(
+        `${name} async phase-two seed extraction retries null delegated seeds`,
+        async () => {
+          let completeCalls = 0;
+          let extractCalls = 0;
+          const inner: Parser<"async", string, string> = {
+            mode: "async",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly string[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context) {
+              return Promise.resolve({
+                success: true as const,
+                next: context,
+                consumed: [],
+              });
+            },
+            complete() {
+              completeCalls++;
+              return Promise.resolve({
+                success: false as const,
+                error: message`Missing value.`,
+              });
+            },
+            suggest: async function* () {},
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          Object.defineProperty(inner, extractPhase2SeedKey, {
+            value(state: string | object) {
+              extractCalls++;
+              return Promise.resolve(
+                typeof state === "string"
+                  ? { value: state.toUpperCase() }
+                  : null,
+              );
+            },
+          });
+          const parser = wrap(inner);
+          const outerState = injectAnnotations(["live"] as [string], {
+            [
+              Symbol.for(
+                `@test/issue-594/${name}/async-phase2-null-retry`,
+              )
+            ]: true,
+          });
+
+          const seed = await extractPhase2Seed(parser, outerState);
+
+          assert.deepEqual(seed, { value: "LIVE" });
+          assert.equal(completeCalls, 1);
+          assert.equal(extractCalls, 2);
+        },
+      );
+
+      it(
+        `${name} phase-two seed extraction normalizes nested annotation wrappers`,
+        () => {
+          const marker = Symbol.for(
+            `@test/issue-594/${name}/phase2-normalize`,
+          );
+          const inner: Parser<
+            "sync",
+            { readonly nested: unknown },
+            string
+          > = {
+            mode: "sync",
+            $valueType: [] as readonly { readonly nested: unknown }[],
+            $stateType: [] as readonly string[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context) {
+              return {
+                success: true as const,
+                next: context,
+                consumed: [],
+              };
+            },
+            complete() {
+              return {
+                success: true as const,
+                value: {
+                  nested: injectAnnotations("value", { [marker]: "inner" }),
+                },
+              };
+            },
+            suggest() {
+              return [];
+            },
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          const parser = wrap(inner);
+          const outerState = injectAnnotations(["live"] as [string], {
+            [marker]: "outer",
+          });
+
+          const seed = extractPhase2Seed(parser, outerState);
+
+          assert.deepEqual(seed, { value: { nested: "value" } });
+        },
+      );
+
+      it(
+        `${name} async phase-two seed extraction normalizes nested annotation wrappers`,
+        async () => {
+          const marker = Symbol.for(
+            `@test/issue-594/${name}/async-phase2-normalize`,
+          );
+          const inner: Parser<
+            "async",
+            { readonly nested: unknown },
+            string
+          > = {
+            mode: "async",
+            $valueType: [] as readonly { readonly nested: unknown }[],
+            $stateType: [] as readonly string[],
+            priority: 0,
+            usage: [],
+            leadingNames: new Set<string>(),
+            acceptingAnyToken: false,
+            initialState: "seed",
+            parse(context) {
+              return Promise.resolve({
+                success: true as const,
+                next: context,
+                consumed: [],
+              });
+            },
+            complete() {
+              return Promise.resolve({
+                success: true as const,
+                value: {
+                  nested: injectAnnotations("value", { [marker]: "inner" }),
+                },
+              });
+            },
+            suggest: async function* () {},
+            getDocFragments() {
+              return { fragments: [] };
+            },
+          };
+          const parser = wrap(inner);
+          const outerState = injectAnnotations(["live"] as [string], {
+            [marker]: "outer",
+          });
+
+          const seed = await extractPhase2Seed(parser, outerState);
+
+          assert.deepEqual(seed, { value: { nested: "value" } });
+        },
+      );
+
+      it(
         `${name} phase-two seed extraction retries the extractor without retrying failed completion`,
         () => {
           let completeCalls = 0;
@@ -10653,6 +10871,35 @@ describe("validateValue forwarding through modifiers (#414)", () => {
       }
     });
 
+    it("honors function options.errors.tooFew in validateValue", () => {
+      const parser = multiple(option("-x", string()), {
+        min: 3,
+        errors: {
+          tooFew: (min, actual) =>
+            message`too few: ${text(String(min))}/${text(String(actual))}.`,
+        },
+      });
+      const result = parser.validateValue!(["a"]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(formatMessage(result.error), "too few: 3/1.");
+      }
+    });
+
+    it("honors static options.errors.tooMany in validateValue", () => {
+      const parser = multiple(option("-x", string()), {
+        max: 2,
+        errors: { tooMany: message`custom too-many.` },
+      });
+      const result = parser.validateValue!(["a", "b", "c"]);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(formatMessage(result.error), "custom too-many.");
+      }
+    });
+
     it("honors options.errors.tooMany in validateValue", () => {
       const parser = multiple(option("-x", string()), {
         max: 2,
@@ -10907,6 +11154,133 @@ describe("validateValue forwarding through modifiers (#414)", () => {
       const min1Result = min1.validateValue!([]);
       assert.ok(min1Result && "success" in min1Result);
       assert.ok(!min1Result.success);
+    });
+
+    it("forwards shouldDeferCompletion from the inner parser", () => {
+      const seenStates: unknown[] = [];
+      const inner: Parser<"sync", string, string> = {
+        mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: ["--name", "alice"],
+          };
+        },
+        complete(state) {
+          return { success: true as const, value: state };
+        },
+        shouldDeferCompletion(state) {
+          seenStates.push(state);
+          return state === "deferred";
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      const parser = nonEmpty(inner);
+
+      assert.ok(parser.shouldDeferCompletion?.("deferred"));
+      assert.deepEqual(seenStates, ["deferred"]);
+    });
+
+    it("forwards placeholders lazily from the inner parser", () => {
+      const parser = nonEmpty(option("--name", string()));
+
+      assert.equal(parser.placeholder, "");
+    });
+
+    it("uses inner runtime suggestion nodes when available", () => {
+      const nodePath = ["profile", "name"] as const;
+      const inner: Parser<"sync", string, string> = {
+        mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: ["--name", "alice"],
+          };
+        },
+        complete(state) {
+          return { success: true as const, value: state };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+        getSuggestRuntimeNodes(state, path) {
+          return [{ path: [...path, "inner"], parser: inner, state }];
+        },
+      };
+      const parser = nonEmpty(inner);
+
+      assert.deepEqual(parser.getSuggestRuntimeNodes?.("live", nodePath), [
+        { path: ["profile", "name", "inner"], parser: inner, state: "live" },
+      ]);
+    });
+
+    it("exposes dependency source runtime suggestion nodes", () => {
+      const sourceId = Symbol("nonempty-source");
+      const inner: Parser<"sync", string, string> = {
+        mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: ["--name", "alice"],
+          };
+        },
+        complete(state) {
+          return { success: true as const, value: state };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+        dependencyMetadata: {
+          source: {
+            kind: "source" as const,
+            sourceId,
+            preservesSourceValue: true,
+            extractSourceValue() {
+              return undefined;
+            },
+          },
+        },
+      };
+      const parser = nonEmpty(inner);
+
+      assert.deepEqual(parser.getSuggestRuntimeNodes?.("live", ["name"]), [
+        { path: ["name"], parser: inner, state: "live" },
+      ]);
     });
   });
 
