@@ -4711,6 +4711,70 @@ describe("coverage-guided dependency parser tests", () => {
       .map((suggestion) => suggestion.text);
     assert.ok(texts.includes("dev-ap"));
   });
+
+  test("sync multi-source derived parser preserves values when defaults fail", () => {
+    const derived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [] as const,
+      factory: () => choice(["ok"] as const),
+      defaultValues: (): readonly [] => {
+        throw new Error("defaults unavailable");
+      },
+    });
+
+    assert.equal(derived.placeholder, undefined);
+    assert.equal(derived.format("sentinel" as never), "sentinel");
+    assert.deepEqual([...(derived.suggest?.("o") ?? [])], []);
+    assert.equal(derived.normalize?.("sentinel" as never), "sentinel");
+
+    const result = derived.parse("ok");
+    assert.ok(!result.success);
+    assert.equal(getSnapshottedDefaultDependencyValues(result), undefined);
+  });
+
+  test("sync multi-source derived parser preserves values when normalize throws", () => {
+    const derived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [] as const,
+      factory: () => ({
+        mode: "sync" as const,
+        metavar: "VALUE",
+        placeholder: "ok",
+        parse(input: string): ValueParserResult<string> {
+          return { success: true, value: input };
+        },
+        format(value: string): string {
+          return value;
+        },
+        normalize(): string {
+          throw new Error("cannot normalize");
+        },
+      }),
+      defaultValues: () => [] as const,
+    });
+
+    assert.equal(derived.normalize?.("sentinel"), "sentinel");
+  });
+
+  test("async multi-source derived parser preserves values when defaults fail", async () => {
+    const derived = deriveFromAsync({
+      metavar: "VALUE",
+      dependencies: [] as const,
+      factory: () => asyncChoice(["ok"] as const),
+      defaultValues: (): readonly [] => {
+        throw new Error("defaults unavailable");
+      },
+    });
+
+    assert.equal(derived.placeholder, undefined);
+    assert.equal(derived.format("sentinel" as never), "sentinel");
+    assert.deepEqual(await collectSuggestions(derived.suggest!("o")), []);
+    assert.equal(derived.normalize?.("sentinel" as never), "sentinel");
+
+    const result = await derived.parse("ok");
+    assert.ok(!result.success);
+    assert.equal(getSnapshottedDefaultDependencyValues(result), undefined);
+  });
 });
 
 describe("property-based tests", () => {

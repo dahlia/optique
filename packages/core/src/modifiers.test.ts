@@ -10201,6 +10201,46 @@ describe("multiple() phase-two seed extraction", () => {
     );
   });
 
+  it("returns null from the sync seed hook when no item has a seed", () => {
+    const parser = multipleLocal(createSyncDeferredItemParser());
+
+    const seed = extractPhase2Seed(parser, []);
+
+    assert.equal(seed, null);
+  });
+
+  it("returns null from the async seed hook when no item has a seed", async () => {
+    const parser = multipleLocal(createAsyncDeferredItemParser());
+
+    const seed = await extractPhase2Seed(parser, []);
+
+    assert.equal(seed, null);
+  });
+
+  it("combines non-empty sync item seeds from the seed hook", () => {
+    const parser = multipleLocal(createSyncDeferredItemParser());
+
+    const seed = extractPhase2Seed(parser, [
+      "scalar",
+      "structured",
+      "partial",
+    ]);
+
+    assertDeferredItems(seed);
+  });
+
+  it("combines non-empty async item seeds from the seed hook", async () => {
+    const parser = multipleLocal(createAsyncDeferredItemParser());
+
+    const seed = await extractPhase2Seed(parser, [
+      "scalar",
+      "structured",
+      "partial",
+    ]);
+
+    assertDeferredItems(seed);
+  });
+
   it("unwraps injected annotation wrappers before extracting item seeds", () => {
     const marker = Symbol.for("@test/multiple-phase-two-seed");
     const child: Parser<"sync", string, string> = {
@@ -10655,6 +10695,19 @@ describe("validateValue forwarding through modifiers (#414)", () => {
       }
     });
 
+    it("keeps the original array when inner validation does not canonicalize", () => {
+      const parser = multiple(option("-x", integer({ min: 1, max: 10 })));
+      const values = [1, 5, 10] as const;
+
+      const result = parser.validateValue!(values);
+
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, values);
+      }
+    });
+
     it("preserves canonicalized element values in async mode", async () => {
       const upcaseString: ValueParser<"async", string> = {
         mode: "async",
@@ -10672,6 +10725,106 @@ describe("validateValue forwarding through modifiers (#414)", () => {
       if (result.success) {
         assert.deepEqual(result.value, ["FOO", "BAR"]);
       }
+    });
+
+    it("returns the first async element validation failure", async () => {
+      const asyncFormat: ValueParser<"async", string> = {
+        mode: "async",
+        metavar: "FORMAT",
+        placeholder: "json",
+        parse(input) {
+          return Promise.resolve(
+            input === "json" || input === "yaml"
+              ? { success: true as const, value: input }
+              : {
+                success: false as const,
+                error: message`Invalid value: ${text(input)}.`,
+              },
+          );
+        },
+        format(value) {
+          return value;
+        },
+      };
+      const parser = multiple(option("-x", asyncFormat));
+
+      const result = await parser.validateValue!(["json", "xml"]);
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assertErrorIncludes(result.error, "Invalid value");
+      }
+    });
+
+    it("validates arity without an inner validateValue callback", () => {
+      const parser = multiple(constant("ready"), { min: 1 });
+      assert.ok(typeof parser.validateValue === "function");
+
+      const result = parser.validateValue!(["ready"]);
+
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, ["ready"]);
+      }
+    });
+
+    it("builds placeholders from the inner parser minimum arity", () => {
+      const parser = multiple(option("-x", string()), { min: 3 });
+
+      assert.deepEqual(parser.placeholder, ["", "", ""]);
+    });
+
+    it("falls back to an empty placeholder when the inner placeholder throws", () => {
+      const throwingPlaceholder: Parser<"sync", string, undefined> = {
+        mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        },
+        complete() {
+          return { success: true as const, value: "fallback" };
+        },
+        *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      Object.defineProperty(throwingPlaceholder, "placeholder", {
+        get() {
+          throw new Error("placeholder unavailable.");
+        },
+      });
+      const parser = multiple(throwingPlaceholder, { min: 1 });
+
+      assert.deepEqual(parser.placeholder, []);
+    });
+
+    it("normalizes only changed elements and preserves invalid ones", () => {
+      const normalizingParser = option("-x", domain({ lowercase: true }));
+      const parser = multiple(normalizingParser);
+      assert.ok(typeof parser.normalizeValue === "function");
+
+      const unchanged = ["example.com"] as const;
+      assert.equal(parser.normalizeValue!(unchanged), unchanged);
+      assert.deepEqual(parser.normalizeValue!(["EXAMPLE.COM"]), [
+        "example.com",
+      ]);
+      assert.deepEqual(parser.normalizeValue!(["not a domain"]), [
+        "not a domain",
+      ]);
+      const sentinel = "not-array" as never;
+      assert.equal(parser.normalizeValue!(sentinel), sentinel);
     });
 
     it("rejects non-array fallback values", () => {

@@ -15011,6 +15011,140 @@ describe("branch coverage regressions", () => {
     assert.ok(!functionParser.parse("80").success);
   });
 
+  it("covers portRange placeholders and static range errors", () => {
+    assert.deepEqual(portRange().placeholder, { start: 1, end: 1 });
+    assert.deepEqual(portRange({ type: "bigint" }).placeholder, {
+      start: 1n,
+      end: 1n,
+    });
+
+    const numberParser = portRange({
+      errors: { invalidRange: message`number range is reversed` },
+    });
+    const numberResult = numberParser.parse("9000-8000");
+    assert.ok(!numberResult.success);
+    assert.deepEqual(numberResult.error, [
+      { type: "text", text: "number range is reversed" },
+    ]);
+
+    const bigintParser = portRange({
+      type: "bigint",
+      errors: { invalidRange: message`bigint range is reversed` },
+    });
+    const bigintResult = bigintParser.parse("9000-8000");
+    assert.ok(!bigintResult.success);
+    assert.deepEqual(bigintResult.error, [
+      { type: "text", text: "bigint range is reversed" },
+    ]);
+  });
+
+  it("covers socketAddress placeholders and callback format errors", () => {
+    assert.deepEqual(socketAddress({ host: { type: "ip" } }).placeholder, {
+      host: "0.0.0.0",
+      port: 1,
+    });
+    assert.deepEqual(socketAddress({ defaultPort: 443 }).placeholder, {
+      host: "localhost",
+      port: 443,
+    });
+
+    const invalidNumericPort = socketAddress({
+      separator: "-",
+      defaultPort: 80,
+      errors: {
+        invalidFormat: (input) => message`bad endpoint: ${input}`,
+      },
+    });
+    const portResult = invalidNumericPort.parse("db-70000");
+    assert.ok(!portResult.success);
+    assert.deepEqual(portResult.error, [
+      { type: "text", text: "bad endpoint: " },
+      { type: "value", value: "db-70000" },
+    ]);
+
+    const invalidIpSplit = socketAddress({
+      separator: "-",
+      defaultPort: 80,
+      host: { type: "both", ip: { allowPrivate: false } },
+      errors: {
+        invalidFormat: (input) => message`invalid endpoint: ${input}`,
+      },
+    });
+    const ipResult = invalidIpSplit.parse("192.168.0.1-80");
+    assert.ok(!ipResult.success);
+    assert.deepEqual(ipResult.error, [
+      { type: "text", text: "invalid endpoint: " },
+      { type: "value", value: "192.168.0.1-80" },
+    ]);
+  });
+
+  it("covers IPv6 callback errors for address policy failures", () => {
+    const invalid = ipv6({
+      errors: {
+        invalidIpv6: (input) => message`bad IPv6: ${input}`,
+      },
+    }).parse("not-ipv6");
+    assert.ok(!invalid.success);
+    assert.deepEqual(invalid.error, [
+      { type: "text", text: "bad IPv6: " },
+      { type: "value", value: "not-ipv6" },
+    ]);
+
+    const cases = [
+      {
+        parser: ipv6({
+          allowZero: false,
+          errors: { zeroNotAllowed: (value) => message`zero: ${value}` },
+        }),
+        input: "::",
+        label: "zero",
+      },
+      {
+        parser: ipv6({
+          allowLoopback: false,
+          errors: { loopbackNotAllowed: (value) => message`loop: ${value}` },
+        }),
+        input: "::1",
+        label: "loop",
+      },
+      {
+        parser: ipv6({
+          allowLinkLocal: false,
+          errors: { linkLocalNotAllowed: (value) => message`link: ${value}` },
+        }),
+        input: "fe80::1",
+        label: "link",
+      },
+      {
+        parser: ipv6({
+          allowUniqueLocal: false,
+          errors: {
+            uniqueLocalNotAllowed: (value) => message`unique: ${value}`,
+          },
+        }),
+        input: "fc00::1",
+        label: "unique",
+      },
+      {
+        parser: ipv6({
+          allowMulticast: false,
+          errors: { multicastNotAllowed: (value) => message`multi: ${value}` },
+        }),
+        input: "ff00::1",
+        label: "multi",
+      },
+    ] as const;
+
+    for (const { parser, input, label } of cases) {
+      const result = parser.parse(input);
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: `${label}: ` },
+        { type: "value", value: parser.normalize!(input) },
+      ]);
+    }
+  });
+
   it("covers ip invalidIP function branch when both sub-parsers are generic", () => {
     const parser = ip({
       errors: {
@@ -15020,6 +15154,117 @@ describe("branch coverage regressions", () => {
 
     const result = parser.parse("not-an-ip-literal");
     assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(
+        formatMessage(result.error),
+        'invalid ip via callback: "not-an-ip-literal"',
+      );
+    }
+  });
+
+  it("covers IPv4-mapped IP restriction callbacks", () => {
+    const cases = [
+      {
+        input: "::ffff:127.0.0.1",
+        ipv4: { allowLoopback: false },
+        errors: {
+          loopbackNotAllowed: (addr: string) =>
+            message`mapped loopback ${text(addr)}`,
+        },
+        expected: "mapped loopback ::ffff:7f00:1",
+      },
+      {
+        input: "::ffff:169.254.1.1",
+        ipv4: { allowLinkLocal: false },
+        errors: {
+          linkLocalNotAllowed: (addr: string) =>
+            message`mapped link-local ${text(addr)}`,
+        },
+        expected: "mapped link-local ::ffff:a9fe:101",
+      },
+      {
+        input: "::ffff:224.0.0.1",
+        ipv4: { allowMulticast: false },
+        errors: {
+          multicastNotAllowed: (addr: string) =>
+            message`mapped multicast ${text(addr)}`,
+        },
+        expected: "mapped multicast ::ffff:e000:1",
+      },
+      {
+        input: "::ffff:255.255.255.255",
+        ipv4: { allowBroadcast: false },
+        errors: {
+          broadcastNotAllowed: (addr: string) =>
+            message`mapped broadcast ${text(addr)}`,
+        },
+        expected: "mapped broadcast ::ffff:ffff:ffff",
+      },
+      {
+        input: "::ffff:0.0.0.0",
+        ipv4: { allowZero: false },
+        errors: {
+          zeroNotAllowed: (addr: string) => message`mapped zero ${text(addr)}`,
+        },
+        expected: "mapped zero ::ffff:0:0",
+      },
+    ] as const;
+
+    for (const { input, ipv4: ipv4Options, errors, expected } of cases) {
+      const result = ip({ ipv4: ipv4Options, errors }).parse(input);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(formatMessage(result.error), expected);
+      }
+    }
+  });
+
+  it("covers CIDR placeholders and parser-specific fallback paths", () => {
+    assert.deepEqual(cidr({ version: 6 }).placeholder, {
+      address: "::",
+      prefix: 0,
+      version: 6,
+    });
+    assert.deepEqual(cidr({ minPrefix: 64 }).placeholder, {
+      address: "::",
+      prefix: 64,
+      version: 6,
+    });
+    assert.deepEqual(cidr({ version: 4, minPrefix: 24 }).placeholder, {
+      address: "0.0.0.0",
+      prefix: 24,
+      version: 4,
+    });
+
+    const invalidPrefix = cidr({
+      errors: {
+        invalidCidr: (input) => message`bad cidr ${text(input)}`,
+      },
+    }).parse("192.0.2.0/+24");
+    assert.ok(!invalidPrefix.success);
+    if (!invalidPrefix.success) {
+      assert.equal(
+        formatMessage(invalidPrefix.error),
+        "bad cidr 192.0.2.0/+24",
+      );
+    }
+
+    const prefixCallback = cidr({
+      ipv4: { allowPrivate: false },
+      errors: {
+        invalidPrefix: (prefix, version) =>
+          message`bad prefix ${text(prefix.toString())} for version ${
+            text(version.toString())
+          }`,
+      },
+    }).parse("192.168.0.0/33");
+    assert.ok(!prefixCallback.success);
+    if (!prefixCallback.success) {
+      assert.equal(
+        formatMessage(prefixCallback.error),
+        "bad prefix 33 for version 4",
+      );
+    }
   });
 });
 
@@ -15191,6 +15436,14 @@ describe("ValueParser.normalize()", () => {
     assert.equal(v6.normalize!("0:0:0:0:0:0:0:1"), "0:0:0:0:0:0:0:1");
   });
 
+  it("ipv6().format() and normalize() preserve non-string sentinels", () => {
+    const v6 = ipv6();
+    assert.equal(v6.format({ kind: "auto" } as never), "IPV6");
+    assert.deepEqual(v6.normalize!({ kind: "auto" } as never), {
+      kind: "auto",
+    });
+  });
+
   it("ip().normalize() compresses IPv6 addresses", () => {
     const ipParser = ip();
     assert.equal(
@@ -15198,6 +15451,27 @@ describe("ValueParser.normalize()", () => {
       "2001:db8::1",
     );
     assert.equal(ipParser.normalize!("192.0.2.1"), "192.0.2.1");
+  });
+
+  it("ip().format() and normalize() preserve non-string sentinels", () => {
+    const ipParser = ip();
+    assert.equal(ipParser.format({ kind: "auto" } as never), "IP");
+    assert.deepEqual(ipParser.normalize!({ kind: "auto" } as never), {
+      kind: "auto",
+    });
+  });
+
+  it("ip().format() and normalize() preserve values when validation throws", () => {
+    const ipParser = ip({
+      errors: {
+        invalidIP: () => {
+          throw new TypeError("bad ip callback.");
+        },
+      },
+    });
+
+    assert.equal(ipParser.format("not-an-ip"), "not-an-ip");
+    assert.equal(ipParser.normalize!("not-an-ip"), "not-an-ip");
   });
 
   it("cidr().normalize() compresses IPv6 CIDR addresses", () => {
@@ -15212,6 +15486,36 @@ describe("ValueParser.normalize()", () => {
       prefix: 32,
       version: 6,
     });
+  });
+
+  it("cidr().format() and normalize() preserve invalid sentinels", () => {
+    const cidrParser = cidr();
+    assert.equal(cidrParser.format({ kind: "auto" } as never), "CIDR");
+    assert.deepEqual(cidrParser.normalize!({ kind: "auto" } as never), {
+      kind: "auto",
+    });
+
+    const versionMismatch = { address: "192.0.2.0", prefix: 24, version: 6 };
+    assert.equal(cidrParser.format(versionMismatch as never), "192.0.2.0/24");
+    assert.deepEqual(cidrParser.normalize!(versionMismatch as never), {
+      address: "192.0.2.0",
+      prefix: 24,
+      version: 6,
+    });
+  });
+
+  it("cidr().format() and normalize() preserve values when validation throws", () => {
+    const cidrParser = cidr({
+      errors: {
+        invalidCidr: () => {
+          throw new TypeError("bad cidr callback.");
+        },
+      },
+    });
+    const invalid = { address: "not-an-ip", prefix: 24, version: 4 } as const;
+
+    assert.equal(cidrParser.format(invalid), "not-an-ip/24");
+    assert.deepEqual(cidrParser.normalize!(invalid), invalid);
   });
 });
 

@@ -4947,64 +4947,6 @@ export function macAddress(
     return formatted.join(sep);
   }
 
-  // Normalizes a MAC address string by splitting on the detected separator,
-  // padding octets, and re-joining with the configured separator and case.
-  // Returns the value unchanged if it does not have the expected 6-octet
-  // structure (e.g., a string sentinel like "local").
-  // Shared by both format() and normalize().
-  function normalizeMac(value: string): string {
-    // Guard against sentinel defaults of incompatible runtime type
-    // (e.g., { kind: "local" } cast as string via withDefault).
-    // Fall back to metavar for help-text display.
-    if (typeof value !== "string") return metavar;
-    let octets: string[];
-    let detectedSep: ":" | "-" | "." | "none";
-    if (value.includes(":")) {
-      octets = value.split(":");
-      detectedSep = ":";
-    } else if (value.includes("-")) {
-      octets = value.split("-");
-      detectedSep = "-";
-    } else if (value.includes(".")) {
-      // Cisco format: exactly 3 groups of 4 hex digits
-      const groups = value.split(".");
-      if (
-        groups.length !== 3 ||
-        !groups.every((g) => /^[0-9a-fA-F]{4}$/.test(g))
-      ) {
-        return value;
-      }
-      octets = groups.flatMap((g) => [g.slice(0, 2), g.slice(2)]);
-      detectedSep = ".";
-    } else {
-      // No separator: require exactly 12 hex chars (matching parse's noneRegex)
-      if (value.length !== 12) return value;
-      octets = [];
-      for (let i = 0; i < value.length; i += 2) {
-        octets.push(value.slice(i, i + 2));
-      }
-      detectedSep = "none";
-    }
-    // Guard: a valid MAC has exactly 6 hex octets.  If not, the value is
-    // not a MAC address (e.g., a sentinel default) — return it unchanged.
-    if (
-      octets.length !== 6 ||
-      !octets.every((o) => /^[0-9a-fA-F]{1,2}$/.test(o))
-    ) {
-      return value;
-    }
-    octets = octets.map((o) => o.padStart(2, "0"));
-    let sep: ":" | "-" | "." | "none";
-    if (outputSeparator != null) {
-      sep = outputSeparator;
-    } else if (separator !== "any") {
-      sep = separator;
-    } else {
-      sep = detectedSep;
-    }
-    return joinOctets(octets, sep);
-  }
-
   const parserObj: ValueParser<"sync", string> = {
     mode: "sync",
     metavar,
@@ -5096,7 +5038,9 @@ export function macAddress(
       const finalSeparator = outputSeparator ?? inputSeparator ?? ":";
       return { success: true, value: joinOctets(octets, finalSeparator) };
     },
-    format: normalizeMac, // overridden below
+    format(value: string): string {
+      return value;
+    },
   };
   // Both format and normalize use the full parse() pipeline so that
   // values parse() would reject are returned unchanged.  This keeps
