@@ -1678,6 +1678,79 @@ describe("Zod internal compatibility branches", () => {
       assert.equal(formatMessage(result.error), '"Validation failed"');
     }
   });
+
+  it("should suppress boolean choices through legacy effect wrappers", () => {
+    const booleanSchema = fakeZodSchema<boolean>(
+      { typeName: "ZodBoolean" },
+      (input) =>
+        typeof input === "boolean"
+          ? { success: true, data: input }
+          : zodFailure("Expected boolean."),
+    );
+    const preprocessParser = zod(
+      fakeZodSchema<boolean>(
+        {
+          typeName: "ZodEffects",
+          effect: { type: "preprocess" },
+          schema: booleanSchema,
+        },
+        () => ({ success: true, data: false }),
+      ),
+      { placeholder: false },
+    );
+    assert.equal(preprocessParser.metavar, "VALUE");
+    assert.equal(preprocessParser.choices, undefined);
+    assert.equal(preprocessParser.suggest, undefined);
+
+    const cases = [
+      fakeZodSchema<boolean>(
+        { typeName: "ZodEffects", schema: booleanSchema },
+        () => ({ success: true, data: false }),
+      ),
+      fakeZodSchema<boolean>(
+        { typeName: "ZodCatch", innerType: booleanSchema },
+        () => ({ success: true, data: false }),
+      ),
+    ];
+
+    for (const schema of cases) {
+      const parser = zod(schema, { placeholder: false });
+      assert.equal(parser.metavar, "BOOLEAN");
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
+    }
+  });
+
+  it("should infer booleans through legacy branded and pipeline wrappers", () => {
+    const booleanSchema = fakeZodSchema<boolean>(
+      { typeName: "ZodBoolean" },
+      (input) =>
+        typeof input === "boolean"
+          ? { success: true, data: input }
+          : zodFailure("Expected boolean."),
+    );
+    const cases = [
+      fakeZodSchema<boolean>(
+        { typeName: "ZodBranded", type: booleanSchema },
+        () => ({ success: true, data: true }),
+      ),
+      fakeZodSchema<boolean>(
+        { typeName: "ZodPipeline", innerType: booleanSchema },
+        () => ({ success: true, data: true }),
+      ),
+      fakeZodSchema<boolean>(
+        { typeName: "pipeline", innerType: booleanSchema },
+        () => ({ success: true, data: true }),
+      ),
+    ];
+
+    for (const schema of cases) {
+      const parser = zod(schema, { placeholder: false });
+      assert.equal(parser.metavar, "BOOLEAN");
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
+    }
+  });
 });
 
 // Helpers

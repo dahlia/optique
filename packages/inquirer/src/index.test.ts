@@ -1196,6 +1196,128 @@ describe("prompt()", () => {
   });
 
   describe("consumed-token detection", () => {
+    it("marks object placeholders as fully deferred", async () => {
+      const marker = Symbol.for("@test/inquirer/object-placeholder");
+      const inner:
+        & Parser<
+          "sync",
+          { readonly name: string; readonly meta: { readonly id: string } },
+          { readonly ready: boolean }
+        >
+        & {
+          readonly placeholder: {
+            readonly name: string;
+            readonly meta: { readonly id: string };
+          };
+        } = {
+          mode: "sync",
+          $valueType: [] as readonly {
+            readonly name: string;
+            readonly meta: { readonly id: string };
+          }[],
+          $stateType: [] as readonly { readonly ready: boolean }[],
+          priority: 0,
+          usage: [],
+          leadingNames: new Set(),
+          acceptingAnyToken: false,
+          initialState: { ready: true },
+          placeholder: { name: "", meta: { id: "" } },
+          parse(context) {
+            return {
+              success: true as const,
+              next: context,
+              consumed: [],
+            };
+          },
+          complete(state) {
+            assert.equal(getAnnotations(state)?.[marker], "seen");
+            return { success: true as const, value: undefined as never };
+          },
+          shouldDeferCompletion(state) {
+            assert.equal(getAnnotations(state)?.[marker], "seen");
+            return true;
+          },
+          *suggest() {},
+          getDocFragments() {
+            return { fragments: [] };
+          },
+        };
+      const parser = prompt(inner, {
+        type: "input",
+        message: "profile?",
+      } as never);
+      const state = injectAnnotations(parser.initialState, {
+        [marker]: "seen",
+      });
+
+      const result = await parser.complete(state);
+
+      assert.ok(result.success);
+      if (!result.success) return;
+      assert.deepEqual(result.value, { name: "", meta: { id: "" } });
+      assert.equal(result.deferred, true);
+      assert.deepEqual(
+        result.deferredKeys,
+        new Map<PropertyKey, null>([
+          ["name", null],
+          ["meta", null],
+        ]),
+      );
+    });
+
+    it("marks array placeholders as deferred without touching length", async () => {
+      const inner: Parser<"sync", readonly string[], undefined> & {
+        readonly placeholder: readonly string[];
+      } = {
+        mode: "sync",
+        $valueType: [] as readonly (readonly string[])[],
+        $stateType: [] as readonly undefined[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        placeholder: ["alpha", "beta"],
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        },
+        complete() {
+          return { success: true as const, value: undefined as never };
+        },
+        shouldDeferCompletion() {
+          return true;
+        },
+        *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      const parser = prompt(inner, {
+        type: "checkbox",
+        message: "tags?",
+        choices: [],
+      });
+
+      const result = await parser.complete(parser.initialState);
+
+      assert.ok(result.success);
+      if (!result.success) return;
+      assert.deepEqual(result.value, ["alpha", "beta"]);
+      assert.equal(result.deferred, true);
+      assert.deepEqual(
+        result.deferredKeys,
+        new Map<PropertyKey, null>([
+          ["0", null],
+          ["1", null],
+        ]),
+      );
+      assert.equal(result.deferredKeys?.has("length"), false);
+    });
+
     it("only marks hasCliValue when inner parser consumed tokens", async () => {
       // A mock parser that always succeeds with consumed: [] (like bindConfig
       // or withDefault returning a value without consuming CLI tokens).

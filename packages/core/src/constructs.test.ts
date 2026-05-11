@@ -1231,6 +1231,135 @@ describe("or", () => {
 });
 
 describe("or() inside object() — zero-input complete path", () => {
+  it("complete treats malformed exclusive state as unselected", () => {
+    const parser = or(constant("default"), option("--mode", string()));
+
+    const result = parser.complete(
+      { selected: "not-an-exclusive-state" } as never,
+    );
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "default");
+    }
+  });
+
+  it("complete returns the selected branch failure from explicit state", () => {
+    const parser = or(option("--left", string()), option("--right", string()));
+
+    const result = parser.complete([
+      0,
+      {
+        success: false as const,
+        consumed: 1,
+        error: message`left failed.`,
+      },
+    ]);
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(result.error, message`left failed.`);
+    }
+  });
+
+  it("suggest treats malformed and zero-consumed state as provisional", () => {
+    const parser = or(option("--alpha", string()), option("--beta", string()));
+    const baseContext = {
+      buffer: [],
+      optionsTerminated: false,
+      usage: parser.usage,
+      state: { selected: "not-an-exclusive-state" },
+    };
+
+    assert.deepEqual([...parser.suggest(baseContext as never, "--")], [
+      { kind: "literal", text: "--alpha" },
+      { kind: "literal", text: "--beta" },
+    ]);
+
+    assert.deepEqual(
+      [
+        ...parser.suggest({
+          ...baseContext,
+          state: [
+            0,
+            {
+              success: true as const,
+              next: {
+                ...baseContext,
+                state: undefined,
+              },
+              consumed: [],
+            },
+          ],
+        }, "--"),
+      ],
+      [
+        { kind: "literal", text: "--alpha" },
+        { kind: "literal", text: "--beta" },
+      ],
+    );
+  });
+
+  it("async suggest treats malformed exclusive state as unselected", async () => {
+    const parser = or(
+      toAsyncParser(option("--alpha", string())),
+      option("--beta", string()),
+    );
+    const suggestions: Suggestion[] = [];
+
+    for await (
+      const suggestion of parser.suggest({
+        buffer: [],
+        optionsTerminated: false,
+        usage: parser.usage,
+        state: { selected: "not-an-exclusive-state" } as never,
+      }, "--")
+    ) {
+      suggestions.push(suggestion);
+    }
+
+    assert.deepEqual(suggestions, [
+      { kind: "literal", text: "--alpha" },
+      { kind: "literal", text: "--beta" },
+    ]);
+  });
+
+  it("getSuggestRuntimeNodes ignores invalid exclusive states", () => {
+    const parser = or(option("--left", string()), option("--right", string()));
+
+    assert.deepEqual(
+      parser.getSuggestRuntimeNodes?.({ selected: "bad" } as never, ["choice"]),
+      [],
+    );
+    assert.deepEqual(
+      parser.getSuggestRuntimeNodes?.([
+        0,
+        {
+          success: false as const,
+          consumed: 1,
+          error: message`left failed.`,
+        },
+      ], ["choice"]),
+      [],
+    );
+    assert.deepEqual(
+      parser.getSuggestRuntimeNodes?.([
+        3,
+        {
+          success: true as const,
+          next: {
+            buffer: [],
+            optionsTerminated: false,
+            usage: parser.usage,
+            state: undefined,
+          },
+          consumed: ["--left", "value"],
+        },
+      ] as never, ["choice"]),
+      [],
+    );
+  });
+
   it("completes a zero-consumed constant() branch when the field was never parsed", () => {
     // When or() is nested inside object(), its complete() is called with
     // state=undefined for fields that were never touched.  The zero-input
