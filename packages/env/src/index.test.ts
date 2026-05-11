@@ -2237,6 +2237,46 @@ describe("bindEnv()", () => {
       );
     });
 
+    it("reports null EnvSource values with their concrete type", () => {
+      const context = createEnvContext({
+        source: () => null as never,
+      });
+      const parser = bindEnv(option("--name", string()), {
+        context,
+        key: "NAME",
+        parser: string(),
+      });
+
+      const result = parse(parser, [], {
+        annotations: getSyncAnnotations(context),
+      });
+      assert.ok(!result.success);
+      assert.equal(
+        formatMessage(result.error),
+        'Environment variable `NAME` must be a string, but got: "null".',
+      );
+    });
+
+    it("reports array EnvSource values with their concrete type", () => {
+      const context = createEnvContext({
+        source: () => ["alice"] as never,
+      });
+      const parser = bindEnv(option("--name", string()), {
+        context,
+        key: "NAME",
+        parser: string(),
+      });
+
+      const result = parse(parser, [], {
+        annotations: getSyncAnnotations(context),
+      });
+      assert.ok(!result.success);
+      assert.equal(
+        formatMessage(result.error),
+        'Environment variable `NAME` must be a string, but got: "array".',
+      );
+    });
+
     it("fails when EnvSource returns a Promise", () => {
       const context = createEnvContext({
         source: () => Promise.resolve("alice") as never,
@@ -2259,6 +2299,35 @@ describe("bindEnv()", () => {
       assert.match(
         errorText,
         /must be a string, but got: /u,
+      );
+    });
+
+    it("validates non-string dependency source env values before extraction", () => {
+      const context = createEnvContext({
+        source: () => ["8080"] as never,
+      });
+      const source = dependency(integer());
+      const parser = bindEnv(option("--port", source), {
+        context,
+        key: "PORT",
+        parser: integer(),
+      });
+      const annotations = getSyncAnnotations(context);
+      const parseResult = parser.parse({
+        buffer: [],
+        state: injectAnnotations(parser.initialState, annotations),
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(parseResult.success);
+
+      const extracted = parser.dependencyMetadata?.source
+        ?.extractSourceValue(parseResult.next.state);
+      assert.ok(extracted != null && !(extracted instanceof Promise));
+      assert.ok(!extracted.success);
+      assert.equal(
+        formatMessage(extracted.error),
+        'Environment variable `PORT` must be a string, but got: "array".',
       );
     });
   });
