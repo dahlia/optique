@@ -1318,6 +1318,57 @@ describe("prompt()", () => {
       assert.equal(result.deferredKeys?.has("length"), false);
     });
 
+    it("treats throwing placeholders as absent while deferring prompt", async () => {
+      const inner: Parser<"sync", string | undefined, undefined> & {
+        readonly placeholder: string;
+      } = {
+        mode: "sync",
+        $valueType: [] as readonly (string | undefined)[],
+        $stateType: [] as readonly undefined[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        get placeholder(): string {
+          throw new TypeError("Placeholder is unavailable.");
+        },
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        },
+        complete() {
+          return { success: true as const, value: undefined };
+        },
+        shouldDeferCompletion() {
+          return true;
+        },
+        *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      const parser = prompt(inner, {
+        type: "input",
+        message: "name?",
+      });
+
+      const result = await parser.complete(parser.initialState);
+
+      assert.ok(result.success);
+      if (!result.success) return;
+      assert.equal(result.value, undefined);
+      assert.ok(result.deferred);
+      assert.equal(
+        (parser as typeof parser & { readonly placeholder?: string })
+          .placeholder,
+        undefined,
+      );
+    });
+
     it("only marks hasCliValue when inner parser consumed tokens", async () => {
       // A mock parser that always succeeds with consumed: [] (like bindConfig
       // or withDefault returning a value without consuming CLI tokens).
@@ -1396,6 +1447,19 @@ describe("prompt()", () => {
       assert.deepEqual(nodes[0]?.path, ["prompt"]);
       assert.equal(nodes[0]?.parser, inner);
       assert.equal(nodes[0]?.state, "cli-state");
+
+      const initialNodes = wrapped.getSuggestRuntimeNodes?.(
+        wrapped.initialState as Parameters<
+          NonNullable<typeof wrapped.getSuggestRuntimeNodes>
+        >[0],
+        ["initial"],
+      );
+      assert.ok(initialNodes != null);
+      if (initialNodes == null) return;
+      assert.equal(initialNodes.length, 1);
+      assert.deepEqual(initialNodes[0]?.path, ["initial"]);
+      assert.equal(initialNodes[0]?.parser, inner);
+      assert.equal(initialNodes[0]?.state, "initial");
     });
 
     it("preserves delegated suggest nodes for source wrappers", async () => {
@@ -3478,6 +3542,44 @@ describe("prompt()", () => {
   });
 
   describe("internal branch coverage", { concurrency: false }, () => {
+    it("forwards inner value normalization through prompt()", () => {
+      const inner: Parser<"sync", string, undefined> = {
+        mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        },
+        complete() {
+          return { success: true as const, value: "value" };
+        },
+        normalizeValue(value) {
+          return value.trim().toLowerCase();
+        },
+        *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+
+      const parser = prompt(inner, {
+        type: "input",
+        message: "name?",
+      });
+
+      assert.equal(typeof parser.normalizeValue, "function");
+      assert.equal(parser.normalizeValue?.("  ALICE  "), "alice");
+    });
+
     it("covers async parse/suggest/complete branches with wrapped states", async () => {
       let docDefault: unknown;
       const inner: Parser<"async", string, { readonly token?: string }> = {
@@ -5306,6 +5408,65 @@ describe("prompt() with dependency sources", () => {
       assert.deepEqual(extracted, { success: true, value: "prod" });
     },
   );
+
+  it("delegates source extraction for raw inner states", async () => {
+    const sourceId = Symbol("raw-prompt-source");
+    const inner: Parser<"sync", string, { readonly value?: string }> = {
+      mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly { readonly value?: string }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: {},
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete(state) {
+        return {
+          success: true as const,
+          value: state.value ?? "fallback",
+        };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+      dependencyMetadata: {
+        source: {
+          kind: "source",
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue(state) {
+            return state != null &&
+                typeof state === "object" &&
+                "value" in state &&
+                typeof state.value === "string"
+              ? { success: true as const, value: state.value }
+              : undefined;
+          },
+        },
+      },
+    };
+    const parser = prompt(inner, {
+      type: "input",
+      message: "mode?",
+    });
+
+    assert.ok(
+      parser.dependencyMetadata?.source != null,
+      "Expected source metadata.",
+    );
+    const extracted = await parser.dependencyMetadata.source
+      .extractSourceValue({ value: "prod" });
+
+    assert.deepEqual(extracted, { success: true, value: "prod" });
+  });
 
   describe("shared-buffer wrapper contracts", () => {
     for (const kind of ["tuple", "concat"] as const) {

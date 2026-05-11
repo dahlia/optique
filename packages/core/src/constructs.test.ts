@@ -13194,6 +13194,162 @@ describe("branch coverage: constructs.ts edge cases", () => {
     }
   });
 
+  it("conditional() sync complete remaps deferred branch metadata before parse selection", () => {
+    const nestedKeys: DeferredMap = new Map<PropertyKey, DeferredMap | null>([
+      ["token", null],
+    ]);
+    const deferredBranch: Parser<
+      "sync",
+      { readonly token: string; readonly stable: string },
+      undefined
+    > = {
+      mode: "sync",
+      $valueType: [] as readonly {
+        readonly token: string;
+        readonly stable: string;
+      }[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete() {
+        return {
+          success: true as const,
+          value: { token: "", stable: "kept" },
+          deferred: true as const,
+          deferredKeys: nestedKeys,
+        };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = conditionalLocal(constant("fast"), {
+      fast: deferredBranch,
+    });
+
+    const completed = parser.complete(parser.initialState);
+
+    assert.deepEqual(completed, {
+      success: true,
+      value: ["fast", { token: "", stable: "kept" }],
+      deferred: true,
+      deferredKeys: new Map<PropertyKey, DeferredMap | null>([
+        [1, nestedKeys],
+      ]),
+    });
+  });
+
+  it("conditional() async complete remaps deferred scalar branch metadata", async () => {
+    const discriminator: Parser<"async", string, undefined> = {
+      mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: "fast",
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const branch: Parser<"async", string, undefined> = {
+      ...discriminator,
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: "placeholder",
+          deferred: true as const,
+        });
+      },
+    };
+    const parser = conditionalLocal(discriminator, { fast: branch });
+
+    const completed = await parser.complete(parser.initialState);
+
+    assert.deepEqual(completed, {
+      success: true,
+      value: ["fast", "placeholder"],
+      deferred: true,
+      deferredKeys: new Map<PropertyKey, DeferredMap | null>([[1, null]]),
+    });
+  });
+
+  it("conditional() async complete remaps deferred default branch metadata", async () => {
+    const discriminator: Parser<"async", string, undefined> = {
+      mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`No mode selected.`,
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const defaultBranch: Parser<"async", string, undefined> = {
+      ...discriminator,
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: "fallback",
+          deferred: true as const,
+        });
+      },
+    };
+    const parser = conditionalLocal(discriminator, {}, defaultBranch);
+
+    const completed = await parser.complete(parser.initialState);
+
+    assert.deepEqual(completed, {
+      success: true,
+      value: [undefined, "fallback"],
+      deferred: true,
+      deferredKeys: new Map<PropertyKey, DeferredMap | null>([[1, null]]),
+    });
+  });
+
   // ----- object() complete async: Phase 1 Cases 1/2/3 (lines 3083-3257) -----
   it("object() async complete Phase 1 Case 1: PendingDependencySourceState", async () => {
     // withDefault(option(...)) creates a parser with PendingDependencySourceState.
@@ -14086,6 +14242,22 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const validation = parser.validateValue?.("not a domain");
     assert.ok(validation && typeof validation === "object");
     assert.ok(!validation.success);
+  });
+
+  it("group() exposes dependency source runtime nodes", () => {
+    const source = dependencyLocal(choice(["dev", "prod"] as const));
+    const inner = optionLocal("--mode", source);
+    const parser = group("Mode", inner);
+
+    const nodes = parser.getSuggestRuntimeNodes?.(parser.initialState, [
+      "mode",
+    ]);
+
+    assert.deepEqual(nodes, [{
+      path: ["mode"],
+      parser: inner,
+      state: inner.initialState,
+    }]);
   });
 
   it("longestMatch() prefers a definitive result over an equal provisional result", () => {
@@ -16890,6 +17062,52 @@ describe("branch coverage: constructs.ts edge cases", () => {
         );
       });
 
+      it("concat() complete remaps direct deferred array metadata", () => {
+        const localDeferredKeys = new Map<PropertyKey, DeferredMap | null>([
+          ["1", null],
+          ["named", nestedDeferredKeys],
+        ]);
+        const parser = concatLocal(
+          createSyncDeferredCompleteParser(
+            ["visible", "deferred"],
+            localDeferredKeys,
+          ) as never,
+          constant("tail") as never,
+        );
+
+        assertDeferredComposite(
+          parser.complete(parser.initialState),
+          ["visible", "deferred", "tail"],
+          new Map<PropertyKey, DeferredMap | null>([
+            [1, null],
+            ["named", nestedDeferredKeys],
+          ]),
+        );
+      });
+
+      it("concat() async complete remaps direct deferred array metadata", async () => {
+        const localDeferredKeys = new Map<PropertyKey, DeferredMap | null>([
+          ["1", null],
+          ["named", nestedDeferredKeys],
+        ]);
+        const parser = concatLocal(
+          createAsyncDeferredCompleteParser(
+            ["visible", "deferred"],
+            localDeferredKeys,
+          ) as never,
+          toAsyncParser(constant("tail")) as never,
+        );
+
+        assertDeferredComposite(
+          await parser.complete(parser.initialState),
+          ["visible", "deferred", "tail"],
+          new Map<PropertyKey, DeferredMap | null>([
+            [1, null],
+            ["named", nestedDeferredKeys],
+          ]),
+        );
+      });
+
       it("concat() phase-two seed remaps deferred tuple element metadata", () => {
         const parser = concatLocal(
           tupleLocal(
@@ -16942,6 +17160,52 @@ describe("branch coverage: constructs.ts edge cases", () => {
           new Map<PropertyKey, DeferredMap | null>([
             [0, null],
             [1, nestedDeferredKeys],
+          ]),
+        );
+      });
+
+      it("concat() phase-two seed remaps direct deferred array metadata", () => {
+        const localDeferredKeys = new Map<PropertyKey, DeferredMap | null>([
+          ["1", null],
+          ["named", nestedDeferredKeys],
+        ]);
+        const parser = concatLocal(
+          createSyncDeferredCompleteParser(
+            ["visible", "deferred"],
+            localDeferredKeys,
+          ) as never,
+          constant("tail") as never,
+        );
+
+        assertDeferredComposite(
+          getLocalPhase2SeedExtractor(parser)(parser.initialState),
+          ["visible", "deferred", "tail"],
+          new Map<PropertyKey, DeferredMap | null>([
+            [1, null],
+            ["named", nestedDeferredKeys],
+          ]),
+        );
+      });
+
+      it("concat() async phase-two seed remaps direct deferred array metadata", async () => {
+        const localDeferredKeys = new Map<PropertyKey, DeferredMap | null>([
+          ["1", null],
+          ["named", nestedDeferredKeys],
+        ]);
+        const parser = concatLocal(
+          createAsyncDeferredCompleteParser(
+            ["visible", "deferred"],
+            localDeferredKeys,
+          ) as never,
+          toAsyncParser(constant("tail")) as never,
+        );
+
+        assertDeferredComposite(
+          await getLocalPhase2SeedExtractor(parser)(parser.initialState),
+          ["visible", "deferred", "tail"],
+          new Map<PropertyKey, DeferredMap | null>([
+            [1, null],
+            ["named", nestedDeferredKeys],
           ]),
         );
       });
@@ -20621,6 +20885,104 @@ describe("merge()/concat() suggest with cross-parser dependencies", () => {
     assert.ok(
       texts.includes("strict"),
       `Expected "strict" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+  });
+
+  it("concat() suggest continues after a non-consuming async child", async () => {
+    const skippedAsync: Parser<"async", string, undefined> = {
+      mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 20,
+      usage: [],
+      leadingNames: new Set(["--skip"]),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "skipped" });
+      },
+      suggest: async function* () {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = concat(
+      tuple([skippedAsync]),
+      tuple([option("--mode", choice(["dev", "prod"] as const))]),
+      tuple([option("--level", choice(["debug", "strict"] as const))]),
+    );
+
+    const suggestions = await suggestAsync(
+      parser,
+      ["--mode", "prod", "--level", "s"],
+    );
+
+    assert.deepEqual(
+      suggestions.filter((s) => s.kind === "literal").map((s) => s.text),
+      ["strict"],
+    );
+  });
+
+  it("concat() suggest advances after a consuming async child", async () => {
+    const consumedAsync: Parser<"async", string, string> = {
+      mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 20,
+      usage: [{
+        type: "option",
+        names: ["--profile"],
+        metavar: "PROFILE",
+      }],
+      leadingNames: new Set(["--profile"]),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        if (context.buffer[0] !== "--profile" || context.buffer[1] == null) {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`missing profile.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(2),
+            state: context.buffer[1],
+          },
+          consumed: context.buffer.slice(0, 2),
+        });
+      },
+      complete(state) {
+        return Promise.resolve({ success: true as const, value: state });
+      },
+      suggest: async function* () {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = concat(
+      tuple([consumedAsync]),
+      tuple([option("--target", choice(["api", "worker"] as const))]),
+    );
+
+    const suggestions = await suggestAsync(
+      parser,
+      ["--profile", "dev", "--target", "w"],
+    );
+
+    assert.deepEqual(
+      suggestions.filter((s) => s.kind === "literal").map((s) => s.text),
+      ["worker"],
     );
   });
 });
