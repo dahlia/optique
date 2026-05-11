@@ -4692,6 +4692,127 @@ describe("coverage-guided dependency parser tests", () => {
     }
   });
 
+  test("parse failures after default resolution should preserve dependency snapshots", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const regionParser = dependency(choice(["ap", "eu"] as const));
+
+    const syncMulti = deriveFrom({
+      metavar: "VALUE",
+      mode: "sync",
+      dependencies: [modeParser, regionParser] as const,
+      factory: (mode: "dev" | "prod", _region: "ap" | "eu") => {
+        if (mode === "prod") {
+          throw new Error("prod unavailable");
+        }
+        return choice(["ok"] as const);
+      },
+      defaultValues: () => ["prod", "ap"] as const,
+    });
+    const syncMultiResult = syncMulti.parse("ok");
+    assert.ok(!syncMultiResult.success);
+    assert.deepEqual(
+      getSnapshottedDefaultDependencyValues(syncMultiResult),
+      ["prod", "ap"],
+    );
+
+    const asyncMulti = deriveFromAsync({
+      metavar: "VALUE",
+      dependencies: [modeParser, regionParser] as const,
+      factory: (mode: "dev" | "prod", _region: "ap" | "eu") => {
+        if (mode === "prod") {
+          throw new Error("async prod unavailable");
+        }
+        return asyncChoice(["ok"] as const);
+      },
+      defaultValues: () => ["prod", "ap"] as const,
+    });
+    const asyncMultiResult = await asyncMulti.parse("ok");
+    assert.ok(!asyncMultiResult.success);
+    assert.deepEqual(
+      getSnapshottedDefaultDependencyValues(asyncMultiResult),
+      ["prod", "ap"],
+    );
+
+    const asyncFromSyncMulti = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [
+        dependency(asyncChoice(["dev", "prod"] as const)),
+      ] as const,
+      factory: (mode: "dev" | "prod") => {
+        if (mode === "prod") {
+          throw new Error("async source prod unavailable");
+        }
+        return choice(["ok"] as const);
+      },
+      defaultValues: () => ["prod"] as const,
+    });
+    const asyncFromSyncMultiResult = await asyncFromSyncMulti.parse("ok");
+    assert.ok(!asyncFromSyncMultiResult.success);
+    assert.deepEqual(
+      getSnapshottedDefaultDependencyValues(asyncFromSyncMultiResult),
+      ["prod"],
+    );
+
+    const singleSync = modeParser.derive({
+      metavar: "VALUE",
+      mode: "sync",
+      factory: (mode: "dev" | "prod") => {
+        if (mode === "prod") {
+          throw "single prod unavailable";
+        }
+        return choice(["ok"] as const);
+      },
+      defaultValue: () => "prod" as const,
+    });
+    const singleSyncResult = singleSync.parse("ok");
+    assert.ok(!singleSyncResult.success);
+    assert.deepEqual(
+      getSnapshottedDefaultDependencyValues(singleSyncResult),
+      ["prod"],
+    );
+    assert.deepEqual(
+      singleSyncResult.error,
+      message`Derived parser error: ${"single prod unavailable"}`,
+    );
+
+    const singleAsync = modeParser.deriveAsync({
+      metavar: "VALUE",
+      factory: (mode: "dev" | "prod") => {
+        if (mode === "prod") {
+          throw new Error("single async prod unavailable");
+        }
+        return asyncChoice(["ok"] as const);
+      },
+      defaultValue: () => "prod" as const,
+    });
+    const singleAsyncResult = await singleAsync.parse("ok");
+    assert.ok(!singleAsyncResult.success);
+    assert.deepEqual(
+      getSnapshottedDefaultDependencyValues(singleAsyncResult),
+      ["prod"],
+    );
+
+    const singleAsyncFromSync = dependency(
+      asyncChoice(["dev", "prod"] as const),
+    ).derive({
+      metavar: "VALUE",
+      mode: "sync",
+      factory: (mode: "dev" | "prod") => {
+        if (mode === "prod") {
+          throw new Error("single async-source prod unavailable");
+        }
+        return choice(["ok"] as const);
+      },
+      defaultValue: () => "prod" as const,
+    });
+    const singleAsyncFromSyncResult = await singleAsyncFromSync.parse("ok");
+    assert.ok(!singleAsyncFromSyncResult.success);
+    assert.deepEqual(
+      getSnapshottedDefaultDependencyValues(singleAsyncFromSyncResult),
+      ["prod"],
+    );
+  });
+
   test("deriveFromSync async mode should use defaults for format and suggest", async () => {
     const modeParser = dependency(asyncChoice(["dev", "prod"] as const));
     const regionParser = dependency(asyncChoice(["ap", "eu"] as const));

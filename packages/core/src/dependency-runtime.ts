@@ -1091,16 +1091,16 @@ function resolveDeferredInState(
 ): unknown {
   if (state == null) return state;
 
-  if (typeof state === "object") {
-    if (visited.has(state)) return state;
-    visited.add(state);
-  }
-
   if (isDeferredParseState(state)) {
     return resolveSingleDeferred(state, runtime);
   }
 
   if (isDependencySourceState(state)) return state;
+
+  if (typeof state === "object") {
+    if (visited.has(state)) return state;
+    visited.add(state);
+  }
 
   if (Array.isArray(state)) {
     const resolved = state.map((item) =>
@@ -1158,11 +1158,6 @@ async function resolveDeferredInStateAsync(
 ): Promise<unknown> {
   if (state == null) return state;
 
-  if (typeof state === "object") {
-    if (visited.has(state)) return state;
-    visited.add(state);
-  }
-
   if (isDeferredParseState(state)) {
     const deferred = state;
     const isMultiDep = deferred.dependencyIds != null &&
@@ -1188,6 +1183,11 @@ async function resolveDeferredInStateAsync(
   }
 
   if (isDependencySourceState(state)) return state;
+
+  if (typeof state === "object") {
+    if (visited.has(state)) return state;
+    visited.add(state);
+  }
 
   if (Array.isArray(state)) {
     const resolved = await Promise.all(

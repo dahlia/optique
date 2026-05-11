@@ -12551,6 +12551,155 @@ describe("branch coverage: conditional() complete/suggest edges", () => {
     assert.ok(texts.includes("--threads"));
     assert.ok(!texts.includes("--raw"));
   });
+
+  it("async complete resolves a deferred discriminator into a named branch", async () => {
+    let branchParseSawEmptyBuffer = false;
+    const branch = createSyncBranchParser(
+      "initial",
+      (context) => {
+        branchParseSawEmptyBuffer = context.buffer.length === 0;
+        return {
+          success: true,
+          next: {
+            ...context,
+            state: "parsed",
+          },
+          consumed: [],
+        };
+      },
+      "unused",
+    );
+    Object.defineProperty(branch, "complete", {
+      value(state: string) {
+        return {
+          success: true as const,
+          value: state === "parsed" ? "from-branch" : "wrong-state",
+          deferred: true as const,
+          deferredKeys: new Map<PropertyKey, DeferredMap | null>([
+            ["secret", null],
+          ]),
+        };
+      },
+      configurable: true,
+    });
+    const parser = conditional(
+      createAsyncDeferredDiscriminator({ success: true, value: "fast" }),
+      { fast: branch },
+    );
+
+    const completed = await parser.complete(parser.initialState);
+
+    assert.ok(completed.success);
+    if (!completed.success) return;
+    assert.ok(branchParseSawEmptyBuffer);
+    assert.deepEqual(completed.value, ["fast", "from-branch"]);
+    assert.equal(completed.deferred, true);
+    assert.deepEqual(
+      completed.deferredKeys,
+      new Map<PropertyKey, DeferredMap | null>([
+        [
+          1,
+          new Map<PropertyKey, DeferredMap | null>([["secret", null]]),
+        ],
+      ]),
+    );
+  });
+
+  it("async complete reports branch errors after deferred discriminator resolution", async () => {
+    const branch = createSyncBranchParser(
+      "initial",
+      (context) => ({
+        success: true,
+        next: {
+          ...context,
+          state: "parsed",
+        },
+        consumed: [],
+      }),
+      "unused",
+    );
+    Object.defineProperty(branch, "complete", {
+      value() {
+        return { success: false as const, error: message`branch failed.` };
+      },
+      configurable: true,
+    });
+    const parser = conditional(
+      createAsyncDeferredDiscriminator({ success: true, value: "fast" }),
+      { fast: branch },
+      constant("default"),
+      {
+        errors: {
+          branchError: (value, error) =>
+            message`branch ${value ?? "unknown"}: ${formatMessage(error)}`,
+        },
+      },
+    );
+
+    const completed = await parser.complete(parser.initialState);
+
+    assert.ok(!completed.success);
+    if (completed.success) return;
+    assert.equal(
+      formatMessage(completed.error),
+      'branch "fast": "branch failed."',
+    );
+  });
+
+  it("async complete uses the default branch for an unknown deferred discriminator", async () => {
+    const parser = conditional(
+      createAsyncDeferredDiscriminator({ success: true, value: "missing" }),
+      { fast: flag("--fast") },
+      createSyncBranchParser(
+        "initial",
+        (context) => ({
+          success: true,
+          next: {
+            ...context,
+            state: "parsed-default",
+          },
+          consumed: [],
+        }),
+        "default",
+      ),
+    );
+
+    const completed = await parser.complete(parser.initialState);
+
+    assert.deepEqual(completed, {
+      success: true,
+      value: [undefined, "default"],
+    });
+  });
+
+  it("async complete fails when a deferred discriminator has no branch or default", async () => {
+    const parser = conditional(
+      createAsyncDeferredDiscriminator({ success: true, value: "missing" }),
+      { fast: flag("--fast") },
+    );
+
+    const completed = await parser.complete(parser.initialState);
+
+    assert.ok(!completed.success);
+    if (completed.success) return;
+    assert.equal(formatMessage(completed.error), "No matching option found.");
+  });
+
+  it("async complete propagates deferred discriminator failures without a default", async () => {
+    const parser = conditional(
+      createAsyncDeferredDiscriminator({
+        success: false,
+        error: message`mode unavailable.`,
+      }),
+      { fast: flag("--fast") },
+    );
+
+    const completed = await parser.complete(parser.initialState);
+
+    assert.ok(!completed.success);
+    if (completed.success) return;
+    assert.equal(formatMessage(completed.error), "mode unavailable.");
+  });
 });
 
 describe("branch coverage: generateNoMatchError variants", () => {
