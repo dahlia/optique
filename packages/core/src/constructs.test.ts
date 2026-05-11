@@ -175,6 +175,27 @@ function describeDuplicateSourceState(
     : "missing-source";
 }
 
+function createSyncBranchParser<TState>(
+  initialState: TState,
+  parse: (context: ParserContext<TState>) => ParserResult<TState>,
+  value: string,
+): Parser<"sync", string, TState> {
+  return {
+    $valueType: [] as readonly string[],
+    $stateType: [] as readonly TState[],
+    mode: "sync",
+    priority: 0,
+    usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
+    initialState,
+    parse,
+    complete: () => ({ success: true, value }),
+    suggest: function* () {},
+    getDocFragments: () => ({ fragments: [] }),
+  };
+}
+
 describe("or", () => {
   it("should throw TypeError when called with no parsers", () => {
     assert.throws(
@@ -1428,6 +1449,259 @@ describe("or() - duplicate option handling", () => {
     assert.equal(result.success, false);
     if (!result.success) {
       assert.equal(formatMessage(result.error), "replayed failed.");
+    }
+  });
+
+  it("should switch sync branch after a zero-consumed fallback", () => {
+    const parser = or(constant("fallback"), option("--name", string()));
+    const firstPass = parser.parse({
+      buffer: [],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(firstPass.success);
+
+    const secondPass = parser.parse({
+      buffer: ["--name", "demo"],
+      state: firstPass.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(secondPass.success);
+    if (secondPass.success) {
+      assert.deepEqual(secondPass.consumed, ["--name", "demo"]);
+    }
+  });
+
+  it("should return replayed sync failure after shared-branch switch", () => {
+    const parserA = createSyncBranchParser(
+      "a-initial",
+      (context) => {
+        if (context.buffer[0] === "--shared") {
+          return {
+            success: true,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: "a-consumed",
+            },
+            consumed: ["--shared"],
+          };
+        }
+        return {
+          success: false,
+          consumed: 0,
+          error: message`a failed.`,
+        };
+      },
+      "a",
+    );
+    const parserB = createSyncBranchParser(
+      "b-initial",
+      (context) => {
+        if (
+          context.buffer[0] === "--shared" && context.state === "b-initial"
+        ) {
+          return {
+            success: true,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: "b-checked",
+            },
+            consumed: ["--shared"],
+          };
+        }
+        if (context.buffer[0] === "--b" && context.state === "b-initial") {
+          return {
+            success: true,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: "b-first-pass",
+            },
+            consumed: ["--b"],
+          };
+        }
+        if (context.buffer[0] === "--b" && context.state === "b-checked") {
+          return {
+            success: false,
+            consumed: 1,
+            error: message`replayed failed.`,
+          };
+        }
+        return {
+          success: false,
+          consumed: 0,
+          error: message`b failed.`,
+        };
+      },
+      "b",
+    );
+    const parser = or(parserA, parserB);
+
+    const first = parser.parse({
+      buffer: ["--shared"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const result = parser.parse({
+      buffer: ["--b"],
+      state: first.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.equal(formatMessage(result.error), "replayed failed.");
+    }
+  });
+
+  it("should use a sync provisional branch only when no definitive branch consumes", () => {
+    const provisional = createSyncBranchParser(
+      undefined,
+      (context) => {
+        if (context.buffer[0] === "--draft") {
+          return {
+            success: true,
+            provisional: true,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: undefined,
+            },
+            consumed: ["--draft"],
+          };
+        }
+        return {
+          success: false,
+          consumed: 0,
+          error: message`draft failed.`,
+        };
+      },
+      "draft",
+    );
+    const parser = or(provisional, option("--real", string()));
+
+    const result = parser.parse({
+      buffer: ["--draft"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.provisional, true);
+      assert.deepEqual(result.consumed, ["--draft"]);
+    }
+  });
+
+  it("should replay a sync provisional branch that shares active input", () => {
+    const active = createSyncBranchParser(
+      "active-initial",
+      (context) => {
+        if (context.buffer[0] === "--shared") {
+          return {
+            success: true,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: "active-consumed",
+            },
+            consumed: ["--shared"],
+          };
+        }
+        return {
+          success: false,
+          consumed: 0,
+          error: message`active failed.`,
+        };
+      },
+      "active",
+    );
+    const provisional = createSyncBranchParser(
+      "provisional-initial",
+      (context) => {
+        if (
+          context.buffer[0] === "--shared" &&
+          context.state === "provisional-initial"
+        ) {
+          return {
+            success: true,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: "provisional-checked",
+            },
+            consumed: ["--shared"],
+          };
+        }
+        if (
+          context.buffer[0] === "--next" &&
+          context.state === "provisional-initial"
+        ) {
+          return {
+            success: true,
+            provisional: true,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: "provisional-first-pass",
+            },
+            consumed: ["--next"],
+          };
+        }
+        if (
+          context.buffer[0] === "--next" &&
+          context.state === "provisional-checked"
+        ) {
+          return {
+            success: true,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: "provisional-replayed",
+            },
+            consumed: ["--next"],
+          };
+        }
+        return {
+          success: false,
+          consumed: 0,
+          error: message`provisional failed.`,
+        };
+      },
+      "provisional",
+    );
+    const parser = or(active, provisional);
+
+    const first = parser.parse({
+      buffer: ["--shared"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const result = parser.parse({
+      buffer: ["--next"],
+      state: first.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.provisional, true);
+      assert.deepEqual(result.consumed, ["--next"]);
     }
   });
 });
