@@ -21,7 +21,9 @@ To be released.
 
  -  Fixed root-level help and version option completion so those meta options
     are not suggested while completing an option value or after an options
-    terminator.
+    terminator.  Option values that merely look like help or version options
+    no longer suppress later meta option suggestions, and configured
+    single-dash aliases such as `-help` now appear after a bare `-` prompt.
 
  -  Fixed dependency runtime resolution to preserve shared references to the
     same deferred parser state.  Reused deferred nodes now resolve to the same

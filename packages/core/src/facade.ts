@@ -1624,6 +1624,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
       const argumentContext = getSyncCompletionArgumentContext(
         syncParser,
         args.slice(0, -1),
+        rootOptionSuggestions,
       );
       const suggestions = withRootOptionSuggestions(
         suggest(syncParser, args as [string, ...string[]]),
@@ -1649,6 +1650,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
       const argumentContext = await getAsyncCompletionArgumentContext(
         asyncParser,
         args.slice(0, -1),
+        rootOptionSuggestions,
       );
       for (
         const chunk of shell.encodeSuggestions(
@@ -1676,7 +1678,6 @@ function withRootOptionSuggestions(
   if (extraSuggestions.length === 0) return suggestions;
 
   const prefix = args.at(-1) ?? "";
-  const completedArgs = args.slice(0, -1);
   if (argumentContext.optionsTerminated) {
     return suggestions;
   }
@@ -1685,17 +1686,7 @@ function withRootOptionSuggestions(
     return suggestions;
   }
 
-  const metaNames = new Set(
-    extraSuggestions.map((suggestion) => suggestion.text),
-  );
-  if (
-    completedArgs.some((arg) =>
-      metaNames.has(arg) ||
-      extraSuggestions.some((suggestion) =>
-        arg.startsWith(`${suggestion.text}=`)
-      )
-    )
-  ) {
+  if (argumentContext.completedRootOption) {
     return suggestions;
   }
   if (
@@ -1712,7 +1703,7 @@ function withRootOptionSuggestions(
   );
   const combined = [...suggestions];
   for (const suggestion of extraSuggestions) {
-    if (prefix === "-" && suggestion.text.length !== 2) continue;
+    if (prefix === "-" && suggestion.text.startsWith("--")) continue;
     if (prefix !== "" && !suggestion.text.startsWith(prefix)) continue;
     if (seen.has(suggestion.text)) continue;
     combined.push(suggestion);
@@ -1723,6 +1714,7 @@ function withRootOptionSuggestions(
 
 interface CompletionArgumentContext {
   readonly completingOptionValue: boolean;
+  readonly completedRootOption: boolean;
   readonly optionsTerminated: boolean;
 }
 
@@ -1734,8 +1726,8 @@ interface CurrentOptionNames {
 function getSyncCompletionArgumentContext(
   parser: Parser<"sync", unknown, unknown>,
   args: readonly string[],
+  rootOptionSuggestions: readonly LiteralSuggestion[],
 ): CompletionArgumentContext {
-  const valueOptionNames = collectValueOptionNames(parser.usage);
   let context = createCompletionArgumentParserContext(parser, args);
 
   while (context.buffer.length > 0) {
@@ -1749,7 +1741,7 @@ function getSyncCompletionArgumentContext(
         result,
         context,
         parser.usage,
-        valueOptionNames,
+        rootOptionSuggestions,
       );
     }
     context = result.next;
@@ -1758,6 +1750,7 @@ function getSyncCompletionArgumentContext(
 
   return {
     completingOptionValue: false,
+    completedRootOption: false,
     optionsTerminated: context.optionsTerminated,
   };
 }
@@ -1765,8 +1758,8 @@ function getSyncCompletionArgumentContext(
 async function getAsyncCompletionArgumentContext(
   parser: Parser<"async", unknown, unknown>,
   args: readonly string[],
+  rootOptionSuggestions: readonly LiteralSuggestion[],
 ): Promise<CompletionArgumentContext> {
-  const valueOptionNames = collectValueOptionNames(parser.usage);
   let context = createCompletionArgumentParserContext(parser, args);
 
   while (context.buffer.length > 0) {
@@ -1777,7 +1770,7 @@ async function getAsyncCompletionArgumentContext(
         result,
         context,
         parser.usage,
-        valueOptionNames,
+        rootOptionSuggestions,
       );
     }
     context = result.next;
@@ -1786,6 +1779,7 @@ async function getAsyncCompletionArgumentContext(
 
   return {
     completingOptionValue: false,
+    completedRootOption: false,
     optionsTerminated: context.optionsTerminated,
   };
 }
@@ -1813,18 +1807,19 @@ function getFailedCompletionArgumentContext(
   result: Extract<ParserResult<unknown>, { readonly success: false }>,
   context: ParserContext<unknown>,
   usage: Usage,
-  valueOptionNames: ReadonlySet<string>,
+  rootOptionSuggestions: readonly LiteralSuggestion[],
 ): CompletionArgumentContext {
-  const duplicateCommandBranchValueOptionNames = result.consumed > 0
-    ? new Set<string>()
-    : collectDuplicateCommandBranchValueOptionNames(
-      usage,
-      context.exec?.commandPath ?? [],
-    );
+  const activeValueOptionNames = collectActiveValueOptionNames(
+    usage,
+    context.exec?.commandPath ?? [],
+    result.consumed > 0,
+  );
+  const token = context.buffer[0];
   return {
-    completingOptionValue: result.consumed > 0
-      ? valueOptionNames.has(context.buffer[0])
-      : duplicateCommandBranchValueOptionNames.has(context.buffer[0]),
+    completingOptionValue: (result.consumed === 0 || result.consumed === 1) &&
+      activeValueOptionNames.has(token),
+    completedRootOption: result.consumed === 0 &&
+      isRootOptionToken(token, rootOptionSuggestions),
     optionsTerminated: context.optionsTerminated,
   };
 }
@@ -1837,24 +1832,22 @@ function isCompletionBufferUnchanged(
     before.every((arg, index) => arg === after[index]);
 }
 
-function collectValueOptionNames(usage: Usage): ReadonlySet<string> {
-  const optionNames: CurrentOptionNames = {
-    value: new Set(),
-    flag: new Set(),
-  };
-  collectOptionNamesFromUsage(usage, optionNames);
-  return optionNames.value;
-}
-
-function collectDuplicateCommandBranchValueOptionNames(
+function collectActiveValueOptionNames(
   usage: Usage,
   commandPath: readonly string[],
+  includeDirectAfterCommandOptions: boolean,
 ): ReadonlySet<string> {
   const optionNames: CurrentOptionNames = {
     value: new Set(),
     flag: new Set(),
   };
-  collectDuplicateCommandBranchOptionNames(usage, commandPath, optionNames);
+  collectActiveOptionNames(
+    usage,
+    commandPath,
+    optionNames,
+    false,
+    includeDirectAfterCommandOptions,
+  );
   const names = new Set(optionNames.value);
   for (const name of optionNames.flag) {
     names.delete(name);
@@ -1862,86 +1855,83 @@ function collectDuplicateCommandBranchValueOptionNames(
   return names;
 }
 
-function collectDuplicateCommandBranchOptionNames(
+function collectActiveOptionNames(
   usage: Usage,
   commandPath: readonly string[],
   names: CurrentOptionNames,
+  fromExclusive: boolean,
+  includeDirectAfterCommandOptions: boolean,
 ): void {
-  if (commandPath.length > 0) {
-    const [commandName, ...rest] = commandPath;
-    for (let i = 0; i < usage.length; i++) {
-      const term = usage[i];
-      if (term.type === "command" && term.name === commandName) {
-        collectDuplicateCommandBranchOptionNames(
-          usage.slice(i + 1),
-          rest,
-          names,
-        );
-      } else if (term.type === "optional" || term.type === "multiple") {
-        collectDuplicateCommandBranchOptionNames(
-          term.terms,
-          commandPath,
-          names,
-        );
-      } else if (term.type === "exclusive") {
-        for (const branch of term.terms) {
-          collectDuplicateCommandBranchOptionNames(
-            branch,
-            commandPath,
-            names,
-          );
-        }
-      }
-    }
+  if (commandPath.length === 0) {
+    collectOptionNamesAtCurrentCommandDepth(usage, names, false);
+    return;
   }
 
-  for (const term of usage) {
-    if (term.type === "optional" || term.type === "multiple") {
-      collectDuplicateCommandBranchOptionNames(term.terms, commandPath, names);
+  const [commandName, ...rest] = commandPath;
+  for (let i = 0; i < usage.length; i++) {
+    const term = usage[i];
+    if (term.type === "command" && term.name === commandName) {
+      const remainingUsage = usage.slice(i + 1);
+      if (rest.length === 0) {
+        collectOptionNamesAtCurrentCommandDepth(
+          remainingUsage,
+          names,
+          !fromExclusive && includeDirectAfterCommandOptions,
+        );
+      } else {
+        collectActiveOptionNames(
+          remainingUsage,
+          rest,
+          names,
+          fromExclusive,
+          includeDirectAfterCommandOptions,
+        );
+      }
     } else if (term.type === "exclusive") {
-      if (commandPath.length > 0) {
-        const matchingBranches = term.terms
-          .map((branch) => getUsageAfterDirectCommandPath(branch, commandPath))
-          .filter((branch): branch is Usage => branch != null);
-        if (matchingBranches.length > 1) {
-          for (const branch of matchingBranches) {
-            collectOptionNamesAtCurrentCommandDepth(branch, names);
-          }
-        }
-      }
       for (const branch of term.terms) {
-        collectDuplicateCommandBranchOptionNames(branch, commandPath, names);
+        collectActiveOptionNames(
+          branch,
+          commandPath,
+          names,
+          true,
+          includeDirectAfterCommandOptions,
+        );
       }
+    } else if (term.type === "optional" || term.type === "multiple") {
+      collectActiveOptionNames(
+        term.terms,
+        commandPath,
+        names,
+        fromExclusive,
+        includeDirectAfterCommandOptions,
+      );
     }
   }
 }
 
-function getUsageAfterDirectCommandPath(
-  usage: Usage,
-  commandPath: readonly string[],
-): Usage | null {
-  let scopedUsage = usage;
-  for (const commandName of commandPath) {
-    let nextUsage: Usage | null = null;
-    for (let i = 0; i < scopedUsage.length; i++) {
-      const term = scopedUsage[i];
-      if (term.type === "command" && term.name === commandName) {
-        nextUsage = scopedUsage.slice(i + 1);
-        break;
-      }
-    }
-    if (nextUsage == null) return null;
-    scopedUsage = nextUsage;
-  }
-  return scopedUsage;
+function isRootOptionToken(
+  token: string | undefined,
+  rootOptionSuggestions: readonly LiteralSuggestion[],
+): boolean {
+  return token != null &&
+    rootOptionSuggestions.some((suggestion) =>
+      token === suggestion.text || token.startsWith(`${suggestion.text}=`)
+    );
 }
 
 function collectOptionNamesAtCurrentCommandDepth(
   usage: Usage,
   names: CurrentOptionNames,
+  afterMatchedCommand: boolean,
 ): void {
   for (const term of usage) {
-    if (collectOptionNamesAtCurrentCommandDepthFromTerm(term, names)) {
+    if (
+      collectOptionNamesAtCurrentCommandDepthFromTerm(
+        term,
+        names,
+        afterMatchedCommand,
+      )
+    ) {
       return;
     }
   }
@@ -1950,10 +1940,11 @@ function collectOptionNamesAtCurrentCommandDepth(
 function collectOptionNamesAtCurrentCommandDepthFromTerm(
   term: Usage[number],
   names: CurrentOptionNames,
+  afterMatchedCommand: boolean,
 ): boolean {
   switch (term.type) {
     case "command":
-      return true;
+      return !afterMatchedCommand;
     case "option":
       if (term.metavar != null) {
         for (const name of term.names) names.value.add(name);
@@ -1963,11 +1954,15 @@ function collectOptionNamesAtCurrentCommandDepthFromTerm(
       return false;
     case "optional":
     case "multiple":
-      collectOptionNamesAtCurrentCommandDepth(term.terms, names);
+      collectOptionNamesAtCurrentCommandDepth(
+        term.terms,
+        names,
+        afterMatchedCommand,
+      );
       return false;
     case "exclusive":
       for (const branch of term.terms) {
-        collectOptionNamesAtCurrentCommandDepth(branch, names);
+        collectOptionNamesAtCurrentCommandDepth(branch, names, false);
       }
       return false;
     case "argument":
@@ -1975,45 +1970,6 @@ function collectOptionNamesAtCurrentCommandDepthFromTerm(
     case "passthrough":
     case "ellipsis":
       return false;
-  }
-}
-
-function collectOptionNamesFromUsage(
-  usage: Usage,
-  names: CurrentOptionNames,
-): void {
-  for (const term of usage) {
-    collectOptionNamesFromTerm(term, names);
-  }
-}
-
-function collectOptionNamesFromTerm(
-  term: Usage[number],
-  names: CurrentOptionNames,
-): void {
-  switch (term.type) {
-    case "option":
-      if (term.metavar != null) {
-        for (const name of term.names) names.value.add(name);
-      } else {
-        for (const name of term.names) names.flag.add(name);
-      }
-      return;
-    case "optional":
-    case "multiple":
-      collectOptionNamesFromUsage(term.terms, names);
-      return;
-    case "exclusive":
-      for (const branch of term.terms) {
-        collectOptionNamesFromUsage(branch, names);
-      }
-      return;
-    case "argument":
-    case "command":
-    case "literal":
-    case "passthrough":
-    case "ellipsis":
-      return;
   }
 }
 

@@ -3969,6 +3969,62 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(suggestions.includes("--version"));
     });
 
+    it("should add meta options after an option value matching a meta name", () => {
+      const parser = command(
+        "build",
+        object({
+          output: option("--output", string()),
+        }),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "build",
+        "--output",
+        "--help",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should not add meta options while completing a root option value", () => {
+      const parser = object({
+        output: option("--output", string()),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "--output", ""], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
     it("should add meta options after a flag sharing a value option name", () => {
       const parser = or(
         command("build", object({ target: flag("--target") })),
@@ -4409,6 +4465,38 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(suggestions.includes("-v"));
       assert.ok(suggestions.includes("-h"));
       assert.ok(suggestions.includes("-V"));
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should include single-dash meta aliases in bare short-option completion", () => {
+      const parser = object({
+        verbose: option("-v"),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "-"], {
+        help: {
+          option: { names: ["-help", "--help"] },
+          onShow: () => "help",
+        },
+        version: {
+          option: { names: ["-version", "--version"] },
+          value: "1.0.0",
+        },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("-v"));
+      assert.ok(suggestions.includes("-help"));
+      assert.ok(suggestions.includes("-version"));
       assert.ok(!suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
     });
