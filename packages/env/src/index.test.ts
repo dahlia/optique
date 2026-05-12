@@ -1057,6 +1057,36 @@ describe("bindEnv()", () => {
       assert.ok(!extracted.success);
     });
 
+    it("reports dependency-source env parser failures before inner validation", () => {
+      const context = createEnvContext({
+        source: (key) => ({ PORT: "eighty" })[key],
+      });
+      const source = dependency(integer({ min: 1024 }));
+      const portParser = bindEnv(option("--port", source), {
+        context,
+        key: "PORT",
+        parser: integer(),
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parseResult = portParser.parse({
+        buffer: [],
+        state: injectAnnotations(portParser.initialState, annotations),
+        optionsTerminated: false,
+        usage: portParser.usage,
+      });
+      assert.ok(parseResult.success);
+
+      const extracted = portParser.dependencyMetadata?.source
+        ?.extractSourceValue(parseResult.next.state);
+
+      assert.ok(extracted != null && !(extracted instanceof Promise));
+      assert.ok(!extracted.success);
+      assert.match(formatMessage(extracted.error), /Expected a valid integer/u);
+    });
+
     it("validates dependency-source defaults through inner parser", () => {
       const context = createEnvContext({
         source: () => undefined,
@@ -2329,6 +2359,46 @@ describe("bindEnv()", () => {
         formatMessage(extracted.error),
         'Environment variable `PORT` must be a string, but got: "array".',
       );
+    });
+
+    it("reports non-string dependency source env value types", () => {
+      const cases = [
+        [null, "null"],
+        [8080, "number"],
+        [["8080"], "array"],
+      ] as const;
+
+      for (const [rawValue, typeName] of cases) {
+        const context = createEnvContext({
+          source: () => rawValue as never,
+        });
+        const source = dependency(integer());
+        const parser = bindEnv(option("--port", source), {
+          context,
+          key: "PORT",
+          parser: integer(),
+        });
+        const parseResult = parser.parse({
+          buffer: [],
+          state: injectAnnotations(
+            parser.initialState,
+            getSyncAnnotations(context),
+          ),
+          optionsTerminated: false,
+          usage: parser.usage,
+        });
+        assert.ok(parseResult.success);
+
+        const extracted = parser.dependencyMetadata?.source
+          ?.extractSourceValue(parseResult.next.state);
+
+        assert.ok(extracted != null && !(extracted instanceof Promise));
+        assert.ok(!extracted.success);
+        assert.equal(
+          formatMessage(extracted.error),
+          `Environment variable \`PORT\` must be a string, but got: "${typeName}".`,
+        );
+      }
     });
   });
 

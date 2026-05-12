@@ -16,7 +16,11 @@ import type {
 } from "@optique/core/context";
 import type { DocSection } from "@optique/core/doc";
 import { defineInheritedAnnotationParser } from "./internal/parser.ts";
-import type { ExecutionContext, Parser } from "@optique/core/parser";
+import {
+  createParserContext,
+  type ExecutionContext,
+  type Parser,
+} from "@optique/core/parser";
 import {
   type RunOptions,
   runParser,
@@ -126,6 +130,100 @@ function createPhaseTwoSeedParser(
       };
     },
     *suggest() {},
+    getDocFragments() {
+      return { fragments: [] };
+    },
+  };
+}
+
+function createSyncStallingPhaseTwoParser(
+  tokenKey: symbol,
+): Parser<"sync", string, string | undefined> {
+  return {
+    mode: "sync",
+    $valueType: [] as readonly string[],
+    $stateType: [] as readonly (string | undefined)[],
+    priority: 0,
+    usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse(context) {
+      const token = getAnnotations(context.state)?.[tokenKey];
+      if (typeof token !== "string" || context.buffer.length < 1) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      }
+      return {
+        success: true as const,
+        next: createParserContext(
+          {
+            buffer: context.buffer.slice(1),
+            state: token,
+            optionsTerminated: context.optionsTerminated,
+          },
+          context.exec!,
+        ),
+        consumed: [context.buffer[0]!],
+      };
+    },
+    complete(state) {
+      return {
+        success: true as const,
+        value: state ?? "phase1",
+      };
+    },
+    *suggest() {},
+    getDocFragments() {
+      return { fragments: [] };
+    },
+  };
+}
+
+function createAsyncStallingPhaseTwoParser(
+  tokenKey: symbol,
+): Parser<"async", string, string | undefined> {
+  return {
+    mode: "async",
+    $valueType: [] as readonly string[],
+    $stateType: [] as readonly (string | undefined)[],
+    priority: 0,
+    usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse(context) {
+      const token = getAnnotations(context.state)?.[tokenKey];
+      if (typeof token !== "string" || context.buffer.length < 1) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      }
+      return Promise.resolve({
+        success: true as const,
+        next: createParserContext(
+          {
+            buffer: context.buffer.slice(1),
+            state: token,
+            optionsTerminated: context.optionsTerminated,
+          },
+          context.exec!,
+        ),
+        consumed: [context.buffer[0]!],
+      });
+    },
+    complete(state) {
+      return Promise.resolve({
+        success: true as const,
+        value: state ?? "phase1",
+      });
+    },
+    async *suggest() {},
     getDocFragments() {
       return { fragments: [] };
     },
@@ -5984,6 +6082,27 @@ describe("runWith", () => {
       assert.equal(result, "phase2:hidden");
     });
 
+    it("should hide phase-two seed array shells when every data item is deferred", async () => {
+      const tokenKey = Symbol.for("@test/phase-two-hide-array-shell");
+      let phase2Parsed: unknown = "not-called";
+      const parser = createPhaseTwoSeedParser(tokenKey, {
+        value: ["prompt-placeholder"],
+        deferred: true,
+        deferredKeys: new Map<PropertyKey, DeferredMap | null>([
+          [0, null],
+        ]),
+      });
+      const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
+        phase2Parsed = parsed;
+        return parsed === undefined ? "hidden" : "visible";
+      });
+
+      const result = await runWith(parser, "test", [context], { args: [] });
+
+      assert.equal(phase2Parsed, undefined);
+      assert.equal(result, "phase2:hidden");
+    });
+
     it("should hide phase-two seed values when deferred metadata is stale", async () => {
       const tokenKey = Symbol.for("@test/phase-two-hide-stale-keys");
       let phase2Parsed: unknown = "not-called";
@@ -6003,6 +6122,40 @@ describe("runWith", () => {
 
       assert.equal(phase2Parsed, undefined);
       assert.equal(result, "phase2:hidden");
+    });
+
+    it("should use sync phase-two seeds when parsers stop before consuming input", () => {
+      const tokenKey = Symbol.for("@test/sync-stalled-phase-two-seed");
+      const parser = createSyncStallingPhaseTwoParser(tokenKey);
+      let phase2Parsed: unknown = "not-called";
+      const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
+        phase2Parsed = parsed;
+        return parsed === "phase1" ? "phase2" : "missing";
+      });
+
+      const result = runWithSync(parser, "test", [context], {
+        args: ["--from-context"],
+      });
+
+      assert.equal(phase2Parsed, "phase1");
+      assert.equal(result, "phase2");
+    });
+
+    it("should use async phase-two seeds when parsers stop before consuming input", async () => {
+      const tokenKey = Symbol.for("@test/async-stalled-phase-two-seed");
+      const parser = createAsyncStallingPhaseTwoParser(tokenKey);
+      let phase2Parsed: unknown = "not-called";
+      const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
+        phase2Parsed = parsed;
+        return parsed === "phase1" ? "phase2" : "missing";
+      });
+
+      const result = await runWithAsync(parser, "test", [context], {
+        args: ["--from-context"],
+      });
+
+      assert.equal(phase2Parsed, "phase1");
+      assert.equal(result, "phase2");
     });
 
     it("should handle mixed single-pass and two-pass contexts", async () => {
@@ -7867,6 +8020,33 @@ describe("runWithSync", () => {
 
       runWithSync(parser, "test", [context], { args: [] });
       assert.deepEqual(disposed, ["async"]);
+    });
+
+    it("should reject Promise-returning Symbol.asyncDispose in sync mode", () => {
+      const context: SourceContext = {
+        id: Symbol.for("@test/sync-async-dispose-promise"),
+        phase: "single-pass",
+        getAnnotations() {
+          return {
+            [Symbol.for("@test/sync-async-dispose-promise")]: { value: true },
+          };
+        },
+        [Symbol.asyncDispose]() {
+          return Promise.resolve();
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      assert.throws(
+        () => runWithSync(parser, "test", [context], { args: [] }),
+        {
+          name: "TypeError",
+          message: /returned a Promise from Symbol\.asyncDispose in sync mode/u,
+        },
+      );
     });
 
     it("should dispose remaining contexts when one sync dispose fails", () => {

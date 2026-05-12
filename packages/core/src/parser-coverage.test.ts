@@ -7,8 +7,10 @@ import {
   getDocPageAsync,
   getDocPageSync,
   parse,
+  parseAsync,
   type Parser,
   type ParserContext,
+  parseSync,
   suggest,
   suggestAsync,
   type Suggestion,
@@ -62,6 +64,180 @@ describe("parser.ts coverage branches", () => {
     assert.deepEqual(asyncSuggestions, [
       { kind: "literal", text: "async-suggestion" },
     ]);
+  });
+
+  it("preserves deferred completion metadata from sync parsers", () => {
+    const deferredKeys = new Map<PropertyKey, null>([["answer", null]]);
+    const parser: Parser<"sync", { readonly answer: string }, null> = {
+      $valueType: [] as readonly { readonly answer: string }[],
+      $stateType: [] as readonly null[],
+      mode: "sync",
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse(context) {
+        return {
+          success: true as const,
+          next: { ...context, buffer: [] },
+          consumed: [],
+        };
+      },
+      complete() {
+        return {
+          success: true as const,
+          value: { answer: "" },
+          deferred: true as const,
+          deferredKeys,
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = parseSync(parser, []);
+
+    assert.ok(result.success);
+    assert.ok(result.deferred);
+    assert.deepEqual(result.deferredKeys, deferredKeys);
+  });
+
+  it("preserves deferred completion metadata from async parsers", async () => {
+    const deferredKeys = new Map<PropertyKey, null>([["answer", null]]);
+    const parser: Parser<"async", { readonly answer: string }, null> = {
+      $valueType: [] as readonly { readonly answer: string }[],
+      $stateType: [] as readonly null[],
+      mode: "async",
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, buffer: [] },
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: { answer: "" },
+          deferred: true as const,
+          deferredKeys,
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.ok(result.deferred);
+    assert.deepEqual(result.deferredKeys, deferredKeys);
+  });
+
+  it("seeds dependency source values before sync suggestions", () => {
+    const sourceId = Symbol("sync-source");
+    let extractedState: unknown;
+    const parser: Parser<"sync", "ok", { readonly source: string }> = {
+      $valueType: [] as readonly "ok"[],
+      $stateType: [] as readonly { readonly source: string }[],
+      mode: "sync",
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { source: "dev" },
+      dependencyMetadata: {
+        source: {
+          kind: "source",
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue(state) {
+            extractedState = state;
+            return { success: true as const, value: "dev" };
+          },
+        },
+      },
+      parse(context) {
+        return {
+          success: true as const,
+          next: { ...context, buffer: [] },
+          consumed: [],
+        };
+      },
+      complete() {
+        return { success: true as const, value: "ok" };
+      },
+      *suggest() {
+        yield { kind: "literal", text: "debug" };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = suggestSync(parser, [""]);
+
+    assert.deepEqual(result, [{ kind: "literal", text: "debug" }]);
+    assert.deepEqual(extractedState, { source: "dev" });
+  });
+
+  it("seeds dependency source values before async suggestions", async () => {
+    const sourceId = Symbol("async-source");
+    let extractedState: unknown;
+    const parser: Parser<"async", "ok", { readonly source: string }> = {
+      $valueType: [] as readonly "ok"[],
+      $stateType: [] as readonly { readonly source: string }[],
+      mode: "async",
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: { source: "prod" },
+      dependencyMetadata: {
+        source: {
+          kind: "source",
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue(state) {
+            extractedState = state;
+            return Promise.resolve({ success: true as const, value: "prod" });
+          },
+        },
+      },
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, buffer: [] },
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "ok" });
+      },
+      async *suggest() {
+        yield { kind: "literal", text: "strict" };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = await suggestAsync(parser, [""]);
+
+    assert.deepEqual(result, [{ kind: "literal", text: "strict" }]);
+    assert.deepEqual(extractedState, { source: "prod" });
   });
 
   it("injects annotations into suggestSync() and suggestAsync() states", async () => {

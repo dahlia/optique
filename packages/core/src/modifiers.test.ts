@@ -3395,6 +3395,72 @@ describe("multiple", () => {
     );
   });
 
+  it("should fallback to unwrapped primitive state in async suggest()", async () => {
+    const baseParser: Parser<"async", string, string> = {
+      mode: "async",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          consumed: [head],
+          next: { ...context, buffer: tail, state: head },
+        });
+      },
+      complete(state) {
+        return Promise.resolve({
+          success: true as const,
+          value: state.toUpperCase(),
+        });
+      },
+      async *suggest(context) {
+        if (typeof context.state !== "string") {
+          throw new TypeError("Expected string state.");
+        }
+        yield { kind: "literal" as const, text: "beta" };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const parseResult = await parser.parse({
+      buffer: ["alpha"],
+      state: injectAnnotations(parser.initialState, {
+        [Symbol.for("@test/fallback-suggest-async")]: true,
+      }),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success);
+    if (!parseResult.success) {
+      return;
+    }
+    const suggestions = await collectSuggestions(parser.suggest({
+      buffer: [],
+      state: parseResult.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    }, ""));
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "beta"),
+    );
+  });
+
   it("should pass annotations to inner suggest state", () => {
     const annotation = Symbol.for("@test/multiple-suggest-annotations");
     const baseParser: Parser<"sync", string, string> = {
@@ -10346,6 +10412,112 @@ describe("multiple() dependency source extraction", () => {
     assert.deepEqual(result, { success: true, value: "prod" });
     assert.deepEqual(visited, [latest, earlier]);
   });
+
+  it("scans sync source states from newest to oldest", () => {
+    const sourceId = Symbol("mode");
+    const earliest = Symbol("earliest");
+    const middle = Symbol("middle");
+    const latest = Symbol("latest");
+    const visited: unknown[] = [];
+    const inner: Parser<"sync", string, symbol | null> = {
+      mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No parse.`,
+      }),
+      complete: () => ({
+        success: false as const,
+        error: message`No completion.`,
+      }),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    Object.defineProperty(inner, "dependencyMetadata", {
+      value: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue(state: unknown) {
+            visited.push(state);
+            return state === middle
+              ? { success: true as const, value: "stage" }
+              : undefined;
+          },
+        },
+      },
+      configurable: true,
+      enumerable: false,
+    });
+    const parser = multiple(inner);
+
+    const result = parser.dependencyMetadata?.source?.extractSourceValue([
+      earliest,
+      middle,
+      latest,
+    ]);
+
+    assert.deepEqual(result, { success: true, value: "stage" });
+    assert.deepEqual(visited, [latest, middle]);
+  });
+
+  it("returns undefined when no repeated source state has a value", () => {
+    const sourceId = Symbol("mode");
+    const visited: unknown[] = [];
+    const inner: Parser<"sync", string, string | null> = {
+      mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No parse.`,
+      }),
+      complete: () => ({
+        success: false as const,
+        error: message`No completion.`,
+      }),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    Object.defineProperty(inner, "dependencyMetadata", {
+      value: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue(state: unknown) {
+            visited.push(state);
+            return undefined;
+          },
+        },
+      },
+      configurable: true,
+      enumerable: false,
+    });
+    const parser = multiple(inner);
+
+    const result = parser.dependencyMetadata?.source?.extractSourceValue([
+      "dev",
+      "prod",
+    ]);
+
+    assert.equal(result, undefined);
+    assert.deepEqual(visited, ["prod", "dev"]);
+  });
 });
 
 describe("multiple() value helpers", () => {
@@ -10606,9 +10778,524 @@ describe("multiple() phase-two seed extraction", () => {
 
     assert.deepEqual(seed, { value: ["optique.json"] });
   });
+
+  it("unwraps injected annotation wrappers before sync item completion", () => {
+    const marker = Symbol.for("@test/multiple-complete-sync-wrapper");
+    const child: Parser<"sync", string, string> = {
+      mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete(state) {
+        return { success: true as const, value: state.toUpperCase() };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = multipleLocal(child, { min: 1 });
+    const wrapped = injectAnnotations("dev", { [marker]: true });
+
+    const result = parser.complete([wrapped]);
+
+    assert.deepEqual(result, { success: true, value: ["DEV"] });
+  });
+
+  it("unwraps injected annotation wrappers before async item completion", async () => {
+    const marker = Symbol.for("@test/multiple-complete-async-wrapper");
+    const child: Parser<"async", string, string> = {
+      mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete(state) {
+        return Promise.resolve({
+          success: true as const,
+          value: state.toUpperCase(),
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = multipleLocal(child, { min: 1 });
+    const wrapped = injectAnnotations("dev", { [marker]: true });
+
+    const result = await parser.complete([wrapped]);
+
+    assert.deepEqual(result, { success: true, value: ["DEV"] });
+  });
+
+  it("propagates sync item completion exceptions for plain states", () => {
+    const completionError = new TypeError("Plain completion failed.");
+    const child: Parser<"sync", string, string> = {
+      mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        throw completionError;
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = multipleLocal(child, { min: 1 });
+
+    assert.throws(() => parser.complete(["dev"]), completionError);
+  });
+
+  it("propagates async item completion exceptions for plain states", async () => {
+    const completionError = new TypeError("Plain async completion failed.");
+    const child: Parser<"async", string, string> = {
+      mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        throw completionError;
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = multipleLocal(child, { min: 1 });
+
+    await assert.rejects(() => parser.complete(["dev"]), completionError);
+  });
+
+  it("unwraps injected annotation wrappers before sync item parse retries", () => {
+    const marker = Symbol.for("@test/multiple-parse-sync-wrapper");
+    const child: Parser<"sync", string, string> = {
+      mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return {
+          success: true as const,
+          next: { ...context, state: context.state.toUpperCase() },
+          consumed: ["--mode"],
+        };
+      },
+      complete(state) {
+        return { success: true as const, value: state };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = multipleLocal(child, { min: 1 });
+    const wrapped = injectAnnotations("dev", { [marker]: true });
+
+    const result = parser.parse({
+      buffer: ["--mode"],
+      state: [wrapped],
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(result.success);
+    assert.equal(unwrapPrimitiveState(result.next.state[0]), "DEV");
+    assert.ok(getAnnotations(result.next.state[0])?.[marker]);
+  });
+
+  it("unwraps injected annotation wrappers before async item parse retries", async () => {
+    const marker = Symbol.for("@test/multiple-parse-async-wrapper");
+    const child: Parser<"async", string, string> = {
+      mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, state: context.state.toUpperCase() },
+          consumed: ["--mode"],
+        });
+      },
+      complete(state) {
+        return Promise.resolve({ success: true as const, value: state });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = multipleLocal(child, { min: 1 });
+    const wrapped = injectAnnotations("dev", { [marker]: true });
+
+    const result = await parser.parse({
+      buffer: ["--mode"],
+      state: [wrapped],
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(result.success);
+    assert.equal(unwrapPrimitiveState(result.next.state[0]), "DEV");
+    assert.ok(getAnnotations(result.next.state[0])?.[marker]);
+  });
+
+  it("propagates sync item parse exceptions for plain states", () => {
+    const parseError = new TypeError("Plain parse failed.");
+    const child: Parser<"sync", string, string> = {
+      mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse() {
+        throw parseError;
+      },
+      complete(state) {
+        return { success: true as const, value: state };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = multipleLocal(child, { min: 1 });
+
+    assert.throws(
+      () =>
+        parser.parse({
+          buffer: ["--mode"],
+          state: ["dev"],
+          optionsTerminated: false,
+          usage: parser.usage,
+        }),
+      parseError,
+    );
+  });
+
+  it("propagates async item parse exceptions for plain states", async () => {
+    const parseError = new TypeError("Plain async parse failed.");
+    const child: Parser<"async", string, string> = {
+      mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse() {
+        throw parseError;
+      },
+      complete(state) {
+        return Promise.resolve({ success: true as const, value: state });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = multipleLocal(child, { min: 1 });
+
+    await assert.rejects(
+      () =>
+        parser.parse({
+          buffer: ["--mode"],
+          state: ["dev"],
+          optionsTerminated: false,
+          usage: parser.usage,
+        }),
+      parseError,
+    );
+  });
+
+  it("retries sync item phase-two seeds after primitive-wrapper TypeErrors", () => {
+    const marker = Symbol.for("@test/multiple-phase-two-sync-typeerror");
+    const child: Parser<"sync", string, string> = {
+      mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: false as const, error: message`Missing item.` };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    Object.defineProperty(child, extractPhase2SeedKey, {
+      value(state: string) {
+        return { value: state.toUpperCase() };
+      },
+    });
+    const parser = multipleLocal(child, { min: 1 });
+    const wrapped = injectAnnotations("dev", { [marker]: true });
+
+    const seed = extractPhase2Seed(parser, [wrapped]);
+
+    assert.deepEqual(seed, { value: ["DEV"] });
+  });
+
+  it("propagates sync item phase-two exceptions for plain states", () => {
+    const seedError = new TypeError("Plain phase-two seed failed.");
+    const child: Parser<"sync", string, string> = {
+      mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: false as const, error: message`Missing item.` };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    Object.defineProperty(child, extractPhase2SeedKey, {
+      value() {
+        throw seedError;
+      },
+    });
+    const parser = multipleLocal(child, { min: 1 });
+
+    assert.throws(() => extractPhase2Seed(parser, ["dev"]), seedError);
+  });
+
+  it("retries async item phase-two seeds after primitive-wrapper TypeErrors", async () => {
+    const marker = Symbol.for("@test/multiple-phase-two-async-typeerror");
+    const child: Parser<"async", string, string> = {
+      mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`Missing item.`,
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    Object.defineProperty(child, extractPhase2SeedKey, {
+      value(state: string) {
+        return Promise.resolve({ value: state.toUpperCase() });
+      },
+    });
+    const parser = multipleLocal(child, { min: 1 });
+    const wrapped = injectAnnotations("dev", { [marker]: true });
+
+    const seed = await extractPhase2Seed(parser, [wrapped]);
+
+    assert.deepEqual(seed, { value: ["DEV"] });
+  });
+
+  it("retries async item phase-two seeds after null wrapper results", async () => {
+    const marker = Symbol.for("@test/multiple-phase-two-async-null");
+    const child: Parser<"async", string, string> = {
+      mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`Missing item.`,
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    Object.defineProperty(child, extractPhase2SeedKey, {
+      value(state: string | object) {
+        return Promise.resolve(
+          typeof state === "string" ? { value: state.toUpperCase() } : null,
+        );
+      },
+    });
+    const parser = multipleLocal(child, { min: 1 });
+    const wrapped = injectAnnotations("dev", { [marker]: true });
+
+    const seed = await extractPhase2Seed(parser, [wrapped]);
+
+    assert.deepEqual(seed, { value: ["DEV"] });
+  });
+
+  it("propagates async item phase-two exceptions for plain states", async () => {
+    const seedError = new TypeError("Plain async phase-two seed failed.");
+    const child: Parser<"async", string, string> = {
+      mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`Missing item.`,
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    Object.defineProperty(child, extractPhase2SeedKey, {
+      value() {
+        return Promise.reject(seedError);
+      },
+    });
+    const parser = multipleLocal(child, { min: 1 });
+
+    await assert.rejects(() => extractPhase2Seed(parser, ["dev"]), seedError);
+  });
 });
 
 describe("withDefault() phase-two seed extraction", () => {
+  it("ignores primitive outer states for sync optional-like seeds", () => {
+    const parser = optionalLocal(option("--name", string()));
+
+    const seed = extractPhase2Seed(
+      parser as Parser<"sync", string | undefined, [string] | undefined>,
+      "not-an-outer-state" as never,
+    );
+
+    assert.equal(seed, null);
+  });
+
+  it("ignores primitive outer states for async optional-like seeds", async () => {
+    const inner: Parser<"async", string, string> = {
+      mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "",
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete(state) {
+        return Promise.resolve({ success: true as const, value: state });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser = optionalLocal(inner);
+
+    const seed = await extractPhase2Seed(
+      parser as Parser<"async", string | undefined, [string] | undefined>,
+      "not-an-outer-state" as never,
+    );
+
+    assert.equal(seed, null);
+  });
+
   it("preserves default-only seeds", () => {
     const seed = completeOrExtractPhase2Seed(
       withDefault(option("--name", string()), "fallback"),

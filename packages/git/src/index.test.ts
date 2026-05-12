@@ -399,6 +399,32 @@ describe("git parsers", () => {
       }
     });
 
+    it("should list available remotes in the default error", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        await isomorphicGit.addRemote({
+          fs,
+          dir: testRepoDir,
+          remote: "origin",
+          url: "https://example.com/repo.git",
+          force: true,
+        });
+
+        const parser = gitRemote({ dir: testRepoDir });
+        const result = await parser.parse("upstream");
+
+        assert.ok(!result.success);
+        if (!result.success) {
+          assert.equal(
+            formatMessage(result.error),
+            'Remote "upstream" does not exist. Available remotes: "origin"',
+          );
+        }
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
     it("should have async mode", () => {
       const parser = gitRemote({ dir: "/tmp/dummy" });
       assert.equal(parser.mode, "async");
@@ -490,6 +516,32 @@ describe("git parsers", () => {
           assert.ok(
             !msg.includes("Remote branch"),
             "Should not say 'Remote branch' when the remote itself is missing",
+          );
+        }
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
+    it("should list available remotes when a remote branch remote is missing", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        await isomorphicGit.addRemote({
+          fs,
+          dir: testRepoDir,
+          remote: "origin",
+          url: "https://example.com/repo.git",
+          force: true,
+        });
+
+        const parser = gitRemoteBranch("upstream", { dir: testRepoDir });
+        const result = await parser.parse("main");
+
+        assert.ok(!result.success);
+        if (!result.success) {
+          assert.equal(
+            formatMessage(result.error),
+            'Remote "upstream" does not exist. Available remotes: "origin"',
           );
         }
       } finally {
@@ -1234,6 +1286,40 @@ describe("git parsers", () => {
           mainSuggestions.length,
           1,
           "Should suggest 'main' only once",
+        );
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
+    it("should not suggest duplicate refs when a branch matches a short commit", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        const oid = await isomorphicGit.resolveRef({
+          fs,
+          dir: testRepoDir,
+          ref: "main",
+        });
+        const shortOid = oid.slice(0, 7);
+        await isomorphicGit.branch({
+          fs,
+          dir: testRepoDir,
+          ref: shortOid,
+        });
+
+        const parser = gitRef({ dir: testRepoDir });
+        const suggestions: Suggestion[] = [];
+        for await (const s of parser.suggest!(shortOid)) {
+          suggestions.push(s);
+        }
+
+        assert.deepEqual(
+          suggestions
+            .filter((s): s is { kind: "literal"; text: string } =>
+              s.kind === "literal" && s.text === shortOid
+            )
+            .map((s) => s.text),
+          [shortOid],
         );
       } finally {
         await cleanupTestRepo(testRepoDir);
