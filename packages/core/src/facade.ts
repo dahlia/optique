@@ -1740,7 +1740,7 @@ function getSyncCompletionArgumentContext(
       return getFailedCompletionArgumentContext(
         result,
         context,
-        parser.usage,
+        parser,
         rootOptionSuggestions,
       );
     }
@@ -1769,7 +1769,7 @@ async function getAsyncCompletionArgumentContext(
       return getFailedCompletionArgumentContext(
         result,
         context,
-        parser.usage,
+        parser,
         rootOptionSuggestions,
       );
     }
@@ -1806,13 +1806,14 @@ function createCompletionArgumentParserContext(
 function getFailedCompletionArgumentContext(
   result: Extract<ParserResult<unknown>, { readonly success: false }>,
   context: ParserContext<unknown>,
-  usage: Usage,
+  parser: Parser<Mode, unknown, unknown>,
   rootOptionSuggestions: readonly LiteralSuggestion[],
 ): CompletionArgumentContext {
   const activeValueOptionNames = collectActiveValueOptionNames(
-    usage,
+    parser.usage,
     context.exec?.commandPath ?? [],
     result.consumed > 0,
+    parser.leadingNames,
   );
   const token = context.buffer[0];
   return {
@@ -1836,23 +1837,73 @@ function collectActiveValueOptionNames(
   usage: Usage,
   commandPath: readonly string[],
   includeDirectAfterCommandOptions: boolean,
+  rootLeadingNames: ReadonlySet<string>,
 ): ReadonlySet<string> {
   const optionNames: CurrentOptionNames = {
     value: new Set(),
     flag: new Set(),
   };
-  collectActiveOptionNames(
-    usage,
-    commandPath,
-    optionNames,
-    false,
-    includeDirectAfterCommandOptions,
-  );
+  if (commandPath.length === 0) {
+    collectRootOptionNames(usage, optionNames, rootLeadingNames);
+    return optionNames.value;
+  } else {
+    collectActiveOptionNames(
+      usage,
+      commandPath,
+      optionNames,
+      false,
+      includeDirectAfterCommandOptions,
+    );
+  }
   const names = new Set(optionNames.value);
   for (const name of optionNames.flag) {
     names.delete(name);
   }
   return names;
+}
+
+function collectRootOptionNames(
+  usage: Usage,
+  names: CurrentOptionNames,
+  rootLeadingNames: ReadonlySet<string>,
+): void {
+  for (const term of usage) {
+    collectRootOptionNamesFromTerm(term, names, rootLeadingNames);
+  }
+}
+
+function collectRootOptionNamesFromTerm(
+  term: Usage[number],
+  names: CurrentOptionNames,
+  rootLeadingNames: ReadonlySet<string>,
+): void {
+  switch (term.type) {
+    case "option":
+      for (const name of term.names) {
+        if (!rootLeadingNames.has(name)) continue;
+        if (term.metavar != null) {
+          names.value.add(name);
+        } else {
+          names.flag.add(name);
+        }
+      }
+      return;
+    case "optional":
+    case "multiple":
+      collectRootOptionNames(term.terms, names, rootLeadingNames);
+      return;
+    case "exclusive":
+      for (const branch of term.terms) {
+        collectRootOptionNames(branch, names, rootLeadingNames);
+      }
+      return;
+    case "argument":
+    case "command":
+    case "literal":
+    case "passthrough":
+    case "ellipsis":
+      return;
+  }
 }
 
 function collectActiveOptionNames(

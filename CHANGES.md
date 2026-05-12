@@ -24,6 +24,8 @@ To be released.
     terminator.  Option values that merely look like help or version options
     no longer suppress later meta option suggestions, and configured
     single-dash aliases such as `-help` now appear after a bare `-` prompt.
+    Root value options declared after command terms are now recognized while
+    completing their values as well.
 
  -  Fixed dependency runtime resolution to preserve shared references to the
     same deferred parser state.  Reused deferred nodes now resolve to the same
