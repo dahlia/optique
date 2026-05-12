@@ -1430,6 +1430,7 @@ describe("resolveStateWithRuntime", () => {
       success: true,
       value: "warn:prod",
     });
+    assert.strictEqual(record.nested[0], record[symbolKey]);
   });
 
   test("returns original cyclic containers when no deferred state changes", () => {
@@ -1577,6 +1578,8 @@ describe("resolveStateWithRuntimeAsync", () => {
     assert.deepEqual(record.first, expected);
     assert.deepEqual(record.nested[0], expected);
     assert.deepEqual(record[symbolKey], expected);
+    assert.strictEqual(record.first, record.nested[0]);
+    assert.strictEqual(record.first, record[symbolKey]);
   });
 });
 
