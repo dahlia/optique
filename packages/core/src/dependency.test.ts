@@ -4435,8 +4435,10 @@ describe("coverage-guided dependency parser tests", () => {
         metavar: "VALUE",
         placeholder: "ok" as const,
         parse(_input: string): ValueParserResult<"ok"> {
-          const thenable = () => undefined;
-          thenable.then = () => undefined;
+          const thenable: (() => undefined) & { then: () => undefined } = Object
+            .assign(() => undefined, {
+              then: () => undefined,
+            });
           // @ts-expect-error: intentional function-thenable regression coverage.
           return thenable;
         },

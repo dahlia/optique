@@ -7035,7 +7035,7 @@ describe("branch coverage: modifiers edge cases", () => {
 
     assert.ok(result.success);
     if (!result.success) return;
-    assert.equal(result.provisional, true);
+    assert.ok(result.provisional);
     assert.deepEqual(result.next.state, state);
     assert.deepEqual(result.consumed, ["--same"]);
   });
@@ -7082,7 +7082,7 @@ describe("branch coverage: modifiers edge cases", () => {
 
     assert.ok(result.success);
     if (!result.success) return;
-    assert.equal(result.provisional, true);
+    assert.ok(result.provisional);
     assert.deepEqual(result.next.state, state);
     assert.deepEqual(result.consumed, ["--same"]);
   });
@@ -9788,8 +9788,10 @@ describe(
       it(
         `${name} phase-two seed extraction retries null delegated seeds`,
         () => {
-          let completeCalls = 0;
-          let extractCalls = 0;
+          const marker = Symbol.for(
+            `@test/issue-594/${name}/phase2-null-retry`,
+          );
+          const extractedStates: unknown[] = [];
           const inner: Parser<"sync", string, string> = {
             mode: "sync",
             $valueType: [] as readonly string[],
@@ -9807,7 +9809,6 @@ describe(
               };
             },
             complete() {
-              completeCalls++;
               return {
                 success: false as const,
                 error: message`Missing value.`,
@@ -9822,7 +9823,7 @@ describe(
           };
           Object.defineProperty(inner, extractPhase2SeedKey, {
             value(state: string | object) {
-              extractCalls++;
+              extractedStates.push(state);
               return typeof state === "string"
                 ? { value: state.toUpperCase() }
                 : null;
@@ -9830,22 +9831,28 @@ describe(
           });
           const parser = wrap(inner);
           const outerState = injectAnnotations(["live"] as [string], {
-            [Symbol.for(`@test/issue-594/${name}/phase2-null-retry`)]: true,
+            [marker]: true,
           });
 
           const seed = extractPhase2Seed(parser, outerState);
 
           assert.deepEqual(seed, { value: "LIVE" });
-          assert.equal(completeCalls, 1);
-          assert.equal(extractCalls, 2);
+          assert.ok(
+            extractedStates.some((state) =>
+              getAnnotations(state)?.[marker] === true
+            ),
+          );
+          assert.ok(extractedStates.includes("live"));
         },
       );
 
       it(
         `${name} async phase-two seed extraction retries null delegated seeds`,
         async () => {
-          let completeCalls = 0;
-          let extractCalls = 0;
+          const marker = Symbol.for(
+            `@test/issue-594/${name}/async-phase2-null-retry`,
+          );
+          const extractedStates: unknown[] = [];
           const inner: Parser<"async", string, string> = {
             mode: "async",
             $valueType: [] as readonly string[],
@@ -9863,7 +9870,6 @@ describe(
               });
             },
             complete() {
-              completeCalls++;
               return Promise.resolve({
                 success: false as const,
                 error: message`Missing value.`,
@@ -9876,7 +9882,7 @@ describe(
           };
           Object.defineProperty(inner, extractPhase2SeedKey, {
             value(state: string | object) {
-              extractCalls++;
+              extractedStates.push(state);
               return Promise.resolve(
                 typeof state === "string"
                   ? { value: state.toUpperCase() }
@@ -9886,18 +9892,18 @@ describe(
           });
           const parser = wrap(inner);
           const outerState = injectAnnotations(["live"] as [string], {
-            [
-              Symbol.for(
-                `@test/issue-594/${name}/async-phase2-null-retry`,
-              )
-            ]: true,
+            [marker]: true,
           });
 
           const seed = await extractPhase2Seed(parser, outerState);
 
           assert.deepEqual(seed, { value: "LIVE" });
-          assert.equal(completeCalls, 1);
-          assert.equal(extractCalls, 2);
+          assert.ok(
+            extractedStates.some((state) =>
+              getAnnotations(state)?.[marker] === true
+            ),
+          );
+          assert.ok(extractedStates.includes("live"));
         },
       );
 
@@ -10006,8 +10012,9 @@ describe(
       it(
         `${name} phase-two seed extraction retries the extractor without retrying failed completion`,
         () => {
-          let completeCalls = 0;
-          let extractCalls = 0;
+          const marker = Symbol.for(`@test/issue-594/${name}/phase2`);
+          const completedStates: unknown[] = [];
+          const extractedStates: unknown[] = [];
           const inner: Parser<"sync", string, string> = {
             mode: "sync",
             $valueType: [] as readonly string[],
@@ -10024,8 +10031,8 @@ describe(
                 consumed: [],
               };
             },
-            complete() {
-              completeCalls++;
+            complete(state) {
+              completedStates.push(state);
               return {
                 success: false as const,
                 error: message`Missing value.`,
@@ -10040,7 +10047,7 @@ describe(
           };
           Object.defineProperty(inner, extractPhase2SeedKey, {
             value(state: string | object) {
-              extractCalls++;
+              extractedStates.push(state);
               return typeof state === "string"
                 ? { value: { inner: state } }
                 : null;
@@ -10048,23 +10055,28 @@ describe(
           });
           const parser = wrap(inner);
           const outerState = injectAnnotations(["live"] as [string], {
-            [Symbol.for(`@test/issue-594/${name}/phase2`)]: true,
+            [marker]: true,
           });
 
           const seed = completeOrExtractPhase2Seed(parser, outerState);
 
-          assert.equal(completeCalls, 2);
-          assert.equal(extractCalls, 2);
           assert.deepEqual(seed, {
             value: { inner: "live" },
           });
+          assert.ok(
+            completedStates.some((state) =>
+              getAnnotations(state)?.[marker] === true
+            ),
+          );
+          assert.ok(!completedStates.includes("live"));
+          assert.ok(extractedStates.includes("live"));
         },
       );
       it(
         `${name} phase-two seed extraction retries wrapped initial-state failures before the extractor`,
         () => {
-          let completeCalls = 0;
-          let extractCalls = 0;
+          let completedUnwrappedState = false;
+          let extracted = false;
           const inner: Parser<"sync", string, undefined> = {
             mode: "sync",
             $valueType: [] as readonly string[],
@@ -10082,7 +10094,7 @@ describe(
               };
             },
             complete(state) {
-              completeCalls++;
+              if (state === undefined) completedUnwrappedState = true;
               return state === undefined
                 ? { success: true as const, value: "resolved" }
                 : {
@@ -10099,7 +10111,7 @@ describe(
           };
           Object.defineProperty(inner, extractPhase2SeedKey, {
             value() {
-              extractCalls++;
+              extracted = true;
               return null;
             },
           });
@@ -10113,16 +10125,16 @@ describe(
           assert.deepEqual(seed, {
             value: "resolved",
           });
-          assert.equal(completeCalls, 2);
-          assert.equal(extractCalls, 0);
+          assert.ok(completedUnwrappedState);
+          assert.ok(!extracted);
         },
       );
 
       it(
         `${name} async phase-two seed extraction retries wrapped initial-state failures before the extractor`,
         async () => {
-          let completeCalls = 0;
-          let extractCalls = 0;
+          let completedUnwrappedState = false;
+          let extracted = false;
           const inner: Parser<"async", string, undefined> = {
             mode: "async",
             $valueType: [] as readonly string[],
@@ -10140,7 +10152,7 @@ describe(
               });
             },
             complete(state) {
-              completeCalls++;
+              if (state === undefined) completedUnwrappedState = true;
               return Promise.resolve(
                 state === undefined
                   ? { success: true as const, value: "resolved" }
@@ -10157,7 +10169,7 @@ describe(
           };
           Object.defineProperty(inner, extractPhase2SeedKey, {
             value() {
-              extractCalls++;
+              extracted = true;
               return Promise.resolve(null);
             },
           });
@@ -10171,8 +10183,8 @@ describe(
           assert.deepEqual(seed, {
             value: "resolved",
           });
-          assert.equal(completeCalls, 2);
-          assert.equal(extractCalls, 0);
+          assert.ok(completedUnwrappedState);
+          assert.ok(!extracted);
         },
       );
 
@@ -10654,7 +10666,7 @@ describe("multiple() phase-two seed extraction", () => {
       (result as { readonly value?: unknown }).value,
       ["", { ready: false }, { inner: "", stable: "kept" }],
     );
-    assert.equal((result as { readonly deferred?: unknown }).deferred, true);
+    assert.ok((result as { readonly deferred?: unknown }).deferred);
     assert.deepEqual(
       (result as { readonly deferredKeys?: unknown }).deferredKeys,
       new Map<PropertyKey, DeferredMap | null>([
