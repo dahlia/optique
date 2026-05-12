@@ -2,7 +2,7 @@
 bun = "1.3"
 deno = "2.3"
 node = "24"
-"npm:pnpm" = "latest"
+"npm:pnpm" = "^11.0.9"
 
 [tasks.deps]
 alias = "install"
