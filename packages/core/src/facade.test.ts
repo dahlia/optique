@@ -230,6 +230,32 @@ function createAsyncStallingPhaseTwoParser(
   };
 }
 
+function countSyncParserParses<T, S>(
+  parser: Parser<"sync", T, S>,
+  onParse: () => void,
+): Parser<"sync", T, S> {
+  return {
+    ...parser,
+    parse(context) {
+      onParse();
+      return parser.parse(context);
+    },
+  };
+}
+
+function countAsyncParserParses<T, S>(
+  parser: Parser<"async", T, S>,
+  onParse: () => void,
+): Parser<"async", T, S> {
+  return {
+    ...parser,
+    parse(context) {
+      onParse();
+      return parser.parse(context);
+    },
+  };
+}
+
 function createPhaseTwoCaptureContext(
   tokenKey: symbol,
   getToken: (parsed: unknown) => string,
@@ -4023,6 +4049,63 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       );
       assert.ok(!suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should parse sync completion arguments only once", () => {
+      let parseCalls = 0;
+      const parser = countSyncParserParses(
+        object({ output: option("--output", string()) }),
+        () => {
+          parseCalls++;
+        },
+      );
+
+      runParser(parser, "myapp", ["completion", "bash", "--output", ""], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: () => {},
+      });
+
+      assert.equal(parseCalls, 2);
+    });
+
+    it("should parse async completion arguments only once", async () => {
+      let parseCalls = 0;
+      const asyncStringParser: ValueParser<"async", string> = {
+        mode: "async",
+        metavar: "TEXT",
+        parse(input: string) {
+          return Promise.resolve({ success: true as const, value: input });
+        },
+        format(value: string) {
+          return value;
+        },
+        async *suggest(prefix: string) {
+          yield { kind: "literal" as const, text: prefix };
+        },
+        placeholder: "",
+      };
+      const parser = countAsyncParserParses(
+        option("--output", asyncStringParser),
+        () => {
+          parseCalls++;
+        },
+      );
+
+      await runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "--output",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: () => {},
+      });
+
+      assert.equal(parseCalls, 2);
     });
 
     it("should not add meta options while completing a root option value after a command term", () => {

@@ -38,12 +38,15 @@ import {
   type Parser,
   type ParserContext,
   type ParserResult,
-  suggest,
-  suggestAsync,
   type Suggestion,
 } from "./parser.ts";
 import { dispatchByMode } from "./internal/mode-dispatch.ts";
-import { createDependencyRuntimeContext } from "./dependency-runtime.ts";
+import {
+  collectExplicitSourceValues,
+  collectExplicitSourceValuesAsync,
+  createDependencyRuntimeContext,
+  type RuntimeNode,
+} from "./dependency-runtime.ts";
 import { createInputTrace } from "./input-trace.ts";
 import { completeOrExtractPhase2Seed } from "./phase2-seed.ts";
 import { argument, command, constant, flag, option } from "./primitives.ts";
@@ -1621,16 +1624,16 @@ function handleCompletion<M extends Mode, THelp, TError>(
     parser.mode,
     () => {
       const syncParser = parser as Parser<"sync", unknown, unknown>;
-      const argumentContext = getSyncCompletionArgumentContext(
+      const completionSuggestions = getSyncCompletionSuggestions(
         syncParser,
-        args.slice(0, -1),
+        args,
         rootOptionSuggestions,
       );
       const suggestions = withRootOptionSuggestions(
-        suggest(syncParser, args as [string, ...string[]]),
+        completionSuggestions.suggestions,
         args,
         rootOptionSuggestions,
-        argumentContext,
+        completionSuggestions.argumentContext,
       );
       for (const chunk of shell.encodeSuggestions(suggestions)) {
         stdout(chunk);
@@ -1643,22 +1646,18 @@ function handleCompletion<M extends Mode, THelp, TError>(
     },
     async () => {
       const asyncParser = parser as Parser<"async", unknown, unknown>;
-      const suggestions = await suggestAsync(
+      const completionSuggestions = await getAsyncCompletionSuggestions(
         asyncParser,
-        args as [string, ...string[]],
-      );
-      const argumentContext = await getAsyncCompletionArgumentContext(
-        asyncParser,
-        args.slice(0, -1),
+        args,
         rootOptionSuggestions,
       );
       for (
         const chunk of shell.encodeSuggestions(
           withRootOptionSuggestions(
-            suggestions,
+            completionSuggestions.suggestions,
             args,
             rootOptionSuggestions,
-            argumentContext,
+            completionSuggestions.argumentContext,
           ),
         )
       ) {
@@ -1718,36 +1717,121 @@ interface CompletionArgumentContext {
   readonly optionsTerminated: boolean;
 }
 
+interface CompletionSuggestionResult {
+  readonly suggestions: readonly Suggestion[];
+  readonly argumentContext: CompletionArgumentContext;
+}
+
 interface CurrentOptionNames {
   readonly value: Set<string>;
   readonly flag: Set<string>;
 }
 
-function getSyncCompletionArgumentContext(
+function getSyncCompletionSuggestions(
   parser: Parser<"sync", unknown, unknown>,
   args: readonly string[],
   rootOptionSuggestions: readonly LiteralSuggestion[],
-): CompletionArgumentContext {
-  let context = createCompletionArgumentParserContext(parser, args);
+): CompletionSuggestionResult {
+  const prefix = args.at(-1) ?? "";
+  let context = createCompletionArgumentParserContext(
+    parser,
+    args.slice(0, -1),
+  );
 
   while (context.buffer.length > 0) {
-    const previousBuffer = context.buffer;
     const result = parser.parse(context);
     if (result instanceof Promise) {
       throw new RunParserError("Synchronous parser returned async result.");
     }
     if (!result.success) {
-      return getFailedCompletionArgumentContext(
+      const argumentContext = getFailedCompletionArgumentContext(
         result,
         context,
         parser,
         rootOptionSuggestions,
       );
+      return {
+        suggestions: Array.from(
+          parser.suggest(withCompletionSuggestRuntime(parser, context), prefix),
+        ),
+        argumentContext,
+      };
     }
+    const previousBuffer = context.buffer;
     context = result.next;
-    if (isCompletionBufferUnchanged(previousBuffer, context.buffer)) break;
+    if (isCompletionBufferUnchanged(previousBuffer, context.buffer)) {
+      return {
+        suggestions: [],
+        argumentContext: getCompletedCompletionArgumentContext(context),
+      };
+    }
   }
 
+  return {
+    suggestions: Array.from(
+      parser.suggest(withCompletionSuggestRuntime(parser, context), prefix),
+    ),
+    argumentContext: getCompletedCompletionArgumentContext(context),
+  };
+}
+
+async function getAsyncCompletionSuggestions(
+  parser: Parser<"async", unknown, unknown>,
+  args: readonly string[],
+  rootOptionSuggestions: readonly LiteralSuggestion[],
+): Promise<CompletionSuggestionResult> {
+  const prefix = args.at(-1) ?? "";
+  let context = createCompletionArgumentParserContext(
+    parser,
+    args.slice(0, -1),
+  );
+
+  while (context.buffer.length > 0) {
+    const result = await parser.parse(context);
+    if (!result.success) {
+      const argumentContext = getFailedCompletionArgumentContext(
+        result,
+        context,
+        parser,
+        rootOptionSuggestions,
+      );
+      const suggestions: Suggestion[] = [];
+      const suggestContext = await withCompletionSuggestRuntimeAsync(
+        parser,
+        context,
+      );
+      for await (const suggestion of parser.suggest(suggestContext, prefix)) {
+        suggestions.push(suggestion);
+      }
+      return { suggestions, argumentContext };
+    }
+    const previousBuffer = context.buffer;
+    context = result.next;
+    if (isCompletionBufferUnchanged(previousBuffer, context.buffer)) {
+      return {
+        suggestions: [],
+        argumentContext: getCompletedCompletionArgumentContext(context),
+      };
+    }
+  }
+
+  const suggestions: Suggestion[] = [];
+  const suggestContext = await withCompletionSuggestRuntimeAsync(
+    parser,
+    context,
+  );
+  for await (const suggestion of parser.suggest(suggestContext, prefix)) {
+    suggestions.push(suggestion);
+  }
+  return {
+    suggestions,
+    argumentContext: getCompletedCompletionArgumentContext(context),
+  };
+}
+
+function getCompletedCompletionArgumentContext(
+  context: ParserContext<unknown>,
+): CompletionArgumentContext {
   return {
     completingOptionValue: false,
     completedRootOption: false,
@@ -1755,33 +1839,65 @@ function getSyncCompletionArgumentContext(
   };
 }
 
-async function getAsyncCompletionArgumentContext(
-  parser: Parser<"async", unknown, unknown>,
-  args: readonly string[],
-  rootOptionSuggestions: readonly LiteralSuggestion[],
-): Promise<CompletionArgumentContext> {
-  let context = createCompletionArgumentParserContext(parser, args);
-
-  while (context.buffer.length > 0) {
-    const previousBuffer = context.buffer;
-    const result = await parser.parse(context);
-    if (!result.success) {
-      return getFailedCompletionArgumentContext(
-        result,
-        context,
-        parser,
-        rootOptionSuggestions,
-      );
-    }
-    context = result.next;
-    if (isCompletionBufferUnchanged(previousBuffer, context.buffer)) break;
+function withCompletionSuggestRuntime<TState>(
+  parser: Parser<Mode, unknown, TState>,
+  context: ParserContext<TState>,
+): ParserContext<TState> {
+  const runtime = createDependencyRuntimeContext();
+  const nodes = getCompletionSuggestRuntimeNodes(
+    parser,
+    context.state,
+    context.exec?.path ?? [],
+  );
+  if (nodes.length > 0) {
+    collectExplicitSourceValues(nodes, runtime);
   }
+  return addCompletionSuggestRuntime(context, runtime);
+}
 
+async function withCompletionSuggestRuntimeAsync<TState>(
+  parser: Parser<Mode, unknown, TState>,
+  context: ParserContext<TState>,
+): Promise<ParserContext<TState>> {
+  const runtime = createDependencyRuntimeContext();
+  const nodes = getCompletionSuggestRuntimeNodes(
+    parser,
+    context.state,
+    context.exec?.path ?? [],
+  );
+  if (nodes.length > 0) {
+    await collectExplicitSourceValuesAsync(nodes, runtime);
+  }
+  return addCompletionSuggestRuntime(context, runtime);
+}
+
+function addCompletionSuggestRuntime<TState>(
+  context: ParserContext<TState>,
+  runtime: ReturnType<typeof createDependencyRuntimeContext>,
+): ParserContext<TState> {
   return {
-    completingOptionValue: false,
-    completedRootOption: false,
-    optionsTerminated: context.optionsTerminated,
+    ...context,
+    dependencyRegistry: runtime.registry,
+    exec: context.exec
+      ? {
+        ...context.exec,
+        dependencyRuntime: runtime,
+        dependencyRegistry: runtime.registry,
+      }
+      : undefined,
   };
+}
+
+function getCompletionSuggestRuntimeNodes<TState>(
+  parser: Parser<Mode, unknown, TState>,
+  state: TState,
+  path: readonly PropertyKey[],
+): readonly RuntimeNode[] {
+  if (typeof parser.getSuggestRuntimeNodes === "function") {
+    return parser.getSuggestRuntimeNodes(state, path);
+  }
+  if (parser.dependencyMetadata?.source == null) return [];
+  return [{ path, parser, state }];
 }
 
 function createCompletionArgumentParserContext(
