@@ -4924,8 +4924,8 @@ export function macAddress(
   const noneRegex = /^([0-9a-fA-F]{12})$/;
 
   // Shared formatting logic: applies case conversion and joins octets with
-  // the given separator.  Used by both parse() and format() to guarantee
-  // consistent normalization.
+  // the given separator.  Used by parse() to guarantee consistent
+  // normalization.
   function joinOctets(
     octets: readonly string[],
     sep: ":" | "-" | "." | "none",
@@ -4945,6 +4945,20 @@ export function macAddress(
     }
     if (sep === "none") return formatted.join("");
     return formatted.join(sep);
+  }
+
+  let macParsing = false;
+  function normalizeMacValue(value: string, fallback: string): string {
+    if (macParsing) return value;
+    macParsing = true;
+    try {
+      const result = parserObj.parse(value);
+      return result.success ? result.value : fallback;
+    } catch {
+      return fallback;
+    } finally {
+      macParsing = false;
+    }
   }
 
   const parserObj: ValueParser<"sync", string> = {
@@ -5039,50 +5053,14 @@ export function macAddress(
       return { success: true, value: joinOctets(octets, finalSeparator) };
     },
     format(value: string): string {
-      return value;
+      if (typeof value !== "string") return metavar;
+      return normalizeMacValue(value, value);
+    },
+    normalize(value: string): string {
+      if (typeof value !== "string") return value;
+      return normalizeMacValue(value, value);
     },
   };
-  // Both format and normalize use the full parse() pipeline so that
-  // values parse() would reject are returned unchanged.  This keeps
-  // help text consistent with the runtime default.
-  // A recursion guard prevents stack overflow when custom error callbacks
-  // call format()/normalize() on the same parser.
-  const macParser = parserObj;
-  let macParsing = false;
-  Object.defineProperty(parserObj, "format", {
-    value(v: string): string {
-      if (typeof v !== "string") return metavar;
-      if (macParsing) return v;
-      macParsing = true;
-      try {
-        const result = macParser.parse(v);
-        return result.success ? result.value : v;
-      } catch {
-        return v;
-      } finally {
-        macParsing = false;
-      }
-    },
-    configurable: true,
-    enumerable: true,
-  });
-  Object.defineProperty(parserObj, "normalize", {
-    value(v: string): string {
-      if (typeof v !== "string") return v;
-      if (macParsing) return v;
-      macParsing = true;
-      try {
-        const result = macParser.parse(v);
-        return result.success ? result.value : v;
-      } catch {
-        return v;
-      } finally {
-        macParsing = false;
-      }
-    },
-    configurable: true,
-    enumerable: true,
-  });
   return parserObj;
 }
 
