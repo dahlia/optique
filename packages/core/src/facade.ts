@@ -1621,10 +1621,15 @@ function handleCompletion<M extends Mode, THelp, TError>(
     parser.mode,
     () => {
       const syncParser = parser as Parser<"sync", unknown, unknown>;
+      const argumentContext = getSyncCompletionArgumentContext(
+        syncParser,
+        args.slice(0, -1),
+      );
       const suggestions = withRootOptionSuggestions(
         suggest(syncParser, args as [string, ...string[]]),
         args,
         rootOptionSuggestions,
+        argumentContext,
       );
       for (const chunk of shell.encodeSuggestions(suggestions)) {
         stdout(chunk);
@@ -1636,13 +1641,23 @@ function handleCompletion<M extends Mode, THelp, TError>(
       return result;
     },
     async () => {
+      const asyncParser = parser as Parser<"async", unknown, unknown>;
       const suggestions = await suggestAsync(
-        parser as Parser<"async", unknown, unknown>,
+        asyncParser,
         args as [string, ...string[]],
+      );
+      const argumentContext = await getAsyncCompletionArgumentContext(
+        asyncParser,
+        args.slice(0, -1),
       );
       for (
         const chunk of shell.encodeSuggestions(
-          withRootOptionSuggestions(suggestions, args, rootOptionSuggestions),
+          withRootOptionSuggestions(
+            suggestions,
+            args,
+            rootOptionSuggestions,
+            argumentContext,
+          ),
         )
       ) {
         stdout(chunk);
@@ -1656,18 +1671,29 @@ function withRootOptionSuggestions(
   suggestions: readonly Suggestion[],
   args: readonly string[],
   extraSuggestions: readonly LiteralSuggestion[],
+  argumentContext: CompletionArgumentContext,
 ): readonly Suggestion[] {
   if (extraSuggestions.length === 0) return suggestions;
 
   const prefix = args.at(-1) ?? "";
   const completedArgs = args.slice(0, -1);
+  if (argumentContext.optionsTerminated) {
+    return suggestions;
+  }
+
+  if (argumentContext.completingOptionValue) {
+    return suggestions;
+  }
+
   const metaNames = new Set(
     extraSuggestions.map((suggestion) => suggestion.text),
   );
   if (
     completedArgs.some((arg) =>
       metaNames.has(arg) ||
-      [...metaNames].some((name) => arg.startsWith(`${name}=`))
+      extraSuggestions.some((suggestion) =>
+        arg.startsWith(`${suggestion.text}=`)
+      )
     )
   ) {
     return suggestions;
@@ -1693,6 +1719,302 @@ function withRootOptionSuggestions(
     seen.add(suggestion.text);
   }
   return combined;
+}
+
+interface CompletionArgumentContext {
+  readonly completingOptionValue: boolean;
+  readonly optionsTerminated: boolean;
+}
+
+interface CurrentOptionNames {
+  readonly value: Set<string>;
+  readonly flag: Set<string>;
+}
+
+function getSyncCompletionArgumentContext(
+  parser: Parser<"sync", unknown, unknown>,
+  args: readonly string[],
+): CompletionArgumentContext {
+  const valueOptionNames = collectValueOptionNames(parser.usage);
+  let context = createCompletionArgumentParserContext(parser, args);
+
+  while (context.buffer.length > 0) {
+    const previousBuffer = context.buffer;
+    const result = parser.parse(context);
+    if (result instanceof Promise) {
+      throw new RunParserError("Synchronous parser returned async result.");
+    }
+    if (!result.success) {
+      return getFailedCompletionArgumentContext(
+        result,
+        context,
+        parser.usage,
+        valueOptionNames,
+      );
+    }
+    context = result.next;
+    if (isCompletionBufferUnchanged(previousBuffer, context.buffer)) break;
+  }
+
+  return {
+    completingOptionValue: false,
+    optionsTerminated: context.optionsTerminated,
+  };
+}
+
+async function getAsyncCompletionArgumentContext(
+  parser: Parser<"async", unknown, unknown>,
+  args: readonly string[],
+): Promise<CompletionArgumentContext> {
+  const valueOptionNames = collectValueOptionNames(parser.usage);
+  let context = createCompletionArgumentParserContext(parser, args);
+
+  while (context.buffer.length > 0) {
+    const previousBuffer = context.buffer;
+    const result = await parser.parse(context);
+    if (!result.success) {
+      return getFailedCompletionArgumentContext(
+        result,
+        context,
+        parser.usage,
+        valueOptionNames,
+      );
+    }
+    context = result.next;
+    if (isCompletionBufferUnchanged(previousBuffer, context.buffer)) break;
+  }
+
+  return {
+    completingOptionValue: false,
+    optionsTerminated: context.optionsTerminated,
+  };
+}
+
+function createCompletionArgumentParserContext(
+  parser: Parser<Mode, unknown, unknown>,
+  args: readonly string[],
+): ParserContext<unknown> {
+  return createParserContext(
+    {
+      buffer: args,
+      state: parser.initialState,
+      optionsTerminated: false,
+    },
+    {
+      usage: parser.usage,
+      phase: "suggest",
+      path: [],
+      trace: createInputTrace(),
+    },
+  );
+}
+
+function getFailedCompletionArgumentContext(
+  result: Extract<ParserResult<unknown>, { readonly success: false }>,
+  context: ParserContext<unknown>,
+  usage: Usage,
+  valueOptionNames: ReadonlySet<string>,
+): CompletionArgumentContext {
+  const duplicateCommandBranchValueOptionNames = result.consumed > 0
+    ? new Set<string>()
+    : collectDuplicateCommandBranchValueOptionNames(
+      usage,
+      context.exec?.commandPath ?? [],
+    );
+  return {
+    completingOptionValue: result.consumed > 0
+      ? valueOptionNames.has(context.buffer[0])
+      : duplicateCommandBranchValueOptionNames.has(context.buffer[0]),
+    optionsTerminated: context.optionsTerminated,
+  };
+}
+
+function isCompletionBufferUnchanged(
+  before: readonly string[],
+  after: readonly string[],
+): boolean {
+  return before.length === after.length &&
+    before.every((arg, index) => arg === after[index]);
+}
+
+function collectValueOptionNames(usage: Usage): ReadonlySet<string> {
+  const optionNames: CurrentOptionNames = {
+    value: new Set(),
+    flag: new Set(),
+  };
+  collectOptionNamesFromUsage(usage, optionNames);
+  return optionNames.value;
+}
+
+function collectDuplicateCommandBranchValueOptionNames(
+  usage: Usage,
+  commandPath: readonly string[],
+): ReadonlySet<string> {
+  const optionNames: CurrentOptionNames = {
+    value: new Set(),
+    flag: new Set(),
+  };
+  collectDuplicateCommandBranchOptionNames(usage, commandPath, optionNames);
+  const names = new Set(optionNames.value);
+  for (const name of optionNames.flag) {
+    names.delete(name);
+  }
+  return names;
+}
+
+function collectDuplicateCommandBranchOptionNames(
+  usage: Usage,
+  commandPath: readonly string[],
+  names: CurrentOptionNames,
+): void {
+  if (commandPath.length > 0) {
+    const [commandName, ...rest] = commandPath;
+    for (let i = 0; i < usage.length; i++) {
+      const term = usage[i];
+      if (term.type === "command" && term.name === commandName) {
+        collectDuplicateCommandBranchOptionNames(
+          usage.slice(i + 1),
+          rest,
+          names,
+        );
+      } else if (term.type === "optional" || term.type === "multiple") {
+        collectDuplicateCommandBranchOptionNames(
+          term.terms,
+          commandPath,
+          names,
+        );
+      } else if (term.type === "exclusive") {
+        for (const branch of term.terms) {
+          collectDuplicateCommandBranchOptionNames(
+            branch,
+            commandPath,
+            names,
+          );
+        }
+      }
+    }
+  }
+
+  for (const term of usage) {
+    if (term.type === "optional" || term.type === "multiple") {
+      collectDuplicateCommandBranchOptionNames(term.terms, commandPath, names);
+    } else if (term.type === "exclusive") {
+      if (commandPath.length > 0) {
+        const matchingBranches = term.terms
+          .map((branch) => getUsageAfterDirectCommandPath(branch, commandPath))
+          .filter((branch): branch is Usage => branch != null);
+        if (matchingBranches.length > 1) {
+          for (const branch of matchingBranches) {
+            collectOptionNamesAtCurrentCommandDepth(branch, names);
+          }
+        }
+      }
+      for (const branch of term.terms) {
+        collectDuplicateCommandBranchOptionNames(branch, commandPath, names);
+      }
+    }
+  }
+}
+
+function getUsageAfterDirectCommandPath(
+  usage: Usage,
+  commandPath: readonly string[],
+): Usage | null {
+  let scopedUsage = usage;
+  for (const commandName of commandPath) {
+    let nextUsage: Usage | null = null;
+    for (let i = 0; i < scopedUsage.length; i++) {
+      const term = scopedUsage[i];
+      if (term.type === "command" && term.name === commandName) {
+        nextUsage = scopedUsage.slice(i + 1);
+        break;
+      }
+    }
+    if (nextUsage == null) return null;
+    scopedUsage = nextUsage;
+  }
+  return scopedUsage;
+}
+
+function collectOptionNamesAtCurrentCommandDepth(
+  usage: Usage,
+  names: CurrentOptionNames,
+): void {
+  for (const term of usage) {
+    if (collectOptionNamesAtCurrentCommandDepthFromTerm(term, names)) {
+      return;
+    }
+  }
+}
+
+function collectOptionNamesAtCurrentCommandDepthFromTerm(
+  term: Usage[number],
+  names: CurrentOptionNames,
+): boolean {
+  switch (term.type) {
+    case "command":
+      return true;
+    case "option":
+      if (term.metavar != null) {
+        for (const name of term.names) names.value.add(name);
+      } else {
+        for (const name of term.names) names.flag.add(name);
+      }
+      return false;
+    case "optional":
+    case "multiple":
+      collectOptionNamesAtCurrentCommandDepth(term.terms, names);
+      return false;
+    case "exclusive":
+      for (const branch of term.terms) {
+        collectOptionNamesAtCurrentCommandDepth(branch, names);
+      }
+      return false;
+    case "argument":
+    case "literal":
+    case "passthrough":
+    case "ellipsis":
+      return false;
+  }
+}
+
+function collectOptionNamesFromUsage(
+  usage: Usage,
+  names: CurrentOptionNames,
+): void {
+  for (const term of usage) {
+    collectOptionNamesFromTerm(term, names);
+  }
+}
+
+function collectOptionNamesFromTerm(
+  term: Usage[number],
+  names: CurrentOptionNames,
+): void {
+  switch (term.type) {
+    case "option":
+      if (term.metavar != null) {
+        for (const name of term.names) names.value.add(name);
+      } else {
+        for (const name of term.names) names.flag.add(name);
+      }
+      return;
+    case "optional":
+    case "multiple":
+      collectOptionNamesFromUsage(term.terms, names);
+      return;
+    case "exclusive":
+      for (const branch of term.terms) {
+        collectOptionNamesFromUsage(branch, names);
+      }
+      return;
+    case "argument":
+    case "command":
+    case "literal":
+    case "passthrough":
+    case "ellipsis":
+      return;
+  }
 }
 
 function getRootMetaOptionSuggestions(

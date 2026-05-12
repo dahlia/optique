@@ -3819,6 +3819,473 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(suggestions.includes("--version"));
     });
 
+    it("should not add meta options while completing an option value", () => {
+      const parser = command(
+        "build",
+        object({
+          output: option("--output", string()),
+        }),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "build",
+        "--output",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should not add meta options for option-like option values", () => {
+      const parser = command(
+        "build",
+        object({
+          output: option("--output", string()),
+        }),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "build",
+        "--output",
+        "--",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should not add meta options after an options terminator", () => {
+      const parser = command("build", option("--target", string()));
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "build", "--", ""], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should add meta options after a completed equals-form option value", () => {
+      const parser = command(
+        "build",
+        object({
+          output: option("--output", string()),
+        }),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "build",
+        "--output=dist",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should add meta options after a terminator-like option value", () => {
+      const parser = command(
+        "build",
+        object({
+          output: option("--output", string()),
+        }),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "build",
+        "--output",
+        "--",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should add meta options after a flag sharing a value option name", () => {
+      const parser = or(
+        command("build", object({ target: flag("--target") })),
+        command("deploy", object({ target: option("--target", string()) })),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "build",
+        "--target",
+        "--",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should honor a terminator after a flag sharing a value option name", () => {
+      const parser = or(
+        command("build", object({ target: flag("--target") })),
+        command("deploy", object({ target: option("--target", string()) })),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "build",
+        "--target",
+        "--",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should not add meta options while completing a selected value option sharing a flag name", () => {
+      const parser = or(
+        command("build", object({ target: option("--target", string()) })),
+        command("deploy", object({ target: flag("--target") })),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "build",
+        "--target",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should add meta options after an ambiguous exclusive flag option", () => {
+      const parser = command(
+        "tool",
+        or(
+          object({ target: flag("--target") }),
+          object({ target: option("--target", string()) }),
+        ),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "tool",
+        "--target",
+        "--",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should honor a terminator after an ambiguous exclusive flag option", () => {
+      const parser = command(
+        "tool",
+        or(
+          object({ target: flag("--target") }),
+          object({ target: option("--target", string()) }),
+        ),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "tool",
+        "--target",
+        "--",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should not treat nested command options as current value slots", () => {
+      const parser = command(
+        "outer",
+        command("inner", option("--output", string())),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "outer",
+        "--output",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should not add meta options while completing a sibling option before a nested command", () => {
+      const parser = command(
+        "outer",
+        object({
+          inner: command("inner", object({})),
+          global: option("--global", string()),
+        }),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "outer",
+        "--global",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should not treat unselected branch options as current value slots", () => {
+      const parser = command(
+        "tool",
+        or(
+          command(
+            "deploy",
+            object({ target: option("--target", string()) }),
+          ),
+          command("status", object({})),
+        ),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "tool",
+        "--target",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should not add meta options while completing an option from a duplicate command branch", () => {
+      const parser = or(
+        command("tool", object({ a: option("--a", string()) })),
+        command("tool", object({ b: option("--b", string()) })),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "tool",
+        "--b",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should not treat nested duplicate command branch options as current value slots", () => {
+      const parser = or(
+        command("tool", command("deploy", option("--target", string()))),
+        command("tool", command("status", object({}))),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "tool",
+        "--target",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
     it("should filter meta options by the current argument prefix", () => {
       const parser = command(
         "build",
