@@ -1653,11 +1653,23 @@ function withRootOptionSuggestions(
   args: readonly string[],
   extraSuggestions: readonly LiteralSuggestion[],
 ): readonly Suggestion[] {
-  if (args.length !== 1 || extraSuggestions.length === 0) return suggestions;
+  if (extraSuggestions.length === 0) return suggestions;
 
-  const prefix = args[0];
+  const prefix = args.at(-1) ?? "";
+  const completedArgs = args.slice(0, -1);
+  const metaNames = new Set(
+    extraSuggestions.map((suggestion) => suggestion.text),
+  );
   if (
-    !(prefix.startsWith("--") || prefix.startsWith("-") ||
+    completedArgs.some((arg) =>
+      metaNames.has(arg) ||
+      [...metaNames].some((name) => arg.startsWith(`${name}=`))
+    )
+  ) {
+    return suggestions;
+  }
+  if (
+    !(prefix === "" || prefix.startsWith("--") || prefix.startsWith("-") ||
       prefix.startsWith("/") || prefix.startsWith("+"))
   ) {
     return suggestions;
@@ -1671,7 +1683,7 @@ function withRootOptionSuggestions(
   const combined = [...suggestions];
   for (const suggestion of extraSuggestions) {
     if (prefix === "-" && suggestion.text.length !== 2) continue;
-    if (!suggestion.text.startsWith(prefix)) continue;
+    if (prefix !== "" && !suggestion.text.startsWith(prefix)) continue;
     if (seen.has(suggestion.text)) continue;
     combined.push(suggestion);
     seen.add(suggestion.text);

@@ -3770,6 +3770,81 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(suggestions.includes("--version"));
     });
 
+    it("should include meta options in empty root completion suggestions", () => {
+      const parser = command("build", option("--target", string()));
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", ""], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("build"));
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should include meta options after subcommands", () => {
+      const parser = command(
+        "build",
+        object({
+          target: option("--target", string()),
+        }),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "build", "--"], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--target"));
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should filter meta options by the current argument prefix", () => {
+      const parser = command(
+        "build",
+        object({
+          target: option("--target", string()),
+        }),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "build", "--h"], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
     it("should not duplicate user options that shadow meta options in completion suggestions", () => {
       const parser = object({
         help: option("--help", string()),

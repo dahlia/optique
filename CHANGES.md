@@ -14,8 +14,14 @@ To be released.
     Completion requests now include root-level meta options such as `--help`
     and `--version`, including plus-prefixed aliases such as `+h`, without
     treating those options as active help/version requests inside the
-    completion payload.  Plus-prefixed parser options are now recognized as
-    option-prefix completions as well.
+    completion payload.  These meta options are now suggested from empty
+    completion prompts and after subcommands using the current argument prefix.
+    Plus-prefixed parser options are now recognized as option-prefix
+    completions as well.
+
+ -  Fixed dependency runtime resolution to preserve shared references to the
+    same deferred parser state.  Reused deferred nodes now resolve to the same
+    result object instead of distinct but structurally equal objects.
 
  -  When an `object()` parser expects no CLI input (no options, commands, or
     arguments in its usage) and a required field fails the empty-buffer
