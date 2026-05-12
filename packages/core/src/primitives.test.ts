@@ -755,6 +755,24 @@ describe("option", () => {
       }]);
     });
 
+    it("should suggest plus-prefixed async option names", async () => {
+      const parser = option("+log", asyncFileSuggestingParser());
+
+      const suggestions: Suggestion[] = [];
+      for await (
+        const suggestion of parser.suggest({
+          buffer: [],
+          state: parser.initialState,
+          usage: parser.usage,
+          optionsTerminated: false,
+        }, "+")
+      ) {
+        suggestions.push(suggestion);
+      }
+
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "+log" }]);
+    });
+
     it("should not suggest async option names while completing a value", async () => {
       const asyncModeParser: ValueParser<"async", string> = {
         mode: "async",
@@ -1473,6 +1491,21 @@ describe("flag", () => {
     });
   });
 
+  describe("suggestions", () => {
+    it("should suggest plus-prefixed flag names", () => {
+      const parser = flag("+debug");
+
+      const suggestions = Array.from(parser.suggest({
+        buffer: [],
+        state: parser.initialState,
+        usage: parser.usage,
+        optionsTerminated: false,
+      }, "+"));
+
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "+debug" }]);
+    });
+  });
+
   describe("error handling", () => {
     it("should fail when flag receives a value with = syntax", () => {
       const parser = flag("--force");
@@ -2158,6 +2191,79 @@ describe("negatableFlag()", () => {
     if (!noMatch.success) {
       assert.equal(formatMessage(noMatch.error), "nomatch --colr --color");
     }
+  });
+
+  it("should support static custom errors for every error branch", () => {
+    const parser = negatableFlag({
+      positive: "--color",
+      negative: "--no-color",
+    }, {
+      errors: {
+        missing: message`static missing`,
+        optionsTerminated: message`static terminated`,
+        endOfInput: message`static empty`,
+        duplicate: message`static duplicate`,
+        conflict: message`static conflict`,
+        unexpectedValue: message`static unexpected`,
+        noMatch: message`static no match`,
+      },
+    });
+
+    const cases = [
+      parser.complete(undefined),
+      parser.parse({
+        buffer: ["--color"],
+        state: parser.initialState,
+        optionsTerminated: true,
+        usage: parser.usage,
+      }),
+      parser.parse({
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }),
+      parser.parse({
+        buffer: ["--color"],
+        state: { value: true, token: "--color" },
+        optionsTerminated: false,
+        usage: parser.usage,
+      }),
+      parser.parse({
+        buffer: ["--no-color"],
+        state: { value: true, token: "--color" },
+        optionsTerminated: false,
+        usage: parser.usage,
+      }),
+      parser.parse({
+        buffer: ["--color=true"],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }),
+      parser.parse({
+        buffer: ["--unknown"],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }),
+    ] as const;
+
+    assert.deepEqual(
+      cases.map((result) => {
+        assert.ok(!result.success);
+        return result.success ? "" : formatMessage(result.error);
+      }),
+      [
+        "static missing",
+        "static terminated",
+        "static empty",
+        "static duplicate",
+        "static conflict",
+        "static unexpected",
+        "static no match",
+      ],
+    );
   });
 
   it('should keep docs and suggestions for hidden: "usage"', () => {
@@ -7971,6 +8077,115 @@ describe("validateValue on primitives (#414)", () => {
           "success" in numberResult,
       );
       assert.ok(!numberResult.success);
+    });
+
+    it("normalizes fallback values through the value parser when available", () => {
+      const valueParser: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: "example",
+        parse: (input) => ({ success: true, value: input.toLowerCase() }),
+        format: (value) => value,
+        normalize: (value) => value.toLowerCase(),
+      };
+      const parser = option("-x", valueParser);
+      assert.equal(typeof parser.normalizeValue, "function");
+      if (typeof parser.normalizeValue === "function") {
+        assert.equal(parser.normalizeValue("Example.COM"), "example.com");
+      }
+    });
+
+    it("preserves fallback values when normalization throws", () => {
+      const sentinel = { value: "raw" };
+      const valueParser: ValueParser<"sync", typeof sentinel> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: sentinel,
+        parse: () => ({ success: true, value: sentinel }),
+        format: () => "raw",
+        normalize: () => {
+          throw new TypeError("Cannot normalize sentinel.");
+        },
+      };
+      const parser = option("-x", valueParser);
+
+      assert.equal(typeof parser.normalizeValue, "function");
+      if (typeof parser.normalizeValue === "function") {
+        assert.equal(parser.normalizeValue(sentinel), sentinel);
+      }
+    });
+
+    it("accepts fallback values unchanged when format throws", () => {
+      const sentinel = { value: "raw" };
+      const valueParser: ValueParser<"sync", typeof sentinel> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: sentinel,
+        parse: () => ({ success: true, value: sentinel }),
+        format: () => {
+          throw new TypeError("Cannot format sentinel.");
+        },
+      };
+      const parser = option("-x", valueParser);
+
+      const result = parser.validateValue!(sentinel);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, sentinel);
+    });
+
+    it("accepts fallback values unchanged when format returns a non-string", () => {
+      const valueParser: ValueParser<"sync", number> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: 0,
+        parse: () => ({ success: false, error: message`should not parse.` }),
+        format: () => 123 as never,
+      };
+      const parser = option("-x", valueParser);
+
+      const result = parser.validateValue!(42);
+      assert.ok(result && typeof result === "object" && "success" in result);
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, 42);
+    });
+
+    it("exposes undefined placeholder when the value parser placeholder throws", () => {
+      const valueParser: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "VALUE",
+        get placeholder(): string {
+          throw new TypeError("No placeholder.");
+        },
+        parse: (input) => ({ success: true, value: input }),
+        format: (value) => value,
+      };
+      const parser = option("-x", valueParser);
+
+      assert.equal(parser.placeholder, undefined);
+    });
+
+    it("validates async fallback values through async value parsers", async () => {
+      const valueParser: ValueParser<"async", string> = {
+        mode: "async",
+        metavar: "VALUE",
+        placeholder: "ok",
+        parse: (input) =>
+          Promise.resolve(
+            input === "ok"
+              ? { success: true, value: input }
+              : { success: false, error: message`Expected ok.` },
+          ),
+        format: (value) => value,
+      };
+      const parser = option("-x", valueParser);
+
+      const valid = await parser.validateValue!("ok");
+      assert.ok(valid.success);
+      if (valid.success) assert.equal(valid.value, "ok");
+
+      const invalid = await parser.validateValue!("bad");
+      assert.ok(!invalid.success);
     });
   });
 

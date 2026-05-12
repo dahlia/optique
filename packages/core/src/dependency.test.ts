@@ -4425,6 +4425,36 @@ describe("coverage-guided dependency parser tests", () => {
     });
   });
 
+  test("sync derived parsers should reject function thenables", () => {
+    const modeParser = dependency(choice(["sync", "async"] as const));
+    const derived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [modeParser] as const,
+      factory: () => ({
+        mode: "sync" as const,
+        metavar: "VALUE",
+        placeholder: "ok" as const,
+        parse(_input: string): ValueParserResult<"ok"> {
+          const thenable: (() => undefined) & { then: () => undefined } = Object
+            .assign(() => undefined, {
+              then: () => undefined,
+            });
+          // @ts-expect-error: intentional function-thenable regression coverage.
+          return thenable;
+        },
+        format(value: "ok"): string {
+          return value;
+        },
+      }),
+      defaultValues: () => ["sync"] as const,
+    });
+
+    assert.throws(() => derived.parse("ok"), {
+      name: "TypeError",
+      message: /promise-like result/i,
+    });
+  });
+
   test("suggestWithDependency should return empty when both factories fail", async () => {
     const envParser = dependency(choice(["dev", "prod"] as const));
     const regionParser = dependency(choice(["local", "remote"] as const));
@@ -4690,6 +4720,150 @@ describe("coverage-guided dependency parser tests", () => {
         message`Factory error: ${"single-async-source-error"}`,
       );
     }
+
+    const asyncMulti = deriveFromAsync({
+      metavar: "VALUE",
+      dependencies: [modeParser, regionParser] as const,
+      factory: (mode: "ok" | "boom", _region: "us" | "eu") => {
+        if (mode === "boom") {
+          throw new Error("async-multi-factory-error");
+        }
+        return asyncChoice(["value"] as const);
+      },
+      defaultValues: () => ["ok", "us"] as const,
+    });
+    const asyncMultiResult = await asyncMulti[parseWithDependency](
+      "value",
+      ["boom", "us"] as const,
+    );
+    assert.ok(!asyncMultiResult.success);
+    if (!asyncMultiResult.success) {
+      assert.deepEqual(
+        asyncMultiResult.error,
+        message`Factory error: ${"async-multi-factory-error"}`,
+      );
+    }
+  });
+
+  test("parse failures after default resolution should preserve dependency snapshots", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const regionParser = dependency(choice(["ap", "eu"] as const));
+
+    const syncMulti = deriveFrom({
+      metavar: "VALUE",
+      mode: "sync",
+      dependencies: [modeParser, regionParser] as const,
+      factory: (mode: "dev" | "prod", _region: "ap" | "eu") => {
+        if (mode === "prod") {
+          throw new Error("prod unavailable");
+        }
+        return choice(["ok"] as const);
+      },
+      defaultValues: () => ["prod", "ap"] as const,
+    });
+    const syncMultiResult = syncMulti.parse("ok");
+    assert.ok(!syncMultiResult.success);
+    assert.deepEqual(
+      getSnapshottedDefaultDependencyValues(syncMultiResult),
+      ["prod", "ap"],
+    );
+
+    const asyncMulti = deriveFromAsync({
+      metavar: "VALUE",
+      dependencies: [modeParser, regionParser] as const,
+      factory: (mode: "dev" | "prod", _region: "ap" | "eu") => {
+        if (mode === "prod") {
+          throw new Error("async prod unavailable");
+        }
+        return asyncChoice(["ok"] as const);
+      },
+      defaultValues: () => ["prod", "ap"] as const,
+    });
+    const asyncMultiResult = await asyncMulti.parse("ok");
+    assert.ok(!asyncMultiResult.success);
+    assert.deepEqual(
+      getSnapshottedDefaultDependencyValues(asyncMultiResult),
+      ["prod", "ap"],
+    );
+
+    const asyncFromSyncMulti = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [
+        dependency(asyncChoice(["dev", "prod"] as const)),
+      ] as const,
+      factory: (mode: "dev" | "prod") => {
+        if (mode === "prod") {
+          throw new Error("async source prod unavailable");
+        }
+        return choice(["ok"] as const);
+      },
+      defaultValues: () => ["prod"] as const,
+    });
+    const asyncFromSyncMultiResult = await asyncFromSyncMulti.parse("ok");
+    assert.ok(!asyncFromSyncMultiResult.success);
+    assert.deepEqual(
+      getSnapshottedDefaultDependencyValues(asyncFromSyncMultiResult),
+      ["prod"],
+    );
+
+    const singleSync = modeParser.derive({
+      metavar: "VALUE",
+      mode: "sync",
+      factory: (mode: "dev" | "prod") => {
+        if (mode === "prod") {
+          throw "single prod unavailable";
+        }
+        return choice(["ok"] as const);
+      },
+      defaultValue: () => "prod" as const,
+    });
+    const singleSyncResult = singleSync.parse("ok");
+    assert.ok(!singleSyncResult.success);
+    assert.deepEqual(
+      getSnapshottedDefaultDependencyValues(singleSyncResult),
+      ["prod"],
+    );
+    assert.deepEqual(
+      singleSyncResult.error,
+      message`Derived parser error: ${"single prod unavailable"}`,
+    );
+
+    const singleAsync = modeParser.deriveAsync({
+      metavar: "VALUE",
+      factory: (mode: "dev" | "prod") => {
+        if (mode === "prod") {
+          throw new Error("single async prod unavailable");
+        }
+        return asyncChoice(["ok"] as const);
+      },
+      defaultValue: () => "prod" as const,
+    });
+    const singleAsyncResult = await singleAsync.parse("ok");
+    assert.ok(!singleAsyncResult.success);
+    assert.deepEqual(
+      getSnapshottedDefaultDependencyValues(singleAsyncResult),
+      ["prod"],
+    );
+
+    const singleAsyncFromSync = dependency(
+      asyncChoice(["dev", "prod"] as const),
+    ).derive({
+      metavar: "VALUE",
+      mode: "sync",
+      factory: (mode: "dev" | "prod") => {
+        if (mode === "prod") {
+          throw new Error("single async-source prod unavailable");
+        }
+        return choice(["ok"] as const);
+      },
+      defaultValue: () => "prod" as const,
+    });
+    const singleAsyncFromSyncResult = await singleAsyncFromSync.parse("ok");
+    assert.ok(!singleAsyncFromSyncResult.success);
+    assert.deepEqual(
+      getSnapshottedDefaultDependencyValues(singleAsyncFromSyncResult),
+      ["prod"],
+    );
   });
 
   test("deriveFromSync async mode should use defaults for format and suggest", async () => {
@@ -4710,6 +4884,173 @@ describe("coverage-guided dependency parser tests", () => {
       .filter((suggestion) => suggestion.kind === "literal")
       .map((suggestion) => suggestion.text);
     assert.ok(texts.includes("dev-ap"));
+  });
+
+  test("sync multi-source derived parser preserves values when defaults fail", () => {
+    const derived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [] as const,
+      factory: () => choice(["ok"] as const),
+      defaultValues: (): readonly [] => {
+        throw new Error("defaults unavailable");
+      },
+    });
+
+    assert.equal(derived.placeholder, undefined);
+    assert.equal(derived.format("sentinel" as never), "sentinel");
+    assert.deepEqual([...(derived.suggest?.("o") ?? [])], []);
+    assert.equal(derived.normalize?.("sentinel" as never), "sentinel");
+
+    const result = derived.parse("ok");
+    assert.ok(!result.success);
+    assert.equal(getSnapshottedDefaultDependencyValues(result), undefined);
+  });
+
+  test("sync multi-source derived parser preserves values when normalize throws", () => {
+    const derived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [] as const,
+      factory: () => ({
+        mode: "sync" as const,
+        metavar: "VALUE",
+        placeholder: "ok",
+        parse(input: string): ValueParserResult<string> {
+          return { success: true, value: input };
+        },
+        format(value: string): string {
+          return value;
+        },
+        normalize(): string {
+          throw new Error("cannot normalize");
+        },
+      }),
+      defaultValues: () => [] as const,
+    });
+
+    assert.equal(derived.normalize?.("sentinel"), "sentinel");
+  });
+
+  test("async multi-source derived parser preserves values when defaults fail", async () => {
+    const derived = deriveFromAsync({
+      metavar: "VALUE",
+      dependencies: [] as const,
+      factory: () => asyncChoice(["ok"] as const),
+      defaultValues: (): readonly [] => {
+        throw new Error("defaults unavailable");
+      },
+    });
+
+    assert.equal(derived.placeholder, undefined);
+    assert.equal(derived.format("sentinel" as never), "sentinel");
+    assert.deepEqual(await collectSuggestions(derived.suggest!("o")), []);
+    assert.equal(derived.normalize?.("sentinel" as never), "sentinel");
+
+    const result = await derived.parse("ok");
+    assert.ok(!result.success);
+    assert.equal(getSnapshottedDefaultDependencyValues(result), undefined);
+  });
+
+  test("async-from-sync multi-source parser preserves values when defaults fail", async () => {
+    const derived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [
+        dependency(asyncChoice(["dev", "prod"] as const)),
+      ] as const,
+      factory: () => choice(["ok", "sentinel"] as const),
+      defaultValues: (): readonly ["dev"] => {
+        throw new Error("defaults unavailable");
+      },
+    });
+
+    assert.equal(derived.placeholder, undefined);
+    assert.equal(derived.format("sentinel"), "sentinel");
+    assert.equal(derived.normalize?.("sentinel"), "sentinel");
+    assert.deepEqual(await collectSuggestions(derived.suggest!("o")), []);
+
+    const result = await derived.parse("ok");
+    assert.ok(!result.success);
+    assert.deepEqual(
+      result.error,
+      message`Derived parser error: ${"defaults unavailable"}`,
+    );
+    assert.equal(getSnapshottedDefaultDependencyValues(result), undefined);
+  });
+
+  test("async-from-sync multi-source parser reports dependency factory errors", async () => {
+    const derived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [
+        dependency(asyncChoice(["dev", "prod"] as const)),
+      ] as const,
+      factory: (mode: "dev" | "prod") => {
+        if (mode === "prod") {
+          throw new Error("prod parser unavailable");
+        }
+        return choice(["ok"] as const);
+      },
+      defaultValues: () => ["dev"] as const,
+    });
+
+    const result = await derived[parseWithDependency](
+      "ok",
+      ["prod"] as const,
+    );
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(
+        result.error,
+        message`Factory error: ${"prod parser unavailable"}`,
+      );
+    }
+  });
+
+  test("async-from-sync single-source parser preserves values when defaults fail", async () => {
+    const source = dependency(asyncChoice(["dev", "prod"] as const));
+    const derived = source.derive({
+      metavar: "VALUE",
+      mode: "sync",
+      factory: () => choice(["ok", "sentinel"] as const),
+      defaultValue: (): "dev" => {
+        throw new Error("single default unavailable");
+      },
+    });
+
+    assert.equal(derived.placeholder, undefined);
+    assert.equal(derived.format("sentinel"), "sentinel");
+    assert.equal(derived.normalize?.("sentinel"), "sentinel");
+    assert.deepEqual(await collectSuggestions(derived.suggest!("o")), []);
+
+    const result = await derived.parse("ok");
+    assert.ok(!result.success);
+    assert.deepEqual(
+      result.error,
+      message`Derived parser error: ${"single default unavailable"}`,
+    );
+    assert.equal(getSnapshottedDefaultDependencyValues(result), undefined);
+  });
+
+  test("async-from-sync single-source parser reports dependency factory errors", async () => {
+    const source = dependency(asyncChoice(["dev", "prod"] as const));
+    const derived = source.derive({
+      metavar: "VALUE",
+      mode: "sync",
+      factory: (mode: "dev" | "prod") => {
+        if (mode === "prod") {
+          throw new Error("single prod unavailable");
+        }
+        return choice(["ok"] as const);
+      },
+      defaultValue: () => "dev" as const,
+    });
+
+    const result = await derived[parseWithDependency]("ok", "prod");
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(
+        result.error,
+        message`Factory error: ${"single prod unavailable"}`,
+      );
+    }
   });
 });
 

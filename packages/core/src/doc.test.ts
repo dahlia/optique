@@ -7,6 +7,7 @@ import {
   type DocPageFormatOptions,
   type DocSection,
   formatDocPage,
+  isDocEntryHidden,
 } from "@optique/core/doc";
 import { message, valueSet } from "@optique/core/message";
 import assert from "node:assert/strict";
@@ -27,6 +28,40 @@ describe("formatDocPage", () => {
     const result = formatDocPage("myapp", page);
     const expected = "\n  test                        A test command\n";
     assert.equal(result, expected);
+  });
+
+  it("should compute maxWidth from visible atomic usage terms", () => {
+    const page: DocPage = {
+      usage: [
+        { type: "optional", terms: [{ type: "literal", value: "sub" }] },
+        {
+          type: "multiple",
+          min: 0,
+          terms: [{ type: "passthrough" }],
+        },
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "command", name: "secret", hidden: true }],
+            [{ type: "ellipsis" }],
+          ],
+        },
+      ],
+      sections: [],
+    };
+
+    assert.throws(
+      () => formatDocPage("app", page, { maxWidth: 11 }),
+      {
+        name: "RangeError",
+        message: "maxWidth must be at least 12, got 11.",
+      },
+    );
+    const result = formatDocPage("app", page, { maxWidth: 12 });
+    assert.ok(result.startsWith("Usage: app"));
+    assert.ok(result.includes("sub"));
+    assert.ok(result.includes("[...]"));
+    assert.ok(!result.includes("secret"));
   });
 
   it("should format a page with brief", () => {
@@ -2630,6 +2665,30 @@ describe("branch coverage: doc.ts edge cases", () => {
     assert.ok(result.includes("..."), "should show ellipsis for truncation");
   });
 
+  it("showChoices: maxItems should count only value terms", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--color"] },
+          choices: [
+            { type: "text", text: "try " },
+            { type: "value", value: "red" },
+            { type: "text", text: " or " },
+            { type: "value", value: "green" },
+            { type: "text", text: " first" },
+          ],
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page, {
+      showChoices: { maxItems: 1 },
+    });
+
+    assert.ok(result.includes("choices: try red, ..."));
+    assert.ok(!result.includes("green"));
+  });
+
   it("showChoices: maxItems 0 throws RangeError", () => {
     const page: DocPage = {
       sections: [{
@@ -2949,6 +3008,34 @@ describe("branch coverage: doc.ts edge cases", () => {
         formatDocPage("app", page, { colors: false, maxWidth: 1 });
       });
     });
+  });
+});
+
+describe("isDocEntryHidden", () => {
+  it("should follow hidden flags for doc-hideable terms", () => {
+    const entries: readonly DocEntry[] = [
+      { term: { type: "argument", metavar: "FILE", hidden: true } },
+      { term: { type: "option", names: ["--secret"], hidden: "doc" } },
+      { term: { type: "command", name: "internal", hidden: "help" } },
+      { term: { type: "passthrough", hidden: true } },
+    ];
+
+    for (const entry of entries) {
+      assert.ok(isDocEntryHidden(entry));
+    }
+  });
+
+  it("should keep usage-only and structural terms visible in docs", () => {
+    const entries: readonly DocEntry[] = [
+      { term: { type: "option", names: ["--verbose"], hidden: "usage" } },
+      { term: { type: "literal", value: "--" } },
+      { term: { type: "ellipsis" } },
+      { term: { type: "optional", terms: [] } },
+    ];
+
+    for (const entry of entries) {
+      assert.ok(!isDocEntryHidden(entry));
+    }
   });
 });
 

@@ -1057,6 +1057,36 @@ describe("bindEnv()", () => {
       assert.ok(!extracted.success);
     });
 
+    it("reports dependency-source env parser failures before inner validation", () => {
+      const context = createEnvContext({
+        source: (key) => ({ PORT: "eighty" })[key],
+      });
+      const source = dependency(integer({ min: 1024 }));
+      const portParser = bindEnv(option("--port", source), {
+        context,
+        key: "PORT",
+        parser: integer(),
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parseResult = portParser.parse({
+        buffer: [],
+        state: injectAnnotations(portParser.initialState, annotations),
+        optionsTerminated: false,
+        usage: portParser.usage,
+      });
+      assert.ok(parseResult.success);
+
+      const extracted = portParser.dependencyMetadata?.source
+        ?.extractSourceValue(parseResult.next.state);
+
+      assert.ok(extracted != null && !(extracted instanceof Promise));
+      assert.ok(!extracted.success);
+      assert.match(formatMessage(extracted.error), /Expected a valid integer/u);
+    });
+
     it("validates dependency-source defaults through inner parser", () => {
       const context = createEnvContext({
         source: () => undefined,
@@ -2237,6 +2267,46 @@ describe("bindEnv()", () => {
       );
     });
 
+    it("reports null EnvSource values with their concrete type", () => {
+      const context = createEnvContext({
+        source: () => null as never,
+      });
+      const parser = bindEnv(option("--name", string()), {
+        context,
+        key: "NAME",
+        parser: string(),
+      });
+
+      const result = parse(parser, [], {
+        annotations: getSyncAnnotations(context),
+      });
+      assert.ok(!result.success);
+      assert.equal(
+        formatMessage(result.error),
+        'Environment variable `NAME` must be a string, but got: "null".',
+      );
+    });
+
+    it("reports array EnvSource values with their concrete type", () => {
+      const context = createEnvContext({
+        source: () => ["alice"] as never,
+      });
+      const parser = bindEnv(option("--name", string()), {
+        context,
+        key: "NAME",
+        parser: string(),
+      });
+
+      const result = parse(parser, [], {
+        annotations: getSyncAnnotations(context),
+      });
+      assert.ok(!result.success);
+      assert.equal(
+        formatMessage(result.error),
+        'Environment variable `NAME` must be a string, but got: "array".',
+      );
+    });
+
     it("fails when EnvSource returns a Promise", () => {
       const context = createEnvContext({
         source: () => Promise.resolve("alice") as never,
@@ -2260,6 +2330,75 @@ describe("bindEnv()", () => {
         errorText,
         /must be a string, but got: /u,
       );
+    });
+
+    it("validates non-string dependency source env values before extraction", () => {
+      const context = createEnvContext({
+        source: () => ["8080"] as never,
+      });
+      const source = dependency(integer());
+      const parser = bindEnv(option("--port", source), {
+        context,
+        key: "PORT",
+        parser: integer(),
+      });
+      const annotations = getSyncAnnotations(context);
+      const parseResult = parser.parse({
+        buffer: [],
+        state: injectAnnotations(parser.initialState, annotations),
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(parseResult.success);
+
+      const extracted = parser.dependencyMetadata?.source
+        ?.extractSourceValue(parseResult.next.state);
+      assert.ok(extracted != null && !(extracted instanceof Promise));
+      assert.ok(!extracted.success);
+      assert.equal(
+        formatMessage(extracted.error),
+        'Environment variable `PORT` must be a string, but got: "array".',
+      );
+    });
+
+    it("reports non-string dependency source env value types", () => {
+      const cases = [
+        [null, "null"],
+        [8080, "number"],
+        [["8080"], "array"],
+      ] as const;
+
+      for (const [rawValue, typeName] of cases) {
+        const context = createEnvContext({
+          source: () => rawValue as never,
+        });
+        const source = dependency(integer());
+        const parser = bindEnv(option("--port", source), {
+          context,
+          key: "PORT",
+          parser: integer(),
+        });
+        const parseResult = parser.parse({
+          buffer: [],
+          state: injectAnnotations(
+            parser.initialState,
+            getSyncAnnotations(context),
+          ),
+          optionsTerminated: false,
+          usage: parser.usage,
+        });
+        assert.ok(parseResult.success);
+
+        const extracted = parser.dependencyMetadata?.source
+          ?.extractSourceValue(parseResult.next.state);
+
+        assert.ok(extracted != null && !(extracted instanceof Promise));
+        assert.ok(!extracted.success);
+        assert.equal(
+          formatMessage(extracted.error),
+          `Environment variable \`PORT\` must be a string, but got: "${typeName}".`,
+        );
+      }
     });
   });
 
@@ -2580,6 +2719,104 @@ describe("bindEnv() with dependency sources", () => {
       parser.dependencyMetadata?.source?.extractSourceValue(state),
       { success: true, value: "prod" },
     );
+  });
+
+  it("reports non-string env source values during source extraction", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: ["prod"] as never })[key],
+    });
+    const parser = bindEnv(option("--mode", mode), {
+      context: envContext,
+      key: "MODE",
+      parser: choice(["dev", "prod"] as const),
+    });
+    const state = injectAnnotations(
+      parser.initialState,
+      envContext.getAnnotations() as Record<symbol, unknown>,
+    );
+
+    const result = parser.dependencyMetadata?.source?.extractSourceValue(state);
+
+    assert.ok(result != null && "success" in result);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.match(
+        formatMessage(result.error),
+        /Environment variable .*APP_MODE.* must be a string, but got: .*array/,
+      );
+    }
+  });
+
+  it("validates default source values through preserving inner parsers", () => {
+    const sourceId = Symbol("mode");
+    const innerParser = {
+      mode: "sync" as const,
+      $valueType: [] as readonly ("dev" | "prod")[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`No CLI value.`,
+        };
+      },
+      complete() {
+        return { success: false as const, error: message`No value.` };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+      validateValue(value: "dev" | "prod") {
+        return value === "dev" || value === "prod"
+          ? { success: true as const, value }
+          : {
+            success: false as const,
+            error: message`Invalid mode default.`,
+          };
+      },
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue() {
+            return undefined;
+          },
+        },
+      },
+    } satisfies Parser<"sync", "dev" | "prod", undefined> & {
+      readonly dependencyMetadata: {
+        readonly source: {
+          readonly kind: "source";
+          readonly sourceId: typeof sourceId;
+          readonly preservesSourceValue: true;
+          readonly extractSourceValue: () => undefined;
+        };
+      };
+    };
+    const parser = bindEnv(innerParser, {
+      context: createEnvContext({ source: () => undefined }),
+      key: "MODE",
+      parser: choice(["dev", "prod", "test"] as const),
+      default: "test" as never,
+    });
+
+    const result = parser.dependencyMetadata?.source?.getMissingSourceValue?.();
+
+    assert.ok(result != null && "success" in result);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(formatMessage(result.error), "Invalid mode default.");
+    }
   });
 
   it("propagates env value as dependency to derived parser (suggest)", () => {
@@ -2969,6 +3206,185 @@ describe("bindEnv() with dependency sources", () => {
     );
     assert.deepEqual(extracted, { success: true, value: "prod" });
     assert.equal(completeCalls, 0);
+  });
+
+  it("exposes bindEnv defaults as missing source values without validation hooks", () => {
+    const sourceId = Symbol("mode-default");
+    const innerParser = {
+      mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`No CLI value.`,
+          next: context,
+        };
+      },
+      complete() {
+        return { success: false as const, error: message`No value.` };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: true,
+          extractSourceValue() {
+            return undefined;
+          },
+        },
+      },
+    } satisfies Parser<"sync", "dev" | "prod", undefined> & {
+      readonly dependencyMetadata: {
+        readonly source: {
+          readonly kind: "source";
+          readonly sourceId: typeof sourceId;
+          readonly preservesSourceValue: true;
+          readonly extractSourceValue: () => undefined;
+        };
+      };
+    };
+    const parser = bindEnv(innerParser, {
+      context: createEnvContext({ source: () => undefined }),
+      key: "MODE",
+      parser: choice(["dev", "prod"] as const),
+      default: "prod" as const,
+    });
+
+    const missing = parser.dependencyMetadata?.source
+      ?.getMissingSourceValue?.();
+
+    assert.deepEqual(missing, { success: true, value: "prod" });
+  });
+
+  it("delegates non-preserving source extraction for raw inner states", () => {
+    const sourceId = Symbol("mapped-mode");
+    const rawState = { selected: "prod" as const };
+    const innerParser = {
+      mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: rawState,
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete() {
+        return { success: true as const, value: "production" as const };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+      dependencyMetadata: {
+        source: {
+          kind: "source" as const,
+          sourceId,
+          preservesSourceValue: false,
+          extractSourceValue(state: unknown) {
+            return state === rawState
+              ? { success: true as const, value: "production" as const }
+              : undefined;
+          },
+        },
+      },
+    } satisfies Parser<"sync", "production", typeof rawState> & {
+      readonly dependencyMetadata: {
+        readonly source: {
+          readonly kind: "source";
+          readonly sourceId: typeof sourceId;
+          readonly preservesSourceValue: false;
+          readonly extractSourceValue: (
+            state: unknown,
+          ) => ValueParserResult<unknown> | undefined;
+        };
+      };
+    };
+    const parser = bindEnv(innerParser, {
+      context: createEnvContext({ source: () => undefined }),
+      key: "MODE",
+      parser: choice(["development", "production"] as const),
+    });
+
+    const extracted = parser.dependencyMetadata?.source?.extractSourceValue(
+      rawState,
+    );
+
+    assert.deepEqual(extracted, { success: true, value: "production" });
+  });
+
+  it("uses async defaults unchanged when the inner parser has no validator", async () => {
+    const innerParser = {
+      mode: "async" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`No CLI value.`,
+          next: context,
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`No value.`,
+        });
+      },
+      suggest() {
+        return {
+          async *[Symbol.asyncIterator]() {
+            yield* [];
+          },
+        };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    } satisfies Parser<"async", "dev" | "prod", undefined>;
+    const envContext = createEnvContext({ source: () => undefined });
+    const parser = bindEnv(innerParser, {
+      context: envContext,
+      key: "MODE",
+      parser: asyncChoice(["dev", "prod"] as const),
+      default: "prod" as const,
+    });
+
+    const result = await parse(parser, [], {
+      annotations: getSyncAnnotations(envContext),
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "prod");
+    }
   });
 
   it("preserves outer annotations when no-CLI fallback delegates source extraction", () => {

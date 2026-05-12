@@ -4924,8 +4924,8 @@ export function macAddress(
   const noneRegex = /^([0-9a-fA-F]{12})$/;
 
   // Shared formatting logic: applies case conversion and joins octets with
-  // the given separator.  Used by both parse() and format() to guarantee
-  // consistent normalization.
+  // the given separator.  Used by parse() to guarantee consistent
+  // normalization.
   function joinOctets(
     octets: readonly string[],
     sep: ":" | "-" | "." | "none",
@@ -4947,62 +4947,18 @@ export function macAddress(
     return formatted.join(sep);
   }
 
-  // Normalizes a MAC address string by splitting on the detected separator,
-  // padding octets, and re-joining with the configured separator and case.
-  // Returns the value unchanged if it does not have the expected 6-octet
-  // structure (e.g., a string sentinel like "local").
-  // Shared by both format() and normalize().
-  function normalizeMac(value: string): string {
-    // Guard against sentinel defaults of incompatible runtime type
-    // (e.g., { kind: "local" } cast as string via withDefault).
-    // Fall back to metavar for help-text display.
-    if (typeof value !== "string") return metavar;
-    let octets: string[];
-    let detectedSep: ":" | "-" | "." | "none";
-    if (value.includes(":")) {
-      octets = value.split(":");
-      detectedSep = ":";
-    } else if (value.includes("-")) {
-      octets = value.split("-");
-      detectedSep = "-";
-    } else if (value.includes(".")) {
-      // Cisco format: exactly 3 groups of 4 hex digits
-      const groups = value.split(".");
-      if (
-        groups.length !== 3 ||
-        !groups.every((g) => /^[0-9a-fA-F]{4}$/.test(g))
-      ) {
-        return value;
-      }
-      octets = groups.flatMap((g) => [g.slice(0, 2), g.slice(2)]);
-      detectedSep = ".";
-    } else {
-      // No separator: require exactly 12 hex chars (matching parse's noneRegex)
-      if (value.length !== 12) return value;
-      octets = [];
-      for (let i = 0; i < value.length; i += 2) {
-        octets.push(value.slice(i, i + 2));
-      }
-      detectedSep = "none";
+  let macParsing = false;
+  function normalizeMacValue(value: string, fallback: string): string {
+    if (macParsing) return value;
+    macParsing = true;
+    try {
+      const result = parserObj.parse(value);
+      return result.success ? result.value : fallback;
+    } catch {
+      return fallback;
+    } finally {
+      macParsing = false;
     }
-    // Guard: a valid MAC has exactly 6 hex octets.  If not, the value is
-    // not a MAC address (e.g., a sentinel default) — return it unchanged.
-    if (
-      octets.length !== 6 ||
-      !octets.every((o) => /^[0-9a-fA-F]{1,2}$/.test(o))
-    ) {
-      return value;
-    }
-    octets = octets.map((o) => o.padStart(2, "0"));
-    let sep: ":" | "-" | "." | "none";
-    if (outputSeparator != null) {
-      sep = outputSeparator;
-    } else if (separator !== "any") {
-      sep = separator;
-    } else {
-      sep = detectedSep;
-    }
-    return joinOctets(octets, sep);
   }
 
   const parserObj: ValueParser<"sync", string> = {
@@ -5096,49 +5052,15 @@ export function macAddress(
       const finalSeparator = outputSeparator ?? inputSeparator ?? ":";
       return { success: true, value: joinOctets(octets, finalSeparator) };
     },
-    format: normalizeMac, // overridden below
+    format(value: string): string {
+      if (typeof value !== "string") return metavar;
+      return normalizeMacValue(value, value);
+    },
+    normalize(value: string): string {
+      if (typeof value !== "string") return value;
+      return normalizeMacValue(value, value);
+    },
   };
-  // Both format and normalize use the full parse() pipeline so that
-  // values parse() would reject are returned unchanged.  This keeps
-  // help text consistent with the runtime default.
-  // A recursion guard prevents stack overflow when custom error callbacks
-  // call format()/normalize() on the same parser.
-  const macParser = parserObj;
-  let macParsing = false;
-  Object.defineProperty(parserObj, "format", {
-    value(v: string): string {
-      if (typeof v !== "string") return metavar;
-      if (macParsing) return v;
-      macParsing = true;
-      try {
-        const result = macParser.parse(v);
-        return result.success ? result.value : v;
-      } catch {
-        return v;
-      } finally {
-        macParsing = false;
-      }
-    },
-    configurable: true,
-    enumerable: true,
-  });
-  Object.defineProperty(parserObj, "normalize", {
-    value(v: string): string {
-      if (typeof v !== "string") return v;
-      if (macParsing) return v;
-      macParsing = true;
-      try {
-        const result = macParser.parse(v);
-        return result.success ? result.value : v;
-      } catch {
-        return v;
-      } finally {
-        macParsing = false;
-      }
-    },
-    configurable: true,
-    enumerable: true,
-  });
   return parserObj;
 }
 

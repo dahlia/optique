@@ -932,6 +932,35 @@ describe("valibot()", () => {
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
     });
+
+    it("should not expose choices from malformed internal choice metadata", () => {
+      const malformedPicklist = valibot({
+        type: "picklist",
+        options: "not-array",
+      } as never, { placeholder: "" });
+      assert.equal(malformedPicklist.metavar, "CHOICE");
+      assert.equal(malformedPicklist.choices, undefined);
+      assert.equal(malformedPicklist.suggest, undefined);
+
+      const malformedUnionOptions = valibot({
+        type: "union",
+        options: "not-array",
+      } as never, { placeholder: "" });
+      assert.equal(malformedUnionOptions.metavar, "VALUE");
+      assert.equal(malformedUnionOptions.choices, undefined);
+      assert.equal(malformedUnionOptions.suggest, undefined);
+
+      const malformedUnionMember = valibot({
+        type: "union",
+        options: [
+          { type: "literal", literal: "dev" },
+          "prod",
+        ],
+      } as never, { placeholder: "" });
+      assert.equal(malformedUnionMember.metavar, "VALUE");
+      assert.equal(malformedUnionMember.choices, undefined);
+      assert.equal(malformedUnionMember.suggest, undefined);
+    });
   });
 
   describe("async schema rejection", () => {
@@ -1305,6 +1334,46 @@ describe("valibot()", () => {
       assert.ok(result.success);
     });
 
+    it("should not reject union with v.pipe(v.any(), safe-transform) arm", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const asyncSchema = v.union([
+        v.pipe(v.any(), v.toLowerCase() as never),
+        asyncInner,
+      ] as never);
+      const parser = valibot(asyncSchema as never, {
+        placeholder: "" as never,
+      });
+      const result = parser.parse("HELLO");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "hello");
+      }
+    });
+
+    it("should not reject union with v.pipe(v.string(), safe-transform) arm", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const asyncSchema = v.union([
+        v.pipe(v.string(), v.toUpperCase()),
+        asyncInner,
+      ] as never);
+      const parser = valibot(asyncSchema as never, {
+        placeholder: "" as never,
+      });
+      const result = parser.parse("hello");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "HELLO");
+      }
+    });
+
     it("should not reject union with nested schema in string pipe catch-all", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
@@ -1337,6 +1406,77 @@ describe("valibot()", () => {
         v.pipe(v.string(), v.email()),
         asyncInner,
       ] as never);
+      assert.throws(
+        () => valibot(asyncSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
+    });
+
+    it("should reject async map members after transform", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const asyncKeySchema = v.pipe(
+        v.string(),
+        v.transform(() => new Map()),
+        v.map(asyncInner as never, v.string()),
+      );
+      assert.throws(
+        () => valibot(asyncKeySchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
+
+      const asyncValueSchema = v.pipe(
+        v.string(),
+        v.transform(() => new Map()),
+        v.map(v.string(), asyncInner as never),
+      );
+      assert.throws(
+        () => valibot(asyncValueSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
+    });
+
+    it("should reject async rest schemas after transform", () => {
+      const asyncRest = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const objectSchema = v.pipe(
+        v.string(),
+        v.transform(() => ({ extra: "ok" })) as never,
+        v.objectWithRest({}, asyncRest as never) as never,
+      );
+      assert.throws(
+        () => valibot(objectSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
+
+      const tupleSchema = v.pipe(
+        v.string(),
+        v.transform(() => ["ok"]) as never,
+        v.tupleWithRest([], asyncRest as never) as never,
+      );
+      assert.throws(
+        () => valibot(tupleSchema as never, { placeholder: "" as never }),
+        expectedError,
+      );
+    });
+
+    it("should propagate type-changing nested pipe schemas to later containers", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const asyncSchema = v.pipe(
+        v.string(),
+        v.pipe(v.string(), v.transform(JSON.parse)) as never,
+        v.object({ value: asyncInner } as never),
+      );
       assert.throws(
         () => valibot(asyncSchema as never, { placeholder: "" as never }),
         expectedError,

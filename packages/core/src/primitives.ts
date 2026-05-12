@@ -533,7 +533,7 @@ function* suggestOptionSync<T>(
     if (
       !expectingValue &&
       (prefix.startsWith("--") || prefix.startsWith("-") ||
-        prefix.startsWith("/"))
+        prefix.startsWith("/") || prefix.startsWith("+"))
     ) {
       for (const optionName of optionNames) {
         if (optionName.startsWith(prefix)) {
@@ -563,7 +563,7 @@ function* suggestOptionSync<T>(
         context.buffer.length === 0 &&
         (context.exec?.path?.length ?? 0) === 0 &&
         !(prefix.startsWith("--") || prefix.startsWith("-") ||
-          prefix.startsWith("/"))
+          prefix.startsWith("/") || prefix.startsWith("+"))
       ) {
         shouldSuggestValues = true;
       }
@@ -713,7 +713,7 @@ async function* suggestOptionAsync<T>(
     if (
       !expectingValue &&
       (prefix.startsWith("--") || prefix.startsWith("-") ||
-        prefix.startsWith("/"))
+        prefix.startsWith("/") || prefix.startsWith("+"))
     ) {
       for (const optionName of optionNames) {
         if (optionName.startsWith(prefix)) {
@@ -743,7 +743,7 @@ async function* suggestOptionAsync<T>(
         context.buffer.length === 0 &&
         (context.exec?.path?.length ?? 0) === 0 &&
         !(prefix.startsWith("--") || prefix.startsWith("-") ||
-          prefix.startsWith("/"))
+          prefix.startsWith("/") || prefix.startsWith("+"))
       ) {
         shouldSuggestValues = true;
       }
@@ -1815,7 +1815,7 @@ export function flag(
       // If the prefix looks like an option prefix, suggest matching option names
       if (
         prefix.startsWith("--") || prefix.startsWith("-") ||
-        prefix.startsWith("/")
+        prefix.startsWith("/") || prefix.startsWith("+")
       ) {
         for (const optionName of optionNames) {
           if (optionName.startsWith(prefix)) {

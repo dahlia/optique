@@ -29,6 +29,43 @@ if (usingPolyfill) {
   globalThis.Temporal = polyfill.Temporal;
 }
 
+function throwingTemporalType<
+  T extends { readonly from: (...args: never[]) => unknown },
+>(
+  originalType: T,
+): T {
+  const clone = Object.create(originalType) as T;
+  Object.defineProperty(clone, "from", {
+    value() {
+      throw new RangeError("placeholder unavailable.");
+    },
+    configurable: true,
+  });
+  return clone;
+}
+
+function canShadowTemporalConstructors(): boolean {
+  const originalTemporal = globalThis.Temporal;
+  if (originalTemporal == null) return false;
+  try {
+    Object.defineProperty(globalThis, "Temporal", {
+      value: {
+        ...originalTemporal,
+        Instant: throwingTemporalType(originalTemporal.Instant),
+      },
+      configurable: true,
+    });
+    return instant().placeholder === undefined;
+  } catch {
+    return false;
+  } finally {
+    Object.defineProperty(globalThis, "Temporal", {
+      value: originalTemporal,
+      configurable: true,
+    });
+  }
+}
+
 describe("instant", () => {
   const parser = instant();
 
@@ -1631,5 +1668,45 @@ describe("placeholder values", () => {
     assert.ok(p instanceof Temporal.PlainMonthDay);
     assert.equal(p.monthCode, "M01");
     assert.equal(p.day, 1);
+  });
+
+  const canShadowTemporal = canShadowTemporalConstructors();
+  it("placeholder getters fall back to undefined when Temporal.from throws", {
+    skip: !canShadowTemporal,
+  }, () => {
+    if (!canShadowTemporal) return;
+
+    const originalTemporal = globalThis.Temporal;
+
+    try {
+      Object.defineProperty(globalThis, "Temporal", {
+        value: {
+          ...originalTemporal,
+          Instant: throwingTemporalType(originalTemporal.Instant),
+          Duration: throwingTemporalType(originalTemporal.Duration),
+          ZonedDateTime: throwingTemporalType(originalTemporal.ZonedDateTime),
+          PlainDate: throwingTemporalType(originalTemporal.PlainDate),
+          PlainTime: throwingTemporalType(originalTemporal.PlainTime),
+          PlainDateTime: throwingTemporalType(originalTemporal.PlainDateTime),
+          PlainYearMonth: throwingTemporalType(originalTemporal.PlainYearMonth),
+          PlainMonthDay: throwingTemporalType(originalTemporal.PlainMonthDay),
+        },
+        configurable: true,
+      });
+
+      assert.equal(instant().placeholder, undefined);
+      assert.equal(duration().placeholder, undefined);
+      assert.equal(zonedDateTime().placeholder, undefined);
+      assert.equal(plainDate().placeholder, undefined);
+      assert.equal(plainTime().placeholder, undefined);
+      assert.equal(plainDateTime().placeholder, undefined);
+      assert.equal(plainYearMonth().placeholder, undefined);
+      assert.equal(plainMonthDay().placeholder, undefined);
+    } finally {
+      Object.defineProperty(globalThis, "Temporal", {
+        value: originalTemporal,
+        configurable: true,
+      });
+    }
   });
 });

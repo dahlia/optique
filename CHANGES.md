@@ -10,6 +10,31 @@ To be released.
 
 ### @optique/core
 
+ -  Fixed shell completion suggestions for configured help and version options.
+    Completion requests now include root-level meta options such as `--help`
+    and `--version`, including plus-prefixed aliases such as `+h`, without
+    treating those options as active help/version requests inside the
+    completion payload.  These meta options are now suggested from empty
+    completion prompts and after subcommands using the current argument prefix.
+    Plus-prefixed parser options are now recognized as option-prefix
+    completions as well.
+
+ -  Fixed root-level help and version option completion so those meta options
+    are not suggested while completing an option value or after an options
+    terminator.  Option values that merely look like help or version options
+    no longer suppress later meta option suggestions, and configured
+    single-dash aliases such as `-help` now appear after a bare `-` prompt.
+    Root value options declared after command terms are now recognized while
+    completing their values as well.  Completion requests no longer parse the
+    same argument prefix twice when deciding whether to add root meta options.
+
+ -  Fixed dependency runtime resolution to preserve shared references to the
+    same deferred parser state.  Reused deferred nodes now resolve to the same
+    result object instead of distinct but structurally equal objects.
+
+ -  Fixed documentation-only meta option parsers to forward default values and
+    use the wrapped parser's own initial state when rendering help fragments.
+
  -  When an `object()` parser expects no CLI input (no options, commands, or
     arguments in its usage) and a required field fails the empty-buffer
     completion probe, the specific error from that field's `complete()` is now

@@ -16,7 +16,11 @@ import type {
 } from "@optique/core/context";
 import type { DocSection } from "@optique/core/doc";
 import { defineInheritedAnnotationParser } from "./internal/parser.ts";
-import type { ExecutionContext, Parser } from "@optique/core/parser";
+import {
+  createParserContext,
+  type ExecutionContext,
+  type Parser,
+} from "@optique/core/parser";
 import {
   type RunOptions,
   runParser,
@@ -44,7 +48,7 @@ import {
 } from "@optique/core/primitives";
 import type { Program } from "@optique/core/program";
 import type { OptionName } from "@optique/core/usage";
-import type { ValueParser } from "@optique/core/valueparser";
+import type { DeferredMap, ValueParser } from "@optique/core/valueparser";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -82,6 +86,213 @@ function getRuntimeExtractPhase2SeedKey(): symbol {
   );
   assert.ok(key, "expected command() to expose extractPhase2SeedKey");
   return key;
+}
+
+function createPhaseTwoSeedParser(
+  tokenKey: symbol,
+  seed: {
+    readonly value: unknown;
+    readonly deferred?: true;
+    readonly deferredKeys?: DeferredMap;
+  },
+): Parser<"sync", unknown, undefined> {
+  return {
+    mode: "sync",
+    $valueType: [] as readonly unknown[],
+    $stateType: [] as readonly undefined[],
+    priority: 0,
+    usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse(context) {
+      return {
+        success: true as const,
+        next: context,
+        consumed: [],
+      };
+    },
+    complete(state) {
+      const token = getAnnotations(state)?.[tokenKey];
+      if (typeof token === "string") {
+        return {
+          success: true as const,
+          value: `phase2:${token}`,
+        };
+      }
+      return {
+        success: true as const,
+        value: seed.value,
+        ...(seed.deferred ? { deferred: true as const } : {}),
+        ...(seed.deferredKeys == null
+          ? {}
+          : { deferredKeys: seed.deferredKeys }),
+      };
+    },
+    *suggest() {},
+    getDocFragments() {
+      return { fragments: [] };
+    },
+  };
+}
+
+function createSyncStallingPhaseTwoParser(
+  tokenKey: symbol,
+): Parser<"sync", string, string | undefined> {
+  return {
+    mode: "sync",
+    $valueType: [] as readonly string[],
+    $stateType: [] as readonly (string | undefined)[],
+    priority: 0,
+    usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse(context) {
+      const token = getAnnotations(context.state)?.[tokenKey];
+      if (typeof token !== "string" || context.buffer.length < 1) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      }
+      return {
+        success: true as const,
+        next: createParserContext(
+          {
+            buffer: context.buffer.slice(1),
+            state: token,
+            optionsTerminated: context.optionsTerminated,
+          },
+          context.exec!,
+        ),
+        consumed: [context.buffer[0]!],
+      };
+    },
+    complete(state) {
+      return {
+        success: true as const,
+        value: state ?? "phase1",
+      };
+    },
+    *suggest() {},
+    getDocFragments() {
+      return { fragments: [] };
+    },
+  };
+}
+
+function createAsyncStallingPhaseTwoParser(
+  tokenKey: symbol,
+): Parser<"async", string, string | undefined> {
+  return {
+    mode: "async",
+    $valueType: [] as readonly string[],
+    $stateType: [] as readonly (string | undefined)[],
+    priority: 0,
+    usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse(context) {
+      const token = getAnnotations(context.state)?.[tokenKey];
+      if (typeof token !== "string" || context.buffer.length < 1) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      }
+      return Promise.resolve({
+        success: true as const,
+        next: createParserContext(
+          {
+            buffer: context.buffer.slice(1),
+            state: token,
+            optionsTerminated: context.optionsTerminated,
+          },
+          context.exec!,
+        ),
+        consumed: [context.buffer[0]!],
+      });
+    },
+    complete(state) {
+      return Promise.resolve({
+        success: true as const,
+        value: state ?? "phase1",
+      });
+    },
+    async *suggest() {},
+    getDocFragments() {
+      return { fragments: [] };
+    },
+  };
+}
+
+function countSyncParserParses<T, S>(
+  parser: Parser<"sync", T, S>,
+  onParse: () => void,
+): Parser<"sync", T, S> {
+  return {
+    ...parser,
+    parse(context) {
+      onParse();
+      return parser.parse(context);
+    },
+  };
+}
+
+function countAsyncParserParses<T, S>(
+  parser: Parser<"async", T, S>,
+  onParse: () => void,
+): Parser<"async", T, S> {
+  return {
+    ...parser,
+    parse(context) {
+      onParse();
+      return parser.parse(context);
+    },
+  };
+}
+
+function createPhaseTwoCaptureContext(
+  tokenKey: symbol,
+  getToken: (parsed: unknown) => string,
+): SourceContext {
+  return {
+    id: tokenKey,
+    phase: "two-pass",
+    getAnnotations(request?: unknown) {
+      if (isPhase1ContextRequest(request)) return {};
+      return { [tokenKey]: getToken(getPhase2ContextParsed(request)) };
+    },
+  };
+}
+
+type PhaseTwoScrubbedConfig = {
+  readonly config: string;
+  readonly prompt: unknown;
+  readonly nested: {
+    readonly source: string;
+    readonly prompt: unknown;
+  };
+  readonly list: readonly unknown[];
+  readonly [key: symbol]: unknown;
+};
+
+function isPhaseTwoScrubbedConfig(
+  value: unknown,
+): value is PhaseTwoScrubbedConfig {
+  return value != null &&
+    typeof value === "object" &&
+    "config" in value &&
+    (value as { readonly config?: unknown }).config === "optique.json" &&
+    "nested" in value &&
+    (value as { readonly nested?: unknown }).nested != null &&
+    typeof (value as { readonly nested?: unknown }).nested === "object" &&
+    "list" in value &&
+    Array.isArray((value as { readonly list?: unknown }).list);
 }
 
 describe("runParser", () => {
@@ -3561,6 +3772,1041 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(suggestions.includes("--format"));
     });
 
+    it("should include meta options in completion suggestions", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "--"], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--verbose"));
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should include meta options in empty root completion suggestions", () => {
+      const parser = command("build", option("--target", string()));
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", ""], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("build"));
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should include meta options after subcommands", () => {
+      const parser = command(
+        "build",
+        object({
+          target: option("--target", string()),
+        }),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "build", "--"], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--target"));
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should not add meta options while completing an option value", () => {
+      const parser = command(
+        "build",
+        object({
+          output: option("--output", string()),
+        }),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "build",
+        "--output",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should not add meta options for option-like option values", () => {
+      const parser = command(
+        "build",
+        object({
+          output: option("--output", string()),
+        }),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "build",
+        "--output",
+        "--",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should not add meta options after an options terminator", () => {
+      const parser = command("build", option("--target", string()));
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "build", "--", ""], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should add meta options after a completed equals-form option value", () => {
+      const parser = command(
+        "build",
+        object({
+          output: option("--output", string()),
+        }),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "build",
+        "--output=dist",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should add meta options after a terminator-like option value", () => {
+      const parser = command(
+        "build",
+        object({
+          output: option("--output", string()),
+        }),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "build",
+        "--output",
+        "--",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should add meta options after an option value matching a meta name", () => {
+      const parser = command(
+        "build",
+        object({
+          output: option("--output", string()),
+        }),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "build",
+        "--output",
+        "--help",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should not add meta options while completing a root option value", () => {
+      const parser = object({
+        output: option("--output", string()),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "--output", ""], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should parse sync completion arguments only once", () => {
+      let parseCalls = 0;
+      const parser = countSyncParserParses(
+        object({ output: option("--output", string()) }),
+        () => {
+          parseCalls++;
+        },
+      );
+
+      runParser(parser, "myapp", ["completion", "bash", "--output", ""], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: () => {},
+      });
+
+      assert.equal(parseCalls, 2);
+    });
+
+    it("should parse async completion arguments only once", async () => {
+      let parseCalls = 0;
+      const asyncStringParser: ValueParser<"async", string> = {
+        mode: "async",
+        metavar: "TEXT",
+        parse(input: string) {
+          return Promise.resolve({ success: true as const, value: input });
+        },
+        format(value: string) {
+          return value;
+        },
+        async *suggest(prefix: string) {
+          yield { kind: "literal" as const, text: prefix };
+        },
+        placeholder: "",
+      };
+      const parser = countAsyncParserParses(
+        option("--output", asyncStringParser),
+        () => {
+          parseCalls++;
+        },
+      );
+
+      await runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "--output",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: () => {},
+      });
+
+      assert.equal(parseCalls, 2);
+    });
+
+    it("should not add meta options while completing a root option value after a command term", () => {
+      const parser = object({
+        command: command(
+          "build",
+          object({ target: option("--target", string()) }),
+        ),
+        output: option("--output", string()),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "--output", ""], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should not add meta options while completing a root option value sharing a command option name", () => {
+      const parser = object({
+        command: command("build", object({ output: flag("--output") })),
+        output: option("--output", string()),
+      }, { allowDuplicates: true });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "--output", ""], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should add meta options after a flag sharing a value option name", () => {
+      const parser = or(
+        command("build", object({ target: flag("--target") })),
+        command("deploy", object({ target: option("--target", string()) })),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "build",
+        "--target",
+        "--",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should honor a terminator after a flag sharing a value option name", () => {
+      const parser = or(
+        command("build", object({ target: flag("--target") })),
+        command("deploy", object({ target: option("--target", string()) })),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "build",
+        "--target",
+        "--",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should not add meta options while completing a selected value option sharing a flag name", () => {
+      const parser = or(
+        command("build", object({ target: option("--target", string()) })),
+        command("deploy", object({ target: flag("--target") })),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "build",
+        "--target",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should add meta options after an ambiguous exclusive flag option", () => {
+      const parser = command(
+        "tool",
+        or(
+          object({ target: flag("--target") }),
+          object({ target: option("--target", string()) }),
+        ),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "tool",
+        "--target",
+        "--",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should honor a terminator after an ambiguous exclusive flag option", () => {
+      const parser = command(
+        "tool",
+        or(
+          object({ target: flag("--target") }),
+          object({ target: option("--target", string()) }),
+        ),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "tool",
+        "--target",
+        "--",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should not treat nested command options as current value slots", () => {
+      const parser = command(
+        "outer",
+        command("inner", option("--output", string())),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "outer",
+        "--output",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should not add meta options while completing a sibling option before a nested command", () => {
+      const parser = command(
+        "outer",
+        object({
+          inner: command("inner", object({})),
+          global: option("--global", string()),
+        }),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "outer",
+        "--global",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should not treat unselected branch options as current value slots", () => {
+      const parser = command(
+        "tool",
+        or(
+          command(
+            "deploy",
+            object({ target: option("--target", string()) }),
+          ),
+          command("status", object({})),
+        ),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "tool",
+        "--target",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should not add meta options while completing an option from a duplicate command branch", () => {
+      const parser = or(
+        command("tool", object({ a: option("--a", string()) })),
+        command("tool", object({ b: option("--b", string()) })),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "tool",
+        "--b",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should not treat nested duplicate command branch options as current value slots", () => {
+      const parser = or(
+        command("tool", command("deploy", option("--target", string()))),
+        command("tool", command("status", object({}))),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", [
+        "completion",
+        "bash",
+        "tool",
+        "--target",
+        "",
+      ], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should filter meta options by the current argument prefix", () => {
+      const parser = command(
+        "build",
+        object({
+          target: option("--target", string()),
+        }),
+      );
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "build", "--h"], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should not duplicate user options that shadow meta options in completion suggestions", () => {
+      const parser = object({
+        help: option("--help", string()),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "--h"], {
+        help: { option: true, onShow: () => "help" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.equal(
+        suggestions.filter((suggestion) => suggestion === "--help").length,
+        1,
+      );
+    });
+
+    it("should respect hidden meta options in completion suggestions", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "--"], {
+        help: { option: { hidden: true }, onShow: () => "help" },
+        version: { option: { hidden: true }, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--verbose"));
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should keep long meta options out of bare short-option completion", () => {
+      const parser = object({
+        verbose: option("-v"),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "-"], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("-v"));
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should include short meta aliases in bare short-option completion", () => {
+      const parser = object({
+        verbose: option("-v"),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "-"], {
+        help: { option: { names: ["-h", "--help"] }, onShow: () => "help" },
+        version: {
+          option: { names: ["-V", "--version"] },
+          value: "1.0.0",
+        },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("-v"));
+      assert.ok(suggestions.includes("-h"));
+      assert.ok(suggestions.includes("-V"));
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should include single-dash meta aliases in bare short-option completion", () => {
+      const parser = object({
+        verbose: option("-v"),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "-"], {
+        help: {
+          option: { names: ["-help", "--help"] },
+          onShow: () => "help",
+        },
+        version: {
+          option: { names: ["-version", "--version"] },
+          value: "1.0.0",
+        },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("-v"));
+      assert.ok(suggestions.includes("-help"));
+      assert.ok(suggestions.includes("-version"));
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should include slash-prefixed meta options in slash completion", () => {
+      const parser = object({
+        verbose: option("/v"),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "/"], {
+        help: { option: { names: ["/?"] }, onShow: () => "help" },
+        version: { option: { names: ["/V"] }, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("/v"));
+      assert.ok(suggestions.includes("/?"));
+      assert.ok(suggestions.includes("/V"));
+    });
+
+    it("should include plus-prefixed options in plus completion", () => {
+      const parser = object({
+        verbose: option("+verbose"),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "+"], {
+        help: { option: { names: ["+h"] }, onShow: () => "help" },
+        version: { option: { names: ["+V"] }, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("+verbose"));
+      assert.ok(suggestions.includes("+h"));
+      assert.ok(suggestions.includes("+V"));
+    });
+
+    it("should filter meta options by completion prefix", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "--h"], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should not add meta options for non-option root completion", () => {
+      const parser = command("build", option("--verbose"));
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "b"], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("build"));
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should preserve file suggestions while adding root meta options", () => {
+      const parser: Parser<"sync", string, undefined> = {
+        mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: true,
+        initialState: undefined,
+        parse() {
+          return { success: false, consumed: 0, error: message`missing` };
+        },
+        complete() {
+          return { success: false, error: message`missing` };
+        },
+        *suggest() {
+          yield { kind: "file", type: "file", pattern: "--" };
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "--"], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(
+        suggestions.some((suggestion) =>
+          suggestion.startsWith("__FILE__:file")
+        ),
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should not let meta options in completion payload change parser context", () => {
+      const parser = command(
+        "build",
+        object({
+          verbose: option("--verbose"),
+        }),
+      );
+
+      for (
+        const completionArgs of [
+          ["completion", "bash", "build", "--help", ""],
+          ["completion", "bash", "build", "--version", ""],
+        ]
+      ) {
+        let completionOutput = "";
+
+        runParser(parser, "myapp", completionArgs, {
+          help: { option: true, onShow: () => "help" },
+          version: { option: true, value: "1.0.0" },
+          completion: { command: true },
+          stdout: (text) => {
+            completionOutput += text;
+          },
+        });
+
+        const suggestions = completionOutput.split("\n").filter((s) =>
+          s.length > 0
+        );
+        assert.deepEqual(suggestions, []);
+      }
+    });
+
     it("should provide completion suggestions for zsh format", () => {
       const parser = object({
         verbose: option("--verbose"),
@@ -5779,6 +7025,200 @@ describe("runWith", () => {
       assert.deepEqual(result, { name: "default" });
     });
 
+    it("should hide deferred non-plain phase-two seed values from contexts", async () => {
+      const tokenKey = Symbol.for("@test/phase-two-hide-non-plain-leaf");
+      let phase2Parsed: unknown = "not-called";
+      const parser = createPhaseTwoSeedParser(tokenKey, {
+        value: new URL("https://example.com/config.json"),
+        deferred: true,
+        deferredKeys: new Map(),
+      });
+      const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
+        phase2Parsed = parsed;
+        return parsed === undefined ? "hidden" : "visible";
+      });
+
+      const result = await runWith(parser, "test", [context], { args: [] });
+
+      assert.equal(phase2Parsed, undefined);
+      assert.equal(result, "phase2:hidden");
+    });
+
+    it("should hide deferred class instance seed values from contexts", async () => {
+      class DeferredSecret {
+        constructor(readonly token: string) {}
+      }
+
+      const tokenKey = Symbol.for("@test/phase-two-hide-class-leaf");
+      let phase2Parsed: unknown = "not-called";
+      const parser = createPhaseTwoSeedParser(tokenKey, {
+        value: new DeferredSecret("prompt-placeholder"),
+        deferred: true,
+        deferredKeys: new Map<PropertyKey, DeferredMap | null>([
+          ["token", null],
+        ]),
+      });
+      const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
+        phase2Parsed = parsed;
+        return parsed === undefined ? "hidden" : "visible";
+      });
+
+      const result = await runWith(parser, "test", [context], { args: [] });
+
+      assert.equal(phase2Parsed, undefined);
+      assert.equal(result, "phase2:hidden");
+    });
+
+    it("should scrub only deferred fields from structured phase-two seed values", async () => {
+      const tokenKey = Symbol.for("@test/phase-two-scrub-structured");
+      const symbolKey = Symbol("source");
+      const seedValue = {
+        config: "optique.json",
+        prompt: "prompt-placeholder",
+        nested: {
+          source: "env",
+          prompt: "prompt-placeholder",
+        },
+        list: ["prompt-placeholder", "kept"],
+        [symbolKey]: "symbol-value",
+      };
+      const deferredKeys = new Map<PropertyKey, DeferredMap | null>([
+        ["prompt", null],
+        [
+          "nested",
+          new Map<PropertyKey, DeferredMap | null>([
+            ["prompt", null],
+          ]),
+        ],
+        [
+          "list",
+          new Map<PropertyKey, DeferredMap | null>([
+            [0, null],
+          ]),
+        ],
+      ]);
+      let phase2Parsed: unknown;
+      const parser = createPhaseTwoSeedParser(tokenKey, {
+        value: seedValue,
+        deferred: true,
+        deferredKeys,
+      });
+      const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
+        phase2Parsed = parsed;
+        return isPhaseTwoScrubbedConfig(parsed) ? parsed.config : "missing";
+      });
+
+      const result = await runWith(parser, "test", [context], { args: [] });
+
+      assert.ok(isPhaseTwoScrubbedConfig(phase2Parsed));
+      assert.equal(phase2Parsed.config, "optique.json");
+      assert.equal(phase2Parsed.prompt, undefined);
+      assert.deepEqual(phase2Parsed.nested, {
+        source: "env",
+        prompt: undefined,
+      });
+      assert.deepEqual(phase2Parsed.list, [undefined, "kept"]);
+      assert.equal(phase2Parsed[symbolKey], "symbol-value");
+      assert.equal(result, "phase2:optique.json");
+    });
+
+    it("should hide phase-two seed object shells when every data field is deferred", async () => {
+      const tokenKey = Symbol.for("@test/phase-two-hide-object-shell");
+      let phase2Parsed: unknown = "not-called";
+      const parser = createPhaseTwoSeedParser(tokenKey, {
+        value: { prompt: "prompt-placeholder" },
+        deferred: true,
+        deferredKeys: new Map<PropertyKey, DeferredMap | null>([
+          ["prompt", null],
+        ]),
+      });
+      const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
+        phase2Parsed = parsed;
+        return parsed === undefined ? "hidden" : "visible";
+      });
+
+      const result = await runWith(parser, "test", [context], { args: [] });
+
+      assert.equal(phase2Parsed, undefined);
+      assert.equal(result, "phase2:hidden");
+    });
+
+    it("should hide phase-two seed array shells when every data item is deferred", async () => {
+      const tokenKey = Symbol.for("@test/phase-two-hide-array-shell");
+      let phase2Parsed: unknown = "not-called";
+      const parser = createPhaseTwoSeedParser(tokenKey, {
+        value: ["prompt-placeholder"],
+        deferred: true,
+        deferredKeys: new Map<PropertyKey, DeferredMap | null>([
+          [0, null],
+        ]),
+      });
+      const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
+        phase2Parsed = parsed;
+        return parsed === undefined ? "hidden" : "visible";
+      });
+
+      const result = await runWith(parser, "test", [context], { args: [] });
+
+      assert.equal(phase2Parsed, undefined);
+      assert.equal(result, "phase2:hidden");
+    });
+
+    it("should hide phase-two seed values when deferred metadata is stale", async () => {
+      const tokenKey = Symbol.for("@test/phase-two-hide-stale-keys");
+      let phase2Parsed: unknown = "not-called";
+      const parser = createPhaseTwoSeedParser(tokenKey, {
+        value: { config: "optique.json" },
+        deferred: true,
+        deferredKeys: new Map<PropertyKey, DeferredMap | null>([
+          ["removed", null],
+        ]),
+      });
+      const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
+        phase2Parsed = parsed;
+        return parsed === undefined ? "hidden" : "visible";
+      });
+
+      const result = await runWith(parser, "test", [context], { args: [] });
+
+      assert.equal(phase2Parsed, undefined);
+      assert.equal(result, "phase2:hidden");
+    });
+
+    it("should use sync phase-two seeds when parsers stop before consuming input", () => {
+      const tokenKey = Symbol.for("@test/sync-stalled-phase-two-seed");
+      const parser = createSyncStallingPhaseTwoParser(tokenKey);
+      let phase2Parsed: unknown = "not-called";
+      const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
+        phase2Parsed = parsed;
+        return parsed === "phase1" ? "phase2" : "missing";
+      });
+
+      const result = runWithSync(parser, "test", [context], {
+        args: ["--from-context"],
+      });
+
+      assert.equal(phase2Parsed, "phase1");
+      assert.equal(result, "phase2");
+    });
+
+    it("should use async phase-two seeds when parsers stop before consuming input", async () => {
+      const tokenKey = Symbol.for("@test/async-stalled-phase-two-seed");
+      const parser = createAsyncStallingPhaseTwoParser(tokenKey);
+      let phase2Parsed: unknown = "not-called";
+      const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
+        phase2Parsed = parsed;
+        return parsed === "phase1" ? "phase2" : "missing";
+      });
+
+      const result = await runWithAsync(parser, "test", [context], {
+        args: ["--from-context"],
+      });
+
+      assert.equal(phase2Parsed, "phase1");
+      assert.equal(result, "phase2");
+    });
+
     it("should handle mixed single-pass and two-pass contexts", async () => {
       const envKey = Symbol.for("@test/env");
       const configKey = Symbol.for("@test/config");
@@ -7641,6 +9081,33 @@ describe("runWithSync", () => {
 
       runWithSync(parser, "test", [context], { args: [] });
       assert.deepEqual(disposed, ["async"]);
+    });
+
+    it("should reject Promise-returning Symbol.asyncDispose in sync mode", () => {
+      const context: SourceContext = {
+        id: Symbol.for("@test/sync-async-dispose-promise"),
+        phase: "single-pass",
+        getAnnotations() {
+          return {
+            [Symbol.for("@test/sync-async-dispose-promise")]: { value: true },
+          };
+        },
+        [Symbol.asyncDispose]() {
+          return Promise.resolve();
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      assert.throws(
+        () => runWithSync(parser, "test", [context], { args: [] }),
+        {
+          name: "TypeError",
+          message: /returned a Promise from Symbol\.asyncDispose in sync mode/u,
+        },
+      );
     });
 
     it("should dispose remaining contexts when one sync dispose fails", () => {

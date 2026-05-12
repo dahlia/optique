@@ -265,6 +265,24 @@ describe("git parsers", () => {
       }
     });
 
+    it("should list available tags in the default missing-tag error", async () => {
+      const testRepoDir = await createTestRepoWithBranchesAndTags();
+      try {
+        const parser = gitTag({ dir: testRepoDir });
+        const result = await parser.parse("v9.9.9");
+
+        assert.ok(!result.success);
+        if (!result.success) {
+          const text = formatMessage(result.error);
+          assert.match(text, /Tag "v9\.9\.9" does not exist/);
+          assert.match(text, /Available tags:/);
+          assert.match(text, /v1\.0\.0/);
+        }
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
     it("should parse tags with prerelease versions", async () => {
       const testRepoDir = await createTestRepoWithBranchesAndTags();
       try {
@@ -381,6 +399,32 @@ describe("git parsers", () => {
       }
     });
 
+    it("should list available remotes in the default error", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        await isomorphicGit.addRemote({
+          fs,
+          dir: testRepoDir,
+          remote: "origin",
+          url: "https://example.com/repo.git",
+          force: true,
+        });
+
+        const parser = gitRemote({ dir: testRepoDir });
+        const result = await parser.parse("upstream");
+
+        assert.ok(!result.success);
+        if (!result.success) {
+          assert.equal(
+            formatMessage(result.error),
+            'Remote "upstream" does not exist. Available remotes: "origin"',
+          );
+        }
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
     it("should have async mode", () => {
       const parser = gitRemote({ dir: "/tmp/dummy" });
       assert.equal(parser.mode, "async");
@@ -479,6 +523,32 @@ describe("git parsers", () => {
       }
     });
 
+    it("should list available remotes when a remote branch remote is missing", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        await isomorphicGit.addRemote({
+          fs,
+          dir: testRepoDir,
+          remote: "origin",
+          url: "https://example.com/repo.git",
+          force: true,
+        });
+
+        const parser = gitRemoteBranch("upstream", { dir: testRepoDir });
+        const result = await parser.parse("main");
+
+        assert.ok(!result.success);
+        if (!result.success) {
+          assert.equal(
+            formatMessage(result.error),
+            'Remote "upstream" does not exist. Available remotes: "origin"',
+          );
+        }
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
     it("should report missing branch when remote exists but branch does not", async () => {
       const testRepoDir = await createTestRepo();
       try {
@@ -497,6 +567,47 @@ describe("git parsers", () => {
           const msg = formatMessage(result.error);
           assert.match(msg, /Remote branch/);
           assert.match(msg, /nonexistent/);
+        }
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
+    it("should list available remote branches in the default error", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        await isomorphicGit.addRemote({
+          fs,
+          dir: testRepoDir,
+          remote: "origin",
+          url: "https://example.com/repo.git",
+          force: true,
+        });
+        const head = await isomorphicGit.resolveRef({
+          fs,
+          dir: testRepoDir,
+          ref: "HEAD",
+        });
+        await fs.mkdir(join(testRepoDir, ".git", "refs", "remotes", "origin"), {
+          recursive: true,
+        });
+        await fs.writeFile(
+          join(testRepoDir, ".git", "refs", "remotes", "origin", "main"),
+          `${head}\n`,
+        );
+
+        const parser = gitRemoteBranch("origin", { dir: testRepoDir });
+        const result = await parser.parse("release");
+
+        assert.ok(!result.success);
+        if (!result.success) {
+          const text = formatMessage(result.error);
+          assert.match(
+            text,
+            /Remote branch "release" does not exist on remote "origin"/,
+          );
+          assert.match(text, /Available branches:/);
+          assert.match(text, /main/);
         }
       } finally {
         await cleanupTestRepo(testRepoDir);
@@ -1175,6 +1286,40 @@ describe("git parsers", () => {
           mainSuggestions.length,
           1,
           "Should suggest 'main' only once",
+        );
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
+    it("should not suggest duplicate refs when a branch matches a short commit", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        const oid = await isomorphicGit.resolveRef({
+          fs,
+          dir: testRepoDir,
+          ref: "main",
+        });
+        const shortOid = oid.slice(0, 7);
+        await isomorphicGit.branch({
+          fs,
+          dir: testRepoDir,
+          ref: shortOid,
+        });
+
+        const parser = gitRef({ dir: testRepoDir });
+        const suggestions: Suggestion[] = [];
+        for await (const s of parser.suggest!(shortOid)) {
+          suggestions.push(s);
+        }
+
+        assert.deepEqual(
+          suggestions
+            .filter((s): s is { kind: "literal"; text: string } =>
+              s.kind === "literal" && s.text === shortOid
+            )
+            .map((s) => s.text),
+          [shortOid],
         );
       } finally {
         await cleanupTestRepo(testRepoDir);

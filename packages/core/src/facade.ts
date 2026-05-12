@@ -38,17 +38,22 @@ import {
   type Parser,
   type ParserContext,
   type ParserResult,
-  suggest,
-  suggestAsync,
+  type Suggestion,
 } from "./parser.ts";
 import { dispatchByMode } from "./internal/mode-dispatch.ts";
-import { createDependencyRuntimeContext } from "./dependency-runtime.ts";
+import {
+  collectExplicitSourceValues,
+  collectExplicitSourceValuesAsync,
+  createDependencyRuntimeContext,
+  type RuntimeNode,
+} from "./dependency-runtime.ts";
 import { createInputTrace } from "./input-trace.ts";
 import { completeOrExtractPhase2Seed } from "./phase2-seed.ts";
 import { argument, command, constant, flag, option } from "./primitives.ts";
 import {
   formatUsage,
   type HiddenVisibility,
+  isSuggestionHidden,
   type OptionName,
   type Usage,
 } from "./usage.ts";
@@ -74,6 +79,8 @@ import type {
 } from "./context.ts";
 
 export type { ParserValuePlaceholder, SourceContext, SourceContextRequest };
+
+type LiteralSuggestion = Extract<Suggestion, { readonly kind: "literal" }>;
 
 type SuppressedErrorConstructor = new (
   error: unknown,
@@ -927,246 +934,65 @@ interface MetaCommandGroups {
   readonly completionOptionGroup?: string;
 }
 
+function createMetaOptionDocParser(
+  source: Parser<"sync", unknown, unknown>,
+): Parser<"sync", null, null> {
+  return {
+    mode: "sync",
+    $valueType: [],
+    $stateType: [],
+    priority: 200,
+    usage: source.usage,
+    leadingNames: source.leadingNames,
+    acceptingAnyToken: false,
+    initialState: null,
+    parse: () => ({
+      success: false,
+      error: message`Documentation-only meta option.`,
+      consumed: 0,
+    }),
+    complete: (state) => ({ success: true, value: state }),
+    suggest: function* () {},
+    getDocFragments: (_state, defaultValue) =>
+      source.getDocFragments(
+        { kind: "available", state: source.initialState },
+        defaultValue,
+      ),
+  };
+}
+
 function combineWithHelpVersion(
   originalParser: Parser<Mode, unknown, unknown>,
   helpParsers: HelpParsers,
   versionParsers: VersionParsers,
   completionParsers: CompletionParsers,
   groups?: MetaCommandGroups,
-  helpOptionNames?: readonly string[],
-  versionOptionNames?: readonly string[],
 ): Parser<Mode, unknown, unknown> {
   const parsers: Parser<Mode, unknown, unknown>[] = [];
-
-  const effectiveHelpOptionNames = helpOptionNames ?? ["--help"];
-  const effectiveVersionOptionNames = versionOptionNames ?? ["--version"];
 
   // Add options FIRST - they are more specific and should have priority
 
   // Add help option (standalone) - accepts any mix of options and arguments
   if (helpParsers.helpOption) {
-    // Create a lenient help parser that accepts help flag anywhere
-    // and ignores all other options/arguments
-    const lenientHelpParser: Parser<"sync", unknown, unknown> = {
-      mode: "sync",
-      $valueType: [],
-      $stateType: [],
-      priority: 200, // Very high priority
-      usage: helpParsers.helpOption.usage,
-      leadingNames: helpParsers.helpOption.leadingNames,
-      acceptingAnyToken: false,
-      initialState: null,
-
-      parse(context) {
-        const { buffer, optionsTerminated } = context;
-
-        // If options are terminated (after --), don't match
-        if (optionsTerminated) {
-          return {
-            success: false,
-            error: message`Options terminated.`,
-            consumed: 0,
-          };
-        }
-
-        let helpFound = false;
-        let helpIndex = -1;
-
-        // Look for help option names and version option names to implement
-        // last-option-wins
-        let versionIndex = -1;
-        for (let i = 0; i < buffer.length; i++) {
-          if (buffer[i] === "--") break; // Stop at options terminator
-          if (effectiveHelpOptionNames.includes(buffer[i])) {
-            helpFound = true;
-            helpIndex = i;
-          }
-          if (effectiveVersionOptionNames.includes(buffer[i])) {
-            versionIndex = i;
-          }
-        }
-
-        // If both help and version options are present, but version comes
-        // last, don't match
-        if (helpFound && versionIndex > helpIndex) {
-          return {
-            success: false,
-            error: message`Version option wins.`,
-            consumed: 0,
-          };
-        }
-
-        // Multiple help options is OK - just show help
-
-        if (helpFound) {
-          // Extract command names that appear before the help option
-          const commands: string[] = [];
-          for (let i = 0; i < helpIndex; i++) {
-            const arg = buffer[i];
-            // Include non-option arguments as commands (don't start with -)
-            if (!arg.startsWith("-")) {
-              commands.push(arg);
-            }
-          }
-
-          // Consume all remaining arguments and return success
-          return {
-            success: true,
-            next: {
-              ...context,
-              buffer: [],
-              state: {
-                [metaResultBrand]: true,
-                help: true,
-                version: false,
-                completion: false,
-                commands,
-                helpFlag: true,
-              },
-            },
-            consumed: buffer.slice(0),
-          };
-        }
-
-        // Help option not found
-        return {
-          success: false,
-          error: message`Flag ${
-            optionName(effectiveHelpOptionNames[0])
-          } not found.`,
-          consumed: 0,
-        };
-      },
-
-      complete(state) {
-        return { success: true, value: state };
-      },
-
-      *suggest(_context, prefix) {
-        for (const name of effectiveHelpOptionNames) {
-          if (name.startsWith(prefix)) {
-            yield { kind: "literal", text: name } as const;
-          }
-        }
-      },
-
-      getDocFragments(state) {
-        return helpParsers.helpOption?.getDocFragments(state) ??
-          { fragments: [] };
-      },
-    };
+    const helpOptionDocParser = createMetaOptionDocParser(
+      helpParsers.helpOption,
+    );
 
     const wrappedHelp = groups?.helpOptionGroup
-      ? group(groups.helpOptionGroup, lenientHelpParser)
-      : lenientHelpParser;
+      ? group(groups.helpOptionGroup, helpOptionDocParser)
+      : helpOptionDocParser;
     parsers.push(wrappedHelp);
   }
 
   // Add version option (standalone) - accepts any mix of options and arguments
   if (versionParsers.versionOption) {
-    // Create a lenient version parser that accepts version flag anywhere
-    // and ignores all other options/arguments
-    const lenientVersionParser: Parser<"sync", unknown, unknown> = {
-      mode: "sync",
-      $valueType: [],
-      $stateType: [],
-      priority: 200, // Very high priority
-      usage: versionParsers.versionOption.usage,
-      leadingNames: versionParsers.versionOption.leadingNames,
-      acceptingAnyToken: false,
-      initialState: null,
-
-      parse(context) {
-        const { buffer, optionsTerminated } = context;
-
-        // If options are terminated (after --), don't match
-        if (optionsTerminated) {
-          return {
-            success: false,
-            error: message`Options terminated.`,
-            consumed: 0,
-          };
-        }
-
-        let versionFound = false;
-        let versionIndex = -1;
-
-        // Look for version option names and help option names to implement
-        // last-option-wins
-        let helpIndex = -1;
-        for (let i = 0; i < buffer.length; i++) {
-          if (buffer[i] === "--") break; // Stop at options terminator
-          if (effectiveVersionOptionNames.includes(buffer[i])) {
-            versionFound = true;
-            versionIndex = i;
-          }
-          if (effectiveHelpOptionNames.includes(buffer[i])) {
-            helpIndex = i;
-          }
-        }
-
-        // If both version and help options are present, but help comes last,
-        // don't match
-        if (versionFound && helpIndex > versionIndex) {
-          return {
-            success: false,
-            error: message`Help option wins.`,
-            consumed: 0,
-          };
-        }
-
-        // Multiple version options is OK - just show version
-
-        if (versionFound) {
-          // Consume all remaining arguments and return success
-          return {
-            success: true,
-            next: {
-              ...context,
-              buffer: [],
-              state: {
-                [metaResultBrand]: true,
-                help: false,
-                version: true,
-                completion: false,
-                versionFlag: true,
-              },
-            },
-            consumed: buffer.slice(0),
-          };
-        }
-
-        // Version option not found
-        return {
-          success: false,
-          error: message`Flag ${
-            optionName(effectiveVersionOptionNames[0])
-          } not found.`,
-          consumed: 0,
-        };
-      },
-
-      complete(state) {
-        return { success: true, value: state };
-      },
-
-      *suggest(_context, prefix) {
-        for (const name of effectiveVersionOptionNames) {
-          if (name.startsWith(prefix)) {
-            yield { kind: "literal", text: name } as const;
-          }
-        }
-      },
-
-      getDocFragments(state) {
-        return versionParsers.versionOption?.getDocFragments(state) ??
-          { fragments: [] };
-      },
-    };
+    const versionOptionDocParser = createMetaOptionDocParser(
+      versionParsers.versionOption,
+    );
 
     const wrappedVersion = groups?.versionOptionGroup
-      ? group(groups.versionOptionGroup, lenientVersionParser)
-      : lenientVersionParser;
+      ? group(groups.versionOptionGroup, versionOptionDocParser)
+      : versionOptionDocParser;
     parsers.push(wrappedVersion);
   }
 
@@ -1700,6 +1526,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
   completionOptionDisplayName?: string,
   isOptionMode?: boolean,
   sectionOrder?: (a: DocSection, b: DocSection) => number,
+  rootOptionSuggestions: readonly LiteralSuggestion[] = [],
 ): ModeValue<M, THelp | TError> {
   const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
@@ -1797,7 +1624,17 @@ function handleCompletion<M extends Mode, THelp, TError>(
     parser.mode,
     () => {
       const syncParser = parser as Parser<"sync", unknown, unknown>;
-      const suggestions = suggest(syncParser, args as [string, ...string[]]);
+      const completionSuggestions = getSyncCompletionSuggestions(
+        syncParser,
+        args,
+        rootOptionSuggestions,
+      );
+      const suggestions = withRootOptionSuggestions(
+        completionSuggestions.suggestions,
+        args,
+        rootOptionSuggestions,
+        completionSuggestions.argumentContext,
+      );
       for (const chunk of shell.encodeSuggestions(suggestions)) {
         stdout(chunk);
       }
@@ -1808,16 +1645,530 @@ function handleCompletion<M extends Mode, THelp, TError>(
       return result;
     },
     async () => {
-      const suggestions = await suggestAsync(
-        parser as Parser<"async", unknown, unknown>,
-        args as [string, ...string[]],
+      const asyncParser = parser as Parser<"async", unknown, unknown>;
+      const completionSuggestions = await getAsyncCompletionSuggestions(
+        asyncParser,
+        args,
+        rootOptionSuggestions,
       );
-      for (const chunk of shell.encodeSuggestions(suggestions)) {
+      for (
+        const chunk of shell.encodeSuggestions(
+          withRootOptionSuggestions(
+            completionSuggestions.suggestions,
+            args,
+            rootOptionSuggestions,
+            completionSuggestions.argumentContext,
+          ),
+        )
+      ) {
         stdout(chunk);
       }
       return callOnCompletion(0);
     },
   );
+}
+
+function withRootOptionSuggestions(
+  suggestions: readonly Suggestion[],
+  args: readonly string[],
+  extraSuggestions: readonly LiteralSuggestion[],
+  argumentContext: CompletionArgumentContext,
+): readonly Suggestion[] {
+  if (extraSuggestions.length === 0) return suggestions;
+
+  const prefix = args.at(-1) ?? "";
+  if (argumentContext.optionsTerminated) {
+    return suggestions;
+  }
+
+  if (argumentContext.completingOptionValue) {
+    return suggestions;
+  }
+
+  if (argumentContext.completedRootOption) {
+    return suggestions;
+  }
+  if (
+    !(prefix === "" || prefix.startsWith("--") || prefix.startsWith("-") ||
+      prefix.startsWith("/") || prefix.startsWith("+"))
+  ) {
+    return suggestions;
+  }
+
+  const seen = new Set(
+    suggestions.flatMap((suggestion) =>
+      suggestion.kind === "literal" ? [suggestion.text] : []
+    ),
+  );
+  const combined = [...suggestions];
+  for (const suggestion of extraSuggestions) {
+    if (prefix === "-" && suggestion.text.startsWith("--")) continue;
+    if (prefix !== "" && !suggestion.text.startsWith(prefix)) continue;
+    if (seen.has(suggestion.text)) continue;
+    combined.push(suggestion);
+    seen.add(suggestion.text);
+  }
+  return combined;
+}
+
+interface CompletionArgumentContext {
+  readonly completingOptionValue: boolean;
+  readonly completedRootOption: boolean;
+  readonly optionsTerminated: boolean;
+}
+
+interface CompletionSuggestionResult {
+  readonly suggestions: readonly Suggestion[];
+  readonly argumentContext: CompletionArgumentContext;
+}
+
+interface CurrentOptionNames {
+  readonly value: Set<string>;
+  readonly flag: Set<string>;
+}
+
+function getSyncCompletionSuggestions(
+  parser: Parser<"sync", unknown, unknown>,
+  args: readonly string[],
+  rootOptionSuggestions: readonly LiteralSuggestion[],
+): CompletionSuggestionResult {
+  const prefix = args.at(-1) ?? "";
+  let context = createCompletionArgumentParserContext(
+    parser,
+    args.slice(0, -1),
+  );
+
+  while (context.buffer.length > 0) {
+    const result = parser.parse(context);
+    if (result instanceof Promise) {
+      throw new RunParserError("Synchronous parser returned async result.");
+    }
+    if (!result.success) {
+      const argumentContext = getFailedCompletionArgumentContext(
+        result,
+        context,
+        parser,
+        rootOptionSuggestions,
+      );
+      return {
+        suggestions: Array.from(
+          parser.suggest(withCompletionSuggestRuntime(parser, context), prefix),
+        ),
+        argumentContext,
+      };
+    }
+    const previousBuffer = context.buffer;
+    context = result.next;
+    if (isCompletionBufferUnchanged(previousBuffer, context.buffer)) {
+      return {
+        suggestions: [],
+        argumentContext: getCompletedCompletionArgumentContext(context),
+      };
+    }
+  }
+
+  return {
+    suggestions: Array.from(
+      parser.suggest(withCompletionSuggestRuntime(parser, context), prefix),
+    ),
+    argumentContext: getCompletedCompletionArgumentContext(context),
+  };
+}
+
+async function getAsyncCompletionSuggestions(
+  parser: Parser<"async", unknown, unknown>,
+  args: readonly string[],
+  rootOptionSuggestions: readonly LiteralSuggestion[],
+): Promise<CompletionSuggestionResult> {
+  const prefix = args.at(-1) ?? "";
+  let context = createCompletionArgumentParserContext(
+    parser,
+    args.slice(0, -1),
+  );
+
+  while (context.buffer.length > 0) {
+    const result = await parser.parse(context);
+    if (!result.success) {
+      const argumentContext = getFailedCompletionArgumentContext(
+        result,
+        context,
+        parser,
+        rootOptionSuggestions,
+      );
+      const suggestions: Suggestion[] = [];
+      const suggestContext = await withCompletionSuggestRuntimeAsync(
+        parser,
+        context,
+      );
+      for await (const suggestion of parser.suggest(suggestContext, prefix)) {
+        suggestions.push(suggestion);
+      }
+      return { suggestions, argumentContext };
+    }
+    const previousBuffer = context.buffer;
+    context = result.next;
+    if (isCompletionBufferUnchanged(previousBuffer, context.buffer)) {
+      return {
+        suggestions: [],
+        argumentContext: getCompletedCompletionArgumentContext(context),
+      };
+    }
+  }
+
+  const suggestions: Suggestion[] = [];
+  const suggestContext = await withCompletionSuggestRuntimeAsync(
+    parser,
+    context,
+  );
+  for await (const suggestion of parser.suggest(suggestContext, prefix)) {
+    suggestions.push(suggestion);
+  }
+  return {
+    suggestions,
+    argumentContext: getCompletedCompletionArgumentContext(context),
+  };
+}
+
+function getCompletedCompletionArgumentContext(
+  context: ParserContext<unknown>,
+): CompletionArgumentContext {
+  return {
+    completingOptionValue: false,
+    completedRootOption: false,
+    optionsTerminated: context.optionsTerminated,
+  };
+}
+
+function withCompletionSuggestRuntime<TState>(
+  parser: Parser<Mode, unknown, TState>,
+  context: ParserContext<TState>,
+): ParserContext<TState> {
+  const runtime = createDependencyRuntimeContext();
+  const nodes = getCompletionSuggestRuntimeNodes(
+    parser,
+    context.state,
+    context.exec?.path ?? [],
+  );
+  if (nodes.length > 0) {
+    collectExplicitSourceValues(nodes, runtime);
+  }
+  return addCompletionSuggestRuntime(context, runtime);
+}
+
+async function withCompletionSuggestRuntimeAsync<TState>(
+  parser: Parser<Mode, unknown, TState>,
+  context: ParserContext<TState>,
+): Promise<ParserContext<TState>> {
+  const runtime = createDependencyRuntimeContext();
+  const nodes = getCompletionSuggestRuntimeNodes(
+    parser,
+    context.state,
+    context.exec?.path ?? [],
+  );
+  if (nodes.length > 0) {
+    await collectExplicitSourceValuesAsync(nodes, runtime);
+  }
+  return addCompletionSuggestRuntime(context, runtime);
+}
+
+function addCompletionSuggestRuntime<TState>(
+  context: ParserContext<TState>,
+  runtime: ReturnType<typeof createDependencyRuntimeContext>,
+): ParserContext<TState> {
+  return {
+    ...context,
+    dependencyRegistry: runtime.registry,
+    exec: context.exec
+      ? {
+        ...context.exec,
+        dependencyRuntime: runtime,
+        dependencyRegistry: runtime.registry,
+      }
+      : undefined,
+  };
+}
+
+function getCompletionSuggestRuntimeNodes<TState>(
+  parser: Parser<Mode, unknown, TState>,
+  state: TState,
+  path: readonly PropertyKey[],
+): readonly RuntimeNode[] {
+  if (typeof parser.getSuggestRuntimeNodes === "function") {
+    return parser.getSuggestRuntimeNodes(state, path);
+  }
+  if (parser.dependencyMetadata?.source == null) return [];
+  return [{ path, parser, state }];
+}
+
+function createCompletionArgumentParserContext(
+  parser: Parser<Mode, unknown, unknown>,
+  args: readonly string[],
+): ParserContext<unknown> {
+  return createParserContext(
+    {
+      buffer: args,
+      state: parser.initialState,
+      optionsTerminated: false,
+    },
+    {
+      usage: parser.usage,
+      phase: "suggest",
+      path: [],
+      trace: createInputTrace(),
+    },
+  );
+}
+
+function getFailedCompletionArgumentContext(
+  result: Extract<ParserResult<unknown>, { readonly success: false }>,
+  context: ParserContext<unknown>,
+  parser: Parser<Mode, unknown, unknown>,
+  rootOptionSuggestions: readonly LiteralSuggestion[],
+): CompletionArgumentContext {
+  const activeValueOptionNames = collectActiveValueOptionNames(
+    parser.usage,
+    context.exec?.commandPath ?? [],
+    result.consumed > 0,
+    parser.leadingNames,
+  );
+  const token = context.buffer[0];
+  return {
+    completingOptionValue: (result.consumed === 0 || result.consumed === 1) &&
+      activeValueOptionNames.has(token),
+    completedRootOption: result.consumed === 0 &&
+      isRootOptionToken(token, rootOptionSuggestions),
+    optionsTerminated: context.optionsTerminated,
+  };
+}
+
+function isCompletionBufferUnchanged(
+  before: readonly string[],
+  after: readonly string[],
+): boolean {
+  return before.length === after.length &&
+    before.every((arg, index) => arg === after[index]);
+}
+
+function collectActiveValueOptionNames(
+  usage: Usage,
+  commandPath: readonly string[],
+  includeDirectAfterCommandOptions: boolean,
+  rootLeadingNames: ReadonlySet<string>,
+): ReadonlySet<string> {
+  const optionNames: CurrentOptionNames = {
+    value: new Set(),
+    flag: new Set(),
+  };
+  if (commandPath.length === 0) {
+    collectRootOptionNames(usage, optionNames, rootLeadingNames);
+    return optionNames.value;
+  } else {
+    collectActiveOptionNames(
+      usage,
+      commandPath,
+      optionNames,
+      false,
+      includeDirectAfterCommandOptions,
+    );
+  }
+  const names = new Set(optionNames.value);
+  for (const name of optionNames.flag) {
+    names.delete(name);
+  }
+  return names;
+}
+
+function collectRootOptionNames(
+  usage: Usage,
+  names: CurrentOptionNames,
+  rootLeadingNames: ReadonlySet<string>,
+): void {
+  for (const term of usage) {
+    collectRootOptionNamesFromTerm(term, names, rootLeadingNames);
+  }
+}
+
+function collectRootOptionNamesFromTerm(
+  term: Usage[number],
+  names: CurrentOptionNames,
+  rootLeadingNames: ReadonlySet<string>,
+): void {
+  switch (term.type) {
+    case "option":
+      for (const name of term.names) {
+        if (!rootLeadingNames.has(name)) continue;
+        if (term.metavar != null) {
+          names.value.add(name);
+        } else {
+          names.flag.add(name);
+        }
+      }
+      return;
+    case "optional":
+    case "multiple":
+      collectRootOptionNames(term.terms, names, rootLeadingNames);
+      return;
+    case "exclusive":
+      for (const branch of term.terms) {
+        collectRootOptionNames(branch, names, rootLeadingNames);
+      }
+      return;
+    case "argument":
+    case "command":
+    case "literal":
+    case "passthrough":
+    case "ellipsis":
+      return;
+  }
+}
+
+function collectActiveOptionNames(
+  usage: Usage,
+  commandPath: readonly string[],
+  names: CurrentOptionNames,
+  fromExclusive: boolean,
+  includeDirectAfterCommandOptions: boolean,
+): void {
+  if (commandPath.length === 0) {
+    collectOptionNamesAtCurrentCommandDepth(usage, names, false);
+    return;
+  }
+
+  const [commandName, ...rest] = commandPath;
+  for (let i = 0; i < usage.length; i++) {
+    const term = usage[i];
+    if (term.type === "command" && term.name === commandName) {
+      const remainingUsage = usage.slice(i + 1);
+      if (rest.length === 0) {
+        collectOptionNamesAtCurrentCommandDepth(
+          remainingUsage,
+          names,
+          !fromExclusive && includeDirectAfterCommandOptions,
+        );
+      } else {
+        collectActiveOptionNames(
+          remainingUsage,
+          rest,
+          names,
+          fromExclusive,
+          includeDirectAfterCommandOptions,
+        );
+      }
+    } else if (term.type === "exclusive") {
+      for (const branch of term.terms) {
+        collectActiveOptionNames(
+          branch,
+          commandPath,
+          names,
+          true,
+          includeDirectAfterCommandOptions,
+        );
+      }
+    } else if (term.type === "optional" || term.type === "multiple") {
+      collectActiveOptionNames(
+        term.terms,
+        commandPath,
+        names,
+        fromExclusive,
+        includeDirectAfterCommandOptions,
+      );
+    }
+  }
+}
+
+function isRootOptionToken(
+  token: string | undefined,
+  rootOptionSuggestions: readonly LiteralSuggestion[],
+): boolean {
+  return token != null &&
+    rootOptionSuggestions.some((suggestion) =>
+      token === suggestion.text || token.startsWith(`${suggestion.text}=`)
+    );
+}
+
+function collectOptionNamesAtCurrentCommandDepth(
+  usage: Usage,
+  names: CurrentOptionNames,
+  afterMatchedCommand: boolean,
+): void {
+  for (const term of usage) {
+    if (
+      collectOptionNamesAtCurrentCommandDepthFromTerm(
+        term,
+        names,
+        afterMatchedCommand,
+      )
+    ) {
+      return;
+    }
+  }
+}
+
+function collectOptionNamesAtCurrentCommandDepthFromTerm(
+  term: Usage[number],
+  names: CurrentOptionNames,
+  afterMatchedCommand: boolean,
+): boolean {
+  switch (term.type) {
+    case "command":
+      return !afterMatchedCommand;
+    case "option":
+      if (term.metavar != null) {
+        for (const name of term.names) names.value.add(name);
+      } else {
+        for (const name of term.names) names.flag.add(name);
+      }
+      return false;
+    case "optional":
+    case "multiple":
+      collectOptionNamesAtCurrentCommandDepth(
+        term.terms,
+        names,
+        afterMatchedCommand,
+      );
+      return false;
+    case "exclusive":
+      for (const branch of term.terms) {
+        collectOptionNamesAtCurrentCommandDepth(branch, names, false);
+      }
+      return false;
+    case "argument":
+    case "literal":
+    case "passthrough":
+    case "ellipsis":
+      return false;
+  }
+}
+
+function getRootMetaOptionSuggestions(
+  helpOptionConfig: OptionSubConfig | null | undefined,
+  helpOptionNames: readonly string[],
+  versionOptionConfig: OptionSubConfig | null | undefined,
+  versionOptionNames: readonly string[],
+): readonly LiteralSuggestion[] {
+  const suggestions: LiteralSuggestion[] = [];
+  if (
+    helpOptionConfig != null && !isSuggestionHidden(helpOptionConfig.hidden)
+  ) {
+    suggestions.push(
+      ...helpOptionNames.map((name): LiteralSuggestion => ({
+        kind: "literal",
+        text: name,
+      })),
+    );
+  }
+  if (
+    versionOptionConfig != null &&
+    !isSuggestionHidden(versionOptionConfig.hidden)
+  ) {
+    suggestions.push(
+      ...versionOptionNames.map((name): LiteralSuggestion => ({
+        kind: "literal",
+        text: name,
+      })),
+    );
+  }
+  return suggestions;
 }
 
 /**
@@ -2066,6 +2417,12 @@ export function runParser<
     completionCommandConfig?.names ?? ["completion"];
   const completionOptionNames: readonly string[] =
     completionOptionConfig?.names ?? ["--completion"];
+  const rootOptionSuggestions = getRootMetaOptionSuggestions(
+    helpOptionConfig,
+    helpOptionNames,
+    versionOptionConfig,
+    versionOptionNames,
+  );
 
   // Validate only meta/meta collisions. Parser-defined names may now overlap
   // with meta names; the runner resolves those cases parser-first at runtime.
@@ -2150,8 +2507,6 @@ export function runParser<
         completionCommandGroup: completionCommandConfig?.group,
         completionOptionGroup: completionOptionConfig?.group,
       },
-      helpOptionConfig ? [...helpOptionNames] : undefined,
-      versionOptionConfig ? [...versionOptionNames] : undefined,
     );
 
   // Helper function to handle parsed result
@@ -2197,6 +2552,7 @@ export function runParser<
           completionOptionNames[0],
           classified.source === "option",
           sectionOrder,
+          rootOptionSuggestions,
         ) as InferValue<TParser>;
 
       case "help": {

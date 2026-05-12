@@ -988,6 +988,31 @@ function resolveSingleDeferred(
   return result;
 }
 
+function resolveSingleDeferredAsync(
+  deferred: DeferredParseState<unknown>,
+  runtime: DependencyRuntimeContext,
+): Promise<unknown> {
+  const isMultiDep = deferred.dependencyIds != null &&
+    deferred.dependencyIds.length > 0;
+  const depIds = isMultiDep ? deferred.dependencyIds! : [deferred.dependencyId];
+  const resolution = runtime.resolveDependencies({
+    dependencyIds: depIds,
+    defaultValues: deferred.defaultValues,
+  });
+  if (resolution.kind !== "resolved") {
+    return Promise.resolve(deferred.preliminaryResult);
+  }
+
+  if (resolution.usedDefaults.every((d) => d)) {
+    return Promise.resolve(deferred.preliminaryResult);
+  }
+
+  const depValue = isMultiDep ? resolution.values : resolution.values[0];
+  return Promise.resolve(
+    deferred.parser[parseWithDependency](deferred.rawInput, depValue),
+  );
+}
+
 /**
  * Recursively collects dependency source values from {@link DependencySourceState}
  * objects found in the state tree and registers them in the runtime.
@@ -1088,23 +1113,31 @@ function resolveDeferredInState(
   state: unknown,
   runtime: DependencyRuntimeContext,
   visited: WeakSet<object> = new WeakSet<object>(),
+  deferredCache: WeakMap<
+    DeferredParseState<unknown>,
+    ValueParserResult<unknown>
+  > = new WeakMap(),
 ): unknown {
   if (state == null) return state;
+
+  if (isDeferredParseState(state)) {
+    const cached = deferredCache.get(state);
+    if (cached !== undefined) return cached;
+    const resolved = resolveSingleDeferred(state, runtime);
+    deferredCache.set(state, resolved);
+    return resolved;
+  }
+
+  if (isDependencySourceState(state)) return state;
 
   if (typeof state === "object") {
     if (visited.has(state)) return state;
     visited.add(state);
   }
 
-  if (isDeferredParseState(state)) {
-    return resolveSingleDeferred(state, runtime);
-  }
-
-  if (isDependencySourceState(state)) return state;
-
   if (Array.isArray(state)) {
     const resolved = state.map((item) =>
-      resolveDeferredInState(item, runtime, visited)
+      resolveDeferredInState(item, runtime, visited, deferredCache)
     );
     return resolved.every((item, index) => item === state[index])
       ? state
@@ -1114,7 +1147,10 @@ function resolveDeferredInState(
   if (isPlainObject(state)) {
     const keys = Reflect.ownKeys(state);
     const resolvedEntries = keys.map((key) =>
-      [key, resolveDeferredInState(state[key], runtime, visited)] as const
+      [
+        key,
+        resolveDeferredInState(state[key], runtime, visited, deferredCache),
+      ] as const
     );
     if (resolvedEntries.every(([key, value]) => value === state[key])) {
       return state;
@@ -1155,43 +1191,31 @@ async function resolveDeferredInStateAsync(
   state: unknown,
   runtime: DependencyRuntimeContext,
   visited: WeakSet<object> = new WeakSet<object>(),
+  deferredCache: WeakMap<DeferredParseState<unknown>, Promise<unknown>> =
+    new WeakMap(),
 ): Promise<unknown> {
   if (state == null) return state;
+
+  if (isDeferredParseState(state)) {
+    const cached = deferredCache.get(state);
+    if (cached !== undefined) return cached;
+    const resolved = resolveSingleDeferredAsync(state, runtime);
+    deferredCache.set(state, resolved);
+    return resolved;
+  }
+
+  if (isDependencySourceState(state)) return state;
 
   if (typeof state === "object") {
     if (visited.has(state)) return state;
     visited.add(state);
   }
 
-  if (isDeferredParseState(state)) {
-    const deferred = state;
-    const isMultiDep = deferred.dependencyIds != null &&
-      deferred.dependencyIds.length > 0;
-    const depIds = isMultiDep
-      ? deferred.dependencyIds!
-      : [deferred.dependencyId];
-    const resolution = runtime.resolveDependencies({
-      dependencyIds: depIds,
-      defaultValues: deferred.defaultValues,
-    });
-    if (resolution.kind !== "resolved") return deferred.preliminaryResult;
-
-    // If every dependency value came from defaults, skip the replay.
-    if (resolution.usedDefaults.every((d) => d)) {
-      return deferred.preliminaryResult;
-    }
-
-    const depValue = isMultiDep ? resolution.values : resolution.values[0];
-    return Promise.resolve(
-      deferred.parser[parseWithDependency](deferred.rawInput, depValue),
-    );
-  }
-
-  if (isDependencySourceState(state)) return state;
-
   if (Array.isArray(state)) {
     const resolved = await Promise.all(
-      state.map((item) => resolveDeferredInStateAsync(item, runtime, visited)),
+      state.map((item) =>
+        resolveDeferredInStateAsync(item, runtime, visited, deferredCache)
+      ),
     );
     return resolved.every((item, index) => item === state[index])
       ? state
@@ -1208,6 +1232,7 @@ async function resolveDeferredInStateAsync(
             state[key],
             runtime,
             visited,
+            deferredCache,
           ),
         ] as const;
       }),

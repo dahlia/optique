@@ -890,6 +890,23 @@ describe("createConsoleSink()", () => {
     );
   });
 
+  it("should fall back when object stream stringifies to undefined", () => {
+    const stream = {
+      toJSON() {
+        return undefined;
+      },
+    };
+
+    assert.throws(
+      () => createConsoleSink({ stream: stream as never }),
+      {
+        name: "TypeError",
+        message:
+          'Invalid stream: expected "stdout" or "stderr", got [object Object].',
+      },
+    );
+  });
+
   it("should throw TypeError for cyclic object stream (JSON.stringify throws)", () => {
     // When JSON.stringify throws (cyclic object), the catch block falls back
     // to String(value) = "[object Object]" (lines 238–240 in output.ts).

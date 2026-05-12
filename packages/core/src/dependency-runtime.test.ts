@@ -21,6 +21,7 @@ import {
   replayDerivedParser,
   replayDerivedParserAsync,
   resolveStateWithRuntime,
+  resolveStateWithRuntimeAsync,
   type RuntimeNode,
 } from "./dependency-runtime.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
@@ -28,12 +29,16 @@ import {
   createDeferredParseState,
   createDependencySourceState,
   createPendingDependencySourceState,
+  defaultValues,
   dependencyId,
+  dependencyIds,
   DependencyRegistry,
+  type DerivedValueParser,
+  derivedValueParserMarker,
   isDependencySourceState,
   parseWithDependency,
 } from "./internal/dependency.ts";
-import { message } from "./message.ts";
+import { formatMessage, message } from "./message.ts";
 import { unmatchedNonCliDependencySourceStateMarker } from "./internal/parser.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import type { ValueParserResult } from "./valueparser.ts";
@@ -276,6 +281,28 @@ describe("createDependencyFingerprint", () => {
     const fp2 = createDependencyFingerprint([obj]);
     assert.equal(fp1, fp2);
   });
+
+  test("separates primitive edge cases and tuple boundaries", () => {
+    const fn = () => "value";
+
+    assert.notEqual(
+      createDependencyFingerprint([0]),
+      createDependencyFingerprint([-0]),
+    );
+    assert.notEqual(
+      createDependencyFingerprint(["ab", "c"]),
+      createDependencyFingerprint(["a", "bc"]),
+    );
+    assert.notEqual(
+      createDependencyFingerprint([null]),
+      createDependencyFingerprint([undefined]),
+    );
+    assert.equal(
+      createDependencyFingerprint([fn]),
+      createDependencyFingerprint([fn]),
+    );
+    assert.equal(typeof createDependencyFingerprint([1n]), "string");
+  });
 });
 
 describe("createReplayKey", () => {
@@ -359,6 +386,44 @@ function unwrappingExtract(
     return bareExtract(state[0]);
   }
   return bareExtract(state);
+}
+
+function makeDerivedValueParser(
+  sourceId: symbol,
+  replay: (
+    rawInput: string,
+    dependencyValue: unknown,
+  ) => ValueParserResult<unknown> | Promise<ValueParserResult<unknown>>,
+  options: {
+    readonly dependencyIds?: readonly symbol[];
+    readonly defaultValues?: () => readonly unknown[];
+  } = {},
+): DerivedValueParser<"sync", unknown, unknown> {
+  const parser: DerivedValueParser<"sync", unknown, unknown> = {
+    mode: "sync",
+    metavar: "VALUE",
+    placeholder: "value",
+    [dependencyId]: sourceId,
+    [parseWithDependency]: replay,
+    parse(input: string) {
+      return { success: true, value: input };
+    },
+    format(value: unknown) {
+      return String(value);
+    },
+    [derivedValueParserMarker]: true,
+  };
+  if (options.dependencyIds != null) {
+    Object.defineProperty(parser, dependencyIds, {
+      value: options.dependencyIds,
+    });
+  }
+  if (options.defaultValues != null) {
+    Object.defineProperty(parser, defaultValues, {
+      value: options.defaultValues,
+    });
+  }
+  return parser;
 }
 
 describe("collectExplicitSourceValues", () => {
@@ -950,6 +1015,101 @@ describe("fillMissingSourceDefaultsAsync", () => {
     assert.ok(runtime.hasSource(sourceId));
     assert.equal(runtime.getSource(sourceId), "async-dev");
   });
+
+  test("skips async defaults for sources that are already resolved or blocked", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const existingId = Symbol("existing");
+    const failedId = Symbol("failed");
+    const matchedId = Symbol("matched");
+    const transformedId = Symbol("transformed");
+    const missingGetterId = Symbol("missing-getter");
+    runtime.registerSource(existingId, "cli", "cli");
+    runtime.markSourceFailed(failedId);
+
+    const calls: string[] = [];
+    const sourceNode = (
+      sourceId: symbol,
+      path: string,
+      extra: Partial<ParserDependencyMetadata["source"]> = {},
+      matched?: boolean,
+    ): RuntimeNode => ({
+      path: [path],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            extractSourceValue: bareExtract,
+            preservesSourceValue: true,
+            getMissingSourceValue: () => {
+              calls.push(path);
+              return Promise.resolve({
+                success: true as const,
+                value: `${path}-default`,
+              });
+            },
+            ...extra,
+          },
+        },
+      },
+      state: undefined,
+      matched,
+    });
+
+    const failures = await fillMissingSourceDefaultsAsync([
+      { path: ["plain"], parser: {}, state: undefined },
+      sourceNode(existingId, "existing"),
+      sourceNode(failedId, "failed"),
+      sourceNode(matchedId, "matched", {}, true),
+      sourceNode(transformedId, "transformed", { preservesSourceValue: false }),
+      sourceNode(missingGetterId, "missing-getter", {
+        getMissingSourceValue: undefined,
+      }),
+    ], runtime);
+
+    assert.deepEqual(failures, []);
+    assert.deepEqual(calls, []);
+    assert.equal(runtime.getSource(existingId), "cli");
+    assert.ok(!runtime.hasSource(matchedId));
+    assert.ok(!runtime.hasSource(transformedId));
+    assert.ok(!runtime.hasSource(missingGetterId));
+  });
+
+  test("reports async default thunks that throw non-Error values", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("env");
+    const nodes: RuntimeNode[] = [{
+      path: ["env"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            extractSourceValue: bareExtract,
+            preservesSourceValue: true,
+            getMissingSourceValue: () => {
+              throw "missing env";
+            },
+          },
+        },
+      },
+      state: undefined,
+    }];
+
+    const failures = await fillMissingSourceDefaultsAsync(nodes, runtime);
+
+    assert.equal(failures.length, 1);
+    assert.equal(failures[0].sourceId, sourceId);
+    assert.deepEqual(failures[0].path, ["env"]);
+    assert.ok(!failures[0].error.success);
+    if (!failures[0].error.success) {
+      assert.equal(
+        formatMessage(failures[0].error.error),
+        'Default value evaluation failed: "missing env"',
+      );
+    }
+    assert.ok(!runtime.hasSource(sourceId));
+  });
 });
 
 describe("replayDerivedParser", () => {
@@ -1165,6 +1325,127 @@ describe("extractRawInputFromState", () => {
 });
 
 describe("resolveStateWithRuntime", () => {
+  test("resolves deferred parse states with explicit single and multiple dependencies", () => {
+    const singleId = Symbol("single");
+    const firstId = Symbol("first");
+    const secondId = Symbol("second");
+    const runtime = createDependencyRuntimeContext();
+    runtime.registerSource(singleId, "prod", "cli");
+    runtime.registerSource(firstId, "us", "cli");
+    runtime.registerSource(secondId, "blue", "cli");
+
+    const single = createDeferredParseState(
+      "warn",
+      makeDerivedValueParser(singleId, (raw, dependency) => ({
+        success: true,
+        value: `${raw}:${dependency}`,
+      })),
+      { success: false, error: message`pending` },
+    );
+    const multi = createDeferredParseState(
+      "deploy",
+      makeDerivedValueParser(
+        firstId,
+        (raw, dependencies) => ({
+          success: true,
+          value: `${raw}:${(dependencies as readonly unknown[]).join("/")}`,
+        }),
+        { dependencyIds: [firstId, secondId] },
+      ),
+      { success: false, error: message`pending` },
+    );
+
+    assert.deepEqual(resolveStateWithRuntime(single, runtime), {
+      success: true,
+      value: "warn:prod",
+    });
+    assert.deepEqual(resolveStateWithRuntime(multi, runtime), {
+      success: true,
+      value: "deploy:us/blue",
+    });
+  });
+
+  test("keeps preliminary deferred results when only defaults resolved dependencies", () => {
+    const sourceId = Symbol("env");
+    let replays = 0;
+    const deferred = createDeferredParseState(
+      "warn",
+      makeDerivedValueParser(
+        sourceId,
+        () => {
+          replays++;
+          return { success: true, value: "replayed" };
+        },
+        { defaultValues: () => ["dev"] },
+      ),
+      { success: true, value: "preliminary" },
+    );
+
+    const runtime = createDependencyRuntimeContext();
+    const resolved = resolveStateWithRuntime(deferred, runtime);
+
+    assert.deepEqual(resolved, { success: true, value: "preliminary" });
+    assert.equal(replays, 0);
+  });
+
+  test("preserves dependency source states and clones only changed containers", () => {
+    const sourceId = Symbol("env");
+    const runtime = createDependencyRuntimeContext();
+    runtime.registerSource(sourceId, "prod", "cli");
+    const source = createDependencySourceState(
+      { success: true, value: "prod" },
+      sourceId,
+    );
+    const deferred = createDeferredParseState(
+      "warn",
+      makeDerivedValueParser(sourceId, (raw, dependency) => ({
+        success: true,
+        value: `${raw}:${dependency}`,
+      })),
+      { success: false, error: message`pending` },
+    );
+    const symbolKey = Symbol("derived");
+    const state = {
+      unchanged: source,
+      nested: [deferred],
+      [symbolKey]: deferred,
+    };
+
+    const resolved = resolveStateWithRuntime(state, runtime);
+
+    assert.notStrictEqual(resolved, state);
+    assert.ok(resolved != null && typeof resolved === "object");
+    const record = resolved as {
+      readonly unchanged: unknown;
+      readonly nested: readonly unknown[];
+      readonly [symbolKey]: unknown;
+    };
+    assert.strictEqual(record.unchanged, source);
+    assert.notStrictEqual(record.nested, state.nested);
+    assert.deepEqual(record.nested[0], {
+      success: true,
+      value: "warn:prod",
+    });
+    assert.deepEqual(record[symbolKey], {
+      success: true,
+      value: "warn:prod",
+    });
+    assert.strictEqual(record.nested[0], record[symbolKey]);
+  });
+
+  test("returns original cyclic containers when no deferred state changes", () => {
+    const runtime = createDependencyRuntimeContext();
+    const state: { self?: unknown; nested: readonly unknown[] } = {
+      nested: [],
+    };
+    state.self = state;
+
+    const resolved = resolveStateWithRuntime(state, runtime);
+
+    assert.strictEqual(resolved, state);
+    assert.strictEqual(state.self, state);
+  });
+
   test("throws when sync deferred replay receives a thenable", () => {
     const depId = Symbol("env");
     const deferred = createDeferredParseState(
@@ -1192,6 +1473,113 @@ describe("resolveStateWithRuntime", () => {
           /resolveStateWithRuntime\(\) received an async parseWithDependency\(\) result/i,
       },
     );
+  });
+});
+
+describe("resolveStateWithRuntimeAsync", () => {
+  test("awaits deferred replay and preserves preliminary default-only results", async () => {
+    const explicitId = Symbol("explicit");
+    const defaultId = Symbol("default");
+    const runtime = createDependencyRuntimeContext();
+    runtime.registerSource(explicitId, "prod", "cli");
+    let defaultReplays = 0;
+    const state = [
+      createDeferredParseState(
+        "warn",
+        makeDerivedValueParser(
+          explicitId,
+          (raw, dependency) =>
+            Promise.resolve({
+              success: true,
+              value: `${raw}:${dependency}`,
+            }),
+        ),
+        { success: false, error: message`pending` },
+      ),
+      createDeferredParseState(
+        "info",
+        makeDerivedValueParser(
+          defaultId,
+          () => {
+            defaultReplays++;
+            return Promise.resolve({ success: true, value: "replayed" });
+          },
+          { defaultValues: () => ["dev"] },
+        ),
+        { success: true, value: "preliminary" },
+      ),
+    ];
+
+    const resolved = await resolveStateWithRuntimeAsync(state, runtime);
+
+    assert.deepEqual(resolved, [
+      { success: true, value: "warn:prod" },
+      { success: true, value: "preliminary" },
+    ]);
+    assert.equal(defaultReplays, 0);
+  });
+
+  test("keeps unresolved async deferred states at their preliminary result", async () => {
+    const sourceId = Symbol("missing");
+    const runtime = createDependencyRuntimeContext();
+    const preliminary = { success: false as const, error: message`pending` };
+    const state = {
+      value: createDeferredParseState(
+        "warn",
+        makeDerivedValueParser(
+          sourceId,
+          () =>
+            Promise.resolve({
+              success: true,
+              value: "unreachable",
+            }),
+        ),
+        preliminary,
+      ),
+    };
+
+    const resolved = await resolveStateWithRuntimeAsync(state, runtime);
+
+    assert.deepEqual(resolved, { value: preliminary });
+  });
+
+  test("resolves a shared async deferred state at every reference", async () => {
+    const sourceId = Symbol("env");
+    const runtime = createDependencyRuntimeContext();
+    runtime.registerSource(sourceId, "prod", "cli");
+    const deferred = createDeferredParseState(
+      "warn",
+      makeDerivedValueParser(
+        sourceId,
+        (raw, dependency) =>
+          Promise.resolve({
+            success: true,
+            value: `${raw}:${dependency}`,
+          }),
+      ),
+      { success: false, error: message`pending` },
+    );
+    const symbolKey = Symbol("shared");
+    const state = {
+      first: deferred,
+      nested: [deferred],
+      [symbolKey]: deferred,
+    };
+
+    const resolved = await resolveStateWithRuntimeAsync(state, runtime);
+
+    assert.ok(resolved != null && typeof resolved === "object");
+    const record = resolved as {
+      readonly first: unknown;
+      readonly nested: readonly unknown[];
+      readonly [symbolKey]: unknown;
+    };
+    const expected = { success: true, value: "warn:prod" };
+    assert.deepEqual(record.first, expected);
+    assert.deepEqual(record.nested[0], expected);
+    assert.deepEqual(record[symbolKey], expected);
+    assert.strictEqual(record.first, record.nested[0]);
+    assert.strictEqual(record.first, record[symbolKey]);
   });
 });
 

@@ -9,8 +9,12 @@ import {
   createDependencySourceState,
   dependency,
   dependencyId,
+  dependencyIds,
+  derivedValueParserMarker,
   deriveFrom,
   isDependencySourceState,
+  parseWithDependency,
+  suggestWithDependency,
 } from "./internal/dependency.ts";
 import { choice } from "./valueparser.ts";
 import type { NonEmptyString } from "./nonempty.ts";
@@ -20,6 +24,7 @@ import {
   type ParserDependencyMetadata,
 } from "./dependency-metadata.ts";
 import { message } from "./message.ts";
+import type { Suggestion } from "./parser.ts";
 
 // =============================================================================
 // Shared test fixtures
@@ -55,6 +60,16 @@ async function resolveExtractResult(
     | undefined,
 ) {
   return await result;
+}
+
+async function collectSuggestions(
+  suggestions: Iterable<Suggestion> | AsyncIterable<Suggestion>,
+): Promise<readonly Suggestion[]> {
+  const collected: Suggestion[] = [];
+  for await (const suggestion of suggestions) {
+    collected.push(suggestion);
+  }
+  return collected;
 }
 
 function createDerivedFromMulti(
@@ -222,6 +237,84 @@ describe("extractDependencyMetadata", () => {
     const result = metadata.derived.replayParse("debug", ["prod"]);
     assert.ok(!(result instanceof Promise));
     assert.ok(!result.success);
+  });
+
+  test("derived capability replaySuggest works", async () => {
+    const env = createEnvSource();
+    const logLevel = createDerivedLogLevel(env);
+    const metadata = extractDependencyMetadata(logLevel);
+    assert.ok(metadata?.derived?.replaySuggest !== undefined);
+
+    const suggestions = await collectSuggestions(
+      metadata.derived.replaySuggest("", ["prod"]),
+    );
+
+    assert.deepEqual(
+      suggestions.flatMap((suggestion) =>
+        suggestion.kind === "literal" ? [suggestion.text] : []
+      ),
+      ["warn", "error"],
+    );
+  });
+
+  test("derived capability omits replaySuggest when parser has no suggester", () => {
+    const env = createEnvSource();
+    const valueParser = {
+      [derivedValueParserMarker]: true,
+      [dependencyId]: env[dependencyId],
+      mode: "sync" as const,
+      metavar: "LEVEL" as NonEmptyString,
+      placeholder: "",
+      parse: () => ({ success: true as const, value: "debug" }),
+      format: String,
+      [parseWithDependency]: (rawInput: string) => ({
+        success: true as const,
+        value: rawInput,
+      }),
+    };
+
+    const metadata = extractDependencyMetadata(valueParser);
+
+    assert.ok(metadata?.derived !== undefined);
+    assert.equal(metadata.derived.replaySuggest, undefined);
+  });
+
+  test("derived capability replaySuggest passes tuple dependencies unchanged", async () => {
+    const env = createEnvSource();
+    const region = createEnvSource();
+    const valueParser = {
+      [derivedValueParserMarker]: true,
+      [dependencyIds]: [env[dependencyId], region[dependencyId]] as const,
+      mode: "sync" as const,
+      metavar: "URL" as NonEmptyString,
+      placeholder: "",
+      parse: () => ({ success: true as const, value: "dev.dev" }),
+      format: String,
+      [parseWithDependency]: (rawInput: string) => ({
+        success: true as const,
+        value: rawInput,
+      }),
+      *[suggestWithDependency](
+        _prefix: string,
+        dependencies: readonly unknown[],
+      ) {
+        yield {
+          kind: "literal" as const,
+          text: dependencies.join("."),
+          description: undefined,
+        };
+      },
+    };
+
+    const metadata = extractDependencyMetadata(valueParser);
+    assert.ok(metadata?.derived?.replaySuggest !== undefined);
+    const suggestions = await collectSuggestions(
+      metadata.derived.replaySuggest("", ["prod", "dev"]),
+    );
+
+    assert.deepEqual(suggestions, [
+      { kind: "literal", text: "prod.dev", description: undefined },
+    ]);
   });
 
   test("single-source derive() exposes getDefaultDependencyValues", () => {

@@ -1107,6 +1107,29 @@ describe("expandCommands option", () => {
     );
   });
 
+  it("should expand branches that start with optional leaf terms", () => {
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "optional", terms: [{ type: "command", name: "init" }] }],
+          [{
+            type: "optional",
+            terms: [{ type: "option", names: ["--verbose"] }],
+          }],
+          [{
+            type: "optional",
+            terms: [{ type: "argument", metavar: "FILE" }],
+          }],
+        ],
+      },
+    ];
+
+    const result = formatUsage("tool", usage, { expandCommands: true });
+
+    assert.equal(result, "tool [init]\ntool [--verbose]\ntool [FILE]");
+  });
+
   it("should exclude hidden commands from expanded usage lines", () => {
     // Regression test for hidden commands appearing in usage lines
     // When a command has hidden: true, it should not appear in the
@@ -1750,6 +1773,12 @@ describe("formatUsageTerm", () => {
       const term: UsageTerm = { type: "ellipsis" };
       const result = formatUsageTerm(term);
       assert.equal(result, "...");
+    });
+
+    it("should dim ellipsis usage terms when colors are enabled", () => {
+      const term: UsageTerm = { type: "ellipsis" };
+      const result = formatUsageTerm(term, { colors: true });
+      assert.equal(result, "\x1b[2m...\x1b[0m");
     });
   });
 
@@ -2430,6 +2459,45 @@ describe("normalizeUsage", () => {
       const result = normalizeUsage([
         { type: "argument", metavar: "" } as never,
       ]);
+      assert.deepEqual(result, []);
+    });
+
+    it("should strip exclusive branches that normalize to malformed leaves", () => {
+      const result = normalizeUsage([
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "argument", metavar: "" } as never],
+            [],
+          ],
+        },
+      ]);
+
+      assert.deepEqual(result, [{ type: "exclusive", terms: [[]] }]);
+    });
+
+    it("should strip nested malformed exclusive branches", () => {
+      const result = normalizeUsage([
+        {
+          type: "exclusive",
+          terms: [
+            [{
+              type: "optional",
+              terms: [{ type: "argument", metavar: "" } as never],
+            }],
+            [{
+              type: "multiple",
+              terms: [{ type: "command", name: "" } as never],
+              min: 0,
+            }],
+            [{
+              type: "exclusive",
+              terms: [[{ type: "option", names: [] as never }]],
+            }],
+          ],
+        },
+      ]);
+
       assert.deepEqual(result, []);
     });
 
@@ -3304,6 +3372,11 @@ describe("mergeHidden special cases", () => {
     assert.equal(mergeHidden("help", "doc"), "help");
     assert.equal(mergeHidden("usage", "help"), "help");
     assert.equal(mergeHidden("doc", "help"), "help");
+  });
+
+  it("should treat false as an absent restriction", () => {
+    assert.equal(mergeHidden(false, "usage"), "usage");
+    assert.equal(mergeHidden("doc", false), "doc");
   });
 
   it('should not hide suggestions when merging into "help"', () => {

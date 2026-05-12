@@ -243,6 +243,33 @@ describe("annotation-state", () => {
   );
 
   it(
+    "getDelegatedAnnotationState() delegates built-in objects without annotation views",
+    () => {
+      const marker = Symbol.for(
+        "@test/getDelegatedAnnotationState-built-ins",
+      );
+      const annotations = { [marker]: true } satisfies Annotations;
+      const parentState = injectAnnotations(undefined, annotations);
+
+      for (
+        const state of [
+          [],
+          new Date(0),
+          new Map([["key", "value"]]),
+          new Set(["value"]),
+          /value/u,
+        ] as const
+      ) {
+        const delegated = getDelegatedAnnotationState(parentState, state);
+
+        assert.ok(hasDelegatedAnnotationCarrier(delegated));
+        assert.ok(getAnnotations(delegated)?.[marker]);
+        assert.equal(normalizeDelegatedAnnotationState(delegated), state);
+      }
+    },
+  );
+
+  it(
     "getDelegatedAnnotationState() tracks delegated plain-object clones",
     () => {
       const marker = Symbol.for(
@@ -756,6 +783,70 @@ describe("annotation-state", () => {
   );
 
   it(
+    "normalizeNestedDelegatedAnnotationState() preserves Map self references",
+    () => {
+      const map = new Map<unknown, unknown>();
+      map.set(map, map);
+
+      const normalized = normalizeNestedDelegatedAnnotationState(map);
+
+      assert.strictEqual(normalized, map);
+      assert.strictEqual(normalized.get(map), map);
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() preserves changed Map cycles",
+    () => {
+      const marker = Symbol.for("@test/map-cycle-with-carrier");
+      const parentState = injectAnnotations(undefined, { [marker]: true });
+      const original = { value: "seed" };
+      const delegated = getDelegatedAnnotationState(parentState, original);
+      const map = new Map<unknown, unknown>();
+      map.set(map, delegated);
+      map.set("self", map);
+
+      const normalized = normalizeNestedDelegatedAnnotationState(map);
+
+      assert.notStrictEqual(normalized, map);
+      assert.strictEqual(normalized.get(normalized), original);
+      assert.strictEqual(normalized.get("self"), normalized);
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() preserves Set self references",
+    () => {
+      const set = new Set<unknown>();
+      set.add(set);
+
+      const normalized = normalizeNestedDelegatedAnnotationState(set);
+
+      assert.strictEqual(normalized, set);
+      assert.ok(normalized.has(set));
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() preserves changed Set cycles",
+    () => {
+      const marker = Symbol.for("@test/set-cycle-with-carrier");
+      const parentState = injectAnnotations(undefined, { [marker]: true });
+      const original = { value: "seed" };
+      const delegated = getDelegatedAnnotationState(parentState, original);
+      const set = new Set<unknown>();
+      set.add(set);
+      set.add(delegated);
+
+      const normalized = normalizeNestedDelegatedAnnotationState(set);
+
+      assert.notStrictEqual(normalized, set);
+      assert.ok(normalized.has(normalized));
+      assert.ok(normalized.has(original));
+    },
+  );
+
+  it(
     "normalizeNestedDelegatedAnnotationState() preserves non-plain objects (Date, RegExp) as-is at the top level",
     () => {
       // Date and RegExp are non-plain objects whose prototype is not
@@ -767,6 +858,193 @@ describe("annotation-state", () => {
 
       assert.strictEqual(normalizeNestedDelegatedAnnotationState(date), date);
       assert.strictEqual(normalizeNestedDelegatedAnnotationState(re), re);
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() ignores phantom object keys",
+    () => {
+      const marker = Symbol.for("@test/phantom-object-key");
+      const parentState = injectAnnotations(undefined, { [marker]: true });
+      const source = new Proxy({
+        value: getDelegatedAnnotationState(parentState, "seed"),
+      }, {
+        ownKeys(target) {
+          return [...Reflect.ownKeys(target), "phantom"];
+        },
+        getOwnPropertyDescriptor(target, key) {
+          if (key === "phantom") return undefined;
+          return Reflect.getOwnPropertyDescriptor(target, key);
+        },
+      });
+
+      const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+      assert.notStrictEqual(normalized, source);
+      assert.deepEqual(normalized, { value: "seed" });
+      assert.ok(!Reflect.has(normalized, "phantom"));
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() ignores phantom Map own keys",
+    () => {
+      const marker = Symbol.for("@test/phantom-map-key");
+      const parentState = injectAnnotations(undefined, { [marker]: true });
+      const map = new Map<string, unknown>([
+        ["value", getDelegatedAnnotationState(parentState, "seed")],
+      ]);
+      const source = new Proxy(map, {
+        ownKeys(target) {
+          return [...Reflect.ownKeys(target), "phantom"];
+        },
+        getOwnPropertyDescriptor(target, key) {
+          if (key === "phantom") return undefined;
+          return Reflect.getOwnPropertyDescriptor(target, key);
+        },
+        get(target, key, receiver) {
+          const value = Reflect.get(target, key, receiver);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+
+      const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+      assert.notStrictEqual(normalized, source);
+      assert.equal(normalized.get("value"), "seed");
+      assert.ok(!Reflect.has(normalized, "phantom"));
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() ignores disappearing Map own properties",
+    () => {
+      const marker = Symbol.for("@test/disappearing-map-property");
+      const parentState = injectAnnotations(undefined, { [marker]: true });
+      const delegated = getDelegatedAnnotationState(parentState, "seed");
+      let descriptorReads = 0;
+      const source = new Proxy(new Map<string, unknown>(), {
+        ownKeys(target) {
+          return [...Reflect.ownKeys(target), "meta"];
+        },
+        getOwnPropertyDescriptor(target, key) {
+          if (key !== "meta") {
+            return Reflect.getOwnPropertyDescriptor(target, key);
+          }
+          descriptorReads++;
+          return descriptorReads === 1
+            ? {
+              value: delegated,
+              enumerable: true,
+              writable: true,
+              configurable: true,
+            }
+            : undefined;
+        },
+        get(target, key, receiver) {
+          const value = Reflect.get(target, key, receiver);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+
+      const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+      assert.notStrictEqual(normalized, source);
+      assert.ok(!Reflect.has(normalized, "meta"));
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() ignores phantom Set own keys",
+    () => {
+      const marker = Symbol.for("@test/phantom-set-key");
+      const parentState = injectAnnotations(undefined, { [marker]: true });
+      const set = new Set([
+        getDelegatedAnnotationState(parentState, "seed"),
+      ]);
+      const source = new Proxy(set, {
+        ownKeys(target) {
+          return [...Reflect.ownKeys(target), "phantom"];
+        },
+        getOwnPropertyDescriptor(target, key) {
+          if (key === "phantom") return undefined;
+          return Reflect.getOwnPropertyDescriptor(target, key);
+        },
+        get(target, key, receiver) {
+          const value = Reflect.get(target, key, receiver);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+
+      const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+      assert.notStrictEqual(normalized, source);
+      assert.ok(normalized.has("seed"));
+      assert.ok(!Reflect.has(normalized, "phantom"));
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() ignores disappearing Set own properties",
+    () => {
+      const marker = Symbol.for("@test/disappearing-set-property");
+      const parentState = injectAnnotations(undefined, { [marker]: true });
+      const delegated = getDelegatedAnnotationState(parentState, "seed");
+      let descriptorReads = 0;
+      const source = new Proxy(new Set<unknown>(), {
+        ownKeys(target) {
+          return [...Reflect.ownKeys(target), "meta"];
+        },
+        getOwnPropertyDescriptor(target, key) {
+          if (key !== "meta") {
+            return Reflect.getOwnPropertyDescriptor(target, key);
+          }
+          descriptorReads++;
+          return descriptorReads === 1
+            ? {
+              value: delegated,
+              enumerable: true,
+              writable: true,
+              configurable: true,
+            }
+            : undefined;
+        },
+        get(target, key, receiver) {
+          const value = Reflect.get(target, key, receiver);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+
+      const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+      assert.notStrictEqual(normalized, source);
+      assert.ok(!Reflect.has(normalized, "meta"));
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() ignores accessor-only properties",
+    () => {
+      const marker = Symbol.for("@test/accessor-only-property-parent");
+      const parentState = injectAnnotations(undefined, { [marker]: true });
+      const source = {
+        nested: getDelegatedAnnotationState(parentState, "seed"),
+        get computed() {
+          return "derived";
+        },
+      };
+
+      const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+      assert.notStrictEqual(normalized, source);
+      assert.deepEqual(normalized, {
+        nested: "seed",
+        computed: "derived",
+      });
+      assert.equal(
+        Object.getOwnPropertyDescriptor(normalized, "computed")?.get,
+        Object.getOwnPropertyDescriptor(source, "computed")?.get,
+      );
     },
   );
 
@@ -858,6 +1136,83 @@ describe("annotation-state", () => {
         reDelegated,
         delegated,
         "re-delegating an already-tracked carrier with same annotations should return it unchanged",
+      );
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() falls back when an array subclass slice throws",
+    () => {
+      class BrokenSliceArray<T> extends Array<T> {
+        override slice(): T[] {
+          throw new TypeError("slice disabled.");
+        }
+      }
+      const marker = Symbol.for("@test/array-slice-fallback");
+      const annotations = { [marker]: true } satisfies Annotations;
+      const parentState = injectAnnotations(undefined, annotations);
+      const original = { value: "entry" };
+      const delegated = getDelegatedAnnotationState(parentState, original);
+      const source = new BrokenSliceArray<typeof delegated>();
+      source.push(delegated);
+
+      const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+      assert.ok(Array.isArray(normalized));
+      assert.ok(!(normalized instanceof BrokenSliceArray));
+      assert.strictEqual(normalized[0], original);
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() unwraps delegated Map own properties",
+    () => {
+      const marker = Symbol.for("@test/map-own-property");
+      const annotations = { [marker]: true } satisfies Annotations;
+      const parentState = injectAnnotations(undefined, annotations);
+      const original = { value: "metadata" };
+      const delegated = getDelegatedAnnotationState(parentState, original);
+      const source = new Map<string, string>([["mode", "prod"]]);
+      Object.defineProperty(source, "metadata", {
+        value: delegated,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+      assert.notStrictEqual(normalized, source);
+      assert.equal(normalized.get("mode"), "prod");
+      assert.strictEqual(
+        (normalized as Map<string, string> & { readonly metadata: unknown })
+          .metadata,
+        original,
+      );
+    },
+  );
+
+  it(
+    "normalizeNestedDelegatedAnnotationState() unwraps delegated Set own properties",
+    () => {
+      const marker = Symbol.for("@test/set-own-property");
+      const annotations = { [marker]: true } satisfies Annotations;
+      const parentState = injectAnnotations(undefined, annotations);
+      const original = { value: "metadata" };
+      const delegated = getDelegatedAnnotationState(parentState, original);
+      const source = new Set<string>(["prod"]);
+      Object.defineProperty(source, "metadata", {
+        value: delegated,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+      assert.notStrictEqual(normalized, source);
+      assert.ok(normalized.has("prod"));
+      assert.strictEqual(
+        (normalized as Set<string> & { readonly metadata: unknown }).metadata,
+        original,
       );
     },
   );
