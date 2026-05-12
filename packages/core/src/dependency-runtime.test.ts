@@ -412,7 +412,7 @@ function makeDerivedValueParser(
       return String(value);
     },
     [derivedValueParserMarker]: true,
-  } as DerivedValueParser<"sync", unknown, unknown>;
+  };
   if (options.dependencyIds != null) {
     Object.defineProperty(parser, dependencyIds, {
       value: options.dependencyIds,

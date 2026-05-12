@@ -23,6 +23,9 @@ To be released.
     same deferred parser state.  Reused deferred nodes now resolve to the same
     result object instead of distinct but structurally equal objects.
 
+ -  Fixed documentation-only meta option parsers to forward default values and
+    use the wrapped parser's own initial state when rendering help fragments.
+
  -  When an `object()` parser expects no CLI input (no options, commands, or
     arguments in its usage) and a required field fails the empty-buffer
     completion probe, the specific error from that field's `complete()` is now

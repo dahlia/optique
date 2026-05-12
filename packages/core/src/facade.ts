@@ -950,7 +950,11 @@ function createMetaOptionDocParser(
     }),
     complete: (state) => ({ success: true, value: state }),
     suggest: function* () {},
-    getDocFragments: (state) => source.getDocFragments(state),
+    getDocFragments: (_state, defaultValue) =>
+      source.getDocFragments(
+        { kind: "available", state: source.initialState },
+        defaultValue,
+      ),
   };
 }
 
