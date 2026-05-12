@@ -755,6 +755,24 @@ describe("option", () => {
       }]);
     });
 
+    it("should suggest plus-prefixed async option names", async () => {
+      const parser = option("+log", asyncFileSuggestingParser());
+
+      const suggestions: Suggestion[] = [];
+      for await (
+        const suggestion of parser.suggest({
+          buffer: [],
+          state: parser.initialState,
+          usage: parser.usage,
+          optionsTerminated: false,
+        }, "+")
+      ) {
+        suggestions.push(suggestion);
+      }
+
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "+log" }]);
+    });
+
     it("should not suggest async option names while completing a value", async () => {
       const asyncModeParser: ValueParser<"async", string> = {
         mode: "async",
@@ -1470,6 +1488,21 @@ describe("flag", () => {
       if (!result.success) {
         assertErrorIncludes(result.error, "Some parse error");
       }
+    });
+  });
+
+  describe("suggestions", () => {
+    it("should suggest plus-prefixed flag names", () => {
+      const parser = flag("+debug");
+
+      const suggestions = Array.from(parser.suggest({
+        buffer: [],
+        state: parser.initialState,
+        usage: parser.usage,
+        optionsTerminated: false,
+      }, "+"));
+
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "+debug" }]);
     });
   });
 

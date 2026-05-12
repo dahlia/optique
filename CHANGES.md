@@ -10,6 +10,13 @@ To be released.
 
 ### @optique/core
 
+ -  Fixed shell completion suggestions for configured help and version options.
+    Completion requests now include root-level meta options such as `--help`
+    and `--version`, including plus-prefixed aliases such as `+h`, without
+    treating those options as active help/version requests inside the
+    completion payload.  Plus-prefixed parser options are now recognized as
+    option-prefix completions as well.
+
  -  When an `object()` parser expects no CLI input (no options, commands, or
     arguments in its usage) and a required field fails the empty-buffer
     completion probe, the specific error from that field's `complete()` is now

@@ -40,6 +40,7 @@ import {
   type ParserResult,
   suggest,
   suggestAsync,
+  type Suggestion,
 } from "./parser.ts";
 import { dispatchByMode } from "./internal/mode-dispatch.ts";
 import { createDependencyRuntimeContext } from "./dependency-runtime.ts";
@@ -49,6 +50,7 @@ import { argument, command, constant, flag, option } from "./primitives.ts";
 import {
   formatUsage,
   type HiddenVisibility,
+  isSuggestionHidden,
   type OptionName,
   type Usage,
 } from "./usage.ts";
@@ -74,6 +76,8 @@ import type {
 } from "./context.ts";
 
 export type { ParserValuePlaceholder, SourceContext, SourceContextRequest };
+
+type LiteralSuggestion = Extract<Suggestion, { readonly kind: "literal" }>;
 
 type SuppressedErrorConstructor = new (
   error: unknown,
@@ -1515,6 +1519,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
   completionOptionDisplayName?: string,
   isOptionMode?: boolean,
   sectionOrder?: (a: DocSection, b: DocSection) => number,
+  rootOptionSuggestions: readonly LiteralSuggestion[] = [],
 ): ModeValue<M, THelp | TError> {
   const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
@@ -1612,7 +1617,11 @@ function handleCompletion<M extends Mode, THelp, TError>(
     parser.mode,
     () => {
       const syncParser = parser as Parser<"sync", unknown, unknown>;
-      const suggestions = suggest(syncParser, args as [string, ...string[]]);
+      const suggestions = withRootOptionSuggestions(
+        suggest(syncParser, args as [string, ...string[]]),
+        args,
+        rootOptionSuggestions,
+      );
       for (const chunk of shell.encodeSuggestions(suggestions)) {
         stdout(chunk);
       }
@@ -1627,12 +1636,78 @@ function handleCompletion<M extends Mode, THelp, TError>(
         parser as Parser<"async", unknown, unknown>,
         args as [string, ...string[]],
       );
-      for (const chunk of shell.encodeSuggestions(suggestions)) {
+      for (
+        const chunk of shell.encodeSuggestions(
+          withRootOptionSuggestions(suggestions, args, rootOptionSuggestions),
+        )
+      ) {
         stdout(chunk);
       }
       return callOnCompletion(0);
     },
   );
+}
+
+function withRootOptionSuggestions(
+  suggestions: readonly Suggestion[],
+  args: readonly string[],
+  extraSuggestions: readonly LiteralSuggestion[],
+): readonly Suggestion[] {
+  if (args.length !== 1 || extraSuggestions.length === 0) return suggestions;
+
+  const prefix = args[0];
+  if (
+    !(prefix.startsWith("--") || prefix.startsWith("-") ||
+      prefix.startsWith("/") || prefix.startsWith("+"))
+  ) {
+    return suggestions;
+  }
+
+  const seen = new Set(
+    suggestions.flatMap((suggestion) =>
+      suggestion.kind === "literal" ? [suggestion.text] : []
+    ),
+  );
+  const combined = [...suggestions];
+  for (const suggestion of extraSuggestions) {
+    if (prefix === "-" && suggestion.text.length !== 2) continue;
+    if (!suggestion.text.startsWith(prefix)) continue;
+    if (seen.has(suggestion.text)) continue;
+    combined.push(suggestion);
+    seen.add(suggestion.text);
+  }
+  return combined;
+}
+
+function getRootMetaOptionSuggestions(
+  helpOptionConfig: OptionSubConfig | null | undefined,
+  helpOptionNames: readonly string[],
+  versionOptionConfig: OptionSubConfig | null | undefined,
+  versionOptionNames: readonly string[],
+): readonly LiteralSuggestion[] {
+  const suggestions: LiteralSuggestion[] = [];
+  if (
+    helpOptionConfig != null && !isSuggestionHidden(helpOptionConfig.hidden)
+  ) {
+    suggestions.push(
+      ...helpOptionNames.map((name): LiteralSuggestion => ({
+        kind: "literal",
+        text: name,
+      })),
+    );
+  }
+  if (
+    versionOptionConfig != null &&
+    !isSuggestionHidden(versionOptionConfig.hidden)
+  ) {
+    suggestions.push(
+      ...versionOptionNames.map((name): LiteralSuggestion => ({
+        kind: "literal",
+        text: name,
+      })),
+    );
+  }
+  return suggestions;
 }
 
 /**
@@ -1881,6 +1956,12 @@ export function runParser<
     completionCommandConfig?.names ?? ["completion"];
   const completionOptionNames: readonly string[] =
     completionOptionConfig?.names ?? ["--completion"];
+  const rootOptionSuggestions = getRootMetaOptionSuggestions(
+    helpOptionConfig,
+    helpOptionNames,
+    versionOptionConfig,
+    versionOptionNames,
+  );
 
   // Validate only meta/meta collisions. Parser-defined names may now overlap
   // with meta names; the runner resolves those cases parser-first at runtime.
@@ -2010,6 +2091,7 @@ export function runParser<
           completionOptionNames[0],
           classified.source === "option",
           sectionOrder,
+          rootOptionSuggestions,
         ) as InferValue<TParser>;
 
       case "help": {

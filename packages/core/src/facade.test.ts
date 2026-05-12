@@ -3746,6 +3746,303 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(suggestions.includes("--format"));
     });
 
+    it("should include meta options in completion suggestions", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "--"], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--verbose"));
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should not duplicate user options that shadow meta options in completion suggestions", () => {
+      const parser = object({
+        help: option("--help", string()),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "--h"], {
+        help: { option: true, onShow: () => "help" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.equal(
+        suggestions.filter((suggestion) => suggestion === "--help").length,
+        1,
+      );
+    });
+
+    it("should respect hidden meta options in completion suggestions", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "--"], {
+        help: { option: { hidden: true }, onShow: () => "help" },
+        version: { option: { hidden: true }, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--verbose"));
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should keep long meta options out of bare short-option completion", () => {
+      const parser = object({
+        verbose: option("-v"),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "-"], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("-v"));
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should include short meta aliases in bare short-option completion", () => {
+      const parser = object({
+        verbose: option("-v"),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "-"], {
+        help: { option: { names: ["-h", "--help"] }, onShow: () => "help" },
+        version: {
+          option: { names: ["-V", "--version"] },
+          value: "1.0.0",
+        },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("-v"));
+      assert.ok(suggestions.includes("-h"));
+      assert.ok(suggestions.includes("-V"));
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should include slash-prefixed meta options in slash completion", () => {
+      const parser = object({
+        verbose: option("/v"),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "/"], {
+        help: { option: { names: ["/?"] }, onShow: () => "help" },
+        version: { option: { names: ["/V"] }, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("/v"));
+      assert.ok(suggestions.includes("/?"));
+      assert.ok(suggestions.includes("/V"));
+    });
+
+    it("should include plus-prefixed options in plus completion", () => {
+      const parser = object({
+        verbose: option("+verbose"),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "+"], {
+        help: { option: { names: ["+h"] }, onShow: () => "help" },
+        version: { option: { names: ["+V"] }, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("+verbose"));
+      assert.ok(suggestions.includes("+h"));
+      assert.ok(suggestions.includes("+V"));
+    });
+
+    it("should filter meta options by completion prefix", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "--h"], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should not add meta options for non-option root completion", () => {
+      const parser = command("build", option("--verbose"));
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "b"], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("build"));
+      assert.ok(!suggestions.includes("--help"));
+      assert.ok(!suggestions.includes("--version"));
+    });
+
+    it("should preserve file suggestions while adding root meta options", () => {
+      const parser: Parser<"sync", string, undefined> = {
+        mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: true,
+        initialState: undefined,
+        parse() {
+          return { success: false, consumed: 0, error: message`missing` };
+        },
+        complete() {
+          return { success: false, error: message`missing` };
+        },
+        *suggest() {
+          yield { kind: "file", type: "file", pattern: "--" };
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+
+      let completionOutput = "";
+
+      runParser(parser, "myapp", ["completion", "bash", "--"], {
+        help: { option: true, onShow: () => "help" },
+        version: { option: true, value: "1.0.0" },
+        completion: { command: true },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(
+        suggestions.some((suggestion) =>
+          suggestion.startsWith("__FILE__:file")
+        ),
+      );
+      assert.ok(suggestions.includes("--help"));
+      assert.ok(suggestions.includes("--version"));
+    });
+
+    it("should not let meta options in completion payload change parser context", () => {
+      const parser = command(
+        "build",
+        object({
+          verbose: option("--verbose"),
+        }),
+      );
+
+      for (
+        const completionArgs of [
+          ["completion", "bash", "build", "--help", ""],
+          ["completion", "bash", "build", "--version", ""],
+        ]
+      ) {
+        let completionOutput = "";
+
+        runParser(parser, "myapp", completionArgs, {
+          help: { option: true, onShow: () => "help" },
+          version: { option: true, value: "1.0.0" },
+          completion: { command: true },
+          stdout: (text) => {
+            completionOutput += text;
+          },
+        });
+
+        const suggestions = completionOutput.split("\n").filter((s) =>
+          s.length > 0
+        );
+        assert.deepEqual(suggestions, []);
+      }
+    });
+
     it("should provide completion suggestions for zsh format", () => {
       const parser = object({
         verbose: option("--verbose"),
