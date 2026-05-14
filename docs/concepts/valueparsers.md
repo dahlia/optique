@@ -39,6 +39,7 @@ with Optique's type system.
 | `url()`                          | *@optique/core*     | `URL`                          | URL with protocol filtering                         |
 | `locale()`                       | *@optique/core*     | `Intl.Locale`                  | BCP 47 locale identifier                            |
 | `uuid()`                         | *@optique/core*     | `string`                       | UUID with RFC 9562 validation                       |
+| `semVer()`                       | *@optique/core*     | `SemVerString` or `SemVer`     | Semantic Versioning 2.0.0                           |
 | `port()`                         | *@optique/core*     | `number` or `bigint`           | TCP/UDP port number                                 |
 | `ipv4()`                         | *@optique/core*     | `string`                       | IPv4 address with restrictions                      |
 | `ipv6()`                         | *@optique/core*     | `string`                       | IPv6 address                                        |
@@ -822,6 +823,121 @@ processUuid("not-a-uuid");  // ✗ Type error
 
 The parser uses `"UUID"` as its default metavar and provides specific error
 messages for format violations, version mismatches, and variant violations.
+
+
+`semVer()` parser
+-----------------
+
+*This API is available since Optique 1.1.0.*
+
+The `semVer()` parser validates strings according to the
+[Semantic Versioning 2.0.0] specification.  It ensures that major, minor, and
+patch components are non-negative integers without leading zeros, and that
+pre-release and build metadata identifiers contain only permitted characters.
+
+~~~~ typescript twoslash
+import { semVer } from "@optique/core/valueparser";
+
+// String mode (default): returns a SemVerString template-literal type
+const version = semVer();
+
+// Object mode: returns a structured SemVer object
+const structuredVersion = semVer({ type: "object" });
+~~~~
+
+[Semantic Versioning 2.0.0]: https://semver.org/
+
+### String mode
+
+By default, `semVer()` returns a `SemVerString` template-literal type that
+covers all four valid forms of a SemVer string:
+
+~~~~ typescript twoslash
+import { semVer, type SemVerString } from "@optique/core/valueparser";
+
+const parser = semVer();
+
+const result = parser.parse("1.2.3-rc.1+build.42");
+if (result.success) {
+  const v: SemVerString = result.value;  // "1.2.3-rc.1+build.42"
+}
+~~~~
+
+The output is always the canonical form with no leading `v` prefix, even when
+the `v` prefix was accepted as input (see [V prefix](#v-prefix) below).
+
+### Object mode
+
+Pass `type: "object"` to receive a structured `SemVer` value with individual
+components:
+
+~~~~ typescript twoslash
+import { semVer, type SemVer } from "@optique/core/valueparser";
+
+const parser = semVer({ type: "object" });
+
+const result = parser.parse("2.0.0-alpha.1+build.42");
+if (result.success) {
+  const v: SemVer = result.value;
+  // v.major    → 2
+  // v.minor    → 0
+  // v.patch    → 0
+  // v.preRelease → "alpha.1"
+  // v.metadata   → "build.42"
+}
+~~~~
+
+The `preRelease` and `metadata` fields are absent (not `undefined`) when the
+input contains no pre-release or build metadata.
+
+> [!NOTE]
+> Object mode stores `major`, `minor`, and `patch` as JavaScript `number`
+> values, so it rejects inputs whose version components exceed
+> `Number.MAX_SAFE_INTEGER` (2⁵³ − 1 = 9,007,199,254,740,991).  In the
+> unlikely event that you need to handle version numbers of that magnitude,
+> use string mode instead.
+
+### V prefix
+
+By default the parser rejects a leading `v` character.  Set `allowPrefix: true`
+to accept the common `v1.2.3` convention:
+
+~~~~ typescript twoslash
+import { semVer } from "@optique/core/valueparser";
+
+const parser = semVer({ allowPrefix: true });
+
+const result = parser.parse("v1.2.3");
+if (result.success) {
+  console.log(result.value);  // "1.2.3" — prefix stripped from output
+}
+~~~~
+
+The `v` prefix is stripped from the output regardless of mode; the canonical
+form never includes it.
+
+### Error messages
+
+When input is not a valid SemVer 2.0.0 string, the parser returns an error:
+
+~~~~ bash
+$ myapp --version "1.02.0"
+Error: Expected a valid Semantic Versioning 2.0.0 string (e.g. 1.0.0), but got 1.02.0.
+~~~~
+
+Custom error messages can be provided as a static message or a function:
+
+~~~~ typescript twoslash
+import { semVer } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+
+const parser = semVer({
+  errors: {
+    invalidSemVer: (input) =>
+      message`${input} is not a valid version string.`,
+  },
+});
+~~~~
 
 
 `port()` parser

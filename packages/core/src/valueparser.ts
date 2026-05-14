@@ -8041,3 +8041,268 @@ export function cidr(
   });
   return cidrParserObj;
 }
+
+/**
+ * A normalized Semantic Versioning 2.0.0 string.
+ *
+ * Covers all four valid forms:
+ *  - `MAJOR.MINOR.PATCH`
+ *  - `MAJOR.MINOR.PATCH-preRelease`
+ *  - `MAJOR.MINOR.PATCH+metadata`
+ *  - `MAJOR.MINOR.PATCH-preRelease+metadata`
+ *
+ * Note: this type uses TypeScript template literals as a coarse structural
+ * hint.  The `${number}` slots accept any JavaScript number serialization
+ * (including negative numbers, decimals, and `Infinity`), so the type alone
+ * does not guarantee full SemVer 2.0.0 validity.  Full validation is
+ * enforced at parse time by {@link semVer}.  Only values returned by
+ * `semVer().parse()` are guaranteed to conform to the specification.
+ *
+ * @since 1.1.0
+ */
+export type SemVerString =
+  | `${number}.${number}.${number}`
+  | `${number}.${number}.${number}-${string}`
+  | `${number}.${number}.${number}+${string}`
+  | `${number}.${number}.${number}-${string}+${string}`;
+
+/**
+ * A parsed Semantic Versioning 2.0.0 value as a structured object.
+ *
+ * @since 1.1.0
+ */
+export interface SemVer {
+  /**
+   * The major version number.
+   *
+   * This field is a JavaScript `number`, so it is limited to
+   * {@link Number.MAX_SAFE_INTEGER} (2⁵³ − 1).  Inputs whose major
+   * component exceeds this value are rejected by {@link semVer} in object
+   * mode; use string mode to handle arbitrarily large version numbers.
+   */
+  readonly major: number;
+  /**
+   * The minor version number.
+   *
+   * Same safe-integer constraint as {@link major}.
+   */
+  readonly minor: number;
+  /**
+   * The patch version number.
+   *
+   * Same safe-integer constraint as {@link major}.
+   */
+  readonly patch: number;
+  /**
+   * The pre-release identifier (the part after `-`, before `+`), if present.
+   * Example: `"alpha.1"` for `1.0.0-alpha.1`.
+   */
+  readonly preRelease?: string;
+  /**
+   * The build metadata (the part after `+`), if present.
+   * Example: `"build.42"` for `1.0.0+build.42`.
+   */
+  readonly metadata?: string;
+}
+
+/** @internal */
+interface SemVerOptionsBase {
+  /**
+   * The metavariable name for this parser.  Used in help messages.
+   * @default `"SEMVER"`
+   */
+  readonly metavar?: NonEmptyString;
+  /**
+   * Whether to accept an optional leading `v` character (e.g. `v1.2.3`).
+   * The `v` prefix is stripped; output is always the canonical unprefixed form.
+   * @default false
+   */
+  readonly allowPrefix?: boolean;
+  /**
+   * Custom error messages for parse failures.
+   * @since 1.1.0
+   */
+  readonly errors?: {
+    /**
+     * Message when input is not a valid SemVer string.
+     * Can be a static message or a function receiving the rejected input.
+     */
+    readonly invalidSemVer?: Message | ((input: string) => Message);
+  };
+}
+
+/**
+ * Options for {@link semVer} in string mode (the default).
+ *
+ * @since 1.1.0
+ */
+export interface SemVerOptionsString extends SemVerOptionsBase {
+  /** Return a {@link SemVerString} template-literal type. */
+  readonly type?: "string";
+}
+
+/**
+ * Options for {@link semVer} in object mode.
+ *
+ * In object mode, version components are stored as JavaScript `number`
+ * values.  Components exceeding {@link Number.MAX_SAFE_INTEGER} (2⁵³ − 1)
+ * cannot be represented exactly and are therefore rejected with a parse
+ * error.  Use string mode (the default) if you need to handle version
+ * numbers of arbitrary magnitude.
+ *
+ * @since 1.1.0
+ */
+export interface SemVerOptionsObject extends SemVerOptionsBase {
+  /** Return a structured {@link SemVer} object. */
+  readonly type: "object";
+}
+
+// Official SemVer 2.0.0 regex with optional leading "v" prefix capture group.
+// Groups: prefix?, major, minor, patch, pre?, meta?
+const SEMVER_REGEX =
+  /^(?<prefix>v)?(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-(?<pre>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?<meta>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
+
+const SEMVER_SUGGESTIONS: readonly string[] = Object.freeze([
+  "0.0.0",
+  "1.0.0",
+  "1.0.0-alpha",
+  "1.0.0-alpha.1",
+  "1.0.0+build.1",
+  "1.0.0-alpha.1+build.1",
+]);
+
+/**
+ * Creates a {@link ValueParser} for [Semantic Versioning 2.0.0] strings.
+ *
+ * In string mode (the default), the parser returns a {@link SemVerString}
+ * template-literal type.  String mode accepts any spec-valid SemVer input,
+ * including version components of arbitrary magnitude.
+ *
+ * In object mode (`type: "object"`), the parser returns a structured
+ * {@link SemVer} value with `major`, `minor`, `patch`, and optional
+ * `preRelease` and `metadata` fields.  Because the numeric components are
+ * stored as JavaScript `number`, object mode additionally rejects inputs
+ * whose major, minor, or patch value exceeds
+ * {@link Number.MAX_SAFE_INTEGER} (2⁵³ − 1).  Use string mode if you need
+ * to handle arbitrarily large version numbers.
+ *
+ * Both modes strictly enforce the SemVer 2.0.0 specification: no leading
+ * zeros in numeric components, no empty pre-release or build identifiers,
+ * and no invalid characters.
+ *
+ * [Semantic Versioning 2.0.0]: https://semver.org/
+ *
+ * @param options Configuration options.
+ * @returns A {@link ValueParser} that validates SemVer strings.
+ * @throws {TypeError} If {@link SemVerOptionsString.metavar} is an empty
+ *   string.
+ * @since 1.1.0
+ */
+export function semVer(
+  options?: SemVerOptionsString,
+): ValueParser<"sync", SemVerString>;
+/**
+ * Creates a {@link ValueParser} for [Semantic Versioning 2.0.0] strings,
+ * returning a structured {@link SemVer} object.
+ *
+ * [Semantic Versioning 2.0.0]: https://semver.org/
+ *
+ * @param options Configuration options with `type: "object"`.
+ * @returns A {@link ValueParser} that converts SemVer strings to {@link SemVer}
+ *   objects.
+ * @throws {TypeError} If {@link SemVerOptionsObject.metavar} is an empty
+ *   string.
+ * @since 1.1.0
+ */
+export function semVer(
+  options: SemVerOptionsObject,
+): ValueParser<"sync", SemVer>;
+export function semVer(
+  options: SemVerOptionsString | SemVerOptionsObject = {},
+): ValueParser<"sync", SemVerString> | ValueParser<"sync", SemVer> {
+  const metavar = options.metavar ?? "SEMVER";
+  ensureNonEmptyString(metavar);
+  checkBooleanOption(options, "allowPrefix");
+  const allowPrefix = options.allowPrefix ?? false;
+  const objectMode = options.type === "object";
+  const errorOption = options.errors?.invalidSemVer;
+
+  const suggestions: readonly string[] = allowPrefix
+    ? [...SEMVER_SUGGESTIONS, ...SEMVER_SUGGESTIONS.map((s) => `v${s}`)]
+    : SEMVER_SUGGESTIONS;
+
+  function makeError(input: string): ValueParserResult<never> {
+    return {
+      success: false,
+      error: errorOption
+        ? (typeof errorOption === "function" ? errorOption(input) : errorOption)
+        : message`Expected a valid Semantic Versioning 2.0.0 string (e.g. ${"1.0.0"}), but got ${input}.`,
+    };
+  }
+
+  if (objectMode) {
+    return {
+      mode: "sync",
+      metavar,
+      placeholder: { major: 0, minor: 0, patch: 0 },
+      parse(input: string): ValueParserResult<SemVer> {
+        const m = SEMVER_REGEX.exec(input);
+        if (m == null) return makeError(input);
+        if (!allowPrefix && m.groups!.prefix != null) return makeError(input);
+        const major = parseInt(m.groups!.major, 10);
+        const minor = parseInt(m.groups!.minor, 10);
+        const patch = parseInt(m.groups!.patch, 10);
+        if (
+          !Number.isSafeInteger(major) ||
+          !Number.isSafeInteger(minor) ||
+          !Number.isSafeInteger(patch)
+        ) {
+          return makeError(input);
+        }
+        const result: SemVer = {
+          major,
+          minor,
+          patch,
+          ...(m.groups!.pre != null ? { preRelease: m.groups!.pre } : {}),
+          ...(m.groups!.meta != null ? { metadata: m.groups!.meta } : {}),
+        };
+        return { success: true, value: result };
+      },
+      format(value: SemVer): string {
+        let s = `${value.major}.${value.minor}.${value.patch}`;
+        if (value.preRelease != null) s += `-${value.preRelease}`;
+        if (value.metadata != null) s += `+${value.metadata}`;
+        return s;
+      },
+      *suggest(prefix: string): Iterable<Suggestion> {
+        for (const s of suggestions) {
+          if (s.startsWith(prefix)) yield { kind: "literal", text: s };
+        }
+      },
+    };
+  }
+
+  return {
+    mode: "sync",
+    metavar,
+    placeholder: "0.0.0" as SemVerString,
+    parse(input: string): ValueParserResult<SemVerString> {
+      const m = SEMVER_REGEX.exec(input);
+      if (m == null) return makeError(input);
+      if (!allowPrefix && m.groups!.prefix != null) return makeError(input);
+      const canonical =
+        `${m.groups!.major}.${m.groups!.minor}.${m.groups!.patch}` +
+        (m.groups!.pre != null ? `-${m.groups!.pre}` : "") +
+        (m.groups!.meta != null ? `+${m.groups!.meta}` : "");
+      return { success: true, value: canonical as SemVerString };
+    },
+    format(value: SemVerString): string {
+      return value;
+    },
+    *suggest(prefix: string): Iterable<Suggestion> {
+      for (const s of suggestions) {
+        if (s.startsWith(prefix)) yield { kind: "literal", text: s };
+      }
+    },
+  };
+}

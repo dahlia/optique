@@ -21,6 +21,9 @@ import {
   type NonEmptyString,
   port,
   portRange,
+  type SemVer,
+  semVer,
+  type SemVerString,
   socketAddress,
   string,
   url,
@@ -17465,6 +17468,429 @@ describe("color()", () => {
     it("no suggestions for unmatched prefix", () => {
       const suggestions = [...color().suggest!("zzz")];
       assert.deepEqual(suggestions, []);
+    });
+  });
+});
+
+describe("semVer()", () => {
+  describe("constructor", () => {
+    it("default mode is sync", () => {
+      assert.equal(semVer().mode, "sync");
+    });
+
+    it("default metavar is SEMVER", () => {
+      assert.equal(semVer().metavar, "SEMVER");
+    });
+
+    it("custom metavar is respected", () => {
+      assert.equal(semVer({ metavar: "VERSION" }).metavar, "VERSION");
+    });
+
+    it("empty metavar throws TypeError", () => {
+      assert.throws(
+        () => semVer({ metavar: "" as NonEmptyString }),
+        TypeError,
+      );
+    });
+
+    it("placeholder for string mode is 0.0.0", () => {
+      assert.equal(semVer().placeholder, "0.0.0");
+    });
+
+    it("placeholder for object mode has major/minor/patch", () => {
+      assert.deepEqual(semVer({ type: "object" }).placeholder, {
+        major: 0,
+        minor: 0,
+        patch: 0,
+      });
+    });
+  });
+
+  describe("parse() — string mode (default)", () => {
+    it("parses a basic version", () => {
+      const result = semVer().parse("1.2.3");
+      assert.ok(result.success);
+      assert.equal(result.value, "1.2.3");
+    });
+
+    it("parses version with pre-release", () => {
+      const result = semVer().parse("1.0.0-alpha.1");
+      assert.ok(result.success);
+      assert.equal(result.value, "1.0.0-alpha.1");
+    });
+
+    it("parses version with build metadata", () => {
+      const result = semVer().parse("1.0.0+build.42");
+      assert.ok(result.success);
+      assert.equal(result.value, "1.0.0+build.42");
+    });
+
+    it("parses version with pre-release and build metadata", () => {
+      const result = semVer().parse("1.0.0-beta.2+exp.sha.5114f85");
+      assert.ok(result.success);
+      assert.equal(result.value, "1.0.0-beta.2+exp.sha.5114f85");
+    });
+
+    it("parses 0.0.0", () => {
+      const result = semVer().parse("0.0.0");
+      assert.ok(result.success);
+      assert.equal(result.value, "0.0.0");
+    });
+
+    it("rejects leading zeros in major", () => {
+      const result = semVer().parse("01.0.0");
+      assert.ok(!result.success);
+    });
+
+    it("rejects leading zeros in minor", () => {
+      const result = semVer().parse("1.02.0");
+      assert.ok(!result.success);
+    });
+
+    it("rejects leading zeros in patch", () => {
+      const result = semVer().parse("1.0.03");
+      assert.ok(!result.success);
+    });
+
+    it("rejects empty pre-release identifier", () => {
+      const result = semVer().parse("1.0.0-");
+      assert.ok(!result.success);
+    });
+
+    it("rejects empty build metadata identifier", () => {
+      const result = semVer().parse("1.0.0+");
+      assert.ok(!result.success);
+    });
+
+    it("rejects invalid characters in pre-release", () => {
+      const result = semVer().parse("1.0.0-alpha@1");
+      assert.ok(!result.success);
+    });
+
+    it("rejects arbitrary strings", () => {
+      const result = semVer().parse("not-a-version");
+      assert.ok(!result.success);
+    });
+
+    it("rejects two-part version", () => {
+      const result = semVer().parse("1.2");
+      assert.ok(!result.success);
+    });
+
+    it("rejects negative numbers", () => {
+      const result = semVer().parse("-1.0.0");
+      assert.ok(!result.success);
+    });
+
+    it("rejects v-prefixed input by default", () => {
+      const result = semVer().parse("v1.0.0");
+      assert.ok(!result.success);
+    });
+
+    it("rejects leading zeros in numeric pre-release identifier", () => {
+      const result = semVer().parse("1.0.0-01");
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("parse() — numeric limits", () => {
+    it("accepts Number.MAX_SAFE_INTEGER as major", () => {
+      const result = semVer({ type: "object" }).parse(
+        `${Number.MAX_SAFE_INTEGER}.0.0`,
+      );
+      assert.ok(result.success);
+      assert.equal(result.value.major, Number.MAX_SAFE_INTEGER);
+    });
+
+    it("rejects components beyond Number.MAX_SAFE_INTEGER in object mode", () => {
+      const unsafe = "9007199254740993"; // MAX_SAFE_INTEGER + 2
+      const result = semVer({ type: "object" }).parse(`${unsafe}.0.0`);
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("parse() — allowPrefix option", () => {
+    it("accepts v-prefixed input when allowPrefix: true", () => {
+      const result = semVer({ allowPrefix: true }).parse("v1.2.3");
+      assert.ok(result.success);
+    });
+
+    it("strips the v prefix from string mode output", () => {
+      const result = semVer({ allowPrefix: true }).parse("v1.2.3");
+      assert.ok(result.success);
+      assert.equal(result.value, "1.2.3");
+    });
+
+    it("still accepts non-prefixed input when allowPrefix: true", () => {
+      const result = semVer({ allowPrefix: true }).parse("1.2.3");
+      assert.ok(result.success);
+      assert.equal(result.value, "1.2.3");
+    });
+
+    it("rejects v-prefixed input when allowPrefix: false (explicit)", () => {
+      const result = semVer({ allowPrefix: false }).parse("v1.0.0");
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("parse() — object mode", () => {
+    it("parses basic version into components", () => {
+      const result = semVer({ type: "object" }).parse("1.2.3");
+      assert.ok(result.success);
+      assert.deepEqual(result.value, { major: 1, minor: 2, patch: 3 });
+    });
+
+    it("parses version with pre-release", () => {
+      const result = semVer({ type: "object" }).parse("1.0.0-alpha.1");
+      assert.ok(result.success);
+      assert.deepEqual(result.value, {
+        major: 1,
+        minor: 0,
+        patch: 0,
+        preRelease: "alpha.1",
+      });
+    });
+
+    it("parses version with build metadata", () => {
+      const result = semVer({ type: "object" }).parse("1.0.0+build.42");
+      assert.ok(result.success);
+      assert.deepEqual(result.value, {
+        major: 1,
+        minor: 0,
+        patch: 0,
+        metadata: "build.42",
+      });
+    });
+
+    it("parses version with pre-release and metadata", () => {
+      const result = semVer({ type: "object" }).parse(
+        "2.3.4-rc.1+sha.abc123",
+      );
+      assert.ok(result.success);
+      assert.deepEqual(result.value, {
+        major: 2,
+        minor: 3,
+        patch: 4,
+        preRelease: "rc.1",
+        metadata: "sha.abc123",
+      });
+    });
+
+    it("strips v prefix from object mode output when allowPrefix: true", () => {
+      const result = semVer({ type: "object", allowPrefix: true }).parse(
+        "v3.0.0",
+      );
+      assert.ok(result.success);
+      assert.deepEqual(result.value, { major: 3, minor: 0, patch: 0 });
+    });
+
+    it("rejects invalid input in object mode", () => {
+      const result = semVer({ type: "object" }).parse("not-semver");
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("format()", () => {
+    it("string mode returns the value as-is", () => {
+      const p = semVer();
+      assert.equal(p.format("1.2.3" as SemVerString), "1.2.3");
+    });
+
+    it("string mode with pre-release", () => {
+      const p = semVer();
+      assert.equal(
+        p.format("1.0.0-alpha.1" as SemVerString),
+        "1.0.0-alpha.1",
+      );
+    });
+
+    it("object mode formats major.minor.patch", () => {
+      const p = semVer({ type: "object" });
+      assert.equal(p.format({ major: 1, minor: 2, patch: 3 }), "1.2.3");
+    });
+
+    it("object mode includes pre-release", () => {
+      const p = semVer({ type: "object" });
+      assert.equal(
+        p.format({ major: 1, minor: 0, patch: 0, preRelease: "alpha.1" }),
+        "1.0.0-alpha.1",
+      );
+    });
+
+    it("object mode includes metadata", () => {
+      const p = semVer({ type: "object" });
+      assert.equal(
+        p.format({ major: 1, minor: 0, patch: 0, metadata: "build.42" }),
+        "1.0.0+build.42",
+      );
+    });
+
+    it("object mode includes pre-release and metadata", () => {
+      const p = semVer({ type: "object" });
+      assert.equal(
+        p.format({
+          major: 1,
+          minor: 0,
+          patch: 0,
+          preRelease: "rc.1",
+          metadata: "sha.abc",
+        }),
+        "1.0.0-rc.1+sha.abc",
+      );
+    });
+  });
+
+  describe("format() round-trip", () => {
+    it("string mode parse→format is identity", () => {
+      const p = semVer();
+      const versions = [
+        "1.0.0",
+        "0.0.1",
+        "10.20.30",
+        "1.0.0-alpha",
+        "1.0.0-alpha.1",
+        "1.0.0-0.3.7",
+        "1.0.0+build.1",
+        "1.0.0-beta+exp.sha",
+      ];
+      for (const v of versions) {
+        const result = p.parse(v);
+        assert.ok(result.success, `Expected ${v} to parse successfully`);
+        assert.equal(p.format(result.value), v);
+      }
+    });
+
+    it("object mode parse→format is identity", () => {
+      const p = semVer({ type: "object" });
+      const versions = [
+        "1.0.0",
+        "1.0.0-alpha.1",
+        "1.0.0+build.1",
+        "1.0.0-rc.1+sha.abc",
+      ];
+      for (const v of versions) {
+        const result = p.parse(v);
+        assert.ok(result.success, `Expected ${v} to parse successfully`);
+        assert.equal(p.format(result.value), v);
+      }
+    });
+
+    it("property-based round-trip for string mode", () => {
+      const p = semVer();
+      const semverArbitrary = fc
+        .tuple(
+          fc.nat({ max: 999 }),
+          fc.nat({ max: 999 }),
+          fc.nat({ max: 999 }),
+        )
+        .map(([ma, mi, pa]) => `${ma}.${mi}.${pa}`);
+      fc.assert(
+        fc.property(semverArbitrary, (v) => {
+          const result = p.parse(v);
+          assert.ok(result.success);
+          assert.equal(p.format(result.value), v);
+        }),
+        propertyParameters,
+      );
+    });
+  });
+
+  describe("error messages", () => {
+    it("default error message references the input", () => {
+      const result = semVer().parse("bad-version");
+      assert.ok(!result.success);
+      const msg = result.error;
+      const hasInput = msg.some(
+        (t) => t.type === "value" && t.value === "bad-version",
+      );
+      assert.ok(hasInput);
+    });
+
+    it("static custom error message", () => {
+      const customError = [text("Not a valid version.")] as const;
+      const p = semVer({
+        errors: { invalidSemVer: customError },
+      });
+      const result = p.parse("bad");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, customError);
+    });
+
+    it("function custom error message receives input", () => {
+      const p = semVer({
+        errors: {
+          invalidSemVer: (input) => message`Nope, "${input}" is not semver.`,
+        },
+      });
+      const result = p.parse("xyz");
+      assert.ok(!result.success);
+      const flat = formatMessage(result.error);
+      assert.ok(flat.includes("xyz"));
+    });
+  });
+
+  describe("suggest()", () => {
+    it("has a suggest function", () => {
+      assert.ok(typeof semVer().suggest === "function");
+    });
+
+    it("empty prefix returns non-empty suggestions", () => {
+      const suggestions = [...semVer().suggest!("")];
+      assert.ok(suggestions.length > 0);
+    });
+
+    it("all suggestions are kind=literal", () => {
+      const suggestions = [...semVer().suggest!("")];
+      assert.ok(suggestions.every((s) => s.kind === "literal"));
+    });
+
+    it("filters suggestions by prefix", () => {
+      const suggestions = [...semVer().suggest!("1.")];
+      assert.ok(
+        suggestions.every(
+          (s) => s.kind === "literal" && s.text.startsWith("1."),
+        ),
+      );
+    });
+
+    it("no suggestions for unmatched prefix", () => {
+      const suggestions = [...semVer().suggest!("zzz")];
+      assert.deepEqual(suggestions, []);
+    });
+
+    it("allowPrefix: true includes v-prefixed suggestions", () => {
+      const suggestions = [...semVer({ allowPrefix: true }).suggest!("v")];
+      assert.ok(suggestions.length > 0);
+      assert.ok(
+        suggestions.every(
+          (s) => s.kind === "literal" && s.text.startsWith("v"),
+        ),
+      );
+    });
+
+    it("allowPrefix: false does not include v-prefixed suggestions", () => {
+      const suggestions = [...semVer({ allowPrefix: false }).suggest!("v")];
+      assert.deepEqual(suggestions, []);
+    });
+  });
+
+  describe("type inference", () => {
+    it("string mode infers SemVerString", () => {
+      const p = semVer();
+      const result = p.parse("1.0.0");
+      if (result.success) {
+        const _v: SemVerString = result.value;
+        assert.ok(_v);
+      }
+    });
+
+    it("object mode infers SemVer", () => {
+      const p = semVer({ type: "object" });
+      const result = p.parse("1.0.0");
+      if (result.success) {
+        const _v: SemVer = result.value;
+        assert.ok(_v);
+      }
     });
   });
 });

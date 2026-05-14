@@ -76,14 +76,30 @@ To be released.
     accepted input notations.  The `format()` method always outputs
     canonical lowercase hex.  [[#810], [#815]]
 
+ -  Added `semVer()` value parser for [Semantic Versioning 2.0.0] strings.
+    The parser strictly validates that input conforms to the SemVer 2.0.0
+    specification (no leading zeros in numeric components, no empty
+    identifiers, only permitted characters in pre-release and build
+    metadata).  Returns either a `SemVerString` template-literal type
+    (default, accepts arbitrary valid SemVer numeric components) or a
+    structured `SemVer` object with `major`, `minor`, `patch`, and optional
+    `preRelease` and `metadata` fields via `type: "object"` (object mode
+    stores components as `number` and rejects values above
+    `Number.MAX_SAFE_INTEGER`).  An `allowPrefix` option accepts an optional
+    leading `v` character (e.g. `v1.2.3`); the prefix is always stripped
+    from the output.  [[#808], [#816]]
+
+[Semantic Versioning 2.0.0]: https://semver.org/
 [#801]: https://github.com/dahlia/optique/issues/801
 [#802]: https://github.com/dahlia/optique/pull/802
 [#803]: https://github.com/dahlia/optique/issues/803
 [#805]: https://github.com/dahlia/optique/pull/805
 [#807]: https://github.com/dahlia/optique/issues/807
+[#808]: https://github.com/dahlia/optique/issues/808
 [#810]: https://github.com/dahlia/optique/issues/810
 [#814]: https://github.com/dahlia/optique/pull/814
 [#815]: https://github.com/dahlia/optique/pull/815
+[#816]: https://github.com/dahlia/optique/pull/816
 
 ### @optique/env
 
