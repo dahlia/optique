@@ -1918,14 +1918,25 @@ export function fileSize(
  * @param options Configuration options for the file size parser.
  * @returns A {@link ValueParser} that parses file size strings into byte
  *          counts.
- * @throws {TypeError} If `metavar` is an empty string, if `allowNegative` or
- *   `siAsBinary` is not a boolean, or if `defaultUnit` is not a valid
- *   {@link FileSizeUnit}.
+ * @throws {TypeError} If `type` is neither `"number"` nor `"bigint"`, if
+ *   `metavar` is an empty string, if `allowNegative` or `siAsBinary` is not
+ *   a boolean, or if `defaultUnit` is not a valid {@link FileSizeUnit}.
  * @since 1.1.0
  */
 export function fileSize(
   options: FileSizeOptionsNumber | FileSizeOptionsBigInt = {},
 ): ValueParser<"sync", number> | ValueParser<"sync", bigint> {
+  if (
+    options.type !== undefined &&
+    options.type !== "number" &&
+    options.type !== "bigint"
+  ) {
+    throw new TypeError(
+      `Expected type to be "number" or "bigint", but got: ${
+        String(options.type)
+      }.`,
+    );
+  }
   const metavar = options.metavar ?? "SIZE";
   ensureNonEmptyString(metavar);
   checkBooleanOption(options, "allowNegative");

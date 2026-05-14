@@ -16448,11 +16448,24 @@ describe("fileSize() — bigint mode", () => {
   });
 
   describe("option validation", () => {
+    it("throws TypeError for invalid type", () => {
+      assert.throws(
+        // @ts-ignore intentionally invalid
+        () => fileSize({ type: "bytes" }),
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message ===
+            'Expected type to be "number" or "bigint", but got: bytes.',
+      );
+    });
+
     it("throws TypeError for empty metavar", () => {
       assert.throws(
         // @ts-ignore intentionally invalid
         () => fileSize({ type: "bigint", metavar: "" }),
-        TypeError,
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message === "Expected a non-empty string.",
       );
     });
 
@@ -16460,7 +16473,10 @@ describe("fileSize() — bigint mode", () => {
       assert.throws(
         // @ts-ignore intentionally invalid
         () => fileSize({ type: "bigint", allowNegative: "yes" }),
-        TypeError,
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message ===
+            "Expected allowNegative to be a boolean, but got string: yes.",
       );
     });
 
@@ -16468,7 +16484,10 @@ describe("fileSize() — bigint mode", () => {
       assert.throws(
         // @ts-ignore intentionally invalid
         () => fileSize({ type: "bigint", siAsBinary: 1 }),
-        TypeError,
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message ===
+            "Expected siAsBinary to be a boolean, but got number: 1.",
       );
     });
 
@@ -16476,7 +16495,12 @@ describe("fileSize() — bigint mode", () => {
       assert.throws(
         // @ts-ignore intentionally invalid
         () => fileSize({ type: "bigint", defaultUnit: "XB" }),
-        TypeError,
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message ===
+            'Expected defaultUnit to be one of "B", "KB", "MB", "GB", ' +
+              '"TB", "PB", "EB", "KiB", "MiB", "GiB", "TiB", "PiB", ' +
+              '"EiB", but got string: "XB".',
       );
     });
   });
