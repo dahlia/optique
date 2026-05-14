@@ -33,7 +33,7 @@ with Optique's type system.
 | `string()`                       | *@optique/core*     | `string`                       | Any string, with optional pattern validation        |
 | `integer()`                      | *@optique/core*     | `number` or `bigint`           | Integer with range validation                       |
 | `float()`                        | *@optique/core*     | `number`                       | Floating-point number                               |
-| `fileSize()`                     | *@optique/core*     | `number`                       | Human-readable data size (bytes)                    |
+| `fileSize()`                     | *@optique/core*     | `number` or `bigint`           | Human-readable data size (bytes)                    |
 | `choice()`                       | *@optique/core*     | string or number literal union | Enumerated values                                   |
 | `url()`                          | *@optique/core*     | `URL`                          | URL with protocol filtering                         |
 | `locale()`                       | *@optique/core*     | `Intl.Locale`                  | BCP 47 locale identifier                            |
@@ -280,12 +280,11 @@ Unit suffixes are matched case-insensitively: `"1kb"`, `"1KB"`, and `"1Kb"`
 are all treated as 1 000 bytes.  Optional whitespace between the number and
 unit is also accepted (`"1 MB"`).
 
-[^filesize-safe]: Because `fileSize()` returns a JavaScript `number`, the result
-                  must be a safe integer (≤ `Number.MAX_SAFE_INTEGER` ≈ 9 ×
-                  10^15). In practice this means values in the `EB`/`EiB` range
-                  and values above roughly 9 PB or 8 PiB are rejected. If you
-                  need to handle sizes this large, use the `string()` parser
-                  with manual conversion.
+[^filesize-safe]: In `number` mode (the default), the result must be a safe
+                  integer (≤ `Number.MAX_SAFE_INTEGER` ≈ 9 × 10^15). Values in
+                  the `EB`/`EiB` range and values above roughly 9 PB or 8 PiB
+                  are therefore rejected. Use `type: "bigint"` to lift this
+                  restriction — see the [bigint mode](#bigint-mode) section.
 
 ### Default unit
 
@@ -325,6 +324,24 @@ const legacySize = fileSize({ siAsBinary: true });
 
 IEC suffixes (`KiB`, `MiB`, …) are unaffected by this option and always
 use powers of 1 024.
+
+### Bigint mode {#bigint-mode}
+
+By default, `fileSize()` returns `number`, which cannot represent byte counts
+above roughly 9 PB exactly.  Pass `type: "bigint"` to get a `bigint` result
+instead — this lifts the safe-integer restriction and makes `EB`/`EiB` values
+usable:
+
+~~~~ typescript twoslash
+import { fileSize } from "@optique/core/valueparser";
+// ---cut-before---
+const diskLimit = fileSize({ type: "bigint" });
+// "1EB" → 1_000_000_000_000_000_000n
+// "1EiB" → 1_152_921_504_606_846_976n
+~~~~
+
+All options (`allowNegative`, `defaultUnit`, `siAsBinary`, `metavar`) work
+the same way in bigint mode.
 
 ### Error messages
 

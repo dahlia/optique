@@ -6,6 +6,7 @@ import {
   domain,
   email,
   fileSize,
+  type FileSizeOptionsBigInt,
   float,
   hostname,
   integer,
@@ -16170,6 +16171,254 @@ describe("fileSize()", () => {
         } not allowed`;
         assert.deepEqual(r.error, expected);
       }
+    });
+  });
+});
+
+describe("fileSize() — bigint mode", () => {
+  const bigintParser = fileSize({ type: "bigint" });
+
+  describe("type inference", () => {
+    it("returns bigint values", () => {
+      const r = bigintParser.parse("512B");
+      assert.ok(r.success);
+      if (r.success) assert.equal(typeof r.value, "bigint");
+    });
+
+    it("accepts FileSizeOptionsBigInt type", () => {
+      const opts: FileSizeOptionsBigInt = { type: "bigint" };
+      const parser = fileSize(opts);
+      assert.ok(isValueParser(parser));
+    });
+  });
+
+  describe("SI units", () => {
+    it("parses 512B → 512n", () => {
+      const r = bigintParser.parse("512B");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 512n);
+    });
+
+    it("parses 1KB → 1000n", () => {
+      const r = bigintParser.parse("1KB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000n);
+    });
+
+    it("parses 1MB → 1_000_000n", () => {
+      const r = bigintParser.parse("1MB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000_000n);
+    });
+
+    it("parses 1GB → 1_000_000_000n", () => {
+      const r = bigintParser.parse("1GB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000_000_000n);
+    });
+  });
+
+  describe("IEC units", () => {
+    it("parses 1KiB → 1024n", () => {
+      const r = bigintParser.parse("1KiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_024n);
+    });
+
+    it("parses 1GiB → 1_073_741_824n", () => {
+      const r = bigintParser.parse("1GiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_073_741_824n);
+    });
+  });
+
+  describe("large values (beyond Number.MAX_SAFE_INTEGER)", () => {
+    it("parses 1EB → 1_000_000_000_000_000_000n", () => {
+      const r = bigintParser.parse("1EB");
+      assert.ok(r.success);
+      if (r.success) {
+        assert.equal(r.value, 1_000_000_000_000_000_000n);
+        assert.equal(typeof r.value, "bigint");
+      }
+    });
+
+    it("parses 1EiB → 1_152_921_504_606_846_976n", () => {
+      const r = bigintParser.parse("1EiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_152_921_504_606_846_976n);
+    });
+
+    it("parses 100EB", () => {
+      const r = bigintParser.parse("100EB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 100_000_000_000_000_000_000n);
+    });
+  });
+
+  describe("floating-point inputs", () => {
+    it("parses 1.5GB → 1_500_000_000n", () => {
+      const r = bigintParser.parse("1.5GB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_500_000_000n);
+    });
+
+    it("parses 1.5EiB → 1_729_382_256_910_270_464n", () => {
+      const r = bigintParser.parse("1.5EiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_729_382_256_910_270_464n);
+    });
+  });
+
+  describe("case-insensitive units", () => {
+    it("parses 1KIB → 1024n", () => {
+      const r = bigintParser.parse("1KIB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_024n);
+    });
+
+    it("parses 1eb → 1_000_000_000_000_000_000n", () => {
+      const r = bigintParser.parse("1eb");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000_000_000_000_000_000n);
+    });
+  });
+
+  describe("defaultUnit option", () => {
+    it("uses defaultUnit when no unit is in input", () => {
+      const parser = fileSize({ type: "bigint", defaultUnit: "MB" });
+      const r = parser.parse("100");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 100_000_000n);
+    });
+
+    it("rejects bare number when defaultUnit is absent", () => {
+      const r = bigintParser.parse("100");
+      assert.ok(!r.success);
+    });
+  });
+
+  describe("allowNegative option", () => {
+    it("rejects negative by default", () => {
+      const r = bigintParser.parse("-1MB");
+      assert.ok(!r.success);
+    });
+
+    it("allows negative when allowNegative is true", () => {
+      const parser = fileSize({ type: "bigint", allowNegative: true });
+      const r = parser.parse("-1EB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, -1_000_000_000_000_000_000n);
+    });
+  });
+
+  describe("siAsBinary option", () => {
+    it("treats KB as 1024n when siAsBinary is true", () => {
+      const parser = fileSize({ type: "bigint", siAsBinary: true });
+      const r = parser.parse("1KB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_024n);
+    });
+
+    it("treats EB as 1024^6 when siAsBinary is true", () => {
+      const parser = fileSize({ type: "bigint", siAsBinary: true });
+      const r = parser.parse("1EB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_152_921_504_606_846_976n);
+    });
+  });
+
+  describe("placeholder", () => {
+    it("defaults to 0n", () => {
+      assert.equal(bigintParser.placeholder, 0n);
+    });
+
+    it("uses custom placeholder", () => {
+      const parser = fileSize({ type: "bigint", placeholder: 1024n });
+      assert.equal(parser.placeholder, 1024n);
+    });
+  });
+
+  describe("format()", () => {
+    it("formats 512n as 512B", () => {
+      assert.equal(bigintParser.format(512n), "512B");
+    });
+
+    it("formats 1_000n as 1KB", () => {
+      assert.equal(bigintParser.format(1_000n), "1KB");
+    });
+
+    it("formats 1_073_741_824n (1GiB) as 1GiB", () => {
+      assert.equal(bigintParser.format(1_073_741_824n), "1GiB");
+    });
+
+    it("formats 1_000_000_000_000_000_000n (1EB) as 1EB", () => {
+      assert.equal(
+        bigintParser.format(1_000_000_000_000_000_000n),
+        "1EB",
+      );
+    });
+
+    it("formats 1_152_921_504_606_846_976n (1EiB) as 1EiB", () => {
+      assert.equal(
+        bigintParser.format(1_152_921_504_606_846_976n),
+        "1EiB",
+      );
+    });
+
+    it("formats 1_729_382_256_910_270_464n (1.5EiB) as 1.5EiB", () => {
+      assert.equal(
+        bigintParser.format(1_729_382_256_910_270_464n),
+        "1.5EiB",
+      );
+    });
+
+    it("formats 0n as 0B", () => {
+      assert.equal(bigintParser.format(0n), "0B");
+    });
+
+    it("round-trips representative values", () => {
+      const values = [
+        0n,
+        512n,
+        1_000n,
+        1_024n,
+        1_073_741_824n,
+        1_000_000_000_000_000_000n,
+        1_152_921_504_606_846_976n,
+      ];
+      for (const v of values) {
+        const formatted = bigintParser.format(v);
+        const result = bigintParser.parse(formatted);
+        assert.ok(result.success, `format(${v}) = ${formatted} did not parse`);
+        if (result.success) assert.equal(result.value, v);
+      }
+    });
+  });
+
+  describe("error cases", () => {
+    it("rejects fractional byte values (0.1B)", () => {
+      assert.ok(!bigintParser.parse("0.1B").success);
+    });
+
+    it("rejects unknown unit", () => {
+      assert.ok(!bigintParser.parse("100XB").success);
+    });
+  });
+
+  describe("custom error messages", () => {
+    it("negativeNotAllowed receives bigint argument", () => {
+      let received: bigint | undefined;
+      const parser = fileSize({
+        type: "bigint",
+        errors: {
+          negativeNotAllowed: (value) => {
+            received = value;
+            return message`Negative: ${String(value)}`;
+          },
+        },
+      });
+      parser.parse("-1EB");
+      assert.equal(received, -1_000_000_000_000_000_000n);
     });
   });
 });
