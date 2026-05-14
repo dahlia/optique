@@ -67,12 +67,23 @@ To be released.
     byte counts beyond `Number.MAX_SAFE_INTEGER` (including EB/EiB
     values).  [[#807], [#814]]
 
+ -  Added `color()` value parser for parsing CSS color strings into a
+    structured `Color` object with `r`, `g`, `b` (0–255), and `a` (0–1)
+    fields.  Supports hex notation (`#rgb`, `#rrggbb`, `#rgba`,
+    `#rrggbbaa`), RGB/RGBA functional notation, HSL/HSLA functional
+    notation, and all 148 CSS Level 4 named colors (including
+    `transparent` and `rebeccapurple`).  The `formats` option restricts
+    accepted input notations.  The `format()` method always outputs
+    canonical lowercase hex.  [[#810], [#815]]
+
 [#801]: https://github.com/dahlia/optique/issues/801
 [#802]: https://github.com/dahlia/optique/pull/802
 [#803]: https://github.com/dahlia/optique/issues/803
 [#805]: https://github.com/dahlia/optique/pull/805
 [#807]: https://github.com/dahlia/optique/issues/807
+[#810]: https://github.com/dahlia/optique/issues/810
 [#814]: https://github.com/dahlia/optique/pull/814
+[#815]: https://github.com/dahlia/optique/pull/815
 
 ### @optique/env
 
