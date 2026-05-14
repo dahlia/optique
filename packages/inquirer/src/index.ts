@@ -1095,7 +1095,7 @@ export function prompt<M extends Mode, TValue, TState>(
       // We propagate annotations into object-shaped and nullish inner
       // initial states so that boolean flag options (whose
       // `initialState` is an object like `{ success: true, value: false }`),
-      // source-binding wrappers (`bindEnv()` / `bindConfig()` with a
+      // source-binding wrappers (`bindEnv()`/`bindConfig()` with a
       // nullish initial state that they rebuild during `parse()`), and
       // class-instance initial states all see the annotations they
       // need.  `inheritAnnotations()` handles the object cases (plain

@@ -4893,7 +4893,7 @@ describe("multiple", () => {
     });
 
     it("preserves optional(multiple(min>0)) fallback on empty input", () => {
-      // Regression guard: optional() / withDefault() must continue to
+      // Regression guard: optional()/withDefault() must continue to
       // absorb multiple(min>0) parse failures on empty input after
       // #408, so that the fallback values can be applied.
       const result = parse(optional(multiple(flag("-v"), { min: 1 })), []);
@@ -4947,7 +4947,7 @@ describe("multiple", () => {
       // failures with `consumed > 0` must still propagate.  A missing
       // option value triggers that exact branch in `option().parse()`
       // (as opposed to a value-parser validation error, which goes
-      // through the `ValueParserResult` / `complete()` path and would
+      // through the `ValueParserResult`/`complete()` path and would
       // not exercise the propagation branch under test here).
       const result = parse(
         multiple(option("-p", integer({ min: 1, max: 100 }))),
@@ -5664,7 +5664,7 @@ describe("state management edge cases", () => {
     // Async counterpart of `completeOnly()`.  Using a real async parser
     // here ensures `parseAsync(optional(...))` and
     // `parseAsync(object({ x: withDefault(...) }))` actually exercise
-    // `parseOptionalStyleAsync` / the async wrapper path, rather than
+    // `parseOptionalStyleAsync`/the async wrapper path, rather than
     // dispatching through the sync fast path for a sync inner parser.
     function asyncCompleteOnly<T>(
       value: T,
@@ -6060,7 +6060,7 @@ describe("state management edge cases", () => {
     // fix is to return the primitive initial state unchanged from
     // `deriveOptionalInnerParseState()` (nullish initial states still
     // go through `inheritAnnotations()` so source-binding wrappers
-    // like `bindEnv()` / `bindConfig()` can still resolve from
+    // like `bindEnv()`/`bindConfig()` can still resolve from
     // annotations at parse-time).
     it("object({ x: optional(constant(...)) }) with annotations returns the primitive", () => {
       const marker = Symbol.for("@test/issue-233-primitive-constant");
@@ -11840,7 +11840,7 @@ describe("validateValue forwarding through modifiers (#414)", () => {
       // parser that uppercases), CLI parsing passes the normalized
       // value through.  The fallback path must do the same—returning
       // the original array would let non-canonical values leak from
-      // bindEnv() / bindConfig() defaults (review r3048978718).
+      // bindEnv()/bindConfig() defaults (review r3048978718).
       const upcaseString: ValueParser<"sync", string> = {
         mode: "sync",
         metavar: "TEXT",

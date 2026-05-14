@@ -132,7 +132,7 @@ describe("DependencyRuntimeContext", () => {
     assert.deepStrictEqual(result.values, ["prod", undefined]);
   });
 
-  test("getReplayResult / setReplayResult caching", () => {
+  test("getReplayResult/setReplayResult caching", () => {
     const runtime = createDependencyRuntimeContext();
     const key = createReplayKey(["env"], "prod", ["prod"]);
     assert.equal(runtime.getReplayResult(key), undefined);
@@ -225,7 +225,7 @@ describe("DependencyRuntimeContext", () => {
 });
 
 // =============================================================================
-// createDependencyFingerprint / createReplayKey
+// createDependencyFingerprint/createReplayKey
 // =============================================================================
 
 describe("createDependencyFingerprint", () => {
@@ -1750,7 +1750,7 @@ describe("collectExplicitSourceValues—undefined return from extractSourceValue
   test("skips registration when extractSourceValue returns undefined", () => {
     // This exercises registerExplicitSourceValue() with result == null.
     // The extractor returns undefined because the state doesn't contain
-    // a source result yet (unpopulated / initial state).
+    // a source result yet (unpopulated/initial state).
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
     const nodes: RuntimeNode[] = [{

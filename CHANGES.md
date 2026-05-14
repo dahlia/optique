@@ -243,8 +243,8 @@ changes and migration notes carefully when upgrading from 0.x versions.
     wrappers (`optional()`, `withDefault()`, `group()`, `command()`,
     `nonEmpty()`) forward it from inner parsers.  `multiple()` validates
     each array element through the inner parser and additionally
-    enforces its own `min` / `max` arity rules against the array length.
-    Dependency-derived value parsers (`deriveFrom` / `derive`) are
+    enforces its own `min`/`max` arity rules against the array length.
+    Dependency-derived value parsers (`deriveFrom`/`derive`) are
     exempt because their `format()` rebuilds from default dependency
     values rather than the live resolved values.  `map()`, `or()`,
     `longestMatch()`, `merge()`, and `concat()` intentionally do not
@@ -346,7 +346,7 @@ changes and migration notes carefully when upgrading from 0.x versions.
 
  -  Replaced the sentinel-based two-pass `SourceContext` contract with an
     explicit `SourceContextRequest` object. `getAnnotations()` and
-    `getInternalAnnotations()` now receive `phase: "phase1"` / `"phase2"`
+    `getInternalAnnotations()` now receive `phase: "phase1"`/`"phase2"`
     requests, so successful first-pass values of `undefined` are no longer
     ambiguous. This removes the need for context-local `undefined` wrapping
     workarounds and fixes custom two-pass contexts that previously could not
@@ -359,7 +359,7 @@ changes and migration notes carefully when upgrading from 0.x versions.
 
      -  `SourceContext.getInternalAnnotations()`: optional method for contexts
         to inject additional annotations during collection
-     -  `SourceContextRequest`: explicit phase-1 / phase-2 request object for
+     -  `SourceContextRequest`: explicit phase-1/phase-2 request object for
         `SourceContext.getAnnotations()` and
         `SourceContext.getInternalAnnotations()`
      -  `Parser.shouldDeferCompletion()`: optional method that combinators
@@ -380,7 +380,7 @@ changes and migration notes carefully when upgrading from 0.x versions.
 
  -  Added optional `Symbol.dispose` and `Symbol.asyncDispose` methods to
     `SourceContext`.  Contexts that hold resources (e.g., global registries)
-    can now implement `Disposable` / `AsyncDisposable` for automatic cleanup.
+    can now implement `Disposable`/`AsyncDisposable` for automatic cleanup.
     `runWith()` and `runWithSync()` call dispose on all contexts in a
     `finally` block.  [[#110]]
 
@@ -391,7 +391,7 @@ changes and migration notes carefully when upgrading from 0.x versions.
     [[#240], [#241], [#575], [#581]]
 
  -  Documented and regression-tested `runWith()` cleanup ordering for async
-    parser completion.  `Symbol.dispose` / `Symbol.asyncDispose` now
+    parser completion.  `Symbol.dispose`/`Symbol.asyncDispose` now
     explicitly guarantee that cleanup begins only after the full `runWith()`
     promise settles, including later asynchronous `complete()` work.
     [[#269]]
@@ -600,7 +600,7 @@ changes and migration notes carefully when upgrading from 0.x versions.
     state is an annotation wrapper (e.g., from
     `parse(parser, args, { annotations })`), the inner parser's `parse()`
     now receives an annotated initial state so that `bindEnv()` /
-    `bindConfig()` wrappers under `optional()` / `withDefault()` can
+    `bindConfig()` wrappers under `optional()`/`withDefault()` can
     resolve their fallbacks at top level.  [[#233], [#775]]
 
  -  Fixed `optional()`, `withDefault()`, and `group()` dropping the
@@ -628,7 +628,7 @@ changes and migration notes carefully when upgrading from 0.x versions.
     internal annotation carrier path as other annotation-enabled flows, and
     non-plain objects now receive short-lived annotation views that preserve
     class methods and private fields. This lets annotation-aware parsers and
-    `prompt(optional(...))` / `prompt(withDefault(...))` compositions observe
+    `prompt(optional(...))`/`prompt(withDefault(...))` compositions observe
     outer annotations consistently across all state shapes. [[#594], [#789]]
 
  -  Fixed proxy-based sanitization of deferred prompt values breaking class
@@ -653,7 +653,7 @@ changes and migration notes carefully when upgrading from 0.x versions.
     annotations record with no own symbol keys now behaves identically to
     omitting the `annotations` option entirely: `injectAnnotations()`
     short-circuits, `injectAnnotationsIntoState()` bypasses injection, and
-    the top-level `parseSync()` / `parseAsync()` unwrap step is no longer
+    the top-level `parseSync()`/`parseAsync()` unwrap step is no longer
     triggered.  [[#484], [#778]]
 
  -  Fixed `runWith()`, `runWithSync()`, and the higher-level `run()` helpers
@@ -711,13 +711,13 @@ changes and migration notes carefully when upgrading from 0.x versions.
 
  -  Fixed phase-two source-context inputs when later integrations need to
     inspect parsed values before the final parse completes.  During the
-    second pass of `runWith()` / `runWithSync()`, deferred prompt placeholders
+    second pass of `runWith()`/`runWithSync()`, deferred prompt placeholders
     are now scrubbed from parsed values before they reach later dynamic
     contexts, while preserving earlier-context precedence and stable
     parsed-value identity within the phase-two pass.  [[#177], [#490]]
 
  -  Fixed `runWith()` and `runWithSync()` skipping context disposal
-    (`Symbol.dispose` / `Symbol.asyncDispose`) on early help, version,
+    (`Symbol.dispose`/`Symbol.asyncDispose`) on early help, version,
     and completion exits.  Contexts are now disposed on every exit path,
     including early meta-command exits.  [[#226], [#733]]
 
@@ -1980,7 +1980,7 @@ changes and migration notes carefully when upgrading from 0.x versions.
     error that a CLI-sourced value would produce.  Fallback values that
     flow through `map()` are exempt because the mapped output type no
     longer matches the inner parser's constraints; dependency-derived
-    value parsers (`derive` / `deriveFrom`) are also exempt because
+    value parsers (`derive`/`deriveFrom`) are also exempt because
     their `format()` rebuilds from default dependency values.  This is
     a behavior change for any code that relied on constraint-violating
     config values or defaults being accepted.  [[#414], [#777]]
@@ -2001,7 +2001,7 @@ changes and migration notes carefully when upgrading from 0.x versions.
     `undefined`, so top-level primitive parsers still reach the second
     config-loading phase correctly.  [[#161], [#164]]
 
- -  Fixed phase-two `load(parsed)` / `getConfigPath(parsed)` inputs for
+ -  Fixed phase-two `load(parsed)`/`getConfigPath(parsed)` inputs for
     unresolved prompt-backed values.  Config callbacks now receive scrubbed
     parsed values with deferred prompt placeholders normalized to
     `undefined`, while keeping the original parsed object identity when no
@@ -2127,7 +2127,7 @@ environment variable integration via source contexts.  [[#86], [#135]]
     source for a derived parser.  Fallback values that flow through
     `map()` are exempt because the mapped output type no longer matches
     the inner parser's constraints; dependency-derived value parsers
-    (`derive` / `deriveFrom`) are also exempt because their `format()`
+    (`derive`/`deriveFrom`) are also exempt because their `format()`
     rebuilds from default dependency values.  This is a behavior change
     for any code that relied on constraint-violating environment values
     or defaults being accepted.  [[#414], [#777]]

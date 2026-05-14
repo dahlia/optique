@@ -357,6 +357,10 @@ When writing documentation in English:
  -  When an em dash is used mid-sentence, write it without surrounding spaces:
     `word—word`, not `word — word`.  Exception: in list items that follow the
     `- *Term* — Description` pattern, spaces around the em dash are acceptable.
+ -  When a slash is used as an “or”/alternatives separator, write it without
+    surrounding spaces: `bindEnv()/bindConfig()`, not
+    `bindEnv() / bindConfig()`. Exception: for division or fraction
+    expressions, keep the spaces (e.g., `distance / input length`, `128 / 255`).
 
 
 Markdown style guide

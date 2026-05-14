@@ -371,14 +371,14 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
 
 /**
  * Computes the inner state to pass through to the wrapped parser inside
- * {@link optional} / {@link withDefault}.  When the outer state is an
+ * {@link optional}/{@link withDefault}.  When the outer state is an
  * array, the inner state is `state[0]`.  Otherwise, including the
  * common case where `optional()` sits at top level and the outer state
- * is either `undefined` or an annotation wrapper from `parseOptionalLike`
- * / `parse({ annotations })`, we use the wrapped parser's
+ * is either `undefined` or an annotation wrapper from `parseOptionalLike`/
+ * `parse({ annotations })`, we use the wrapped parser's
  * `initialState`, propagating annotations from the outer state so that
- * source-binding wrappers under `optional()` / `withDefault()` (e.g.,
- * `bindEnv()` / `bindConfig()`) can resolve their fallbacks.
+ * source-binding wrappers under `optional()`/`withDefault()` (e.g.,
+ * `bindEnv()`/`bindConfig()`) can resolve their fallbacks.
  *
  * @internal
  */
@@ -394,7 +394,7 @@ function deriveOptionalInnerParseState<TState>(
     // (the parent stamps the array wrapper, not the inner element).
     // Mirror the object-state part of
     // `normalizeOptionalLikeInnerState()`'s array handling so that
-    // source-binding wrappers under `optional()` / `withDefault()` see
+    // source-binding wrappers under `optional()`/`withDefault()` see
     // the same annotations on parse-time re-entry that they see in
     // complete-time, instead of dropping them on the way back into the
     // inner parser. Primitive inner states still pass through verbatim
@@ -411,8 +411,8 @@ function deriveOptionalInnerParseState<TState>(
   }
   // Propagate any annotations carried by the outer wrapper state into
   // the inner parser's initial state so that source-binding wrappers
-  // like `bindEnv()` / `bindConfig()` placed under
-  // `optional()` / `withDefault()` can resolve from annotations at top
+  // like `bindEnv()`/`bindConfig()` placed under
+  // `optional()`/`withDefault()` can resolve from annotations at top
   // level.  Non-nullish primitive initial states (e.g. `constant("v")`
   // whose `initialState` is `"v"`) are returned verbatim: otherwise
   // `inheritAnnotations()` would wrap the primitive into an opaque
@@ -420,8 +420,8 @@ function deriveOptionalInnerParseState<TState>(
   // like `constant()` would return that wrapper from `complete()`
   // instead of the original primitive, leaking through `object()`
   // fields as an empty-looking object.  Nullish initial states
-  // (`undefined` / `null`, the "no state yet" signal used by
-  // `option()` / `argument()` / `bindEnv()` / `bindConfig()`) still go
+  // (`undefined`/`null`, the "no state yet" signal used by
+  // `option()`/`argument()`/`bindEnv()`/`bindConfig()`) still go
   // through `inheritAnnotations()` so source-binding wrappers can read
   // the propagated annotations from their `parse()` context. Object-shaped
   // initial states go through delegated annotation state tracking so any
@@ -699,7 +699,7 @@ export function optional<M extends Mode, TValue, TState>(
     $stateType: [],
     // Forward the non-CLI source-binding marker so that `optional()`'s
     // `complete()` method can delegate to the inner parser when the
-    // wrapped parser is a `bindEnv()` / `bindConfig()` source binding.
+    // wrapped parser is a `bindEnv()`/`bindConfig()` source binding.
     // This ensures source fallbacks resolve even when object()'s
     // zero-consumption pass skips `optional.parse()` because the inner
     // parser has leadingNames from its own wrapped `option()`.
@@ -2750,7 +2750,7 @@ export function multiple<M extends Mode, TValue, TState>(
     // Mirrors the arity branch of `validateMultipleResult` above so that
     // fallback validation failures look identical to CLI failures (same
     // number formatting via `toLocaleString("en")`, same "but got only"
-    // phrasing, and the same `options.errors.tooFew` / `tooMany`
+    // phrasing, and the same `options.errors.tooFew`/`tooMany`
     // customization).
     const validateArity = (
       values: readonly TValue[],

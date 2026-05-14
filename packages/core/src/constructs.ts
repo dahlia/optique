@@ -11860,7 +11860,7 @@ export function conditional(
           // While `state.speculative` is set, the selection is still
           // tentative—the discriminator hasn't yet confirmed it.
           // Keep parse results provisional across subsequent calls so
-          // outer combinators (or() / longestMatch()) don't treat the
+          // outer combinators (or()/longestMatch()) don't treat the
           // unverified speculative selection as definitive.  The flag
           // is consulted (and locally cleared) during completion
           // verification—completeAsync() does not write the cleared

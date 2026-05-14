@@ -125,7 +125,7 @@ export interface ManPageOptions {
  * Formats a date for use in man pages.
  *
  * When a `Date` object is given, the month and year are extracted using
- * the host's local timezone (`getMonth()` / `getFullYear()`).  This means
+ * the host's local timezone (`getMonth()`/`getFullYear()`).  This means
  * the same `Date` instant may produce different output on machines in
  * different timezones.  Pass a pre-formatted string (e.g., `"January 2026"`)
  * if you need timezone-independent output.

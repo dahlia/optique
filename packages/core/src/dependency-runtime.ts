@@ -4,7 +4,7 @@
  * The dependency runtime centralizes dependency resolution state that was
  * previously spread across parser states and wrapper markers.  Constructs
  * and the top-level entry points will eventually use this runtime instead
- * of the old `resolveDeferredParseStates` / `collectDependencies` pipeline.
+ * of the old `resolveDeferredParseStates`/`collectDependencies` pipeline.
  *
  * @internal
  * @since 1.0.0

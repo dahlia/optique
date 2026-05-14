@@ -1142,7 +1142,7 @@ describe("bindEnv()", () => {
     });
 
     it("does not attach validateValue to derived value parsers", () => {
-      // Derived value parsers (deriveFrom / derive) rebuild from default
+      // Derived value parsers (deriveFrom/derive) rebuild from default
       // dependency values, so their format() does not correspond to a
       // live-validated round-trip.  bindEnv must skip validation in that
       // case and return the configured default unchanged.

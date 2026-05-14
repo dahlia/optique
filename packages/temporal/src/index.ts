@@ -445,7 +445,7 @@ const CALENDAR_ANNOTATION_REQUIRED = String.raw`\[!?u-ca=[a-zA-Z0-9\-]+\]`;
 
 /**
  * Year portion: either 4 digits (`YYYY`) or a sign-prefixed 6-digit expanded
- * year (`+YYYYYY` / `-YYYYYY`).
+ * year (`+YYYYYY`/`-YYYYYY`).
  */
 const YEAR = String.raw`([+-]\d{6}|\d{4})`;
 

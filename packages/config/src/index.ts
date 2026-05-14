@@ -1087,7 +1087,7 @@ function validateFallbackValue<M extends "sync" | "async", TValue>(
  *                     key callback.
  * @throws {Error} Propagates errors thrown by
  *                 `innerParser.validateValue()` (via
- *                 {@link getConfigOrDefault} / {@link validateFallbackValue})
+ *                 {@link getConfigOrDefault}/{@link validateFallbackValue})
  *                 while revalidating a config-sourced value or the
  *                 configured `default` against the inner CLI parser's
  *                 constraints (see issue #414).

@@ -11533,7 +11533,7 @@ describe("branch coverage: facade.ts edge cases", () => {
   // Line 1595: completion case in switch (unreachable guard)
   // Not directly triggerable; skipped (dead code).
 
-  // Lines 1626/1629: help for specific meta-commands (help cmd / version cmd)
+  // Lines 1626/1629: help for specific meta-commands (help cmd/version cmd)
   it("help --help shows help for help command itself", () => {
     const parser = object({});
     let helpOutput = "";

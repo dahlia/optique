@@ -71,7 +71,7 @@ Features
  -  *Common Boolean parser* via `bool()`
  -  *Prefix support* for namespaced environment variables
  -  *Custom env source* for Deno, tests, and custom runtimes
- -  *Composable contexts* with `run()` / `runAsync()` / `runWith()`
+ -  *Composable contexts* with `run()`/`runAsync()`/`runWith()`
 
 
 Documentation

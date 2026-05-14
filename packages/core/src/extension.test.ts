@@ -59,7 +59,7 @@ function createSourceMetadata(
 }
 
 describe("extension", () => {
-  describe("defineTraits() / getTraits()", () => {
+  describe("defineTraits()/getTraits()", () => {
     it("returns an empty object when no traits are defined", () => {
       const parser = createTestParser();
 

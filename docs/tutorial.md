@@ -1350,7 +1350,7 @@ Here are some directions to explore next:
     [environment variables](./integrations/env.md),
     [config files](./integrations/config.md),
     [interactive prompts](./integrations/inquirer.md),
-    [Zod](./integrations/zod.md) / [Valibot](./integrations/valibot.md),
+    [Zod](./integrations/zod.md)/[Valibot](./integrations/valibot.md),
     [Git references](./integrations/git.md),
     [Temporal dates](./integrations/temporal.md)
  -  [Why Optique?](./why.md): The design philosophy behind parser combinators

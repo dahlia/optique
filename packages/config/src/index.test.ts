@@ -1502,7 +1502,7 @@ describe("bindConfig parity with bindEnv", () => {
   test("bindEnv(bindConfig(...)) composition: env fallback works (issue 2)", () => {
     // When composing bindEnv(bindConfig(...)), the env fallback should still
     // activate when no CLI value is provided.  The bug was that bindConfig
-    // returned success with consumed: [] (from withDefault / no CLI), and
+    // returned success with consumed: [] (from withDefault/no CLI), and
     // bindEnv was seeing that as "CLI provided a value", so it skipped the
     // env fallback.
     const schema = z.object({ port: z.number() });

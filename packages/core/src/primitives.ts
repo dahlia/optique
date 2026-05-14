@@ -917,7 +917,7 @@ export function option<M extends Mode, T>(
     ? extractDependencyMetadata(valueParser)
     : undefined;
   // Shared error formatter used by both complete() and validateValue()
-  // so that fallback validation errors from bindEnv() / bindConfig()
+  // so that fallback validation errors from bindEnv()/bindConfig()
   // carry the same option-name prefix and `options.errors.invalidValue`
   // customization as CLI-sourced errors (see issue #414).
   const formatInvalidValueError = (error: Message): Message =>
@@ -1391,11 +1391,11 @@ export function option<M extends Mode, T>(
     // boolean—`true` when the flag is present and `false` when it is
     // missing (see `option().complete()`).  There are no shape
     // constraints to enforce, but fallback values from `bindEnv()` /
-    // `bindConfig()` originate in `unknown`-typed config / env sources
+    // `bindConfig()` originate in `unknown`-typed config/env sources
     // and a non-boolean would otherwise leak through as the parsed
     // result.  Reject non-booleans with an option-scoped error and
     // accept any boolean unchanged.  Having *some* validator attached
-    // also lets bindEnv(flag-form) / bindConfig(flag-form) forward
+    // also lets bindEnv(flag-form)/bindConfig(flag-form) forward
     // validateValue through downstream wrappers without losing the hook.
     Object.defineProperty(result, "validateValue", {
       value(v: boolean): ModeValue<M, ValueParserResult<boolean>> {
@@ -2394,7 +2394,7 @@ export function argument<M extends Mode, T>(
   const syncValueParser = valueParser as ValueParser<"sync", T>;
   const dependencyMetadata = extractDependencyMetadata(valueParser);
   // Shared error formatter used by both complete() and validateValue()
-  // so that fallback validation errors from bindEnv() / bindConfig()
+  // so that fallback validation errors from bindEnv()/bindConfig()
   // carry the same metavar prefix and `options.errors.invalidValue`
   // customization as CLI-sourced errors (see issue #414).
   const formatInvalidValueError = (error: Message): Message =>

@@ -232,7 +232,7 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
     // short/porcelain formats (where it changes the output structure).
     if (config.branch || config.format === "long") {
       if (config.format === "porcelain" || config.format === "short") {
-        // Machine-readable / short format: ## <branch> header line.
+        // Machine-readable/short format: ## <branch> header line.
         // git uses "## No commits yet on <branch>" for unborn branches.
         if (repo.headDetached()) {
           console.log("## HEAD (no branch)");

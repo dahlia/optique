@@ -70,7 +70,7 @@ export function escapeRoff(text: string): string {
  * Escapes roff-sensitive characters inside a quoted value in body text.
  * Handles backslashes and double quotes so the value can be safely
  * placed between literal `"` delimiters in roff text output (e.g.,
- * `value()` / `values()` message terms).
+ * `value()`/`values()` message terms).
  *
  * This function is *not* safe for roff request arguments such as
  * `.SH "..."`, where groff performs an extra level of escape

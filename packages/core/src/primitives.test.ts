@@ -8044,7 +8044,7 @@ describe("validateValue on primitives (#414)", () => {
     });
 
     it("rejects non-boolean fallback values on a flag-form option", () => {
-      // bindEnv() / bindConfig() can feed values from `unknown` config /
+      // bindEnv()/bindConfig() can feed values from `unknown` config /
       // env sources into validateValue.  A non-boolean fallback would
       // leak through as the parsed result even though the CLI parser
       // can only ever produce a boolean for flag-form options.

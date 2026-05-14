@@ -244,7 +244,7 @@ function analyzeBooleanInner(
   // treated as boolean.  Transform/pipe schemas receive the already-
   // parsed boolean, so the input side determines boolean detection.
   if (typeName === "pipe" || typeName === "ZodPipeline") {
-    // Zod v4 pipe: _def.in / _def.out
+    // Zod v4 pipe: _def.in/_def.out
     const inSchema = def.in;
     if (inSchema != null) {
       return analyzeBooleanInner(inSchema, false, visited);

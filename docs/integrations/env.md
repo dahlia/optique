@@ -390,11 +390,11 @@ bindEnv(option("--name", string({ pattern: /^[A-Z]+$/ })), {
 
 Validation is forwarded through standard combinators (`optional()`,
 `withDefault()`, `group()`, `command()`) and through wrapping
-`bindEnv()` / `bindConfig()` layers, so a constraint defined on a deeply
+`bindEnv()`/`bindConfig()` layers, so a constraint defined on a deeply
 nested primitive is still enforced against a fallback value.
 
 `multiple()` attaches its own `validateValue`: it enforces the
-configured `min` / `max` arity against the fallback array length and,
+configured `min`/`max` arity against the fallback array length and,
 *if* the inner parser exposes a `validateValue` hook, walks each
 element through it.  Arity enforcement is unconditional—it kicks in
 even when the inner parser has no `validateValue`—and a non-array

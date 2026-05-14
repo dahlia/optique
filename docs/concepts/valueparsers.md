@@ -1217,7 +1217,7 @@ IPv4 address as a string (e.g., “192.168.1.1”).
 > [!TIP]
 > See also: [`domain()`](#domain-parser), [`email()`](#email-parser),
 > [`socketAddress()`](#socketaddress-parser),
-> [`ipv4()`](#ipv4-parser) / [`ipv6()`](#ipv6-parser).
+> [`ipv4()`](#ipv4-parser)/[`ipv6()`](#ipv6-parser).
 
 The `hostname()` parser validates DNS hostnames according to RFC 1123. It
 supports flexible options for wildcard hostnames, underscores, localhost
