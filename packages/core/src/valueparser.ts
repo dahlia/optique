@@ -2468,9 +2468,9 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
           `Color components out of range: r=${r}, g=${g}, b=${b}, a=${a}.`,
         );
       }
-      const rh = Math.round(r).toString(16).padStart(2, "0");
-      const gh = Math.round(g).toString(16).padStart(2, "0");
-      const bh = Math.round(b).toString(16).padStart(2, "0");
+      const rh = r.toString(16).padStart(2, "0");
+      const gh = g.toString(16).padStart(2, "0");
+      const bh = b.toString(16).padStart(2, "0");
       if (a === 1) {
         return `#${rh}${gh}${bh}`;
       }
