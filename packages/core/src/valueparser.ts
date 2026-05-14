@@ -8194,8 +8194,11 @@ const SEMVER_SUGGESTIONS: readonly string[] = Object.freeze([
  *
  * @param options Configuration options.
  * @returns A {@link ValueParser} that validates SemVer strings.
- * @throws {TypeError} If {@link SemVerOptionsString.metavar} is an empty
- *   string.
+ * @throws {TypeError} If {@link SemVerOptionsBase.metavar} is an empty string.
+ * @throws {TypeError} If {@link SemVerOptionsBase.allowPrefix} is not a
+ *   boolean.
+ * @throws {TypeError} If {@link SemVerOptionsString.type} is not `"string"`,
+ *   `"object"`, or `undefined`.
  * @since 1.1.0
  */
 export function semVer(
@@ -8210,8 +8213,11 @@ export function semVer(
  * @param options Configuration options with `type: "object"`.
  * @returns A {@link ValueParser} that converts SemVer strings to {@link SemVer}
  *   objects.
- * @throws {TypeError} If {@link SemVerOptionsObject.metavar} is an empty
- *   string.
+ * @throws {TypeError} If {@link SemVerOptionsBase.metavar} is an empty string.
+ * @throws {TypeError} If {@link SemVerOptionsBase.allowPrefix} is not a
+ *   boolean.
+ * @throws {TypeError} If {@link SemVerOptionsObject.type} is not `"string"`,
+ *   `"object"`, or `undefined`.
  * @since 1.1.0
  */
 export function semVer(
@@ -8222,6 +8228,7 @@ export function semVer(
 ): ValueParser<"sync", SemVerString> | ValueParser<"sync", SemVer> {
   const metavar = options.metavar ?? "SEMVER";
   ensureNonEmptyString(metavar);
+  checkEnumOption(options, "type", ["string", "object"]);
   checkBooleanOption(options, "allowPrefix");
   const allowPrefix = options.allowPrefix ?? false;
   const objectMode = options.type === "object";
