@@ -65,13 +65,14 @@ To be released.
     1 KB = 1 024 bytes), and a `type: "bigint"` mode that returns
     `bigint` instead of `number`, enabling exact representation of
     byte counts beyond `Number.MAX_SAFE_INTEGER` (including EB/EiB
-    values).  [[#807]]
+    values).  [[#807], [#814]]
 
 [#801]: https://github.com/dahlia/optique/issues/801
 [#802]: https://github.com/dahlia/optique/pull/802
 [#803]: https://github.com/dahlia/optique/issues/803
 [#805]: https://github.com/dahlia/optique/pull/805
 [#807]: https://github.com/dahlia/optique/issues/807
+[#814]: https://github.com/dahlia/optique/pull/814
 
 ### @optique/env
 
