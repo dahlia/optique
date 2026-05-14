@@ -2212,6 +2212,8 @@ const CSS_NAMED_COLORS: Readonly<Record<string, Color>> = {
   yellowgreen: { r: 154, g: 205, b: 50, a: 1 },
 };
 
+const CSS_NAMED_COLOR_KEYS: readonly string[] = Object.keys(CSS_NAMED_COLORS);
+
 function hslToRgb(
   h: number,
   s: number,
@@ -2325,6 +2327,9 @@ export interface ColorOptions {
  * @returns A sync value parser producing {@link Color} objects.
  * @throws {TypeError} If {@link ColorOptions.metavar} is an empty string, or
  *   if {@link ColorOptions.formats} contains an invalid format name.
+ * @throws {RangeError} If {@link ValueParser.format} is called with a
+ *   {@link Color} whose `r`, `g`, or `b` channel is not an integer in
+ *   0–255, or whose `a` channel is not a finite number in 0–1.
  * @since 1.1.0
  */
 export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
@@ -2461,7 +2466,7 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
     *suggest(prefix: string): Iterable<Suggestion> {
       if (allowNamed) {
         const lowerPrefix = prefix.toLowerCase();
-        for (const name of Object.keys(CSS_NAMED_COLORS)) {
+        for (const name of CSS_NAMED_COLOR_KEYS) {
           if (name.startsWith(lowerPrefix)) {
             yield { kind: "literal", text: name };
           }
