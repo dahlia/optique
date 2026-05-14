@@ -2448,7 +2448,7 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
 
       if (allowNamed) {
         const key = trimmed.toLowerCase();
-        if (key in CSS_NAMED_COLORS) {
+        if (Object.hasOwn(CSS_NAMED_COLORS, key)) {
           return { success: true, value: { ...CSS_NAMED_COLORS[key] } };
         }
       }

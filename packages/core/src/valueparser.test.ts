@@ -17103,6 +17103,18 @@ describe("color()", () => {
       const r = color().parse("");
       assert.ok(!r.success);
     });
+
+    it("rejects prototype-inherited keys like 'constructor'", () => {
+      assert.ok(!color().parse("constructor").success);
+    });
+
+    it("rejects prototype-inherited keys like 'toString'", () => {
+      assert.ok(!color().parse("toString").success);
+    });
+
+    it("rejects '__proto__'", () => {
+      assert.ok(!color().parse("__proto__").success);
+    });
   });
 
   describe("formats option", () => {
