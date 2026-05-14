@@ -2891,7 +2891,7 @@ describe("prompt()", () => {
       const p1 = phaseOneValues[0] as { token: unknown };
       assert.equal(typeof p1.token, "string");
 
-      // Second runWith — placeholder should not be corrupted
+      // Second runWith—placeholder should not be corrupted
       const result2 = await runWith(parser, "test", [context, spyContext], {
         args: [],
         contextOptions: {

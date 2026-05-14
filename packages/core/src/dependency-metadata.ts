@@ -382,7 +382,7 @@ export function composeDependencyMetadata(
     }
 
     case "map": {
-      // map() does not wrap state — it passes through the inner state
+      // map() does not wrap state—it passes through the inner state
       // unchanged.  extractSourceValue is inherited as-is from inner.
       const result: ParserDependencyMetadata = {
         ...inner,

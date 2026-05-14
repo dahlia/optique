@@ -1,5 +1,5 @@
 /**
- * Unit tests for InputTrace — immutable path-keyed trace store.
+ * Unit tests for InputTrace—immutable path-keyed trace store.
  *
  * Part of https://github.com/dahlia/optique/issues/752
  */

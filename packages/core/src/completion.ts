@@ -205,7 +205,7 @@ function _${programName} () {
 
       # Pre-expand file candidates.  When the glob base came from the
       # program's pattern and contains wildcard characters (* or ?),
-      # use it as-is via compgen -G (safe — no command substitution).
+      # use it as-is via compgen -G (safe—no command substitution).
       # Otherwise append * to treat it as a prefix.
       # Note: [ is NOT treated as a glob indicator because it commonly
       # appears in literal filenames like [draft] or foo[1].txt.
@@ -422,7 +422,7 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
             [[ "\$__compare_pattern" == */* ]] && __compare_pattern="\${__compare_pattern%/*}/" || __compare_pattern=""
           fi
           if [[ ( -n "\$__compare_pattern" || -n "\$__norm_prefix" ) && \${#__norm_prefix} -ge \${#__compare_pattern} && "\${__norm_prefix[1,\${#__compare_pattern}]}" == "\$__compare_pattern" && "\$PREFIX" != "\$pattern" ]]; then
-            # User typed an equivalent or extended form — keep PREFIX
+            # User typed an equivalent or extended form—keep PREFIX
             true
           else
             PREFIX="\$pattern"
@@ -602,7 +602,7 @@ ${
                 end
             end
 
-            # Expand tilde prefix for globbing — fish does not expand ~
+            # Expand tilde prefix for globbing—fish does not expand ~
             # inside variable substitutions, so replace it with $HOME
             if string match -q '~/*' -- "$glob_base"
                 set __tilde_prefix "~"
@@ -1285,7 +1285,7 @@ ${
                     \$prefix = \$prefix + '/'
                 }
 
-                # Build the glob path — when the prefix contains wildcard
+                # Build the glob path—when the prefix contains wildcard
                 # characters, use it as-is; otherwise append *
                 \$globPath = if (\$prefix -match '[\*\?]') { \$prefix } else { "\${prefix}*" }
 

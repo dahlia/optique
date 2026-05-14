@@ -813,7 +813,7 @@ export function formatDocPage(
         : 0;
 
       // Once any content has caused a line break inside the description
-      // string, the extra physical offset no longer applies — subsequent
+      // string, the extra physical offset no longer applies—subsequent
       // content lands on a fresh continuation line indented by
       // termIndent + effectiveTermWidth + 2, not by
       // termIndent + termVisibleWidth + 2.

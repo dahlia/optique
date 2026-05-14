@@ -137,7 +137,7 @@ function literalTexts(suggestions: readonly Suggestion[]): string[] {
 // =============================================================================
 
 describe("A. Parse path: derive() × execution contexts", () => {
-  test("A.1 object() — source provided, derived valid", () => {
+  test("A.1 object()—source provided, derived valid", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -150,7 +150,7 @@ describe("A. Parse path: derive() × execution contexts", () => {
     assert.equal(result.value.log, "warn");
   });
 
-  test("A.2 object() — source provided, derived invalid (rejected)", () => {
+  test("A.2 object()—source provided, derived invalid (rejected)", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -162,7 +162,7 @@ describe("A. Parse path: derive() × execution contexts", () => {
     assert.ok(!result.success);
   });
 
-  test("A.3 object() — source omitted (derived uses default)", () => {
+  test("A.3 object()—source omitted (derived uses default)", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -176,7 +176,7 @@ describe("A. Parse path: derive() × execution contexts", () => {
     assert.equal(result.value.log, "debug");
   });
 
-  test("A.4 tuple() — source earlier, derived later", () => {
+  test("A.4 tuple()—source earlier, derived later", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = tuple([
@@ -189,7 +189,7 @@ describe("A. Parse path: derive() × execution contexts", () => {
     assert.equal(result.value[1], "info");
   });
 
-  test("A.5 concat() — source in first child, derived in second", () => {
+  test("A.5 concat()—source in first child, derived in second", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = concat(
@@ -202,7 +202,7 @@ describe("A. Parse path: derive() × execution contexts", () => {
     assert.equal(result.value[1], "warn");
   });
 
-  test("A.6 merge() — source and derived in different children", () => {
+  test("A.6 merge()—source and derived in different children", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = merge(
@@ -217,7 +217,7 @@ describe("A. Parse path: derive() × execution contexts", () => {
 });
 
 describe("A. Parse path: deriveFrom(single) × execution contexts", () => {
-  test("A.7 object() — source provided, derived valid", () => {
+  test("A.7 object()—source provided, derived valid", () => {
     const env = createEnvSource();
     const endpoint = createDerivedFromSingle(env);
     const parser = object({
@@ -235,7 +235,7 @@ describe("A. Parse path: deriveFrom(single) × execution contexts", () => {
     assert.equal(result.value.endpoint, "https://api.example.com");
   });
 
-  test("A.8 object() — source provided, derived invalid", () => {
+  test("A.8 object()—source provided, derived invalid", () => {
     const env = createEnvSource();
     const endpoint = createDerivedFromSingle(env);
     const parser = object({
@@ -251,7 +251,7 @@ describe("A. Parse path: deriveFrom(single) × execution contexts", () => {
     assert.ok(!result.success);
   });
 
-  test("A.9 tuple() — source earlier, derived later", () => {
+  test("A.9 tuple()—source earlier, derived later", () => {
     const env = createEnvSource();
     const endpoint = createDerivedFromSingle(env);
     const parser = tuple([
@@ -269,7 +269,7 @@ describe("A. Parse path: deriveFrom(single) × execution contexts", () => {
     assert.equal(result.value[1], "http://localhost:3000");
   });
 
-  test("A.10 concat() — cross-boundary", () => {
+  test("A.10 concat()—cross-boundary", () => {
     const env = createEnvSource();
     const endpoint = createDerivedFromSingle(env);
     const parser = concat(
@@ -287,7 +287,7 @@ describe("A. Parse path: deriveFrom(single) × execution contexts", () => {
     assert.equal(result.value[1], "http://localhost:8080");
   });
 
-  test("A.11 merge() — cross-child", () => {
+  test("A.11 merge()—cross-child", () => {
     const env = createEnvSource();
     const endpoint = createDerivedFromSingle(env);
     const parser = merge(
@@ -307,7 +307,7 @@ describe("A. Parse path: deriveFrom(single) × execution contexts", () => {
 });
 
 describe("A. Parse path: deriveFrom(multi) × execution contexts", () => {
-  test("A.12 object() — both sources provided, derived valid", () => {
+  test("A.12 object()—both sources provided, derived valid", () => {
     const env = createEnvSource();
     const region = createRegionSource();
     const url = createDerivedFromMulti(env, region);
@@ -330,7 +330,7 @@ describe("A. Parse path: deriveFrom(multi) × execution contexts", () => {
     assert.equal(result.value.url, "https://eu-west.prod.example.com");
   });
 
-  test("A.13 object() — both sources provided, derived invalid", () => {
+  test("A.13 object()—both sources provided, derived invalid", () => {
     const env = createEnvSource();
     const region = createRegionSource();
     const url = createDerivedFromMulti(env, region);
@@ -350,7 +350,7 @@ describe("A. Parse path: deriveFrom(multi) × execution contexts", () => {
     assert.ok(!result.success);
   });
 
-  test("A.14 tuple() — sources and derived in tuple", () => {
+  test("A.14 tuple()—sources and derived in tuple", () => {
     const env = createEnvSource();
     const region = createRegionSource();
     const url = createDerivedFromMulti(env, region);
@@ -373,7 +373,7 @@ describe("A. Parse path: deriveFrom(multi) × execution contexts", () => {
     assert.equal(result.value[2], "http://us-east.dev.local");
   });
 
-  test("A.15 concat() — sources in first child, derived in second", () => {
+  test("A.15 concat()—sources in first child, derived in second", () => {
     const env = createEnvSource();
     const region = createRegionSource();
     const url = createDerivedFromMulti(env, region);
@@ -395,7 +395,7 @@ describe("A. Parse path: deriveFrom(multi) × execution contexts", () => {
     assert.equal(result.value[2], "https://us-east.prod.example.com");
   });
 
-  test("A.16 merge() — sources and derived across children", () => {
+  test("A.16 merge()—sources and derived across children", () => {
     const env = createEnvSource();
     const region = createRegionSource();
     const url = createDerivedFromMulti(env, region);
@@ -426,7 +426,7 @@ describe("A. Parse path: deriveFrom(multi) × execution contexts", () => {
 // =============================================================================
 
 describe("B. Suggest path: derive() × execution contexts", () => {
-  test("B.1 object() — suggests derived values using resolved source", () => {
+  test("B.1 object()—suggests derived values using resolved source", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -441,7 +441,7 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     assert.ok(!texts.includes("debug"), `Unexpected "debug" in ${texts}`);
   });
 
-  test("B.2 object() — suggests derived values using default when source not provided", () => {
+  test("B.2 object()—suggests derived values using default when source not provided", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -455,7 +455,7 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     assert.ok(texts.includes("trace"), `Expected "trace" in ${texts}`);
   });
 
-  test("B.3 tuple() — suggests from the parsed source value", () => {
+  test("B.3 tuple()—suggests from the parsed source value", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = tuple([
@@ -469,7 +469,7 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     assert.ok(!texts.includes("debug"), `Unexpected "debug" in ${texts}`);
   });
 
-  test("B.3a tuple() — does not fall back after invalid source input", () => {
+  test("B.3a tuple()—does not fall back after invalid source input", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = tuple([
@@ -486,7 +486,7 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     assert.deepEqual(texts, []);
   });
 
-  test("B.3b tuple() — keeps unrelated nested source defaults after sibling source failure", () => {
+  test("B.3b tuple()—keeps unrelated nested source defaults after sibling source failure", () => {
     const env = createEnvSource();
     const profile = dependency(choice(["light", "dark"] as const));
     const theme = profile.deriveSync({
@@ -515,7 +515,7 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     assert.ok(!texts.includes("day"), `Unexpected "day" in ${texts}`);
   });
 
-  test("B.4 concat() — suggests with cross-boundary source", () => {
+  test("B.4 concat()—suggests with cross-boundary source", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = concat(
@@ -528,7 +528,7 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     assert.ok(texts.includes("warn"), `Expected "warn" in ${texts}`);
   });
 
-  test("B.4a concat() — suggests with explicit source from multiple()", () => {
+  test("B.4a concat()—suggests with explicit source from multiple()", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = concat(
@@ -543,7 +543,7 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     assert.ok(!texts.includes("trace"), `Unexpected "trace" in ${texts}`);
   });
 
-  test("B.4b concat() — async suggest uses explicit source from multiple()", async () => {
+  test("B.4b concat()—async suggest uses explicit source from multiple()", async () => {
     const env = createEnvSource();
     const log = createAsyncDerivedLogLevel(env);
     const parser = concat(
@@ -563,7 +563,7 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     assert.ok(!texts.includes("trace"), `Unexpected "trace" in ${texts}`);
   });
 
-  test("B.4c object(tuple()) — preserves seeded sources in child contexts", () => {
+  test("B.4c object(tuple())—preserves seeded sources in child contexts", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -578,7 +578,7 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     assert.ok(!texts.includes("trace"), `Unexpected "trace" in ${texts}`);
   });
 
-  test("B.5 merge() — suggests with cross-child source", () => {
+  test("B.5 merge()—suggests with cross-child source", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = merge(
@@ -593,7 +593,7 @@ describe("B. Suggest path: derive() × execution contexts", () => {
 });
 
 describe("B. Suggest path: deriveFrom(single) × execution contexts", () => {
-  test("B.6 object() — suggests derived values from resolved source", () => {
+  test("B.6 object()—suggests derived values from resolved source", () => {
     const env = createEnvSource();
     const endpoint = createDerivedFromSingle(env);
     const parser = object({
@@ -613,7 +613,7 @@ describe("B. Suggest path: deriveFrom(single) × execution contexts", () => {
     );
   });
 
-  test("B.7 merge() — suggests deriveFrom across children (uses source from different child)", () => {
+  test("B.7 merge()—suggests deriveFrom across children (uses source from different child)", () => {
     // Note: merge() suggest resolves deriveFrom() dependencies across
     // children, but the resolution may not pick up the parsed source
     // value for deriveFrom (as opposed to derive).  The suggest path
@@ -640,7 +640,7 @@ describe("B. Suggest path: deriveFrom(single) × execution contexts", () => {
 });
 
 describe("B. Suggest path: deriveFrom(multi) × execution contexts", () => {
-  test("B.8 object() — suggests from multiple resolved sources", () => {
+  test("B.8 object()—suggests from multiple resolved sources", () => {
     const env = createEnvSource();
     const region = createRegionSource();
     const url = createDerivedFromMulti(env, region);
@@ -664,7 +664,7 @@ describe("B. Suggest path: deriveFrom(multi) × execution contexts", () => {
     );
   });
 
-  test("B.9 merge() — suggests deriveFrom(multi) across children", () => {
+  test("B.9 merge()—suggests deriveFrom(multi) across children", () => {
     const env = createEnvSource();
     const region = createRegionSource();
     const url = createDerivedFromMulti(env, region);
@@ -696,7 +696,7 @@ describe("B. Suggest path: deriveFrom(multi) × execution contexts", () => {
 // =============================================================================
 
 describe("C. Wrapper combinations: source wrappers", () => {
-  test("C.1 optional(source) — omitted source does not register dependency", () => {
+  test("C.1 optional(source)—omitted source does not register dependency", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -710,7 +710,7 @@ describe("C. Wrapper combinations: source wrappers", () => {
     assert.equal(result.value.log, "trace");
   });
 
-  test("C.2 withDefault(source, value) — omitted source registers default", () => {
+  test("C.2 withDefault(source, value)—omitted source registers default", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -724,7 +724,7 @@ describe("C. Wrapper combinations: source wrappers", () => {
     assert.equal(result.value.log, "info");
   });
 
-  test("C.2b withDefault(source) — omitted source rejects dev-only value", () => {
+  test("C.2b withDefault(source)—omitted source rejects dev-only value", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -736,7 +736,7 @@ describe("C. Wrapper combinations: source wrappers", () => {
     assert.ok(!result.success);
   });
 
-  test("C.3 optional(withDefault(source, value)) — double wrap", () => {
+  test("C.3 optional(withDefault(source, value))—double wrap", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -750,7 +750,7 @@ describe("C. Wrapper combinations: source wrappers", () => {
     assert.equal(result.value.log, "warn");
   });
 
-  test("C.4 withDefault(optional(source), value) — reverse double wrap", () => {
+  test("C.4 withDefault(optional(source), value)—reverse double wrap", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -764,7 +764,7 @@ describe("C. Wrapper combinations: source wrappers", () => {
     assert.equal(result.value.log, "info");
   });
 
-  test("C.4b optional(or(withDefault(source), withDefault(source))) — omitted exclusive source uses derived defaults", () => {
+  test("C.4b optional(or(withDefault(source), withDefault(source)))—omitted exclusive source uses derived defaults", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -780,7 +780,7 @@ describe("C. Wrapper combinations: source wrappers", () => {
     assert.equal(result.value.log, "trace");
   });
 
-  test("C.5 map(source, f) — breaks source-value preservation", () => {
+  test("C.5 map(source, f)—breaks source-value preservation", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const mappedEnv = map(option("--env", env), (e) => e.toUpperCase());
@@ -812,7 +812,7 @@ describe("C. Wrapper combinations: source wrappers", () => {
 });
 
 describe("C. Wrapper combinations: derived wrappers", () => {
-  test("C.6 map(derived, f) — preserves derived relationship", () => {
+  test("C.6 map(derived, f)—preserves derived relationship", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const mappedLog = map(option("--log", log), (l) => l.toUpperCase());
@@ -826,7 +826,7 @@ describe("C. Wrapper combinations: derived wrappers", () => {
     assert.equal(result.value.log, "INFO");
   });
 
-  test("C.7 optional(derived) — omitted returns undefined", () => {
+  test("C.7 optional(derived)—omitted returns undefined", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -839,7 +839,7 @@ describe("C. Wrapper combinations: derived wrappers", () => {
     assert.equal(result.value.log, undefined);
   });
 
-  test("C.8 withDefault(derived, value) — omitted uses default", () => {
+  test("C.8 withDefault(derived, value)—omitted uses default", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -857,7 +857,7 @@ describe("C. Wrapper combinations: derived wrappers", () => {
 });
 
 describe("C. Wrapper combinations: suggest path", () => {
-  test("C.9 withDefault(source) suggest — uses default for derived suggestions", () => {
+  test("C.9 withDefault(source) suggest—uses default for derived suggestions", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -872,7 +872,7 @@ describe("C. Wrapper combinations: suggest path", () => {
     assert.ok(!texts.includes("debug"), `Unexpected "debug" in ${texts}`);
   });
 
-  test("C.10 optional(source) suggest — uses parser default for derived suggestions", () => {
+  test("C.10 optional(source) suggest—uses parser default for derived suggestions", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -924,7 +924,7 @@ describe("D. argument() with dependencies", () => {
 // =============================================================================
 
 describe("E. Sync/async parity", () => {
-  test("E.1 object() derive() — sync and async produce identical results", async () => {
+  test("E.1 object() derive()—sync and async produce identical results", async () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -937,7 +937,7 @@ describe("E. Sync/async parity", () => {
     assert.deepEqual(syncResult, asyncResult);
   });
 
-  test("E.2 merge() deriveFrom(multi) — sync and async produce identical results", async () => {
+  test("E.2 merge() deriveFrom(multi)—sync and async produce identical results", async () => {
     const env = createEnvSource();
     const region = createRegionSource();
     const url = createDerivedFromMulti(env, region);
@@ -961,7 +961,7 @@ describe("E. Sync/async parity", () => {
     assert.deepEqual(syncResult, asyncResult);
   });
 
-  test("E.3 suggest — sync and async produce identical suggestions", async () => {
+  test("E.3 suggest—sync and async produce identical suggestions", async () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
@@ -974,7 +974,7 @@ describe("E. Sync/async parity", () => {
     assert.deepEqual(syncSuggestions, asyncSuggestions);
   });
 
-  test("E.4 withDefault(source) — sync and async produce identical results", async () => {
+  test("E.4 withDefault(source)—sync and async produce identical results", async () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({

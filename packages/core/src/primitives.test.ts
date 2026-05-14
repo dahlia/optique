@@ -3882,7 +3882,7 @@ describe("command", () => {
 
   it("should not suggest sub-command names even when similar to input", () => {
     // "ad" is close to "add" (a sub-command), but "add" is not valid at the
-    // current position — only "file" is. So no suggestion should appear.
+    // current position—only "file" is. So no suggestion should appear.
     const addCmd = command("add", object({}));
     const removeCmd = command("remove", object({}));
     const fileCmd = command("file", or(addCmd, removeCmd));
@@ -4382,7 +4382,7 @@ describe("command() error customization", () => {
   // Regression tests for issue #117:
   // https://github.com/dahlia/optique/issues/117
   it("should not pass sub-command names to custom notMatched suggestions", () => {
-    // command("file", or(add, remove)) — "add" is typed
+    // command("file", or(add, remove))—"add" is typed
     // The custom notMatched receives suggestions from context.usage.
     // After the fix, the suggestions should NOT contain "add" or "remove"
     // because they are only valid *after* "file" has been consumed.
@@ -6486,7 +6486,7 @@ describe("branch coverage regressions", () => {
         errors: { multiple: message`Already provided.` },
       }),
     ]);
-    // Parse two positional args — second one triggers "multiple" error
+    // Parse two positional args—second one triggers "multiple" error
     const result = parseAsync(parser, ["first", "second"]);
     return (result as Promise<unknown>).then((r) => {
       // The parser may succeed with only first arg consumed, or
@@ -6549,7 +6549,7 @@ describe("branch coverage regressions", () => {
 });
 
 describe("branch coverage: primitives edge cases", () => {
-  // Lines 261/412: getSuggestionsWithDependency/Async — valueParser has no
+  // Lines 261/412: getSuggestionsWithDependency/Async—valueParser has no
   // suggest function.  The early-return branch is uncovered by other tests.
   it("option suggest: valueParser without suggest yields no value suggestions", () => {
     const noSuggest = noSuggestParser();
@@ -6585,7 +6585,7 @@ describe("branch coverage: primitives edge cases", () => {
     assert.deepEqual(suggestions, []);
   });
 
-  // Line 484: suggestOptionAsync — hidden: true causes early return.
+  // Line 484: suggestOptionAsync—hidden: true causes early return.
   it("option suggest: hidden async option returns no suggestions", async () => {
     const parser = option("--secret", asyncFileSuggestingParser(), {
       hidden: true,
@@ -6629,7 +6629,7 @@ describe("branch coverage: primitives edge cases", () => {
     );
   });
 
-  // Lines 1884/1895/1907: suggestCommandAsync — "matched" and "parsing"
+  // Lines 1884/1895/1907: suggestCommandAsync—"matched" and "parsing"
   // async states. Use an async inner parser so the command is async mode.
   it("command suggest async: 'matched' state delegates to inner parser", async () => {
     // The command becomes async because the inner parser is async.
@@ -6674,7 +6674,7 @@ describe("branch coverage: primitives edge cases", () => {
     assert.ok(Array.isArray(suggestions));
   });
 
-  // Lines 2087: command complete async — "matched" state triggers async path.
+  // Lines 2087: command complete async—"matched" state triggers async path.
   // Use a custom async inner parser whose parse() always returns a Promise so
   // command.complete() can call .then() on it correctly.
   it("command complete async: 'matched' state resolves asynchronously", async () => {
@@ -6745,7 +6745,7 @@ describe("branch coverage: primitives edge cases", () => {
     }
   });
 
-  // Line 1330: flag with / prefix — the `${name}:` join format is created
+  // Line 1330: flag with / prefix—the `${name}:` join format is created
   // for /Option style flags (Windows-style).
   it("flag /OPTION:value returns unexpectedValue error", () => {
     const f = flag("/verbose");

@@ -3,7 +3,7 @@
  *
  * Primitives record raw input into the trace so that constructs and the
  * dependency runtime can replay derived parsers with actual dependency values
- * later.  The trace is path-keyed and immutable — every mutation returns a
+ * later.  The trace is path-keyed and immutable—every mutation returns a
  * new instance.
  *
  * @internal

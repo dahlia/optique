@@ -173,7 +173,7 @@ function prepareParsedForContexts(
     }
     if (hasMatchingKey) {
       // If ALL data properties are deferred, the entire object is a
-      // placeholder shell — return undefined instead of a truthy
+      // placeholder shell—return undefined instead of a truthy
       // object with all-undefined fields.
       const isArray = Array.isArray(parsed);
       let allDeferred = true;
@@ -226,7 +226,7 @@ function prepareParsedForContexts(
   // Structured deferred without per-field info (e.g., after map(), or
   // non-plain objects): pass through as-is so that context annotations can
   // still access non-deferred data inside the value.  This is an
-  // intentional trade-off — map() drops deferredKeys because the transform
+  // intentional trade-off—map() drops deferredKeys because the transform
   // may rename/restructure fields, making the inner key set invalid for
   // the output shape.  Placeholder values may be visible to phase-two
   // contexts in this path; the final parse always resolves them correctly.
@@ -1085,7 +1085,7 @@ function combineWithHelpVersion(
 
   // Reorder the usage so that the main parser's usage appears before
   // meta-command (version/completion/help) usage.  The parsing order
-  // remains unchanged — only the display order is affected.
+  // remains unchanged—only the display order is affected.
   // See https://github.com/dahlia/optique/issues/107
   const topUsage = combined.usage[0];
   if (topUsage?.type === "exclusive" && mainParserIndex > 0) {

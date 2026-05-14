@@ -9965,7 +9965,7 @@ describe("socketAddress()", () => {
         host: { type: "both" },
       });
 
-      // 08 contains digit 8, not valid octal — WHATWG IPv4 parsing
+      // 08 contains digit 8, not valid octal—WHATWG IPv4 parsing
       // fails on this part, so the form is not a valid IPv4 literal
       const result = parser.parse("08.0.0.0x1");
       assert.ok(result.success);
@@ -10127,7 +10127,7 @@ describe("socketAddress()", () => {
         host: { type: "both" },
       });
 
-      // Contains digits 8/9, not valid octal — treat as hostname
+      // Contains digits 8/9, not valid octal—treat as hostname
       const result = parser.parse("0189");
       assert.ok(result.success);
       assert.strictEqual(result.value.host, "0189");
@@ -10439,7 +10439,7 @@ describe("socketAddress()", () => {
     it("should reject trailing separator even when defaultPort is set", () => {
       const parser = socketAddress({ defaultPort: 80 });
 
-      // "localhost:" has an explicit trailing separator — the user intended
+      // "localhost:" has an explicit trailing separator—the user intended
       // to specify a port but left it empty.  This should fail, not silently
       // substitute the default port.
       const result = parser.parse("localhost:");
@@ -10479,7 +10479,7 @@ describe("socketAddress()", () => {
     it("should still accept host-only input without separator when defaultPort is set", () => {
       const parser = socketAddress({ defaultPort: 80 });
 
-      // "example.com" has no separator — this is a valid host-only input.
+      // "example.com" has no separator—this is a valid host-only input.
       const result = parser.parse("example.com");
       assert.ok(result.success);
       assert.strictEqual(result.value.host, "example.com");
@@ -10563,7 +10563,7 @@ describe("socketAddress()", () => {
     it("should accept host-only with whitespace separator when no separator in input", () => {
       const parser = socketAddress({ separator: " ", defaultPort: 80 });
 
-      // "localhost" has no space separator — host-only input.
+      // "localhost" has no space separator—host-only input.
       const result = parser.parse("localhost");
       assert.ok(result.success);
       assert.strictEqual(result.value.host, "localhost");
@@ -10571,7 +10571,7 @@ describe("socketAddress()", () => {
     });
 
     it("should reject trailing multi-char separator overlapping trimmed region", () => {
-      // "exampleto " with separator "to " — the separator spans indices
+      // "exampleto " with separator "to "—the separator spans indices
       // 7-9 and the trailing space at index 9 is in the whitespace-
       // trimmed region.  The overlap means the match depends on the
       // trailing whitespace, so it should be treated as a trailing
@@ -11135,7 +11135,7 @@ describe("socketAddress()", () => {
     it("should not surface port error for ambiguous separator when whole input is a hostname", () => {
       // "foo-70000" with separator "-": the port 70000 is out of
       // range, but "foo-70000" is also a valid hostname.  The split
-      // is ambiguous — same as "foo-80" — so the generic format
+      // is ambiguous—same as "foo-80"—so the generic format
       // error should be returned, not the port error.
       const parser = socketAddress({
         separator: "-",
@@ -13468,7 +13468,7 @@ describe("ip()", () => {
     it("should snapshot IPv4 restrictions at construction time", () => {
       const ipv4Opts = { allowPrivate: false };
       const parser = ip({ ipv4: ipv4Opts });
-      // Mutate nested field after construction — should have no effect
+      // Mutate nested field after construction—should have no effect
       ipv4Opts.allowPrivate = true;
       const result = parser.parse("::ffff:192.168.0.1");
       assert.ok(!result.success);
@@ -14269,15 +14269,15 @@ describe("cidr()", () => {
       // the base address is validated, not the network range.
       const parser = cidr({ ipv4: { allowPrivate: false } });
 
-      // Broad prefix — base address 10.0.0.0 is still private
+      // Broad prefix—base address 10.0.0.0 is still private
       const r1 = parser.parse("::ffff:10.0.0.0/97");
       assert.ok(!r1.success);
 
-      // Prefix at /96 — base address is still checked
+      // Prefix at /96—base address is still checked
       const r2 = parser.parse("::ffff:10.0.0.0/96");
       assert.ok(!r2.success);
 
-      // Prefix below /96 — base address is still checked
+      // Prefix below /96—base address is still checked
       const r3 = parser.parse("::ffff:10.0.0.0/80");
       assert.ok(!r3.success);
 
@@ -14346,7 +14346,7 @@ describe("cidr()", () => {
     it("should snapshot IPv4 restrictions at construction time", () => {
       const ipv4Opts = { allowPrivate: false };
       const parser = cidr({ ipv4: ipv4Opts });
-      // Mutate nested field after construction — should have no effect
+      // Mutate nested field after construction—should have no effect
       ipv4Opts.allowPrivate = true;
       const result = parser.parse("::ffff:192.168.0.0/120");
       assert.ok(!result.success);
@@ -15486,12 +15486,12 @@ describe("ValueParser.normalize()", () => {
     assert.equal(mac.normalize!("foo.bar.baz"), "foo.bar.baz");
     // Non-Cisco dotted hex strings are preserved
     assert.equal(mac.normalize!("aaa.bbb.ccc"), "aaa.bbb.ccc");
-    // 3-char octets are invalid — should not be rewritten
+    // 3-char octets are invalid—should not be rewritten
     assert.equal(
       mac.normalize!("aaa:bbb:ccc:ddd:eee:fff"),
       "aaa:bbb:ccc:ddd:eee:fff",
     );
-    // 11-digit bare hex is invalid (need exactly 12) — should not be rewritten
+    // 11-digit bare hex is invalid (need exactly 12)—should not be rewritten
     assert.equal(mac.normalize!("aabbccddeef"), "aabbccddeef");
   });
 
@@ -16271,7 +16271,7 @@ describe("fileSize()", () => {
   });
 });
 
-describe("fileSize() — bigint mode", () => {
+describe("fileSize()—bigint mode", () => {
   const bigintParser = fileSize({ type: "bigint" });
 
   describe("type inference", () => {
@@ -16824,7 +16824,7 @@ describe("color()", () => {
       }
     });
 
-    it("rejects #gg0000 — invalid hex digit", () => {
+    it("rejects #gg0000—invalid hex digit", () => {
       const r = color().parse("#gg0000");
       assert.ok(!r.success);
     });
@@ -16899,17 +16899,17 @@ describe("color()", () => {
       if (r.success) assert.deepEqual(r.value, { r: 0, g: 0, b: 0, a: 0 });
     });
 
-    it("rejects rgb(256, 0, 0) — r > 255", () => {
+    it("rejects rgb(256, 0, 0)—r > 255", () => {
       const r = color().parse("rgb(256, 0, 0)");
       assert.ok(!r.success);
     });
 
-    it("rejects rgba(0, 0, 0, 1.5) — alpha > 1", () => {
+    it("rejects rgba(0, 0, 0, 1.5)—alpha > 1", () => {
       const r = color().parse("rgba(0, 0, 0, 1.5)");
       assert.ok(!r.success);
     });
 
-    it("rejects rgba(0, 0, 0, -0.1) — alpha < 0", () => {
+    it("rejects rgba(0, 0, 0, -0.1)—alpha < 0", () => {
       const r = color().parse("rgba(0, 0, 0, -0.1)");
       assert.ok(!r.success);
     });
@@ -16974,34 +16974,34 @@ describe("color()", () => {
       }
     });
 
-    it("accepts hsl(360, 100%, 50%) — hue wraps to same as 0°", () => {
+    it("accepts hsl(360, 100%, 50%)—hue wraps to same as 0°", () => {
       const r = color().parse("hsl(360, 100%, 50%)");
       assert.ok(r.success);
       if (r.success) assert.deepEqual(r.value, { r: 255, g: 0, b: 0, a: 1 });
     });
 
-    it("accepts hsl(361, 100%, 50%) — out-of-range hue wraps", () => {
+    it("accepts hsl(361, 100%, 50%)—out-of-range hue wraps", () => {
       const r = color().parse("hsl(361, 100%, 50%)");
       assert.ok(r.success);
     });
 
-    it("accepts hsl(-120, 100%, 50%) — negative hue wraps to 240°", () => {
+    it("accepts hsl(-120, 100%, 50%)—negative hue wraps to 240°", () => {
       const r = color().parse("hsl(-120, 100%, 50%)");
       assert.ok(r.success);
       if (r.success) assert.deepEqual(r.value, { r: 0, g: 0, b: 255, a: 1 });
     });
 
-    it("rejects hsl(0, 101%, 50%) — saturation > 100%", () => {
+    it("rejects hsl(0, 101%, 50%)—saturation > 100%", () => {
       const r = color().parse("hsl(0, 101%, 50%)");
       assert.ok(!r.success);
     });
 
-    it("rejects hsl(0, 100%, 101%) — lightness > 100%", () => {
+    it("rejects hsl(0, 100%, 101%)—lightness > 100%", () => {
       const r = color().parse("hsl(0, 100%, 101%)");
       assert.ok(!r.success);
     });
 
-    it("rejects hsla(0, 100%, 50%, 1.1) — alpha > 1", () => {
+    it("rejects hsla(0, 100%, 50%, 1.1)—alpha > 1", () => {
       const r = color().parse("hsla(0, 100%, 50%, 1.1)");
       assert.ok(!r.success);
     });
@@ -17528,7 +17528,7 @@ describe("semVer()", () => {
     });
   });
 
-  describe("parse() — string mode (default)", () => {
+  describe("parse()—string mode (default)", () => {
     it("parses a basic version", () => {
       const result = semVer().parse("1.2.3");
       assert.ok(result.success);
@@ -17615,7 +17615,7 @@ describe("semVer()", () => {
     });
   });
 
-  describe("parse() — numeric limits", () => {
+  describe("parse()—numeric limits", () => {
     it("accepts Number.MAX_SAFE_INTEGER as major", () => {
       const result = semVer({ type: "object" }).parse(
         `${Number.MAX_SAFE_INTEGER}.0.0`,
@@ -17631,7 +17631,7 @@ describe("semVer()", () => {
     });
   });
 
-  describe("parse() — allowPrefix option", () => {
+  describe("parse()—allowPrefix option", () => {
     it("accepts v-prefixed input when allowPrefix: true", () => {
       const result = semVer({ allowPrefix: true }).parse("v1.2.3");
       assert.ok(result.success);
@@ -17655,7 +17655,7 @@ describe("semVer()", () => {
     });
   });
 
-  describe("parse() — object mode", () => {
+  describe("parse()—object mode", () => {
     it("parses basic version into components", () => {
       const result = semVer({ type: "object" }).parse("1.2.3");
       assert.ok(result.success);

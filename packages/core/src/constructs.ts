@@ -3336,7 +3336,7 @@ export function or(
     ) {
       // Persist the branch state so wrappers like multiple() can
       // see the state change.  Only propagate provisional from the
-      // selected branch — a definitively resolved branch (e.g.,
+      // selected branch—a definitively resolved branch (e.g.,
       // constant()) should not be marked provisional, so that
       // or(or(constant("inner")), constant("outer")) correctly
       // returns "inner".
@@ -3474,7 +3474,7 @@ export function or(
                   // that returns a non-provisional success (e.g., a child
                   // parser that didn't propagate provisional itself)
                   // would clear the flag in state, and outer combinators
-                  // would treat the branch as definitive — blocking the
+                  // would treat the branch as definitive—blocking the
                   // intended fallthrough to definitive alternatives.
                   provisional: true as const,
                   consumed: [
@@ -3944,7 +3944,7 @@ export function or(
   defineInheritedAnnotationParser(singleResult);
 
   // or() does NOT forward normalizeValue because the active branch is
-  // unknown at default time — normalizing through the wrong branch would
+  // unknown at default time—normalizing through the wrong branch would
   // produce values that differ from what parse() returns.  The same
   // reasoning applies to validateValue (#414): a fallback value may
   // belong to any branch, so revalidating through a single arbitrary
@@ -4513,7 +4513,7 @@ export function longestMatch(
   defineInheritedAnnotationParser(multiResult);
 
   // longestMatch() does NOT forward normalizeValue because the winning
-  // branch is unknown at default time — normalizing through the wrong
+  // branch is unknown at default time—normalizing through the wrong
   // branch would produce values that differ from what parse() returns.
   // The same reasoning applies to validateValue (#414).
   return multiResult as Parser<
@@ -4641,7 +4641,7 @@ function* suggestObjectSync<
 
   // Pre-complete dependency source defaults (old-protocol bridge).
   // This is the single evaluation point for lazy defaults in the
-  // suggest path — do NOT also call fillMissingSourceDefaults which
+  // suggest path—do NOT also call fillMissingSourceDefaults which
   // would evaluate the same defaults a second time.
   completeDependencySourceDefaults(
     context,
@@ -5155,7 +5155,7 @@ function filterExcludedFieldParsers<T>(
 /**
  * Pre-completes dependency source fields and registers their values in
  * the given registry.  Unlike `completeDependencySourceDefaults()` (used
- * by suggest), this function handles all four Phase 1 cases — including
+ * by suggest), this function handles all four Phase 1 cases—including
  * PendingDependencySourceState in arrays and wrappedDependencySourceMarker.
  *
  * The original state is NOT modified; only the registry is populated.
@@ -6137,7 +6137,7 @@ export function object<
           // registered in the runtime for derived-parser replay.
           // resolveStateWithRuntime (Phase 2) then collects matched
           // DependencySourceState from the raw state tree, which may
-          // overwrite defaults with actual CLI values — that is correct.
+          // overwrite defaults with actual CLI values—that is correct.
           const runtime = exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec: ExecutionContext = {
@@ -10042,7 +10042,7 @@ function preParseSuggestLoop(
     ) {
       return tried as Promise<ParserContext<readonly unknown[]>>;
     }
-    // A sync parser consumed input — restart the outer loop.
+    // A sync parser consumed input—restart the outer loop.
     currentContext = tried as ParserContext<readonly unknown[]>;
     changed = true;
   }
@@ -10109,7 +10109,7 @@ function tryParseSuggestList(
               matchedParsers,
             );
           }
-          // This async parser didn't consume — try the remaining parsers.
+          // This async parser didn't consume—try the remaining parsers.
           // If one of them consumes, restart the full outer loop.
           const next = tryParseSuggestList(
             context,
@@ -10119,7 +10119,7 @@ function tryParseSuggestList(
             tail,
           );
           if (next === null) return { ...context, state: stateArray };
-          // A tail parser consumed — restart the loop on the updated
+          // A tail parser consumed—restart the loop on the updated
           // context, but only if the buffer actually shrank; otherwise
           // we'd re-enter with the same state and recurse infinitely.
           if (
@@ -10588,7 +10588,7 @@ export function concat(
           }
         } else if (result.deferred) {
           // Opaque deferred array child (e.g., after map()). Don't
-          // mark all indices — that would blank out non-deferred
+          // mark all indices—that would blank out non-deferred
           // elements. Let them pass through with placeholder values.
           hasDeferred = true;
         }
@@ -10600,7 +10600,7 @@ export function concat(
           } else if (
             result.value == null || typeof result.value !== "object"
           ) {
-            // Scalar deferred child — record its index.
+            // Scalar deferred child—record its index.
             deferredKeys.set(baseIndex, null);
           } else {
             hasDeferred = true;
@@ -10706,7 +10706,7 @@ export function concat(
           } else if (
             result.value == null || typeof result.value !== "object"
           ) {
-            // Scalar deferred child — record its index.
+            // Scalar deferred child—record its index.
             deferredKeys.set(baseIndex, null);
           } else {
             hasDeferred = true;
@@ -11139,7 +11139,7 @@ export function group<M extends Mode, TValue, TState>(
       // the group was originally labeling.  When group() wraps command
       // parsers (via or()), the initial state produces command entries.
       // Once a command is selected, the inner parser's flags/options are
-      // returned instead — the group label should not apply to those.
+      // returned instead—the group label should not apply to those.
       //
       // Additionally, if the selected command itself exposes further nested
       // subcommands (e.g. `alias` containing `delete`, `set`, …), those
@@ -11709,7 +11709,7 @@ export function conditional(
 
           // Branch parse failed but discriminator succeeded.
           if (discriminatorResult.consumed.length > 0) {
-            // Discriminator consumed input — commit to the branch even
+            // Discriminator consumed input—commit to the branch even
             // though it hasn't consumed yet (it may on the next call).
             return {
               success: true,
@@ -11858,12 +11858,12 @@ export function conditional(
         return {
           success: true,
           // While `state.speculative` is set, the selection is still
-          // tentative — the discriminator hasn't yet confirmed it.
+          // tentative—the discriminator hasn't yet confirmed it.
           // Keep parse results provisional across subsequent calls so
           // outer combinators (or() / longestMatch()) don't treat the
           // unverified speculative selection as definitive.  The flag
           // is consulted (and locally cleared) during completion
-          // verification — completeAsync() does not write the cleared
+          // verification—completeAsync() does not write the cleared
           // state back into parse-time state.
           ...((state.speculative || branchResult.provisional)
             ? { provisional: true as const }
@@ -11970,7 +11970,7 @@ export function conditional(
             // conditional) don't count toward the definitive ambiguity
             // check but are tracked separately.  If multiple
             // provisional results exist, they are discarded to keep
-            // branch selection order-independent.  Don't break — later
+            // branch selection order-independent.  Don't break—later
             // definitive branches must still be examined.
             if (branchResult.provisional) {
               if (provisionalHit == null && !provisionalAmbiguous) {
@@ -11988,7 +11988,7 @@ export function conditional(
             speculativeHit = { key, bp, result: branchResult };
           }
           // Track consuming failures for better error messages, but
-          // keep trying other branches — a later branch may succeed
+          // keep trying other branches—a later branch may succeed
           // (e.g., flag("--x") vs option("--x", string())).
           if (
             !branchResult.success && branchResult.consumed > 0 &&
@@ -12057,7 +12057,7 @@ export function conditional(
           }
         }
 
-        // No named branch consumed — fall back to the default branch.
+        // No named branch consumed—fall back to the default branch.
         // Use speculationContext so the default branch sees any buffer
         // or optionsTerminated changes from the discriminator parse.
         //
@@ -12134,7 +12134,7 @@ export function conditional(
         // specific error than the generic stall the top-level loop
         // would produce.  Return it after the default branch has been
         // tried, and only when speculation was not skipped due to
-        // either definitive or provisional ambiguity — otherwise the
+        // either definitive or provisional ambiguity—otherwise the
         // returned error would be order-dependent and contradict the
         // ambiguity-skip intent.
         if (
@@ -12376,7 +12376,7 @@ export function conditional(
       Parser<"sync", unknown, unknown>
     >;
 
-    // No branch selected yet — try completing the deferred discriminator,
+    // No branch selected yet—try completing the deferred discriminator,
     // then fall through to the default branch.  The sync path runs during
     // all phases (including parse-time probes from object/tuple/merge)
     // because sync discriminators are side-effect-free.  The async path
@@ -12470,7 +12470,7 @@ export function conditional(
             }
             return branchResult;
           }
-          // Discriminator resolved but branch not found — use noMatch.
+          // Discriminator resolved but branch not found—use noMatch.
           if (syncDefaultBranch === undefined) {
             return {
               success: false,
@@ -12478,7 +12478,7 @@ export function conditional(
             };
           }
         } else if (syncDefaultBranch === undefined) {
-          // Discriminator failed and no default — surface the error.
+          // Discriminator failed and no default—surface the error.
           return deferredDiscriminatorResult;
         }
       }
@@ -12573,7 +12573,7 @@ export function conditional(
       dependencyRuntime: runtime,
       dependencyRegistry: runtime.registry,
     };
-    // Only complete the discriminator when needed — skip re-completion
+    // Only complete the discriminator when needed—skip re-completion
     // when the cached discriminatorValue already matches the selected
     // branch key, avoiding side effects from non-idempotent discriminators.
     const needsDiscriminatorCompletion = state.selectedBranch.kind !==
@@ -12786,7 +12786,7 @@ export function conditional(
       }
 
       // Parse/suggest probe with no branch selected: do NOT call
-      // defaultBranch.complete() OR discriminator.complete() — both
+      // defaultBranch.complete() OR discriminator.complete()—both
       // may contain side-effecting completers (e.g., prompt(), bindEnv)
       // that should only fire during the real complete pass.  This
       // applies whether or not a default branch is configured: when
@@ -12884,7 +12884,7 @@ export function conditional(
     // branch in mismatch cases, potentially throwing or running side
     // effects that should have been pre-empted by the mismatch error.
     // The resolve step is therefore deferred until after the mismatch
-    // check below — see `resolvedBranchState` further down.
+    // check below—see `resolvedBranchState` further down.
     const completionExec: ExecutionContext = {
       ...(exec ?? {
         usage: branchParser.usage,
@@ -12970,7 +12970,7 @@ export function conditional(
     // resolved discriminator value matches.  A mismatch means
     // contradictory input (e.g., --threads provided but discriminator
     // resolved to "slow").  The speculative branch already consumed
-    // tokens during parse, so recovery is not possible — the tokens
+    // tokens during parse, so recovery is not possible—the tokens
     // are committed to the wrong branch.
     if (
       wasSpeculative &&
@@ -13331,7 +13331,7 @@ export function conditional(
 
       // Try resolving the discriminator for branch suggestions
       // (see sync counterpart for rationale).  Only attempt completion
-      // for sync discriminators — async ones (e.g., prompt()) may
+      // for sync discriminators—async ones (e.g., prompt()) may
       // trigger side effects that are unsafe during suggest.
       let discResolved = false;
       if (discriminator.mode === "sync") {

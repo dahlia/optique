@@ -4958,7 +4958,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       );
 
-      // Should invoke completion (not error) — the first --completion is the
+      // Should invoke completion (not error)—the first --completion is the
       // meta option; the second --completion is completion payload
       assert.equal(completionResult, "completion-0");
     });
@@ -9830,7 +9830,7 @@ describe("runWithAsync", () => {
         helpOutput.indexOf("completion", otherIndex) > otherIndex,
         "completion should be under Other:",
       );
-      // help command should NOT be under "Other:" — it should be in the
+      // help command should NOT be under "Other:"—it should be in the
       // ungrouped section, which appears before "Other:" (untitled before titled)
       const helpIndex = helpOutput.indexOf("  help");
       assert.ok(
@@ -10472,7 +10472,7 @@ describe("runWithAsync", () => {
         assert.ok(helpShown);
       });
 
-      it("should support multiple option names — all shown in help output", () => {
+      it("should support multiple option names—all shown in help output", () => {
         const parser = object({ name: argument(string()) });
 
         let helpOutput = "";
@@ -11600,7 +11600,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     );
   });
 
-  // Line 2006: default unreachable case — not triggerable from public API
+  // Line 2006: default unreachable case—not triggerable from public API
 
   // Lines 2522-2653: runWith two-phase paths
   it("runWith: async parser + needsEarlyExit returns via async runParser", async () => {

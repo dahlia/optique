@@ -475,7 +475,7 @@ function resolveProgramInput<
  *
  * @since 1.0.0
  */
-// Overload: parser with statically non-empty contexts — returns Promise
+// Overload: parser with statically non-empty contexts—returns Promise
 export function run<
   T extends Parser<Mode, unknown, unknown>,
   const TContexts extends NonEmptySourceContexts,
@@ -500,7 +500,7 @@ export function run<
     & ContextOptionsParam<TContexts, InferValue<T>>,
 ): ModeValue<InferMode<T>, InferValue<T>> | Promise<InferValue<T>>;
 
-// Overload: Program with statically non-empty contexts — returns Promise
+// Overload: Program with statically non-empty contexts—returns Promise
 export function run<
   M extends Mode,
   T,
@@ -979,7 +979,7 @@ function runImpl<T extends Parser<Mode, unknown, unknown>>(
     ) as Promise<InferValue<T>>;
   }
 
-  // No contexts — use runParser directly
+  // No contexts—use runParser directly
   const { programName, args, coreOptions } = buildCoreOptions(
     options,
     programMetadata,

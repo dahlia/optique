@@ -602,7 +602,7 @@ export function dependency<M extends Mode, T>(
     deriveAsync<U>(
       options: DeriveAsyncOptions<T, U>,
     ): DerivedValueParser<"async", U, T> {
-      // Skip mode detection — the type guarantees the factory returns async.
+      // Skip mode detection—the type guarantees the factory returns async.
       return createAsyncDerivedParserFromAsyncFactory(id, options);
     },
   };
@@ -930,7 +930,7 @@ function createSyncDerivedFromParser<
     mode: "sync",
     metavar: options.metavar,
     get placeholder(): T {
-      // The factory is synchronous — it returns a ValueParser, not a
+      // The factory is synchronous—it returns a ValueParser, not a
       // Promise<ValueParser>.  The returned parser's placeholder is
       // a plain T value even for async-mode parsers.
       try {
@@ -1093,7 +1093,7 @@ function createAsyncDerivedFromParserFromAsyncFactory<
     mode: "async",
     metavar: options.metavar,
     get placeholder(): T {
-      // The factory is synchronous — it returns a ValueParser, not a
+      // The factory is synchronous—it returns a ValueParser, not a
       // Promise<ValueParser>.  The returned parser's placeholder is
       // a plain T value even for async-mode parsers.
       try {
@@ -1237,7 +1237,7 @@ function createAsyncDerivedFromParserFromSyncFactory<
     mode: "async",
     metavar: options.metavar,
     get placeholder(): T {
-      // The factory is synchronous — it returns a ValueParser, not a
+      // The factory is synchronous—it returns a ValueParser, not a
       // Promise<ValueParser>.  The returned parser's placeholder is
       // a plain T value even for async-mode parsers.
       try {
@@ -1402,7 +1402,7 @@ function createSyncDerivedParser<S, T>(
     mode: "sync",
     metavar: options.metavar,
     get placeholder(): T {
-      // The factory is synchronous — it returns a ValueParser, not a
+      // The factory is synchronous—it returns a ValueParser, not a
       // Promise<ValueParser>.  The returned parser's placeholder is
       // a plain T value even for async-mode parsers.
       try {
@@ -1543,7 +1543,7 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
     mode: "async",
     metavar: options.metavar,
     get placeholder(): T {
-      // The factory is synchronous — it returns a ValueParser, not a
+      // The factory is synchronous—it returns a ValueParser, not a
       // Promise<ValueParser>.  The returned parser's placeholder is
       // a plain T value even for async-mode parsers.
       try {
@@ -1667,7 +1667,7 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
     mode: "async",
     metavar: options.metavar,
     get placeholder(): T {
-      // The factory is synchronous — it returns a ValueParser, not a
+      // The factory is synchronous—it returns a ValueParser, not a
       // Promise<ValueParser>.  The returned parser's placeholder is
       // a plain T value even for async-mode parsers.
       try {

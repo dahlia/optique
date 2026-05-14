@@ -933,7 +933,7 @@ printf '__FILE__:file::${tildeDir}:0\\n'
 
         const script = bash.generateScript("tilde-pat-cli");
 
-        // Current word is empty — the pattern should drive the glob
+        // Current word is empty—the pattern should drive the glob
         const testScript = `
 export PATH="${tempDir}:$PATH"
 source /dev/stdin <<'COMPLETION_SCRIPT'
@@ -991,7 +991,7 @@ printf '__FILE__:file::${absSrcDir}/:0\\n'
         const script = bash.generateScript("abs-pat-cli");
 
         // Current word starts with ~ so tilde state is set,
-        // but the pattern is absolute — results must not be tilde-rewritten
+        // but the pattern is absolute—results must not be tilde-rewritten
         const testScript = `
 export PATH="${tempDir}:$PATH"
 source /dev/stdin <<'COMPLETION_SCRIPT'
@@ -1045,7 +1045,7 @@ printf '__FILE__:file::src/:0\\n'
 
         const script = bash.generateScript("incr-cli");
 
-        // User has typed "src/ma" — should narrow to main.ts only
+        // User has typed "src/ma"—should narrow to main.ts only
         const testScript = `
 export PATH="${tempDir}:$PATH"
 source /dev/stdin <<'COMPLETION_SCRIPT'
@@ -1103,7 +1103,7 @@ printf '__FILE__:file::src/:0\\n'
 
         const script = bash.generateScript("dot-cli");
 
-        // User typed "./src/ma" — should still narrow to main.ts
+        // User typed "./src/ma"—should still narrow to main.ts
         const testScript = `
 export PATH="${tempDir}:$PATH"
 source /dev/stdin <<'COMPLETION_SCRIPT'
@@ -4097,7 +4097,7 @@ ${functionName}
           l.length > 0
         );
 
-        // Pattern "src/.e" targets hidden files — they must not be filtered out
+        // Pattern "src/.e" targets hidden files—they must not be filtered out
         ok(completions.some((c) => c.includes(".env")));
         ok(completions.some((c) => c.includes(".eslintrc")));
         // Non-matching files should not appear
@@ -4140,7 +4140,7 @@ printf '__FILE__:file::src/:0\\tFile\\n'
           ? functionMatch[1]
           : "__incr_cli_complete";
 
-        // User has typed "src/ma" — should narrow to main.ts only
+        // User has typed "src/ma"—should narrow to main.ts only
         const testScript = `
 set -x PATH "${tempDir}" $PATH
 source "${scriptPath}"

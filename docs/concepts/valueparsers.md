@@ -314,7 +314,7 @@ const delta = fileSize({ allowNegative: true });
 ### SI-as-binary mode
 
 Some tools use `KB`, `MB`, `GB` etc. to mean powers of 1 024 rather than
-1 000 — a widespread but technically incorrect convention.  Enable
+1 000—a widespread but technically incorrect convention.  Enable
 `siAsBinary: true` to match that behaviour:
 
 ~~~~ typescript twoslash
@@ -331,7 +331,7 @@ use powers of 1 024.
 
 By default, `fileSize()` returns `number`, which cannot represent byte counts
 above roughly 9 PB exactly.  Pass `type: "bigint"` to get a `bigint` result
-instead — this lifts the safe-integer restriction and makes `EB`/`EiB` values
+instead—this lifts the safe-integer restriction and makes `EB`/`EiB` values
 usable:
 
 ~~~~ typescript twoslash

@@ -2180,7 +2180,7 @@ describe("formatDocPageAsMan()", () => {
       },
     );
 
-    // No args — getDocPage resolves usageLine for the top-level command.
+    // No args—getDocPage resolves usageLine for the top-level command.
     const page = await getDocPage(parser);
     assert.ok(page);
     const result = formatDocPageAsMan(page, minimalOptions);
@@ -2214,7 +2214,7 @@ describe("formatDocPageAsMan()", () => {
       },
     );
 
-    // With args — getDocPage resolves usageLine for navigated command.
+    // With args—getDocPage resolves usageLine for navigated command.
     const page = await getDocPage(parser, ["config"]);
     assert.ok(page);
     const result = formatDocPageAsMan(page, minimalOptions);
@@ -2388,7 +2388,7 @@ describe("doc-level usage term formatting (nested terms)", () => {
     };
     const result = formatDocPageAsMan(page, minimalOptions);
     // When all inner terms are doc-hidden, the optional renders to "",
-    // which causes the entire entry to be skipped — no "[" and no
+    // which causes the entire entry to be skipped—no "[" and no
     // description text in the output.
     assert.ok(!result.includes("["));
     assert.ok(!result.includes("Hidden arg."));
@@ -2424,7 +2424,7 @@ describe("doc-level usage term formatting (nested terms)", () => {
   it("formats exclusive term with all-empty alternatives as empty string", () => {
     // When all branches of an exclusive term produce empty strings (all
     // terms inside each branch are doc-hidden), formatDocUsageAsRoff returns
-    // "" for the exclusive — line 400 in man.ts.
+    // "" for the exclusive—line 400 in man.ts.
     const page: DocPage = {
       sections: [{
         entries: [{
@@ -2449,7 +2449,7 @@ describe("doc-level usage term formatting (nested terms)", () => {
 
   it("formats exclusive term with exactly one non-empty alternative", () => {
     // When only one alternative is non-empty, the result is unwrapped
-    // (no surrounding parens) — line 401 in man.ts.
+    // (no surrounding parens)—line 401 in man.ts.
     const page: DocPage = {
       sections: [{
         entries: [{
@@ -2473,7 +2473,7 @@ describe("doc-level usage term formatting (nested terms)", () => {
 
   it("formats multiple term with all-hidden inner terms as empty string", () => {
     // When all inner terms of a multiple are doc-hidden,
-    // formatDocUsageAsRoff returns "" — line 389 in man.ts.
+    // formatDocUsageAsRoff returns ""—line 389 in man.ts.
     const page: DocPage = {
       sections: [{
         entries: [{
@@ -2488,7 +2488,7 @@ describe("doc-level usage term formatting (nested terms)", () => {
     };
     const result = formatDocPageAsMan(page, minimalOptions);
     // All inner terms are doc-hidden, so multiple renders to "" and the
-    // entry is skipped entirely — neither ARG nor the description appear.
+    // entry is skipped entirely—neither ARG nor the description appear.
     assert.ok(!result.includes("ARG"));
     assert.ok(!result.includes("A repeatable."));
   });

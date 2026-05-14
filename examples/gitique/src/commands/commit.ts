@@ -219,7 +219,7 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
       try {
         branchName = repo.head().name().replace("refs/heads/", "");
       } catch {
-        // Unborn/just-created branch — read from .git/HEAD directly
+        // Unborn/just-created branch—read from .git/HEAD directly
         try {
           const headContent = readFileSync(
             resolve(repo.path(), "HEAD"),

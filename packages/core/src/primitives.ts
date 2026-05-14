@@ -1388,7 +1388,7 @@ export function option<M extends Mode, T>(
   // return the value unchanged instead of mis-validating.
   if (valueParser == null) {
     // Flag-form option (no value parser): the runtime value is a plain
-    // boolean — `true` when the flag is present and `false` when it is
+    // boolean—`true` when the flag is present and `false` when it is
     // missing (see `option().complete()`).  There are no shape
     // constraints to enforce, but fallback values from `bindEnv()` /
     // `bindConfig()` originate in `unknown`-typed config / env sources

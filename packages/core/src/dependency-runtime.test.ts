@@ -579,7 +579,7 @@ describe("collectExplicitSourceValues", () => {
       state: { success: true, value: "test.txt" },
     }];
     collectExplicitSourceValues(nodes, runtime);
-    // Nothing registered — no error
+    // Nothing registered—no error
   });
 
   test("skips nodes without extractSourceValue", () => {
@@ -603,7 +603,7 @@ describe("collectExplicitSourceValues", () => {
   });
 });
 
-describe("collectExplicitSourceValues — failed sources", () => {
+describe("collectExplicitSourceValues—failed sources", () => {
   test("marks failed source so defaults do not override", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
@@ -626,7 +626,7 @@ describe("collectExplicitSourceValues — failed sources", () => {
       state: sourceState,
     }];
     collectExplicitSourceValues(nodes, runtime);
-    // Source failed — should NOT be registered as a value.
+    // Source failed—should NOT be registered as a value.
     assert.ok(!runtime.hasSource(sourceId));
     // But should be marked as failed.
     assert.ok(runtime.isSourceFailed(sourceId));
@@ -637,7 +637,7 @@ describe("collectExplicitSourceValues — failed sources", () => {
       dependencyIds: [sourceId],
       defaultValues: ["dev"],
     });
-    // Failed source blocks default fallback — resolution stays unresolved.
+    // Failed source blocks default fallback—resolution stays unresolved.
     assert.notEqual(resolution.kind, "resolved");
   });
 
@@ -808,7 +808,7 @@ describe("fillMissingSourceDefaults", () => {
       matched: true,
     }];
     fillMissingSourceDefaults(nodes, runtime);
-    // The source had explicit input that failed — default must not be applied.
+    // The source had explicit input that failed—default must not be applied.
     assert.ok(!runtime.hasSource(sourceId));
   });
 
@@ -835,7 +835,7 @@ describe("fillMissingSourceDefaults", () => {
       state: undefined,
     }];
     fillMissingSourceDefaults(nodes, runtime);
-    // map() breaks source identity — default must not be registered.
+    // map() breaks source identity—default must not be registered.
     assert.ok(!runtime.hasSource(sourceId));
   });
 
@@ -889,7 +889,7 @@ describe("fillMissingSourceDefaults", () => {
       },
       state: undefined,
     }];
-    // Should not throw — returns the failure so the caller can propagate it.
+    // Should not throw—returns the failure so the caller can propagate it.
     const failures = fillMissingSourceDefaults(nodes, runtime);
     assert.ok(!runtime.hasSource(sourceId));
     assert.equal(failures.length, 1);
@@ -1163,7 +1163,7 @@ describe("replayDerivedParser", () => {
   test("uses snapshotted defaults instead of re-evaluating thunk", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
-    // Source is missing — resolution should use defaults.
+    // Source is missing—resolution should use defaults.
     let thunkCalls = 0;
     const metadata: ParserDependencyMetadata = {
       derived: {
@@ -1746,7 +1746,7 @@ describe("buildRuntimeNodesFromArray", () => {
 // Additional branch coverage
 // =============================================================================
 
-describe("collectExplicitSourceValues — undefined return from extractSourceValue", () => {
+describe("collectExplicitSourceValues—undefined return from extractSourceValue", () => {
   test("skips registration when extractSourceValue returns undefined", () => {
     // This exercises registerExplicitSourceValue() with result == null.
     // The extractor returns undefined because the state doesn't contain
@@ -1760,7 +1760,7 @@ describe("collectExplicitSourceValues — undefined return from extractSourceVal
           source: {
             kind: "source",
             sourceId,
-            // Always returns undefined — state is unpopulated
+            // Always returns undefined—state is unpopulated
             extractSourceValue: (_state: unknown) => undefined,
             preservesSourceValue: true,
           },
@@ -1777,7 +1777,7 @@ describe("collectExplicitSourceValues — undefined return from extractSourceVal
   });
 });
 
-describe("replayDerivedParser — additional branches", () => {
+describe("replayDerivedParser—additional branches", () => {
   test("returns undefined when partial dependencies", () => {
     // Two deps, only one registered → resolution.kind === "partial"
     const runtime = createDependencyRuntimeContext();
@@ -1850,7 +1850,7 @@ describe("replayDerivedParser — additional branches", () => {
   });
 });
 
-describe("replayDerivedParserAsync — additional branches", () => {
+describe("replayDerivedParserAsync—additional branches", () => {
   test("returns undefined when dependencies are missing", async () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
@@ -1979,7 +1979,7 @@ describe("replayDerivedParserAsync — additional branches", () => {
   });
 });
 
-describe("fillMissingSourceDefaults — failure result", () => {
+describe("fillMissingSourceDefaults—failure result", () => {
   test("propagates failure when getMissingSourceValue returns { success: false }", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
@@ -2017,7 +2017,7 @@ describe("fillMissingSourceDefaults — failure result", () => {
   });
 });
 
-describe("DependencyRuntimeContext — FailedAwareRegistry clone", () => {
+describe("DependencyRuntimeContext—FailedAwareRegistry clone", () => {
   test("clone() preserves all failed-source state across multiple failures", () => {
     // Mark two distinct sources as failed and verify that both IDs are
     // preserved when the registry is cloned and wrapped in a new context.

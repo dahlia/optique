@@ -230,7 +230,7 @@ export interface BindEnvOptions<M extends Mode, TValue> {
  *                 parsing the environment variable value, or if the inner
  *                 parser's {@link Parser.validateValue} hook throws while
  *                 re-validating a fallback value (environment variable value
- *                 or configured `default`) — the hook can run even when no
+ *                 or configured `default`)—the hook can run even when no
  *                 CLI tokens are parsed (see issue #414).
  * @since 1.0.0
  */

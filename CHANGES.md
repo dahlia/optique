@@ -566,7 +566,7 @@ changes and migration notes carefully when upgrading from 0.x versions.
     `withDefault()`, which absorbed the inner parser's failure on their own.
     `multiple(p, { min: 0 }).parse()` (the default `min`) now absorbs
     zero-consumption inner failures and defers to `complete()`, which
-    returns `[]` — mirroring how `optional()` already handles the same
+    returns `[]`—mirroring how `optional()` already handles the same
     case.  `multiple()` with `min > 0` still propagates zero-consumption
     inner failures so that outer wrappers like `optional()` and
     `withDefault()` continue to absorb them, so for example
@@ -2233,7 +2233,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
  -  Re-exports `Separator` from `@inquirer/prompts` for use in choice lists.
 
  -  `prompt()` always returns an async parser (`mode: "async"`) and integrates
-    cleanly with `bindEnv()` and `bindConfig()` — the prompt is skipped
+    cleanly with `bindEnv()` and `bindConfig()`—the prompt is skipped
     whenever the CLI, environment variable, or config file supplies a value.
 
  -  Added `validate` support to `SelectConfig`, `RawlistConfig`,
@@ -2250,7 +2250,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     false rejections when value-transforming combinators like `map()` changed
     the value domain.  This means prompted values are no longer checked
     against constraints like `integer({ min, max })`, `string({ pattern })`,
-    or `choice()` — those constraints only apply to CLI input.  Use the
+    or `choice()`—those constraints only apply to CLI input.  Use the
     prompt config's `validate`, `min`/`max`/`step`, or `choices` options
     to enforce equivalent constraints on prompted values.
     [[#392], [#613], [#615], [#621]]

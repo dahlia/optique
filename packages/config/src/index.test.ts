@@ -80,7 +80,7 @@ describe("createConfigContext", () => {
     const context = createConfigContext({ schema });
 
     // Symbol.for() would register the symbol so that Symbol.for(description)
-    // returns the *same* symbol — making it accessible by any code that knows
+    // returns the *same* symbol—making it accessible by any code that knows
     // the description string.  Symbol() does not register, so looking it up
     // via Symbol.for(description) produces a different symbol.
     const lookedUp = Symbol.for(context.id.description!);
@@ -243,7 +243,7 @@ describe("bindConfig", () => {
       const context = createConfigContext<{ [sym]: string }>({
         schema: z.object({}) as never,
       });
-      // Should not throw — symbol is a valid property key
+      // Should not throw—symbol is a valid property key
       assert.doesNotThrow(() =>
         bindConfig(option("--name", string()), {
           context,
@@ -256,7 +256,7 @@ describe("bindConfig", () => {
       const context = createConfigContext<{ 0: string }>({
         schema: z.object({}) as never,
       });
-      // Should not throw — number is a valid property key
+      // Should not throw—number is a valid property key
       assert.doesNotThrow(() =>
         bindConfig(option("--name", string()), {
           context,
@@ -961,7 +961,7 @@ describe("bindConfig", () => {
       default: "unused",
     });
 
-    // No meta field — only data is present.
+    // No meta field—only data is present.
     const annotations: Annotations = {
       [context.id]: { data: { outDir: "./dist" } },
     };
@@ -3447,7 +3447,7 @@ describe("bindConfig() with dependency sources", () => {
 
   test("optional(bindConfig(..., default)) uses bindConfig default when config absent", () => {
     const context = createConfigContext({ schema });
-    // The config context is bound, but the config object is empty — bindConfig
+    // The config context is bound, but the config object is empty—bindConfig
     // should fall back to its own `default` for the unbound key.
     const annotations: Annotations = {
       [context.id]: { data: {} },

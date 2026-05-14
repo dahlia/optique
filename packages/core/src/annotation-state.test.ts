@@ -850,7 +850,7 @@ describe("annotation-state", () => {
     "normalizeNestedDelegatedAnnotationState() preserves non-plain objects (Date, RegExp) as-is at the top level",
     () => {
       // Date and RegExp are non-plain objects whose prototype is not
-      // Object.prototype/null — they are neither Array nor Map nor Set.
+      // Object.prototype/null—they are neither Array nor Map nor Set.
       // normalizeNestedDelegatedAnnotationState() should return them
       // unchanged rather than treating them as structured plain objects.
       const date = new Date(2024, 0, 1);
@@ -1053,7 +1053,7 @@ describe("annotation-state", () => {
     () => {
       // When parser does NOT have inheritParentAnnotationsKey set (no
       // defineInheritedAnnotationParser() call), getWrappedChildState() must
-      // still propagate annotations — but only via withAnnotationView(), not
+      // still propagate annotations—but only via withAnnotationView(), not
       // via injectAnnotations().  This is the branch where
       // shouldInheritAnnotations is false and childState is an object.
       const marker = Symbol.for(

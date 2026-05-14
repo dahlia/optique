@@ -1481,7 +1481,7 @@ describe("bindEnv()", () => {
       context,
       key: "HOST",
       parser: string(),
-      // No default — if hasCliValue is wrongly true, it would call
+      // No default—if hasCliValue is wrongly true, it would call
       // mockParser.complete() which returns "from-inner-complete".
       // If hasCliValue is correctly false and env is absent, we want
       // to fall through to the inner parser's complete() so downstream
@@ -1526,7 +1526,7 @@ describe("bindEnv()", () => {
       context,
       key: "HOST",
       parser: string(),
-      // No default — should fall through to inner parser's complete()
+      // No default—should fall through to inner parser's complete()
     });
 
     const result = parse(parser, []);
@@ -1751,7 +1751,7 @@ describe("bindEnv()", () => {
           return v.toString();
         },
       },
-      // No default — should take the error path.
+      // No default—should take the error path.
     });
 
     const completeResult = parser.complete(parser.initialState);
@@ -2047,7 +2047,7 @@ describe("bindEnv()", () => {
       prefix: "DB_",
     });
 
-    // Top-level parser bound to context2 — context1 is only present so
+    // Top-level parser bound to context2—context1 is only present so
     // its annotations overwrite context2's in the merge, exposing the bug.
     const parser = bindEnv(option("--db-host", string()), {
       context: context2,

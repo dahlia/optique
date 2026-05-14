@@ -2172,7 +2172,7 @@ describe("withDefault", () => {
 
   it("still forwards multiple() normalizer through withDefault", () => {
     // Regression guard for https://github.com/dahlia/optique/issues/408
-    // — `withDefault` must keep forwarding `multiple()`'s
+    //—`withDefault` must keep forwarding `multiple()`'s
     // `normalizeValue` through the full wrapper chain even though the
     // configured default is no longer reached at parse time for
     // `min: 0`.  Exercising the composition directly (rather than
@@ -6553,7 +6553,7 @@ describe("nonEmpty", () => {
 
 describe("branch coverage: modifiers edge cases", () => {
   // Line 710: withDefault getDocFragments with options.message and a non-entry
-  // fragment (section) — the else branch that returns the fragment unchanged.
+  // fragment (section)—the else branch that returns the fragment unchanged.
   it("withDefault: options.message skips non-entry fragments", () => {
     // object() returns section fragments; wrap it in withDefault with message
     const inner = object({ x: option("--x", string()) });
@@ -6568,7 +6568,7 @@ describe("branch coverage: modifiers edge cases", () => {
     assert.ok(Array.isArray(fragments.fragments));
   });
 
-  // Line 935: async multiple() parse — "not added" (update existing state).
+  // Line 935: async multiple() parse—"not added" (update existing state).
   // This branch fires when added=false and parse succeeds, so we keep
   // context.state.slice(0, -1) instead of the full context.state.
   it("multiple: async parser updates existing state (slice branch)", async () => {
@@ -6603,7 +6603,7 @@ describe("branch coverage: modifiers edge cases", () => {
     }
   });
 
-  // Line 982: async multiple() complete — inner complete() failure.
+  // Line 982: async multiple() complete—inner complete() failure.
   it("multiple: async complete fails when inner completion fails", async () => {
     const inner: Parser<"async", string, string> = {
       mode: "async" as const,
@@ -6810,7 +6810,7 @@ describe("branch coverage: modifiers edge cases", () => {
     assert.deepEqual(suggestions, [{ kind: "literal", text: "latest-fast" }]);
   });
 
-  // Line 1012: multiple() suggest — shouldInclude returns true for non-literal
+  // Line 1012: multiple() suggest—shouldInclude returns true for non-literal
   // suggestion kind (e.g., "file" or "directory" kinds pass through always).
   function coerceRuntimeSuggestState<TState>(state: unknown): TState {
     // @ts-expect-error: intentionally exercise runtime-only state shapes.
@@ -7126,7 +7126,7 @@ describe("branch coverage: modifiers edge cases", () => {
     assert.deepEqual(result.next.state, []);
   });
 
-  // Line 155/442: async optional/withDefault suggestAsync — state is undefined
+  // Line 155/442: async optional/withDefault suggestAsync—state is undefined
   // (not an array), so the else branch uses syncParser.initialState.
   it("optional: async suggest with undefined state uses initialState", async () => {
     const asyncOpt = optional(
@@ -11838,7 +11838,7 @@ describe("validateValue forwarding through modifiers (#414)", () => {
       // When the inner value parser canonicalizes on parse (e.g., a
       // URL parser that strips trailing slashes, or here a string
       // parser that uppercases), CLI parsing passes the normalized
-      // value through.  The fallback path must do the same — returning
+      // value through.  The fallback path must do the same—returning
       // the original array would let non-canonical values leak from
       // bindEnv() / bindConfig() defaults (review r3048978718).
       const upcaseString: ValueParser<"sync", string> = {

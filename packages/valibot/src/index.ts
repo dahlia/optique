@@ -170,7 +170,7 @@ function isCatchAllSchema(
     });
   }
   // Unwrap any schema with a wrapped field (optional, nullable, nullish,
-  // nonOptional, exactOptional, etc.) — but only if there's no pipe,
+  // nonOptional, exactOptional, etc.)—but only if there's no pipe,
   // since piped wrappers may have rejecting pipe actions.
   if (s.wrapped && !s.pipe) {
     return isCatchAllSchema(s.wrapped, afterTransform);
@@ -212,15 +212,15 @@ function containsAsyncSchema(
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return true;
 
-  // Unwrap optional/nullable/nullish wrappers — but only if there's no
+  // Unwrap optional/nullable/nullish wrappers—but only if there's no
   // pipe, since piped wrappers need their pipe actions inspected too.
   if (s.wrapped && !s.pipe) {
     return containsAsyncSchema(s.wrapped, visited, afterTransform);
   }
 
-  // Check intersect options — all arms must match, so async arms are always
+  // Check intersect options—all arms must match, so async arms are always
   // reachable and must be rejected.
-  // For union/variant — Valibot evaluates arms left-to-right.  A catch-all
+  // For union/variant—Valibot evaluates arms left-to-right.  A catch-all
   // arm makes all *subsequent* arms unreachable, so we only suppress async
   // checking once a catch-all is found scanning in order.
   // After a transform, only type-agnostic catch-alls (unknown/any) are
@@ -460,7 +460,7 @@ function inferMetavar(
     return "VALUE";
   }
 
-  // 8. Check for variant (discriminated union — not suitable for choices)
+  // 8. Check for variant (discriminated union—not suitable for choices)
   if (schemaType === "variant") {
     return "VALUE";
   }

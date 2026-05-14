@@ -923,7 +923,7 @@ describe("valibot()", () => {
 
     it("should not expose choices for v.union() with a catch-all v.any() member", () => {
       // When a union contains a catch-all schema (v.any()), inferChoices
-      // detects it via isCatchAllSchema and returns undefined — no choices
+      // detects it via isCatchAllSchema and returns undefined—no choices
       // are exposed because the union can accept any value.
       const parser = valibot(
         v.union([v.literal("a"), v.any()]) as never,
@@ -1031,7 +1031,7 @@ describe("valibot()", () => {
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
       // v.literal("a") only matches "a", so non-"a" inputs reach the
-      // async arm — this must be rejected.
+      // async arm—this must be rejected.
       const asyncSchema = v.union([v.literal("a"), asyncInner] as never);
       assert.throws(
         () => valibot(asyncSchema as never, { placeholder: "" as never }),
@@ -1133,7 +1133,7 @@ describe("valibot()", () => {
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
-      // Direct containers are unreachable from string input — the outer
+      // Direct containers are unreachable from string input—the outer
       // type check (object/array/tuple) rejects the string first.
       const objParser = valibot(v.object({ a: asyncInner } as never), {
         placeholder: "" as never,
@@ -1283,7 +1283,7 @@ describe("valibot()", () => {
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
-      // v.any() accepts every value of any type — async arm is unreachable
+      // v.any() accepts every value of any type—async arm is unreachable
       const asyncSchema = v.union([v.any(), asyncInner] as never);
       const parser = valibot(asyncSchema as never, {
         placeholder: "" as never,
@@ -1400,7 +1400,7 @@ describe("valibot()", () => {
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
-      // v.email() is a validation — it can reject input, so the string pipe
+      // v.email() is a validation—it can reject input, so the string pipe
       // is NOT a catch-all and the async arm may be reached.
       const asyncSchema = v.union([
         v.pipe(v.string(), v.email()),

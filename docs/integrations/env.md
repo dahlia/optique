@@ -367,8 +367,8 @@ Invalid Boolean value: "maybe". Expected one of "true", "1", "yes", "on",
 Since Optique 1.0.0, fallback values produced by `bindEnv()` are
 re-validated against the inner CLI parser's constraints (regex patterns,
 numeric bounds, `choice()` values, etc.).  This applies to both
-environment variable values — which may have been parsed by a looser
-env-level `parser` option — and to the configured `default`.
+environment variable values—which may have been parsed by a looser
+env-level `parser` option—and to the configured `default`.
 
 For example, the following parser rejects the default `"abc"` because
 it does not match the inner CLI pattern `/^[A-Z]+$/`:
@@ -396,8 +396,8 @@ nested primitive is still enforced against a fallback value.
 `multiple()` attaches its own `validateValue`: it enforces the
 configured `min` / `max` arity against the fallback array length and,
 *if* the inner parser exposes a `validateValue` hook, walks each
-element through it.  Arity enforcement is unconditional — it kicks in
-even when the inner parser has no `validateValue` — and a non-array
+element through it.  Arity enforcement is unconditional—it kicks in
+even when the inner parser has no `validateValue`—and a non-array
 fallback (for example a mis-typed default escaped through `as never`)
 is rejected outright because `multiple()` can never produce a
 non-array shape from CLI input.
@@ -416,7 +416,7 @@ the mapped output type no longer corresponds to the inner parser's
 constraints, and derived value parsers rebuild from *default*
 dependency values rather than the live-resolved ones.  Wrapping an
 inner parser in any of these suppresses revalidation of the wrapped
-primitive's constraints — but outer combinators layered above
+primitive's constraints—but outer combinators layered above
 (notably `multiple()`) still enforce their own checks.
 
 ### Help, version, and completion
@@ -483,8 +483,8 @@ Returns
 Binds a parser to environment variables with fallback priority
 (CLI > environment > default > error).
 
-Fallback values — environment variable values and the configured
-`default` — are re-validated against the inner CLI parser's constraints,
+Fallback values—environment variable values and the configured
+`default`—are re-validated against the inner CLI parser's constraints,
 so constraints like `integer({ min })`, `string({ pattern })`, and
 `choice([...])` cannot be bypassed through an environment variable or
 default.  See *Fallback validation* under “Error handling” for details.

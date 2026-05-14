@@ -1121,7 +1121,7 @@ export function withDefault<
     $valueType: [],
     $stateType: [],
     // Forward the non-CLI source-binding marker.  See `optional()` for
-    // the rationale — the same reasoning applies to `withDefault()`.
+    // the rationale—the same reasoning applies to `withDefault()`.
     ...(parser[unmatchedNonCliDependencySourceStateMarker] === true
       ? { [unmatchedNonCliDependencySourceStateMarker]: true as const }
       : {}),
@@ -1508,7 +1508,7 @@ export function withDefault<
  *
  * Because the `deferred` flag is propagated conservatively, mapped scalar
  * results are treated as missing (`undefined`) during phase-two context
- * collection — even when `transform` only used non-deferred fields.
+ * collection—even when `transform` only used non-deferred fields.
  * For example, `map(object({ apiKey: prompt(...), mode: option(...) }),
  * v => v.mode)` makes phase-two contexts see `undefined` instead of the
  * real `mode` value.  This is the intentional trade-off: the alternative

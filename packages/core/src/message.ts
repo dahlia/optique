@@ -575,8 +575,8 @@ export function formatMessage(
 ): string;
 // The implementation accepts an additional `startWidth` field that is not
 // part of the public API.  Other formatters within this package (e.g.,
-// formatDocPage() in doc.ts) pass it as a plain object variable — not as
-// an inline object literal — so TypeScript's excess-property check does not
+// formatDocPage() in doc.ts) pass it as a plain object variable—not as
+// an inline object literal—so TypeScript's excess-property check does not
 // apply and the field reaches the implementation without being part of the
 // declared public type.
 export function formatMessage(

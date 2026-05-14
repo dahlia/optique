@@ -834,8 +834,8 @@ nested primitive is still enforced against a fallback value.
 `multiple()` attaches its own `validateValue`: it enforces the
 configured `min` / `max` arity against the fallback array length and,
 *if* the inner parser exposes a `validateValue` hook, walks each
-element through it.  Arity enforcement is unconditional — it kicks in
-even when the inner parser has no `validateValue` — and a non-array
+element through it.  Arity enforcement is unconditional—it kicks in
+even when the inner parser has no `validateValue`—and a non-array
 fallback (for example a mis-typed default escaped through `as never`)
 is rejected outright because `multiple()` can never produce a
 non-array shape from CLI input.
@@ -854,7 +854,7 @@ the mapped output type no longer corresponds to the inner parser's
 constraints, and derived value parsers rebuild from *default*
 dependency values rather than the live-resolved ones.  Wrapping an
 inner parser in any of these suppresses revalidation of the wrapped
-primitive's constraints — but outer combinators layered above
+primitive's constraints—but outer combinators layered above
 (notably `multiple()`) still enforce their own checks.
 
 
@@ -885,8 +885,8 @@ Returns
 
 Binds a parser to configuration values with fallback priority.
 
-Fallback values — values loaded from the config file and the configured
-`default` — are re-validated against the inner CLI parser's constraints,
+Fallback values—values loaded from the config file and the configured
+`default`—are re-validated against the inner CLI parser's constraints,
 so constraints like `integer({ min })`, `string({ pattern })`, and
 `choice([...])` cannot be bypassed through a config file or default.
 See *Fallback validation* under “Error handling” for details.

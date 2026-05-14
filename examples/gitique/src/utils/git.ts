@@ -129,7 +129,7 @@ function toRepoRelativePath(repo: Repository, filePath: string): string {
   // Strip the trailing /.git/ or \.git\ (Windows) from the repo path.
   const repoRoot = repo.path().replace(/[/\\]?\.git[/\\]?$/, "");
   const absolutePath = resolve(process.cwd(), filePath);
-  // Normalize to forward slashes — libgit2/es-git expects POSIX separators.
+  // Normalize to forward slashes—libgit2/es-git expects POSIX separators.
   return relative(repoRoot, absolutePath).replace(/\\/g, "/");
 }
 
@@ -153,7 +153,7 @@ export function addFile(
     try {
       isDirectory = lstatSync(absolutePath).isDirectory();
     } catch {
-      // Path doesn't exist — let addPath handle the error
+      // Path doesn't exist—let addPath handle the error
     }
   }
 
@@ -162,7 +162,7 @@ export function addFile(
     // `gitique add .` from a subdirectory stages only that subtree, not the
     // whole repository.
     const repoRelDir = toRepoRelativePath(repo, filePath);
-    // An empty string means the cwd is the repo root — use "*" to match all
+    // An empty string means the cwd is the repo root—use "*" to match all
     const pattern = repoRelDir === "" ? "*" : repoRelDir + "/**";
     // updateAll first to stage deletions of tracked files, then addAll for
     // new and modified files.
@@ -192,7 +192,7 @@ export function addFile(
         // Unborn repository
       }
       // Also allow a file that is staged but not yet committed (in index but
-      // not in HEAD) — staging its deletion is valid even under --force.
+      // not in HEAD)—staging its deletion is valid even under --force.
       const inIndex = index.getByPath(repoRelativePath) !== null;
       if (!trackedInHead && !inIndex) {
         throw new Error(
@@ -216,7 +216,7 @@ export function addFile(
         const headTree = repo.head().peelToTree();
         trackedInHead = headTree.getPath(repoRelativePath) !== null;
       } catch {
-        // Unborn repository — nothing in HEAD
+        // Unborn repository—nothing in HEAD
       }
       // Also handle a staged-but-not-committed file deleted from disk:
       // it's not in HEAD but IS in the index, and staging the deletion is valid.
@@ -308,7 +308,7 @@ export function isIndexEmpty(repo: Repository): boolean {
   try {
     headTree = repo.head().peelToTree();
   } catch {
-    // Unborn repository — index is non-empty when the tree has any entries
+    // Unborn repository—index is non-empty when the tree has any entries
     return indexTree.isEmpty();
   }
 
@@ -351,7 +351,7 @@ export function moveHead(repo: Repository, targetOid: string): void {
 
   // repo.headDetached() returns true for detached HEAD and false when HEAD
   // points to a branch.  repo.head() resolves the ref so symbolicTarget()
-  // is always null there — use headDetached() to distinguish the two cases.
+  // is always null there—use headDetached() to distinguish the two cases.
   if (!repo.headDetached()) {
     // Try to resolve the branch name from the resolved ref first; fall back
     // to reading .git/HEAD directly for unborn branches where repo.head()
@@ -360,7 +360,7 @@ export function moveHead(repo: Repository, targetOid: string): void {
     try {
       branchName = repo.head().name().replace(/^refs\/heads\//, "");
     } catch {
-      // Unborn branch — read the symbolic target from .git/HEAD
+      // Unborn branch—read the symbolic target from .git/HEAD
       try {
         const headContent = readFileSync(resolve(repo.path(), "HEAD"), "utf-8")
           .trim();
@@ -417,8 +417,8 @@ export function getCommitHistory(
  * The current index entry is removed.  If the path exists in HEAD the
  * file is then re-added from the working tree so that it remains tracked
  * rather than appearing as a staged deletion.  This does *not* truly
- * restore the HEAD blob into the index — es-git does not expose an API
- * to add index entries by OID — so a tracked file that was staged after
+ * restore the HEAD blob into the index—es-git does not expose an API
+ * to add index entries by OID—so a tracked file that was staged after
  * modification may remain staged with the modified content.  Files not
  * present in HEAD are removed from the index entirely (unstage an
  * addition).
@@ -434,7 +434,7 @@ export function unstageFile(repo: Repository, filePath: string): void {
     const headTree = repo.head().peelToTree();
     inHead = headTree.getPath(repoRelativePath) !== null;
   } catch {
-    // Unborn repository — nothing in HEAD
+    // Unborn repository—nothing in HEAD
   }
 
   // Verify the path is known to at least one of HEAD or the index before
@@ -457,7 +457,7 @@ export function unstageFile(repo: Repository, filePath: string): void {
     try {
       index.addPath(repoRelativePath);
     } catch {
-      // File was deleted from the working tree — leave the staged deletion
+      // File was deleted from the working tree—leave the staged deletion
     }
   }
   index.write();
@@ -545,7 +545,7 @@ export function getStatus(repo: Repository): FileStatus[] {
     // Staged changes: compare HEAD tree (or empty) to the index.
     // index.writeTree() fails when the index contains unresolved merge
     // conflicts (unmerged entries).  In that case we skip the staged diff
-    // entirely rather than crashing — the unstaged diff below will still
+    // entirely rather than crashing—the unstaged diff below will still
     // show the conflicted files.
     const index = repo.index();
     let indexTreeOid: string | null = null;
@@ -683,7 +683,7 @@ export function getDiff(
       // otherwise HEAD.  Unborn repos fall back to an empty tree.
       let baseTree;
       if (options.commit) {
-        // Explicit commit argument — let revspec errors propagate to the caller.
+        // Explicit commit argument—let revspec errors propagate to the caller.
         // Peel through annotated tags to get the actual commit tree.
         const baseOid = repo.revparseSingle(options.commit);
         const baseObj = repo.findObject(baseOid);
@@ -695,7 +695,7 @@ export function getDiff(
         try {
           baseTree = repo.head().peelToTree();
         } catch {
-          // No HEAD yet (unborn repository) — diff against empty tree
+          // No HEAD yet (unborn repository)—diff against empty tree
         }
       }
       const index = repo.index();

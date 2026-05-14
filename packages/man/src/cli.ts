@@ -366,7 +366,7 @@ async function importModule(
     // Any Node.js entry (including .js and .ts on Node 25.2+) may have
     // transitive JSX/TSX dependencies that need tsx.  Register it
     // opportunistically so the loader is in place before the first
-    // import — Node's ESM loader caches failed module jobs, so a
+    // import—Node's ESM loader caches failed module jobs, so a
     // post-failure retry would not work.
     await tryRegisterTsx();
   }
@@ -456,7 +456,7 @@ async function tryRegisterTsx(): Promise<void> {
     const tsx = await import("tsx/esm/api");
     tsx.register();
   } catch {
-    // Intentionally empty — see JSDoc above.
+    // Intentionally empty—see JSDoc above.
   }
 }
 

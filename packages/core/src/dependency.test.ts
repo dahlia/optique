@@ -1731,7 +1731,7 @@ describe("deriveSync()", () => {
       defaultValue: () => "safe" as const,
     });
 
-    // Factory succeeds, but the derived parser's format() throws — that
+    // Factory succeeds, but the derived parser's format() throws—that
     // exception must not be swallowed.
     assert.throws(() => derived.format("x"), { message: "formatter error" });
   });
@@ -5629,11 +5629,11 @@ describe("top-level option()/argument() with derived parsers", () => {
       defaultValue: () => "dev" as const,
     });
     const parser = option("--level", level);
-    // "debug" is valid for dev choices — should succeed
+    // "debug" is valid for dev choices—should succeed
     const valid = parseSync(parser, ["--level", "debug"]);
     assert.ok(valid.success);
     assert.equal(valid.value, "debug");
-    // "silent" is NOT valid for dev choices — should fail
+    // "silent" is NOT valid for dev choices—should fail
     const invalid = parseSync(parser, ["--level", "silent"]);
     assert.ok(!invalid.success);
   });

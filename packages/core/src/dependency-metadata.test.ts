@@ -342,7 +342,7 @@ describe("extractDependencyMetadata", () => {
     // parse() calls defaultValue() once for the preliminary result.
     derived.parse("dev");
     const countAfterParse = callCount;
-    // getDefaultDependencyValues() calls it again — but NOT during parse.
+    // getDefaultDependencyValues() calls it again—but NOT during parse.
     const metadata = extractDependencyMetadata(derived);
     assert.ok(metadata?.derived?.getDefaultDependencyValues !== undefined);
     metadata.derived.getDefaultDependencyValues();
@@ -352,7 +352,7 @@ describe("extractDependencyMetadata", () => {
 
   test("deriveFrom single-dep replayParse passes tuple, not scalar", () => {
     const env = createEnvSource();
-    // deriveFrom with a single dependency — factory receives a tuple [Env]
+    // deriveFrom with a single dependency—factory receives a tuple [Env]
     const derived = deriveFrom({
       metavar: "URL" as NonEmptyString,
       mode: "sync",
@@ -527,7 +527,7 @@ describe("composeDependencyMetadata", () => {
       { success: true, value: "prod" },
       composed.source.sourceId,
     );
-    // map does not wrap state — inner state is passed through
+    // map does not wrap state—inner state is passed through
     const result = await resolveExtractResult(
       composed.source.extractSourceValue(sourceState),
     );

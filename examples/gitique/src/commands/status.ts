@@ -222,7 +222,7 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
       try {
         resolvedBranchName = repo.head().name().replace("refs/heads/", "");
       } catch {
-        // HEAD can't be resolved (unborn branch) — read from .git/HEAD
+        // HEAD can't be resolved (unborn branch)—read from .git/HEAD
         resolvedBranchName = readHeadBranchName(repo.path());
         isUnbornBranch = true;
       }

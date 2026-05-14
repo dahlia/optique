@@ -153,7 +153,7 @@ export interface Parser<
    *
    * Each built-in combinator computes this from its structural semantics.
    * Custom parser implementations must include every fixed token that
-   * the parser accepts at `argv[0]` — command names, option names, and
+   * the parser accepts at `argv[0]`—command names, option names, and
    * literal values alike.  For example, a parser whose usage declares
    * `{ type: "literal", value: "serve" }` should include `"serve"` in
    * this set.  Parsers that accept *any* token (like `argument()`) should
@@ -323,8 +323,8 @@ export interface Parser<
    * parser (e.g., regex patterns, numeric bounds, `choice()` values).
    *
    * Wrappers like `bindEnv()` and `bindConfig()` call this on fallback
-   * values — environment variables parsed by a looser env parser,
-   * configured defaults, and values loaded from config files — so that
+   * values—environment variables parsed by a looser env parser,
+   * configured defaults, and values loaded from config files—so that
    * those values obey the same validation semantics as CLI input.
    * Without it, parser constraints can be silently bypassed through
    * fallback paths.
@@ -350,7 +350,7 @@ export interface Parser<
    * current dependency value, and custom value parsers whose `format()`
    * intentionally throws for unsupported inputs.  Values that
    * `format()` successfully serializes to a string are always re-parsed,
-   * and any resulting parse failure is propagated — they represent the
+   * and any resulting parse failure is propagated—they represent the
    * bug class this method exists to surface.
    *
    * @param value The candidate value to validate.
@@ -495,7 +495,7 @@ export interface ExecutionContext {
    * `preCompleteAndRegisterDependencies` results directly to children
    * in Phase 3.  Children read it in their own Phase 1 to avoid
    * re-evaluating non-idempotent default thunks, but never write to
-   * it — this prevents sibling completions from leaking into each
+   * it—this prevents sibling completions from leaking into each
    * other.
    *
    * Field-name keying naturally handles parser reuse across different

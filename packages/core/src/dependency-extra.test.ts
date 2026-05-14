@@ -2070,7 +2070,7 @@ describe("merge() nested source default thunk exactly-once evaluation", () => {
       object({
         mode: withDefault(option("--outer-mode", outerDep), "a" as const),
         nested: object({
-          // Same field name "mode" as the outer — must NOT collide.
+          // Same field name "mode" as the outer—must NOT collide.
           mode: withDefault(option("--inner-mode", innerDep), "x" as const),
         }),
       }),

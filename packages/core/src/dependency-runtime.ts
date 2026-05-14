@@ -360,7 +360,7 @@ function resolveRequest(
     const id = request.dependencyIds[i];
     if (ctx.isSourceFailed(id)) {
       // Source was explicitly provided but failed validation.
-      // Do not fall back to defaults — treat as unresolvable.
+      // Do not fall back to defaults—treat as unresolvable.
       values.push(undefined);
       usedDefaults.push(false);
     } else if (ctx.hasSource(id)) {
@@ -668,7 +668,7 @@ export function fillMissingSourceDefaults(
     // Also skip if the node's matched flag is set (belt-and-suspenders
     // for cases where the caller didn't run collectExplicitSourceValues).
     if (node.matched === true) continue;
-    // A map() transform breaks source identity — the default value
+    // A map() transform breaks source identity—the default value
     // would be the pre-transform value, not what the parser produces.
     if (!meta.source.preservesSourceValue) continue;
     if (meta.source.getMissingSourceValue == null) continue;
@@ -679,7 +679,7 @@ export function fillMissingSourceDefaults(
     try {
       result = meta.source.getMissingSourceValue();
     } catch (e) {
-      // Default thunk threw — report as failure matching
+      // Default thunk threw—report as failure matching
       // withDefault.complete() contract.
       const msg = e instanceof Error ? e.message : String(e);
       failures.push({
@@ -706,7 +706,7 @@ export function fillMissingSourceDefaults(
         "default",
       );
     } else {
-      // Default thunk returned a failure — propagate it.
+      // Default thunk returned a failure—propagate it.
       failures.push({
         sourceId: meta.source.sourceId,
         path: node.path,
@@ -803,7 +803,7 @@ export function replayDerivedParser(
     try {
       defaults = meta.derived.getDefaultDependencyValues();
     } catch {
-      // Default thunk threw — treat as unresolved.
+      // Default thunk threw—treat as unresolved.
       return undefined;
     }
   }

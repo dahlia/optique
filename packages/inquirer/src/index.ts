@@ -164,13 +164,13 @@ function deferredPromptResult<TValue>(
   const isArray = Array.isArray(placeholderValue);
   const keys = new Map<PropertyKey, null>();
   for (const key of Reflect.ownKeys(placeholderValue as object)) {
-    // Skip "length" on arrays — setting it to undefined would throw
+    // Skip "length" on arrays—setting it to undefined would throw
     // RangeError: Invalid array length.
     if (isArray && key === "length") continue;
     keys.set(key, null);
   }
 
-  // Always set deferredKeys — even when empty (non-plain objects
+  // Always set deferredKeys—even when empty (non-plain objects
   // like URL, Date, Intl.Locale).  An empty map distinguishes leaf
   // deferred objects (from prompt()) from opaque structured deferred
   // (from map()), allowing prepareParsedForContexts() to strip the
@@ -669,7 +669,7 @@ export function prompt<M extends Mode, TValue, TState>(
   //
   // Note: we intentionally do *not* cache prompt results.  Within a single
   // parse invocation `prompt.complete()` is called at most once per
-  // (field, phase) pair — probe returns a placeholder without firing the
+  // (field, phase) pair—probe returns a placeholder without firing the
   // prompter, and real phase runs exactly once.  Caching across parse
   // invocations would be a bug: because `parser.initialState` is a shared
   // object, a WeakMap keyed by state identity would incorrectly reuse a
@@ -1044,7 +1044,7 @@ export function prompt<M extends Mode, TValue, TState>(
 
     complete: (state, exec?): Promise<ValueParserResult<TValue>> => {
       if (isPromptBindState(state) && state.hasCliValue) {
-        // Inner parser consumed CLI tokens — delegate to it directly.
+        // Inner parser consumed CLI tokens—delegate to it directly.
         const r = withAnnotatedInnerState(
           state,
           state.cliState!,
@@ -1139,7 +1139,7 @@ export function prompt<M extends Mode, TValue, TState>(
       const finalizePrompt = (): Promise<ValueParserResult<TValue>> => {
         // `shouldDeferCompletion` is part of the inner `Parser<TState>`
         // contract, so it must be called with the inner parser's own
-        // state shape — not the prompt wrapper's `state` (which is a
+        // state shape—not the prompt wrapper's `state` (which is a
         // `PromptBindState` or annotated view of one).  Route through
         // `withAnnotatedInnerState` so the inner state carries the
         // outer annotations exactly the way `parser.complete` /
@@ -1171,12 +1171,12 @@ export function prompt<M extends Mode, TValue, TState>(
       // parser's complete() before prompting.
       //
       // When `shouldDeferCompletion` is present, we always try inner
-      // complete — the hook is the whole point.  Otherwise we simulate
+      // complete—the hook is the whole point.  Otherwise we simulate
       // an empty-buffer parse and inspect the resulting state for
       // source-binding markers (hasCliValue flag plus a symbol-keyed
       // state shape, as bindEnv/bindConfig produce).  This mirrors what
       // the old sentinel path did, without requiring a sentinel state
-      // identity — the simulate-parse is driven purely by the phase
+      // identity—the simulate-parse is driven purely by the phase
       // signal and the inner parser's own parse() output.
       const hasDeferHook = typeof parser.shouldDeferCompletion === "function";
 
@@ -1197,7 +1197,7 @@ export function prompt<M extends Mode, TValue, TState>(
         if (!isSourceBinding) {
           // Non-source-binding inner (plain option, argument, or an
           // arbitrary value-on-complete parser such as `alwaysCompletes`
-          // in the inquirer tests) — go straight to prompting.
+          // in the inquirer tests)—go straight to prompting.
           return finalizePrompt();
         }
         // Source-binding wrapper detected.  Complete from the

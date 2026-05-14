@@ -1176,12 +1176,12 @@ describe("parser.ts coverage branches", () => {
       command("gamma", constant("c")),
     );
 
-    // "alpha" is inside the inner or() — triggers the recursive exclusive path
+    // "alpha" is inside the inner or()—triggers the recursive exclusive path
     const doc = getDocPage(parser, ["alpha"]);
     assert.ok(doc);
     assert.ok(Array.isArray(doc.usage));
     // After resolving "alpha", the usage should no longer show the outer
-    // exclusive — it should have been replaced with the inner command's terms
+    // exclusive—it should have been replaced with the inner command's terms
     const hasAlphaCommand = doc.usage.some(
       (term) => term.type === "command" && term.name === "alpha",
     );
@@ -1261,7 +1261,7 @@ describe("parser.ts coverage branches", () => {
       },
     );
 
-    // No args — the page's own usage should still reflect the override.
+    // No args—the page's own usage should still reflect the override.
     const doc = await getDocPage(parser);
     assert.ok(doc);
     assert.ok(doc.usage);

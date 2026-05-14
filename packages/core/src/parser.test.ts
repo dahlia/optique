@@ -1998,7 +1998,7 @@ describe("getDocPage", () => {
     const doc = getDocPage(wrapper);
     assert.ok(doc);
     // Without the brand, the wrapper should NOT auto-navigate into
-    // the inner parser's options — it should show the single command entry.
+    // the inner parser's options—it should show the single command entry.
     const allEntries = doc.sections.flatMap((s) => s.entries);
     assert.equal(allEntries.length, 1);
     assert.equal(allEntries[0].term.type, "command");

@@ -230,15 +230,15 @@ function parseNumstat(
 
   for (const line of diffText.split(/\r?\n/)) {
     if (line.startsWith("diff --git ")) {
-      // Start of a new file patch — flush previous file and reset hunk state.
+      // Start of a new file patch—flush previous file and reset hunk state.
       flush();
       inHunk = false;
       pendingOldPath = null;
     } else if (line.startsWith("@@")) {
-      // Hunk header — from here on, +/- lines are content, not file headers.
+      // Hunk header—from here on, +/- lines are content, not file headers.
       inHunk = true;
     } else if (!inHunk && line.startsWith("Binary files ")) {
-      // Binary patch — no textual hunk lines; mark as binary so we emit "-".
+      // Binary patch—no textual hunk lines; mark as binary so we emit "-".
       isBinary = true;
       // Some diff generators omit the --- / +++ headers for binary files,
       // leaving currentPath null.  Extract the path from the "Binary files"
@@ -252,17 +252,17 @@ function parseNumstat(
         }
       }
     } else if (!inHunk && line.startsWith("GIT binary patch")) {
-      // git-format binary patch — path already captured from --- / +++ lines.
+      // git-format binary patch—path already captured from --- / +++ lines.
       isBinary = true;
     } else if (!inHunk && line.startsWith("--- a/")) {
       pendingOldPath = line.slice(6);
     } else if (!inHunk && line.startsWith("--- /dev/null")) {
-      pendingOldPath = null; // New file — path comes from the +++ line
+      pendingOldPath = null; // New file—path comes from the +++ line
     } else if (!inHunk && line.startsWith("+++ b/")) {
       currentPath = line.slice(6);
       pendingOldPath = null;
     } else if (!inHunk && line.startsWith("+++ /dev/null")) {
-      // Deletion — use the old path captured from --- line
+      // Deletion—use the old path captured from --- line
       currentPath = pendingOldPath;
       pendingOldPath = null;
     } else if (inHunk && line.startsWith("+")) {

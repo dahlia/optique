@@ -182,7 +182,7 @@ export type ValueParserResult<T> =
  * A recursive map that tracks which fields in a parsed object hold deferred
  * placeholder values.  Each entry maps a property key to either `null`
  * (the field is fully deferred and should be replaced with `undefined`)
- * or another `DeferredMap` (the field is partially deferred — recurse into
+ * or another `DeferredMap` (the field is partially deferred—recurse into
  * its sub-fields).
  *
  * @since 1.0.0
@@ -434,7 +434,7 @@ export function choice<const T extends string | number>(
   ensureNonEmptyString(metavar);
 
   if (isNumber) {
-    // Number choice implementation — deduplicate in a single pass,
+    // Number choice implementation—deduplicate in a single pass,
     // using Object.is to distinguish 0 and -0
     const numberChoices: readonly number[] = (() => {
       const seen = new Set<number>();
@@ -573,7 +573,7 @@ export function choice<const T extends string | number>(
     };
   }
 
-  // String choice implementation — deduplicate identical values
+  // String choice implementation—deduplicate identical values
   const stringChoices: readonly string[] = Object.freeze([
     ...new Set(choices as readonly string[]),
   ]);
@@ -1616,7 +1616,7 @@ const SI_MULTIPLIERS: Readonly<Record<string, number>> = {
   eb: 1_000_000_000_000_000_000,
 };
 
-// Multipliers for IEC units (powers of 1 024) — also overrides SI when
+// Multipliers for IEC units (powers of 1 024)—also overrides SI when
 // siAsBinary is true, making e.g. "kb" → 1 024.
 const IEC_MULTIPLIERS: Readonly<Record<string, number>> = {
   b: 1,
@@ -1700,7 +1700,7 @@ const FORMAT_UNITS_SI_AS_BINARY: readonly [string, number][] = [
   ["KB", 1_024],
 ];
 
-// Bigint multiplier maps — mirrors of the number maps above
+// Bigint multiplier maps—mirrors of the number maps above
 const BIGINT_SI_MULTIPLIERS: Readonly<Record<string, bigint>> = {
   b: 1n,
   kb: 1_000n,
@@ -4957,7 +4957,7 @@ export function socketAddress(
   // would be misleading.
   //
   // In "hostname" and "both" modes the user's own hostnameParser
-  // is the right authority — its policy restrictions (maxLength,
+  // is the right authority—its policy restrictions (maxLength,
   // allowUnderscore, etc.) determine which strings are valid
   // hostnames, so they should also determine split ambiguity.
   //
@@ -5120,7 +5120,7 @@ export function socketAddress(
       // Set to the port parser's error when a split produces a non-empty
       // host but an all-digit port part that fails validation (e.g., out
       // of range).  This prevents the host-only fallback from silently
-      // masking port typos — even when the host part itself is invalid
+      // masking port typos—even when the host part itself is invalid
       // (e.g., "db--70000" where host "db-" has a trailing hyphen).
       let validHostInvalidPortError: Message | undefined;
       // The validated host from the rightmost split with an empty port
@@ -5139,7 +5139,7 @@ export function socketAddress(
       // True when a trailing separator was found in the region that
       // input.trim() would have removed (i.e., trailing whitespace).
       // When set, the host-only path must not take priority because the
-      // trimmed input only appears to be a valid hostname — the trailing
+      // trimmed input only appears to be a valid hostname—the trailing
       // separator was destroyed by trimming, not genuinely absent.
       let trailingSepInTrimmedRegion = false;
       let searchFrom = searchInput.length;
@@ -5157,7 +5157,7 @@ export function socketAddress(
         ).trim();
 
         if (portPart === "") {
-          // Trailing separator — potential omitted port.  Record the
+          // Trailing separator—potential omitted port.  Record the
           // first (rightmost) result so it can be used as a fallback
           // when the whole input is not a valid hostname.
           if (
@@ -5278,7 +5278,7 @@ export function socketAddress(
         // compatible separators (e.g., ":"), any hostPart containing
         // the separator is an artifact from a multi-separator input
         // like "foo:80:70000".  For host-compatible separators (e.g.,
-        // "-"), only pure-separator hostParts are degenerate — a
+        // "-"), only pure-separator hostParts are degenerate—a
         // hostPart like "_foo-bar" legitimately contains the separator
         // and its host error should propagate.
         if (firstHostError !== undefined && firstHostError.hostPart !== "") {
@@ -5339,7 +5339,7 @@ export function socketAddress(
       // is required, the result is still needed to gate the trailing-
       // separator fallback: if the whole input is a valid hostname
       // (e.g., "toronto" with separator "to"), the trailing separator
-      // should NOT fire — the "to" is part of the hostname, not a
+      // should NOT fire—the "to" is part of the hostname, not a
       // separator with an omitted port.
       let hostOnlyResult: ValueParserResult<string> | undefined;
       if (
@@ -5362,7 +5362,7 @@ export function socketAddress(
       // separator was in the whitespace-trimmed region) but a trailing
       // separator produced a valid host, the user explicitly typed the
       // separator but left the port empty (e.g., "localhost:").  This is
-      // always a missing-port error — even when defaultPort is set —
+      // always a missing-port error—even when defaultPort is set—
       // because the explicit separator signals intent to specify a port.
       // Host-only input *without* a separator (e.g., "localhost") is
       // handled above and correctly uses defaultPort.

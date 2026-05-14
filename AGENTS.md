@@ -354,6 +354,9 @@ When writing documentation in English:
  -  Avoid common LLM writing patterns: overusing em dashes, excessive emphasis,
     compulsive summarizing and categorizing, and rigid textbook-like structure
     at the expense of natural flow.
+ -  When an em dash is used mid-sentence, write it without surrounding spaces:
+    `word—word`, not `word — word`.  Exception: in list items that follow the
+    `- *Term* — Description` pattern, spaces around the em dash are acceptable.
 
 
 Markdown style guide

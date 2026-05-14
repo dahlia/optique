@@ -1273,7 +1273,7 @@ describe("formatDocPage", () => {
         ],
       };
 
-      // Always return 0 (tie) — original order should be preserved
+      // Always return 0 (tie)—original order should be preserved
       const sectionOrder = (_a: DocSection, _b: DocSection): number => 0;
 
       const result = formatDocPage("myapp", page, { sectionOrder });
@@ -2625,7 +2625,7 @@ describe("branch coverage: doc.ts edge cases", () => {
   });
 
   // Lines 523, 529, 538, 546: showChoices as object with label/maxItems
-  // options — exercises the false-branch of the conditional default.
+  // options—exercises the false-branch of the conditional default.
   it("showChoices: object with label uses provided label", () => {
     const page: DocPage = {
       sections: [{

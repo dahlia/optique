@@ -1372,9 +1372,9 @@ describe("zod()", () => {
   });
 });
 
-describe("inferMetavar() — non-coerce schemas", () => {
+describe("inferMetavar()—non-coerce schemas", () => {
   it("should infer BOOLEAN for z.boolean() (non-coerce)", () => {
-    // z.boolean() has typeName/type "ZodBoolean"/"boolean" — same branch as coerce
+    // z.boolean() has typeName/type "ZodBoolean"/"boolean"—same branch as coerce
     const parser = zod(z.boolean(), { placeholder: false });
     assert.equal(parser.metavar, "BOOLEAN");
   });
@@ -1399,9 +1399,9 @@ describe("inferMetavar() — non-coerce schemas", () => {
   });
 });
 
-describe("analyzeBooleanInner() — cycle detection via z.lazy()", () => {
+describe("analyzeBooleanInner()—cycle detection via z.lazy()", () => {
   it("should not infinite-loop on a self-referential lazy schema", () => {
-    // Create a lazy schema that refers to itself — the WeakSet in
+    // Create a lazy schema that refers to itself—the WeakSet in
     // analyzeBooleanInner must break the cycle and return isBoolean=false.
     // deno-lint-ignore prefer-const
     let lazySchema: z.ZodType<unknown>;
@@ -1443,12 +1443,12 @@ describe("analyzeBooleanInner() — cycle detection via z.lazy()", () => {
   });
 });
 
-describe("inferChoices() — non-string literal values", () => {
+describe("inferChoices()—non-string literal values", () => {
   it("should return undefined for a z.literal(42) (numeric literal, no string choices)", () => {
     // z.literal(42) has _def.values = [42].  inferChoices filters to string
     // values only, producing stringValues = [], so the guard
     //   stringValues.length > 0 ? stringValues : undefined
-    // yields undefined — no choices are exposed.
+    // yields undefined—no choices are exposed.
     const parser = zod(z.literal(42), { placeholder: 42 });
     assert.equal(parser.choices, undefined);
     assert.equal(parser.metavar, "VALUE");
@@ -1474,7 +1474,7 @@ describe("inferChoices() — non-string literal values", () => {
   });
 });
 
-describe("format() — class instance branch", () => {
+describe("format()—class instance branch", () => {
   it("should use String() for class instances whose toString returns [object Object]", () => {
     // A class whose toString returns the default "[object Object]" string.
     // The format() function should fall through to `return str` (line 827)
@@ -1484,7 +1484,7 @@ describe("format() — class instance branch", () => {
       constructor(n: number) {
         this.n = n;
       }
-      // No custom toString — default "[object Object]"
+      // No custom toString—default "[object Object]"
     }
     const parser = zod(
       z.string().transform(() => new MyValue(42)),
@@ -1516,7 +1516,7 @@ describe("format() — class instance branch", () => {
   });
 });
 
-describe("parse() — non-async errors are re-thrown", () => {
+describe("parse()—non-async errors are re-thrown", () => {
   it("should propagate non-async errors thrown inside safeParse", () => {
     // A schema whose transform throws a plain non-async error.
     // The try/catch in doSafeParse re-throws it because isZodAsyncError()

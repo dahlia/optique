@@ -85,7 +85,7 @@ export function collectLeadingCandidates(
  *
  * This is the command-only projection of {@link collectLeadingCandidates}
  * and is used to generate accurate "Did you mean?" suggestions in
- * `command()` error messages — suggestions are scoped to commands actually
+ * `command()` error messages—suggestions are scoped to commands actually
  * reachable at the current parse position rather than all commands anywhere
  * in the usage tree.
  *

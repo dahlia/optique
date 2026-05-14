@@ -136,7 +136,7 @@ interface BooleanSchemaInfo {
 /**
  * Analyzes whether the given Zod schema represents a boolean type,
  * unwrapping all known Zod wrappers.  Also determines whether it is
- * safe to expose `choices` and `suggest()` — wrappers that can narrow
+ * safe to expose `choices` and `suggest()`—wrappers that can narrow
  * the accepted domain (effects, catch) suppress choice exposure.
  */
 function analyzeBooleanSchema(
@@ -183,7 +183,7 @@ function analyzeBooleanInner(
     };
   }
 
-  // Wrappers that preserve the input domain — choices stay valid
+  // Wrappers that preserve the input domain—choices stay valid
   if (
     typeName === "ZodOptional" || typeName === "optional" ||
     typeName === "ZodNullable" || typeName === "nullable" ||
@@ -197,14 +197,14 @@ function analyzeBooleanInner(
     }
   }
 
-  // Lazy wrapper — resolve and unwrap the inner schema
+  // Lazy wrapper—resolve and unwrap the inner schema
   if (typeName === "ZodLazy" || typeName === "lazy") {
     if (typeof def.getter === "function") {
       return analyzeBooleanInner(def.getter(), canExposeChoices, visited);
     }
   }
 
-  // effects (refine/transform) — suppress choices.
+  // effects (refine/transform)—suppress choices.
   // Preprocess effects are excluded: they receive the raw input string
   // and handle conversion themselves, so boolean pre-conversion must
   // not interfere.  (Zod v3 only; Zod v4 uses pipe for preprocess.)
@@ -218,7 +218,7 @@ function analyzeBooleanInner(
     }
   }
 
-  // catch — suppress choices
+  // catch—suppress choices
   if (typeName === "ZodCatch" || typeName === "catch") {
     const innerType = def.innerType;
     if (innerType != null) {
@@ -226,7 +226,7 @@ function analyzeBooleanInner(
     }
   }
 
-  // branded — suppress choices (refinements may be involved).
+  // branded—suppress choices (refinements may be involved).
   // Zod v3 stores the inner schema on _def.type (an object),
   // while Zod v4 uses _def.innerType.
   if (typeName === "ZodBranded" || typeName === "branded") {
@@ -239,7 +239,7 @@ function analyzeBooleanInner(
     }
   }
 
-  // Zod v4 pipe (transform/pipe/preprocess) — check the input side.
+  // Zod v4 pipe (transform/pipe/preprocess)—check the input side.
   // Preprocess pipes transform the raw string, so they must not be
   // treated as boolean.  Transform/pipe schemas receive the already-
   // parsed boolean, so the input side determines boolean detection.
@@ -499,7 +499,7 @@ function inferChoices(
         if (typeof val === "string") {
           result.add(val);
         } else {
-          // Numeric member found — bail out entirely because the parser
+          // Numeric member found—bail out entirely because the parser
           // validates via safeParse() which expects the actual number, not
           // its string representation.
           return undefined;

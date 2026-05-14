@@ -90,7 +90,7 @@ export function escapeQuotedValue(text: string): string {
  * (e.g., `.SH "..."`).  Unlike {@link escapeQuotedValue}, this function
  * replaces backslashes with the `\(rs` glyph instead of `\\`, because
  * groff performs an extra level of escape interpretation on request
- * arguments — `\\` would still be parsed as an escape prefix.
+ * arguments—`\\` would still be parsed as an escape prefix.
  *
  * Line breaks (`\r\n`, `\r`, `\n`) are normalized to spaces because a
  * raw newline would split the request line and cause the remainder to be

@@ -1094,7 +1094,7 @@ describe("or", () => {
     it("should not collapse positional arguments with same metavar", () => {
       // Positional arguments are distinguished by position, not metavar.
       // Since DocEntry lacks position info, arguments are never
-      // deduplicated — even when they come from alternative branches.
+      // deduplicated—even when they come from alternative branches.
       const orParser = or(
         tuple([argument(string()), argument(string())]),
         argument(string()),
@@ -1284,7 +1284,7 @@ describe("or", () => {
   });
 });
 
-describe("or() inside object() — zero-input complete path", () => {
+describe("or() inside object()—zero-input complete path", () => {
   it("complete treats malformed exclusive state as unselected", () => {
     const parser = or(constant("default"), option("--mode", string()));
 
@@ -9306,7 +9306,7 @@ describe("conditional", () => {
 
   it("should not fall through to default after matched zero-consumed discriminator", () => {
     // When a zero-consumed discriminator selects a branch that fails,
-    // the branch error should be returned — not the default branch.
+    // the branch error should be returned—not the default branch.
     const parser = conditional(
       constant("key") as Parser<"sync", string>,
       { key: fail<string>() },
@@ -9363,7 +9363,7 @@ describe("conditional", () => {
       assert.deepEqual(result.value, ["a", "x"]);
     }
     // Discriminator.complete() should be called exactly once (during
-    // parse) — not twice.  The complete() phase skips re-completion
+    // parse)—not twice.  The complete() phase skips re-completion
     // because the cached discriminatorValue matches the selected branch.
     assert.equal(completeCalls, 1);
   });
@@ -9824,7 +9824,7 @@ describe("conditional", () => {
       defaultBranchParser,
     );
 
-    // Step 1: parse with empty input — no named branch consumes, so
+    // Step 1: parse with empty input—no named branch consumes, so
     // conditional() falls back to the deferred path with
     // selectedBranch=undefined.
     const parseResult = await parser.parse({
@@ -9839,7 +9839,7 @@ describe("conditional", () => {
     assert.equal(discriminatorCompleteCount, 0);
 
     // Step 2: simulate object()'s probe with phase="parse".  The
-    // default branch's complete() must NOT fire — it may have side
+    // default branch's complete() must NOT fire—it may have side
     // effects (e.g., prompt(), bindEnv).
     const probeResult = await parser.complete(parseResult.next.state, {
       usage: parser.usage,
@@ -9942,7 +9942,7 @@ describe("conditional", () => {
     );
 
     // Step 1: parse with empty input.  No branch consumes, no default
-    // branch — conditional() falls back to the deferred path with
+    // branch—conditional() falls back to the deferred path with
     // selectedBranch=undefined.
     const parseResult = await parser.parse({
       buffer: [],
@@ -10042,7 +10042,7 @@ describe("conditional", () => {
       constant("default-value"),
     );
 
-    // Empty input — no branch can consume, falls back to default branch
+    // Empty input—no branch can consume, falls back to default branch
     const result = await parseAsync(parser, []);
     assert.ok(result.success);
     if (result.success) {
@@ -10618,7 +10618,7 @@ describe("conditional", () => {
     // (provisionalAmbiguous = true), speculation is supposed to be
     // skipped to keep branch selection order-independent.  A separate
     // branch that fails with consumed > 0 should NOT have its error
-    // surfaced in this case — otherwise the outcome depends on
+    // surfaced in this case—otherwise the outcome depends on
     // incidental branch composition and contradicts the ambiguity
     // skip.
     const asyncDiscriminator: Parser<"async", string, null> = {
