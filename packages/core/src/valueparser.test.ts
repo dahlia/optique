@@ -17496,17 +17496,22 @@ describe("semVer()", () => {
 
     it("non-boolean allowPrefix throws TypeError", () => {
       assert.throws(
-        () => semVer({ allowPrefix: "yes" as unknown as boolean }),
-        TypeError,
-        "Expected allowPrefix to be a boolean",
+        () => semVer({ allowPrefix: "yes" as never }),
+        {
+          name: "TypeError",
+          message: "Expected allowPrefix to be a boolean, but got string: yes.",
+        },
       );
     });
 
     it("invalid type option throws TypeError", () => {
       assert.throws(
-        () => semVer({ type: "number" as unknown as "string" }),
-        TypeError,
-        'Expected type to be one of "string", "object"',
+        () => semVer({ type: "number" as never }),
+        {
+          name: "TypeError",
+          message:
+            'Expected type to be one of "string", "object", but got string: "number".',
+        },
       );
     });
 
