@@ -2357,6 +2357,13 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
 
   const defaultPlaceholder: Color = { r: 0, g: 0, b: 0, a: 1 };
 
+  const formatExamples: readonly string[] = [
+    ...(allowHex ? ["#ff0000"] : []),
+    ...(allowRgb ? ["rgb(255, 0, 0)"] : []),
+    ...(allowHsl ? ["hsl(0, 100%, 50%)"] : []),
+    ...(allowNamed ? ["red"] : []),
+  ];
+
   function invalidFormatError(input: string): ValueParserResult<Color> {
     return {
       success: false,
@@ -2364,7 +2371,12 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
         ? (typeof options.errors.invalidFormat === "function"
           ? options.errors.invalidFormat(input)
           : options.errors.invalidFormat)
-        : message`Expected a CSS color like ${"#ff0000"}, ${"rgb(255, 0, 0)"}, or ${"red"}, but got ${input}.`,
+        : message`Expected a CSS color like ${
+          valueSet(formatExamples, {
+            fallback: "a valid color",
+            type: "disjunction",
+          })
+        }, but got ${input}.`,
     };
   }
 
@@ -2433,9 +2445,9 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
       }
 
       if (allowNamed) {
-        const named = CSS_NAMED_COLORS[trimmed.toLowerCase()];
-        if (named !== undefined) {
-          return { success: true, value: { ...named } };
+        const key = trimmed.toLowerCase();
+        if (key in CSS_NAMED_COLORS) {
+          return { success: true, value: { ...CSS_NAMED_COLORS[key] } };
         }
       }
 
