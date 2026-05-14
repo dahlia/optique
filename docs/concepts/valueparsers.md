@@ -325,7 +325,7 @@ const legacySize = fileSize({ siAsBinary: true });
 IEC suffixes (`KiB`, `MiB`, …) are unaffected by this option and always
 use powers of 1 024.
 
-### Bigint mode {#bigint-mode}
+### Bigint mode
 
 By default, `fileSize()` returns `number`, which cannot represent byte counts
 above roughly 9 PB exactly.  Pass `type: "bigint"` to get a `bigint` result
