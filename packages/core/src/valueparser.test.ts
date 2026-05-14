@@ -17348,6 +17348,23 @@ describe("color()", () => {
       const parser = color({ formats: ["named"] });
       assert.equal(parser.format({ r: 255, g: 0, b: 0, a: 1 }), "red");
     });
+
+    it("throws RangeError for named-only parser when no name matches", () => {
+      assert.throws(
+        () =>
+          color({ formats: ["named"] }).format({ r: 128, g: 64, b: 32, a: 1 }),
+        RangeError,
+      );
+    });
+
+    it("hsl format() round-trips near-black color {r:0,g:0,b:1}", () => {
+      const parser = color({ formats: ["hsl"] });
+      const original: Color = { r: 0, g: 0, b: 1, a: 1 };
+      const formatted = parser.format(original);
+      const result = parser.parse(formatted);
+      assert.ok(result.success, `Expected success but got: ${formatted}`);
+      if (result.success) assert.deepEqual(result.value, original);
+    });
   });
 
   describe("normalize()", () => {

@@ -2242,7 +2242,7 @@ function rgbToHsl(
   const min = Math.min(rn, gn, bn);
   const l = (max + min) / 2;
   if (max === min) {
-    return [0, 0, Math.round(l * 100)];
+    return [0, 0, l * 100];
   }
   const d = max - min;
   const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
@@ -2254,7 +2254,7 @@ function rgbToHsl(
   } else {
     h = ((rn - gn) / d + 4) / 6;
   }
-  return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
+  return [h * 360, s * 100, l * 100];
 }
 
 const COLOR_HEX_SHORT_REGEX =
@@ -2509,20 +2509,20 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
       }
       if (allowHsl) {
         const [h, s, l] = rgbToHsl(r, g, b);
+        const hStr = parseFloat(h.toFixed(4));
+        const sStr = parseFloat(s.toFixed(4));
+        const lStr = parseFloat(l.toFixed(4));
         return a === 1
-          ? `hsl(${h}, ${s}%, ${l}%)`
-          : `hsla(${h}, ${s}%, ${l}%, ${aStr})`;
+          ? `hsl(${hStr}, ${sStr}%, ${lStr}%)`
+          : `hsla(${hStr}, ${sStr}%, ${lStr}%, ${aStr})`;
       }
-      // named-only: try reverse lookup, fall back to hex
+      // named-only: try reverse lookup
       for (const [name, c] of Object.entries(CSS_NAMED_COLORS)) {
         if (c.r === r && c.g === g && c.b === b && c.a === a) return name;
       }
-      const rh = r.toString(16).padStart(2, "0");
-      const gh = g.toString(16).padStart(2, "0");
-      const bh = b.toString(16).padStart(2, "0");
-      if (a === 1) return `#${rh}${gh}${bh}`;
-      const ah = Math.round(a * 255).toString(16).padStart(2, "0");
-      return `#${rh}${gh}${bh}${ah}`;
+      throw new RangeError(
+        `No CSS named color matches { r: ${r}, g: ${g}, b: ${b}, a: ${a} }.`,
+      );
     },
 
     normalize(value: Color): Color {
