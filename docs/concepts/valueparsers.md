@@ -34,6 +34,7 @@ with Optique's type system.
 | `integer()`                      | *@optique/core*     | `number` or `bigint`           | Integer with range validation                       |
 | `float()`                        | *@optique/core*     | `number`                       | Floating-point number                               |
 | `fileSize()`                     | *@optique/core*     | `number` or `bigint`           | Human-readable data size (bytes)                    |
+| `color()`                        | *@optique/core*     | `Color`                        | CSS color (hex, rgb, hsl, or named)                 |
 | `choice()`                       | *@optique/core*     | string or number literal union | Enumerated values                                   |
 | `url()`                          | *@optique/core*     | `URL`                          | URL with protocol filtering                         |
 | `locale()`                       | *@optique/core*     | `Intl.Locale`                  | BCP 47 locale identifier                            |
@@ -357,6 +358,100 @@ Error: Expected a non-negative file size, but got -1MB.
 ~~~~
 
 The parser uses `"SIZE"` as its default metavar.
+
+
+`color()` parser
+----------------
+
+*This API is available since Optique 1.1.0.*
+
+The `color()` parser converts CSS color strings into a structured `Color`
+object with normalized `r`, `g`, `b`, and `a` fields.  It is useful for CLI
+tools that accept theme colors, background colors, or any other color
+configuration from users.
+
+~~~~ typescript twoslash
+import { color } from "@optique/core/valueparser";
+
+// Accepts any CSS color notation
+const background = color();
+
+// Custom metavar shown in help text
+const fg = color({ metavar: "FG_COLOR" });
+~~~~
+
+### Supported formats
+
+The parser accepts four CSS color notations by default:
+
+| Format  | Examples                                       |
+| ------- | ---------------------------------------------- |
+| `hex`   | `#f00`, `#ff0000`, `#f00f`, `#ff0000ff`        |
+| `rgb`   | `rgb(255, 0, 0)`, `rgba(255, 0, 0, 0.5)`       |
+| `hsl`   | `hsl(0, 100%, 50%)`, `hsla(0, 100%, 50%, 0.5)` |
+| `named` | `red`, `rebeccapurple`, `transparent`, …       |
+
+Hex digits are matched case-insensitively.  The `rgb` and `hsl` function
+names are also case-insensitive.  Named colors are matched
+case-insensitively as well.
+
+### Return type
+
+The returned `Color` object has four fields:
+
+ -  `r`, `g`, `b` — red, green, and blue channels as integers in the range
+    0–255
+ -  `a` — alpha channel as a float in the range 0–1, where 1 is fully opaque
+    and 0 is fully transparent
+
+~~~~ typescript twoslash
+import { color, type Color } from "@optique/core/valueparser";
+// ---cut-before---
+const result = color().parse("#ff8000");
+if (result.success) {
+  const c: Color = result.value;
+  // c.r === 255, c.g === 128, c.b === 0, c.a === 1
+}
+~~~~
+
+### Restricting accepted formats
+
+Use the `formats` option to limit which notations are accepted:
+
+~~~~ typescript twoslash
+import { color } from "@optique/core/valueparser";
+// ---cut-before---
+// Only hex notation
+const hexOnly = color({ formats: ["hex"] });
+
+// Hex and named colors
+const hexOrNamed = color({ formats: ["hex", "named"] });
+~~~~
+
+### Named colors
+
+The parser recognizes all 148 CSS Level 4 named colors, including
+`transparent` (which has alpha 0) and `rebeccapurple`.  Named color lookup
+is case-insensitive, so `"Red"`, `"RED"`, and `"red"` all parse to the same
+value.
+
+When shell completion is active, named colors are suggested based on the
+current prefix.
+
+### `format()` output
+
+The `format()` method always outputs canonical lowercase hex: `#rrggbb`
+when alpha is 1, or `#rrggbbaa` when alpha is less than 1.  This means
+`format()` output can always be re-parsed with `formats: ["hex"]`.
+
+### Error messages
+
+~~~~ bash
+$ myapp --bg "notacolor"
+Error: Expected a CSS color like #ff0000, rgb(255, 0, 0), or red, but got notacolor.
+~~~~
+
+The parser uses `"COLOR"` as its default metavar.
 
 
 `choice()` parser

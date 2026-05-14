@@ -3,6 +3,8 @@ import {
   checkEnumOption,
   choice,
   cidr,
+  type Color,
+  color,
   domain,
   email,
   fileSize,
@@ -24,7 +26,13 @@ import {
   url,
   uuid,
 } from "@optique/core/valueparser";
-import { formatMessage, message, text, values } from "@optique/core/message";
+import {
+  formatMessage,
+  message,
+  type MessageTerm,
+  text,
+  values,
+} from "@optique/core/message";
 import assert from "node:assert/strict";
 import * as fc from "fast-check";
 import { describe, it } from "node:test";
@@ -16703,6 +16711,760 @@ describe("fileSize() — bigint mode", () => {
       });
       parser.parse("-1EB");
       assert.equal(received, -1_000_000_000_000_000_000n);
+    });
+  });
+});
+
+describe("color()", () => {
+  describe("constructor", () => {
+    it("default metavar is COLOR", () => {
+      const parser = color();
+      assert.equal(parser.metavar, "COLOR");
+    });
+
+    it("accepts custom metavar", () => {
+      const parser = color({ metavar: "FG" });
+      assert.equal(parser.metavar, "FG");
+    });
+
+    it("throws TypeError for empty metavar", () => {
+      assert.throws(
+        () => color({ metavar: "" as NonEmptyString }),
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message === "Expected a non-empty string.",
+      );
+    });
+
+    it("mode is sync", () => {
+      assert.equal(color().mode, "sync");
+    });
+
+    it("default placeholder is opaque black", () => {
+      assert.deepEqual(color().placeholder, { r: 0, g: 0, b: 0, a: 1 });
+    });
+
+    it("accepts custom placeholder", () => {
+      const p: Color = { r: 255, g: 0, b: 0, a: 1 };
+      assert.deepEqual(color({ placeholder: p }).placeholder, p);
+    });
+
+    it("throws TypeError for invalid format in formats array", () => {
+      assert.throws(
+        () => color({ formats: ["hex", "invalid" as never] }),
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message ===
+            `Expected formats to contain only "hex", "rgb", "hsl", "named", but got: "invalid".`,
+      );
+    });
+
+    it("accepts empty formats array", () => {
+      const parser = color({ formats: [] });
+      const r = parser.parse("#ff0000");
+      assert.ok(!r.success);
+    });
+  });
+
+  describe("hex format", () => {
+    it("parses 6-digit lowercase #rrggbb", () => {
+      const r = color().parse("#ff8000");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 255, g: 128, b: 0, a: 1 });
+    });
+
+    it("parses 6-digit uppercase #RRGGBB", () => {
+      const r = color().parse("#FF8000");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 255, g: 128, b: 0, a: 1 });
+    });
+
+    it("parses 3-digit shorthand #rgb", () => {
+      const r = color().parse("#f80");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 255, g: 136, b: 0, a: 1 });
+    });
+
+    it("parses 8-digit #rrggbbaa", () => {
+      const r = color().parse("#ff000080");
+      assert.ok(r.success);
+      if (r.success) {
+        assert.equal(r.value.r, 255);
+        assert.equal(r.value.g, 0);
+        assert.equal(r.value.b, 0);
+        assert.ok(Math.abs(r.value.a - 128 / 255) < 1e-9);
+      }
+    });
+
+    it("parses 4-digit shorthand #rgba", () => {
+      const r = color().parse("#f00f");
+      assert.ok(r.success);
+      if (r.success) {
+        assert.equal(r.value.r, 255);
+        assert.equal(r.value.g, 0);
+        assert.equal(r.value.b, 0);
+        assert.equal(r.value.a, 1);
+      }
+    });
+
+    it("parses #000000 as black", () => {
+      const r = color().parse("#000000");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 0, g: 0, b: 0, a: 1 });
+    });
+
+    it("parses #ffffff as white", () => {
+      const r = color().parse("#ffffff");
+      assert.ok(r.success);
+      if (r.success) {
+        assert.deepEqual(r.value, { r: 255, g: 255, b: 255, a: 1 });
+      }
+    });
+
+    it("rejects #gg0000 — invalid hex digit", () => {
+      const r = color().parse("#gg0000");
+      assert.ok(!r.success);
+    });
+
+    it("rejects 5-digit hex", () => {
+      const r = color().parse("#ff000");
+      assert.ok(!r.success);
+    });
+
+    it("rejects 7-digit hex", () => {
+      const r = color().parse("#ff00000");
+      assert.ok(!r.success);
+    });
+
+    it("trims leading/trailing whitespace", () => {
+      const r = color().parse("  #ff0000  ");
+      assert.ok(r.success);
+    });
+
+    it("round-trip: parse(format(x)) for opaque hex color", () => {
+      fc.assert(
+        fc.property(
+          fc.integer({ min: 0, max: 255 }),
+          fc.integer({ min: 0, max: 255 }),
+          fc.integer({ min: 0, max: 255 }),
+          (r, g, b) => {
+            const parser = color();
+            const original: Color = { r, g, b, a: 1 };
+            const formatted = parser.format(original);
+            const result = parser.parse(formatted);
+            if (!result.success) return false;
+            return (
+              result.value.r === r &&
+              result.value.g === g &&
+              result.value.b === b &&
+              result.value.a === 1
+            );
+          },
+        ),
+        propertyParameters,
+      );
+    });
+  });
+
+  describe("rgb/rgba format", () => {
+    it("parses rgb(255, 0, 0) as red", () => {
+      const r = color().parse("rgb(255, 0, 0)");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 255, g: 0, b: 0, a: 1 });
+    });
+
+    it("parses rgb(0, 0, 0) as black", () => {
+      const r = color().parse("rgb(0, 0, 0)");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 0, g: 0, b: 0, a: 1 });
+    });
+
+    it("parses rgba(255, 128, 0, 0.5)", () => {
+      const r = color().parse("rgba(255, 128, 0, 0.5)");
+      assert.ok(r.success);
+      if (r.success) {
+        assert.equal(r.value.r, 255);
+        assert.equal(r.value.g, 128);
+        assert.equal(r.value.b, 0);
+        assert.equal(r.value.a, 128 / 255); // quantized to 8-bit
+      }
+    });
+
+    it("parses rgba(0, 0, 0, 0) as fully transparent", () => {
+      const r = color().parse("rgba(0, 0, 0, 0)");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 0, g: 0, b: 0, a: 0 });
+    });
+
+    it("rejects rgb(256, 0, 0) — r > 255", () => {
+      const r = color().parse("rgb(256, 0, 0)");
+      assert.ok(!r.success);
+    });
+
+    it("rejects rgba(0, 0, 0, 1.5) — alpha > 1", () => {
+      const r = color().parse("rgba(0, 0, 0, 1.5)");
+      assert.ok(!r.success);
+    });
+
+    it("rejects rgba(0, 0, 0, -0.1) — alpha < 0", () => {
+      const r = color().parse("rgba(0, 0, 0, -0.1)");
+      assert.ok(!r.success);
+    });
+
+    it("accepts extra whitespace: rgb( 255 , 0 , 0 )", () => {
+      const r = color().parse("rgb( 255 , 0 , 0 )");
+      assert.ok(r.success);
+    });
+
+    it("case-insensitive: RGB(255, 0, 0)", () => {
+      const r = color().parse("RGB(255, 0, 0)");
+      assert.ok(r.success);
+    });
+
+    it("case-insensitive: RGBA(255, 0, 0, 1)", () => {
+      const r = color().parse("RGBA(255, 0, 0, 1)");
+      assert.ok(r.success);
+    });
+  });
+
+  describe("hsl/hsla format", () => {
+    it("parses hsl(0, 100%, 50%) as red", () => {
+      const r = color().parse("hsl(0, 100%, 50%)");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 255, g: 0, b: 0, a: 1 });
+    });
+
+    it("parses hsl(120, 100%, 50%) as lime", () => {
+      const r = color().parse("hsl(120, 100%, 50%)");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 0, g: 255, b: 0, a: 1 });
+    });
+
+    it("parses hsl(240, 100%, 50%) as blue", () => {
+      const r = color().parse("hsl(240, 100%, 50%)");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 0, g: 0, b: 255, a: 1 });
+    });
+
+    it("parses hsl(0, 0%, 0%) as black", () => {
+      const r = color().parse("hsl(0, 0%, 0%)");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 0, g: 0, b: 0, a: 1 });
+    });
+
+    it("parses hsl(0, 0%, 100%) as white", () => {
+      const r = color().parse("hsl(0, 0%, 100%)");
+      assert.ok(r.success);
+      if (r.success) {
+        assert.deepEqual(r.value, { r: 255, g: 255, b: 255, a: 1 });
+      }
+    });
+
+    it("parses hsla(120, 100%, 50%, 0.5)", () => {
+      const r = color().parse("hsla(120, 100%, 50%, 0.5)");
+      assert.ok(r.success);
+      if (r.success) {
+        assert.equal(r.value.r, 0);
+        assert.equal(r.value.g, 255);
+        assert.equal(r.value.b, 0);
+        assert.equal(r.value.a, 128 / 255); // quantized to 8-bit
+      }
+    });
+
+    it("accepts hsl(360, 100%, 50%) — hue wraps to same as 0°", () => {
+      const r = color().parse("hsl(360, 100%, 50%)");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 255, g: 0, b: 0, a: 1 });
+    });
+
+    it("accepts hsl(361, 100%, 50%) — out-of-range hue wraps", () => {
+      const r = color().parse("hsl(361, 100%, 50%)");
+      assert.ok(r.success);
+    });
+
+    it("accepts hsl(-120, 100%, 50%) — negative hue wraps to 240°", () => {
+      const r = color().parse("hsl(-120, 100%, 50%)");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 0, g: 0, b: 255, a: 1 });
+    });
+
+    it("rejects hsl(0, 101%, 50%) — saturation > 100%", () => {
+      const r = color().parse("hsl(0, 101%, 50%)");
+      assert.ok(!r.success);
+    });
+
+    it("rejects hsl(0, 100%, 101%) — lightness > 100%", () => {
+      const r = color().parse("hsl(0, 100%, 101%)");
+      assert.ok(!r.success);
+    });
+
+    it("rejects hsla(0, 100%, 50%, 1.1) — alpha > 1", () => {
+      const r = color().parse("hsla(0, 100%, 50%, 1.1)");
+      assert.ok(!r.success);
+    });
+
+    it("case-insensitive: HSL(0, 100%, 50%)", () => {
+      const r = color().parse("HSL(0, 100%, 50%)");
+      assert.ok(r.success);
+    });
+
+    it("case-insensitive: HSLA(0, 100%, 50%, 1)", () => {
+      const r = color().parse("HSLA(0, 100%, 50%, 1)");
+      assert.ok(r.success);
+    });
+  });
+
+  describe("named colors", () => {
+    it("parses 'red'", () => {
+      const r = color().parse("red");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 255, g: 0, b: 0, a: 1 });
+    });
+
+    it("parses 'green' as #008000", () => {
+      const r = color().parse("green");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 0, g: 128, b: 0, a: 1 });
+    });
+
+    it("parses 'blue'", () => {
+      const r = color().parse("blue");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 0, g: 0, b: 255, a: 1 });
+    });
+
+    it("parses 'white'", () => {
+      const r = color().parse("white");
+      assert.ok(r.success);
+      if (r.success) {
+        assert.deepEqual(r.value, { r: 255, g: 255, b: 255, a: 1 });
+      }
+    });
+
+    it("parses 'black'", () => {
+      const r = color().parse("black");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 0, g: 0, b: 0, a: 1 });
+    });
+
+    it("parses 'transparent' as fully transparent black", () => {
+      const r = color().parse("transparent");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 0, g: 0, b: 0, a: 0 });
+    });
+
+    it("parses 'rebeccapurple' (#663399)", () => {
+      const r = color().parse("rebeccapurple");
+      assert.ok(r.success);
+      if (r.success) {
+        assert.equal(r.value.r, 102);
+        assert.equal(r.value.g, 51);
+        assert.equal(r.value.b, 153);
+        assert.equal(r.value.a, 1);
+      }
+    });
+
+    it("case-insensitive: 'RED', 'Red', 'rEd'", () => {
+      const red = { r: 255, g: 0, b: 0, a: 1 };
+      for (const name of ["RED", "Red", "rEd"]) {
+        const r = color().parse(name);
+        assert.ok(r.success, `Expected ${name} to parse`);
+        if (r.success) assert.deepEqual(r.value, red);
+      }
+    });
+
+    it("'aqua' and 'cyan' are the same color", () => {
+      const a = color().parse("aqua");
+      const c = color().parse("cyan");
+      assert.ok(a.success && c.success);
+      if (a.success && c.success) assert.deepEqual(a.value, c.value);
+    });
+
+    it("'fuchsia' and 'magenta' are the same color", () => {
+      const a = color().parse("fuchsia");
+      const b = color().parse("magenta");
+      assert.ok(a.success && b.success);
+      if (a.success && b.success) assert.deepEqual(a.value, b.value);
+    });
+
+    it("'gray' and 'grey' are the same color", () => {
+      const a = color().parse("gray");
+      const b = color().parse("grey");
+      assert.ok(a.success && b.success);
+      if (a.success && b.success) assert.deepEqual(a.value, b.value);
+    });
+
+    it("rejects unknown name 'notacolor'", () => {
+      const r = color().parse("notacolor");
+      assert.ok(!r.success);
+    });
+
+    it("rejects empty string", () => {
+      const r = color().parse("");
+      assert.ok(!r.success);
+    });
+
+    it("rejects prototype-inherited keys like 'constructor'", () => {
+      assert.ok(!color().parse("constructor").success);
+    });
+
+    it("rejects prototype-inherited keys like 'toString'", () => {
+      assert.ok(!color().parse("toString").success);
+    });
+
+    it("rejects '__proto__'", () => {
+      assert.ok(!color().parse("__proto__").success);
+    });
+  });
+
+  describe("formats option", () => {
+    it("formats: ['hex'] accepts hex", () => {
+      const r = color({ formats: ["hex"] }).parse("#ff0000");
+      assert.ok(r.success);
+    });
+
+    it("formats: ['hex'] rejects rgb", () => {
+      const r = color({ formats: ["hex"] }).parse("rgb(255, 0, 0)");
+      assert.ok(!r.success);
+    });
+
+    it("formats: ['hex'] rejects hsl", () => {
+      const r = color({ formats: ["hex"] }).parse("hsl(0, 100%, 50%)");
+      assert.ok(!r.success);
+    });
+
+    it("formats: ['hex'] rejects named", () => {
+      const r = color({ formats: ["hex"] }).parse("red");
+      assert.ok(!r.success);
+    });
+
+    it("formats: ['rgb'] accepts rgb", () => {
+      const r = color({ formats: ["rgb"] }).parse("rgb(255, 0, 0)");
+      assert.ok(r.success);
+    });
+
+    it("formats: ['rgb'] rejects hex", () => {
+      const r = color({ formats: ["rgb"] }).parse("#ff0000");
+      assert.ok(!r.success);
+    });
+
+    it("formats: ['hsl'] accepts hsl", () => {
+      const r = color({ formats: ["hsl"] }).parse("hsl(0, 100%, 50%)");
+      assert.ok(r.success);
+    });
+
+    it("formats: ['hsl'] rejects hex", () => {
+      const r = color({ formats: ["hsl"] }).parse("#ff0000");
+      assert.ok(!r.success);
+    });
+
+    it("formats: ['named'] accepts named colors", () => {
+      const r = color({ formats: ["named"] }).parse("red");
+      assert.ok(r.success);
+    });
+
+    it("formats: ['named'] rejects hex", () => {
+      const r = color({ formats: ["named"] }).parse("#ff0000");
+      assert.ok(!r.success);
+    });
+
+    it("formats: ['hex', 'named'] accepts hex and named", () => {
+      assert.ok(color({ formats: ["hex", "named"] }).parse("#ff0000").success);
+      assert.ok(color({ formats: ["hex", "named"] }).parse("red").success);
+    });
+
+    it("formats: ['hex', 'named'] rejects rgb and hsl", () => {
+      assert.ok(
+        !color({ formats: ["hex", "named"] }).parse("rgb(255, 0, 0)").success,
+      );
+      assert.ok(
+        !color({ formats: ["hex", "named"] }).parse("hsl(0, 100%, 50%)")
+          .success,
+      );
+    });
+  });
+
+  describe("NaN/malformed input rejection", () => {
+    it("rejects rgba with dot-only alpha: rgba(0,0,0,.)", () => {
+      assert.ok(!color().parse("rgba(0,0,0,.)").success);
+    });
+
+    it("rejects rgba with double-dot alpha: rgba(0,0,0,1..)", () => {
+      assert.ok(!color().parse("rgba(0,0,0,1..)").success);
+    });
+
+    it("accepts rgba with leading-dot alpha: rgba(0,0,0,.5)", () => {
+      const r = color().parse("rgba(0,0,0,.5)");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value.a, 128 / 255); // quantized to 8-bit
+    });
+
+    it("rejects hsl with dot-only hue: hsl(.,50%,50%)", () => {
+      assert.ok(!color().parse("hsl(.,50%,50%)").success);
+    });
+
+    it("rejects hsl with double-dot hue: hsl(1..,50%,50%)", () => {
+      assert.ok(!color().parse("hsl(1..,50%,50%)").success);
+    });
+
+    it("rejects hsl with dot-only saturation: hsl(0,.%,50%)", () => {
+      assert.ok(!color().parse("hsl(0,.%,50%)").success);
+    });
+  });
+
+  describe("named color immutability", () => {
+    it("returns a fresh object each time for named colors", () => {
+      const r1 = color().parse("red");
+      const r2 = color().parse("red");
+      assert.ok(r1.success && r2.success);
+      if (r1.success && r2.success) {
+        assert.notStrictEqual(r1.value, r2.value);
+        assert.deepEqual(r1.value, r2.value);
+      }
+    });
+  });
+
+  describe("format()", () => {
+    it("formats opaque color as #rrggbb", () => {
+      assert.equal(
+        color().format({ r: 255, g: 0, b: 0, a: 1 }),
+        "#ff0000",
+      );
+    });
+
+    it("formats #000000", () => {
+      assert.equal(
+        color().format({ r: 0, g: 0, b: 0, a: 1 }),
+        "#000000",
+      );
+    });
+
+    it("formats #ffffff", () => {
+      assert.equal(
+        color().format({ r: 255, g: 255, b: 255, a: 1 }),
+        "#ffffff",
+      );
+    });
+
+    it("formats transparent as #00000000", () => {
+      assert.equal(
+        color().format({ r: 0, g: 0, b: 0, a: 0 }),
+        "#00000000",
+      );
+    });
+
+    it("formats 50% alpha as #rrggbb80", () => {
+      const formatted = color().format({ r: 255, g: 0, b: 0, a: 0.5 });
+      assert.equal(formatted, "#ff000080");
+    });
+
+    it("property: parse(format(x)) round-trips for integer r/g/b", () => {
+      fc.assert(
+        fc.property(
+          fc.integer({ min: 0, max: 255 }),
+          fc.integer({ min: 0, max: 255 }),
+          fc.integer({ min: 0, max: 255 }),
+          (r, g, b) => {
+            const parser = color();
+            const original: Color = { r, g, b, a: 1 };
+            const result = parser.parse(parser.format(original));
+            return result.success &&
+              result.value.r === r &&
+              result.value.g === g &&
+              result.value.b === b &&
+              result.value.a === 1;
+          },
+        ),
+        propertyParameters,
+      );
+    });
+
+    it("throws RangeError for r > 255", () => {
+      assert.throws(
+        () => color().format({ r: 300, g: 0, b: 0, a: 1 }),
+        RangeError,
+      );
+    });
+
+    it("throws RangeError for a > 1", () => {
+      assert.throws(
+        () => color().format({ r: 0, g: 0, b: 0, a: 1.5 }),
+        RangeError,
+      );
+    });
+
+    it("throws RangeError for NaN in a field", () => {
+      assert.throws(
+        () => color().format({ r: 0, g: 0, b: 0, a: Number.NaN }),
+        RangeError,
+      );
+    });
+
+    it("throws RangeError for fractional r", () => {
+      assert.throws(
+        () => color().format({ r: 0.5, g: 0, b: 0, a: 1 }),
+        RangeError,
+      );
+    });
+
+    it("throws RangeError for fractional g", () => {
+      assert.throws(
+        () => color().format({ r: 0, g: 128.7, b: 0, a: 1 }),
+        RangeError,
+      );
+    });
+
+    it("throws RangeError for fractional b", () => {
+      assert.throws(
+        () => color().format({ r: 0, g: 0, b: 0.1, a: 1 }),
+        RangeError,
+      );
+    });
+
+    it("formats as rgb() when hex is not in formats", () => {
+      const parser = color({ formats: ["rgb"] });
+      assert.equal(
+        parser.format({ r: 255, g: 0, b: 0, a: 1 }),
+        "rgb(255, 0, 0)",
+      );
+    });
+
+    it("formats as rgba() with alpha when hex is not in formats", () => {
+      const parser = color({ formats: ["rgb"] });
+      const formatted = parser.format({ r: 255, g: 0, b: 0, a: 128 / 255 });
+      assert.ok(formatted.startsWith("rgba(255, 0, 0,"), formatted);
+      const r = parser.parse(formatted);
+      assert.ok(r.success);
+    });
+
+    it("formats as hsl() when only hsl is in formats", () => {
+      const parser = color({ formats: ["hsl"] });
+      const formatted = parser.format({ r: 255, g: 0, b: 0, a: 1 });
+      assert.equal(formatted, "hsl(0, 100%, 50%)");
+      assert.ok(parser.parse(formatted).success);
+    });
+
+    it("formats as named color when only named is in formats and a match exists", () => {
+      const parser = color({ formats: ["named"] });
+      assert.equal(parser.format({ r: 255, g: 0, b: 0, a: 1 }), "red");
+    });
+
+    it("throws RangeError for named-only parser when no name matches", () => {
+      assert.throws(
+        () =>
+          color({ formats: ["named"] }).format({ r: 128, g: 64, b: 32, a: 1 }),
+        RangeError,
+      );
+    });
+
+    it("hsl format() round-trips near-black color {r:0,g:0,b:1}", () => {
+      const parser = color({ formats: ["hsl"] });
+      const original: Color = { r: 0, g: 0, b: 1, a: 1 };
+      const formatted = parser.format(original);
+      const result = parser.parse(formatted);
+      assert.ok(result.success, `Expected success but got: ${formatted}`);
+      if (result.success) assert.deepEqual(result.value, original);
+    });
+  });
+
+  describe("normalize()", () => {
+    it("quantizes non-integer alpha to 8-bit precision", () => {
+      const normalized = color().normalize!({ r: 0, g: 0, b: 0, a: 0.5 });
+      assert.equal(normalized.a, 128 / 255);
+    });
+
+    it("leaves already-quantized alpha unchanged", () => {
+      const original: Color = { r: 0, g: 0, b: 0, a: 128 / 255 };
+      const normalized = color().normalize!(original);
+      assert.strictEqual(normalized, original);
+    });
+
+    it("leaves opaque colors with a === 1 unchanged", () => {
+      const original: Color = { r: 255, g: 0, b: 0, a: 1 };
+      const normalized = color().normalize!(original);
+      assert.strictEqual(normalized, original);
+    });
+
+    it("returns invalid Color unchanged without throwing", () => {
+      const invalid = { r: 300, g: 0, b: 0, a: 1 } as Color;
+      assert.deepEqual(color().normalize!(invalid), invalid);
+    });
+  });
+
+  describe("error messages", () => {
+    it("default error message on invalid input mentions the input", () => {
+      const r = color().parse("notacolor");
+      assert.ok(!r.success);
+      if (!r.success) {
+        const mentionsInput = r.error.some(
+          (t: MessageTerm) => t.type === "value" && t.value === "notacolor",
+        );
+        assert.ok(mentionsInput, "Error should mention input");
+      }
+    });
+
+    it("uses static invalidFormat error message", () => {
+      const customError = message`Must be a valid color.`;
+      const parser = color({ errors: { invalidFormat: customError } });
+      const r = parser.parse("notacolor");
+      assert.ok(!r.success);
+      if (!r.success) assert.deepEqual(r.error, customError);
+    });
+
+    it("uses function invalidFormat receiving raw input", () => {
+      let received: string | undefined;
+      const parser = color({
+        errors: {
+          invalidFormat: (input: string) => {
+            received = input;
+            return message`Bad color: ${input}`;
+          },
+        },
+      });
+      parser.parse("  notacolor  ");
+      assert.equal(received, "  notacolor  ");
+    });
+  });
+
+  describe("suggest()", () => {
+    it("suggests named colors matching prefix", () => {
+      const suggestions = [...color().suggest!("re")]
+        .filter((s) => s.kind === "literal")
+        .map((s) => s.kind === "literal" ? s.text : "");
+      assert.ok(suggestions.includes("red"), "should include 'red'");
+      assert.ok(
+        suggestions.includes("rebeccapurple"),
+        "should include 'rebeccapurple'",
+      );
+    });
+
+    it("suggest prefix 're' does not include 'blue'", () => {
+      const suggestions = [...color().suggest!("re")]
+        .filter((s) => s.kind === "literal")
+        .map((s) => s.kind === "literal" ? s.text : "");
+      assert.ok(!suggestions.includes("blue"));
+    });
+
+    it("no suggestions when formats excludes named", () => {
+      const suggestions = [...color({ formats: ["hex"] }).suggest!("re")];
+      assert.deepEqual(suggestions, []);
+    });
+
+    it("case-insensitive prefix: 'RE' matches named colors", () => {
+      const suggestions = [...color().suggest!("RE")]
+        .filter((s) => s.kind === "literal")
+        .map((s) => s.kind === "literal" ? s.text : "");
+      assert.ok(suggestions.includes("red"));
+    });
+
+    it("empty prefix yields all named colors", () => {
+      const suggestions = [...color().suggest!("")];
+      assert.equal(suggestions.length, 149);
+    });
+
+    it("no suggestions for unmatched prefix", () => {
+      const suggestions = [...color().suggest!("zzz")];
+      assert.deepEqual(suggestions, []);
     });
   });
 });
