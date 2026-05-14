@@ -16728,7 +16728,12 @@ describe("color()", () => {
     });
 
     it("throws TypeError for empty metavar", () => {
-      assert.throws(() => color({ metavar: "" as NonEmptyString }), TypeError);
+      assert.throws(
+        () => color({ metavar: "" as NonEmptyString }),
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message === "Expected a non-empty string.",
+      );
     });
 
     it("mode is sync", () => {
@@ -16747,7 +16752,10 @@ describe("color()", () => {
     it("throws TypeError for invalid format in formats array", () => {
       assert.throws(
         () => color({ formats: ["hex", "invalid" as never] }),
-        TypeError,
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message ===
+            `Expected formats to contain only "hex", "rgb", "hsl", "named", but got: "invalid".`,
       );
     });
 
@@ -17369,7 +17377,7 @@ describe("color()", () => {
 
     it("empty prefix yields all named colors", () => {
       const suggestions = [...color().suggest!("")];
-      assert.ok(suggestions.length > 100, "should have many named colors");
+      assert.equal(suggestions.length, 149);
     });
 
     it("no suggestions for unmatched prefix", () => {
