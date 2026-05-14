@@ -33,6 +33,7 @@ with Optique's type system.
 | `string()`                       | *@optique/core*     | `string`                       | Any string, with optional pattern validation        |
 | `integer()`                      | *@optique/core*     | `number` or `bigint`           | Integer with range validation                       |
 | `float()`                        | *@optique/core*     | `number`                       | Floating-point number                               |
+| `fileSize()`                     | *@optique/core*     | `number`                       | Human-readable data size (bytes)                    |
 | `choice()`                       | *@optique/core*     | string or number literal union | Enumerated values                                   |
 | `url()`                          | *@optique/core*     | `URL`                          | URL with protocol filtering                         |
 | `locale()`                       | *@optique/core*     | `Intl.Locale`                  | BCP 47 locale identifier                            |
@@ -238,6 +239,107 @@ const value = float({
 
 The parser uses `"NUMBER"` as its default metavar and provides clear error
 messages for invalid formats and out-of-range values.
+
+
+`fileSize()` parser
+-------------------
+
+*This API is available since Optique 1.1.0.*
+
+The `fileSize()` parser converts human-readable data size strings into a
+`number` representing the equivalent byte count.  It is useful for CLI tools
+that accept storage limits, upload caps, log rotation thresholds, or similar
+size values.
+
+~~~~ typescript twoslash
+import { fileSize } from "@optique/core/valueparser";
+
+// Parses "10MB", "1.5GiB", "512B", etc. → number (bytes)
+const maxUpload = fileSize();
+
+// Custom metavar shown in help text
+const cacheSize = fileSize({ metavar: "SIZE" });
+~~~~
+
+### Supported units
+
+The parser accepts both SI (decimal) and IEC (binary) unit suffixes,
+matched case-insensitively:
+
+| Unit | Bytes (SI/default)     | Unit | Bytes (IEC)           |
+| ---- | ---------------------- | ---- | --------------------- |
+| B    | 1                      |      |                       |
+| KB   | 1 000                  | KiB  | 1 024                 |
+| MB   | 1 000 000              | MiB  | 1 048 576             |
+| GB   | 1 000 000 000          | GiB  | 1 073 741 824         |
+| TB   | 1 000 000 000 000      | TiB  | 1 099 511 627 776     |
+| PB   | 10^15                  | PiB  | 2^50                  |
+| EB   | 10^18 [^filesize-safe] | EiB  | 2^60 [^filesize-safe] |
+
+Unit suffixes are matched case-insensitively: `"1kb"`, `"1KB"`, and `"1Kb"`
+are all treated as 1 000 bytes.  Optional whitespace between the number and
+unit is also accepted (`"1 MB"`).
+
+[^filesize-safe]: Because `fileSize()` returns a JavaScript `number`, the result
+                  must be a safe integer (≤ `Number.MAX_SAFE_INTEGER` ≈ 9 ×
+                  10^15). In practice this means values in the `EB`/`EiB` range
+                  and values above roughly 9 PB or 8 PiB are rejected. If you
+                  need to handle sizes this large, use the `string()` parser
+                  with manual conversion.
+
+### Default unit
+
+When a bare number is provided without a unit, `fileSize()` rejects it by
+default.  Use the `defaultUnit` option to assume a unit in that case:
+
+~~~~ typescript twoslash
+import { fileSize } from "@optique/core/valueparser";
+// ---cut-before---
+// "100" → 100 000 000 bytes; "100MB" → still 100 000 000 bytes
+const parser = fileSize({ defaultUnit: "MB" });
+~~~~
+
+### Allowing negative values
+
+By default, negative values are rejected.  Pass `allowNegative: true` to
+accept them:
+
+~~~~ typescript twoslash
+import { fileSize } from "@optique/core/valueparser";
+// ---cut-before---
+const delta = fileSize({ allowNegative: true });
+~~~~
+
+### SI-as-binary mode
+
+Some tools use `KB`, `MB`, `GB` etc. to mean powers of 1 024 rather than
+1 000 — a widespread but technically incorrect convention.  Enable
+`siAsBinary: true` to match that behaviour:
+
+~~~~ typescript twoslash
+import { fileSize } from "@optique/core/valueparser";
+// ---cut-before---
+// "1KB" → 1 024 bytes instead of 1 000
+const legacySize = fileSize({ siAsBinary: true });
+~~~~
+
+IEC suffixes (`KiB`, `MiB`, …) are unaffected by this option and always
+use powers of 1 024.
+
+### Error messages
+
+~~~~ bash
+$ myapp --max-upload "abc"
+Error: Expected a file size like 10MB or 1.5GiB, but got abc.
+
+$ myapp --max-upload "100"
+Error: Expected a file size like 10MB or 1.5GiB, but got 100.
+
+$ myapp --max-upload "-1MB"
+Error: Expected a non-negative file size, but got -1MB.
+~~~~
+
+The parser uses `"SIZE"` as its default metavar.
 
 
 `choice()` parser

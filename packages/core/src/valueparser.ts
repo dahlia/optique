@@ -1443,6 +1443,341 @@ export function float(options: FloatOptions = {}): ValueParser<"sync", number> {
 }
 
 /**
+ * A canonical file size unit string.  SI units use powers of 1 000 by
+ * default; IEC units always use powers of 1 024.
+ * @since 1.1.0
+ */
+export type FileSizeUnit =
+  | "B"
+  | "KB"
+  | "MB"
+  | "GB"
+  | "TB"
+  | "PB"
+  | "EB"
+  | "KiB"
+  | "MiB"
+  | "GiB"
+  | "TiB"
+  | "PiB"
+  | "EiB";
+
+/**
+ * Options for creating a {@link fileSize} parser.
+ * @since 1.1.0
+ */
+export interface FileSizeOptions {
+  /**
+   * The metavariable name for this parser.  Used in help messages to
+   * indicate what kind of value this parser expects.
+   * @default `"SIZE"`
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * If `true`, negative byte values are accepted.  Most size-related CLI
+   * options do not accept negative values, so this defaults to `false`.
+   * @default `false`
+   */
+  readonly allowNegative?: boolean;
+
+  /**
+   * The unit to assume when the input contains only a number with no unit
+   * suffix (e.g., `"100"` with `defaultUnit: "MB"` → 100 000 000 bytes).
+   * When this option is absent, a bare number without a unit is rejected.
+   */
+  readonly defaultUnit?: FileSizeUnit;
+
+  /**
+   * When `true`, SI suffixes (`KB`, `MB`, `GB`, …) are interpreted as
+   * binary powers of 1 024 rather than decimal powers of 1 000.  This
+   * matches a widespread but technically incorrect convention where
+   * "1 KB" means 1 024 bytes.  IEC suffixes (`KiB`, `MiB`, …) are
+   * unaffected by this option.
+   *
+   * @default `false`
+   * @since 1.1.0
+   */
+  readonly siAsBinary?: boolean;
+
+  /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * @default `0`
+   * @since 1.1.0
+   */
+  readonly placeholder?: number;
+
+  /**
+   * Custom error messages for file size parsing failures.
+   * @since 1.1.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when the input is not a valid file size string.
+     * Can be a static message or a function that receives the raw input.
+     */
+    readonly invalidFormat?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when a negative value is provided but
+     * {@link FileSizeOptions.allowNegative} is `false`.
+     * Can be a static message or a function that receives the byte value.
+     */
+    readonly negativeNotAllowed?: Message | ((value: number) => Message);
+  };
+}
+
+// Multipliers for SI units (powers of 1 000)
+const SI_MULTIPLIERS: Readonly<Record<string, number>> = {
+  b: 1,
+  kb: 1_000,
+  mb: 1_000_000,
+  gb: 1_000_000_000,
+  tb: 1_000_000_000_000,
+  pb: 1_000_000_000_000_000,
+  eb: 1_000_000_000_000_000_000,
+};
+
+// Multipliers for IEC units (powers of 1 024) — also overrides SI when
+// siAsBinary is true, making e.g. "kb" → 1 024.
+const IEC_MULTIPLIERS: Readonly<Record<string, number>> = {
+  b: 1,
+  kb: 1_024,
+  mb: 1_024 ** 2,
+  gb: 1_024 ** 3,
+  tb: 1_024 ** 4,
+  pb: 1_024 ** 5,
+  eb: 1_024 ** 6,
+  kib: 1_024,
+  mib: 1_024 ** 2,
+  gib: 1_024 ** 3,
+  tib: 1_024 ** 4,
+  pib: 1_024 ** 5,
+  eib: 1_024 ** 6,
+};
+
+// IEC-only keys for normal mode (unit strings that always use powers of 1 024)
+const IEC_ONLY_MULTIPLIERS: Readonly<Record<string, number>> = {
+  kib: 1_024,
+  mib: 1_024 ** 2,
+  gib: 1_024 ** 3,
+  tib: 1_024 ** 4,
+  pib: 1_024 ** 5,
+  eib: 1_024 ** 6,
+};
+
+const FILE_SIZE_REGEX = /^([+-]?(?:\d+\.?\d*|\d*\.\d+))\s*([a-zA-Z]*)$/;
+
+/**
+ * Checks whether `v` has at most two decimal places (within floating-point
+ * tolerance) and lies in the range [1, 1000).
+ */
+function isCleanUnit(v: number): boolean {
+  if (v < 1 || v >= 1000) return false;
+  const rounded = Math.round(v * 100) / 100;
+  return Math.abs(rounded - v) < 1e-9 * Math.max(1, Math.abs(v));
+}
+
+/**
+ * Formats `bytes` using the most readable unit from the given ordered list.
+ * Falls back to `"${bytes}B"`.
+ */
+function formatWithUnits(
+  bytes: number,
+  units: readonly [string, number][],
+): string {
+  if (bytes === 0) return "0B";
+  const absBytes = Math.abs(bytes);
+  for (const [unit, size] of units) {
+    const v = bytes / size;
+    if (absBytes >= size && isCleanUnit(Math.abs(v))) {
+      const rounded = Math.round(v * 100) / 100;
+      return `${rounded}${unit}`;
+    }
+  }
+  return `${bytes}B`;
+}
+
+// Format order for default mode: IEC first (prefer binary for exact powers of
+// 1 024), then SI.
+const FORMAT_UNITS_DEFAULT: readonly [string, number][] = [
+  ["EiB", 1_024 ** 6],
+  ["PiB", 1_024 ** 5],
+  ["TiB", 1_024 ** 4],
+  ["GiB", 1_024 ** 3],
+  ["MiB", 1_024 ** 2],
+  ["KiB", 1_024],
+  ["EB", 1_000_000_000_000_000_000],
+  ["PB", 1_000_000_000_000_000],
+  ["TB", 1_000_000_000_000],
+  ["GB", 1_000_000_000],
+  ["MB", 1_000_000],
+  ["KB", 1_000],
+];
+
+// Format order for siAsBinary mode: SI suffixes come first (they are the
+// user's preferred convention), using binary multipliers.
+const FORMAT_UNITS_SI_AS_BINARY: readonly [string, number][] = [
+  ["EB", 1_024 ** 6],
+  ["PB", 1_024 ** 5],
+  ["TB", 1_024 ** 4],
+  ["GB", 1_024 ** 3],
+  ["MB", 1_024 ** 2],
+  ["KB", 1_024],
+];
+
+/**
+ * Parses `numStr` as a decimal rational and multiplies by `multiplier`,
+ * returning the exact integer result as a safe `number`, or `null` when the
+ * result would be fractional or outside `Number.MAX_SAFE_INTEGER`.
+ *
+ * All arithmetic is performed with `bigint` to avoid float64 precision loss
+ * (e.g. `"1.0000000000000001"` must not silently round to `1`).
+ */
+function parseExactBytes(
+  numStr: string,
+  multiplier: number,
+): number | null {
+  const negative = numStr.startsWith("-");
+  const absStr = numStr.startsWith("+") || numStr.startsWith("-")
+    ? numStr.slice(1)
+    : numStr;
+  const dotIdx = absStr.indexOf(".");
+  const intPart = dotIdx < 0 ? absStr : absStr.slice(0, dotIdx);
+  const fracPart = dotIdx < 0 ? "" : absStr.slice(dotIdx + 1);
+  // Remove leading zeros to avoid BigInt parsing issues, but keep at least "0"
+  const numeratorStr = ((intPart || "0") + fracPart).replace(/^0+/, "") || "0";
+  const numerator = BigInt(numeratorStr) * (negative ? -1n : 1n);
+  const denominator = 10n ** BigInt(fracPart.length);
+  // All our multipliers are exact integers representable as float64.
+  const mBig = BigInt(multiplier);
+  const bytesNumerator = numerator * mBig;
+  if (bytesNumerator % denominator !== 0n) return null;
+  const bytes = bytesNumerator / denominator;
+  const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
+  if (bytes < -maxSafe || bytes > maxSafe) return null;
+  return Number(bytes);
+}
+
+const FILE_SIZE_UNITS: readonly FileSizeUnit[] = [
+  "B",
+  "KB",
+  "MB",
+  "GB",
+  "TB",
+  "PB",
+  "EB",
+  "KiB",
+  "MiB",
+  "GiB",
+  "TiB",
+  "PiB",
+  "EiB",
+];
+
+/**
+ * Creates a {@link ValueParser} for human-readable file/data size strings such
+ * as `"10MB"`, `"1.5GiB"`, or `"512B"`.  The parsed value is a `number`
+ * representing the equivalent byte count.
+ *
+ * Supported units:
+ *
+ * | Unit | Bytes (default) |
+ * |------|----------------|
+ * | B    | 1              |
+ * | KB   | 1 000          |
+ * | MB   | 1 000 000      |
+ * | GB   | 1 000 000 000  |
+ * | KiB  | 1 024          |
+ * | MiB  | 1 048 576      |
+ * | GiB  | 1 073 741 824  |
+ * | …    | …              |
+ *
+ * Unit suffixes are matched case-insensitively, so `"1kb"`, `"1KB"`, and
+ * `"1Kb"` are all equivalent.
+ *
+ * @param options Configuration options for the file size parser.
+ * @returns A {@link ValueParser} that parses file size strings into byte
+ *          counts.
+ * @throws {TypeError} If {@link FileSizeOptions.metavar} is an empty string,
+ *   if {@link FileSizeOptions.allowNegative} or
+ *   {@link FileSizeOptions.siAsBinary} is not a boolean, or if
+ *   {@link FileSizeOptions.defaultUnit} is not a valid
+ *   {@link FileSizeUnit}.
+ * @since 1.1.0
+ */
+export function fileSize(
+  options: FileSizeOptions = {},
+): ValueParser<"sync", number> {
+  const metavar = options.metavar ?? "SIZE";
+  ensureNonEmptyString(metavar);
+  checkBooleanOption(options, "allowNegative");
+  checkBooleanOption(options, "siAsBinary");
+  checkEnumOption(options, "defaultUnit", FILE_SIZE_UNITS);
+  const siAsBinary = options.siAsBinary ?? false;
+  const multiplierMap = siAsBinary ? IEC_MULTIPLIERS : {
+    ...SI_MULTIPLIERS,
+    ...IEC_ONLY_MULTIPLIERS,
+  };
+  const formatUnits = siAsBinary
+    ? FORMAT_UNITS_SI_AS_BINARY
+    : FORMAT_UNITS_DEFAULT;
+
+  function invalidFormatError(input: string): ValueParserResult<number> {
+    return {
+      success: false,
+      error: options.errors?.invalidFormat
+        ? (typeof options.errors.invalidFormat === "function"
+          ? options.errors.invalidFormat(input)
+          : options.errors.invalidFormat)
+        : message`Expected a file size like ${"10MB"} or ${"1.5GiB"}, but got ${input}.`,
+    };
+  }
+
+  return {
+    mode: "sync",
+    metavar,
+    placeholder: options.placeholder ?? 0,
+    parse(input: string): ValueParserResult<number> {
+      const match = FILE_SIZE_REGEX.exec(input.trim());
+      if (match == null) return invalidFormatError(input);
+
+      const numStr = match[1];
+      const unitStr = match[2].toLowerCase();
+
+      let multiplier: number;
+      if (unitStr === "") {
+        if (options.defaultUnit == null) return invalidFormatError(input);
+        multiplier = multiplierMap[options.defaultUnit.toLowerCase()];
+      } else {
+        const m = multiplierMap[unitStr];
+        if (m == null) return invalidFormatError(input);
+        multiplier = m;
+      }
+
+      const bytes = parseExactBytes(numStr, multiplier);
+      if (bytes == null) return invalidFormatError(input);
+
+      if (!(options.allowNegative ?? false) && bytes < 0) {
+        return {
+          success: false,
+          error: options.errors?.negativeNotAllowed
+            ? (typeof options.errors.negativeNotAllowed === "function"
+              ? options.errors.negativeNotAllowed(bytes)
+              : options.errors.negativeNotAllowed)
+            : message`Expected a non-negative file size, but got ${input}.`,
+        };
+      }
+
+      return { success: true, value: bytes };
+    },
+    format(value: number): string {
+      return formatWithUnits(value, formatUnits);
+    },
+  };
+}
+
+/**
  * The set of URL schemes that are considered "special" by the WHATWG URL
  * Standard.  These schemes always use the `://` authority syntax.
  * Non-special schemes use only `:` (e.g., `mailto:`, `urn:`).

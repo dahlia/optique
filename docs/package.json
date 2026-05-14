@@ -16,6 +16,7 @@
     "@types/node": "catalog:",
     "arktype": "^2.1.29",
     "markdown-it-deflist": "^3.0.0",
+    "markdown-it-footnote": "^4.0.0",
     "typescript": "catalog:",
     "valibot": "catalog:",
     "vitepress": "^2.0.0-alpha.15",
