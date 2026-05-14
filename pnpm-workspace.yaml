@@ -19,6 +19,7 @@ catalog:
 
 allowBuilds:
   esbuild: true
+  workerd: true
 
 engineStrict: true
 nodeVersion: 20.19.0
