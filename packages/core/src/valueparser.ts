@@ -8171,6 +8171,11 @@ const SEMVER_SUGGESTIONS: readonly string[] = Object.freeze([
   "1.0.0-alpha.1+build.1",
 ]);
 
+const SEMVER_SUGGESTIONS_WITH_PREFIX: readonly string[] = Object.freeze([
+  ...SEMVER_SUGGESTIONS,
+  ...SEMVER_SUGGESTIONS.map((s) => `v${s}`),
+]);
+
 /**
  * Creates a {@link ValueParser} for [Semantic Versioning 2.0.0] strings.
  *
@@ -8234,8 +8239,8 @@ export function semVer(
   const objectMode = options.type === "object";
   const errorOption = options.errors?.invalidSemVer;
 
-  const suggestions: readonly string[] = allowPrefix
-    ? [...SEMVER_SUGGESTIONS, ...SEMVER_SUGGESTIONS.map((s) => `v${s}`)]
+  const suggestions = allowPrefix
+    ? SEMVER_SUGGESTIONS_WITH_PREFIX
     : SEMVER_SUGGESTIONS;
 
   function makeError(input: string): ValueParserResult<never> {
