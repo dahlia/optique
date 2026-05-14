@@ -17490,6 +17490,23 @@ describe("semVer()", () => {
       assert.throws(
         () => semVer({ metavar: "" as NonEmptyString }),
         TypeError,
+        "Expected a non-empty string.",
+      );
+    });
+
+    it("non-boolean allowPrefix throws TypeError", () => {
+      assert.throws(
+        () => semVer({ allowPrefix: "yes" as unknown as boolean }),
+        TypeError,
+        "Expected allowPrefix to be a boolean",
+      );
+    });
+
+    it("invalid type option throws TypeError", () => {
+      assert.throws(
+        () => semVer({ type: "number" as unknown as "string" }),
+        TypeError,
+        'Expected type to be one of "string", "object"',
       );
     });
 
