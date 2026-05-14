@@ -55,10 +55,24 @@ To be released.
     Documentation and the negatable Boolean options pattern example now show
     the new primitive.  [[#801], [#802]]
 
+ -  Added `fileSize()` value parser for parsing human-readable data size
+    strings such as `"10MB"` or `"1.5GiB"` into byte counts.  Supports
+    both SI units (`KB`, `MB`, `GB`, …) and IEC units (`KiB`, `MiB`,
+    `GiB`, …), case-insensitive input, optional negative values via
+    `allowNegative`, a configurable `defaultUnit` for bare numbers, a
+    `siAsBinary` mode that interprets SI suffixes as powers of 1 024
+    (matching the common but technically incorrect convention where
+    1 KB = 1 024 bytes), and a `type: "bigint"` mode that returns
+    `bigint` instead of `number`, enabling exact representation of
+    byte counts beyond `Number.MAX_SAFE_INTEGER` (including EB/EiB
+    values).  [[#807], [#814]]
+
 [#801]: https://github.com/dahlia/optique/issues/801
 [#802]: https://github.com/dahlia/optique/pull/802
 [#803]: https://github.com/dahlia/optique/issues/803
 [#805]: https://github.com/dahlia/optique/pull/805
+[#807]: https://github.com/dahlia/optique/issues/807
+[#814]: https://github.com/dahlia/optique/pull/814
 
 ### @optique/env
 

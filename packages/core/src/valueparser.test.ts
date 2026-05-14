@@ -5,6 +5,8 @@ import {
   cidr,
   domain,
   email,
+  fileSize,
+  type FileSizeOptionsBigInt,
   float,
   hostname,
   integer,
@@ -15749,6 +15751,959 @@ describe("checkEnumOption", () => {
           'Expected foo to be one of "a", "b", "c", but got symbol: Symbol(x).',
       },
     );
+  });
+});
+
+describe("fileSize()", () => {
+  describe("basic byte parsing", () => {
+    it("parses bare bytes with B suffix", () => {
+      const parser = fileSize();
+      const r = parser.parse("512B");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 512);
+    });
+
+    it("parses zero bytes", () => {
+      const parser = fileSize();
+      const r = parser.parse("0B");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 0);
+    });
+  });
+
+  describe("SI units (powers of 1000)", () => {
+    it("parses 1KB as 1000", () => {
+      const r = fileSize().parse("1KB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000);
+    });
+
+    it("parses 1MB as 1_000_000", () => {
+      const r = fileSize().parse("1MB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000_000);
+    });
+
+    it("parses 1GB as 1_000_000_000", () => {
+      const r = fileSize().parse("1GB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000_000_000);
+    });
+
+    it("parses 1TB as 1_000_000_000_000", () => {
+      const r = fileSize().parse("1TB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000_000_000_000);
+    });
+
+    it("parses 1PB as 1_000_000_000_000_000", () => {
+      const r = fileSize().parse("1PB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000_000_000_000_000);
+    });
+  });
+
+  describe("IEC units (powers of 1024)", () => {
+    it("parses 1KiB as 1024", () => {
+      const r = fileSize().parse("1KiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_024);
+    });
+
+    it("parses 1MiB as 1_048_576", () => {
+      const r = fileSize().parse("1MiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_048_576);
+    });
+
+    it("parses 1GiB as 1_073_741_824", () => {
+      const r = fileSize().parse("1GiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_073_741_824);
+    });
+
+    it("parses 1TiB as 1_099_511_627_776", () => {
+      const r = fileSize().parse("1TiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_099_511_627_776);
+    });
+
+    it("parses 1PiB as 1_125_899_906_842_624", () => {
+      const r = fileSize().parse("1PiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_125_899_906_842_624);
+    });
+  });
+
+  describe("floating-point values", () => {
+    it("parses 1.5MB as 1_500_000", () => {
+      const r = fileSize().parse("1.5MB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_500_000);
+    });
+
+    it("parses 1.5GiB as 1_610_612_736", () => {
+      const r = fileSize().parse("1.5GiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_610_612_736);
+    });
+
+    it("parses .5KB as 500", () => {
+      const r = fileSize().parse(".5KB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 500);
+    });
+  });
+
+  describe("case-insensitive units", () => {
+    it("parses lowercase kb as KB", () => {
+      const r = fileSize().parse("1kb");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000);
+    });
+
+    it("parses uppercase KIB as KiB", () => {
+      const r = fileSize().parse("1KIB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_024);
+    });
+
+    it("parses mixed case Gib as GiB", () => {
+      const r = fileSize().parse("1Gib");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_073_741_824);
+    });
+
+    it("parses mixed case Mb as MB", () => {
+      const r = fileSize().parse("2Mb");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 2_000_000);
+    });
+  });
+
+  describe("optional whitespace between number and unit", () => {
+    it("parses '1 MB' with a space", () => {
+      const r = fileSize().parse("1 MB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000_000);
+    });
+
+    it("parses '1  KiB' with multiple spaces", () => {
+      const r = fileSize().parse("1  KiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_024);
+    });
+  });
+
+  describe("defaultUnit option", () => {
+    it("uses defaultUnit when no unit is in input", () => {
+      const parser = fileSize({ defaultUnit: "MB" });
+      const r = parser.parse("100");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 100_000_000);
+    });
+
+    it("uses defaultUnit B to treat bare number as bytes", () => {
+      const parser = fileSize({ defaultUnit: "B" });
+      const r = parser.parse("1024");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_024);
+    });
+
+    it("ignores defaultUnit when unit is present in input", () => {
+      const parser = fileSize({ defaultUnit: "MB" });
+      const r = parser.parse("1KB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000);
+    });
+
+    it("rejects bare number when defaultUnit is absent", () => {
+      const r = fileSize().parse("100");
+      assert.ok(!r.success);
+    });
+  });
+
+  describe("negative values", () => {
+    it("rejects negative values by default", () => {
+      const r = fileSize().parse("-100B");
+      assert.ok(!r.success);
+    });
+
+    it("allows negative values when allowNegative is true", () => {
+      const parser = fileSize({ allowNegative: true });
+      const r = parser.parse("-1MB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, -1_000_000);
+    });
+
+    it("allows negative IEC values when allowNegative is true", () => {
+      const parser = fileSize({ allowNegative: true });
+      const r = parser.parse("-1GiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, -1_073_741_824);
+    });
+  });
+
+  describe("siAsBinary option", () => {
+    it("treats KB as 1000 by default (siAsBinary: false)", () => {
+      const r = fileSize().parse("1KB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000);
+    });
+
+    it("treats KB as 1024 when siAsBinary is true", () => {
+      const parser = fileSize({ siAsBinary: true });
+      const r = parser.parse("1KB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_024);
+    });
+
+    it("treats MB as 1_000_000 by default", () => {
+      const r = fileSize().parse("1MB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000_000);
+    });
+
+    it("treats MB as 1_048_576 when siAsBinary is true", () => {
+      const parser = fileSize({ siAsBinary: true });
+      const r = parser.parse("1MB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_048_576);
+    });
+
+    it("treats GB as 1_000_000_000 by default", () => {
+      const r = fileSize().parse("1GB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000_000_000);
+    });
+
+    it("treats GB as 1_073_741_824 when siAsBinary is true", () => {
+      const parser = fileSize({ siAsBinary: true });
+      const r = parser.parse("1GB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_073_741_824);
+    });
+
+    it("does not affect IEC units when siAsBinary is true", () => {
+      const parser = fileSize({ siAsBinary: true });
+      const r = parser.parse("1KiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_024);
+    });
+  });
+
+  describe("error cases", () => {
+    it("rejects unknown unit", () => {
+      const r = fileSize().parse("100XB");
+      assert.ok(!r.success);
+    });
+
+    it("rejects pure text", () => {
+      const r = fileSize().parse("abc");
+      assert.ok(!r.success);
+    });
+
+    it("rejects empty string", () => {
+      const r = fileSize().parse("");
+      assert.ok(!r.success);
+    });
+
+    it("rejects number with leading plus and no unit (no defaultUnit)", () => {
+      const r = fileSize().parse("+100");
+      assert.ok(!r.success);
+    });
+
+    it("rejects fractional byte values (0.1B)", () => {
+      const r = fileSize().parse("0.1B");
+      assert.ok(!r.success);
+    });
+
+    it("rejects fractional byte values (1.5B)", () => {
+      const r = fileSize().parse("1.5B");
+      assert.ok(!r.success);
+    });
+
+    it("rejects values beyond Number.MAX_SAFE_INTEGER", () => {
+      const r = fileSize().parse(`${Number.MAX_SAFE_INTEGER + 1}B`);
+      assert.ok(!r.success);
+    });
+
+    it("rejects input whose float64 conversion silently rounds to integer (1.0000000000000001B)", () => {
+      const r = fileSize().parse("1.0000000000000001B");
+      assert.ok(!r.success);
+    });
+
+    it("rejects input whose float64 conversion silently rounds near MAX_SAFE_INTEGER (0.99999999999999999B)", () => {
+      const r = fileSize().parse("0.99999999999999999B");
+      assert.ok(!r.success);
+    });
+
+    it("rejects byte counts exceeding Number.MAX_SAFE_INTEGER for any unit", () => {
+      const parser = fileSize();
+      fc.assert(
+        fc.property(
+          fc.bigInt({
+            min: BigInt(Number.MAX_SAFE_INTEGER) + 1n,
+            max: 100_000_000_000_000_000_000n,
+          }),
+          (n) => !parser.parse(`${n}B`).success,
+        ),
+        propertyParameters,
+      );
+    });
+  });
+
+  describe("type discriminator", () => {
+    it("type: 'number' explicit returns number", () => {
+      const parser = fileSize({ type: "number" });
+      const r = parser.parse("1MB");
+      assert.ok(r.success);
+      if (r.success) {
+        assert.equal(typeof r.value, "number");
+        assert.equal(r.value, 1_000_000);
+      }
+    });
+
+    it("type: 'number' explicit has same placeholder as default", () => {
+      assert.equal(fileSize({ type: "number" }).placeholder, 0);
+    });
+  });
+
+  describe("metavar", () => {
+    it("defaults to SIZE", () => {
+      assert.equal(fileSize().metavar, "SIZE");
+    });
+
+    it("uses custom metavar", () => {
+      assert.equal(fileSize({ metavar: "BYTES" }).metavar, "BYTES");
+    });
+  });
+
+  describe("placeholder", () => {
+    it("defaults to 0", () => {
+      assert.equal(fileSize().placeholder, 0);
+    });
+
+    it("uses custom placeholder", () => {
+      assert.equal(fileSize({ placeholder: 1024 }).placeholder, 1024);
+    });
+  });
+
+  describe("format()", () => {
+    it("formats 512 as 512B", () => {
+      assert.equal(fileSize().format(512), "512B");
+    });
+
+    it("formats 1000 as 1KB", () => {
+      assert.equal(fileSize().format(1_000), "1KB");
+    });
+
+    it("formats 1_000_000 as 1MB", () => {
+      assert.equal(fileSize().format(1_000_000), "1MB");
+    });
+
+    it("formats 1_000_000_000 as 1GB", () => {
+      assert.equal(fileSize().format(1_000_000_000), "1GB");
+    });
+
+    it("formats 1_073_741_824 (1 GiB) as 1GiB", () => {
+      assert.equal(fileSize().format(1_073_741_824), "1GiB");
+    });
+
+    it("formats 1_500_000 as 1.5MB", () => {
+      assert.equal(fileSize().format(1_500_000), "1.5MB");
+    });
+
+    it("formats 1_572_864 (1.5 MiB) as 1.5MiB", () => {
+      assert.equal(fileSize().format(1_572_864), "1.5MiB");
+    });
+
+    it("formats 0 as 0B", () => {
+      assert.equal(fileSize().format(0), "0B");
+    });
+
+    it("formats 1KB as 1KB when siAsBinary is true", () => {
+      assert.equal(fileSize({ siAsBinary: true }).format(1_024), "1KB");
+    });
+
+    it("round-trips representative byte values through format and parse", () => {
+      const parser = fileSize();
+      for (
+        const bytes of [0, 512, 1000, 1024, 1_500_000, 1_048_576, 1_073_741_824]
+      ) {
+        const formatted = parser.format(bytes);
+        const result = parser.parse(formatted);
+        assert.ok(
+          result.success,
+          `format(${bytes}) = ${formatted} did not parse`,
+        );
+        if (result.success) assert.equal(result.value, bytes);
+      }
+    });
+
+    it("round-trips with siAsBinary: true", () => {
+      const parser = fileSize({ siAsBinary: true });
+      for (const bytes of [0, 512, 1_024, 1_048_576, 1_073_741_824]) {
+        const formatted = parser.format(bytes);
+        const result = parser.parse(formatted);
+        assert.ok(
+          result.success,
+          `format(${bytes}) = ${formatted} did not parse`,
+        );
+        if (result.success) assert.equal(result.value, bytes);
+      }
+    });
+
+    it("round-trips any non-negative safe integer via fast-check", () => {
+      const parser = fileSize();
+      fc.assert(
+        fc.property(
+          fc.integer({ min: 0, max: Number.MAX_SAFE_INTEGER }),
+          (bytes) => {
+            const formatted = parser.format(bytes);
+            const r = parser.parse(formatted);
+            return r.success && r.value === bytes;
+          },
+        ),
+        propertyParameters,
+      );
+    });
+
+    it("round-trips negative values with allowNegative via fast-check", () => {
+      const parser = fileSize({ allowNegative: true });
+      fc.assert(
+        fc.property(
+          fc.integer({ min: -Number.MAX_SAFE_INTEGER, max: -1 }),
+          (bytes) => {
+            const formatted = parser.format(bytes);
+            const r = parser.parse(formatted);
+            return r.success && r.value === bytes;
+          },
+        ),
+        propertyParameters,
+      );
+    });
+
+    it("parse(n × unit) gives n × multiplier for any integer n", () => {
+      const units: readonly [string, number][] = [
+        ["B", 1],
+        ["KB", 1_000],
+        ["MB", 1_000_000],
+        ["GB", 1_000_000_000],
+        ["KiB", 1_024],
+        ["MiB", 1_048_576],
+        ["GiB", 1_073_741_824],
+      ];
+      const parser = fileSize();
+      fc.assert(
+        fc.property(
+          fc.constantFrom(...units),
+          fc.nat({ max: 9_000 }),
+          ([unit, multiplier], n) => {
+            const bytes = n * multiplier;
+            const r = parser.parse(`${n}${unit}`);
+            return r.success && r.value === bytes;
+          },
+        ),
+        propertyParameters,
+      );
+    });
+  });
+
+  describe("custom error messages", () => {
+    it("uses static invalidFormat error message", () => {
+      const customError = message`Bad size: ${"example"}`;
+      const parser = fileSize({ errors: { invalidFormat: customError } });
+      const r = parser.parse("bad");
+      assert.ok(!r.success);
+      if (!r.success) assert.deepEqual(r.error, customError);
+    });
+
+    it("uses function invalidFormat error message", () => {
+      const parser = fileSize({
+        errors: {
+          invalidFormat: (input) => message`Not a size: ${input}`,
+        },
+      });
+      const r = parser.parse("bad");
+      assert.ok(!r.success);
+      if (!r.success) {
+        const expected = message`Not a size: ${"bad"}`;
+        assert.deepEqual(r.error, expected);
+      }
+    });
+
+    it("uses static negativeNotAllowed error message", () => {
+      const customError = message`No negatives!`;
+      const parser = fileSize({ errors: { negativeNotAllowed: customError } });
+      const r = parser.parse("-1MB");
+      assert.ok(!r.success);
+      if (!r.success) assert.deepEqual(r.error, customError);
+    });
+
+    it("uses function negativeNotAllowed error message", () => {
+      const parser = fileSize({
+        errors: {
+          negativeNotAllowed: (value) =>
+            message`Negative size ${text(String(value))} not allowed`,
+        },
+      });
+      const r = parser.parse("-1MB");
+      assert.ok(!r.success);
+      if (!r.success) {
+        const expected = message`Negative size ${
+          text(String(-1_000_000))
+        } not allowed`;
+        assert.deepEqual(r.error, expected);
+      }
+    });
+  });
+});
+
+describe("fileSize() — bigint mode", () => {
+  const bigintParser = fileSize({ type: "bigint" });
+
+  describe("type inference", () => {
+    it("returns bigint values", () => {
+      const r = bigintParser.parse("512B");
+      assert.ok(r.success);
+      if (r.success) assert.equal(typeof r.value, "bigint");
+    });
+
+    it("accepts FileSizeOptionsBigInt type", () => {
+      const opts: FileSizeOptionsBigInt = { type: "bigint" };
+      const parser = fileSize(opts);
+      assert.ok(isValueParser(parser));
+    });
+  });
+
+  describe("SI units", () => {
+    it("parses 512B → 512n", () => {
+      const r = bigintParser.parse("512B");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 512n);
+    });
+
+    it("parses 1KB → 1000n", () => {
+      const r = bigintParser.parse("1KB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000n);
+    });
+
+    it("parses 1MB → 1_000_000n", () => {
+      const r = bigintParser.parse("1MB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000_000n);
+    });
+
+    it("parses 1GB → 1_000_000_000n", () => {
+      const r = bigintParser.parse("1GB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000_000_000n);
+    });
+  });
+
+  describe("IEC units", () => {
+    it("parses 1KiB → 1024n", () => {
+      const r = bigintParser.parse("1KiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_024n);
+    });
+
+    it("parses 1GiB → 1_073_741_824n", () => {
+      const r = bigintParser.parse("1GiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_073_741_824n);
+    });
+  });
+
+  describe("large values (beyond Number.MAX_SAFE_INTEGER)", () => {
+    it("parses 1EB → 1_000_000_000_000_000_000n", () => {
+      const r = bigintParser.parse("1EB");
+      assert.ok(r.success);
+      if (r.success) {
+        assert.equal(r.value, 1_000_000_000_000_000_000n);
+        assert.equal(typeof r.value, "bigint");
+      }
+    });
+
+    it("parses 1EiB → 1_152_921_504_606_846_976n", () => {
+      const r = bigintParser.parse("1EiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_152_921_504_606_846_976n);
+    });
+
+    it("parses 100EB", () => {
+      const r = bigintParser.parse("100EB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 100_000_000_000_000_000_000n);
+    });
+  });
+
+  describe("floating-point inputs", () => {
+    it("parses 1.5GB → 1_500_000_000n", () => {
+      const r = bigintParser.parse("1.5GB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_500_000_000n);
+    });
+
+    it("parses 1.5EiB → 1_729_382_256_910_270_464n", () => {
+      const r = bigintParser.parse("1.5EiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_729_382_256_910_270_464n);
+    });
+  });
+
+  describe("case-insensitive units", () => {
+    it("parses 1KIB → 1024n", () => {
+      const r = bigintParser.parse("1KIB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_024n);
+    });
+
+    it("parses 1eb → 1_000_000_000_000_000_000n", () => {
+      const r = bigintParser.parse("1eb");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000_000_000_000_000_000n);
+    });
+  });
+
+  describe("defaultUnit option", () => {
+    it("uses defaultUnit when no unit is in input", () => {
+      const parser = fileSize({ type: "bigint", defaultUnit: "MB" });
+      const r = parser.parse("100");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 100_000_000n);
+    });
+
+    it("rejects bare number when defaultUnit is absent", () => {
+      const r = bigintParser.parse("100");
+      assert.ok(!r.success);
+    });
+  });
+
+  describe("allowNegative option", () => {
+    it("rejects negative by default", () => {
+      const r = bigintParser.parse("-1MB");
+      assert.ok(!r.success);
+    });
+
+    it("allows negative when allowNegative is true", () => {
+      const parser = fileSize({ type: "bigint", allowNegative: true });
+      const r = parser.parse("-1EB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, -1_000_000_000_000_000_000n);
+    });
+  });
+
+  describe("siAsBinary option", () => {
+    it("treats KB as 1024n when siAsBinary is true", () => {
+      const parser = fileSize({ type: "bigint", siAsBinary: true });
+      const r = parser.parse("1KB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_024n);
+    });
+
+    it("treats EB as 1024^6 when siAsBinary is true", () => {
+      const parser = fileSize({ type: "bigint", siAsBinary: true });
+      const r = parser.parse("1EB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_152_921_504_606_846_976n);
+    });
+
+    it("round-trips with siAsBinary: true", () => {
+      const parser = fileSize({ type: "bigint", siAsBinary: true });
+      for (
+        const bytes of [
+          0n,
+          512n,
+          1_024n,
+          1_048_576n,
+          1_073_741_824n,
+          1_152_921_504_606_846_976n,
+        ]
+      ) {
+        const formatted = parser.format(bytes);
+        const result = parser.parse(formatted);
+        assert.ok(
+          result.success,
+          `format(${bytes}) = ${formatted} did not parse`,
+        );
+        if (result.success) assert.equal(result.value, bytes);
+      }
+    });
+  });
+
+  describe("metavar", () => {
+    it("defaults to SIZE", () => {
+      assert.equal(fileSize({ type: "bigint" }).metavar, "SIZE");
+    });
+
+    it("uses custom metavar", () => {
+      assert.equal(
+        fileSize({ type: "bigint", metavar: "BYTES" }).metavar,
+        "BYTES",
+      );
+    });
+  });
+
+  describe("option validation", () => {
+    it("throws TypeError for invalid type", () => {
+      assert.throws(
+        // @ts-ignore intentionally invalid
+        () => fileSize({ type: "bytes" }),
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message ===
+            'Expected type to be "number" or "bigint", but got: bytes.',
+      );
+    });
+
+    it("throws TypeError for empty metavar", () => {
+      assert.throws(
+        // @ts-ignore intentionally invalid
+        () => fileSize({ type: "bigint", metavar: "" }),
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message === "Expected a non-empty string.",
+      );
+    });
+
+    it("throws TypeError for non-boolean allowNegative", () => {
+      assert.throws(
+        // @ts-ignore intentionally invalid
+        () => fileSize({ type: "bigint", allowNegative: "yes" }),
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message ===
+            "Expected allowNegative to be a boolean, but got string: yes.",
+      );
+    });
+
+    it("throws TypeError for non-boolean siAsBinary", () => {
+      assert.throws(
+        // @ts-ignore intentionally invalid
+        () => fileSize({ type: "bigint", siAsBinary: 1 }),
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message ===
+            "Expected siAsBinary to be a boolean, but got number: 1.",
+      );
+    });
+
+    it("throws TypeError for invalid defaultUnit", () => {
+      assert.throws(
+        // @ts-ignore intentionally invalid
+        () => fileSize({ type: "bigint", defaultUnit: "XB" }),
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message ===
+            'Expected defaultUnit to be one of "B", "KB", "MB", "GB", ' +
+              '"TB", "PB", "EB", "KiB", "MiB", "GiB", "TiB", "PiB", ' +
+              '"EiB", but got string: "XB".',
+      );
+    });
+  });
+
+  describe("optional whitespace between number and unit", () => {
+    it("parses '1 EB' with a space", () => {
+      const r = bigintParser.parse("1 EB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_000_000_000_000_000_000n);
+    });
+
+    it("parses '1  EiB' with multiple spaces", () => {
+      const r = bigintParser.parse("1  EiB");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value, 1_152_921_504_606_846_976n);
+    });
+  });
+
+  describe("placeholder", () => {
+    it("defaults to 0n", () => {
+      assert.equal(bigintParser.placeholder, 0n);
+    });
+
+    it("uses custom placeholder", () => {
+      const parser = fileSize({ type: "bigint", placeholder: 1024n });
+      assert.equal(parser.placeholder, 1024n);
+    });
+  });
+
+  describe("format()", () => {
+    it("formats 512n as 512B", () => {
+      assert.equal(bigintParser.format(512n), "512B");
+    });
+
+    it("formats 1_000n as 1KB", () => {
+      assert.equal(bigintParser.format(1_000n), "1KB");
+    });
+
+    it("formats 1_073_741_824n (1GiB) as 1GiB", () => {
+      assert.equal(bigintParser.format(1_073_741_824n), "1GiB");
+    });
+
+    it("formats 1_000_000_000_000_000_000n (1EB) as 1EB", () => {
+      assert.equal(
+        bigintParser.format(1_000_000_000_000_000_000n),
+        "1EB",
+      );
+    });
+
+    it("formats 1_152_921_504_606_846_976n (1EiB) as 1EiB", () => {
+      assert.equal(
+        bigintParser.format(1_152_921_504_606_846_976n),
+        "1EiB",
+      );
+    });
+
+    it("formats 1_729_382_256_910_270_464n (1.5EiB) as 1.5EiB", () => {
+      assert.equal(
+        bigintParser.format(1_729_382_256_910_270_464n),
+        "1.5EiB",
+      );
+    });
+
+    it("formats 0n as 0B", () => {
+      assert.equal(bigintParser.format(0n), "0B");
+    });
+
+    it("formats 1_500_000_000_000_000_000n (1.5EB) as 1.5EB", () => {
+      assert.equal(bigintParser.format(1_500_000_000_000_000_000n), "1.5EB");
+    });
+
+    it("formats negative values (allowNegative: true)", () => {
+      const parser = fileSize({ type: "bigint", allowNegative: true });
+      assert.equal(parser.format(-1_000_000_000n), "-1GB");
+      assert.equal(parser.format(-1_073_741_824n), "-1GiB");
+      assert.equal(parser.format(-1_000_000_000_000_000_000n), "-1EB");
+    });
+
+    it("round-trips representative values", () => {
+      const values = [
+        0n,
+        512n,
+        1_000n,
+        1_024n,
+        1_073_741_824n,
+        1_000_000_000_000_000_000n,
+        1_152_921_504_606_846_976n,
+      ];
+      for (const v of values) {
+        const formatted = bigintParser.format(v);
+        const result = bigintParser.parse(formatted);
+        assert.ok(result.success, `format(${v}) = ${formatted} did not parse`);
+        if (result.success) assert.equal(result.value, v);
+      }
+    });
+
+    it("round-trips any non-negative bigint up to 1000 EB via fast-check", () => {
+      const maxBytes = 1_000n * 1_000_000_000_000_000_000n;
+      fc.assert(
+        fc.property(
+          fc.bigInt({ min: 0n, max: maxBytes }),
+          (bytes) => {
+            const formatted = bigintParser.format(bytes);
+            const r = bigintParser.parse(formatted);
+            return r.success && r.value === bytes;
+          },
+        ),
+        propertyParameters,
+      );
+    });
+
+    it("parse(n × unit) gives n × multiplier for any integer n", () => {
+      const units: readonly [string, bigint][] = [
+        ["B", 1n],
+        ["KB", 1_000n],
+        ["MB", 1_000_000n],
+        ["EB", 1_000_000_000_000_000_000n],
+        ["KiB", 1_024n],
+        ["EiB", 1_152_921_504_606_846_976n],
+      ];
+      fc.assert(
+        fc.property(
+          fc.constantFrom(...units),
+          fc.bigInt({ min: 1n, max: 999n }),
+          ([unit, multiplier], n) => {
+            const bytes = n * multiplier;
+            const r = bigintParser.parse(`${n}${unit}`);
+            return r.success && r.value === bytes;
+          },
+        ),
+        propertyParameters,
+      );
+    });
+  });
+
+  describe("error cases", () => {
+    it("rejects fractional byte values (0.1B)", () => {
+      assert.ok(!bigintParser.parse("0.1B").success);
+    });
+
+    it("rejects unknown unit", () => {
+      assert.ok(!bigintParser.parse("100XB").success);
+    });
+
+    it("rejects empty string", () => {
+      assert.ok(!bigintParser.parse("").success);
+    });
+
+    it("rejects float64-precision rounding input (1.0000000000000001B)", () => {
+      assert.ok(!bigintParser.parse("1.0000000000000001B").success);
+    });
+  });
+
+  describe("custom error messages", () => {
+    it("uses static invalidFormat error message", () => {
+      const customError = message`Bad size: ${"example"}`;
+      const parser = fileSize({
+        type: "bigint",
+        errors: { invalidFormat: customError },
+      });
+      const r = parser.parse("bad");
+      assert.ok(!r.success);
+      if (!r.success) assert.deepEqual(r.error, customError);
+    });
+
+    it("uses function invalidFormat error message", () => {
+      const parser = fileSize({
+        type: "bigint",
+        errors: { invalidFormat: (input) => message`Not a size: ${input}` },
+      });
+      const r = parser.parse("bad");
+      assert.ok(!r.success);
+      if (!r.success) {
+        const expected = message`Not a size: ${"bad"}`;
+        assert.deepEqual(r.error, expected);
+      }
+    });
+
+    it("uses static negativeNotAllowed error message", () => {
+      const customError = message`No negatives!`;
+      const parser = fileSize({
+        type: "bigint",
+        errors: { negativeNotAllowed: customError },
+      });
+      const r = parser.parse("-1EB");
+      assert.ok(!r.success);
+      if (!r.success) assert.deepEqual(r.error, customError);
+    });
+
+    it("negativeNotAllowed function receives bigint argument", () => {
+      let received: bigint | undefined;
+      const parser = fileSize({
+        type: "bigint",
+        errors: {
+          negativeNotAllowed: (value) => {
+            received = value;
+            return message`Negative: ${String(value)}`;
+          },
+        },
+      });
+      parser.parse("-1EB");
+      assert.equal(received, -1_000_000_000_000_000_000n);
+    });
   });
 });
 

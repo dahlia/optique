@@ -1443,6 +1443,623 @@ export function float(options: FloatOptions = {}): ValueParser<"sync", number> {
 }
 
 /**
+ * A canonical file size unit string.  SI units use powers of 1 000 by
+ * default; IEC units always use powers of 1 024.
+ * @since 1.1.0
+ */
+export type FileSizeUnit =
+  | "B"
+  | "KB"
+  | "MB"
+  | "GB"
+  | "TB"
+  | "PB"
+  | "EB"
+  | "KiB"
+  | "MiB"
+  | "GiB"
+  | "TiB"
+  | "PiB"
+  | "EiB";
+
+/**
+ * Options for creating a {@link fileSize} parser that returns `number`.
+ * @since 1.1.0
+ */
+export interface FileSizeOptionsNumber {
+  /**
+   * The return type.  Defaults to `"number"`.
+   * @default `"number"`
+   */
+  readonly type?: "number";
+
+  /**
+   * The metavariable name for this parser.  Used in help messages to
+   * indicate what kind of value this parser expects.
+   * @default `"SIZE"`
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * If `true`, negative byte values are accepted.  Most size-related CLI
+   * options do not accept negative values, so this defaults to `false`.
+   * @default `false`
+   */
+  readonly allowNegative?: boolean;
+
+  /**
+   * The unit to assume when the input contains only a number with no unit
+   * suffix (e.g., `"100"` with `defaultUnit: "MB"` → 100 000 000 bytes).
+   * When this option is absent, a bare number without a unit is rejected.
+   */
+  readonly defaultUnit?: FileSizeUnit;
+
+  /**
+   * When `true`, SI suffixes (`KB`, `MB`, `GB`, …) are interpreted as
+   * binary powers of 1 024 rather than decimal powers of 1 000.  This
+   * matches a widespread but technically incorrect convention where
+   * "1 KB" means 1 024 bytes.  IEC suffixes (`KiB`, `MiB`, …) are
+   * unaffected by this option.
+   *
+   * @default `false`
+   * @since 1.1.0
+   */
+  readonly siAsBinary?: boolean;
+
+  /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * @default `0`
+   * @since 1.1.0
+   */
+  readonly placeholder?: number;
+
+  /**
+   * Custom error messages for file size parsing failures.
+   * @since 1.1.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when the input is not a valid file size string.
+     * Can be a static message or a function that receives the raw input.
+     */
+    readonly invalidFormat?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when a negative value is provided but
+     * {@link FileSizeOptionsNumber.allowNegative} is `false`.
+     * Can be a static message or a function that receives the byte value.
+     */
+    readonly negativeNotAllowed?: Message | ((value: number) => Message);
+  };
+}
+
+/**
+ * Options for creating a {@link fileSize} parser that returns `bigint`.
+ * Use this when byte counts may exceed `Number.MAX_SAFE_INTEGER` (roughly
+ * 9 PB), for example when working with EB/EiB-range values.
+ * @since 1.1.0
+ */
+export interface FileSizeOptionsBigInt {
+  /**
+   * Must be set to `"bigint"` to select bigint output.
+   */
+  readonly type: "bigint";
+
+  /**
+   * The metavariable name for this parser.  Used in help messages to
+   * indicate what kind of value this parser expects.
+   * @default `"SIZE"`
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * If `true`, negative byte values are accepted.
+   * @default `false`
+   */
+  readonly allowNegative?: boolean;
+
+  /**
+   * The unit to assume when the input contains only a number with no unit
+   * suffix.  When absent, a bare number is rejected.
+   */
+  readonly defaultUnit?: FileSizeUnit;
+
+  /**
+   * When `true`, SI suffixes (`KB`, `MB`, `GB`, …) are interpreted as
+   * binary powers of 1 024 rather than decimal powers of 1 000.
+   * @default `false`
+   * @since 1.1.0
+   */
+  readonly siAsBinary?: boolean;
+
+  /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * @default `0n`
+   * @since 1.1.0
+   */
+  readonly placeholder?: bigint;
+
+  /**
+   * Custom error messages for file size parsing failures.
+   * @since 1.1.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when the input is not a valid file size string.
+     * Can be a static message or a function that receives the raw input.
+     */
+    readonly invalidFormat?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when a negative value is provided but
+     * {@link FileSizeOptionsBigInt.allowNegative} is `false`.
+     * Can be a static message or a function that receives the byte value.
+     */
+    readonly negativeNotAllowed?: Message | ((value: bigint) => Message);
+  };
+}
+
+/**
+ * Options for creating a {@link fileSize} parser.
+ * @since 1.1.0
+ */
+export type FileSizeOptions = FileSizeOptionsNumber | FileSizeOptionsBigInt;
+
+// Multipliers for SI units (powers of 1 000)
+const SI_MULTIPLIERS: Readonly<Record<string, number>> = {
+  b: 1,
+  kb: 1_000,
+  mb: 1_000_000,
+  gb: 1_000_000_000,
+  tb: 1_000_000_000_000,
+  pb: 1_000_000_000_000_000,
+  eb: 1_000_000_000_000_000_000,
+};
+
+// Multipliers for IEC units (powers of 1 024) — also overrides SI when
+// siAsBinary is true, making e.g. "kb" → 1 024.
+const IEC_MULTIPLIERS: Readonly<Record<string, number>> = {
+  b: 1,
+  kb: 1_024,
+  mb: 1_024 ** 2,
+  gb: 1_024 ** 3,
+  tb: 1_024 ** 4,
+  pb: 1_024 ** 5,
+  eb: 1_024 ** 6,
+  kib: 1_024,
+  mib: 1_024 ** 2,
+  gib: 1_024 ** 3,
+  tib: 1_024 ** 4,
+  pib: 1_024 ** 5,
+  eib: 1_024 ** 6,
+};
+
+// IEC-only keys for normal mode (unit strings that always use powers of 1 024)
+const IEC_ONLY_MULTIPLIERS: Readonly<Record<string, number>> = {
+  kib: 1_024,
+  mib: 1_024 ** 2,
+  gib: 1_024 ** 3,
+  tib: 1_024 ** 4,
+  pib: 1_024 ** 5,
+  eib: 1_024 ** 6,
+};
+
+const FILE_SIZE_REGEX = /^([+-]?(?:\d+\.?\d*|\d*\.\d+))\s*([a-zA-Z]*)$/;
+
+/**
+ * Formats `bytes` using the most readable unit from the given ordered list.
+ * Falls back to `"${bytes}B"`.
+ *
+ * A unit is chosen only when the formatted value round-trips exactly: the
+ * rounded quotient must lie in [1, 1000) and `rounded * size === bytes` must
+ * hold in float64 arithmetic.  This guarantees `parse(format(x)) === x`.
+ */
+function formatWithUnits(
+  bytes: number,
+  units: readonly [string, number][],
+): string {
+  if (bytes === 0) return "0B";
+  const absBytes = Math.abs(bytes);
+  for (const [unit, size] of units) {
+    if (absBytes < size) continue;
+    const v = bytes / size;
+    const rounded = Math.round(v * 100) / 100;
+    const absRounded = Math.abs(rounded);
+    if (absRounded >= 1 && absRounded < 1000 && rounded * size === bytes) {
+      return `${rounded}${unit}`;
+    }
+  }
+  return `${bytes}B`;
+}
+
+// Format order for default mode: IEC first (prefer binary for exact powers of
+// 1 024), then SI.
+const FORMAT_UNITS_DEFAULT: readonly [string, number][] = [
+  ["EiB", 1_024 ** 6],
+  ["PiB", 1_024 ** 5],
+  ["TiB", 1_024 ** 4],
+  ["GiB", 1_024 ** 3],
+  ["MiB", 1_024 ** 2],
+  ["KiB", 1_024],
+  ["EB", 1_000_000_000_000_000_000],
+  ["PB", 1_000_000_000_000_000],
+  ["TB", 1_000_000_000_000],
+  ["GB", 1_000_000_000],
+  ["MB", 1_000_000],
+  ["KB", 1_000],
+];
+
+// Format order for siAsBinary mode: SI suffixes come first (they are the
+// user's preferred convention), using binary multipliers.
+const FORMAT_UNITS_SI_AS_BINARY: readonly [string, number][] = [
+  ["EB", 1_024 ** 6],
+  ["PB", 1_024 ** 5],
+  ["TB", 1_024 ** 4],
+  ["GB", 1_024 ** 3],
+  ["MB", 1_024 ** 2],
+  ["KB", 1_024],
+];
+
+// Bigint multiplier maps — mirrors of the number maps above
+const BIGINT_SI_MULTIPLIERS: Readonly<Record<string, bigint>> = {
+  b: 1n,
+  kb: 1_000n,
+  mb: 1_000_000n,
+  gb: 1_000_000_000n,
+  tb: 1_000_000_000_000n,
+  pb: 1_000_000_000_000_000n,
+  eb: 1_000_000_000_000_000_000n,
+};
+
+const BIGINT_IEC_MULTIPLIERS: Readonly<Record<string, bigint>> = {
+  b: 1n,
+  kb: 1_024n,
+  mb: 1_024n ** 2n,
+  gb: 1_024n ** 3n,
+  tb: 1_024n ** 4n,
+  pb: 1_024n ** 5n,
+  eb: 1_024n ** 6n,
+  kib: 1_024n,
+  mib: 1_024n ** 2n,
+  gib: 1_024n ** 3n,
+  tib: 1_024n ** 4n,
+  pib: 1_024n ** 5n,
+  eib: 1_024n ** 6n,
+};
+
+const BIGINT_IEC_ONLY_MULTIPLIERS: Readonly<Record<string, bigint>> = {
+  kib: 1_024n,
+  mib: 1_024n ** 2n,
+  gib: 1_024n ** 3n,
+  tib: 1_024n ** 4n,
+  pib: 1_024n ** 5n,
+  eib: 1_024n ** 6n,
+};
+
+// Bigint format unit lists
+const BIGINT_FORMAT_UNITS_DEFAULT: readonly [string, bigint][] = [
+  ["EiB", 1_024n ** 6n],
+  ["PiB", 1_024n ** 5n],
+  ["TiB", 1_024n ** 4n],
+  ["GiB", 1_024n ** 3n],
+  ["MiB", 1_024n ** 2n],
+  ["KiB", 1_024n],
+  ["EB", 1_000_000_000_000_000_000n],
+  ["PB", 1_000_000_000_000_000n],
+  ["TB", 1_000_000_000_000n],
+  ["GB", 1_000_000_000n],
+  ["MB", 1_000_000n],
+  ["KB", 1_000n],
+];
+
+const BIGINT_FORMAT_UNITS_SI_AS_BINARY: readonly [string, bigint][] = [
+  ["EB", 1_024n ** 6n],
+  ["PB", 1_024n ** 5n],
+  ["TB", 1_024n ** 4n],
+  ["GB", 1_024n ** 3n],
+  ["MB", 1_024n ** 2n],
+  ["KB", 1_024n],
+];
+
+/**
+ * Formats a bigint byte count using the most readable unit.  Falls back to
+ * `"${value}B"`.  Tries exact integers, then 1 and 2 decimal places.
+ */
+function formatBigIntBytes(
+  value: bigint,
+  units: readonly [string, bigint][],
+): string {
+  if (value === 0n) return "0B";
+  const absValue = value < 0n ? -value : value;
+  for (const [unit, size] of units) {
+    if (absValue < size) continue;
+    // Exact integer
+    if (value % size === 0n) {
+      const v = value / size;
+      const absV = v < 0n ? -v : v;
+      if (absV >= 1n && absV < 1000n) return `${v}${unit}`;
+    }
+    // Up to 2 decimal places
+    const v100 = value * 100n;
+    if (v100 % size === 0n) {
+      const q = v100 / size;
+      const absQ = q < 0n ? -q : q;
+      if (absQ >= 100n && absQ < 100_000n) {
+        const intPart = q / 100n;
+        const decPart = absQ % 100n;
+        if (decPart % 10n === 0n) {
+          return `${intPart}.${decPart / 10n}${unit}`;
+        }
+        return `${intPart}.${String(decPart).padStart(2, "0")}${unit}`;
+      }
+    }
+  }
+  return `${value}B`;
+}
+
+/**
+ * Core computation: parses `numStr` as a decimal rational, multiplies by
+ * `mBig`, and returns the exact integer result as a `bigint`, or `null` when
+ * the result would be fractional.  The safe-integer range check is NOT applied
+ * here; callers add it as needed.
+ */
+function parseExactBytesRaw(
+  numStr: string,
+  mBig: bigint,
+): bigint | null {
+  const negative = numStr.startsWith("-");
+  const absStr = numStr.startsWith("+") || numStr.startsWith("-")
+    ? numStr.slice(1)
+    : numStr;
+  const dotIdx = absStr.indexOf(".");
+  const intPart = dotIdx < 0 ? absStr : absStr.slice(0, dotIdx);
+  const fracPart = dotIdx < 0 ? "" : absStr.slice(dotIdx + 1);
+  const numeratorStr = ((intPart || "0") + fracPart).replace(/^0+/, "") || "0";
+  const numerator = BigInt(numeratorStr) * (negative ? -1n : 1n);
+  const denominator = 10n ** BigInt(fracPart.length);
+  const bytesNumerator = numerator * mBig;
+  if (bytesNumerator % denominator !== 0n) return null;
+  return bytesNumerator / denominator;
+}
+
+/**
+ * Parses `numStr` as a decimal rational and multiplies by `multiplier`,
+ * returning the exact integer result as a safe `number`, or `null` when the
+ * result would be fractional or outside `Number.MAX_SAFE_INTEGER`.
+ *
+ * All arithmetic is performed with `bigint` to avoid float64 precision loss
+ * (e.g. `"1.0000000000000001"` must not silently round to `1`).
+ */
+function parseExactBytes(
+  numStr: string,
+  multiplier: number,
+): number | null {
+  const bytes = parseExactBytesRaw(numStr, BigInt(multiplier));
+  if (bytes == null) return null;
+  const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
+  if (bytes < -maxSafe || bytes > maxSafe) return null;
+  return Number(bytes);
+}
+
+const FILE_SIZE_UNITS: readonly FileSizeUnit[] = [
+  "B",
+  "KB",
+  "MB",
+  "GB",
+  "TB",
+  "PB",
+  "EB",
+  "KiB",
+  "MiB",
+  "GiB",
+  "TiB",
+  "PiB",
+  "EiB",
+];
+
+/**
+ * Creates a {@link ValueParser} for human-readable file/data size strings
+ * that returns a `number` byte count.
+ *
+ * @param options Configuration options for the file size parser.
+ * @returns A {@link ValueParser} that parses file size strings into `number`
+ *          byte counts.
+ * @throws {TypeError} If {@link FileSizeOptionsNumber.metavar} is an empty
+ *   string, if {@link FileSizeOptionsNumber.allowNegative} or
+ *   {@link FileSizeOptionsNumber.siAsBinary} is not a boolean, or if
+ *   {@link FileSizeOptionsNumber.defaultUnit} is not a valid
+ *   {@link FileSizeUnit}.
+ * @since 1.1.0
+ */
+export function fileSize(
+  options?: FileSizeOptionsNumber,
+): ValueParser<"sync", number>;
+
+/**
+ * Creates a {@link ValueParser} for human-readable file/data size strings
+ * that returns a `bigint` byte count.  Use this when byte counts may exceed
+ * `Number.MAX_SAFE_INTEGER` (~9 PB), for example with EB/EiB-range values.
+ *
+ * @param options Configuration options for the file size parser.
+ * @returns A {@link ValueParser} that parses file size strings into `bigint`
+ *          byte counts.
+ * @throws {TypeError} If {@link FileSizeOptionsBigInt.metavar} is an empty
+ *   string, if {@link FileSizeOptionsBigInt.allowNegative} or
+ *   {@link FileSizeOptionsBigInt.siAsBinary} is not a boolean, or if
+ *   {@link FileSizeOptionsBigInt.defaultUnit} is not a valid
+ *   {@link FileSizeUnit}.
+ * @since 1.1.0
+ */
+export function fileSize(
+  options: FileSizeOptionsBigInt,
+): ValueParser<"sync", bigint>;
+
+/**
+ * Creates a {@link ValueParser} for human-readable file/data size strings such
+ * as `"10MB"`, `"1.5GiB"`, or `"512B"`.  The parsed value is a `number` or
+ * `bigint` representing the equivalent byte count.
+ *
+ * Supported units:
+ *
+ * | Unit | Bytes (default) |
+ * |------|----------------|
+ * | B    | 1              |
+ * | KB   | 1 000          |
+ * | MB   | 1 000 000      |
+ * | GB   | 1 000 000 000  |
+ * | KiB  | 1 024          |
+ * | MiB  | 1 048 576      |
+ * | GiB  | 1 073 741 824  |
+ * | …    | …              |
+ *
+ * Unit suffixes are matched case-insensitively, so `"1kb"`, `"1KB"`, and
+ * `"1Kb"` are all equivalent.
+ *
+ * @param options Configuration options for the file size parser.
+ * @returns A {@link ValueParser} that parses file size strings into byte
+ *          counts.
+ * @throws {TypeError} If `type` is neither `"number"` nor `"bigint"`, if
+ *   `metavar` is an empty string, if `allowNegative` or `siAsBinary` is not
+ *   a boolean, or if `defaultUnit` is not a valid {@link FileSizeUnit}.
+ * @since 1.1.0
+ */
+export function fileSize(
+  options: FileSizeOptionsNumber | FileSizeOptionsBigInt = {},
+): ValueParser<"sync", number> | ValueParser<"sync", bigint> {
+  if (
+    options.type !== undefined &&
+    options.type !== "number" &&
+    options.type !== "bigint"
+  ) {
+    throw new TypeError(
+      `Expected type to be "number" or "bigint", but got: ${
+        String(options.type)
+      }.`,
+    );
+  }
+  const metavar = options.metavar ?? "SIZE";
+  ensureNonEmptyString(metavar);
+  checkBooleanOption(options, "allowNegative");
+  checkBooleanOption(options, "siAsBinary");
+  checkEnumOption(options, "defaultUnit", FILE_SIZE_UNITS);
+  const siAsBinary = options.siAsBinary ?? false;
+
+  function invalidFormatError(input: string): ValueParserResult<never> {
+    return {
+      success: false,
+      error: options.errors?.invalidFormat
+        ? (typeof options.errors.invalidFormat === "function"
+          ? options.errors.invalidFormat(input)
+          : options.errors.invalidFormat)
+        : message`Expected a file size like ${"10MB"} or ${"1.5GiB"}, but got ${input}.`,
+    };
+  }
+
+  // bigint branch
+  if (options.type === "bigint") {
+    const bigintMultiplierMap: Readonly<Record<string, bigint>> = siAsBinary
+      ? BIGINT_IEC_MULTIPLIERS
+      : {
+        ...BIGINT_SI_MULTIPLIERS,
+        ...BIGINT_IEC_ONLY_MULTIPLIERS,
+      };
+    const bigintFormatUnits = siAsBinary
+      ? BIGINT_FORMAT_UNITS_SI_AS_BINARY
+      : BIGINT_FORMAT_UNITS_DEFAULT;
+    const numberFormatUnits = siAsBinary
+      ? FORMAT_UNITS_SI_AS_BINARY
+      : FORMAT_UNITS_DEFAULT;
+
+    return {
+      mode: "sync",
+      metavar,
+      placeholder: options.placeholder ?? 0n,
+      parse(input: string): ValueParserResult<bigint> {
+        const match = FILE_SIZE_REGEX.exec(input.trim());
+        if (match == null) return invalidFormatError(input);
+        const numStr = match[1];
+        const unitStr = match[2].toLowerCase();
+        let mBig: bigint;
+        if (unitStr === "") {
+          if (options.defaultUnit == null) return invalidFormatError(input);
+          mBig = bigintMultiplierMap[options.defaultUnit.toLowerCase()];
+        } else {
+          const m = bigintMultiplierMap[unitStr];
+          if (m == null) return invalidFormatError(input);
+          mBig = m;
+        }
+        const bytes = parseExactBytesRaw(numStr, mBig);
+        if (bytes == null) return invalidFormatError(input);
+        if (!(options.allowNegative ?? false) && bytes < 0n) {
+          return {
+            success: false,
+            error: options.errors?.negativeNotAllowed
+              ? (typeof options.errors.negativeNotAllowed === "function"
+                ? options.errors.negativeNotAllowed(bytes)
+                : options.errors.negativeNotAllowed)
+              : message`Expected a non-negative file size, but got ${input}.`,
+          };
+        }
+        return { success: true, value: bytes };
+      },
+      format(value: bigint): string {
+        const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
+        if (value >= -maxSafe && value <= maxSafe) {
+          return formatWithUnits(Number(value), numberFormatUnits);
+        }
+        return formatBigIntBytes(value, bigintFormatUnits);
+      },
+    };
+  }
+
+  // number branch (default)
+  const multiplierMap = siAsBinary ? IEC_MULTIPLIERS : {
+    ...SI_MULTIPLIERS,
+    ...IEC_ONLY_MULTIPLIERS,
+  };
+  const formatUnits = siAsBinary
+    ? FORMAT_UNITS_SI_AS_BINARY
+    : FORMAT_UNITS_DEFAULT;
+
+  return {
+    mode: "sync",
+    metavar,
+    placeholder: options.placeholder ?? 0,
+    parse(input: string): ValueParserResult<number> {
+      const match = FILE_SIZE_REGEX.exec(input.trim());
+      if (match == null) return invalidFormatError(input);
+      const numStr = match[1];
+      const unitStr = match[2].toLowerCase();
+      let multiplier: number;
+      if (unitStr === "") {
+        if (options.defaultUnit == null) return invalidFormatError(input);
+        multiplier = multiplierMap[options.defaultUnit.toLowerCase()];
+      } else {
+        const m = multiplierMap[unitStr];
+        if (m == null) return invalidFormatError(input);
+        multiplier = m;
+      }
+      const bytes = parseExactBytes(numStr, multiplier);
+      if (bytes == null) return invalidFormatError(input);
+      if (!(options.allowNegative ?? false) && bytes < 0) {
+        return {
+          success: false,
+          error: options.errors?.negativeNotAllowed
+            ? (typeof options.errors.negativeNotAllowed === "function"
+              ? options.errors.negativeNotAllowed(bytes)
+              : options.errors.negativeNotAllowed)
+            : message`Expected a non-negative file size, but got ${input}.`,
+        };
+      }
+      return { success: true, value: bytes };
+    },
+    format(value: number): string {
+      return formatWithUnits(value, formatUnits);
+    },
+  };
+}
+
+/**
  * The set of URL schemes that are considered "special" by the WHATWG URL
  * Standard.  These schemes always use the `://` authority syntax.
  * Non-special schemes use only `:` (e.g., `mailto:`, `urn:`).
