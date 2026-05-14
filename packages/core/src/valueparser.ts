@@ -1647,18 +1647,12 @@ const IEC_ONLY_MULTIPLIERS: Readonly<Record<string, number>> = {
 const FILE_SIZE_REGEX = /^([+-]?(?:\d+\.?\d*|\d*\.\d+))\s*([a-zA-Z]*)$/;
 
 /**
- * Checks whether `v` has at most two decimal places (within floating-point
- * tolerance) and lies in the range [1, 1000).
- */
-function isCleanUnit(v: number): boolean {
-  if (v < 1 || v >= 1000) return false;
-  const rounded = Math.round(v * 100) / 100;
-  return Math.abs(rounded - v) < 1e-9 * Math.max(1, Math.abs(v));
-}
-
-/**
  * Formats `bytes` using the most readable unit from the given ordered list.
  * Falls back to `"${bytes}B"`.
+ *
+ * A unit is chosen only when the formatted value round-trips exactly: the
+ * rounded quotient must lie in [1, 1000) and `rounded * size === bytes` must
+ * hold in float64 arithmetic.  This guarantees `parse(format(x)) === x`.
  */
 function formatWithUnits(
   bytes: number,
@@ -1667,9 +1661,11 @@ function formatWithUnits(
   if (bytes === 0) return "0B";
   const absBytes = Math.abs(bytes);
   for (const [unit, size] of units) {
+    if (absBytes < size) continue;
     const v = bytes / size;
-    if (absBytes >= size && isCleanUnit(Math.abs(v))) {
-      const rounded = Math.round(v * 100) / 100;
+    const rounded = Math.round(v * 100) / 100;
+    const absRounded = Math.abs(rounded);
+    if (absRounded >= 1 && absRounded < 1000 && rounded * size === bytes) {
       return `${rounded}${unit}`;
     }
   }

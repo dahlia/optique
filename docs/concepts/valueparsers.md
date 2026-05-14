@@ -284,7 +284,7 @@ unit is also accepted (`"1 MB"`).
                   integer (≤ `Number.MAX_SAFE_INTEGER` ≈ 9 × 10^15). Values in
                   the `EB`/`EiB` range and values above roughly 9 PB or 8 PiB
                   are therefore rejected. Use `type: "bigint"` to lift this
-                  restriction — see the [bigint mode](#bigint-mode) section.
+                  restriction—see the [bigint mode](#bigint-mode) section.
 
 ### Default unit
 
