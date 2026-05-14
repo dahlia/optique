@@ -2413,13 +2413,14 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
           const r = parseInt(m[1], 10);
           const g = parseInt(m[2], 10);
           const b = parseInt(m[3], 10);
-          const a = m[4] !== undefined ? parseFloat(m[4]) : 1;
+          const aRaw = m[4] !== undefined ? parseFloat(m[4]) : 1;
           if (
             r > 255 || g > 255 || b > 255 ||
-            !Number.isFinite(a) || a < 0 || a > 1
+            !Number.isFinite(aRaw) || aRaw < 0 || aRaw > 1
           ) {
             return invalidFormatError(input);
           }
+          const a = Math.round(aRaw * 255) / 255;
           return { success: true, value: { r, g, b, a } };
         }
       }
@@ -2430,16 +2431,17 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
           const h = parseFloat(m[1]);
           const s = parseFloat(m[2]);
           const l = parseFloat(m[3]);
-          const a = m[4] !== undefined ? parseFloat(m[4]) : 1;
+          const aRaw = m[4] !== undefined ? parseFloat(m[4]) : 1;
           if (
             !Number.isFinite(h) ||
             !Number.isFinite(s) || s < 0 || s > 100 ||
             !Number.isFinite(l) || l < 0 || l > 100 ||
-            !Number.isFinite(a) || a < 0 || a > 1
+            !Number.isFinite(aRaw) || aRaw < 0 || aRaw > 1
           ) {
             return invalidFormatError(input);
           }
           const [r, g, b] = hslToRgb(h, s / 100, l / 100);
+          const a = Math.round(aRaw * 255) / 255;
           return { success: true, value: { r, g, b, a } };
         }
       }

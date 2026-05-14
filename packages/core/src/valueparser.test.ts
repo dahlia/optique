@@ -16886,7 +16886,7 @@ describe("color()", () => {
         assert.equal(r.value.r, 255);
         assert.equal(r.value.g, 128);
         assert.equal(r.value.b, 0);
-        assert.equal(r.value.a, 0.5);
+        assert.equal(r.value.a, 128 / 255); // quantized to 8-bit
       }
     });
 
@@ -16967,7 +16967,7 @@ describe("color()", () => {
         assert.equal(r.value.r, 0);
         assert.equal(r.value.g, 255);
         assert.equal(r.value.b, 0);
-        assert.equal(r.value.a, 0.5);
+        assert.equal(r.value.a, 128 / 255); // quantized to 8-bit
       }
     });
 
@@ -17184,7 +17184,7 @@ describe("color()", () => {
     it("accepts rgba with leading-dot alpha: rgba(0,0,0,.5)", () => {
       const r = color().parse("rgba(0,0,0,.5)");
       assert.ok(r.success);
-      if (r.success) assert.equal(r.value.a, 0.5);
+      if (r.success) assert.equal(r.value.a, 128 / 255); // quantized to 8-bit
     });
 
     it("rejects hsl with dot-only hue: hsl(.,50%,50%)", () => {
