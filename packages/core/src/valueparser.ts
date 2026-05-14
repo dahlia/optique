@@ -2232,6 +2232,31 @@ function hslToRgb(
   ];
 }
 
+function rgbToHsl(
+  r: number,
+  g: number,
+  b: number,
+): [number, number, number] {
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  if (max === min) {
+    return [0, 0, Math.round(l * 100)];
+  }
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === rn) {
+    h = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6;
+  } else if (max === gn) {
+    h = ((bn - rn) / d + 2) / 6;
+  } else {
+    h = ((rn - gn) / d + 4) / 6;
+  }
+  return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
+}
+
 const COLOR_HEX_SHORT_REGEX =
   /^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])?$/;
 const COLOR_HEX_LONG_REGEX =
@@ -2468,14 +2493,49 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
           `Color components out of range: r=${r}, g=${g}, b=${b}, a=${a}.`,
         );
       }
+      const aStr = parseFloat(a.toFixed(4));
+      if (allowHex) {
+        const rh = r.toString(16).padStart(2, "0");
+        const gh = g.toString(16).padStart(2, "0");
+        const bh = b.toString(16).padStart(2, "0");
+        if (a === 1) return `#${rh}${gh}${bh}`;
+        const ah = Math.round(a * 255).toString(16).padStart(2, "0");
+        return `#${rh}${gh}${bh}${ah}`;
+      }
+      if (allowRgb) {
+        return a === 1
+          ? `rgb(${r}, ${g}, ${b})`
+          : `rgba(${r}, ${g}, ${b}, ${aStr})`;
+      }
+      if (allowHsl) {
+        const [h, s, l] = rgbToHsl(r, g, b);
+        return a === 1
+          ? `hsl(${h}, ${s}%, ${l}%)`
+          : `hsla(${h}, ${s}%, ${l}%, ${aStr})`;
+      }
+      // named-only: try reverse lookup, fall back to hex
+      for (const [name, c] of Object.entries(CSS_NAMED_COLORS)) {
+        if (c.r === r && c.g === g && c.b === b && c.a === a) return name;
+      }
       const rh = r.toString(16).padStart(2, "0");
       const gh = g.toString(16).padStart(2, "0");
       const bh = b.toString(16).padStart(2, "0");
-      if (a === 1) {
-        return `#${rh}${gh}${bh}`;
-      }
+      if (a === 1) return `#${rh}${gh}${bh}`;
       const ah = Math.round(a * 255).toString(16).padStart(2, "0");
       return `#${rh}${gh}${bh}${ah}`;
+    },
+
+    normalize(value: Color): Color {
+      if (
+        !Number.isInteger(value.r) || value.r < 0 || value.r > 255 ||
+        !Number.isInteger(value.g) || value.g < 0 || value.g > 255 ||
+        !Number.isInteger(value.b) || value.b < 0 || value.b > 255 ||
+        !Number.isFinite(value.a) || value.a < 0 || value.a > 1
+      ) {
+        return value;
+      }
+      const a = Math.round(value.a * 255) / 255;
+      return a === value.a ? value : { ...value, a };
     },
 
     *suggest(prefix: string): Iterable<Suggestion> {

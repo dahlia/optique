@@ -17320,6 +17320,58 @@ describe("color()", () => {
         RangeError,
       );
     });
+
+    it("formats as rgb() when hex is not in formats", () => {
+      const parser = color({ formats: ["rgb"] });
+      assert.equal(
+        parser.format({ r: 255, g: 0, b: 0, a: 1 }),
+        "rgb(255, 0, 0)",
+      );
+    });
+
+    it("formats as rgba() with alpha when hex is not in formats", () => {
+      const parser = color({ formats: ["rgb"] });
+      const formatted = parser.format({ r: 255, g: 0, b: 0, a: 128 / 255 });
+      assert.ok(formatted.startsWith("rgba(255, 0, 0,"), formatted);
+      const r = parser.parse(formatted);
+      assert.ok(r.success);
+    });
+
+    it("formats as hsl() when only hsl is in formats", () => {
+      const parser = color({ formats: ["hsl"] });
+      const formatted = parser.format({ r: 255, g: 0, b: 0, a: 1 });
+      assert.equal(formatted, "hsl(0, 100%, 50%)");
+      assert.ok(parser.parse(formatted).success);
+    });
+
+    it("formats as named color when only named is in formats and a match exists", () => {
+      const parser = color({ formats: ["named"] });
+      assert.equal(parser.format({ r: 255, g: 0, b: 0, a: 1 }), "red");
+    });
+  });
+
+  describe("normalize()", () => {
+    it("quantizes non-integer alpha to 8-bit precision", () => {
+      const normalized = color().normalize!({ r: 0, g: 0, b: 0, a: 0.5 });
+      assert.equal(normalized.a, 128 / 255);
+    });
+
+    it("leaves already-quantized alpha unchanged", () => {
+      const original: Color = { r: 0, g: 0, b: 0, a: 128 / 255 };
+      const normalized = color().normalize!(original);
+      assert.strictEqual(normalized, original);
+    });
+
+    it("leaves opaque colors with a === 1 unchanged", () => {
+      const original: Color = { r: 255, g: 0, b: 0, a: 1 };
+      const normalized = color().normalize!(original);
+      assert.strictEqual(normalized, original);
+    });
+
+    it("returns invalid Color unchanged without throwing", () => {
+      const invalid = { r: 300, g: 0, b: 0, a: 1 } as Color;
+      assert.deepEqual(color().normalize!(invalid), invalid);
+    });
   });
 
   describe("error messages", () => {
