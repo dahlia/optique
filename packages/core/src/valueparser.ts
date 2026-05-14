@@ -2414,7 +2414,7 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
           const l = parseFloat(m[3]);
           const a = m[4] !== undefined ? parseFloat(m[4]) : 1;
           if (
-            !Number.isFinite(h) || h < 0 || h > 360 ||
+            !Number.isFinite(h) ||
             !Number.isFinite(s) || s < 0 || s > 100 ||
             !Number.isFinite(l) || l < 0 || l > 100 ||
             !Number.isFinite(a) || a < 0 || a > 1

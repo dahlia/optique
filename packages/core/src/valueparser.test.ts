@@ -16963,18 +16963,18 @@ describe("color()", () => {
       }
     });
 
-    it("accepts hsl(360, 100%, 50%) — hue wraps to 0", () => {
+    it("accepts hsl(360, 100%, 50%) — hue wraps to same as 0°", () => {
       const r = color().parse("hsl(360, 100%, 50%)");
       assert.ok(r.success);
       if (r.success) assert.deepEqual(r.value, { r: 255, g: 0, b: 0, a: 1 });
     });
 
-    it("rejects hsl(361, 100%, 50%) — hue > 360", () => {
+    it("accepts hsl(361, 100%, 50%) — out-of-range hue wraps", () => {
       const r = color().parse("hsl(361, 100%, 50%)");
-      assert.ok(!r.success);
+      assert.ok(r.success);
     });
 
-    it("rejects hsl(-1, 100%, 50%) — hue < 0", () => {
+    it("rejects hsl(-1, 100%, 50%) — negative hue not matched by input pattern", () => {
       const r = color().parse("hsl(-1, 100%, 50%)");
       assert.ok(!r.success);
     });
