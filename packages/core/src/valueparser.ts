@@ -2234,10 +2234,17 @@ const COLOR_HEX_SHORT_REGEX =
   /^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])?$/;
 const COLOR_HEX_LONG_REGEX =
   /^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})?$/;
-const COLOR_RGB_REGEX =
-  /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*([\d.]+))?\s*\)$/i;
-const COLOR_HSL_REGEX =
-  /^hsla?\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*(?:,\s*([\d.]+))?\s*\)$/i;
+const COLOR_NUM_PATTERN = "(?:\\d+(?:\\.\\d*)?|\\d*\\.\\d+)";
+const COLOR_RGB_REGEX = new RegExp(
+  `^rgba?\\(\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})` +
+    `\\s*(?:,\\s*(${COLOR_NUM_PATTERN}))?\\s*\\)$`,
+  "i",
+);
+const COLOR_HSL_REGEX = new RegExp(
+  `^hsla?\\(\\s*(${COLOR_NUM_PATTERN})\\s*,\\s*(${COLOR_NUM_PATTERN})%` +
+    `\\s*,\\s*(${COLOR_NUM_PATTERN})%\\s*(?:,\\s*(${COLOR_NUM_PATTERN}))?\\s*\\)$`,
+  "i",
+);
 
 const VALID_COLOR_FORMATS = ["hex", "rgb", "hsl", "named"] as const;
 
@@ -2389,7 +2396,10 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
           const g = parseInt(m[2], 10);
           const b = parseInt(m[3], 10);
           const a = m[4] !== undefined ? parseFloat(m[4]) : 1;
-          if (r > 255 || g > 255 || b > 255 || a < 0 || a > 1) {
+          if (
+            r > 255 || g > 255 || b > 255 ||
+            !Number.isFinite(a) || a < 0 || a > 1
+          ) {
             return invalidFormatError(input);
           }
           return { success: true, value: { r, g, b, a } };
@@ -2404,8 +2414,10 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
           const l = parseFloat(m[3]);
           const a = m[4] !== undefined ? parseFloat(m[4]) : 1;
           if (
-            h < 0 || h > 360 || s < 0 || s > 100 || l < 0 || l > 100 ||
-            a < 0 || a > 1
+            !Number.isFinite(h) || h < 0 || h > 360 ||
+            !Number.isFinite(s) || s < 0 || s > 100 ||
+            !Number.isFinite(l) || l < 0 || l > 100 ||
+            !Number.isFinite(a) || a < 0 || a > 1
           ) {
             return invalidFormatError(input);
           }
@@ -2417,7 +2429,7 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
       if (allowNamed) {
         const named = CSS_NAMED_COLORS[trimmed.toLowerCase()];
         if (named !== undefined) {
-          return { success: true, value: named };
+          return { success: true, value: { ...named } };
         }
       }
 
@@ -2425,14 +2437,25 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
     },
 
     format(value: Color): string {
-      const r = Math.round(value.r).toString(16).padStart(2, "0");
-      const g = Math.round(value.g).toString(16).padStart(2, "0");
-      const b = Math.round(value.b).toString(16).padStart(2, "0");
-      if (value.a === 1) {
-        return `#${r}${g}${b}`;
+      const { r, g, b, a } = value;
+      if (
+        !Number.isInteger(r) || r < 0 || r > 255 ||
+        !Number.isInteger(g) || g < 0 || g > 255 ||
+        !Number.isInteger(b) || b < 0 || b > 255 ||
+        !Number.isFinite(a) || a < 0 || a > 1
+      ) {
+        throw new RangeError(
+          `Color components out of range: r=${r}, g=${g}, b=${b}, a=${a}.`,
+        );
       }
-      const a = Math.round(value.a * 255).toString(16).padStart(2, "0");
-      return `#${r}${g}${b}${a}`;
+      const rh = Math.round(r).toString(16).padStart(2, "0");
+      const gh = Math.round(g).toString(16).padStart(2, "0");
+      const bh = Math.round(b).toString(16).padStart(2, "0");
+      if (a === 1) {
+        return `#${rh}${gh}${bh}`;
+      }
+      const ah = Math.round(a * 255).toString(16).padStart(2, "0");
+      return `#${rh}${gh}${bh}${ah}`;
     },
 
     *suggest(prefix: string): Iterable<Suggestion> {

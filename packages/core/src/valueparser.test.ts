@@ -17163,6 +17163,46 @@ describe("color()", () => {
     });
   });
 
+  describe("NaN/malformed input rejection", () => {
+    it("rejects rgba with dot-only alpha: rgba(0,0,0,.)", () => {
+      assert.ok(!color().parse("rgba(0,0,0,.)").success);
+    });
+
+    it("rejects rgba with double-dot alpha: rgba(0,0,0,1..)", () => {
+      assert.ok(!color().parse("rgba(0,0,0,1..)").success);
+    });
+
+    it("accepts rgba with leading-dot alpha: rgba(0,0,0,.5)", () => {
+      const r = color().parse("rgba(0,0,0,.5)");
+      assert.ok(r.success);
+      if (r.success) assert.equal(r.value.a, 0.5);
+    });
+
+    it("rejects hsl with dot-only hue: hsl(.,50%,50%)", () => {
+      assert.ok(!color().parse("hsl(.,50%,50%)").success);
+    });
+
+    it("rejects hsl with double-dot hue: hsl(1..,50%,50%)", () => {
+      assert.ok(!color().parse("hsl(1..,50%,50%)").success);
+    });
+
+    it("rejects hsl with dot-only saturation: hsl(0,.%,50%)", () => {
+      assert.ok(!color().parse("hsl(0,.%,50%)").success);
+    });
+  });
+
+  describe("named color immutability", () => {
+    it("returns a fresh object each time for named colors", () => {
+      const r1 = color().parse("red");
+      const r2 = color().parse("red");
+      assert.ok(r1.success && r2.success);
+      if (r1.success && r2.success) {
+        assert.notStrictEqual(r1.value, r2.value);
+        assert.deepEqual(r1.value, r2.value);
+      }
+    });
+  });
+
   describe("format()", () => {
     it("formats opaque color as #rrggbb", () => {
       assert.equal(
@@ -17215,6 +17255,48 @@ describe("color()", () => {
           },
         ),
         propertyParameters,
+      );
+    });
+
+    it("throws RangeError for r > 255", () => {
+      assert.throws(
+        () => color().format({ r: 300, g: 0, b: 0, a: 1 }),
+        RangeError,
+      );
+    });
+
+    it("throws RangeError for a > 1", () => {
+      assert.throws(
+        () => color().format({ r: 0, g: 0, b: 0, a: 1.5 }),
+        RangeError,
+      );
+    });
+
+    it("throws RangeError for NaN in a field", () => {
+      assert.throws(
+        () => color().format({ r: 0, g: 0, b: 0, a: Number.NaN }),
+        RangeError,
+      );
+    });
+
+    it("throws RangeError for fractional r", () => {
+      assert.throws(
+        () => color().format({ r: 0.5, g: 0, b: 0, a: 1 }),
+        RangeError,
+      );
+    });
+
+    it("throws RangeError for fractional g", () => {
+      assert.throws(
+        () => color().format({ r: 0, g: 128.7, b: 0, a: 1 }),
+        RangeError,
+      );
+    });
+
+    it("throws RangeError for fractional b", () => {
+      assert.throws(
+        () => color().format({ r: 0, g: 0, b: 0.1, a: 1 }),
+        RangeError,
       );
     });
   });
