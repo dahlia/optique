@@ -16982,9 +16982,10 @@ describe("color()", () => {
       assert.ok(r.success);
     });
 
-    it("rejects hsl(-1, 100%, 50%) — negative hue not matched by input pattern", () => {
-      const r = color().parse("hsl(-1, 100%, 50%)");
-      assert.ok(!r.success);
+    it("accepts hsl(-120, 100%, 50%) — negative hue wraps to 240°", () => {
+      const r = color().parse("hsl(-120, 100%, 50%)");
+      assert.ok(r.success);
+      if (r.success) assert.deepEqual(r.value, { r: 0, g: 0, b: 255, a: 1 });
     });
 
     it("rejects hsl(0, 101%, 50%) — saturation > 100%", () => {

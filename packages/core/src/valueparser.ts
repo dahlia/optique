@@ -2237,13 +2237,14 @@ const COLOR_HEX_SHORT_REGEX =
 const COLOR_HEX_LONG_REGEX =
   /^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})?$/;
 const COLOR_NUM_PATTERN = "(?:\\d+(?:\\.\\d*)?|\\d*\\.\\d+)";
+const COLOR_HUE_PATTERN = `(?:-?${COLOR_NUM_PATTERN})`;
 const COLOR_RGB_REGEX = new RegExp(
   `^rgba?\\(\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})` +
     `\\s*(?:,\\s*(${COLOR_NUM_PATTERN}))?\\s*\\)$`,
   "i",
 );
 const COLOR_HSL_REGEX = new RegExp(
-  `^hsla?\\(\\s*(${COLOR_NUM_PATTERN})\\s*,\\s*(${COLOR_NUM_PATTERN})%` +
+  `^hsla?\\(\\s*(${COLOR_HUE_PATTERN})\\s*,\\s*(${COLOR_NUM_PATTERN})%` +
     `\\s*,\\s*(${COLOR_NUM_PATTERN})%\\s*(?:,\\s*(${COLOR_NUM_PATTERN}))?\\s*\\)$`,
   "i",
 );
