@@ -161,13 +161,30 @@ describe("discoverCommands()", () => {
       runtime: "node",
       execArgv: [],
       nodeOptions: "",
+      nodeTypeScriptSupport: false,
     });
     assert.deepEqual(nodeDefaults, [".js", ".mjs", ".cjs"]);
+
+    const nodeNativeTsDefaults = getDefaultExtensions({
+      runtime: "node",
+      execArgv: [],
+      nodeOptions: "",
+      nodeTypeScriptSupport: true,
+    });
+    assert.deepEqual(nodeNativeTsDefaults, [
+      ".js",
+      ".mjs",
+      ".cjs",
+      ".ts",
+      ".mts",
+      ".cts",
+    ]);
 
     const nodeTsDefaults = getDefaultExtensions({
       runtime: "node",
       execArgv: ["--import", "tsx"],
       nodeOptions: "",
+      nodeTypeScriptSupport: false,
     });
     assert.deepEqual(nodeTsDefaults, [
       ".js",

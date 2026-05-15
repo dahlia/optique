@@ -108,6 +108,12 @@ export interface RuntimeExtensionOptions {
    * The `NODE_OPTIONS` value used for TypeScript loader detection.
    */
   readonly nodeOptions?: string;
+
+  /**
+   * Whether the Node.js runtime supports TypeScript files without a custom
+   * loader or flag.
+   */
+  readonly nodeTypeScriptSupport?: boolean;
 }
 
 /**
@@ -184,6 +190,7 @@ export function getDefaultExtensions(
     hasNodeTypeScriptLoader(
       options.execArgv ?? process.execArgv,
       options.nodeOptions ?? process.env.NODE_OPTIONS ?? "",
+      options.nodeTypeScriptSupport ?? hasNativeNodeTypeScriptSupport(),
     )
   ) {
     extensions.push(".ts", ".mts", ".cts");
@@ -330,11 +337,21 @@ function getRuntime(): "node" | "deno" | "bun" {
 function hasNodeTypeScriptLoader(
   execArgv: readonly string[],
   nodeOptions: string,
+  nativeSupport: boolean,
 ): boolean {
   const haystack = [...execArgv, nodeOptions].join(" ");
-  return /\b(?:tsx|ts-node|tsimp|jiti)\b/.test(haystack) ||
+  return nativeSupport ||
+    /\b(?:tsx|ts-node|tsimp|jiti)\b/.test(haystack) ||
     /--(?:experimental-)?transform-types\b/.test(haystack) ||
     /--experimental-strip-types\b/.test(haystack);
+}
+
+function hasNativeNodeTypeScriptSupport(): boolean {
+  const features: typeof process.features & {
+    readonly typescript?: unknown;
+  } = process.features;
+  return features.typescript === "strip" ||
+    features.typescript === "transform";
 }
 
 function pathFromDir(dir: string | URL): string {
