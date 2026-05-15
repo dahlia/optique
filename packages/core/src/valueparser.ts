@@ -8318,3 +8318,354 @@ export function semVer(
     },
   };
 }
+
+/**
+ * Any JSON-serializable value.
+ *
+ * This type is a TypeScript approximation of JSON data values.  Note that
+ * certain JavaScript distinctions are not preserved through serialization:
+ * for example, `-0` serializes as `"0"`, so a round-trip through
+ * `format()` and `parse()` may return `0` instead.
+ *
+ * @since 1.1.0
+ */
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { readonly [property: string]: Json }
+  | readonly Json[];
+
+/**
+ * Options for creating a {@link json} value parser.
+ *
+ * @since 1.1.0
+ */
+export interface JsonOptions {
+  /**
+   * The metavariable name for this parser.  This is used in help messages to
+   * indicate what kind of value this parser expects.  Usually a single
+   * word in uppercase, like `DATA` or `CONFIG`.
+   * @default `"JSON"`
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * A custom placeholder value used during deferred prompt resolution.
+   * @default Depends on `rootType`: `null` when unset, `""` for `"string"`,
+   *   `0` for `"number"`, `false` for `"boolean"`, `null` for `"null"`,
+   *   `{}` for `"object"`, `[]` for `"array"`.
+   * @since 1.1.0
+   */
+  readonly placeholder?: Json;
+
+  /**
+   * Restricts the expected JSON root type.  When set, the parser rejects
+   * JSON values whose root type does not match and narrows the TypeScript
+   * return type accordingly.
+   *
+   * @since 1.1.0
+   */
+  readonly rootType?:
+    | "string"
+    | "number"
+    | "boolean"
+    | "null"
+    | "object"
+    | "array";
+
+  /**
+   * Custom error messages for JSON parsing failures.
+   *
+   * @since 1.1.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when the input is not valid JSON.
+     * Can be a static message or a function that receives the raw input.
+     * @since 1.1.0
+     */
+    readonly invalidJson?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when the parsed JSON value does not match the
+     * expected `rootType`.  Can be a static message or a function that
+     * receives the parsed value and the expected root type name.
+     * @since 1.1.0
+     */
+    readonly invalidRootType?:
+      | Message
+      | ((value: Json, expected: string) => Message);
+  };
+}
+
+/**
+ * Creates a {@link ValueParser} that parses JSON-encoded strings and returns
+ * a `string`.
+ *
+ * @param options Configuration options including `rootType: "string"`.
+ * @returns A parser whose successful value is typed as `string`.
+ * @since 1.1.0
+ */
+export function json(
+  options: JsonOptions & {
+    readonly rootType: "string";
+    readonly placeholder?: string;
+  },
+): ValueParser<"sync", string>;
+
+/**
+ * Creates a {@link ValueParser} that parses JSON-encoded strings and returns
+ * a `number`.
+ *
+ * @param options Configuration options including `rootType: "number"`.
+ * @returns A parser whose successful value is typed as `number`.
+ * @since 1.1.0
+ */
+export function json(
+  options: JsonOptions & {
+    readonly rootType: "number";
+    readonly placeholder?: number;
+  },
+): ValueParser<"sync", number>;
+
+/**
+ * Creates a {@link ValueParser} that parses JSON-encoded strings and returns
+ * a `boolean`.
+ *
+ * @param options Configuration options including `rootType: "boolean"`.
+ * @returns A parser whose successful value is typed as `boolean`.
+ * @since 1.1.0
+ */
+export function json(
+  options: JsonOptions & {
+    readonly rootType: "boolean";
+    readonly placeholder?: boolean;
+  },
+): ValueParser<"sync", boolean>;
+
+/**
+ * Creates a {@link ValueParser} that parses JSON-encoded strings and returns
+ * `null`.
+ *
+ * @param options Configuration options including `rootType: "null"`.
+ * @returns A parser whose successful value is typed as `null`.
+ * @since 1.1.0
+ */
+export function json(
+  options: JsonOptions & {
+    readonly rootType: "null";
+    readonly placeholder?: null;
+  },
+): ValueParser<"sync", null>;
+
+/**
+ * Creates a {@link ValueParser} that parses JSON-encoded strings and returns
+ * a plain JSON object.
+ *
+ * @param options Configuration options including `rootType: "object"`.
+ * @returns A parser whose successful value is typed as
+ *   `{ readonly [property: string]: Json }`.
+ * @since 1.1.0
+ */
+export function json(
+  options: JsonOptions & {
+    readonly rootType: "object";
+    readonly placeholder?: { readonly [property: string]: Json };
+  },
+): ValueParser<"sync", { readonly [property: string]: Json }>;
+
+/**
+ * Creates a {@link ValueParser} that parses JSON-encoded strings and returns
+ * a JSON array.
+ *
+ * @param options Configuration options including `rootType: "array"`.
+ * @returns A parser whose successful value is typed as `readonly Json[]`.
+ * @since 1.1.0
+ */
+export function json(
+  options: JsonOptions & {
+    readonly rootType: "array";
+    readonly placeholder?: readonly Json[];
+  },
+): ValueParser<"sync", readonly Json[]>;
+
+/**
+ * Creates a {@link ValueParser} that parses JSON-encoded strings into any
+ * {@link Json} value (object, array, string, number, boolean, or null).
+ *
+ * Also accepts a pre-typed `JsonOptions` variable when the `rootType` is not
+ * known at compile time; the return type is the widened {@link Json} union.
+ *
+ * @param options Optional configuration for the parser.
+ * @returns A parser whose successful value is typed as {@link Json}.
+ * @since 1.1.0
+ */
+export function json(options?: JsonOptions): ValueParser<"sync", Json>;
+
+/**
+ * Creates a {@link ValueParser} for parsing JSON-encoded strings from the
+ * command line.
+ *
+ * The parser accepts any well-formed JSON string by default.  Use the
+ * `rootType` option to restrict which JSON root type is accepted and to
+ * narrow the TypeScript return type accordingly.
+ *
+ * @example
+ * ```typescript
+ * // Accept any JSON value
+ * const anyJson = json();
+ *
+ * // Accept only JSON objects (return type narrowed)
+ * const objJson = json({ rootType: "object" });
+ * ```
+ *
+ * @param options Optional configuration for the parser.
+ * @returns A {@link ValueParser} that converts JSON-encoded strings to the
+ *   appropriate JavaScript type.
+ * @throws {TypeError} If `options.metavar` is provided but is an empty string.
+ * @throws {TypeError} If `options.rootType` is provided but is not one of the
+ *   six allowed values.
+ * @throws {TypeError} If `options.placeholder` or any value nested within
+ *   it is a non-finite number (`Infinity`, `-Infinity`, or `NaN`).
+ * @throws {TypeError} If `options.placeholder` is provided with a `rootType`
+ *   but its JSON type does not match the `rootType`.
+ * @throws {TypeError} If the returned parser's `format()` method is called
+ *   with a value that contains a non-finite number anywhere in its structure.
+ * @since 1.1.0
+ */
+export function json(options?: JsonOptions): ValueParser<"sync", Json> {
+  const metavar = options?.metavar ?? "JSON";
+  ensureNonEmptyString(metavar);
+  checkEnumOption(options, "rootType", [
+    "string",
+    "number",
+    "boolean",
+    "null",
+    "object",
+    "array",
+  ]);
+  const rootType = options?.rootType;
+  const invalidJsonError = options?.errors?.invalidJson;
+  const invalidRootTypeError = options?.errors?.invalidRootType;
+
+  if (options?.placeholder !== undefined) {
+    const p = options.placeholder;
+    const nonFinitePlaceholder = findNonFiniteNumber(p);
+    if (nonFinitePlaceholder !== undefined) {
+      throw new TypeError(
+        `Expected placeholder to contain only finite numbers, but found ${
+          String(nonFinitePlaceholder)
+        }.`,
+      );
+    }
+    if (rootType != null && jsonTypeOf(p) !== rootType) {
+      throw new TypeError(
+        `Expected placeholder to be a JSON ${rootType}, but got ${
+          jsonTypeOf(p)
+        }.`,
+      );
+    }
+  }
+
+  const defaultPlaceholder: Json = rootType === "string"
+    ? ""
+    : rootType === "number"
+    ? 0
+    : rootType === "boolean"
+    ? false
+    : rootType === "object"
+    ? {}
+    : rootType === "array"
+    ? []
+    : null;
+  const placeholder: Json = options?.placeholder ?? defaultPlaceholder;
+
+  return {
+    mode: "sync",
+    metavar,
+    placeholder,
+    parse(input: string): ValueParserResult<Json> {
+      let value: Json;
+      try {
+        value = JSON.parse(input) as Json;
+      } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        const error: Message = invalidJsonError instanceof Function
+          ? invalidJsonError(input)
+          : invalidJsonError ?? [text(`Not a valid JSON: ${err.message}`)];
+        return { success: false, error };
+      }
+      const nonFinite = findNonFiniteNumber(value);
+      if (nonFinite !== undefined) {
+        const error: Message = invalidJsonError instanceof Function
+          ? invalidJsonError(input)
+          : invalidJsonError ??
+            [text(`Not a valid JSON: number out of range.`)];
+        return { success: false, error };
+      }
+      if (rootType != null) {
+        const actual = jsonTypeOf(value);
+        if (actual !== rootType) {
+          const error: Message = invalidRootTypeError instanceof Function
+            ? invalidRootTypeError(value, rootType)
+            : invalidRootTypeError ??
+              [text(`Expected JSON ${rootType}, but got ${actual}.`)];
+          return { success: false, error };
+        }
+      }
+      return { success: true, value };
+    },
+    format(value: Json): string {
+      const nonFinite = findNonFiniteNumber(value);
+      if (nonFinite !== undefined) {
+        throw new TypeError(
+          `Expected a finite JSON number, but got ${String(nonFinite)}.`,
+        );
+      }
+      return JSON.stringify(value);
+    },
+  };
+}
+
+function jsonTypeOf(value: Json): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  return typeof value;
+}
+
+/**
+ * Finds the first non-finite number (`NaN`, `Infinity`, or `-Infinity`)
+ * anywhere in a JSON structure.
+ *
+ * Uses an explicit stack rather than recursion to avoid call-stack overflows
+ * on deeply nested inputs.  Tracks visited objects to handle circular
+ * references without looping forever.
+ *
+ * @returns The first non-finite number found, or `undefined` if all numbers
+ *   in the structure are finite.
+ */
+function findNonFiniteNumber(root: Json): number | undefined {
+  const stack: Json[] = [root];
+  const seen = new Set<object>();
+  while (stack.length > 0) {
+    const value = stack.pop()!;
+    if (typeof value === "number") {
+      if (!Number.isFinite(value)) return value;
+    } else if (Array.isArray(value)) {
+      if (seen.has(value)) continue;
+      seen.add(value);
+      for (const item of value) {
+        stack.push(item);
+      }
+    } else if (value !== null && typeof value === "object") {
+      if (seen.has(value)) continue;
+      seen.add(value);
+      for (const item of Object.values(value)) {
+        stack.push(item);
+      }
+    }
+  }
+  return undefined;
+}

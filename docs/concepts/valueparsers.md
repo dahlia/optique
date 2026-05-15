@@ -36,6 +36,7 @@ with Optique's type system.
 | `fileSize()`                     | *@optique/core*     | `number` or `bigint`           | Human-readable data size (bytes)                    |
 | `color()`                        | *@optique/core*     | `Color`                        | CSS color (hex, rgb, hsl, or named)                 |
 | `choice()`                       | *@optique/core*     | string or number literal union | Enumerated values                                   |
+| `json()`                         | *@optique/core*     | `Json`                         | Any JSON value, with optional root type restriction |
 | `url()`                          | *@optique/core*     | `URL`                          | URL with protocol filtering                         |
 | `locale()`                       | *@optique/core*     | `Intl.Locale`                  | BCP 47 locale identifier                            |
 | `uuid()`                         | *@optique/core*     | `string`                       | UUID with RFC 9562 validation                       |
@@ -553,6 +554,109 @@ const depth = choice([8, 10, 12]);
 > option in your runner configuration.  See the
 > [choice display](./runners.md#choice-display) section in the runners guide
 > for details.
+
+
+`json()` parser
+---------------
+
+*This API is available since Optique 1.1.0.*
+
+The `json()` parser accepts any well-formed JSON string and returns the
+corresponding JavaScript value.  It is a lightweight way to accept structured
+data on the command line without pulling in a full schema library.
+
+~~~~ typescript twoslash
+import { json } from "@optique/core/valueparser";
+
+// Accept any JSON value
+const data = json();
+
+const result = data.parse('{"name":"Alice","age":30}');
+if (result.success) {
+  console.log(result.value); // { name: "Alice", age: 30 }
+}
+~~~~
+
+The return type is the exported `Json` union, which covers all
+JSON-serializable values:
+
+~~~~ typescript
+type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { readonly [property: string]: Json }
+  | readonly Json[];
+~~~~
+
+### Root type restriction
+
+Use the `rootType` option to restrict which JSON root type is accepted.
+When `rootType` is set, the TypeScript return type is narrowed accordingly:
+
+~~~~ typescript twoslash
+import { json, type Json } from "@optique/core/valueparser";
+
+// Only accept JSON objects — return type is { readonly [p: string]: Json }
+const objParser = json({ rootType: "object" });
+
+// Only accept JSON arrays — return type is readonly Json[]
+const arrParser = json({ rootType: "array" });
+
+// Only accept JSON strings — return type is string
+const strParser = json({ rootType: "string" });
+
+// Only accept JSON numbers — return type is number
+const numParser = json({ rootType: "number" });
+
+// Only accept JSON booleans — return type is boolean
+const boolParser = json({ rootType: "boolean" });
+
+// Only accept JSON null — return type is null
+const nullParser = json({ rootType: "null" });
+~~~~
+
+### Error messages
+
+The `json()` parser provides two customizable error messages.
+
+`invalidJson` fires when the input cannot be parsed as JSON at all:
+
+~~~~ bash
+$ myapp --config '{bad json}'
+Error: `JSON`: Not a valid JSON: Expected property name or '}' in JSON at position 1
+~~~~
+
+`invalidRootType` fires when the JSON is valid but the root type does not
+match `rootType`:
+
+~~~~ bash
+$ myapp --count '{"a":1}'
+Error: `JSON`: Expected JSON number, but got object.
+~~~~
+
+Both messages can be overridden with a static `Message` or a callback:
+
+~~~~ typescript twoslash
+import { json } from "@optique/core/valueparser";
+import { text } from "@optique/core/message";
+
+const parser = json({
+  rootType: "object",
+  errors: {
+    invalidJson: [text("Config must be a valid JSON string.")],
+    invalidRootType: (_value, expected) =>
+      [text(`Expected a JSON ${expected}.`)],
+  },
+});
+~~~~
+
+The parser uses `"JSON"` as its default metavar.
+
+> [!TIP]
+> For schema-validated JSON with complex shapes, consider the
+> *@optique/zod* or *@optique/valibot* integrations instead.
 
 
 `url()` parser

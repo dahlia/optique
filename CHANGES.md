@@ -89,6 +89,13 @@ To be released.
     leading `v` character (e.g. `v1.2.3`); the prefix is always stripped
     from the output.  [[#808], [#816]]
 
+ -  Added `json()` value parser for accepting JSON-encoded strings from the
+    command line.  The parser validates well-formed JSON and optionally
+    restricts the root type via the `rootType` option (`"string"`,
+    `"number"`, `"boolean"`, `"null"`, `"object"`, or `"array"`), narrowing
+    the TypeScript return type accordingly.  Also exports the `Json` type
+    representing any JSON-serializable value.  [[#811], [#817]]
+
 [Semantic Versioning 2.0.0]: https://semver.org/
 [#801]: https://github.com/dahlia/optique/issues/801
 [#802]: https://github.com/dahlia/optique/pull/802
@@ -97,9 +104,11 @@ To be released.
 [#807]: https://github.com/dahlia/optique/issues/807
 [#808]: https://github.com/dahlia/optique/issues/808
 [#810]: https://github.com/dahlia/optique/issues/810
+[#811]: https://github.com/dahlia/optique/issues/811
 [#814]: https://github.com/dahlia/optique/pull/814
 [#815]: https://github.com/dahlia/optique/pull/815
 [#816]: https://github.com/dahlia/optique/pull/816
+[#817]: https://github.com/dahlia/optique/pull/817
 
 ### @optique/env
 
