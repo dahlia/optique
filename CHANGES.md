@@ -94,7 +94,7 @@ To be released.
     restricts the root type via the `rootType` option (`"string"`,
     `"number"`, `"boolean"`, `"null"`, `"object"`, or `"array"`), narrowing
     the TypeScript return type accordingly.  Also exports the `Json` type
-    representing any JSON-serializable value.  [[#811]]
+    representing any JSON-serializable value.  [[#811], [#817]]
 
 [Semantic Versioning 2.0.0]: https://semver.org/
 [#801]: https://github.com/dahlia/optique/issues/801
@@ -108,6 +108,7 @@ To be released.
 [#814]: https://github.com/dahlia/optique/pull/814
 [#815]: https://github.com/dahlia/optique/pull/815
 [#816]: https://github.com/dahlia/optique/pull/816
+[#817]: https://github.com/dahlia/optique/pull/817
 
 ### @optique/env
 
