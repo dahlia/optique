@@ -307,21 +307,6 @@ export interface ProgramHelpMetadata {
   readonly description?: Message;
 
   /**
-   * Usage examples shown in help output.
-   */
-  readonly examples?: Message;
-
-  /**
-   * Author text shown in help output.
-   */
-  readonly author?: Message;
-
-  /**
-   * Bug-reporting text shown in help output.
-   */
-  readonly bugs?: Message;
-
-  /**
    * Footer text shown after the command list.
    */
   readonly footer?: Message;
@@ -383,12 +368,18 @@ async function collectCommandFiles(
     if (entry.isDirectory()) {
       files.push(...await collectCommandFiles(path, extensions));
     } else if (
-      entry.isFile() && extensions.some((ext) => entry.name.endsWith(ext))
+      entry.isFile() &&
+      !isDeclarationFile(entry.name) &&
+      extensions.some((ext) => entry.name.endsWith(ext))
     ) {
       files.push(path);
     }
   }
   return files;
+}
+
+function isDeclarationFile(fileName: string): boolean {
+  return /\.d\.[cm]?ts$/.test(fileName);
 }
 
 function commandPathFromFile(

@@ -75,7 +75,8 @@ admin completion bash
 
 By default, Deno and Bun discover `.ts`, `.mts`, `.js`, and `.mjs` files.
 Node.js discovers `.js`, `.mjs`, and `.cjs` files unless it is running with a
-recognized TypeScript loader.
+recognized TypeScript loader.  TypeScript declaration files such as `.d.ts`
+are ignored.
 
 For more resources, see the [docs] and the [*examples/*](/examples/)
 directory.

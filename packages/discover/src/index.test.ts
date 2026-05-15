@@ -121,6 +121,20 @@ describe("discoverCommands()", () => {
     }
   });
 
+  it("ignores TypeScript declaration files", async () => {
+    const dir = await makeTempDir();
+    try {
+      await writeCommand(dir, ["build.ts"], "build");
+      await writeFile(join(dir, "build.d.ts"), "export default {};\n");
+
+      const commands = await discoverCommands({ dir, extensions: [".ts"] });
+
+      assert.deepEqual(commands.map((command) => command.path), [["build"]]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("returns runtime-aware extension defaults", () => {
     const nodeDefaults = getDefaultExtensions({
       runtime: "node",
