@@ -17987,7 +17987,7 @@ describe("json()", () => {
       assert.throws(() => json({ placeholder: Infinity }), {
         name: "TypeError",
         message:
-          "Expected placeholder to be a finite JSON number, but got Infinity.",
+          "Expected placeholder to contain only finite numbers, but found Infinity.",
       });
     });
 
@@ -17995,7 +17995,15 @@ describe("json()", () => {
       assert.throws(() => json({ placeholder: NaN }), {
         name: "TypeError",
         message:
-          "Expected placeholder to be a finite JSON number, but got NaN.",
+          "Expected placeholder to contain only finite numbers, but found NaN.",
+      });
+    });
+
+    it("throws TypeError when placeholder contains nested Infinity", () => {
+      assert.throws(() => json({ placeholder: { n: Infinity } }), {
+        name: "TypeError",
+        message:
+          "Expected placeholder to contain only finite numbers, but found Infinity.",
       });
     });
   });

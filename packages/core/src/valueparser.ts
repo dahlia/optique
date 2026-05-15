@@ -8550,10 +8550,11 @@ export function json(options?: JsonOptions): ValueParser<"sync", Json> {
 
   if (options?.placeholder !== undefined) {
     const p = options.placeholder;
-    if (typeof p === "number" && !Number.isFinite(p)) {
+    const nonFinitePlaceholder = findNonFiniteNumber(p);
+    if (nonFinitePlaceholder !== undefined) {
       throw new TypeError(
-        `Expected placeholder to be a finite JSON number, but got ${
-          String(p)
+        `Expected placeholder to contain only finite numbers, but found ${
+          String(nonFinitePlaceholder)
         }.`,
       );
     }
@@ -8632,6 +8633,13 @@ function jsonTypeOf(value: Json): string {
   return typeof value;
 }
 
+/**
+ * Finds the first non-finite number (`NaN`, `Infinity`, or `-Infinity`)
+ * anywhere in a JSON structure, recursively.
+ *
+ * @returns The first non-finite number found, or `undefined` if all numbers
+ *   in the structure are finite.
+ */
 function findNonFiniteNumber(value: Json): number | undefined {
   if (typeof value === "number") {
     return Number.isFinite(value) ? undefined : value;
