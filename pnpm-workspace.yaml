@@ -8,7 +8,7 @@ catalog:
   "@logtape/file": ^2.0.4
   "@logtape/logtape": ^2.0.4
   "@standard-schema/spec": ^1.1.0
-  "@types/node": ^20.19.9
+  "@types/node": ^24.0.0
   fast-check: ^4.7.0
   isomorphic-git: ^1.36.1
   tsdown: ^0.13.0
@@ -22,4 +22,4 @@ allowBuilds:
   workerd: true
 
 engineStrict: true
-nodeVersion: 20.19.0
+nodeVersion: 24.15.0
