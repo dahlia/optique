@@ -186,6 +186,25 @@ importers:
         specifier: 'catalog:'
         version: 5.8.3
 
+  packages/discover:
+    dependencies:
+      '@optique/core':
+        specifier: workspace:*
+        version: link:../core
+      '@optique/run':
+        specifier: workspace:*
+        version: link:../run
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 20.19.9
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.13.0(typescript@5.8.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+
   packages/env:
     dependencies:
       '@optique/core':
