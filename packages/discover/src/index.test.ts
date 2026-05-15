@@ -4,6 +4,7 @@ import { message } from "@optique/core/message";
 import { withDefault } from "@optique/core/modifiers";
 import { getDocPageAsync } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
+import type { SourceContext } from "@optique/core/context";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { mkdir, rm, writeFile } from "node:fs/promises";
@@ -374,6 +375,63 @@ describe("runProgram()", () => {
       assert.match(stdout, /Usage: tool user add/);
       assert.match(stdout, /user add\s+Add a user command\./);
       assert.match(stdout, /user remove\s+Remove a user command\./);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("passes command values to phase-two source contexts", async () => {
+    const dir = await makeTempDir();
+    const phase2Values: unknown[] = [];
+    const context: SourceContext = {
+      id: Symbol("test-context"),
+      phase: "two-pass",
+      getAnnotations(request) {
+        if (request?.phase === "phase2") {
+          phase2Values.push(request.parsed);
+        }
+        return {};
+      },
+    };
+    try {
+      await writeCommand(
+        dir,
+        ["show.ts"],
+        "show",
+        `
+          import { defineCommand } from "${moduleUrl("command.ts")}";
+          import { object } from "${moduleUrl("../../core/src/constructs.ts")}";
+          import { withDefault } from "${
+          moduleUrl("../../core/src/modifiers.ts")
+        }";
+          import { option } from "${moduleUrl("../../core/src/primitives.ts")}";
+          import { string } from "${
+          moduleUrl("../../core/src/valueparser.ts")
+        }";
+
+          export default defineCommand({
+            parser: object({
+              config: withDefault(option("--config", string()), "app.json"),
+            }),
+            handler() {},
+          });
+        `,
+      );
+
+      await runProgram({
+        dir,
+        extensions: [".ts"],
+        metadata: { name: "tool", version: "1.0.0" },
+        args: ["show"],
+        contexts: [context],
+        stdout() {},
+        stderr() {},
+        onExit(exitCode): never {
+          throw new Error(`Unexpected exit ${exitCode}.`);
+        },
+      });
+
+      assert.deepEqual(phase2Values, [{ config: "app.json" }]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

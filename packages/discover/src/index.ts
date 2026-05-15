@@ -1,4 +1,8 @@
 import { or } from "@optique/core/constructs";
+import type {
+  SourceContext,
+  SourceContextRequest,
+} from "@optique/core/context";
 import type { DocState } from "@optique/core/parser";
 import type { DocFragments } from "@optique/core/doc";
 import { map } from "@optique/core/modifiers";
@@ -542,8 +546,9 @@ function buildRunOptions(options: RunProgramOptions): RunOptions {
     completion,
     ...rest
   } = options;
-  return {
+  const runOptions: RunOptions = {
     ...rest,
+    contexts: unwrapProgramContexts(rest.contexts),
     programName: options.programName ?? metadata.name,
     brief: options.brief ?? metadata.brief,
     description: options.description ?? metadata.description,
@@ -557,4 +562,80 @@ function buildRunOptions(options: RunProgramOptions): RunOptions {
       : version ?? (metadata.version == null ? undefined : metadata.version),
     completion: completion === false ? undefined : completion ?? "both",
   };
+  return runOptions;
+}
+
+function unwrapProgramContexts(
+  contexts: readonly SourceContext<unknown>[] | undefined,
+): readonly SourceContext<unknown>[] | undefined {
+  if (contexts == null) return undefined;
+  return contexts.map(wrapProgramContext);
+}
+
+function wrapProgramContext(
+  context: SourceContext<unknown>,
+): SourceContext<unknown> {
+  const wrapped: SourceContext<unknown> = {
+    id: context.id,
+    phase: context.phase,
+    getAnnotations(request, options) {
+      return context.getAnnotations(
+        unwrapProgramContextRequest(request),
+        options,
+      );
+    },
+  };
+  if (context.getInternalAnnotations != null) {
+    Object.defineProperty(wrapped, "getInternalAnnotations", {
+      value(
+        request: SourceContextRequest,
+        annotations: Parameters<
+          NonNullable<SourceContext<unknown>["getInternalAnnotations"]>
+        >[1],
+      ) {
+        return context.getInternalAnnotations!(
+          unwrapProgramContextRequest(request) ?? request,
+          annotations,
+        );
+      },
+    });
+  }
+  if (context[Symbol.dispose] != null) {
+    Object.defineProperty(wrapped, Symbol.dispose, {
+      value() {
+        return context[Symbol.dispose]!();
+      },
+    });
+  }
+  if (context[Symbol.asyncDispose] != null) {
+    Object.defineProperty(wrapped, Symbol.asyncDispose, {
+      value() {
+        return context[Symbol.asyncDispose]!();
+      },
+    });
+  }
+  return wrapped;
+}
+
+function unwrapProgramContextRequest(
+  request: SourceContextRequest | undefined,
+): SourceContextRequest | undefined {
+  if (
+    request?.phase === "phase2" &&
+    isProgramInvocation(request.parsed)
+  ) {
+    return { phase: "phase2", parsed: request.parsed.value };
+  }
+  return request;
+}
+
+function isProgramInvocation(value: unknown): value is ProgramInvocation {
+  if (value == null || typeof value !== "object") return false;
+  const candidate = value as {
+    readonly command?: unknown;
+    readonly handler?: unknown;
+  };
+  return "value" in value &&
+    isCommand(candidate.command) &&
+    typeof candidate.handler === "function";
 }
