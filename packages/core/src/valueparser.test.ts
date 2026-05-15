@@ -17940,6 +17940,36 @@ describe("json()", () => {
         "Expected a non-empty string.",
       );
     });
+
+    it("accepts a pre-typed JsonOptions variable", () => {
+      const opts: import("@optique/core/valueparser").JsonOptions = {
+        rootType: "object",
+      };
+      const parser = json(opts);
+      const result = parser.parse('{"a":1}');
+      assert.ok(result.success);
+    });
+
+    it("throws TypeError when placeholder type mismatches rootType", () => {
+      assert.throws(
+        () =>
+          json({ rootType: "string", placeholder: 123 as unknown as string }),
+        {
+          name: "TypeError",
+          message: "Expected placeholder to be a JSON string, but got number.",
+        },
+      );
+    });
+
+    it("rootType: string accepts a typed string placeholder", () => {
+      const parser = json({ rootType: "string", placeholder: "default" });
+      assert.equal(parser.placeholder, "default");
+    });
+
+    it("rootType: number accepts a typed number placeholder", () => {
+      const parser = json({ rootType: "number", placeholder: -1 });
+      assert.equal(parser.placeholder, -1);
+    });
   });
 
   describe("parse() without rootType", () => {

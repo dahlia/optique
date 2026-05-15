@@ -8407,7 +8407,10 @@ export interface JsonOptions {
  * @since 1.1.0
  */
 export function json(
-  options: JsonOptions & { readonly rootType: "string" },
+  options: JsonOptions & {
+    readonly rootType: "string";
+    readonly placeholder?: string;
+  },
 ): ValueParser<"sync", string>;
 
 /**
@@ -8419,7 +8422,10 @@ export function json(
  * @since 1.1.0
  */
 export function json(
-  options: JsonOptions & { readonly rootType: "number" },
+  options: JsonOptions & {
+    readonly rootType: "number";
+    readonly placeholder?: number;
+  },
 ): ValueParser<"sync", number>;
 
 /**
@@ -8431,7 +8437,10 @@ export function json(
  * @since 1.1.0
  */
 export function json(
-  options: JsonOptions & { readonly rootType: "boolean" },
+  options: JsonOptions & {
+    readonly rootType: "boolean";
+    readonly placeholder?: boolean;
+  },
 ): ValueParser<"sync", boolean>;
 
 /**
@@ -8443,7 +8452,10 @@ export function json(
  * @since 1.1.0
  */
 export function json(
-  options: JsonOptions & { readonly rootType: "null" },
+  options: JsonOptions & {
+    readonly rootType: "null";
+    readonly placeholder?: null;
+  },
 ): ValueParser<"sync", null>;
 
 /**
@@ -8456,7 +8468,10 @@ export function json(
  * @since 1.1.0
  */
 export function json(
-  options: JsonOptions & { readonly rootType: "object" },
+  options: JsonOptions & {
+    readonly rootType: "object";
+    readonly placeholder?: { readonly [property: string]: Json };
+  },
 ): ValueParser<"sync", { readonly [property: string]: Json }>;
 
 /**
@@ -8468,20 +8483,24 @@ export function json(
  * @since 1.1.0
  */
 export function json(
-  options: JsonOptions & { readonly rootType: "array" },
+  options: JsonOptions & {
+    readonly rootType: "array";
+    readonly placeholder?: readonly Json[];
+  },
 ): ValueParser<"sync", readonly Json[]>;
 
 /**
  * Creates a {@link ValueParser} that parses JSON-encoded strings into any
  * {@link Json} value (object, array, string, number, boolean, or null).
  *
+ * Also accepts a pre-typed `JsonOptions` variable when the `rootType` is not
+ * known at compile time; the return type is the widened {@link Json} union.
+ *
  * @param options Optional configuration for the parser.
  * @returns A parser whose successful value is typed as {@link Json}.
  * @since 1.1.0
  */
-export function json(
-  options?: JsonOptions & { readonly rootType?: undefined },
-): ValueParser<"sync", Json>;
+export function json(options?: JsonOptions): ValueParser<"sync", Json>;
 
 /**
  * Creates a {@link ValueParser} for parsing JSON-encoded strings from the
@@ -8504,6 +8523,8 @@ export function json(
  * @returns A {@link ValueParser} that converts JSON-encoded strings to the
  *   appropriate JavaScript type.
  * @throws {TypeError} If `options.metavar` is provided but is an empty string.
+ * @throws {TypeError} If `options.placeholder` is provided with a `rootType`
+ *   but its JSON type does not match the `rootType`.
  * @since 1.1.0
  */
 export function json(options?: JsonOptions): ValueParser<"sync", Json> {
@@ -8512,6 +8533,15 @@ export function json(options?: JsonOptions): ValueParser<"sync", Json> {
   const rootType = options?.rootType;
   const invalidJsonError = options?.errors?.invalidJson;
   const invalidRootTypeError = options?.errors?.invalidRootType;
+
+  if (rootType != null && options?.placeholder !== undefined) {
+    const placeholderType = jsonTypeOf(options.placeholder);
+    if (placeholderType !== rootType) {
+      throw new TypeError(
+        `Expected placeholder to be a JSON ${rootType}, but got ${placeholderType}.`,
+      );
+    }
+  }
 
   const defaultPlaceholder: Json = rootType === "string"
     ? ""
