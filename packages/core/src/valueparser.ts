@@ -8523,6 +8523,8 @@ export function json(options?: JsonOptions): ValueParser<"sync", Json>;
  * @returns A {@link ValueParser} that converts JSON-encoded strings to the
  *   appropriate JavaScript type.
  * @throws {TypeError} If `options.metavar` is provided but is an empty string.
+ * @throws {TypeError} If `options.rootType` is provided but is not one of the
+ *   six allowed values.
  * @throws {TypeError} If `options.placeholder` is provided with a `rootType`
  *   but its JSON type does not match the `rootType`.
  * @since 1.1.0
@@ -8530,6 +8532,14 @@ export function json(options?: JsonOptions): ValueParser<"sync", Json>;
 export function json(options?: JsonOptions): ValueParser<"sync", Json> {
   const metavar = options?.metavar ?? "JSON";
   ensureNonEmptyString(metavar);
+  checkEnumOption(options, "rootType", [
+    "string",
+    "number",
+    "boolean",
+    "null",
+    "object",
+    "array",
+  ]);
   const rootType = options?.rootType;
   const invalidJsonError = options?.errors?.invalidJson;
   const invalidRootTypeError = options?.errors?.invalidRootType;

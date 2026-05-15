@@ -17968,6 +17968,18 @@ describe("json()", () => {
       const parser = json({ rootType: "number", placeholder: -1 });
       assert.equal(parser.placeholder, -1);
     });
+
+    it("invalid rootType throws TypeError at construction", () => {
+      assert.throws(
+        () => json({ rootType: "invalid" as never }),
+        {
+          name: "TypeError",
+          message:
+            'Expected rootType to be one of "string", "number", "boolean",' +
+            ' "null", "object", "array", but got string: "invalid".',
+        },
+      );
+    });
   });
 
   describe("parse() without rootType", () => {
