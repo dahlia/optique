@@ -16,6 +16,8 @@ import {
   ipv4,
   ipv6,
   isValueParser,
+  type Json,
+  json,
   locale,
   macAddress,
   type NonEmptyString,
@@ -17913,6 +17915,372 @@ describe("semVer()", () => {
         const _v: SemVer = result.value;
         assert.ok(_v);
       }
+    });
+  });
+});
+
+describe("json()", () => {
+  describe("constructor", () => {
+    it("default mode is sync", () => {
+      assert.equal(json().mode, "sync");
+    });
+
+    it("default metavar is JSON", () => {
+      assert.equal(json().metavar, "JSON");
+    });
+
+    it("custom metavar is respected", () => {
+      assert.equal(json({ metavar: "DATA" }).metavar, "DATA");
+    });
+
+    it("empty metavar throws TypeError", () => {
+      assert.throws(
+        () => json({ metavar: "" as NonEmptyString }),
+        TypeError,
+        "Expected a non-empty string.",
+      );
+    });
+  });
+
+  describe("parse() without rootType", () => {
+    it("parses a JSON object", () => {
+      const result = json().parse('{"a":1}');
+      assert.ok(result.success);
+      if (result.success) assert.deepEqual(result.value, { a: 1 });
+    });
+
+    it("parses a JSON array", () => {
+      const result = json().parse("[1,2,3]");
+      assert.ok(result.success);
+      if (result.success) assert.deepEqual(result.value, [1, 2, 3]);
+    });
+
+    it("parses a JSON string", () => {
+      const result = json().parse('"hello"');
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, "hello");
+    });
+
+    it("parses a JSON number", () => {
+      const result = json().parse("42");
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, 42);
+    });
+
+    it("parses a JSON boolean true", () => {
+      const result = json().parse("true");
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, true);
+    });
+
+    it("parses a JSON boolean false", () => {
+      const result = json().parse("false");
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, false);
+    });
+
+    it("parses JSON null", () => {
+      const result = json().parse("null");
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, null);
+    });
+
+    it("parses nested JSON", () => {
+      const result = json().parse('{"a":[1,{"b":true}]}');
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, { a: [1, { b: true }] });
+      }
+    });
+
+    it("rejects malformed JSON with default error", () => {
+      const result = json().parse("{not json}");
+      assert.ok(!result.success);
+      if (!result.success) {
+        const msg = result.error;
+        assert.ok(
+          Array.isArray(msg) && msg[0].type === "text" &&
+            (msg[0].text as string).startsWith("Not a valid JSON:"),
+          `Expected error to start with "Not a valid JSON:", got: ${
+            JSON.stringify(msg)
+          }`,
+        );
+      }
+    });
+
+    it("rejects malformed JSON with static custom error", () => {
+      const parser = json({ errors: { invalidJson: [text("bad JSON")] } });
+      const result = parser.parse("{nope}");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [{ type: "text", text: "bad JSON" }]);
+      }
+    });
+
+    it("rejects malformed JSON with function custom error", () => {
+      const parser = json({
+        errors: { invalidJson: (input) => [text(`bad: ${input}`)] },
+      });
+      const result = parser.parse("{nope}");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [{ type: "text", text: "bad: {nope}" }]);
+      }
+    });
+  });
+
+  describe('parse() with rootType: "string"', () => {
+    it("accepts a JSON string", () => {
+      const result = json({ rootType: "string" }).parse('"hello"');
+      assert.ok(result.success);
+      if (result.success) {
+        const _v: string = result.value;
+        assert.equal(_v, "hello");
+      }
+    });
+
+    it("rejects a JSON number", () => {
+      const result = json({ rootType: "string" }).parse("42");
+      assert.ok(!result.success);
+    });
+
+    it("rejects a JSON object", () => {
+      const result = json({ rootType: "string" }).parse("{}");
+      assert.ok(!result.success);
+    });
+
+    it("rejects a JSON array", () => {
+      const result = json({ rootType: "string" }).parse("[]");
+      assert.ok(!result.success);
+    });
+
+    it("rejects JSON null", () => {
+      const result = json({ rootType: "string" }).parse("null");
+      assert.ok(!result.success);
+    });
+
+    it("default error for type mismatch", () => {
+      const result = json({ rootType: "string" }).parse("42");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected JSON string, but got number." },
+        ]);
+      }
+    });
+  });
+
+  describe('parse() with rootType: "number"', () => {
+    it("accepts a JSON number", () => {
+      const result = json({ rootType: "number" }).parse("3.14");
+      assert.ok(result.success);
+      if (result.success) {
+        const _v: number = result.value;
+        assert.equal(_v, 3.14);
+      }
+    });
+
+    it("rejects a JSON string", () => {
+      assert.ok(!json({ rootType: "number" }).parse('"42"').success);
+    });
+
+    it("rejects a JSON object", () => {
+      assert.ok(!json({ rootType: "number" }).parse("{}").success);
+    });
+  });
+
+  describe('parse() with rootType: "boolean"', () => {
+    it("accepts true", () => {
+      const result = json({ rootType: "boolean" }).parse("true");
+      assert.ok(result.success);
+      if (result.success) {
+        const _v: boolean = result.value;
+        assert.equal(_v, true);
+      }
+    });
+
+    it("accepts false", () => {
+      const result = json({ rootType: "boolean" }).parse("false");
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, false);
+    });
+
+    it("rejects a JSON number", () => {
+      assert.ok(!json({ rootType: "boolean" }).parse("1").success);
+    });
+  });
+
+  describe('parse() with rootType: "null"', () => {
+    it("accepts null", () => {
+      const result = json({ rootType: "null" }).parse("null");
+      assert.ok(result.success);
+      if (result.success) {
+        const _v: null = result.value;
+        assert.equal(_v, null);
+      }
+    });
+
+    it("rejects a JSON boolean", () => {
+      assert.ok(!json({ rootType: "null" }).parse("false").success);
+    });
+
+    it("rejects a JSON string", () => {
+      assert.ok(!json({ rootType: "null" }).parse('"null"').success);
+    });
+  });
+
+  describe('parse() with rootType: "object"', () => {
+    it("accepts a JSON object", () => {
+      const result = json({ rootType: "object" }).parse('{"x":1}');
+      assert.ok(result.success);
+      if (result.success) {
+        const _v: { readonly [p: string]: Json } = result.value;
+        assert.deepEqual(_v, { x: 1 });
+      }
+    });
+
+    it("rejects a JSON array", () => {
+      assert.ok(!json({ rootType: "object" }).parse("[1,2]").success);
+    });
+
+    it("rejects a JSON string", () => {
+      assert.ok(!json({ rootType: "object" }).parse('"hi"').success);
+    });
+
+    it("rejects JSON null", () => {
+      assert.ok(!json({ rootType: "object" }).parse("null").success);
+    });
+
+    it("default error for type mismatch", () => {
+      const result = json({ rootType: "object" }).parse("[1]");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected JSON object, but got array." },
+        ]);
+      }
+    });
+  });
+
+  describe('parse() with rootType: "array"', () => {
+    it("accepts a JSON array", () => {
+      const result = json({ rootType: "array" }).parse("[1,2]");
+      assert.ok(result.success);
+      if (result.success) {
+        const _v: readonly Json[] = result.value;
+        assert.deepEqual(_v, [1, 2]);
+      }
+    });
+
+    it("rejects a JSON object", () => {
+      assert.ok(!json({ rootType: "array" }).parse("{}").success);
+    });
+
+    it("rejects a JSON number", () => {
+      assert.ok(!json({ rootType: "array" }).parse("42").success);
+    });
+
+    it("default error for type mismatch", () => {
+      const result = json({ rootType: "array" }).parse('{"a":1}');
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected JSON array, but got object." },
+        ]);
+      }
+    });
+  });
+
+  describe("custom invalidRootType error", () => {
+    it("static message error", () => {
+      const parser = json({
+        rootType: "string",
+        errors: { invalidRootType: [text("wrong type")] },
+      });
+      const result = parser.parse("42");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [{ type: "text", text: "wrong type" }]);
+      }
+    });
+
+    it("function error receives value and expected type", () => {
+      const parser = json({
+        rootType: "object",
+        errors: {
+          invalidRootType: (
+            value: Json,
+            expected: string,
+          ) => [text(`want ${expected}, got ${typeof value}`)],
+        },
+      });
+      const result = parser.parse("42");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [
+          { type: "text", text: "want object, got number" },
+        ]);
+      }
+    });
+  });
+
+  describe("format()", () => {
+    it("formats an object", () => {
+      assert.equal(json().format({ a: 1 }), '{"a":1}');
+    });
+
+    it("formats an array", () => {
+      assert.equal(json().format([1, 2, 3]), "[1,2,3]");
+    });
+
+    it("formats a string", () => {
+      assert.equal(json().format("hello"), '"hello"');
+    });
+
+    it("formats a number", () => {
+      assert.equal(json().format(42), "42");
+    });
+
+    it("formats a boolean", () => {
+      assert.equal(json().format(true), "true");
+    });
+
+    it("formats null", () => {
+      assert.equal(json().format(null), "null");
+    });
+  });
+
+  describe("placeholder", () => {
+    it("default placeholder is null (no rootType)", () => {
+      assert.equal(json().placeholder, null);
+    });
+
+    it("default placeholder for rootType: string is empty string", () => {
+      assert.equal(json({ rootType: "string" }).placeholder, "");
+    });
+
+    it("default placeholder for rootType: number is 0", () => {
+      assert.equal(json({ rootType: "number" }).placeholder, 0);
+    });
+
+    it("default placeholder for rootType: boolean is false", () => {
+      assert.equal(json({ rootType: "boolean" }).placeholder, false);
+    });
+
+    it("default placeholder for rootType: null is null", () => {
+      assert.equal(json({ rootType: "null" }).placeholder, null);
+    });
+
+    it("default placeholder for rootType: object is empty object", () => {
+      assert.deepEqual(json({ rootType: "object" }).placeholder, {});
+    });
+
+    it("default placeholder for rootType: array is empty array", () => {
+      assert.deepEqual(json({ rootType: "array" }).placeholder, []);
+    });
+
+    it("custom placeholder is respected", () => {
+      assert.equal(json({ placeholder: 123 }).placeholder, 123);
     });
   });
 });
