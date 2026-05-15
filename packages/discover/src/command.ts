@@ -54,7 +54,7 @@ export interface CommandDefinition<M extends Mode, T> {
    * @returns Nothing, or a promise that resolves when command handling
    *          completes.
    */
-  handler(value: T): void | Promise<void>;
+  readonly handler: (value: T) => void | Promise<void>;
 }
 
 /**
@@ -88,6 +88,34 @@ export interface StaticCommand<M extends Mode, T> extends Command<M, T> {
    */
   readonly path: CommandPath;
 }
+
+/**
+ * A command with its handler value type erased.
+ *
+ * This type is used by discovery APIs that collect commands with different
+ * parsed value types.  The handler cannot be called directly without first
+ * recovering the parser's value type.
+ *
+ * @since 1.1.0
+ */
+export type AnyCommand = Omit<Command<Mode, unknown>, "handler"> & {
+  /**
+   * Erased command handler.
+   */
+  readonly handler: (value: never) => void | Promise<void>;
+};
+
+/**
+ * A statically registered command with its handler value type erased.
+ *
+ * @since 1.1.0
+ */
+export type AnyStaticCommand = Omit<StaticCommand<Mode, unknown>, "handler"> & {
+  /**
+   * Erased command handler.
+   */
+  readonly handler: (value: never) => void | Promise<void>;
+};
 
 /**
  * Defines a command module for `@optique/discover`.
@@ -131,7 +159,7 @@ export function defineCommand<M extends Mode, T>(
  * @returns `true` when the value is a discovered command definition.
  * @since 1.1.0
  */
-export function isCommand(value: unknown): value is Command<Mode, unknown> {
+export function isCommand(value: unknown): value is AnyCommand {
   return (
     value != null &&
     typeof value === "object" &&

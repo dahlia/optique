@@ -17,14 +17,16 @@ import { relative, resolve, sep } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
-  type Command,
+  type AnyCommand,
+  type AnyStaticCommand,
   type CommandPath,
   isCommand,
-  type StaticCommand,
 } from "./command.ts";
 
 export { defineCommand, isCommand } from "./command.ts";
 export type {
+  AnyCommand,
+  AnyStaticCommand,
   Command,
   CommandDefinition,
   CommandMetadata,
@@ -44,7 +46,7 @@ export interface ProgramInvocation {
   /**
    * The command definition that matched the input.
    */
-  readonly command: Command<Mode, unknown>;
+  readonly command: AnyCommand;
 
   /**
    * Parsed value produced by the command parser.
@@ -76,7 +78,7 @@ export interface DiscoveredCommand {
   /**
    * The command exported by the module.
    */
-  readonly command: Command<Mode, unknown>;
+  readonly command: AnyCommand;
 }
 
 /**
@@ -198,7 +200,7 @@ export interface RunProgramStaticOptions extends RunProgramBaseOptions {
   /**
    * Commands to compose without file-system discovery.
    */
-  readonly commands: readonly StaticCommand<Mode, unknown>[];
+  readonly commands: readonly AnyStaticCommand[];
 
   /**
    * File-system discovery cannot be used together with `commands`.
@@ -273,11 +275,12 @@ export async function discoverCommands(
   const discovered: DiscoveredCommand[] = [];
   for (const filePath of files) {
     const path = commandPathFromFile(dir, filePath, extensions);
-    const key = path.join(" ");
+    const key = commandPathKey(path);
     const previous = seen.get(key);
     if (previous != null) {
+      const displayPath = path.join(" ");
       throw new TypeError(
-        `Duplicate command path "${key}" from ${previous} and ${filePath}.`,
+        `Duplicate command path "${displayPath}" from ${previous} and ${filePath}.`,
       );
     }
     seen.set(key, filePath);
@@ -389,7 +392,7 @@ export interface ProgramHelpMetadata {
 
 interface CommandTreeNode {
   readonly children: Map<string, CommandTreeNode>;
-  command?: Command<Mode, unknown>;
+  command?: AnyCommand;
 }
 
 function getRuntime(): "node" | "deno" | "bun" {
@@ -494,12 +497,12 @@ function rejectPathConflicts(
   commands: readonly Pick<DiscoveredCommand, "path" | "filePath">[],
 ): void {
   const paths = new Map(
-    commands.map((entry) => [entry.path.join("\0"), entry]),
+    commands.map((entry) => [commandPathKey(entry.path), entry]),
   );
   for (const entry of commands) {
     for (let i = 1; i < entry.path.length; i++) {
       const parent = entry.path.slice(0, i);
-      const parentEntry = paths.get(parent.join("\0"));
+      const parentEntry = paths.get(commandPathKey(parent));
       if (parentEntry != null) {
         throw new TypeError(
           `Command path "${parent.join(" ")}" conflicts with nested command "${
@@ -516,11 +519,12 @@ function rejectDuplicatePaths(
 ): void {
   const seen = new Map<string, string>();
   for (const entry of commands) {
-    const key = entry.path.join(" ");
+    const key = commandPathKey(entry.path);
     const previous = seen.get(key);
     if (previous != null) {
+      const displayPath = entry.path.join(" ");
       throw new TypeError(
-        `Duplicate command path "${key}" from ${previous} and ${entry.filePath}.`,
+        `Duplicate command path "${displayPath}" from ${previous} and ${entry.filePath}.`,
       );
     }
     seen.set(key, entry.filePath);
@@ -549,7 +553,7 @@ function isStaticRunProgramOptions(
 }
 
 function staticCommandsToEntries(
-  commands: readonly StaticCommand<Mode, unknown>[],
+  commands: readonly AnyStaticCommand[],
 ): readonly Pick<DiscoveredCommand, "path" | "command">[] {
   return commands.map((command) => ({
     path: command.path,
@@ -592,7 +596,7 @@ function buildNodeParser(
 }
 
 function createLeafParser(
-  commandDefinition: Command<Mode, unknown>,
+  commandDefinition: AnyCommand,
 ): Parser<Mode, ProgramInvocation, unknown> {
   return map(commandDefinition.parser, (value): ProgramInvocation => ({
     command: commandDefinition,

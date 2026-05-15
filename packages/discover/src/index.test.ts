@@ -163,6 +163,23 @@ describe("discoverCommands()", () => {
     }
   });
 
+  it("keeps command path segments distinct when they contain spaces", async () => {
+    const dir = await makeTempDir();
+    try {
+      await writeCommand(dir, ["foo bar", "c.ts"], "foo-bar-c");
+      await writeCommand(dir, ["foo", "bar c.ts"], "foo-bar-c");
+
+      const commands = await discoverCommands({ dir, extensions: [".ts"] });
+
+      assert.deepEqual(commands.map((command) => command.path), [
+        ["foo bar", "c"],
+        ["foo", "bar c"],
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects modules whose default export is not a command", async () => {
     const dir = await makeTempDir();
     try {
@@ -325,7 +342,7 @@ describe("createProgramParser()", () => {
     const state = await parseAll(parser, ["user", "add", "--name", "Ada"]);
     const result = await parser.complete(state);
 
-    assert.equal(result.success, true);
+    assert.ok(result.success);
     if (result.success) {
       await result.value.handler(result.value.value);
     }
@@ -376,6 +393,23 @@ describe("createProgramParser()", () => {
           { path: ["build"], command: makeCommand() },
         ]),
       /Duplicate command path "build"/,
+    );
+  });
+
+  it("does not collapse distinct static paths before validation", () => {
+    const makeCommand = () =>
+      defineCommand({
+        parser: object({}),
+        handler() {},
+      });
+
+    assert.throws(
+      () =>
+        createProgramParser([
+          { path: ["foo bar", "c"], command: makeCommand() },
+          { path: ["foo", "bar c"], command: makeCommand() },
+        ]),
+      /Command name must not contain whitespace: "foo bar"\./,
     );
   });
 });
@@ -716,7 +750,7 @@ async function parseAll(
   };
   while (context.buffer.length > 0) {
     const result = await parser.parse(context);
-    assert.equal(result.success, true);
+    assert.ok(result.success);
     if (!result.success) break;
     context = result.next;
   }
