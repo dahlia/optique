@@ -8635,30 +8635,29 @@ function jsonTypeOf(value: Json): string {
 
 /**
  * Finds the first non-finite number (`NaN`, `Infinity`, or `-Infinity`)
- * anywhere in a JSON structure, recursively.
+ * anywhere in a JSON structure.
+ *
+ * Uses an explicit stack rather than recursion to avoid call-stack overflows
+ * on deeply nested inputs.
  *
  * @returns The first non-finite number found, or `undefined` if all numbers
  *   in the structure are finite.
  */
-function findNonFiniteNumber(value: Json): number | undefined {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? undefined : value;
-  }
-  if (
-    value === null || typeof value === "string" || typeof value === "boolean"
-  ) {
-    return undefined;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findNonFiniteNumber(item);
-      if (found !== undefined) return found;
+function findNonFiniteNumber(root: Json): number | undefined {
+  const stack: Json[] = [root];
+  while (stack.length > 0) {
+    const value = stack.pop()!;
+    if (typeof value === "number") {
+      if (!Number.isFinite(value)) return value;
+    } else if (Array.isArray(value)) {
+      for (const item of value) {
+        stack.push(item);
+      }
+    } else if (value !== null && typeof value === "object") {
+      for (const item of Object.values(value)) {
+        stack.push(item);
+      }
     }
-    return undefined;
-  }
-  for (const item of Object.values(value)) {
-    const found = findNonFiniteNumber(item);
-    if (found !== undefined) return found;
   }
   return undefined;
 }

@@ -18077,6 +18077,13 @@ describe("json()", () => {
       }
     });
 
+    it("handles very deeply nested arrays without stack overflow", () => {
+      const depth = 10_000;
+      const input = "[".repeat(depth) + "]".repeat(depth);
+      const result = json().parse(input);
+      assert.ok(result.success);
+    });
+
     it("rejects malformed JSON with default error", () => {
       const result = json().parse("{not json}");
       assert.ok(!result.success);
