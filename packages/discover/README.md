@@ -10,6 +10,12 @@ definition.  Each command module exports a `defineCommand()` result, and
 version, and shell completion, then dispatches to the selected command's
 handler.
 
+> [!WARNING]
+> *@optique/discover* reads command files and imports them dynamically at
+> runtime.  It is a poor fit for CLIs that rely on aggressive tree shaking,
+> static bundling, or single-file executable packaging.  In those cases, use
+> manually imported commands with `runProgram({ commands })`.
+
 
 Installation
 ------------
@@ -71,6 +77,40 @@ The file path becomes the command path, so the example above is available as:
 admin user add --name Ada
 admin --help
 admin completion bash
+~~~~
+
+For bundlers and single-file packagers, import commands manually and declare
+their paths in the command definitions:
+
+~~~~ typescript
+// cli.ts
+import { defineCommand, runProgram } from "@optique/discover";
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const addUser = defineCommand({
+  path: ["user", "add"],
+  parser: object({
+    name: option("--name", string()),
+  }),
+  metadata: {
+    brief: message`Add a user.`,
+  },
+  handler(value) {
+    console.log(`Adding ${value.name}.`);
+  },
+});
+
+await runProgram({
+  commands: [addUser],
+  metadata: {
+    name: "admin",
+    version: "1.0.0",
+    brief: message`Administrative command-line tools.`,
+  },
+});
 ~~~~
 
 By default, Deno and Bun discover `.ts`, `.mts`, `.js`, and `.mjs` files.

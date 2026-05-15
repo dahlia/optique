@@ -16,10 +16,21 @@ import { readdir } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { type Command, isCommand } from "./command.ts";
+import {
+  type Command,
+  type CommandPath,
+  isCommand,
+  type StaticCommand,
+} from "./command.ts";
 
 export { defineCommand, isCommand } from "./command.ts";
-export type { Command, CommandDefinition, CommandMetadata } from "./command.ts";
+export type {
+  Command,
+  CommandDefinition,
+  CommandMetadata,
+  CommandPath,
+  StaticCommand,
+} from "./command.ts";
 
 /**
  * The parsed command selected by a discovered command parser.
@@ -55,7 +66,7 @@ export interface DiscoveredCommand {
   /**
    * Command path derived from the module's relative path.
    */
-  readonly path: readonly string[];
+  readonly path: CommandPath;
 
   /**
    * Absolute path to the command module.
@@ -116,30 +127,15 @@ export interface RuntimeExtensionOptions {
   readonly nodeTypeScriptSupport?: boolean;
 }
 
-/**
- * Options for {@link runProgram}.
- *
- * @since 1.1.0
- */
-export interface RunProgramOptions extends
+interface RunProgramBaseOptions extends
   Omit<
     RunOptions,
     "help" | "version" | "completion" | "programName"
   > {
   /**
-   * Directory containing command modules.
-   */
-  readonly dir: string | URL;
-
-  /**
    * Root program metadata.
    */
   readonly metadata: ProgramMetadata;
-
-  /**
-   * File suffixes to include during discovery.
-   */
-  readonly extensions?: readonly string[];
 
   /**
    * Program name override for help, errors, and completion scripts.
@@ -170,6 +166,59 @@ export interface RunProgramOptions extends
    */
   readonly completion?: RunOptions["completion"] | false;
 }
+
+/**
+ * Options for {@link runProgram} when discovering commands from files.
+ *
+ * @since 1.1.0
+ */
+export interface RunProgramDiscoveryOptions extends RunProgramBaseOptions {
+  /**
+   * Directory containing command modules.
+   */
+  readonly dir: string | URL;
+
+  /**
+   * File suffixes to include during discovery.
+   */
+  readonly extensions?: readonly string[];
+
+  /**
+   * Static commands cannot be used together with `dir`.
+   */
+  readonly commands?: never;
+}
+
+/**
+ * Options for {@link runProgram} when commands are imported manually.
+ *
+ * @since 1.1.0
+ */
+export interface RunProgramStaticOptions extends RunProgramBaseOptions {
+  /**
+   * Commands to compose without file-system discovery.
+   */
+  readonly commands: readonly StaticCommand<Mode, unknown>[];
+
+  /**
+   * File-system discovery cannot be used together with `commands`.
+   */
+  readonly dir?: never;
+
+  /**
+   * File suffixes are only used with file-system discovery.
+   */
+  readonly extensions?: never;
+}
+
+/**
+ * Options for {@link runProgram}.
+ *
+ * @since 1.1.0
+ */
+export type RunProgramOptions =
+  | RunProgramDiscoveryOptions
+  | RunProgramStaticOptions;
 
 /**
  * Returns runtime-aware command module suffixes.
@@ -241,6 +290,16 @@ export async function discoverCommands(
         `Module ${filePath} default export must be created with defineCommand().`,
       );
     }
+    if (
+      mod.default.path != null &&
+      commandPathKey(mod.default.path) !== commandPathKey(path)
+    ) {
+      throw new TypeError(
+        `Module ${filePath} declares command path "${
+          mod.default.path.join(" ")
+        }" but file path defines "${path.join(" ")}".`,
+      );
+    }
     discovered.push({ path, filePath, command: mod.default });
   }
 
@@ -292,10 +351,15 @@ export function createProgramParser(
  * @since 1.1.0
  */
 export async function runProgram(options: RunProgramOptions): Promise<void> {
-  const commands = await discoverCommands({
-    dir: options.dir,
-    extensions: options.extensions,
-  });
+  let commands: readonly Pick<DiscoveredCommand, "path" | "command">[];
+  if (isStaticRunProgramOptions(options)) {
+    commands = staticCommandsToEntries(options.commands);
+  } else {
+    commands = await discoverCommands({
+      dir: options.dir,
+      extensions: options.extensions,
+    });
+  }
   const parser = createProgramParser(commands, options.metadata);
   const invocation = await runAsync(parser, buildRunOptions(options));
   await invocation.handler(invocation.value);
@@ -407,7 +471,7 @@ function commandPathFromFile(
   rootDir: string,
   filePath: string,
   extensions: readonly string[],
-): readonly string[] {
+): CommandPath {
   const matchedExtension = extensions.find((ext) => filePath.endsWith(ext));
   if (matchedExtension == null) {
     throw new TypeError(`No configured extension matches ${filePath}.`);
@@ -415,10 +479,15 @@ function commandPathFromFile(
   const withoutExtension = filePath.slice(0, -matchedExtension.length);
   const relativePath = relative(rootDir, withoutExtension);
   const path = relativePath.split(sep).filter((segment) => segment.length > 0);
-  if (path.length < 1) {
+  const [first, ...rest] = path;
+  if (first == null) {
     throw new TypeError(`Command file ${filePath} does not define a path.`);
   }
-  return path;
+  return [first, ...rest];
+}
+
+function commandPathKey(path: readonly string[]): string {
+  return path.join("\0");
 }
 
 function rejectPathConflicts(
@@ -462,8 +531,30 @@ function sortCommands<T extends Pick<DiscoveredCommand, "path">>(
   commands: readonly T[],
 ): readonly T[] {
   return commands.toSorted((a, b) =>
-    a.path.join("\0").localeCompare(b.path.join("\0"))
+    commandPathKey(a.path).localeCompare(commandPathKey(b.path))
   );
+}
+
+function isStaticRunProgramOptions(
+  options: RunProgramOptions,
+): options is RunProgramStaticOptions {
+  const hasCommands = "commands" in options && options.commands != null;
+  const hasDir = "dir" in options && options.dir != null;
+  if (hasCommands === hasDir) {
+    throw new TypeError(
+      "runProgram() requires exactly one of dir or commands.",
+    );
+  }
+  return hasCommands;
+}
+
+function staticCommandsToEntries(
+  commands: readonly StaticCommand<Mode, unknown>[],
+): readonly Pick<DiscoveredCommand, "path" | "command">[] {
+  return commands.map((command) => ({
+    path: command.path,
+    command,
+  }));
 }
 
 function buildCommandTree(
@@ -556,6 +647,7 @@ function buildRunOptions(options: RunProgramOptions): RunOptions {
   const metadata = options.metadata;
   const {
     dir: _dir,
+    commands: _commands,
     extensions: _extensions,
     metadata: _metadata,
     help,

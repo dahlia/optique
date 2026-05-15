@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { defineCommand } from "./command.ts";
 import {
+  type CommandPath,
   createProgramParser,
   discoverCommands,
   getDefaultExtensions,
@@ -35,6 +36,22 @@ describe("defineCommand()", () => {
     });
   });
 
+  it("preserves static command paths", () => {
+    const staticCommand = defineCommand({
+      path: ["user", "add"],
+      parser: object({
+        name: option("--name", string()),
+      }),
+      handler(value) {
+        const name: string = value.name;
+        assert.equal(typeof name, "string");
+      },
+    });
+
+    const path: CommandPath = staticCommand.path;
+    assert.deepEqual(path, ["user", "add"]);
+  });
+
   it("rejects malformed command definitions", () => {
     assert.throws(
       () =>
@@ -51,6 +68,24 @@ describe("defineCommand()", () => {
           handler: undefined as never,
         }),
       /Command handler must be a function\./,
+    );
+    assert.throws(
+      () =>
+        defineCommand({
+          path: [] as never,
+          parser: object({}),
+          handler() {},
+        }),
+      /Command path must be a non-empty array of non-empty strings\./,
+    );
+    assert.throws(
+      () =>
+        defineCommand({
+          path: ["build", ""] as never,
+          parser: object({}),
+          handler() {},
+        }),
+      /Command path must be a non-empty array of non-empty strings\./,
     );
   });
 });
@@ -137,6 +172,63 @@ describe("discoverCommands()", () => {
         () => discoverCommands({ dir, extensions: [".ts"] }),
         /default export must be created with defineCommand\(\)\./,
       );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects declared paths that do not match file-derived paths", async () => {
+    const dir = await makeTempDir();
+    try {
+      await writeCommand(
+        dir,
+        ["build.ts"],
+        "build",
+        `
+          import { defineCommand } from "${moduleUrl("command.ts")}";
+          import { object } from "${moduleUrl("../../core/src/constructs.ts")}";
+
+          export default defineCommand({
+            path: ["deploy"],
+            parser: object({}),
+            handler() {},
+          });
+        `,
+      );
+
+      await assert.rejects(
+        () => discoverCommands({ dir, extensions: [".ts"] }),
+        /declares command path "deploy" but file path defines "build"\./,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts declared paths that match file-derived paths", async () => {
+    const dir = await makeTempDir();
+    try {
+      await writeCommand(
+        dir,
+        ["user", "add.ts"],
+        "add",
+        `
+          import { defineCommand } from "${moduleUrl("command.ts")}";
+          import { object } from "${moduleUrl("../../core/src/constructs.ts")}";
+
+          export default defineCommand({
+            path: ["user", "add"],
+            parser: object({}),
+            handler() {},
+          });
+        `,
+      );
+
+      const commands = await discoverCommands({ dir, extensions: [".ts"] });
+
+      assert.deepEqual(commands.map((command) => command.path), [
+        ["user", "add"],
+      ]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -289,6 +381,125 @@ describe("createProgramParser()", () => {
 });
 
 describe("runProgram()", () => {
+  it("runs statically registered commands and waits for async handlers", async () => {
+    const calls: unknown[] = [];
+    const writeCommand = defineCommand({
+      path: ["write"],
+      parser: object({
+        value: option("--value", string()),
+      }),
+      async handler(value) {
+        await Promise.resolve();
+        calls.push(value);
+      },
+    });
+
+    await runProgram({
+      commands: [writeCommand],
+      metadata: { name: "tool", version: "1.0.0" },
+      args: ["write", "--value", "done"],
+      stdout() {},
+      stderr() {},
+      onExit(exitCode): never {
+        throw new Error(`Unexpected exit ${exitCode}.`);
+      },
+    });
+
+    assert.deepEqual(calls, [{ value: "done" }]);
+  });
+
+  it("shows statically registered nested commands in root help", async () => {
+    const addCommand = defineCommand({
+      path: ["user", "add"],
+      parser: object({}),
+      metadata: { brief: message`Add a user.` },
+      handler() {},
+    });
+    const removeCommand = defineCommand({
+      path: ["user", "remove"],
+      parser: object({}),
+      metadata: { brief: message`Remove a user.` },
+      handler() {},
+    });
+    let stdout = "";
+
+    await assert.rejects(
+      () =>
+        runProgram({
+          commands: [addCommand, removeCommand],
+          metadata: { name: "tool", version: "1.0.0" },
+          args: ["--help"],
+          stdout(text) {
+            stdout += `${text}\n`;
+          },
+          stderr() {},
+          onExit(exitCode): never {
+            throw new ExitSignal(exitCode);
+          },
+        }),
+      ExitSignal,
+    );
+
+    assert.match(stdout, /Usage: tool user add/);
+    assert.match(stdout, /user add\s+Add a user\./);
+    assert.match(stdout, /user remove\s+Remove a user\./);
+  });
+
+  it("passes static command values to phase-two source contexts", async () => {
+    const phase2Values: unknown[] = [];
+    const context: SourceContext = {
+      id: Symbol("test-context"),
+      phase: "two-pass",
+      getAnnotations(request) {
+        if (request?.phase === "phase2") {
+          phase2Values.push(request.parsed);
+        }
+        return {};
+      },
+    };
+    const showCommand = defineCommand({
+      path: ["show"],
+      parser: object({
+        config: withDefault(option("--config", string()), "app.json"),
+      }),
+      handler() {},
+    });
+
+    await runProgram({
+      commands: [showCommand],
+      metadata: { name: "tool", version: "1.0.0" },
+      args: ["show"],
+      contexts: [context],
+      stdout() {},
+      stderr() {},
+      onExit(exitCode): never {
+        throw new Error(`Unexpected exit ${exitCode}.`);
+      },
+    });
+
+    assert.deepEqual(phase2Values, [{ config: "app.json" }]);
+  });
+
+  it("rejects ambiguous command sources", async () => {
+    await assert.rejects(
+      () =>
+        runProgram({
+          dir: ".",
+          commands: [],
+          metadata: { name: "tool" },
+        } as never),
+      /runProgram\(\) requires exactly one of dir or commands\./,
+    );
+
+    await assert.rejects(
+      () =>
+        runProgram({
+          metadata: { name: "tool" },
+        } as never),
+      /runProgram\(\) requires exactly one of dir or commands\./,
+    );
+  });
+
   it("runs the discovered command and waits for async handlers", async () => {
     const dir = await makeTempDir();
     const output = join(dir, "out.txt");

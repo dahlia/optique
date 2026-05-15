@@ -1704,6 +1704,13 @@ inside one `or(command(...))` expression can make the entry point do too much.
 The *@optique/discover* package lets each command live in its own module with
 its parser, help metadata, and handler.
 
+> [!WARNING]
+> This pattern discovers and imports command modules at runtime.  It works best
+> when those command files are present beside the running CLI.  For CLIs that
+> rely on tree shaking, static bundling, or single-file executable packaging,
+> import command modules manually and pass them to `runProgram()` with
+> `commands`.
+
 Put command modules under a directory:
 
 ~~~~ typescript twoslash
@@ -1736,6 +1743,40 @@ import { runProgram } from "@optique/discover";
 
 await runProgram({
   dir: new URL("./commands/", import.meta.url),
+  metadata: {
+    name: "tasks",
+    version: "1.0.0",
+    brief: message`Project task runner.`,
+  },
+});
+~~~~
+
+For a bundled CLI, add a path to each command definition and import the command
+modules manually:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { withDefault } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { defineCommand, runProgram } from "@optique/discover";
+
+const build = defineCommand({
+  path: ["build"],
+  parser: object({
+    target: withDefault(option("--target", string()), "app"),
+  }),
+  metadata: {
+    brief: message`Build the project.`,
+  },
+  handler(value) {
+    console.log(`Building ${value.target}.`);
+  },
+});
+
+await runProgram({
+  commands: [build],
   metadata: {
     name: "tasks",
     version: "1.0.0",

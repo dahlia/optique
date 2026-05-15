@@ -592,6 +592,92 @@ subcommands, each with their own options and behaviors. The type system
 tracks the structure automatically, so you never have to worry about
 accessing the wrong properties or forgetting to handle a case.
 
+### When commands outgrow one file
+
+The examples above define the command tree directly with `command()` and
+`or()`.  That is the clearest way to learn the model, and it works well for
+small and medium CLIs.  When each command starts to feel like its own module,
+*@optique/discover* can build the same command tree from files instead.
+
+> [!WARNING]
+> `runProgram()` discovers command modules from the runtime file system and
+> imports them dynamically.  This is useful for source-layout CLIs, but it is
+> not a good default when the CLI must be aggressively tree-shaken, statically
+> bundled, or packaged as a single executable.  In those cases, import command
+> modules manually and pass them as `commands`.
+
+Each command module default-exports a command created with `defineCommand()`.
+The entry point then points `runProgram()` at the command directory:
+
+~~~~ typescript twoslash
+import { message } from "@optique/core/message";
+import { runProgram } from "@optique/discover";
+
+await runProgram({
+  dir: new URL("./commands/", import.meta.url),
+  metadata: {
+    name: "app",
+    brief: message`Project tools.`,
+  },
+});
+~~~~
+
+For a bundled CLI, declare each command's path and pass the imported commands
+directly:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { defineCommand, runProgram } from "@optique/discover";
+
+const build = defineCommand({
+  path: ["build"],
+  parser: object({
+    target: option("--target", string()),
+  }),
+  metadata: {
+    brief: message`Build the project.`,
+  },
+  handler(value) {
+    console.log(`Building ${value.target}.`);
+  },
+});
+
+await runProgram({
+  commands: [build],
+  metadata: {
+    name: "app",
+    brief: message`Project tools.`,
+  },
+});
+~~~~
+
+With this layout:
+
+~~~~ text
+commands/
+  build.ts
+  deploy.ts
+  config/
+    set.ts
+~~~~
+
+the file paths become command paths:
+
+~~~~ bash
+app build
+app deploy
+app config set
+~~~~
+
+Use this pattern when the command file is the natural place to keep the
+parser, help metadata, and handler together.  See the
+[command discovery guide](./concepts/discover.md) for the full API and the
+[cookbook recipe](./cookbook.md#file-based-command-discovery) for a complete
+example.
+
 
 Modularization and reusability
 ------------------------------
@@ -1344,6 +1430,9 @@ Here are some directions to explore next:
 
  -  [Cookbook](./cookbook.md): Practical recipes for common patterns like
     mutually exclusive options, dependent flags, and integration examples
+ -  [Command discovery](./concepts/discover.md): File-based command modules
+    and static `runProgram({ commands })` registration for CLIs that have
+    outgrown a single parser file
  -  [Concept guides](./concepts/primitives.md): Deep dives into primitives,
     value parsers, combinators, shell completion, and man page generation
  -  Integration packages:

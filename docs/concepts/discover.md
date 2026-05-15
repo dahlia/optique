@@ -19,6 +19,13 @@ discovery.  The alternative name *@optique/program* would overlap with
 `@optique/core/program`, which already provides parser-and-metadata objects for
 man pages and runner integration.
 
+> [!WARNING]
+> Command discovery is a runtime feature, not a static registry.  It reads the
+> command directory and imports matching modules dynamically, so bundlers cannot
+> reliably see which command files are used.  If your CLI depends on tree
+> shaking, static bundling, or single-file executable packaging, import command
+> modules manually and pass them to `runProgram()` with `commands`.
+
 
 Command modules
 ---------------
@@ -49,6 +56,9 @@ export default defineCommand({
 
 `defineCommand()` preserves the parser's inferred value type for `handler`.
 If you change the parser, TypeScript checks the handler against the new shape.
+When commands are passed manually to `runProgram()`, add a `path` field to the
+command definition.  File-based discovery can omit `path`; if it is present,
+it must match the path derived from the file name.
 
 
 Running a discovered program
@@ -120,6 +130,48 @@ await runProgram({
 ~~~~
 
 
+Running statically imported commands
+------------------------------------
+
+When command modules need to be visible to a bundler or single-file packager,
+import them manually and pass them as `commands`.  Each command declares its
+own path:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { withDefault } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { defineCommand, runProgram } from "@optique/discover";
+
+const build = defineCommand({
+  path: ["build"],
+  parser: object({
+    target: withDefault(option("--target", string()), "app"),
+  }),
+  metadata: {
+    brief: message`Build the project.`,
+  },
+  handler(value) {
+    console.log(`Building ${value.target}.`);
+  },
+});
+
+await runProgram({
+  commands: [build],
+  metadata: {
+    name: "admin",
+    version: "1.0.0",
+    brief: message`Administrative command-line tools.`,
+  },
+});
+~~~~
+
+`commands` and `dir` are mutually exclusive.  Use `commands` when static
+imports matter; use `dir` when the runtime file layout is the command registry.
+
+
 File names and extensions
 -------------------------
 
@@ -188,6 +240,12 @@ Use *@optique/discover* when:
  -  Each command should keep its parser, help metadata, and handler together
  -  You want *@optique/run* help, version, and completion behavior without
     manually composing the whole command tree
+
+Use static `commands` with manually imported command modules when:
+
+ -  You need tree shaking, static bundling, or single-file executable
+    packaging
+ -  You want command modules to be visible through ordinary static imports
 
 Use plain *@optique/core* and *@optique/run* when:
 
