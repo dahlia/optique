@@ -419,11 +419,13 @@ function hasNodeTypeScriptLoader(
 }
 
 function hasNativeNodeTypeScriptSupport(): boolean {
-  const features: typeof process.features & {
-    readonly typescript?: unknown;
-  } = process.features;
-  return features.typescript === "strip" ||
-    features.typescript === "transform";
+  const features = process.features as
+    | (typeof process.features & {
+      readonly typescript?: unknown;
+    })
+    | undefined;
+  return features?.typescript === "strip" ||
+    features?.typescript === "transform";
 }
 
 function pathFromDir(dir: string | URL): string {
