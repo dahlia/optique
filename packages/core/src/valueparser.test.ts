@@ -17980,6 +17980,22 @@ describe("json()", () => {
         },
       );
     });
+
+    it("throws TypeError when placeholder is Infinity", () => {
+      assert.throws(() => json({ placeholder: Infinity }), {
+        name: "TypeError",
+        message:
+          "Expected placeholder to be a finite JSON number, but got Infinity.",
+      });
+    });
+
+    it("throws TypeError when placeholder is NaN", () => {
+      assert.throws(() => json({ placeholder: NaN }), {
+        name: "TypeError",
+        message:
+          "Expected placeholder to be a finite JSON number, but got NaN.",
+      });
+    });
   });
 
   describe("parse() without rootType", () => {
@@ -18065,6 +18081,29 @@ describe("json()", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.deepEqual(result.error, [{ type: "text", text: "bad: {nope}" }]);
+      }
+    });
+
+    it("rejects overflowing numbers that parse as Infinity", () => {
+      const result = json().parse("1e309");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Not a valid JSON: number out of range." },
+        ]);
+      }
+    });
+
+    it("uses invalidJson callback for out-of-range numbers", () => {
+      const parser = json({
+        errors: { invalidJson: (input) => [text(`overflow: ${input}`)] },
+      });
+      const result = parser.parse("1e309");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [
+          { type: "text", text: "overflow: 1e309" },
+        ]);
       }
     });
   });
@@ -18287,6 +18326,27 @@ describe("json()", () => {
 
     it("formats null", () => {
       assert.equal(json().format(null), "null");
+    });
+
+    it("throws TypeError for Infinity", () => {
+      assert.throws(() => json().format(Infinity), {
+        name: "TypeError",
+        message: "Expected a finite JSON number, but got Infinity.",
+      });
+    });
+
+    it("throws TypeError for -Infinity", () => {
+      assert.throws(() => json().format(-Infinity), {
+        name: "TypeError",
+        message: "Expected a finite JSON number, but got -Infinity.",
+      });
+    });
+
+    it("throws TypeError for NaN", () => {
+      assert.throws(() => json().format(NaN), {
+        name: "TypeError",
+        message: "Expected a finite JSON number, but got NaN.",
+      });
     });
   });
 

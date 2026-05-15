@@ -8525,6 +8525,8 @@ export function json(options?: JsonOptions): ValueParser<"sync", Json>;
  * @throws {TypeError} If `options.metavar` is provided but is an empty string.
  * @throws {TypeError} If `options.rootType` is provided but is not one of the
  *   six allowed values.
+ * @throws {TypeError} If `options.placeholder` is a non-finite number
+ *   (`Infinity`, `-Infinity`, or `NaN`).
  * @throws {TypeError} If `options.placeholder` is provided with a `rootType`
  *   but its JSON type does not match the `rootType`.
  * @since 1.1.0
@@ -8544,11 +8546,20 @@ export function json(options?: JsonOptions): ValueParser<"sync", Json> {
   const invalidJsonError = options?.errors?.invalidJson;
   const invalidRootTypeError = options?.errors?.invalidRootType;
 
-  if (rootType != null && options?.placeholder !== undefined) {
-    const placeholderType = jsonTypeOf(options.placeholder);
-    if (placeholderType !== rootType) {
+  if (options?.placeholder !== undefined) {
+    const p = options.placeholder;
+    if (typeof p === "number" && !Number.isFinite(p)) {
       throw new TypeError(
-        `Expected placeholder to be a JSON ${rootType}, but got ${placeholderType}.`,
+        `Expected placeholder to be a finite JSON number, but got ${
+          String(p)
+        }.`,
+      );
+    }
+    if (rootType != null && jsonTypeOf(p) !== rootType) {
+      throw new TypeError(
+        `Expected placeholder to be a JSON ${rootType}, but got ${
+          jsonTypeOf(p)
+        }.`,
       );
     }
   }
@@ -8581,6 +8592,13 @@ export function json(options?: JsonOptions): ValueParser<"sync", Json> {
           : invalidJsonError ?? [text(`Not a valid JSON: ${err.message}`)];
         return { success: false, error };
       }
+      if (typeof value === "number" && !Number.isFinite(value)) {
+        const error: Message = invalidJsonError instanceof Function
+          ? invalidJsonError(input)
+          : invalidJsonError ??
+            [text(`Not a valid JSON: number out of range.`)];
+        return { success: false, error };
+      }
       if (rootType != null) {
         const actual = jsonTypeOf(value);
         if (actual !== rootType) {
@@ -8594,6 +8612,11 @@ export function json(options?: JsonOptions): ValueParser<"sync", Json> {
       return { success: true, value };
     },
     format(value: Json): string {
+      if (typeof value === "number" && !Number.isFinite(value)) {
+        throw new TypeError(
+          `Expected a finite JSON number, but got ${String(value)}.`,
+        );
+      }
       return JSON.stringify(value);
     },
   };
