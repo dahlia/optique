@@ -18,6 +18,7 @@ import {
   isValueParser,
   type Json,
   json,
+  type JsonOptions,
   locale,
   macAddress,
   type NonEmptyString,
@@ -17942,7 +17943,7 @@ describe("json()", () => {
     });
 
     it("accepts a pre-typed JsonOptions variable", () => {
-      const opts: import("@optique/core/valueparser").JsonOptions = {
+      const opts: JsonOptions = {
         rootType: "object",
       };
       const parser = json(opts);
@@ -17951,14 +17952,11 @@ describe("json()", () => {
     });
 
     it("throws TypeError when placeholder type mismatches rootType", () => {
-      assert.throws(
-        () =>
-          json({ rootType: "string", placeholder: 123 as unknown as string }),
-        {
-          name: "TypeError",
-          message: "Expected placeholder to be a JSON string, but got number.",
-        },
-      );
+      const opts: JsonOptions = { rootType: "string", placeholder: 123 };
+      assert.throws(() => json(opts), {
+        name: "TypeError",
+        message: "Expected placeholder to be a JSON string, but got number.",
+      });
     });
 
     it("rootType: string accepts a typed string placeholder", () => {
