@@ -18019,6 +18019,24 @@ describe("json()", () => {
       if (result.success) assert.equal(result.value, "hello");
     });
 
+    it("parses a JSON string with escaped quotes", () => {
+      const result = json().parse('"hello \\"world\\""');
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, 'hello "world"');
+    });
+
+    it("parses a JSON string with escape sequences", () => {
+      const result = json().parse('"line1\\nline2"');
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, "line1\nline2");
+    });
+
+    it("parses a JSON string with Unicode escapes", () => {
+      const result = json().parse('"\\u00e9"');
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, "é");
+    });
+
     it("parses a JSON number", () => {
       const result = json().parse("42");
       assert.ok(result.success);
