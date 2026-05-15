@@ -8640,22 +8640,28 @@ function jsonTypeOf(value: Json): string {
  * anywhere in a JSON structure.
  *
  * Uses an explicit stack rather than recursion to avoid call-stack overflows
- * on deeply nested inputs.
+ * on deeply nested inputs.  Tracks visited objects to handle circular
+ * references without looping forever.
  *
  * @returns The first non-finite number found, or `undefined` if all numbers
  *   in the structure are finite.
  */
 function findNonFiniteNumber(root: Json): number | undefined {
   const stack: Json[] = [root];
+  const seen = new Set<object>();
   while (stack.length > 0) {
     const value = stack.pop()!;
     if (typeof value === "number") {
       if (!Number.isFinite(value)) return value;
     } else if (Array.isArray(value)) {
+      if (seen.has(value)) continue;
+      seen.add(value);
       for (const item of value) {
         stack.push(item);
       }
     } else if (value !== null && typeof value === "object") {
+      if (seen.has(value)) continue;
+      seen.add(value);
       for (const item of Object.values(value)) {
         stack.push(item);
       }

@@ -18417,6 +18417,12 @@ describe("json()", () => {
         message: "Expected a finite JSON number, but got Infinity.",
       });
     });
+
+    it("terminates quickly for circular references", () => {
+      const circular: Record<string, unknown> = {};
+      circular.self = circular;
+      assert.throws(() => json().format(circular as Json), TypeError);
+    });
   });
 
   describe("placeholder", () => {
