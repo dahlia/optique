@@ -12,7 +12,7 @@ import type { ProgramMetadata } from "@optique/core/program";
 import { command } from "@optique/core/primitives";
 import { runAsync } from "@optique/run";
 import type { RunOptions } from "@optique/run";
-import { readdir } from "node:fs/promises";
+import { readdir, realpath, stat } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -288,22 +288,23 @@ export async function discoverCommands(
     const mod = await import(pathToFileURL(filePath).href) as {
       readonly default?: unknown;
     };
-    if (!isCommand(mod.default)) {
+    const commandDefinition = unwrapCommandExport(mod.default);
+    if (commandDefinition == null) {
       throw new TypeError(
         `Module ${filePath} default export must be created with defineCommand().`,
       );
     }
     if (
-      mod.default.path != null &&
-      commandPathKey(mod.default.path) !== commandPathKey(path)
+      commandDefinition.path != null &&
+      commandPathKey(commandDefinition.path) !== commandPathKey(path)
     ) {
       throw new TypeError(
         `Module ${filePath} declares command path "${
-          mod.default.path.join(" ")
+          commandDefinition.path.join(" ")
         }" but file path defines "${path.join(" ")}".`,
       );
     }
-    discovered.push({ path, filePath, command: mod.default });
+    discovered.push({ path, filePath, command: commandDefinition });
   }
 
   rejectPathConflicts(discovered);
@@ -446,17 +447,26 @@ function normalizeExtensions(extensions: readonly string[]): readonly string[] {
 async function collectCommandFiles(
   dir: string,
   extensions: readonly string[],
+  activeDirs = new Set<string>(),
 ): Promise<readonly string[]> {
+  const canonicalDir = await realpath(dir);
+  if (activeDirs.has(canonicalDir)) return [];
+  const nextActiveDirs = new Set(activeDirs);
+  nextActiveDirs.add(canonicalDir);
+
   const entries = await readdir(dir, { withFileTypes: true });
   const files: string[] = [];
   for (
     const entry of entries.toSorted((a, b) => a.name.localeCompare(b.name))
   ) {
     const path = resolve(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...await collectCommandFiles(path, extensions));
+    const entryType = await getCommandFileEntryType(path, entry);
+    if (entryType === "directory") {
+      files.push(
+        ...await collectCommandFiles(path, extensions, nextActiveDirs),
+      );
     } else if (
-      entry.isFile() &&
+      entryType === "file" &&
       !isDeclarationFile(entry.name) &&
       extensions.some((ext) => entry.name.endsWith(ext))
     ) {
@@ -464,6 +474,27 @@ async function collectCommandFiles(
     }
   }
   return files;
+}
+
+async function getCommandFileEntryType(
+  path: string,
+  entry: {
+    isDirectory(): boolean;
+    isFile(): boolean;
+    isSymbolicLink(): boolean;
+  },
+): Promise<"directory" | "file" | undefined> {
+  if (entry.isDirectory()) return "directory";
+  if (entry.isFile()) return "file";
+  if (!entry.isSymbolicLink()) return undefined;
+  try {
+    const target = await stat(path);
+    if (target.isDirectory()) return "directory";
+    if (target.isFile()) return "file";
+    return undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function isDeclarationFile(fileName: string): boolean {
@@ -555,10 +586,26 @@ function isStaticRunProgramOptions(
 function staticCommandsToEntries(
   commands: readonly AnyStaticCommand[],
 ): readonly Pick<DiscoveredCommand, "path" | "command">[] {
-  return commands.map((command) => ({
-    path: command.path,
-    command,
-  }));
+  return commands.map((command) => {
+    if (!isCommand(command)) {
+      throw new TypeError(
+        "Static command entries must be created with defineCommand().",
+      );
+    }
+    return {
+      path: command.path,
+      command,
+    };
+  });
+}
+
+function unwrapCommandExport(value: unknown): AnyCommand | undefined {
+  if (isCommand(value)) return value;
+  if (value != null && typeof value === "object") {
+    const nestedDefault = (value as { readonly default?: unknown }).default;
+    if (isCommand(nestedDefault)) return nestedDefault;
+  }
+  return undefined;
 }
 
 function buildCommandTree(

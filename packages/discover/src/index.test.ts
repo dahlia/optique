@@ -7,7 +7,7 @@ import { option } from "@optique/core/primitives";
 import type { SourceContext } from "@optique/core/context";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
@@ -59,7 +59,10 @@ describe("defineCommand()", () => {
           parser: {} as never,
           handler() {},
         }),
-      /Command parser must be an Optique parser\./,
+      {
+        name: "TypeError",
+        message: "Command parser must be an Optique parser.",
+      },
     );
     assert.throws(
       () =>
@@ -67,7 +70,7 @@ describe("defineCommand()", () => {
           parser: object({}),
           handler: undefined as never,
         }),
-      /Command handler must be a function\./,
+      { name: "TypeError", message: "Command handler must be a function." },
     );
     assert.throws(
       () =>
@@ -76,7 +79,10 @@ describe("defineCommand()", () => {
           parser: object({}),
           handler() {},
         }),
-      /Command path must be a non-empty array of non-empty strings\./,
+      {
+        name: "TypeError",
+        message: "Command path must be a non-empty array of non-empty strings.",
+      },
     );
     assert.throws(
       () =>
@@ -85,7 +91,10 @@ describe("defineCommand()", () => {
           parser: object({}),
           handler() {},
         }),
-      /Command path must be a non-empty array of non-empty strings\./,
+      {
+        name: "TypeError",
+        message: "Command path must be a non-empty array of non-empty strings.",
+      },
     );
   });
 });
@@ -189,6 +198,64 @@ describe("discoverCommands()", () => {
         () => discoverCommands({ dir, extensions: [".ts"] }),
         /default export must be created with defineCommand\(\)\./,
       );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("unwraps CommonJS default-wrapped command exports", async () => {
+    const dir = await makeTempDir();
+    const globalCommand = defineCommand({
+      parser: object({}),
+      metadata: { brief: message`Build the project.` },
+      handler() {},
+    });
+    const testGlobal = globalThis as {
+      __optiqueDiscoverDefaultWrappedCommand?: unknown;
+    };
+    testGlobal.__optiqueDiscoverDefaultWrappedCommand = globalCommand;
+    try {
+      await writeFile(
+        join(dir, "build.cjs"),
+        `
+          module.exports = {
+            default: globalThis.__optiqueDiscoverDefaultWrappedCommand,
+          };
+        `,
+      );
+
+      const commands = await discoverCommands({ dir, extensions: [".cjs"] });
+
+      assert.deepEqual(commands.map((command) => command.path), [["build"]]);
+      assert.equal(commands[0]?.command, globalCommand);
+    } finally {
+      delete testGlobal.__optiqueDiscoverDefaultWrappedCommand;
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("follows symlinked command files and directories", async () => {
+    const dir = await makeTempDir();
+    try {
+      const targetDir = join(dir, "targets");
+      await writeCommand(targetDir, ["build.ts"], "build");
+      await writeCommand(targetDir, ["deploy.ts"], "deploy");
+      await symlink(
+        join(targetDir, "build.ts"),
+        join(dir, "linked-build.ts"),
+      );
+      await symlink(targetDir, join(dir, "linked"));
+      await symlink(dir, join(targetDir, "loop"));
+
+      const commands = await discoverCommands({ dir, extensions: [".ts"] });
+
+      assert.deepEqual(commands.map((command) => command.path), [
+        ["linked-build"],
+        ["linked", "build"],
+        ["linked", "deploy"],
+        ["targets", "build"],
+        ["targets", "deploy"],
+      ]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -531,6 +598,30 @@ describe("runProgram()", () => {
           metadata: { name: "tool" },
         } as never),
       /runProgram\(\) requires exactly one of dir or commands\./,
+    );
+  });
+
+  it("rejects static command values not created by defineCommand()", async () => {
+    await assert.rejects(
+      () =>
+        runProgram({
+          commands: [{
+            path: ["build"],
+            parser: object({}),
+            handler() {},
+          }] as never,
+          metadata: { name: "tool" },
+          args: ["build"],
+          stdout() {},
+          stderr() {},
+          onExit(exitCode): never {
+            throw new Error(`Unexpected exit ${exitCode}.`);
+          },
+        }),
+      {
+        name: "TypeError",
+        message: "Static command entries must be created with defineCommand().",
+      },
     );
   });
 
