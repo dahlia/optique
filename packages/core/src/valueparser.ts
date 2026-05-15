@@ -8529,6 +8529,8 @@ export function json(options?: JsonOptions): ValueParser<"sync", Json>;
  *   (`Infinity`, `-Infinity`, or `NaN`).
  * @throws {TypeError} If `options.placeholder` is provided with a `rootType`
  *   but its JSON type does not match the `rootType`.
+ * @throws {TypeError} If the returned parser's `format()` method is called
+ *   with a value that contains a non-finite number anywhere in its structure.
  * @since 1.1.0
  */
 export function json(options?: JsonOptions): ValueParser<"sync", Json> {
@@ -8592,7 +8594,8 @@ export function json(options?: JsonOptions): ValueParser<"sync", Json> {
           : invalidJsonError ?? [text(`Not a valid JSON: ${err.message}`)];
         return { success: false, error };
       }
-      if (typeof value === "number" && !Number.isFinite(value)) {
+      const nonFinite = findNonFiniteNumber(value);
+      if (nonFinite !== undefined) {
         const error: Message = invalidJsonError instanceof Function
           ? invalidJsonError(input)
           : invalidJsonError ??
@@ -8612,9 +8615,10 @@ export function json(options?: JsonOptions): ValueParser<"sync", Json> {
       return { success: true, value };
     },
     format(value: Json): string {
-      if (typeof value === "number" && !Number.isFinite(value)) {
+      const nonFinite = findNonFiniteNumber(value);
+      if (nonFinite !== undefined) {
         throw new TypeError(
-          `Expected a finite JSON number, but got ${String(value)}.`,
+          `Expected a finite JSON number, but got ${String(nonFinite)}.`,
         );
       }
       return JSON.stringify(value);
@@ -8626,4 +8630,27 @@ function jsonTypeOf(value: Json): string {
   if (value === null) return "null";
   if (Array.isArray(value)) return "array";
   return typeof value;
+}
+
+function findNonFiniteNumber(value: Json): number | undefined {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? undefined : value;
+  }
+  if (
+    value === null || typeof value === "string" || typeof value === "boolean"
+  ) {
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findNonFiniteNumber(item);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  for (const item of Object.values(value)) {
+    const found = findNonFiniteNumber(item);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 }

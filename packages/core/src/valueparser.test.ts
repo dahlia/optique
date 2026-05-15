@@ -18106,6 +18106,26 @@ describe("json()", () => {
         ]);
       }
     });
+
+    it("rejects objects containing nested Infinity", () => {
+      const result = json().parse('{"n":1e309}');
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Not a valid JSON: number out of range." },
+        ]);
+      }
+    });
+
+    it("rejects arrays containing nested Infinity", () => {
+      const result = json().parse("[1e309]");
+      assert.ok(!result.success);
+    });
+
+    it("rejects deeply nested Infinity", () => {
+      const result = json().parse('{"a":{"b":[1e309]}}');
+      assert.ok(!result.success);
+    });
   });
 
   describe('parse() with rootType: "string"', () => {
@@ -18346,6 +18366,20 @@ describe("json()", () => {
       assert.throws(() => json().format(NaN), {
         name: "TypeError",
         message: "Expected a finite JSON number, but got NaN.",
+      });
+    });
+
+    it("throws TypeError for object containing Infinity", () => {
+      assert.throws(() => json().format({ n: Infinity }), {
+        name: "TypeError",
+        message: "Expected a finite JSON number, but got Infinity.",
+      });
+    });
+
+    it("throws TypeError for array containing Infinity", () => {
+      assert.throws(() => json().format([Infinity]), {
+        name: "TypeError",
+        message: "Expected a finite JSON number, but got Infinity.",
       });
     });
   });
