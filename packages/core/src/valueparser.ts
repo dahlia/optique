@@ -8322,8 +8322,10 @@ export function semVer(
 /**
  * Any JSON-serializable value.
  *
- * This type covers all values that can be round-tripped through
- * `JSON.stringify` and `JSON.parse` without loss.
+ * This type covers all values that `JSON.stringify` can serialize without
+ * error.  Note that certain JavaScript distinctions are not preserved
+ * through serialization: for example, `-0` serializes as `"0"`, so a
+ * round-trip through `format()` and `parse()` may return `0` instead.
  *
  * @since 1.1.0
  */
@@ -8525,8 +8527,8 @@ export function json(options?: JsonOptions): ValueParser<"sync", Json>;
  * @throws {TypeError} If `options.metavar` is provided but is an empty string.
  * @throws {TypeError} If `options.rootType` is provided but is not one of the
  *   six allowed values.
- * @throws {TypeError} If `options.placeholder` is a non-finite number
- *   (`Infinity`, `-Infinity`, or `NaN`).
+ * @throws {TypeError} If `options.placeholder` or any value nested within
+ *   it is a non-finite number (`Infinity`, `-Infinity`, or `NaN`).
  * @throws {TypeError} If `options.placeholder` is provided with a `rootType`
  *   but its JSON type does not match the `rootType`.
  * @throws {TypeError} If the returned parser's `format()` method is called
