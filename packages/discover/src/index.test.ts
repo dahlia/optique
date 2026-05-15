@@ -345,6 +345,39 @@ describe("runProgram()", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("shows nested leaf commands in root help output", async () => {
+    const dir = await makeTempDir();
+    let stdout = "";
+    try {
+      await writeCommand(dir, ["user", "add.ts"], "Add a user");
+      await writeCommand(dir, ["user", "remove.ts"], "Remove a user");
+
+      await assert.rejects(
+        () =>
+          runProgram({
+            dir,
+            extensions: [".ts"],
+            metadata: { name: "tool", version: "1.0.0" },
+            args: ["--help"],
+            stdout(text) {
+              stdout += `${text}\n`;
+            },
+            stderr() {},
+            onExit(exitCode): never {
+              throw new ExitSignal(exitCode);
+            },
+          }),
+        ExitSignal,
+      );
+
+      assert.match(stdout, /Usage: tool user add/);
+      assert.match(stdout, /user add\s+Add a user command\./);
+      assert.match(stdout, /user remove\s+Remove a user command\./);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 class ExitSignal extends Error {

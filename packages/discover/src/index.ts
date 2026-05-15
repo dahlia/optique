@@ -497,6 +497,23 @@ function withRootDocs(
   metadata: ProgramHelpMetadata,
 ): Parser<Mode, ProgramInvocation, unknown> {
   const rootState = parser.initialState;
+  const rootDocs = (): DocFragments => ({
+    brief: metadata.brief,
+    description: metadata.description,
+    footer: metadata.footer,
+    fragments: [{
+      type: "section",
+      entries: commands.map((entry) => ({
+        term: {
+          type: "command",
+          name: entry.path.join(" "),
+          hidden: entry.command.metadata?.hidden,
+        },
+        description: entry.command.metadata?.brief ??
+          entry.command.metadata?.description,
+      })),
+    }],
+  });
   return {
     ...parser,
     getDocFragments(
@@ -504,26 +521,10 @@ function withRootDocs(
       defaultValue?: ProgramInvocation,
     ): DocFragments {
       if (
-        state.kind === "available" &&
-        Object.is(state.state, rootState)
+        state.kind === "unavailable" ||
+        (state.kind === "available" && Object.is(state.state, rootState))
       ) {
-        return {
-          brief: metadata.brief,
-          description: metadata.description,
-          footer: metadata.footer,
-          fragments: [{
-            type: "section",
-            entries: commands.map((entry) => ({
-              term: {
-                type: "command",
-                name: entry.path.join(" "),
-                hidden: entry.command.metadata?.hidden,
-              },
-              description: entry.command.metadata?.brief ??
-                entry.command.metadata?.description,
-            })),
-          }],
-        };
+        return rootDocs();
       }
       return parser.getDocFragments(state, defaultValue);
     },
