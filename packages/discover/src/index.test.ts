@@ -75,6 +75,26 @@ describe("discoverCommands()", () => {
     }
   });
 
+  it("returns commands sorted by command path after extension stripping", async () => {
+    const dir = await makeTempDir();
+    try {
+      await writeCommand(dir, ["a-zzz.ts"], "a-zzz");
+      await writeCommand(dir, ["a.cmd.ts"], "a");
+
+      const commands = await discoverCommands({
+        dir,
+        extensions: [".cmd.ts", ".ts"],
+      });
+
+      assert.deepEqual(commands.map((command) => command.path), [
+        ["a"],
+        ["a-zzz"],
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects duplicate command paths and file namespace conflicts", async () => {
     const duplicateDir = await makeTempDir();
     try {

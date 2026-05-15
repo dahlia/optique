@@ -234,7 +234,7 @@ export async function discoverCommands(
   }
 
   rejectPathConflicts(discovered);
-  return discovered;
+  return sortCommands(discovered);
 }
 
 /**
