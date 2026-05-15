@@ -396,6 +396,10 @@ interface CommandTreeNode {
   command?: AnyCommand;
 }
 
+type MutableSourceContext = {
+  -readonly [K in keyof SourceContext<unknown>]: SourceContext<unknown>[K];
+};
+
 function getRuntime(): "node" | "deno" | "bun" {
   if ("Deno" in globalThis) return "deno";
   if ("Bun" in globalThis) return "bun";
@@ -524,6 +528,12 @@ function commandPathKey(path: readonly string[]): string {
   return path.join("\0");
 }
 
+function isCommandPath(path: unknown): path is CommandPath {
+  return Array.isArray(path) &&
+    path.length > 0 &&
+    path.every((segment) => typeof segment === "string" && segment.length > 0);
+}
+
 function rejectPathConflicts(
   commands: readonly Pick<DiscoveredCommand, "path" | "filePath">[],
 ): void {
@@ -590,6 +600,11 @@ function staticCommandsToEntries(
     if (!isCommand(command)) {
       throw new TypeError(
         "Static command entries must be created with defineCommand().",
+      );
+    }
+    if (!isCommandPath(command.path)) {
+      throw new TypeError(
+        "Static command entries must declare a non-empty path.",
       );
     }
     return {
@@ -735,7 +750,7 @@ function unwrapProgramContexts(
 function wrapProgramContext(
   context: SourceContext<unknown>,
 ): SourceContext<unknown> {
-  const wrapped: SourceContext<unknown> = {
+  const wrapped: MutableSourceContext = {
     id: context.id,
     phase: context.phase,
     getAnnotations(request, options) {
@@ -746,33 +761,18 @@ function wrapProgramContext(
     },
   };
   if (context.getInternalAnnotations != null) {
-    Object.defineProperty(wrapped, "getInternalAnnotations", {
-      value(
-        request: SourceContextRequest,
-        annotations: Parameters<
-          NonNullable<SourceContext<unknown>["getInternalAnnotations"]>
-        >[1],
-      ) {
-        return context.getInternalAnnotations!(
-          unwrapProgramContextRequest(request) ?? request,
-          annotations,
-        );
-      },
-    });
+    wrapped.getInternalAnnotations = (request, annotations) => {
+      return context.getInternalAnnotations!(
+        unwrapProgramContextRequest(request) ?? request,
+        annotations,
+      );
+    };
   }
   if (context[Symbol.dispose] != null) {
-    Object.defineProperty(wrapped, Symbol.dispose, {
-      value() {
-        return context[Symbol.dispose]!();
-      },
-    });
+    wrapped[Symbol.dispose] = () => context[Symbol.dispose]!();
   }
   if (context[Symbol.asyncDispose] != null) {
-    Object.defineProperty(wrapped, Symbol.asyncDispose, {
-      value() {
-        return context[Symbol.asyncDispose]!();
-      },
-    });
+    wrapped[Symbol.asyncDispose] = () => context[Symbol.asyncDispose]!();
   }
   return wrapped;
 }

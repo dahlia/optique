@@ -625,6 +625,31 @@ describe("runProgram()", () => {
     );
   });
 
+  it("rejects static commands without declared paths", async () => {
+    const command = defineCommand({
+      parser: object({}),
+      handler() {},
+    });
+
+    await assert.rejects(
+      () =>
+        runProgram({
+          commands: [command] as never,
+          metadata: { name: "tool" },
+          args: ["build"],
+          stdout() {},
+          stderr() {},
+          onExit(exitCode): never {
+            throw new Error(`Unexpected exit ${exitCode}.`);
+          },
+        }),
+      {
+        name: "TypeError",
+        message: "Static command entries must declare a non-empty path.",
+      },
+    );
+  });
+
   it("runs the discovered command and waits for async handlers", async () => {
     const dir = await makeTempDir();
     const output = join(dir, "out.txt");
