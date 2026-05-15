@@ -21,8 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v4
-    - uses: jdx/mise-action@v2
+    - uses: actions/checkout@v6
+    - uses: jdx/mise-action@v4
     - run: mise run install
     - run: mise run check
 
@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - run: |
         wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
         sudo dpkg -i packages-microsoft-prod.deb
@@ -39,15 +39,16 @@ jobs:
         echo "deb https://apt.fury.io/nushell/ /" | sudo tee /etc/apt/sources.list.d/fury.list
         sudo apt-get update
         sudo apt-get install -y fish nushell powershell zsh
-    - uses: jdx/mise-action@v2
+    - uses: jdx/mise-action@v4
     - run: mise run install
     - run: deno task test --coverage --junit-path=junit.xml
     - if: ${{ !cancelled() }}
-      uses: codecov/test-results-action@v1
+      uses: codecov/codecov-action@v6
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: junit.xml
-    - uses: codecov/codecov-action@v5
+        report_type: test_results
+    - uses: codecov/codecov-action@v6
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: coverage/lcov.info
@@ -56,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - run: |
         wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
         sudo dpkg -i packages-microsoft-prod.deb
@@ -65,7 +66,7 @@ jobs:
         echo "deb https://apt.fury.io/nushell/ /" | sudo tee /etc/apt/sources.list.d/fury.list
         sudo apt-get update
         sudo apt-get install -y fish nushell powershell zsh
-    - uses: jdx/mise-action@v2
+    - uses: jdx/mise-action@v4
     - run: mise run install
     - run: mise run test:node
 
@@ -73,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - run: |
         wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
         sudo dpkg -i packages-microsoft-prod.deb
@@ -82,7 +83,7 @@ jobs:
         echo "deb https://apt.fury.io/nushell/ /" | sudo tee /etc/apt/sources.list.d/fury.list
         sudo apt-get update
         sudo apt-get install -y fish nushell powershell zsh
-    - uses: jdx/mise-action@v2
+    - uses: jdx/mise-action@v4
     - run: mise run install
     - run: mise run test:bun
 
@@ -94,8 +95,8 @@ jobs:
       contents: read
       id-token: write
     steps:
-    - uses: actions/checkout@v4
-    - uses: jdx/mise-action@v2
+    - uses: actions/checkout@v6
+    - uses: jdx/mise-action@v4
     - run: mise run install
     - run: |
         set -ex
@@ -143,8 +144,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-    - uses: actions/checkout@v4
-    - uses: jdx/mise-action@v2
+    - uses: actions/checkout@v6
+    - uses: jdx/mise-action@v4
     - run: mise run install
     - run: |
         set -ex
@@ -170,14 +171,14 @@ jobs:
         ALGOLIA_API_KEY: ${{ secrets.ALGOLIA_API_KEY }}
         ALGOLIA_INDEX_NAME: ${{ secrets.ALGOLIA_INDEX_NAME }}
       working-directory: docs
-    - uses: actions/upload-pages-artifact@v3
+    - uses: actions/upload-pages-artifact@v5
       with:
         path: docs/.vitepress/dist
     - id: deployment
       if: github.ref_type == 'tag'
-      uses: actions/deploy-pages@v4
+      uses: actions/deploy-pages@v5
     - if: github.ref_type == 'branch'
-      uses: cloudflare/wrangler-action@v3
+      uses: cloudflare/wrangler-action@v4
       with:
         apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
