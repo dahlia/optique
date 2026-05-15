@@ -17937,8 +17937,10 @@ describe("json()", () => {
     it("empty metavar throws TypeError", () => {
       assert.throws(
         () => json({ metavar: "" as NonEmptyString }),
-        TypeError,
-        "Expected a non-empty string.",
+        {
+          name: "TypeError",
+          message: "Expected a non-empty string.",
+        },
       );
     });
 
