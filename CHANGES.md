@@ -110,6 +110,18 @@ To be released.
 [#816]: https://github.com/dahlia/optique/pull/816
 [#817]: https://github.com/dahlia/optique/pull/817
 
+### @optique/discover
+
+ -  Added the new *@optique/discover* package for runtime-aware command module
+    discovery.  Command modules export `defineCommand()` definitions containing
+    parser, metadata, and handler logic; `runProgram()` scans a command
+    directory, builds a nested parser tree, enables help/version/completion via
+    *@optique/run*, and dispatches to the selected command handler.
+    [[#812], [#818]]
+
+[#812]: https://github.com/dahlia/optique/issues/812
+[#818]: https://github.com/dahlia/optique/pull/818
+
 ### @optique/env
 
  -  `bindEnv()` now emits a distinct error message when other source contexts
@@ -121,6 +133,13 @@ To be released.
  -  `bindConfig()` now emits a distinct error message when other source
     contexts are registered via `run()`'s `contexts` option but the config
     context is not included.  [[#803], [#805]]
+
+### @optique/temporal
+
+ -  Fixed single-segment time zone parsing on runtimes whose Temporal
+    implementation rejects curated IANA links such as `CET`.  The curated
+    cross-runtime allowlist is now applied before runtime Temporal validation
+    for single-segment identifiers.  [[#818]]
 
 
 Version 1.0.2

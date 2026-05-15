@@ -59,6 +59,7 @@ const CONCEPTS = {
     { text: "Inter-option dependencies", link: "/concepts/dependencies" },
     { text: "Shell completion", link: "/concepts/completion" },
     { text: "Man pages", link: "/concepts/man" },
+    { text: "Command discovery", link: "/concepts/discover" },
     { text: "Messages", link: "/concepts/messages" },
     { text: "Runners and execution", link: "/concepts/runners" },
     { text: "Runtime context extension", link: "/concepts/extend" },
@@ -84,6 +85,10 @@ const REFERENCES = {
   items: [
     { text: "@optique/core", link: "https://jsr.io/@optique/core/doc" },
     { text: "@optique/run", link: "https://jsr.io/@optique/run/doc" },
+    {
+      text: "@optique/discover",
+      link: "https://jsr.io/@optique/discover/doc",
+    },
     { text: "@optique/man", link: "https://jsr.io/@optique/man/doc" },
     { text: "@optique/env", link: "https://jsr.io/@optique/env/doc" },
     { text: "@optique/config", link: "https://jsr.io/@optique/config/doc" },

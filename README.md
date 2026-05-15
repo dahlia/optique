@@ -46,6 +46,8 @@ Why Optique
     (with *@optique/man*) man pages from the same parser definition.
  -  *Practical integrations*: Extend parsers with config files, environment
     variables, schema validators, interactive prompts, and git-aware parsing.
+ -  *Command discovery*: Split larger command trees into files with
+    *@optique/discover* while keeping parser-driven help and completion.
  -  *Cross-runtime consistency*: Use the same parser model in Deno, Node.js,
     and Bun.
 
@@ -75,6 +77,8 @@ Features
     that validate against external sources like git refs or remote APIs
  -  *Man page generation*: Generate Unix man pages directly from parser
     definitions (via *@optique/man*), keeping documentation always in sync
+ -  *Command discovery*: Discover command modules from a directory and dispatch
+    to type-checked handlers (via *@optique/discover*)
  -  *Shell completion*: Automatic completion script generation for Bash, zsh,
     fish, PowerShell, and Nushell
  -  *Smart error messages*: “Did you mean?” suggestions for typos with
@@ -182,6 +186,7 @@ The following is a list of the available packages:
 | ---------------------------------------- | ---------------------------- | ---------------------------- | -------------------------------------------- |
 | [@optique/core](/packages/core/)         | [JSR][jsr:@optique/core]     | [npm][npm:@optique/core]     | Shared types and parser combinators          |
 | [@optique/run](/packages/run/)           | [JSR][jsr:@optique/run]      | [npm][npm:@optique/run]      | Runner for Node.js/Deno/Bun                  |
+| [@optique/discover](/packages/discover/) | [JSR][jsr:@optique/discover] | [npm][npm:@optique/discover] | Runtime-aware command discovery              |
 | [@optique/config](/packages/config/)     | [JSR][jsr:@optique/config]   | [npm][npm:@optique/config]   | Config file support with [Standard Schema]   |
 | [@optique/env](/packages/env/)           | [JSR][jsr:@optique/env]      | [npm][npm:@optique/env]      | Environment variable integration             |
 | [@optique/git](/packages/git/)           | [JSR][jsr:@optique/git]      | [npm][npm:@optique/git]      | Git reference parsers (branches, tags, etc)  |
@@ -196,6 +201,8 @@ The following is a list of the available packages:
 [npm:@optique/core]: https://www.npmjs.com/package/@optique/core
 [jsr:@optique/run]: https://jsr.io/@optique/run
 [npm:@optique/run]: https://www.npmjs.com/package/@optique/run
+[jsr:@optique/discover]: https://jsr.io/@optique/discover
+[npm:@optique/discover]: https://www.npmjs.com/package/@optique/discover
 [jsr:@optique/config]: https://jsr.io/@optique/config
 [npm:@optique/config]: https://www.npmjs.com/package/@optique/config
 [Standard Schema]: https://standardschema.dev/

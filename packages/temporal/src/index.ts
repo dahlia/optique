@@ -857,20 +857,11 @@ export function timeZone(
     parse(input: string): ValueParserResult<TimeZone> {
       ensureTemporal();
       try {
-        // Validate by creating a ZonedDateTime with this timezone
-        // This will throw if the timezone is invalid
-        Temporal.ZonedDateTime.from({
-          year: 2020,
-          month: 1,
-          day: 1,
-          timeZone: input,
-        });
         // For single-segment identifiers (no "/"), only accept those
         // in the curated allowlist to ensure cross-runtime consistency.
-        // Some Temporal implementations accept identifiers (e.g.,
-        // "Factory") that others reject.  The lookup is
-        // case-insensitive and normalizes to canonical casing so the
-        // returned value is always a valid SingleSegmentTimeZone member.
+        // Some Temporal implementations reject allowlisted links such as
+        // "CET", while others accept additional identifiers like "Factory".
+        // The lookup is case-insensitive and normalizes to canonical casing.
         if (!input.includes("/")) {
           const canonical = singleSegmentTimeZoneLookup.get(
             input.toLowerCase(),
@@ -880,6 +871,15 @@ export function timeZone(
           }
           return { success: true, value: canonical };
         }
+
+        // Validate by creating a ZonedDateTime with this timezone
+        // This will throw if the timezone is invalid
+        Temporal.ZonedDateTime.from({
+          year: 2020,
+          month: 1,
+          day: 1,
+          timeZone: input,
+        });
         return { success: true, value: input as TimeZone };
       } catch {
         return {

@@ -60,6 +60,9 @@ importers:
       '@optique/core':
         specifier: 'workspace:'
         version: link:../packages/core
+      '@optique/discover':
+        specifier: 'workspace:'
+        version: link:../packages/discover
       '@optique/env':
         specifier: 'workspace:'
         version: link:../packages/env
@@ -179,6 +182,25 @@ importers:
       fast-check:
         specifier: 'catalog:'
         version: 4.7.0
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.13.0(typescript@5.8.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+
+  packages/discover:
+    dependencies:
+      '@optique/core':
+        specifier: workspace:*
+        version: link:../core
+      '@optique/run':
+        specifier: workspace:*
+        version: link:../run
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 20.19.9
       tsdown:
         specifier: 'catalog:'
         version: 0.13.0(typescript@5.8.3)

@@ -1,0 +1,82 @@
+{
+  "name": "@optique/discover",
+  "version": "1.1.0",
+  "description": "Runtime-aware command discovery for Optique CLI programs",
+  "keywords": [
+    "CLI",
+    "command-line",
+    "commandline",
+    "parser",
+    "commands",
+    "discovery"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "Hong Minhee",
+    "email": "hong@minhee.org",
+    "url": "https://hongminhee.org/"
+  },
+  "homepage": "https://optique.dev/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dahlia/optique.git",
+    "directory": "packages/discover/"
+  },
+  "bugs": {
+    "url": "https://github.com/dahlia/optique/issues"
+  },
+  "funding": [
+    "https://github.com/sponsors/dahlia"
+  ],
+  "engines": {
+    "node": ">=20.0.0",
+    "bun": ">=1.2.0",
+    "deno": ">=2.3.0"
+  },
+  "files": [
+    "dist/",
+    "package.json",
+    "README.md"
+  ],
+  "type": "module",
+  "module": "./dist/index.js",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts"
+      },
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./command": {
+      "types": {
+        "import": "./dist/command.d.ts",
+        "require": "./dist/command.d.cts"
+      },
+      "import": "./dist/command.js",
+      "require": "./dist/command.cjs"
+    }
+  },
+  "sideEffects": false,
+  "dependencies": {
+    "@optique/core": "workspace:*",
+    "@optique/run": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "prepack": "tsdown",
+    "prepublish": "tsdown",
+    "test": "node --experimental-transform-types --test",
+    "test:bun": "bun test",
+    "test:deno": "deno test --allow-read --allow-write --allow-env",
+    "test-all": "tsdown && node --experimental-transform-types --test && bun test && deno test --allow-read --allow-write --allow-env"
+  }
+}
