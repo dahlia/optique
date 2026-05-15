@@ -8322,10 +8322,10 @@ export function semVer(
 /**
  * Any JSON-serializable value.
  *
- * This type covers all values that `JSON.stringify` can serialize without
- * error.  Note that certain JavaScript distinctions are not preserved
- * through serialization: for example, `-0` serializes as `"0"`, so a
- * round-trip through `format()` and `parse()` may return `0` instead.
+ * This type is a TypeScript approximation of JSON data values.  Note that
+ * certain JavaScript distinctions are not preserved through serialization:
+ * for example, `-0` serializes as `"0"`, so a round-trip through
+ * `format()` and `parse()` may return `0` instead.
  *
  * @since 1.1.0
  */

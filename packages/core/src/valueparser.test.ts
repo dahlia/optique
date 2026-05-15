@@ -18089,10 +18089,13 @@ describe("json()", () => {
       assert.ok(!result.success);
       if (!result.success) {
         const msg = result.error;
+        const prefix = "Not a valid JSON:";
+        const firstText = Array.isArray(msg) && msg[0]?.type === "text"
+          ? (msg[0].text as string)
+          : "";
         assert.ok(
-          Array.isArray(msg) && msg[0].type === "text" &&
-            (msg[0].text as string).startsWith("Not a valid JSON:"),
-          `Expected error to start with "Not a valid JSON:", got: ${
+          firstText.startsWith(prefix) && firstText.length > prefix.length,
+          `Expected error to start with "${prefix}" followed by SyntaxError detail, got: ${
             JSON.stringify(msg)
           }`,
         );
