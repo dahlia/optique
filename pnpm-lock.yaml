@@ -60,6 +60,9 @@ importers:
       '@optique/core':
         specifier: 'workspace:'
         version: link:../packages/core
+      '@optique/discover':
+        specifier: 'workspace:'
+        version: link:../packages/discover
       '@optique/env':
         specifier: 'workspace:'
         version: link:../packages/env

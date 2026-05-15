@@ -132,6 +132,9 @@ Architecture
  -  *@optique/run* (*packages/run/*): CLI integration wrapper.  Provides
     process-integrated `run()` function, argument reading from `process.argv`
     or `Deno.args`, and `process.exit()` handling.
+ -  *@optique/discover* (*packages/discover/*): Runtime-aware command
+    discovery.  Provides `defineCommand()` and `runProgram()` for file-based
+    command modules with handler dispatch.
  -  *@optique/config* (*packages/config/*): Configuration file integration.
     Provides `createConfigContext()` and `bindConfig()` for config fallbacks.
  -  *@optique/env* (*packages/env/*): Environment variable integration.
