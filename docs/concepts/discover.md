@@ -129,15 +129,15 @@ suffix.  Compound suffixes are supported, so `user/add.cmd.ts` can become
 
 By default, *@optique/discover* chooses extensions for the current runtime:
 
-| Runtime | Default extensions           |
-| ------- | ---------------------------- |
-| Deno    | `.ts`, `.mts`, `.js`, `.mjs` |
-| Bun     | `.ts`, `.mts`, `.js`, `.mjs` |
-| Node.js | `.js`, `.mjs`, `.cjs`        |
+| Runtime | Default extensions                                  |
+| ------- | --------------------------------------------------- |
+| Deno    | `.ts`, `.mts`, `.js`, `.mjs`                        |
+| Bun     | `.ts`, `.mts`, `.js`, `.mjs`                        |
+| Node.js | `.js`, `.mjs`, `.cjs`, and sometimes TypeScript too |
 
 Node.js also includes `.ts`, `.mts`, and `.cts` when it appears to be running
-with a TypeScript loader such as `tsx`, `ts-node`, `tsimp`, or `jiti`, or with
-Node's built-in type-stripping flags.
+with native TypeScript support, a TypeScript loader such as `tsx`, `ts-node`,
+`tsimp`, or `jiti`, or Node's built-in type-stripping flags.
 
 TypeScript declaration files (`.d.ts`, `.d.mts`, and `.d.cts`) are ignored even
 when their suffix matches the configured extension list.

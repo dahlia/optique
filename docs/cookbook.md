@@ -1691,6 +1691,88 @@ sensible fallbacks and [`optional()`](./concepts/modifiers.md#optional-parser)
 when absence is meaningful.
 
 
+Application structure patterns
+------------------------------
+
+These recipes use packages that sit above individual parsers and help shape a
+larger CLI application.
+
+### File-based command discovery
+
+When a command tree grows beyond a handful of branches, keeping every command
+inside one `or(command(...))` expression can make the entry point do too much.
+The *@optique/discover* package lets each command live in its own module with
+its parser, help metadata, and handler.
+
+Put command modules under a directory:
+
+~~~~ typescript twoslash
+// commands/build.ts
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { withDefault } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { defineCommand } from "@optique/discover/command";
+
+export default defineCommand({
+  parser: object({
+    target: withDefault(option("--target", string()), "app"),
+  }),
+  metadata: {
+    brief: message`Build the project.`,
+  },
+  handler(value) {
+    console.log(`Building ${value.target}.`);
+  },
+});
+~~~~
+
+Then point `runProgram()` at the command directory:
+
+~~~~ typescript twoslash
+import { message } from "@optique/core/message";
+import { runProgram } from "@optique/discover";
+
+await runProgram({
+  dir: new URL("./commands/", import.meta.url),
+  metadata: {
+    name: "tasks",
+    version: "1.0.0",
+    brief: message`Project task runner.`,
+  },
+});
+~~~~
+
+With this layout:
+
+~~~~ text
+commands/
+  build.ts
+  deploy.ts
+  release/
+    notes.ts
+~~~~
+
+the file paths become command paths:
+
+~~~~ bash
+tasks build
+tasks deploy
+tasks release notes
+~~~~
+
+Use this pattern when the command module is the natural unit of ownership.
+It keeps the root file focused on program metadata and runner configuration,
+while each command file owns the parser and the code that acts on its parsed
+value.  The discovered program still gets the usual *@optique/run* help,
+version, and shell completion behavior.
+
+The repository also includes a runnable version of this pattern in
+`examples/patterns/command-discovery.ts`.  For the full API details, see
+[command discovery](./concepts/discover.md).
+
+
 Integration patterns
 --------------------
 
