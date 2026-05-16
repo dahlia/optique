@@ -31,6 +31,7 @@
     "preview": "vitepress preview"
   },
   "dependencies": {
+    "wrangler": "^4",
     "yaml": "^2.8.2"
   }
 }
