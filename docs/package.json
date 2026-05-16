@@ -14,7 +14,7 @@
     "@optique/zod": "workspace:",
     "@optique/inquirer": "workspace:",
     "@shikijs/vitepress-twoslash": "^3.20.0",
-    "@types/node": "catalog:",
+    "@types/node": "^20.19.9",
     "arktype": "^2.1.29",
     "markdown-it-deflist": "^3.0.0",
     "markdown-it-footnote": "^4.0.0",
