@@ -7052,6 +7052,7 @@ function shouldAdvanceSeqBeforeParse(
   }
   const token = currentContext.buffer[0];
   if (token === "--") return true;
+  if (currentContext.state.states[index] !== parser.initialState) return false;
   const laterLeadingCandidates = leadingCandidatesAfter(parsers, index + 1);
   return tokenMatchesLeadingName(token, laterLeadingCandidates);
 }
@@ -8897,10 +8898,7 @@ export function seq<
 
       if (!result.success) {
         if (result.consumed > 0) return result;
-        if (
-          currentContext.buffer.length < 1 &&
-          !parserCanSkipAt(parser, parserState, currentContext.exec, index)
-        ) {
+        if (!parserCanSkipAt(parser, parserState, currentContext.exec, index)) {
           return result;
         }
         currentContext = advanceSeqContext(currentContext, index + 1, false);
@@ -8975,10 +8973,7 @@ export function seq<
 
       if (!result.success) {
         if (result.consumed > 0) return result;
-        if (
-          currentContext.buffer.length < 1 &&
-          !parserCanSkipAt(parser, parserState, currentContext.exec, index)
-        ) {
+        if (!parserCanSkipAt(parser, parserState, currentContext.exec, index)) {
           return result;
         }
         currentContext = advanceSeqContext(currentContext, index + 1, false);

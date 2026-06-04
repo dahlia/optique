@@ -22054,6 +22054,70 @@ describe("seq", () => {
     assert.equal(calls, 1);
   });
 
+  it("should not skip a non-skippable parser on no-match", () => {
+    const required = createSyncBranchParser(
+      undefined,
+      () => ({
+        success: false,
+        consumed: 0,
+        error: message`Expected required input.`,
+      }),
+      "default",
+    );
+    const parser = seq(required, command("run", object({})));
+
+    const result = parseSync(parser, ["run"]);
+
+    assert.equal(result.success, false);
+    assertErrorIncludes(result.error, "required input");
+  });
+
+  it("should not skip an async non-skippable parser on no-match", async () => {
+    const required = toAsyncParser(
+      createSyncBranchParser(
+        undefined,
+        () => ({
+          success: false,
+          consumed: 0,
+          error: message`Expected required input.`,
+        }),
+        "default",
+      ),
+    );
+    const parser = seq(required, command("run", object({})));
+
+    const result = await parseAsync(parser, ["run"]);
+
+    assert.equal(result.success, false);
+    assertErrorIncludes(result.error, "required input");
+  });
+
+  it("should keep active child precedence over later options", () => {
+    const parser = seq(
+      command("deploy", object({ inner: option("--force") })),
+      option("--force"),
+    );
+
+    assert.deepEqual(parseSync(parser, ["deploy", "--force"]), {
+      success: true,
+      value: [{ inner: true }, false],
+    });
+  });
+
+  it("should keep async active child precedence over later options", async () => {
+    const parser = seq(
+      toAsyncParser(
+        command("deploy", object({ inner: option("--force") })),
+      ),
+      option("--force"),
+    );
+
+    assert.deepEqual(await parseAsync(parser, ["deploy", "--force"]), {
+      success: true,
+      value: [{ inner: true }, false],
+    });
+  });
+
   it("should suggest from the active sequential position", () => {
     const parser = seq(
       option("--name", string()),
