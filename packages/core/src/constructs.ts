@@ -9252,20 +9252,54 @@ export function seq<
             context,
             syncParsers,
           );
+          const runtime = createDependencyRuntimeContext(
+            advancedContext.dependencyRegistry?.clone(),
+          );
           const state = advancedContext.state;
+          const stateArray = state.states as unknown[];
+          const nodes = buildSuggestRuntimeNodesFromArray(
+            syncParsers,
+            stateArray,
+            advancedContext.exec?.path,
+          );
+          collectExplicitSourceValues(nodes, runtime);
+          fillMissingSourceDefaults(nodes, runtime);
+          collectSourcesFromState(stateArray, runtime);
+          completeDependencySourceDefaults(
+            {
+              ...advancedContext,
+              state: createAnnotatedArrayStateRecord(stateArray),
+            },
+            buildIndexedParserPairs(syncParsers),
+            runtime.registry,
+            advancedContext.exec,
+          );
+          const contextWithRegistry = {
+            ...advancedContext,
+            dependencyRegistry: runtime.registry,
+            ...(advancedContext.exec != null
+              ? {
+                exec: {
+                  ...advancedContext.exec,
+                  dependencyRuntime: runtime,
+                  dependencyRegistry: runtime.registry,
+                },
+              }
+              : {}),
+          };
           for (let i = state.index; i < syncParsers.length; i++) {
             const parser = syncParsers[i];
             const parserState = getSeqChildState(state, i, parser);
             suggestions.push(
               ...parser.suggest(
-                withChildContext(advancedContext, i, parserState, parser),
+                withChildContext(contextWithRegistry, i, parserState, parser),
                 prefix,
               ),
             );
             if (
               parser.canSkip?.(
                 parserState,
-                withChildExecPath(advancedContext.exec, i),
+                withChildExecPath(contextWithRegistry.exec, i),
               ) !== true
             ) {
               break;
@@ -9279,12 +9313,46 @@ export function seq<
             context,
             parsers,
           );
+          const runtime = createDependencyRuntimeContext(
+            advancedContext.dependencyRegistry?.clone(),
+          );
           const state = advancedContext.state;
+          const stateArray = state.states as unknown[];
+          const nodes = buildSuggestRuntimeNodesFromArray(
+            parsers,
+            stateArray,
+            advancedContext.exec?.path,
+          );
+          await collectExplicitSourceValuesAsync(nodes, runtime);
+          await fillMissingSourceDefaultsAsync(nodes, runtime);
+          collectSourcesFromState(stateArray, runtime);
+          await completeDependencySourceDefaultsAsync(
+            {
+              ...advancedContext,
+              state: createAnnotatedArrayStateRecord(stateArray),
+            },
+            buildIndexedParserPairs(parsers),
+            runtime.registry,
+            advancedContext.exec,
+          );
+          const contextWithRegistry = {
+            ...advancedContext,
+            dependencyRegistry: runtime.registry,
+            ...(advancedContext.exec != null
+              ? {
+                exec: {
+                  ...advancedContext.exec,
+                  dependencyRuntime: runtime,
+                  dependencyRegistry: runtime.registry,
+                },
+              }
+              : {}),
+          };
           for (let i = state.index; i < parsers.length; i++) {
             const parser = parsers[i];
             const parserState = getSeqChildState(state, i, parser);
             const parserSuggestions = parser.suggest(
-              withChildContext(advancedContext, i, parserState, parser),
+              withChildContext(contextWithRegistry, i, parserState, parser),
               prefix,
             );
             if (parser.mode === "async") {
@@ -9301,7 +9369,7 @@ export function seq<
             if (
               parser.canSkip?.(
                 parserState,
-                withChildExecPath(advancedContext.exec, i),
+                withChildExecPath(contextWithRegistry.exec, i),
               ) !== true
             ) {
               break;

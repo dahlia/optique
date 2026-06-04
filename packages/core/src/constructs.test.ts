@@ -72,6 +72,7 @@ import {
   type ValueParser,
   type ValueParserResult,
 } from "@optique/core/valueparser";
+import type { NonEmptyString } from "@optique/core/nonempty";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
@@ -22101,6 +22102,33 @@ describe("seq", () => {
     }]);
   });
 
+  it("should use dependency source values in suggestions", () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value) =>
+        choice(
+          value === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = seq(
+      option("--mode", mode),
+      option("--level", level),
+    );
+
+    assert.deepEqual(
+      suggestSync(parser, ["--mode", "prod", "--level", "s"]),
+      [
+        { kind: "literal", text: "silent" },
+        { kind: "literal", text: "strict" },
+      ],
+    );
+  });
+
   it("should preserve async skippable child suggestions at the cursor", async () => {
     const parser = seq(
       optional(option("--name", string())),
@@ -22111,6 +22139,63 @@ describe("seq", () => {
       kind: "literal",
       text: "--name",
     }]);
+  });
+
+  it("should use async dependency source values in suggestions", async () => {
+    function asyncChoice<T extends string>(
+      choices: readonly T[],
+    ): ValueParser<"async", T> {
+      return {
+        mode: "async",
+        metavar: "ASYNC_CHOICE" as NonEmptyString,
+        placeholder: choices[0],
+        parse(input: string): Promise<ValueParserResult<T>> {
+          return Promise.resolve(
+            choices.includes(input as T)
+              ? { success: true, value: input as T }
+              : {
+                success: false,
+                error: message`Must be one of: ${choices.join(", ")}`,
+              },
+          );
+        },
+        format(value: T): string {
+          return value;
+        },
+        async *suggest(prefix: string): AsyncIterable<Suggestion> {
+          for (const choice of choices) {
+            if (choice.startsWith(prefix)) {
+              yield { kind: "literal", text: choice };
+            }
+          }
+        },
+      };
+    }
+
+    const mode = dependency(asyncChoice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "async",
+      factory: (value) =>
+        asyncChoice(
+          value === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = seq(
+      option("--mode", mode),
+      option("--level", level),
+    );
+
+    assert.deepEqual(
+      await suggestAsync(parser, ["--mode", "prod", "--level", "s"]),
+      [
+        { kind: "literal", text: "silent" },
+        { kind: "literal", text: "strict" },
+      ],
+    );
   });
 
   it("should preserve invalid value errors during completion", () => {
