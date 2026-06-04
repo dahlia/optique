@@ -6790,6 +6790,491 @@ export interface TupleOptions {
   readonly allowDuplicates?: boolean;
 }
 
+/**
+ * Options for the {@link seq} parser.
+ * @since 1.1.0
+ */
+export interface SeqOptions {
+  /**
+   * When `true`, allows duplicate option names even when they can be active
+   * at the same sequential position. By default (`false`), duplicate option
+   * names at the same position cause a construction-time error.
+   *
+   * @default `false`
+   * @since 1.1.0
+   */
+  readonly allowDuplicates?: boolean;
+}
+
+type SeqTailOptions = SeqOptions & { readonly $valueType?: never };
+
+interface SeqState {
+  readonly index: number;
+  readonly states: readonly unknown[];
+}
+
+function isParserLike(value: unknown): value is Parser<Mode, unknown, unknown> {
+  return value != null &&
+    typeof value === "object" &&
+    "parse" in value &&
+    "$valueType" in value &&
+    "$stateType" in value;
+}
+
+function tokenMatchesLeadingName(
+  token: string | undefined,
+  names: ReadonlySet<string>,
+): boolean {
+  if (token == null) return false;
+  for (const name of names) {
+    if (token === name || token.startsWith(`${name}=`)) return true;
+  }
+  return false;
+}
+
+function parserCanSkipAt(
+  parser: Parser<Mode, unknown, unknown>,
+  state: unknown,
+  exec: ExecutionContext | undefined,
+  index: number,
+): boolean {
+  return parser.canSkip?.(
+    getAnnotatedChildState(undefined, state, parser),
+    withChildExecPath(exec, index),
+  ) === true;
+}
+
+function sequenceLeadingNames(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+): ReadonlySet<string> {
+  const names = new Set<string>();
+  let positionalBlocked = false;
+  for (let i = 0; i < parsers.length; i++) {
+    const parser = parsers[i];
+    for (const name of parser.leadingNames) {
+      if (positionalBlocked && !name.startsWith("-")) continue;
+      names.add(name);
+    }
+    if (parser.acceptingAnyToken) positionalBlocked = true;
+    if (!parserCanSkipAt(parser, parser.initialState, undefined, i)) break;
+  }
+  return names.size === 0 ? EMPTY_LEADING_NAMES : names;
+}
+
+function leadingNamesAfter(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+  startIndex: number,
+): ReadonlySet<string> {
+  return sequenceLeadingNames(parsers.slice(startIndex));
+}
+
+function checkSequentialDuplicateOptionNames(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+): void {
+  const active = new Map<string, (string | symbol)[]>();
+  for (let i = 0; i < parsers.length; i++) {
+    const parser = parsers[i];
+    const optionNames = new Set<string>();
+    collectLeadingCandidates(parser.usage, optionNames, new Set());
+    for (const name of optionNames) {
+      const sources = active.get(name);
+      if (sources != null) {
+        throw new DuplicateOptionError(name, [...sources, String(i)]);
+      }
+    }
+    for (const name of optionNames) {
+      const sources = active.get(name);
+      active.set(name, sources == null ? [String(i)] : [...sources, String(i)]);
+    }
+    if (!parserCanSkipAt(parser, parser.initialState, undefined, i)) {
+      active.clear();
+    }
+  }
+}
+
+function createSeqState(
+  sourceState: unknown,
+  index: number,
+  states: readonly unknown[],
+): SeqState {
+  return {
+    index,
+    states: annotateFreshArray(sourceState, states),
+  };
+}
+
+function getSeqChildState(
+  seqState: SeqState,
+  index: number,
+  parser: Parser<Mode, unknown, unknown>,
+): unknown {
+  return getAnnotatedChildState(
+    seqState.states,
+    seqState.states[index],
+    parser,
+  );
+}
+
+function updateSeqChildState(
+  sourceState: SeqState,
+  index: number,
+  childState: unknown,
+  parser: Parser<Mode, unknown, unknown>,
+): readonly unknown[] {
+  return annotateFreshArray(
+    sourceState.states,
+    sourceState.states.map((state, stateIndex) =>
+      stateIndex === index
+        ? getAnnotatedChildState(sourceState.states, childState, parser)
+        : state
+    ),
+  );
+}
+
+function shouldAdvanceSeqBeforeParse(
+  parser: Parser<Mode, unknown, unknown>,
+  parserState: unknown,
+  currentContext: ParserContext<SeqState>,
+  index: number,
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+): boolean {
+  if (!parserCanSkipAt(parser, parserState, currentContext.exec, index)) {
+    return false;
+  }
+  const token = currentContext.buffer[0];
+  if (token === "--") return true;
+  const laterLeadingNames = leadingNamesAfter(parsers, index + 1);
+  return tokenMatchesLeadingName(token, laterLeadingNames);
+}
+
+function advanceSeqContext(
+  currentContext: ParserContext<SeqState>,
+  nextIndex: number,
+  consumedTerminator: boolean,
+): ParserContext<SeqState> {
+  return {
+    ...currentContext,
+    buffer: consumedTerminator
+      ? currentContext.buffer.slice(1)
+      : currentContext.buffer,
+    optionsTerminated: consumedTerminator
+      ? true
+      : currentContext.optionsTerminated,
+    state: createSeqState(
+      currentContext.state,
+      nextIndex,
+      currentContext.state.states,
+    ),
+  };
+}
+
+function updateSeqContextFromChildResult(
+  currentContext: ParserContext<SeqState>,
+  index: number,
+  parser: Parser<Mode, unknown, unknown>,
+  result: Extract<ParserResult<unknown>, { readonly success: true }>,
+  nextIndex: number,
+): ParserContext<SeqState> {
+  const states = updateSeqChildState(
+    currentContext.state,
+    index,
+    result.next.state,
+    parser,
+  );
+  const mergedExec = mergeChildExec(currentContext.exec, result.next.exec);
+  return {
+    ...currentContext,
+    buffer: result.next.buffer,
+    optionsTerminated: result.next.optionsTerminated,
+    state: createSeqState(currentContext.state, nextIndex, states),
+    ...(mergedExec != null
+      ? {
+        exec: mergedExec,
+        dependencyRegistry: mergedExec.dependencyRegistry,
+      }
+      : {}),
+  };
+}
+
+function advanceSeqSuggestContextSync(
+  context: ParserContext<SeqState>,
+  parsers: readonly Parser<"sync", unknown, unknown>[],
+): ParserContext<SeqState> {
+  let currentContext = context;
+  while (currentContext.state.index < parsers.length) {
+    const index = currentContext.state.index;
+    const parser = parsers[index];
+    const parserState = getSeqChildState(currentContext.state, index, parser);
+
+    if (currentContext.buffer.length < 1) {
+      if (parserCanSkipAt(parser, parserState, currentContext.exec, index)) {
+        currentContext = advanceSeqContext(currentContext, index + 1, false);
+        continue;
+      }
+      break;
+    }
+
+    if (
+      shouldAdvanceSeqBeforeParse(
+        parser,
+        parserState,
+        currentContext,
+        index,
+        parsers,
+      )
+    ) {
+      const consumedTerminator = currentContext.buffer[0] === "--";
+      currentContext = advanceSeqContext(
+        currentContext,
+        index + 1,
+        consumedTerminator,
+      );
+      continue;
+    }
+
+    const result = parser.parse(
+      withChildContext(currentContext, index, parserState, parser),
+    );
+    if (!result.success) {
+      if (result.consumed > 0) break;
+      if (parserCanSkipAt(parser, parserState, currentContext.exec, index)) {
+        currentContext = advanceSeqContext(currentContext, index + 1, false);
+        continue;
+      }
+      break;
+    }
+    const nextIndex = result.consumed.length > 0 ? index : index + 1;
+    currentContext = updateSeqContextFromChildResult(
+      currentContext,
+      index,
+      parser,
+      result,
+      nextIndex,
+    );
+  }
+  return currentContext;
+}
+
+async function advanceSeqSuggestContextAsync(
+  context: ParserContext<SeqState>,
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+): Promise<ParserContext<SeqState>> {
+  let currentContext = context;
+  while (currentContext.state.index < parsers.length) {
+    const index = currentContext.state.index;
+    const parser = parsers[index];
+    const parserState = getSeqChildState(currentContext.state, index, parser);
+
+    if (currentContext.buffer.length < 1) {
+      if (parserCanSkipAt(parser, parserState, currentContext.exec, index)) {
+        currentContext = advanceSeqContext(currentContext, index + 1, false);
+        continue;
+      }
+      break;
+    }
+
+    if (
+      shouldAdvanceSeqBeforeParse(
+        parser,
+        parserState,
+        currentContext,
+        index,
+        parsers,
+      )
+    ) {
+      const consumedTerminator = currentContext.buffer[0] === "--";
+      currentContext = advanceSeqContext(
+        currentContext,
+        index + 1,
+        consumedTerminator,
+      );
+      continue;
+    }
+
+    const result = await parser.parse(
+      withChildContext(currentContext, index, parserState, parser),
+    );
+    if (!result.success) {
+      if (result.consumed > 0) break;
+      if (parserCanSkipAt(parser, parserState, currentContext.exec, index)) {
+        currentContext = advanceSeqContext(currentContext, index + 1, false);
+        continue;
+      }
+      break;
+    }
+    const nextIndex = result.consumed.length > 0 ? index : index + 1;
+    currentContext = updateSeqContextFromChildResult(
+      currentContext,
+      index,
+      parser,
+      result,
+      nextIndex,
+    );
+  }
+  return currentContext;
+}
+
+function createSeqComplete(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+  combinedMode: Mode,
+) {
+  const syncParsers = parsers as readonly Parser<"sync", unknown, unknown>[];
+  return (state: SeqState, exec?: ExecutionContext) =>
+    dispatchByMode(
+      combinedMode,
+      () => {
+        const stateArray = state.states as unknown[];
+        const runtime = exec?.dependencyRuntime ??
+          createDependencyRuntimeContext(exec?.dependencyRegistry);
+        const childExec: ExecutionContext = {
+          ...exec,
+          dependencyRuntime: runtime,
+        } as ExecutionContext;
+        const pairs = buildIndexedParserPairs(syncParsers);
+        const stateRecord = createAnnotatedArrayStateRecord(stateArray);
+        const preCompleted = preCompleteAndRegisterDependencies(
+          stateRecord,
+          pairs,
+          runtime.registry,
+          childExec,
+        );
+        collectExplicitSourceValues(
+          filterPreCompletedRuntimeNodes(
+            buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
+            new Set(preCompleted.keys()),
+          ),
+          runtime,
+        );
+        const phase3Exec: ExecutionContext = {
+          ...childExec,
+          preCompletedByParser: undefined,
+        } as ExecutionContext;
+        const resolvedArray = resolveStateWithRuntime(
+          stateArray,
+          runtime,
+        ) as unknown[];
+        const result: unknown[] = [];
+        const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+        let hasDeferred = false;
+        for (let i = 0; i < syncParsers.length; i++) {
+          const elementParser = syncParsers[i];
+          const preCompletedResult = preCompleted.get(String(i));
+          const valueResult = preCompletedResult !== undefined
+            ? unwrapCompleteResult(preCompletedResult)
+            : unwrapCompleteResult(
+              elementParser.complete(
+                prepareStateForCompletion(resolvedArray[i], elementParser),
+                withChildExecPath(phase3Exec, i),
+              ),
+            );
+          if (!valueResult.success) {
+            return { success: false as const, error: valueResult.error };
+          }
+          result[i] = valueResult.value;
+          if (valueResult.deferred) {
+            if (valueResult.deferredKeys) {
+              deferredKeys.set(i, valueResult.deferredKeys);
+            } else if (
+              valueResult.value == null ||
+              typeof valueResult.value !== "object"
+            ) {
+              deferredKeys.set(i, null);
+            } else {
+              hasDeferred = true;
+            }
+          }
+        }
+        return {
+          success: true as const,
+          value: result,
+          ...(deferredKeys.size > 0 || hasDeferred
+            ? {
+              deferred: true as const,
+              ...(deferredKeys.size > 0
+                ? { deferredKeys: deferredKeys as DeferredMap }
+                : {}),
+            }
+            : {}),
+        };
+      },
+      async () => {
+        const stateArray = state.states as unknown[];
+        const runtime = exec?.dependencyRuntime ??
+          createDependencyRuntimeContext(exec?.dependencyRegistry);
+        const childExec: ExecutionContext = {
+          ...exec,
+          dependencyRuntime: runtime,
+        } as ExecutionContext;
+        const pairs = buildIndexedParserPairs(parsers);
+        const stateRecord = createAnnotatedArrayStateRecord(stateArray);
+        const preCompleted = await preCompleteAndRegisterDependenciesAsync(
+          stateRecord,
+          pairs,
+          runtime.registry,
+          childExec,
+        );
+        await collectExplicitSourceValuesAsync(
+          filterPreCompletedRuntimeNodes(
+            buildRuntimeNodesFromArray(parsers, stateArray, exec?.path),
+            new Set(preCompleted.keys()),
+          ),
+          runtime,
+        );
+        const phase3Exec: ExecutionContext = {
+          ...childExec,
+          preCompletedByParser: undefined,
+        } as ExecutionContext;
+        const resolvedArray = await resolveStateWithRuntimeAsync(
+          stateArray,
+          runtime,
+        ) as unknown[];
+        const result: unknown[] = [];
+        const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+        let hasDeferred = false;
+        for (let i = 0; i < parsers.length; i++) {
+          const elementParser = parsers[i];
+          const preCompletedResult = preCompleted.get(String(i));
+          const valueResult = preCompletedResult !== undefined
+            ? unwrapCompleteResult(preCompletedResult)
+            : unwrapCompleteResult(
+              await elementParser.complete(
+                prepareStateForCompletion(resolvedArray[i], elementParser),
+                withChildExecPath(phase3Exec, i),
+              ),
+            );
+          if (!valueResult.success) {
+            return { success: false as const, error: valueResult.error };
+          }
+          result[i] = valueResult.value;
+          if (valueResult.deferred) {
+            if (valueResult.deferredKeys) {
+              deferredKeys.set(i, valueResult.deferredKeys);
+            } else if (
+              valueResult.value == null ||
+              typeof valueResult.value !== "object"
+            ) {
+              deferredKeys.set(i, null);
+            } else {
+              hasDeferred = true;
+            }
+          }
+        }
+        return {
+          success: true as const,
+          value: result,
+          ...(deferredKeys.size > 0 || hasDeferred
+            ? {
+              deferred: true as const,
+              ...(deferredKeys.size > 0
+                ? { deferredKeys: deferredKeys as DeferredMap }
+                : {}),
+            }
+            : {}),
+        };
+      },
+    );
+}
+
 function suggestTupleSync(
   context: ParserContext<readonly unknown[]>,
   prefix: string,
@@ -8144,6 +8629,667 @@ export function tuple<
 
   defineInheritedAnnotationParser(tupleParser);
   return tupleParser;
+}
+
+/**
+ * Creates an ordered parser that applies child parsers in declaration order.
+ *
+ * Unlike {@link tuple}, which lets child parsers compete for a shared input
+ * buffer by priority, `seq()` keeps a cursor and only parses the current child.
+ * A child may be skipped when its {@link Parser.canSkip} predicate reports
+ * that it can complete without consuming more CLI input.
+ *
+ * @template T A readonly array type where each element is a {@link Parser}.
+ * @param parsers Parsers to apply in the order they are provided.
+ * @returns A parser that produces a readonly tuple of child values.
+ * @since 1.1.0
+ */
+export function seq<
+  const T extends readonly Parser<Mode, unknown, unknown>[],
+>(
+  ...parsers: T
+): Parser<
+  CombineTupleModes<T>,
+  {
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+      : never;
+  },
+  SeqState
+>;
+
+/**
+ * Creates an ordered parser with a label for generated documentation.
+ *
+ * @template T A readonly array type where each element is a {@link Parser}.
+ * @param label A descriptive label for this parser group.
+ * @param parsers Parsers to apply in the order they are provided.
+ * @returns A parser that produces a readonly tuple of child values.
+ * @throws {TypeError} If the label is empty, whitespace-only, or contains
+ *         control characters.
+ * @since 1.1.0
+ */
+export function seq<
+  const T extends readonly Parser<Mode, unknown, unknown>[],
+>(
+  label: string,
+  ...parsers: T
+): Parser<
+  CombineTupleModes<T>,
+  {
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+      : never;
+  },
+  SeqState
+>;
+
+/**
+ * Creates an ordered parser with options.
+ *
+ * @template T A readonly array type where each element is a {@link Parser}.
+ * @param parsers Parsers to apply in the order they are provided, followed by
+ *                {@link SeqOptions}.
+ * @returns A parser that produces a readonly tuple of child values.
+ * @since 1.1.0
+ */
+export function seq<
+  const T extends readonly Parser<Mode, unknown, unknown>[],
+>(
+  ...args: readonly [...T, SeqTailOptions]
+): Parser<
+  CombineTupleModes<T>,
+  {
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+      : never;
+  },
+  SeqState
+>;
+
+/**
+ * Creates a labeled ordered parser with options.
+ *
+ * @template T A readonly array type where each element is a {@link Parser}.
+ * @param label A descriptive label for this parser group.
+ * @param args Parsers to apply in the order they are provided, followed by
+ *             {@link SeqOptions}.
+ * @returns A parser that produces a readonly tuple of child values.
+ * @throws {TypeError} If the label is empty, whitespace-only, or contains
+ *         control characters.
+ * @since 1.1.0
+ */
+export function seq<
+  const T extends readonly Parser<Mode, unknown, unknown>[],
+>(
+  label: string,
+  ...args: readonly [...T, SeqTailOptions]
+): Parser<
+  CombineTupleModes<T>,
+  {
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+      : never;
+  },
+  SeqState
+>;
+
+export function seq<
+  const T extends readonly Parser<Mode, unknown, unknown>[],
+>(
+  ...rawArgs: readonly unknown[]
+): Parser<Mode, { readonly [K in keyof T]: unknown }, SeqState> {
+  const label = typeof rawArgs[0] === "string" ? rawArgs[0] : undefined;
+  if (label != null) validateLabel(label);
+
+  const args = label == null ? rawArgs : rawArgs.slice(1);
+  const lastArg = args.at(-1);
+  const hasOptions = lastArg != null && !isParserLike(lastArg);
+  const options: SeqOptions = hasOptions ? lastArg as SeqOptions : {};
+  const parsers = (hasOptions ? args.slice(0, -1) : args) as readonly Parser<
+    Mode,
+    unknown,
+    unknown
+  >[];
+
+  const combinedMode: Mode = parsers.some((p) => p.mode === "async")
+    ? "async"
+    : "sync";
+  const syncParsers = parsers as readonly Parser<"sync", unknown, unknown>[];
+
+  if (!options.allowDuplicates) {
+    checkSequentialDuplicateOptionNames(parsers);
+  }
+
+  const initialState = createSeqState(
+    undefined,
+    0,
+    parsers.map((parser) => parser.initialState),
+  );
+  type ParseResult = ParserResult<SeqState>;
+
+  const parseSync = (context: ParserContext<SeqState>): ParseResult => {
+    let currentContext = context;
+    const allConsumed: string[] = [];
+
+    while (currentContext.state.index < syncParsers.length) {
+      const index = currentContext.state.index;
+      const parser = syncParsers[index];
+      const parserState = getSeqChildState(currentContext.state, index, parser);
+
+      if (
+        shouldAdvanceSeqBeforeParse(
+          parser,
+          parserState,
+          currentContext,
+          index,
+          syncParsers,
+        )
+      ) {
+        const consumedTerminator = currentContext.buffer[0] === "--";
+        if (consumedTerminator) allConsumed.push("--");
+        currentContext = advanceSeqContext(
+          currentContext,
+          index + 1,
+          consumedTerminator,
+        );
+        continue;
+      }
+
+      const result = parser.parse(
+        withChildContext(currentContext, index, parserState, parser),
+      );
+
+      if (!result.success) {
+        if (result.consumed > 0) return result;
+        if (
+          currentContext.buffer.length < 1 &&
+          !parserCanSkipAt(parser, parserState, currentContext.exec, index)
+        ) {
+          return result;
+        }
+        currentContext = advanceSeqContext(currentContext, index + 1, false);
+        continue;
+      }
+
+      const states = updateSeqChildState(
+        currentContext.state,
+        index,
+        result.next.state,
+        parser,
+      );
+      const nextIndex = result.consumed.length > 0 ? index : index + 1;
+      const mergedExec = mergeChildExec(currentContext.exec, result.next.exec);
+      currentContext = {
+        ...currentContext,
+        buffer: result.next.buffer,
+        optionsTerminated: result.next.optionsTerminated,
+        state: createSeqState(currentContext.state, nextIndex, states),
+        ...(mergedExec != null
+          ? {
+            exec: mergedExec,
+            dependencyRegistry: mergedExec.dependencyRegistry,
+          }
+          : {}),
+      };
+      allConsumed.push(...result.consumed);
+    }
+
+    return {
+      success: true,
+      next: currentContext,
+      consumed: allConsumed,
+    };
+  };
+
+  const parseAsync = async (
+    context: ParserContext<SeqState>,
+  ): Promise<ParseResult> => {
+    let currentContext = context;
+    const allConsumed: string[] = [];
+
+    while (currentContext.state.index < parsers.length) {
+      const index = currentContext.state.index;
+      const parser = parsers[index];
+      const parserState = getSeqChildState(currentContext.state, index, parser);
+
+      if (
+        shouldAdvanceSeqBeforeParse(
+          parser,
+          parserState,
+          currentContext,
+          index,
+          parsers,
+        )
+      ) {
+        const consumedTerminator = currentContext.buffer[0] === "--";
+        if (consumedTerminator) allConsumed.push("--");
+        currentContext = advanceSeqContext(
+          currentContext,
+          index + 1,
+          consumedTerminator,
+        );
+        continue;
+      }
+
+      const result = await parser.parse(
+        withChildContext(currentContext, index, parserState, parser),
+      );
+
+      if (!result.success) {
+        if (result.consumed > 0) return result;
+        if (
+          currentContext.buffer.length < 1 &&
+          !parserCanSkipAt(parser, parserState, currentContext.exec, index)
+        ) {
+          return result;
+        }
+        currentContext = advanceSeqContext(currentContext, index + 1, false);
+        continue;
+      }
+
+      const states = updateSeqChildState(
+        currentContext.state,
+        index,
+        result.next.state,
+        parser,
+      );
+      const nextIndex = result.consumed.length > 0 ? index : index + 1;
+      const mergedExec = mergeChildExec(currentContext.exec, result.next.exec);
+      currentContext = {
+        ...currentContext,
+        buffer: result.next.buffer,
+        optionsTerminated: result.next.optionsTerminated,
+        state: createSeqState(currentContext.state, nextIndex, states),
+        ...(mergedExec != null
+          ? {
+            exec: mergedExec,
+            dependencyRegistry: mergedExec.dependencyRegistry,
+          }
+          : {}),
+      };
+      allConsumed.push(...result.consumed);
+    }
+
+    return {
+      success: true,
+      next: currentContext,
+      consumed: allConsumed,
+    };
+  };
+
+  const seqParser = {
+    mode: combinedMode,
+    $valueType: [],
+    $stateType: [],
+    [fieldParsersKey]: parsers.map(
+      (parser, index) =>
+        [String(index), parser] as [
+          string,
+          Parser<Mode, unknown, unknown>,
+        ],
+    ),
+    usage: [{
+      type: "sequence" as const,
+      terms: parsers.flatMap((parser) => parser.usage),
+    }],
+    leadingNames: sequenceLeadingNames(parsers),
+    acceptingAnyToken: parsers.length > 0 &&
+      sequenceLeadingNames(parsers).size < 1 &&
+      parsers.some((parser, index) => {
+        if (!parser.acceptingAnyToken) return false;
+        return parsers.slice(0, index).every((previous, previousIndex) =>
+          parserCanSkipAt(
+            previous,
+            previous.initialState,
+            undefined,
+            previousIndex,
+          )
+        );
+      }),
+    priority: parsers[0]?.priority ?? 0,
+    initialState,
+    canSkip(state: SeqState, exec?: ExecutionContext) {
+      for (let i = state.index; i < parsers.length; i++) {
+        const parser = parsers[i];
+        if (
+          parser.canSkip?.(
+            getSeqChildState(state, i, parser),
+            withChildExecPath(exec, i),
+          ) !== true
+        ) {
+          return false;
+        }
+      }
+      return true;
+    },
+    parse(context: ParserContext<SeqState>) {
+      return dispatchByMode(
+        combinedMode,
+        () => parseSync(context),
+        () => parseAsync(context),
+      );
+    },
+    complete: undefined as unknown as Parser<
+      Mode,
+      { readonly [K in keyof T]: unknown },
+      SeqState
+    >["complete"],
+    [extractPhase2SeedKey](state: SeqState, exec?: ExecutionContext) {
+      return dispatchByMode(
+        combinedMode,
+        () => {
+          const stateArray = state.states as unknown[];
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec = withDependencyRuntimeExec(
+            seqParser.usage,
+            exec,
+            runtime,
+          );
+          const pairs = buildIndexedParserPairs(syncParsers);
+          const stateRecord = createAnnotatedArrayStateRecord(stateArray);
+          const preCompleted = preCompleteAndRegisterDependencies(
+            stateRecord,
+            pairs,
+            runtime.registry,
+            childExec,
+          );
+          collectExplicitSourceValues(
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
+              new Set(preCompleted.keys()),
+            ),
+            runtime,
+          );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: undefined,
+          } as ExecutionContext;
+          const resolvedArray = resolveStateWithRuntime(
+            stateArray,
+            runtime,
+          ) as unknown[];
+
+          const result: unknown[] = [];
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (let i = 0; i < syncParsers.length; i++) {
+            const elementParser = syncParsers[i];
+            const childExec = withChildExecPath(phase3Exec, i);
+            const preCompletedResult = preCompleted.get(String(i));
+            const seed = preCompletedResult !== undefined
+              ? reusePreCompletedPhase2Seed(
+                elementParser,
+                prepareStateForCompletion(resolvedArray[i], elementParser),
+                preCompletedResult,
+                childExec,
+              )
+              : completeOrExtractPhase2Seed(
+                elementParser,
+                prepareStateForCompletion(resolvedArray[i], elementParser),
+                childExec,
+              );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            result[i] = seed.value;
+            if (seed.deferred) {
+              if (seed.deferredKeys) {
+                deferredKeys.set(i, seed.deferredKeys);
+              } else if (
+                seed.value == null ||
+                typeof seed.value !== "object"
+              ) {
+                deferredKeys.set(i, null);
+              } else {
+                hasDeferred = true;
+              }
+            }
+          }
+
+          if (!hasAnySeed) return null;
+          return {
+            value: result as { [K in keyof T]: T[K]["$valueType"][number] },
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+        async () => {
+          const stateArray = state.states as unknown[];
+          const runtime = exec?.dependencyRuntime ??
+            createDependencyRuntimeContext(exec?.dependencyRegistry);
+          const childExec = withDependencyRuntimeExec(
+            seqParser.usage,
+            exec,
+            runtime,
+          );
+          const pairs = buildIndexedParserPairs(parsers);
+          const stateRecord = createAnnotatedArrayStateRecord(stateArray);
+          const preCompleted = await preCompleteAndRegisterDependenciesAsync(
+            stateRecord,
+            pairs,
+            runtime.registry,
+            childExec,
+          );
+          await collectExplicitSourceValuesAsync(
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromArray(parsers, stateArray, exec?.path),
+              new Set(preCompleted.keys()),
+            ),
+            runtime,
+          );
+          const phase3Exec: ExecutionContext = {
+            ...childExec,
+            preCompletedByParser: undefined,
+          } as ExecutionContext;
+          const resolvedArray = await resolveStateWithRuntimeAsync(
+            stateArray,
+            runtime,
+          ) as unknown[];
+
+          const result: unknown[] = [];
+          const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+          let hasDeferred = false;
+          let hasAnySeed = false;
+          for (let i = 0; i < parsers.length; i++) {
+            const elementParser = parsers[i];
+            const childExec = withChildExecPath(phase3Exec, i);
+            const preCompletedResult = preCompleted.get(String(i));
+            const seed = preCompletedResult !== undefined
+              ? await reusePreCompletedPhase2SeedAsync(
+                elementParser,
+                prepareStateForCompletion(resolvedArray[i], elementParser),
+                preCompletedResult,
+                childExec,
+              )
+              : await completeOrExtractPhase2Seed(
+                elementParser,
+                prepareStateForCompletion(resolvedArray[i], elementParser),
+                childExec,
+              );
+            if (seed == null) continue;
+            hasAnySeed = true;
+            result[i] = seed.value;
+            if (seed.deferred) {
+              if (seed.deferredKeys) {
+                deferredKeys.set(i, seed.deferredKeys);
+              } else if (
+                seed.value == null ||
+                typeof seed.value !== "object"
+              ) {
+                deferredKeys.set(i, null);
+              } else {
+                hasDeferred = true;
+              }
+            }
+          }
+
+          if (!hasAnySeed) return null;
+          return {
+            value: result as { [K in keyof T]: T[K]["$valueType"][number] },
+            ...(deferredKeys.size > 0 || hasDeferred
+              ? {
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
+              : {}),
+          };
+        },
+      );
+    },
+    suggest(context: ParserContext<SeqState>, prefix: string) {
+      return dispatchIterableByMode(
+        combinedMode,
+        () => {
+          const suggestions: Suggestion[] = [];
+          const advancedContext = advanceSeqSuggestContextSync(
+            context,
+            syncParsers,
+          );
+          const state = advancedContext.state;
+          for (let i = state.index; i < syncParsers.length; i++) {
+            const parser = syncParsers[i];
+            const parserState = getSeqChildState(state, i, parser);
+            suggestions.push(
+              ...parser.suggest(
+                withChildContext(advancedContext, i, parserState, parser),
+                prefix,
+              ),
+            );
+            if (
+              parser.canSkip?.(
+                parserState,
+                withChildExecPath(advancedContext.exec, i),
+              ) !== true
+            ) {
+              break;
+            }
+          }
+          return deduplicateSuggestions(suggestions);
+        },
+        async function* () {
+          const suggestions: Suggestion[] = [];
+          const advancedContext = await advanceSeqSuggestContextAsync(
+            context,
+            parsers,
+          );
+          const state = advancedContext.state;
+          for (let i = state.index; i < parsers.length; i++) {
+            const parser = parsers[i];
+            const parserState = getSeqChildState(state, i, parser);
+            const parserSuggestions = parser.suggest(
+              withChildContext(advancedContext, i, parserState, parser),
+              prefix,
+            );
+            if (parser.mode === "async") {
+              for await (
+                const suggestion of parserSuggestions as AsyncIterable<
+                  Suggestion
+                >
+              ) {
+                suggestions.push(suggestion);
+              }
+            } else {
+              suggestions.push(...parserSuggestions as Iterable<Suggestion>);
+            }
+            if (
+              parser.canSkip?.(
+                parserState,
+                withChildExecPath(advancedContext.exec, i),
+              ) !== true
+            ) {
+              break;
+            }
+          }
+          yield* deduplicateSuggestions(suggestions);
+        },
+      );
+    },
+    getDocFragments(
+      state: DocState<SeqState>,
+      defaultValue?: readonly unknown[],
+    ) {
+      const fragments = syncParsers.flatMap((parser, index) => {
+        const indexState: DocState<unknown> = state.kind === "unavailable"
+          ? { kind: "unavailable" }
+          : {
+            kind: "available",
+            state: state.state.states[index],
+          };
+        return parser.getDocFragments(indexState, defaultValue?.[index])
+          .fragments;
+      });
+      const entries: DocEntry[] = fragments.filter((d) => d.type === "entry");
+      const sections: DocSection[] = [];
+      for (const fragment of fragments) {
+        if (fragment.type !== "section") continue;
+        if (fragment.title == null) {
+          entries.push(...fragment.entries);
+        } else {
+          sections.push(fragment);
+        }
+      }
+      sections.push({ title: label, entries });
+      return { fragments: sections.map((s) => ({ ...s, type: "section" })) };
+    },
+    [Symbol.for("Deno.customInspect")]() {
+      const parsersStr = parsers.length === 1
+        ? "1 parser"
+        : `${parsers.length} parsers`;
+      return label == null
+        ? `seq(${parsersStr})`
+        : `seq(${JSON.stringify(label)}, ${parsersStr})`;
+    },
+  } as Parser<Mode, { readonly [K in keyof T]: unknown }, SeqState>;
+
+  Object.defineProperty(seqParser, "complete", {
+    value: createSeqComplete(parsers, combinedMode),
+    configurable: true,
+    enumerable: true,
+  });
+
+  const normalizers: [number, (v: unknown) => unknown][] = [];
+  for (let i = 0; i < parsers.length; i++) {
+    const parser = parsers[i];
+    if (typeof parser.normalizeValue === "function") {
+      normalizers.push([i, parser.normalizeValue.bind(parser)]);
+    }
+  }
+  if (normalizers.length > 0) {
+    Object.defineProperty(seqParser, "normalizeValue", {
+      value(arr: readonly unknown[]): readonly unknown[] {
+        if (!Array.isArray(arr)) return arr;
+        let changed = false;
+        let result: unknown[] | undefined;
+        for (const [index, normalize] of normalizers) {
+          if (index < arr.length && Object.hasOwn(arr, index)) {
+            try {
+              const original = arr[index];
+              const normalized = normalize(original);
+              if (normalized !== original) {
+                result ??= [...arr];
+                result[index] = normalized;
+                changed = true;
+              }
+            } catch {
+              // best-effort
+            }
+          }
+        }
+        return changed ? result! : arr;
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+
+  defineInheritedAnnotationParser(seqParser);
+  return seqParser;
 }
 
 /**

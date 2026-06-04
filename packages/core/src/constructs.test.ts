@@ -7,6 +7,7 @@ import {
   merge,
   object,
   or,
+  seq,
   tuple,
 } from "@optique/core/constructs";
 import type { DocEntry, DocFragment, DocSection } from "@optique/core/doc";
@@ -80,6 +81,7 @@ import {
   merge as mergeLocal,
   object as objectLocal,
   or as orLocal,
+  seq as seqLocal,
   tuple as tupleLocal,
 } from "./constructs.ts";
 import { dependency as dependencyLocal } from "./internal/dependency.ts";
@@ -16068,6 +16070,40 @@ describe("branch coverage: constructs.ts edge cases", () => {
         assert.equal(getCallCount(), 1);
       });
 
+      it("seq() reuses sync pre-completed defaults", () => {
+        const { parser: modeParser, getCallCount } =
+          createCountingSourceParser();
+        const parser = seqLocal(
+          modeParser,
+          optionLocal("--required", string()),
+        );
+
+        const seed = getLocalPhase2SeedExtractor(parser)(parser.initialState);
+
+        assert.deepEqual(seed, {
+          value: ["alpha"],
+        });
+        assert.equal(getCallCount(), 1);
+      });
+
+      it("seq() reuses async pre-completed defaults", async () => {
+        const { parser: modeParser, getCallCount } =
+          createCountingSourceParser();
+        const parser = seqLocal(
+          modeParser,
+          toAsyncParser(optionLocal("--required", string())),
+        );
+
+        const seed = await getLocalPhase2SeedExtractor(parser)(
+          parser.initialState,
+        );
+
+        assert.deepEqual(seed, {
+          value: ["alpha"],
+        });
+        assert.equal(getCallCount(), 1);
+      });
+
       it("concat() extracts sync seeds across child boundaries", () => {
         const { parser: modeParser, getCallCount } =
           createCountingSourceParser();
@@ -21892,5 +21928,116 @@ describe("canSkip", () => {
         constant("fallback"),
       ).canSkip?.(undefined),
     );
+  });
+});
+
+describe("seq", () => {
+  it("should parse child parsers in declaration order", () => {
+    const parser = seq(
+      option("--first", string()),
+      option("--second", string()),
+    );
+
+    assert.deepEqual(
+      parseSync(parser, ["--first", "a", "--second", "b"]),
+      { success: true, value: ["a", "b"] },
+    );
+    assert.equal(
+      parseSync(parser, ["--second", "b", "--first", "a"]).success,
+      false,
+    );
+  });
+
+  it("should preserve declaration order in usage output", () => {
+    const parser = seq(
+      argument(string({ metavar: "SOURCE" })),
+      or(command("local", object({})), command("remote", object({}))),
+      option("--force"),
+    );
+
+    assert.equal(
+      formatUsage("copy", parser.usage),
+      "copy SOURCE (local | remote) [--force]",
+    );
+  });
+
+  it("should skip fixed optional positionals before later commands", () => {
+    const parser = seq(
+      optional(argument(string({ metavar: "ALIAS" }))),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(parseSync(parser, ["run"]), {
+      success: true,
+      value: [undefined, {}],
+    });
+    assert.deepEqual(parseSync(parser, ["main", "run"]), {
+      success: true,
+      value: ["main", {}],
+    });
+  });
+
+  it("should consume -- when advancing to a later positional parser", () => {
+    const parser = seq(
+      option("--name", string()),
+      argument(string({ metavar: "VALUE" })),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--name", "alice", "--", "--raw"]), {
+      success: true,
+      value: ["alice", "--raw"],
+    });
+  });
+
+  it("should reject duplicate options active at the same position", () => {
+    assert.throws(
+      () =>
+        seq(
+          optional(option("--path", string())),
+          option("--path", string()),
+        ),
+      DuplicateOptionError,
+    );
+  });
+
+  it("should allow duplicate options across sequential command boundaries", () => {
+    const parser = seq(
+      object({ path: option("--path") }),
+      command("local", object({ path: option("--path") })),
+    );
+
+    assert.deepEqual(parseSync(parser, ["local", "--path"]), {
+      success: true,
+      value: [{ path: false }, { path: true }],
+    });
+  });
+
+  it("should evaluate lazy defaults once during completion", () => {
+    let calls = 0;
+    const parser = seq(
+      withDefault(option("--name", string()), () => {
+        calls++;
+        return "default";
+      }),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(parseSync(parser, ["run"]), {
+      success: true,
+      value: ["default", {}],
+    });
+    assert.equal(calls, 1);
+  });
+
+  it("should suggest from the active sequential position", () => {
+    const parser = seq(
+      option("--name", string()),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(suggestSync(parser, ["--name", "alice", ""]), [{
+      kind: "literal",
+      text: "run",
+    }]);
   });
 });

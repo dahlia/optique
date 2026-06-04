@@ -127,6 +127,7 @@ test("parser module hides constructs and parser-internal helpers", () => {
 
 test("root module keeps user-facing APIs but not internal machinery", () => {
   assert.equal(typeof root.object, "function");
+  assert.equal(typeof root.seq, "function");
   assert.equal(typeof root.option, "function");
   assert.equal(typeof root.negatableFlag, "function");
   assert.equal(typeof root.parse, "function");
