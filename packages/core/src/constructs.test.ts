@@ -21977,6 +21977,30 @@ describe("seq", () => {
     });
   });
 
+  it("should not treat command=value as a later command name", () => {
+    const parser = seq(
+      optional(argument(string({ metavar: "PROFILE" }))),
+      command("build", object({})),
+    );
+
+    assert.deepEqual(parseSync(parser, ["build=prod", "build"]), {
+      success: true,
+      value: ["build=prod", {}],
+    });
+  });
+
+  it("should treat option=value as a later value option", () => {
+    const parser = seq(
+      optional(argument(string({ metavar: "PROFILE" }))),
+      option("--name", string()),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--name=alice"]), {
+      success: true,
+      value: [undefined, "alice"],
+    });
+  });
+
   it("should consume -- when advancing to a later positional parser", () => {
     const parser = seq(
       option("--name", string()),
@@ -22038,6 +22062,30 @@ describe("seq", () => {
     assert.deepEqual(suggestSync(parser, ["--name", "alice", ""]), [{
       kind: "literal",
       text: "run",
+    }]);
+  });
+
+  it("should preserve skippable child suggestions at the cursor", () => {
+    const parser = seq(
+      optional(option("--name", string())),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(suggestSync(parser, ["--"]), [{
+      kind: "literal",
+      text: "--name",
+    }]);
+  });
+
+  it("should preserve async skippable child suggestions at the cursor", async () => {
+    const parser = seq(
+      optional(option("--name", string())),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(await suggestAsync(parser, ["--"]), [{
+      kind: "literal",
+      text: "--name",
     }]);
   });
 });

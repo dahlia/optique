@@ -644,6 +644,7 @@ import {
   extractOptionNames,
   type HiddenVisibility,
   isDocHidden,
+  isSuggestionHidden,
   mergeHidden,
   type Usage,
   type UsageTerm,
@@ -6813,6 +6814,12 @@ interface SeqState {
   readonly states: readonly unknown[];
 }
 
+interface SeqLeadingCandidates {
+  readonly optionNames: ReadonlySet<string>;
+  readonly joinedOptionNames: ReadonlySet<string>;
+  readonly commandNames: ReadonlySet<string>;
+}
+
 function isParserLike(value: unknown): value is Parser<Mode, unknown, unknown> {
   return value != null &&
     typeof value === "object" &&
@@ -6823,11 +6830,23 @@ function isParserLike(value: unknown): value is Parser<Mode, unknown, unknown> {
 
 function tokenMatchesLeadingName(
   token: string | undefined,
-  names: ReadonlySet<string>,
+  candidates: SeqLeadingCandidates,
 ): boolean {
   if (token == null) return false;
-  for (const name of names) {
-    if (token === name || token.startsWith(`${name}=`)) return true;
+  for (const name of candidates.optionNames) {
+    if (token === name) return true;
+  }
+  for (const name of candidates.joinedOptionNames) {
+    if (
+      name.startsWith("/") && token.startsWith(`${name}:`) ||
+      (name.startsWith("--") || name.startsWith("-") && name.length > 2) &&
+        token.startsWith(`${name}=`)
+    ) {
+      return true;
+    }
+  }
+  for (const name of candidates.commandNames) {
+    if (token === name) return true;
   }
   return false;
 }
@@ -6844,28 +6863,112 @@ function parserCanSkipAt(
   ) === true;
 }
 
-function sequenceLeadingNames(
+function collectLeadingJoinedOptionNames(
+  terms: Usage,
+  optionNames: Set<string>,
+): boolean {
+  for (const term of terms) {
+    if (term.type === "option") {
+      if (!isSuggestionHidden(term.hidden) && term.metavar != null) {
+        for (const name of term.names) optionNames.add(name);
+      }
+      return false;
+    }
+
+    if (term.type === "command" || term.type === "argument") return false;
+
+    if (term.type === "optional") {
+      collectLeadingJoinedOptionNames(term.terms, optionNames);
+      continue;
+    }
+
+    if (term.type === "multiple") {
+      collectLeadingJoinedOptionNames(term.terms, optionNames);
+      if (term.min === 0) continue;
+      return false;
+    }
+
+    if (term.type === "sequence") {
+      if (collectLeadingJoinedOptionNames(term.terms, optionNames)) {
+        continue;
+      }
+      return false;
+    }
+
+    if (term.type === "exclusive") {
+      let allSkippable = true;
+      for (const branch of term.terms) {
+        const branchSkippable = collectLeadingJoinedOptionNames(
+          branch,
+          optionNames,
+        );
+        allSkippable = allSkippable && branchSkippable;
+      }
+      if (allSkippable) continue;
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function sequenceLeadingCandidates(
   parsers: readonly Parser<Mode, unknown, unknown>[],
-): ReadonlySet<string> {
-  const names = new Set<string>();
+): SeqLeadingCandidates {
+  const optionNames = new Set<string>();
+  const joinedOptionNames = new Set<string>();
+  const commandNames = new Set<string>();
   let positionalBlocked = false;
   for (let i = 0; i < parsers.length; i++) {
     const parser = parsers[i];
-    for (const name of parser.leadingNames) {
-      if (positionalBlocked && !name.startsWith("-")) continue;
-      names.add(name);
+    const parserOptions = new Set<string>();
+    const parserJoinedOptions = new Set<string>();
+    const parserCommands = new Set<string>();
+    collectLeadingCandidates(parser.usage, parserOptions, parserCommands);
+    collectLeadingJoinedOptionNames(parser.usage, parserJoinedOptions);
+    for (const name of parserOptions) optionNames.add(name);
+    for (const name of parserJoinedOptions) joinedOptionNames.add(name);
+    if (!positionalBlocked) {
+      for (const name of parserCommands) commandNames.add(name);
+      for (const name of parser.leadingNames) {
+        if (!parserOptions.has(name)) commandNames.add(name);
+      }
+    } else {
+      for (const name of parser.leadingNames) {
+        if (!parserOptions.has(name) && name.startsWith("-")) {
+          commandNames.add(name);
+        }
+      }
     }
     if (parser.acceptingAnyToken) positionalBlocked = true;
     if (!parserCanSkipAt(parser, parser.initialState, undefined, i)) break;
   }
+  return {
+    optionNames: optionNames.size === 0 ? EMPTY_LEADING_NAMES : optionNames,
+    joinedOptionNames: joinedOptionNames.size === 0
+      ? EMPTY_LEADING_NAMES
+      : joinedOptionNames,
+    commandNames: commandNames.size === 0 ? EMPTY_LEADING_NAMES : commandNames,
+  };
+}
+
+function sequenceLeadingNames(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+): ReadonlySet<string> {
+  const candidates = sequenceLeadingCandidates(parsers);
+  const names = new Set<string>([
+    ...candidates.optionNames,
+    ...candidates.joinedOptionNames,
+    ...candidates.commandNames,
+  ]);
   return names.size === 0 ? EMPTY_LEADING_NAMES : names;
 }
 
-function leadingNamesAfter(
+function leadingCandidatesAfter(
   parsers: readonly Parser<Mode, unknown, unknown>[],
   startIndex: number,
-): ReadonlySet<string> {
-  return sequenceLeadingNames(parsers.slice(startIndex));
+): SeqLeadingCandidates {
+  return sequenceLeadingCandidates(parsers.slice(startIndex));
 }
 
 function checkSequentialDuplicateOptionNames(
@@ -6943,8 +7046,8 @@ function shouldAdvanceSeqBeforeParse(
   }
   const token = currentContext.buffer[0];
   if (token === "--") return true;
-  const laterLeadingNames = leadingNamesAfter(parsers, index + 1);
-  return tokenMatchesLeadingName(token, laterLeadingNames);
+  const laterLeadingCandidates = leadingCandidatesAfter(parsers, index + 1);
+  return tokenMatchesLeadingName(token, laterLeadingCandidates);
 }
 
 function advanceSeqContext(
@@ -7006,13 +7109,7 @@ function advanceSeqSuggestContextSync(
     const parser = parsers[index];
     const parserState = getSeqChildState(currentContext.state, index, parser);
 
-    if (currentContext.buffer.length < 1) {
-      if (parserCanSkipAt(parser, parserState, currentContext.exec, index)) {
-        currentContext = advanceSeqContext(currentContext, index + 1, false);
-        continue;
-      }
-      break;
-    }
+    if (currentContext.buffer.length < 1) break;
 
     if (
       shouldAdvanceSeqBeforeParse(
@@ -7065,13 +7162,7 @@ async function advanceSeqSuggestContextAsync(
     const parser = parsers[index];
     const parserState = getSeqChildState(currentContext.state, index, parser);
 
-    if (currentContext.buffer.length < 1) {
-      if (parserCanSkipAt(parser, parserState, currentContext.exec, index)) {
-        currentContext = advanceSeqContext(currentContext, index + 1, false);
-        continue;
-      }
-      break;
-    }
+    if (currentContext.buffer.length < 1) break;
 
     if (
       shouldAdvanceSeqBeforeParse(
