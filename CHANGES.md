@@ -96,6 +96,15 @@ To be released.
     the TypeScript return type accordingly.  Also exports the `Json` type
     representing any JSON-serializable value.  [[#811], [#817]]
 
+ -  Added `seq()` as an ordered construct combinator for CLI grammars where
+    child parsers must run in declaration order instead of shared-buffer
+    priority order.  It returns a tuple of child values, preserves declaration
+    order in usage output and suggestions, skips optional boundaries before
+    later command names, and supports position-aware duplicate option checking.
+    The parser protocol now exposes `canSkip()` for combinators that need to
+    determine whether a child can finish without more CLI input.
+    [[#819], [#820]]
+
 [Semantic Versioning 2.0.0]: https://semver.org/
 [#801]: https://github.com/dahlia/optique/issues/801
 [#802]: https://github.com/dahlia/optique/pull/802
@@ -109,6 +118,8 @@ To be released.
 [#815]: https://github.com/dahlia/optique/pull/815
 [#816]: https://github.com/dahlia/optique/pull/816
 [#817]: https://github.com/dahlia/optique/pull/817
+[#819]: https://github.com/dahlia/optique/issues/819
+[#820]: https://github.com/dahlia/optique/pull/820
 
 ### @optique/discover
 
