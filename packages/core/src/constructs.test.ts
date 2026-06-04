@@ -21830,3 +21830,67 @@ describe("acceptingAnyToken", () => {
     assert.ok(!withCatchAllDiscriminator.acceptingAnyToken);
   });
 });
+
+describe("canSkip", () => {
+  it("should be true for parsers that can complete without CLI input", () => {
+    assert.ok(constant("value").canSkip?.("value"));
+    assert.ok(optional(option("--name", string())).canSkip?.(undefined));
+    assert.ok(
+      withDefault(option("--name", string()), "default").canSkip?.(
+        undefined,
+      ),
+    );
+    assert.ok(multiple(option("--tag", string())).canSkip?.([]));
+  });
+
+  it("should be false for required primitive parsers", () => {
+    assert.equal(option("--name", string()).canSkip?.(undefined), false);
+    assert.equal(argument(string()).canSkip?.(undefined), false);
+    assert.equal(command("run", object({})).canSkip?.(undefined), false);
+  });
+
+  it("should be true for required parsers after successful consumption", () => {
+    assert.ok(
+      option("--name", string()).canSkip?.({ success: true, value: "alice" }),
+    );
+    assert.ok(flag("--force").canSkip?.({ success: true, value: true }));
+    assert.ok(
+      argument(string()).canSkip?.({ success: true, value: "input.txt" }),
+    );
+    assert.ok(command("run", object({})).canSkip?.(["matched", "run"]));
+  });
+
+  it("should compose through parser combinators", () => {
+    assert.ok(
+      object({
+        verbose: optional(flag("--verbose")),
+        name: withDefault(option("--name", string()), "default"),
+      }).canSkip?.({
+        verbose: undefined,
+        name: undefined,
+      }),
+    );
+    assert.equal(
+      object({
+        input: argument(string()),
+        verbose: optional(flag("--verbose")),
+      }).canSkip?.({
+        input: undefined,
+        verbose: undefined,
+      }),
+      false,
+    );
+    assert.ok(
+      tuple([
+        optional(flag("--verbose")),
+        constant("ok"),
+      ]).canSkip?.([undefined, "ok"]),
+    );
+    assert.ok(
+      or(
+        argument(string()),
+        constant("fallback"),
+      ).canSkip?.(undefined),
+    );
+  });
+});

@@ -3868,6 +3868,18 @@ export function or(
     leadingNames: unionLeadingNames(parsers),
     acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
     initialState: undefined,
+    canSkip(state: OrState, exec?: ExecutionContext) {
+      const activeState = normalizeExclusiveState(state);
+      if (activeState != null) {
+        const [index, result] = activeState;
+        const parser = parsers[index];
+        return result.success && parser?.canSkip?.(result.next.state, exec) ===
+            true;
+      }
+      return parsers.some((parser) =>
+        parser.canSkip?.(parser.initialState, exec) === true
+      );
+    },
     complete: createExclusiveComplete(
       parsers,
       options,
@@ -6091,6 +6103,19 @@ export function object<
     ),
     leadingNames: sharedBufferLeadingNames(parserPairs.map(([_, p]) => p)),
     acceptingAnyToken: parserPairs.some(([_, p]) => p.acceptingAnyToken),
+    canSkip(
+      state: { readonly [K in keyof T]: unknown },
+      exec?: ExecutionContext,
+    ) {
+      const getFieldState = createFieldStateGetter(state);
+      return parserKeys.every((field) => {
+        const parser = parsers[field];
+        return parser.canSkip?.(
+          getFieldState(field, parser),
+          withChildExecPath(exec, field as string | symbol),
+        ) === true;
+      });
+    },
     get initialState(): {
       readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U3)
         ? U3
@@ -7641,6 +7666,15 @@ export function tuple<
       readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U3)
         ? U3
         : never;
+    },
+    canSkip(state: TupleState, exec?: ExecutionContext) {
+      const stateArray = state as readonly unknown[];
+      return parsers.every((parser, index) =>
+        parser.canSkip?.(
+          getAnnotatedChildState(stateArray, stateArray[index], parser),
+          withChildExecPath(exec, index),
+        ) === true
+      );
     },
     parse(context: ParserContext<TupleState>) {
       return dispatchByMode(

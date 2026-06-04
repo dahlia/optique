@@ -62,6 +62,15 @@ function hasParsedOptionValue<M extends Mode, T>(
     (state as { value?: boolean }).value === true;
 }
 
+function isSuccessfulValueState<T>(
+  state: ValueParserResult<T> | undefined,
+): boolean {
+  return state != null &&
+    typeof state === "object" &&
+    "success" in state &&
+    state.success === true;
+}
+
 /**
  * Helper function to create the stored state for an option or argument value.
  *
@@ -257,6 +266,9 @@ export function constant<const T>(value: T): Parser<"sync", T, T> {
     leadingNames: EMPTY_LEADING_NAMES,
     acceptingAnyToken: false,
     initialState: value,
+    canSkip() {
+      return true;
+    },
     parse(context) {
       return { success: true, next: context, consumed: [] };
     },
@@ -308,6 +320,9 @@ export function fail<T>(): Parser<"sync", T, undefined> {
     leadingNames: EMPTY_LEADING_NAMES,
     acceptingAnyToken: false,
     initialState: undefined,
+    canSkip() {
+      return false;
+    },
     parse(_context) {
       return {
         success: false,
@@ -956,6 +971,9 @@ export function option<M extends Mode, T>(
     initialState: valueParser == null
       ? { success: true, value: false }
       : undefined,
+    canSkip(state: ValueParserResult<T | boolean> | undefined) {
+      return valueParser == null || isSuccessfulValueState(state);
+    },
     parse(
       context: ParserContext<
         ValueParserResult<T | boolean> | undefined
@@ -1636,6 +1654,9 @@ export function flag(
     leadingNames: new Set<string>(optionNames),
     acceptingAnyToken: false,
     initialState: undefined,
+    canSkip(state) {
+      return isSuccessfulValueState(state);
+    },
     parse(context) {
       if (context.optionsTerminated) {
         return {
@@ -2420,6 +2441,9 @@ export function argument<M extends Mode, T>(
     leadingNames: EMPTY_LEADING_NAMES,
     acceptingAnyToken: true,
     initialState: undefined,
+    canSkip(state: ValueParserResult<T> | undefined) {
+      return isSuccessfulValueState(state);
+    },
     parse(
       context: ParserContext<
         ValueParserResult<T> | undefined
@@ -3015,6 +3039,20 @@ export function command<M extends Mode, T, TState>(
     leadingNames: new Set([name]),
     acceptingAnyToken: false,
     initialState: undefined,
+    canSkip(state: CommandState<TState>, exec?: ExecutionContext) {
+      const normalizedState = normalizeCommandState(state);
+      if (normalizedState === undefined) return false;
+      if (normalizedState[0] === "matched") {
+        return parser.canSkip?.(
+          getCommandChildState(state, parser.initialState, parser),
+          withChildExecPath(exec, name),
+        ) === true;
+      }
+      return parser.canSkip?.(
+        getCommandChildState(state, normalizedState[1], parser),
+        withChildExecPath(exec, name),
+      ) === true;
+    },
     getSuggestRuntimeNodes(
       state: CommandState<TState>,
       path: readonly PropertyKey[],
@@ -3531,6 +3569,9 @@ export function passThrough(
     leadingNames: EMPTY_LEADING_NAMES,
     acceptingAnyToken: false,
     initialState: [],
+    canSkip() {
+      return true;
+    },
 
     parse(context) {
       if (context.buffer.length < 1) {

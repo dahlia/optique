@@ -714,6 +714,9 @@ export function optional<M extends Mode, TValue, TState>(
     // parser's catch-all status does not apply to the wrapper.
     acceptingAnyToken: false,
     initialState: undefined,
+    canSkip() {
+      return true;
+    },
     // Forward completion deferral hook from inner parser, adapting the
     // outer state shape ([TState] | undefined) to the inner TState.
     ...(typeof parser.shouldDeferCompletion === "function"
@@ -1132,6 +1135,9 @@ export function withDefault<
     // parser's catch-all status does not apply to the wrapper.
     acceptingAnyToken: false,
     initialState: undefined,
+    canSkip() {
+      return true;
+    },
     // Forward completion deferral hook from inner parser, adapting the
     // outer state shape ([TState] | undefined) to the inner TState.
     ...(typeof parser.shouldDeferCompletion === "function"
@@ -2275,6 +2281,12 @@ export function multiple<M extends Mode, TValue, TState>(
     // catch-all status when at least one match is required.
     acceptingAnyToken: min > 0 && (parser.acceptingAnyToken ?? false),
     initialState: [] as readonly TState[],
+    canSkip(state: MultipleState) {
+      if (state.length < min) return false;
+      const currentItemState = state.at(-1);
+      return currentItemState == null ||
+        isTerminalMultipleItemState(currentItemState);
+    },
     getSuggestRuntimeNodes(state: MultipleState, path: readonly PropertyKey[]) {
       const innerNodes = state.flatMap((item, i) => [
         ...getInnerSuggestRuntimeNodes(item as TState, [...path, i]),
@@ -2996,6 +3008,9 @@ export function nonEmpty<M extends Mode, T, TState>(
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
+    ...(typeof parser.canSkip === "function"
+      ? { canSkip: parser.canSkip.bind(parser) }
+      : {}),
     // Forward shouldDeferCompletion from inner parser so that prompt()
     // can defer through nonEmpty() wrappers.
     ...(typeof parser.shouldDeferCompletion === "function"

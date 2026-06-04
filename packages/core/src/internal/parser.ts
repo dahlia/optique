@@ -187,6 +187,21 @@ export interface Parser<
   readonly acceptingAnyToken: boolean;
 
   /**
+   * Returns whether this parser can be skipped at the current state without
+   * consuming more CLI input or evaluating completion-time defaults.
+   *
+   * Sequential combinators use this as a lightweight boundary predicate.  It
+   * must be synchronous and side-effect free.  Custom parsers that omit this
+   * method are treated as not skippable.
+   *
+   * @param state The current parser state.
+   * @param exec Optional shared execution context.
+   * @returns `true` when parsing may advance past this parser.
+   * @since 1.1.0
+   */
+  canSkip?(state: TState, exec?: ExecutionContext): boolean;
+
+  /**
    * The initial state for this parser.  This is used to initialize the
    * state when parsing starts.
    */

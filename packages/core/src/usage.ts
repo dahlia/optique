@@ -202,6 +202,24 @@ export type UsageTerm =
     readonly terms: readonly Usage[];
   }
   /**
+   * A sequence term, which preserves the declaration order of its child
+   * terms through usage normalization.
+   *
+   * This is used by ordered parser combinators where argument/command/option
+   * order is part of the accepted grammar.
+   * @since 1.1.0
+   */
+  | {
+    /**
+     * The type of the term, which is always `"sequence"` for this term.
+     */
+    readonly type: "sequence";
+    /**
+     * Terms that must be displayed in the given order.
+     */
+    readonly terms: Usage;
+  }
+  /**
    * A literal term, which represents a fixed string value in the command-line
    * usage. Unlike metavars which are placeholders for user-provided values,
    * literals represent exact strings that must be typed as-is.
@@ -302,7 +320,10 @@ export function extractOptionNames(
         for (const name of term.names) {
           names.add(name);
         }
-      } else if (term.type === "optional" || term.type === "multiple") {
+      } else if (
+        term.type === "optional" || term.type === "multiple" ||
+        term.type === "sequence"
+      ) {
         traverseUsage(term.terms);
       } else if (term.type === "exclusive") {
         for (const exclusiveUsage of term.terms) {
@@ -350,7 +371,10 @@ export function extractCommandNames(
       if (term.type === "command") {
         if (!includeHidden && isSuggestionHidden(term.hidden)) continue;
         names.add(term.name);
-      } else if (term.type === "optional" || term.type === "multiple") {
+      } else if (
+        term.type === "optional" || term.type === "multiple" ||
+        term.type === "sequence"
+      ) {
         traverseUsage(term.terms);
       } else if (term.type === "exclusive") {
         for (const exclusiveUsage of term.terms) {
@@ -384,7 +408,10 @@ export function extractLiteralValues(usage: Usage): Set<string> {
     for (const term of terms) {
       if (term.type === "literal") {
         values.add(term.value);
-      } else if (term.type === "optional" || term.type === "multiple") {
+      } else if (
+        term.type === "optional" || term.type === "multiple" ||
+        term.type === "sequence"
+      ) {
         traverseUsage(term.terms);
       } else if (term.type === "exclusive") {
         for (const branch of term.terms) {
@@ -428,7 +455,10 @@ export function extractArgumentMetavars(usage: Usage): Set<string> {
       if (term.type === "argument") {
         if (isSuggestionHidden(term.hidden)) continue;
         metavars.add(term.metavar);
-      } else if (term.type === "optional" || term.type === "multiple") {
+      } else if (
+        term.type === "optional" || term.type === "multiple" ||
+        term.type === "sequence"
+      ) {
         traverseUsage(term.terms);
       } else if (term.type === "exclusive") {
         for (const exclusiveUsage of term.terms) {
@@ -644,6 +674,11 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
       terms: normalizeUsage(term.terms),
       min: term.min,
     };
+  } else if (term.type === "sequence") {
+    return {
+      type: "sequence",
+      terms: term.terms.map(normalizeUsageTerm).filter(isNonDegenerateTerm),
+    };
   } else if (term.type === "exclusive") {
     const terms: Usage[] = [];
     for (const usage of term.terms) {
@@ -685,7 +720,7 @@ function isNonDegenerateTerm(term: UsageTerm): boolean {
   if (term.type === "argument") return term.metavar.length > 0;
   if (
     term.type === "optional" || term.type === "multiple" ||
-    term.type === "exclusive"
+    term.type === "exclusive" || term.type === "sequence"
   ) {
     return term.terms.length > 0;
   }
@@ -697,7 +732,10 @@ function containsMalformedLeaf(usage: Usage): boolean {
     if (term.type === "option" && term.names.length === 0) return true;
     if (term.type === "command" && term.name === "") return true;
     if (term.type === "argument" && term.metavar.length === 0) return true;
-    if (term.type === "optional" || term.type === "multiple") {
+    if (
+      term.type === "optional" || term.type === "multiple" ||
+      term.type === "sequence"
+    ) {
       if (containsMalformedLeaf(term.terms)) return true;
     }
     if (term.type === "exclusive") {
@@ -745,6 +783,8 @@ export function cloneUsageTerm(term: UsageTerm): UsageTerm {
         type: "exclusive",
         terms: term.terms.map((u) => u.map(cloneUsageTerm)),
       };
+    case "sequence":
+      return { type: "sequence", terms: term.terms.map(cloneUsageTerm) };
     case "literal":
     case "passthrough":
     case "ellipsis":
@@ -810,6 +850,13 @@ function filterUsageForDisplay(
         .filter((branch) => branch.length > 0);
       if (filteredBranches.length > 0) {
         terms.push({ type: "exclusive", terms: filteredBranches });
+      }
+      continue;
+    }
+    if (term.type === "sequence") {
+      const filtered = filterUsageForDisplay(term.terms, isHidden);
+      if (filtered.length > 0) {
+        terms.push({ type: "sequence", terms: filtered });
       }
       continue;
     }
@@ -984,6 +1031,8 @@ function* formatUsageTermInternal(
       text: options?.colors ? `\x1b[2m)\x1b[0m` : ")", // Dim
       width: 1,
     };
+  } else if (term.type === "sequence") {
+    yield* formatUsageTerms(term.terms, options);
   } else if (term.type === "multiple") {
     if (term.min < 1) {
       yield {

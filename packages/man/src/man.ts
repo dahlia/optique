@@ -295,6 +295,9 @@ function formatUsageTermAsRoffInternal(
       return `(${alternatives.join(" | ")})`;
     }
 
+    case "sequence":
+      return formatUsageAsRoffInternal(term.terms, insideBrackets);
+
     case "literal":
       return escapeRoff(term.value);
 
@@ -401,6 +404,9 @@ function formatDocUsageTermAsRoff(term: UsageTerm): string {
       if (alternatives.length === 1) return alternatives[0];
       return `(${alternatives.join(" | ")})`;
     }
+
+    case "sequence":
+      return formatDocUsageAsRoff(term.terms);
 
     case "argument":
       return `\\fI${escapeRoff(term.metavar)}\\fR`;

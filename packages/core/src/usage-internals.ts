@@ -61,6 +61,13 @@ export function collectLeadingCandidates(
       return false;
     }
 
+    if (term.type === "sequence") {
+      if (collectLeadingCandidates(term.terms, optionNames, commandNames)) {
+        continue;
+      }
+      return false;
+    }
+
     if (term.type === "exclusive") {
       let allSkippable = true;
       for (const branch of term.terms) {
