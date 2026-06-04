@@ -698,6 +698,12 @@ function applyHiddenToUsageTerm(
       min: term.min,
     };
   }
+  if (term.type === "sequence") {
+    return {
+      type: "sequence",
+      terms: applyHiddenToUsage(term.terms, hidden),
+    };
+  }
   if (term.type === "exclusive") {
     return {
       type: "exclusive",
@@ -8864,6 +8870,8 @@ export function seq<
       const parser = syncParsers[index];
       const parserState = getSeqChildState(currentContext.state, index, parser);
 
+      if (currentContext.buffer.length < 1) break;
+
       if (
         shouldAdvanceSeqBeforeParse(
           parser,
@@ -8939,6 +8947,8 @@ export function seq<
       const index = currentContext.state.index;
       const parser = parsers[index];
       const parserState = getSeqChildState(currentContext.state, index, parser);
+
+      if (currentContext.buffer.length < 1) break;
 
       if (
         shouldAdvanceSeqBeforeParse(

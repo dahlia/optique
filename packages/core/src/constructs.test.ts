@@ -22065,6 +22065,30 @@ describe("seq", () => {
     }]);
   });
 
+  it("should preserve suggestions after a consumed command", () => {
+    const parser = seq(
+      optional(argument(string({ metavar: "PROFILE" }))),
+      command("deploy", object({ force: option("--force") })),
+    );
+
+    assert.deepEqual(suggestSync(parser, ["deploy", "--"]), [{
+      kind: "literal",
+      text: "--force",
+    }]);
+  });
+
+  it("should preserve async suggestions after a consumed command", async () => {
+    const parser = seq(
+      optional(argument(string({ metavar: "PROFILE" }))),
+      command("deploy", object({ force: option("--force") })),
+    );
+
+    assert.deepEqual(await suggestAsync(parser, ["deploy", "--"]), [{
+      kind: "literal",
+      text: "--force",
+    }]);
+  });
+
   it("should preserve skippable child suggestions at the cursor", () => {
     const parser = seq(
       optional(option("--name", string())),
@@ -22087,5 +22111,20 @@ describe("seq", () => {
       kind: "literal",
       text: "--name",
     }]);
+  });
+
+  it("should preserve invalid value errors during completion", () => {
+    const parser = seq(option("--num", integer()));
+
+    const result = parseSync(parser, ["--num", "bad"]);
+
+    assert.equal(result.success, false);
+    assertErrorIncludes(result.error, "integer");
+  });
+
+  it("should propagate hidden usage through sequence terms", () => {
+    const parser = group("hidden", seq(option("--secret")), { hidden: true });
+
+    assert.equal(formatUsage("tool", parser.usage), "tool");
   });
 });
