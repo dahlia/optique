@@ -3,6 +3,7 @@ import * as fc from "fast-check";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
+import { getAnnotations } from "@optique/core/annotations";
 import type { Annotations } from "@optique/core/context";
 import { injectAnnotations } from "@optique/core/extension";
 import {
@@ -744,6 +745,61 @@ describe("bindEnv()", () => {
       success: true,
       value: ["env-profile", {}],
     });
+  });
+
+  it("preserves annotations when checking env-bound skip state", () => {
+    const annotationKey = Symbol("@optique/test/canSkip");
+    const envContext = createEnvContext({
+      source: () => undefined,
+    });
+    const innerParser: Parser<"sync", string, undefined> = {
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      mode: "sync",
+      priority: 0,
+      usage: [{ type: "argument", metavar: "VALUE" }],
+      leadingNames: new Set(),
+      acceptingAnyToken: true,
+      initialState: undefined,
+      parse() {
+        return {
+          success: false,
+          consumed: 0,
+          error: message`No CLI input.`,
+        };
+      },
+      complete() {
+        return { success: true, value: "from-complete" };
+      },
+      canSkip(state) {
+        return getAnnotations(state)?.[annotationKey] === true;
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = bindEnv(innerParser, {
+      context: envContext,
+      key: "PROFILE",
+      parser: string(),
+    });
+    const annotations: Annotations = {
+      ...getSyncAnnotations(envContext),
+      [annotationKey]: true,
+    };
+
+    const result = parser.parse({
+      buffer: [],
+      state: injectAnnotations(parser.initialState, annotations),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(result.success);
+    assert.ok(parser.canSkip?.(result.next.state));
   });
 
   it("does not read env fallbacks after seq consumes CLI values", () => {

@@ -5,6 +5,7 @@ import {
   delegateSuggestNodes,
   dispatchByMode,
   getTraits,
+  inheritAnnotations,
   injectAnnotations,
   isInjectedAnnotationState,
   mapModeValue,
@@ -301,6 +302,13 @@ export function bindEnv<
       undefined;
   }
 
+  function getInnerState(state: TState): TState {
+    if (!isEnvBindState(state)) return state;
+    return state.cliState === undefined
+      ? inheritAnnotations(state, parser.initialState)
+      : state.cliState as TState;
+  }
+
   const boundParser: Parser<M, TValue, TState> = {
     mode: parser.mode,
     $valueType: parser.$valueType,
@@ -318,22 +326,13 @@ export function bindEnv<
           return parser.canSkip?.(state.cliState!, exec) === true;
         }
         if (hasEnvFallback(state)) return true;
-        return parser.canSkip?.(
-          state.cliState === undefined
-            ? parser.initialState
-            : state.cliState as TState,
-          exec,
-        ) === true;
+        return parser.canSkip?.(getInnerState(state), exec) === true;
       }
       if (hasEnvFallback(state)) return true;
       return parser.canSkip?.(state, exec) === true;
     },
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
-      const innerState = isEnvBindState(state)
-        ? (state.cliState === undefined
-          ? parser.initialState
-          : state.cliState as TState)
-        : state;
+      const innerState = getInnerState(state);
       return delegateSuggestNodes(
         parser,
         boundParser,
