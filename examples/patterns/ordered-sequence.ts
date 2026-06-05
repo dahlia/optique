@@ -43,9 +43,12 @@ const profileName = profile ?? "default";
 
 if (commandResult.action === "build") {
   print(message`Building ${commandResult.target} with ${profileName}.`);
-} else {
-  const suffix = commandResult.force ? " with force" : "";
+} else if (commandResult.force) {
   print(
-    message`Deploying ${commandResult.environment} with ${profileName}${suffix}.`,
+    message`Deploying ${commandResult.environment} with ${profileName} with force.`,
+  );
+} else {
+  print(
+    message`Deploying ${commandResult.environment} with ${profileName}.`,
   );
 }
