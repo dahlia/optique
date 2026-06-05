@@ -2177,6 +2177,62 @@ describe("getDocPage", () => {
     );
   });
 
+  it("should use actual buffer advancement for replayed command docs", () => {
+    const parser = or(
+      object({
+        shared: option("--shared", string()),
+        alpha: command("alpha", object({ a: option("--a") }), {
+          usageLine: [{ type: "literal", value: "alpha-usage" }],
+        }),
+      }),
+      object({
+        shared: option("--shared", string()),
+        deploy: command("deploy", object({ force: option("--force") }), {
+          usageLine: [{ type: "literal", value: "deployment-usage" }],
+        }),
+      }),
+    );
+
+    const docPage = getDocPage(parser, ["--shared", "value", "deploy"]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(
+      formatUsage("tool", docPage.usage),
+      "tool deploy deployment-usage",
+    );
+  });
+
+  it("should use actual buffer advancement for async replayed command docs", async () => {
+    const parser = or(
+      object({
+        shared: option("--shared", string()),
+        alpha: command("alpha", object({ a: option("--a") }), {
+          usageLine: [{ type: "literal", value: "alpha-usage" }],
+        }),
+      }),
+      object({
+        shared: option("--shared", string()),
+        deploy: command("deploy", object({ force: option("--force") }), {
+          usageLine: [{ type: "literal", value: "deployment-usage" }],
+        }),
+      }),
+    );
+
+    const docPage = await getDocPageAsync(parser, [
+      "--shared",
+      "value",
+      "deploy",
+    ]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(
+      formatUsage("tool", docPage.usage),
+      "tool deploy deployment-usage",
+    );
+  });
+
   it("should handle exclusive (or) parsers correctly", () => {
     const parser = or(
       option("-v", "--verbose"),

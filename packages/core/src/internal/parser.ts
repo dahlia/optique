@@ -1693,21 +1693,20 @@ function getDocPageSyncImpl(
     exec,
   );
   const matchedCommandArgIndices = new Set<number>();
-  let consumedArgCount = 0;
   while (context.buffer.length > 0) {
     const result = parser.parse(context);
     if (!result.success) break;
     const previousCommandPath = context.exec?.commandPath;
     const previousBuffer = context.buffer;
     context = result.next;
+    const consumedCount = previousBuffer.length - context.buffer.length;
     recordMatchedCommandArgIndices(
-      result.consumed,
+      previousBuffer.slice(0, consumedCount),
       previousCommandPath,
       context.exec?.commandPath,
-      consumedArgCount,
+      args.length - previousBuffer.length,
       matchedCommandArgIndices,
     );
-    consumedArgCount += result.consumed.length;
     if (isBufferUnchanged(previousBuffer, context.buffer)) break;
   }
   return buildDocPage(parser, context, args, matchedCommandArgIndices);
@@ -1733,21 +1732,20 @@ async function getDocPageAsyncImpl(
     exec,
   );
   const matchedCommandArgIndices = new Set<number>();
-  let consumedArgCount = 0;
   while (context.buffer.length > 0) {
     const result = await parser.parse(context);
     if (!result.success) break;
     const previousCommandPath = context.exec?.commandPath;
     const previousBuffer = context.buffer;
     context = result.next;
+    const consumedCount = previousBuffer.length - context.buffer.length;
     recordMatchedCommandArgIndices(
-      result.consumed,
+      previousBuffer.slice(0, consumedCount),
       previousCommandPath,
       context.exec?.commandPath,
-      consumedArgCount,
+      args.length - previousBuffer.length,
       matchedCommandArgIndices,
     );
-    consumedArgCount += result.consumed.length;
     if (isBufferUnchanged(previousBuffer, context.buffer)) break;
   }
   return buildDocPage(parser, context, args, matchedCommandArgIndices);
@@ -1875,16 +1873,15 @@ function buildDocPage(
     let term = usage[i];
     const canSearchCommand = commandArgIndices == null ||
       commandArgIndices.has(argIndex);
+    if (!canSearchCommand) continue;
     let found: Usage | null = null;
-    if (canSearchCommand) {
-      for (let searchIndex = i; searchIndex < usage.length; searchIndex++) {
-        found = findCommandInCurrentUsageTerm(
-          usage[searchIndex],
-          arg,
-          usage.slice(searchIndex + 1),
-        );
-        if (found != null) break;
-      }
+    for (let searchIndex = i; searchIndex < usage.length; searchIndex++) {
+      found = findCommandInCurrentUsageTerm(
+        usage[searchIndex],
+        arg,
+        usage.slice(searchIndex + 1),
+      );
+      if (found != null) break;
     }
     if (found) {
       usage.splice(i, usage.length - i, ...found);
