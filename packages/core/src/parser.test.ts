@@ -2111,6 +2111,72 @@ describe("getDocPage", () => {
     );
   });
 
+  it("should not enter seq command docs for positional command names", () => {
+    const parser = seq(
+      argument(string({ metavar: "PROFILE" })),
+      command("deploy", object({ force: option("--force") }), {
+        usageLine: [{ type: "literal", value: "deployment-usage" }],
+      }),
+    );
+
+    const docPage = getDocPage(parser, ["deploy"]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(
+      formatUsage("tool", docPage.usage),
+      "tool PROFILE deploy [--force]",
+    );
+    const allEntries = docPage.sections.flatMap((s) => s.entries);
+    assert.ok(
+      !allEntries.some((e) =>
+        e.term.type === "option" && e.term.names.includes("--force")
+      ),
+    );
+  });
+
+  it("should not enter async seq command docs for positional command names", async () => {
+    const parser = seq(
+      argument(string({ metavar: "PROFILE" })),
+      command("deploy", object({ force: option("--force") }), {
+        usageLine: [{ type: "literal", value: "deployment-usage" }],
+      }),
+    );
+
+    const docPage = await getDocPageAsync(parser, ["deploy"]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(
+      formatUsage("tool", docPage.usage),
+      "tool PROFILE deploy [--force]",
+    );
+    const allEntries = docPage.sections.flatMap((s) => s.entries);
+    assert.ok(
+      !allEntries.some((e) =>
+        e.term.type === "option" && e.term.names.includes("--force")
+      ),
+    );
+  });
+
+  it("should enter seq command docs after repeated positional names", () => {
+    const parser = seq(
+      argument(string({ metavar: "PROFILE" })),
+      command("deploy", object({ force: option("--force") }), {
+        usageLine: [{ type: "literal", value: "deployment-usage" }],
+      }),
+    );
+
+    const docPage = getDocPage(parser, ["deploy", "deploy"]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(
+      formatUsage("tool", docPage.usage),
+      "tool deploy deployment-usage",
+    );
+  });
+
   it("should handle exclusive (or) parsers correctly", () => {
     const parser = or(
       option("-v", "--verbose"),

@@ -8993,6 +8993,15 @@ export function seq<
     parsers.map((parser) => parser.initialState),
   );
   type ParseResult = ParserResult<SeqState>;
+  type ParseFailure = Extract<ParseResult, { readonly success: false }>;
+
+  const withSeqConsumedDepth = (
+    result: ParseFailure,
+    consumed: readonly string[],
+  ): ParseFailure => ({
+    ...result,
+    consumed: consumed.length + result.consumed,
+  });
 
   const parseSync = (context: ParserContext<SeqState>): ParseResult => {
     let currentContext = context;
@@ -9029,9 +9038,11 @@ export function seq<
       );
 
       if (!result.success) {
-        if (result.consumed > 0) return result;
+        if (result.consumed > 0) {
+          return withSeqConsumedDepth(result, allConsumed);
+        }
         if (!parserCanSkipAt(parser, parserState, currentContext.exec, index)) {
-          return result;
+          return withSeqConsumedDepth(result, allConsumed);
         }
         currentContext = advanceSeqContext(currentContext, index + 1, false);
         continue;
@@ -9104,9 +9115,11 @@ export function seq<
       );
 
       if (!result.success) {
-        if (result.consumed > 0) return result;
+        if (result.consumed > 0) {
+          return withSeqConsumedDepth(result, allConsumed);
+        }
         if (!parserCanSkipAt(parser, parserState, currentContext.exec, index)) {
-          return result;
+          return withSeqConsumedDepth(result, allConsumed);
         }
         currentContext = advanceSeqContext(currentContext, index + 1, false);
         continue;

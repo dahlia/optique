@@ -1496,6 +1496,27 @@ function findCommandInCurrentUsageTerm(
   return null;
 }
 
+function recordMatchedCommandArgIndices(
+  consumed: readonly string[],
+  previousCommandPath: readonly string[] | undefined,
+  nextCommandPath: readonly string[] | undefined,
+  consumedOffset: number,
+  indices: Set<number>,
+): void {
+  const previousLength = previousCommandPath?.length ?? 0;
+  const next = nextCommandPath ?? [];
+  if (next.length <= previousLength || consumed.length < 1) return;
+
+  let searchEnd = consumed.length;
+  for (let index = next.length - 1; index >= previousLength; index--) {
+    const commandName = next[index];
+    const localIndex = consumed.lastIndexOf(commandName, searchEnd - 1);
+    if (localIndex < 0) continue;
+    indices.add(consumedOffset + localIndex);
+    searchEnd = localIndex;
+  }
+}
+
 /**
  * Generates a documentation page for a synchronous parser.
  *
@@ -1670,14 +1691,25 @@ function getDocPageSyncImpl(
     { buffer: args, state: initialState, optionsTerminated: false },
     exec,
   );
+  const matchedCommandArgIndices = new Set<number>();
+  let consumedArgCount = 0;
   while (context.buffer.length > 0) {
     const result = parser.parse(context);
     if (!result.success) break;
+    const previousCommandPath = context.exec?.commandPath;
     const previousBuffer = context.buffer;
     context = result.next;
+    recordMatchedCommandArgIndices(
+      result.consumed,
+      previousCommandPath,
+      context.exec?.commandPath,
+      consumedArgCount,
+      matchedCommandArgIndices,
+    );
+    consumedArgCount += result.consumed.length;
     if (isBufferUnchanged(previousBuffer, context.buffer)) break;
   }
-  return buildDocPage(parser, context, args);
+  return buildDocPage(parser, context, args, matchedCommandArgIndices);
 }
 
 /**
@@ -1699,14 +1731,25 @@ async function getDocPageAsyncImpl(
     { buffer: args, state: initialState, optionsTerminated: false },
     exec,
   );
+  const matchedCommandArgIndices = new Set<number>();
+  let consumedArgCount = 0;
   while (context.buffer.length > 0) {
     const result = await parser.parse(context);
     if (!result.success) break;
+    const previousCommandPath = context.exec?.commandPath;
     const previousBuffer = context.buffer;
     context = result.next;
+    recordMatchedCommandArgIndices(
+      result.consumed,
+      previousCommandPath,
+      context.exec?.commandPath,
+      consumedArgCount,
+      matchedCommandArgIndices,
+    );
+    consumedArgCount += result.consumed.length;
     if (isBufferUnchanged(previousBuffer, context.buffer)) break;
   }
-  return buildDocPage(parser, context, args);
+  return buildDocPage(parser, context, args, matchedCommandArgIndices);
 }
 
 /**
@@ -1717,6 +1760,7 @@ function buildDocPage(
   parser: Parser<Mode, unknown, unknown>,
   context: ParserContext<unknown>,
   args: readonly string[],
+  matchedCommandArgIndices?: ReadonlySet<number>,
 ): DocPage | undefined {
   let effectiveArgs: readonly string[] = args;
   let { brief, description, fragments, footer } = parser.getDocFragments(
@@ -1823,15 +1867,20 @@ function buildDocPage(
     0,
     effectiveArgs.length - context.buffer.length,
   );
+  const commandArgIndices = args.length > 0 ? matchedCommandArgIndices : null;
   for (let argIndex = 0; argIndex < effectiveArgs.length; argIndex++) {
     const arg = effectiveArgs[argIndex];
     if (i >= usage.length) break;
     let term = usage[i];
-    const found = findCommandInCurrentUsageTerm(
-      term,
-      arg,
-      usage.slice(i + 1),
-    );
+    const canSearchCommand = commandArgIndices == null ||
+      commandArgIndices.has(argIndex);
+    const found = canSearchCommand
+      ? findCommandInCurrentUsageTerm(
+        term,
+        arg,
+        usage.slice(i + 1),
+      )
+      : null;
     if (found) {
       usage.splice(i, usage.length - i, ...found);
       term = usage[i];

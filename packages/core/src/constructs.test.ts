@@ -22132,6 +22132,44 @@ describe("seq", () => {
     });
   });
 
+  it("should preserve consumed depth on child failures", () => {
+    const parser = seq(
+      argument(string({ metavar: "PROFILE" })),
+      option("--x", string()),
+    );
+
+    const result = parser.parse({
+      buffer: ["a", "--x", "1", "--x", "2"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.equal(result.consumed, 4);
+    }
+  });
+
+  it("should preserve async consumed depth on child failures", async () => {
+    const parser = seq(
+      toAsyncParser(argument(string({ metavar: "PROFILE" }))),
+      option("--x", string()),
+    );
+
+    const result = await parser.parse({
+      buffer: ["a", "--x", "1", "--x", "2"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.equal(result.consumed, 4);
+    }
+  });
+
   it("should not skip initial optional duplicates when duplicates are allowed", () => {
     const parser = seq(
       optional(option("--x", string())),
