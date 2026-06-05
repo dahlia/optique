@@ -33,7 +33,13 @@ import {
   text,
   valueSet,
 } from "@optique/core/message";
-import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
+import {
+  map,
+  multiple,
+  nonEmpty,
+  optional,
+  withDefault,
+} from "@optique/core/modifiers";
 import { defineInheritedAnnotationParser } from "./internal/parser.ts";
 import {
   type ExecutionContext,
@@ -22025,6 +22031,17 @@ describe("seq", () => {
     );
   });
 
+  it("should reject hidden duplicate options active at the same position", () => {
+    assert.throws(
+      () =>
+        seq(
+          optional(option("--path", string(), { hidden: true })),
+          option("--path", string()),
+        ),
+      DuplicateOptionError,
+    );
+  });
+
   it("should allow duplicate options across sequential command boundaries", () => {
     const parser = seq(
       object({ path: option("--path") }),
@@ -22052,6 +22069,55 @@ describe("seq", () => {
       value: ["default", {}],
     });
     assert.equal(calls, 1);
+  });
+
+  it("should not skip nonEmpty() before it parses input", () => {
+    const parser = seq(
+      nonEmpty(optional(option("--alias", string()))),
+      command("run", object({})),
+    );
+
+    const result = parseSync(parser, ["run"]);
+
+    assert.equal(result.success, false);
+    assertErrorIncludes(result.error, "consume at least one token");
+  });
+
+  it("should advance after nonEmpty() consumes input", () => {
+    const parser = seq(
+      nonEmpty(option("--active")),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--active", "run"]), {
+      success: true,
+      value: [true, {}],
+    });
+  });
+
+  it("should not skip async nonEmpty() before it parses input", async () => {
+    const parser = seq(
+      nonEmpty(toAsyncParser(optional(option("--alias", string())))),
+      command("run", object({})),
+    );
+
+    const result = await parseAsync(parser, ["run"]);
+
+    assert.equal(result.success, false);
+    assertErrorIncludes(result.error, "consume at least one token");
+  });
+
+  it("should accept a callable parser object", () => {
+    const fnParser = Object.assign(
+      () => {},
+      option("--active"),
+    );
+    const parser = seq(fnParser as never);
+
+    assert.deepEqual(parseSync(parser, ["--active"]), {
+      success: true,
+      value: [true],
+    });
   });
 
   it("should not skip a non-skippable parser on no-match", () => {

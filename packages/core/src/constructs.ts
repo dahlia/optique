@@ -6828,7 +6828,7 @@ interface SeqLeadingCandidates {
 
 function isParserLike(value: unknown): value is Parser<Mode, unknown, unknown> {
   return value != null &&
-    typeof value === "object" &&
+    (typeof value === "object" || typeof value === "function") &&
     "parse" in value &&
     "$valueType" in value &&
     "$stateType" in value;
@@ -6984,7 +6984,7 @@ function checkSequentialDuplicateOptionNames(
   for (let i = 0; i < parsers.length; i++) {
     const parser = parsers[i];
     const optionNames = new Set<string>();
-    collectLeadingCandidates(parser.usage, optionNames, new Set());
+    collectLeadingCandidates(parser.usage, optionNames, new Set(), true);
     for (const name of optionNames) {
       const sources = active.get(name);
       if (sources != null) {

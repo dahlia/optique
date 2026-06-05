@@ -3009,7 +3009,13 @@ export function nonEmpty<M extends Mode, T, TState>(
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
     ...(typeof parser.canSkip === "function"
-      ? { canSkip: parser.canSkip.bind(parser) }
+      ? {
+        canSkip(state: TState, exec?: ExecutionContext) {
+          const unwrappedState = unwrapInjectedAnnotationWrapper(state);
+          if (unwrappedState === parser.initialState) return false;
+          return parser.canSkip?.(state, exec) === true;
+        },
+      }
       : {}),
     // Forward shouldDeferCompletion from inner parser so that prompt()
     // can defer through nonEmpty() wrappers.

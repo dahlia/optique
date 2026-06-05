@@ -26,12 +26,13 @@ export function collectLeadingCandidates(
   terms: Usage,
   optionNames: Set<string>,
   commandNames: Set<string>,
+  includeHidden = false,
 ): boolean {
   if (!terms || !Array.isArray(terms)) return true;
 
   for (const term of terms) {
     if (term.type === "option") {
-      if (!isSuggestionHidden(term.hidden)) {
+      if (includeHidden || !isSuggestionHidden(term.hidden)) {
         for (const name of term.names) {
           optionNames.add(name);
         }
@@ -40,7 +41,7 @@ export function collectLeadingCandidates(
     }
 
     if (term.type === "command") {
-      if (!isSuggestionHidden(term.hidden)) {
+      if (includeHidden || !isSuggestionHidden(term.hidden)) {
         commandNames.add(term.name);
       }
       return false;
@@ -51,18 +52,35 @@ export function collectLeadingCandidates(
     }
 
     if (term.type === "optional") {
-      collectLeadingCandidates(term.terms, optionNames, commandNames);
+      collectLeadingCandidates(
+        term.terms,
+        optionNames,
+        commandNames,
+        includeHidden,
+      );
       continue;
     }
 
     if (term.type === "multiple") {
-      collectLeadingCandidates(term.terms, optionNames, commandNames);
+      collectLeadingCandidates(
+        term.terms,
+        optionNames,
+        commandNames,
+        includeHidden,
+      );
       if (term.min === 0) continue;
       return false;
     }
 
     if (term.type === "sequence") {
-      if (collectLeadingCandidates(term.terms, optionNames, commandNames)) {
+      if (
+        collectLeadingCandidates(
+          term.terms,
+          optionNames,
+          commandNames,
+          includeHidden,
+        )
+      ) {
         continue;
       }
       return false;
@@ -75,6 +93,7 @@ export function collectLeadingCandidates(
           branch,
           optionNames,
           commandNames,
+          includeHidden,
         );
         allSkippable = allSkippable && branchSkippable;
       }
