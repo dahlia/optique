@@ -33,6 +33,7 @@ import {
   mapModeValue,
   mapSourceMetadata,
   type ParserSourceMetadata,
+  withAnnotationView,
   wrapForMode,
 } from "@optique/core/extension";
 import { message } from "@optique/core/message";
@@ -709,12 +710,26 @@ export function bindConfig<
   // parser isolated from those legacy markers prevents optional()/withDefault()
   // wrappers from invoking it without the annotation context it requires.
 
-  const getSuggestInnerState = (state: TState): TState =>
-    isConfigBindState(state)
-      ? (state.cliState === undefined
-        ? inheritAnnotations(state, parser.initialState)
-        : state.cliState as TState)
-      : state;
+  function getInnerState(state: TState): TState {
+    if (!isConfigBindState(state)) return state;
+    if (state.cliState !== undefined) return state.cliState as TState;
+    const initialState = parser.initialState;
+    if (initialState != null && typeof initialState !== "object") {
+      return initialState;
+    }
+    const annotated = inheritAnnotations(state, initialState);
+    if (
+      annotated === initialState &&
+      initialState != null &&
+      typeof initialState === "object"
+    ) {
+      const annotations = getAnnotations(state);
+      return annotations == null
+        ? initialState
+        : withAnnotationView(initialState, annotations);
+    }
+    return annotated;
+  }
 
   function hasConfigFallback(state: TState): boolean {
     if (options.default !== undefined) return true;
@@ -761,13 +776,13 @@ export function bindConfig<
           return parser.canSkip?.(state.cliState!, exec) === true;
         }
         if (hasConfigFallback(state)) return true;
-        return parser.canSkip?.(getSuggestInnerState(state), exec) === true;
+        return parser.canSkip?.(getInnerState(state), exec) === true;
       }
       if (hasConfigFallback(state)) return true;
       return parser.canSkip?.(state, exec) === true;
     },
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
-      const innerState = getSuggestInnerState(state);
+      const innerState = getInnerState(state);
       return delegateSuggestNodes(
         parser,
         boundParser,
@@ -858,7 +873,7 @@ export function bindConfig<
     },
 
     suggest: (context, prefix) => {
-      const innerState = getSuggestInnerState(context.state);
+      const innerState = getInnerState(context.state);
       const innerContext = innerState !== context.state
         ? { ...context, state: innerState }
         : context;

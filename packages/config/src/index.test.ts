@@ -3007,6 +3007,65 @@ describe("createConfigContext error paths", () => {
     },
   );
 
+  test("bindConfig canSkip preserves annotations on no-cli fallback", () => {
+    const context = createConfigContext({
+      schema: z.object({
+        host: z.string().optional(),
+      }),
+    });
+    const annotationKey = Symbol("@optique/test/canSkip");
+    class InnerState {
+      #marker = "inner";
+
+      get marker(): string {
+        return this.#marker;
+      }
+    }
+    const initialState = new InnerState();
+    const inner: Parser<"sync", string, InnerState | undefined> = {
+      mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly (InnerState | undefined)[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: true,
+      initialState,
+      parse(_parseContext) {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`No CLI value.`,
+        };
+      },
+      complete: () => ({ success: true as const, value: "ok" }),
+      suggest: () => [],
+      canSkip(state) {
+        return state instanceof InnerState &&
+          state.marker === "inner" &&
+          getAnnotations(state)?.[annotationKey] === true;
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser = bindConfig(inner, {
+      context,
+      key: "host",
+    });
+
+    const parsed = parser.parse({
+      buffer: [],
+      state: injectAnnotations(undefined, {
+        [annotationKey]: true,
+      }),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
+
+    assert.ok(parser.canSkip?.(parsed.next.state));
+  });
+
   test("bindConfig getSuggestRuntimeNodes preserves inner nodes for source parsers", () => {
     const context = createConfigContext({
       schema: z.object({
