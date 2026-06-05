@@ -7170,13 +7170,15 @@ function shouldAdvanceSeqBeforeParse(
   index: number,
   parsers: readonly Parser<Mode, unknown, unknown>[],
 ): boolean {
+  const token = currentContext.buffer[0];
+  if (token !== "--") {
+    const laterLeadingCandidates = leadingCandidatesAfter(parsers, index + 1);
+    if (!tokenMatchesLeadingName(token, laterLeadingCandidates)) return false;
+  }
   if (!parserCanSkipAt(parser, parserState, currentContext.exec, index)) {
     return false;
   }
-  const token = currentContext.buffer[0];
   if (token === "--") return true;
-  const laterLeadingCandidates = leadingCandidatesAfter(parsers, index + 1);
-  if (!tokenMatchesLeadingName(token, laterLeadingCandidates)) return false;
   if (currentContext.state.states[index] === parser.initialState) {
     const currentLeadingCandidates = sequenceLeadingCandidates([parser]);
     return !tokenMatchesLeadingName(token, currentLeadingCandidates);

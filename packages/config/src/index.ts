@@ -718,13 +718,30 @@ export function bindConfig<
 
   function hasConfigFallback(state: TState): boolean {
     if (options.default !== undefined) return true;
-    if (typeof options.key === "function") return false;
     const annotations = getAnnotations(state);
     const annotationValue = annotations?.[options.context.id] as
       | { readonly data: T; readonly meta?: TConfigMeta | undefined }
       | undefined;
     const configData = annotationValue?.data;
-    return configData != null && configData[options.key] !== undefined;
+    const configMeta = annotationValue?.meta;
+    if (configData == null) return false;
+    if (typeof options.key !== "function") {
+      return configData[options.key] !== undefined;
+    }
+    const configValue = options.key(configData, configMeta);
+    if (
+      configValue != null &&
+      (typeof configValue === "object" ||
+        typeof configValue === "function") &&
+      "then" in configValue &&
+      typeof (configValue as Record<string, unknown>).then === "function"
+    ) {
+      throw new TypeError(
+        "The key callback must return a synchronous value, " +
+          "but got a thenable.",
+      );
+    }
+    return configValue !== undefined;
   }
 
   const boundParser: Parser<M, TValue, TState> = {
@@ -739,10 +756,14 @@ export function bindConfig<
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
     canSkip(state: TState, exec?: ExecutionContext) {
-      if (hasConfigFallback(state)) return true;
       if (isConfigBindState(state)) {
+        if (state.hasCliValue) {
+          return parser.canSkip?.(state.cliState!, exec) === true;
+        }
+        if (hasConfigFallback(state)) return true;
         return parser.canSkip?.(getSuggestInnerState(state), exec) === true;
       }
+      if (hasConfigFallback(state)) return true;
       return parser.canSkip?.(state, exec) === true;
     },
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {

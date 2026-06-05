@@ -313,8 +313,11 @@ export function bindEnv<
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
     canSkip(state: TState, exec?: ExecutionContext) {
-      if (hasEnvFallback(state)) return true;
       if (isEnvBindState(state)) {
+        if (state.hasCliValue) {
+          return parser.canSkip?.(state.cliState!, exec) === true;
+        }
+        if (hasEnvFallback(state)) return true;
         return parser.canSkip?.(
           state.cliState === undefined
             ? parser.initialState
@@ -322,6 +325,7 @@ export function bindEnv<
           exec,
         ) === true;
       }
+      if (hasEnvFallback(state)) return true;
       return parser.canSkip?.(state, exec) === true;
     },
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {

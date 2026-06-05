@@ -746,6 +746,31 @@ describe("bindEnv()", () => {
     });
   });
 
+  it("does not read env fallbacks after seq consumes CLI values", () => {
+    const context = createEnvContext({
+      source: () => {
+        throw new Error("Environment should not be read.");
+      },
+    });
+    const parser = seq(
+      bindEnv(argument(string()), {
+        context,
+        key: "PROFILE",
+        parser: string(),
+      }),
+      command("run", object({})),
+    );
+
+    const result = parse(parser, ["cli-profile", "run"], {
+      annotations: getSyncAnnotations(context),
+    });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: ["cli-profile", {}],
+    });
+  });
+
   it("should always prefer CLI over env and default values", () => {
     fc.assert(
       fc.property(

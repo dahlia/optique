@@ -451,6 +451,29 @@ describe("bindConfig", () => {
     });
   });
 
+  test("lets seq skip config-bound accessor values before commands", () => {
+    const schema = z.object({
+      profile: z.string().optional(),
+    });
+    const context = createConfigContext({ schema });
+    const parser = seq(
+      bindConfig(argument(string()), {
+        context,
+        key: (config) => config.profile,
+      }),
+      command("run", object({})),
+    );
+
+    const result = parse(parser, ["run"], {
+      annotations: { [context.id]: { data: { profile: "config-profile" } } },
+    });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: ["config-profile", {}],
+    });
+  });
+
   test("should always prefer CLI over config and default values", () => {
     fc.assert(
       fc.property(
