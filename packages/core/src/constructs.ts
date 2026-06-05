@@ -12988,6 +12988,11 @@ export function conditional(
           ...term,
           terms: appendLiteralToUsage(term.terms, literalValue),
         });
+      } else if (term.type === "sequence") {
+        result.push({
+          ...term,
+          terms: appendLiteralToUsage(term.terms, literalValue),
+        });
       } else if (term.type === "exclusive") {
         result.push({
           ...term,

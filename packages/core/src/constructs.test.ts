@@ -14981,6 +14981,24 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.ok(result.success);
   });
 
+  it("conditional() rewrites discriminator literals inside seq usage", () => {
+    const parser = conditional(
+      map(
+        seq(option("--kind", choice(["a", "b"] as const))),
+        ([kind]) => kind,
+      ),
+      {
+        a: object({ aa: option("--aa") }),
+        b: object({ bb: option("--bb") }),
+      },
+    );
+
+    assert.equal(
+      formatUsage("tool", parser.usage),
+      "tool (--kind a [--aa] | --kind b [--bb])",
+    );
+  });
+
   // ----- conditional() async complete: discriminatorCompleteResult failure (line 7085) -----
   it("conditional() async complete falls back to selectedBranch.key on discriminator failure", async () => {
     // Build an async conditional where discriminator complete is normal
