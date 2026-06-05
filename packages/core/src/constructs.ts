@@ -9886,9 +9886,9 @@ export function merge(
   type MergeParseResult = ParserResult<MergeState>;
 
   // Helper function to extract the appropriate state for a parser
-  const extractParserState = (
+  const extractParserStateFromState = (
     parser: Parser<Mode, MergeState, MergeState>,
-    context: ParserContext<MergeState>,
+    state: MergeState,
     index: number,
   ): unknown => {
     if (parser.initialState === undefined) {
@@ -9896,10 +9896,10 @@ export function merge(
       // check if they have accumulated state during parsing
       const key = parserStateKey(index);
       if (
-        context.state && typeof context.state === "object" &&
-        key in context.state
+        state && typeof state === "object" &&
+        key in state
       ) {
-        return context.state[key];
+        return state[key];
       }
       return undefined;
     } else if (
@@ -9908,17 +9908,17 @@ export function merge(
       const localStateKey = localObjectStateKey(index);
       if (
         shouldPreserveLocalChildState(parser) &&
-        context.state && typeof context.state === "object" &&
-        localStateKey in context.state
+        state && typeof state === "object" &&
+        localStateKey in state
       ) {
-        return context.state[localStateKey];
+        return state[localStateKey];
       }
       // For object parsers, extract matching fields from context state
-      if (context.state && typeof context.state === "object") {
+      if (state && typeof state === "object") {
         const extractedState: MergeState = {};
         for (const field in parser.initialState) {
-          extractedState[field] = field in context.state
-            ? context.state[field]
+          extractedState[field] = field in state
+            ? state[field]
             : parser.initialState[field];
         }
         return extractedState;
@@ -9927,6 +9927,11 @@ export function merge(
     }
     return parser.initialState;
   };
+  const extractParserState = (
+    parser: Parser<Mode, MergeState, MergeState>,
+    context: ParserContext<MergeState>,
+    index: number,
+  ): unknown => extractParserStateFromState(parser, context.state, index);
 
   // Helper function to merge result state into context state
   const mergeResultState = (
@@ -10156,6 +10161,15 @@ export function merge(
     leadingNames: sharedBufferLeadingNames(parsers),
     acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
     initialState,
+    canSkip(state: MergeState, exec?: ExecutionContext) {
+      return parsers.every((parser, index) => {
+        const parserState = extractParserStateFromState(parser, state, index);
+        return parser.canSkip?.(
+          getAnnotatedChildState(state, parserState as MergeState, parser),
+          withChildExecPath(exec, index),
+        ) === true;
+      });
+    },
     parse(context: ParserContext<MergeState>) {
       if (isAsync) {
         return parseAsync(context);
@@ -12246,6 +12260,15 @@ export function concat(
     leadingNames: sharedBufferLeadingNames(parsers),
     acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
     initialState,
+    canSkip(state, exec?: ExecutionContext) {
+      const stateArray = state as readonly unknown[];
+      return parsers.every((parser, index) =>
+        parser.canSkip?.(
+          getAnnotatedChildState(stateArray, stateArray[index], parser),
+          withChildExecPath(exec, index),
+        ) === true
+      );
+    },
     parse(context) {
       if (isAsync) {
         return parseAsync(context);

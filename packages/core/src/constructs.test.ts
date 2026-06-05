@@ -22120,6 +22120,60 @@ describe("seq", () => {
     });
   });
 
+  it("should skip skippable merged children before commands", () => {
+    const parser = seq(
+      merge(object({ profile: optional(argument(string())) })),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(parseSync(parser, ["run"]), {
+      success: true,
+      value: [{ profile: undefined }, {}],
+    });
+  });
+
+  it("should skip skippable concatenated children before commands", () => {
+    const parser = seq(
+      concat(tuple([optional(argument(string()))])),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(parseSync(parser, ["run"]), {
+      success: true,
+      value: [[undefined], {}],
+    });
+  });
+
+  it("should skip async skippable merged children before commands", async () => {
+    const parser = seq(
+      merge(object({ profile: optional(argument(string())) })),
+      command(
+        "run",
+        object({ token: optional(option("--token", asyncStringValue())) }),
+      ),
+    );
+
+    assert.deepEqual(await parseAsync(parser, ["run"]), {
+      success: true,
+      value: [{ profile: undefined }, { token: undefined }],
+    });
+  });
+
+  it("should skip async skippable concatenated children before commands", async () => {
+    const parser = seq(
+      concat(tuple([optional(argument(string()))])),
+      command(
+        "run",
+        object({ token: optional(option("--token", asyncStringValue())) }),
+      ),
+    );
+
+    assert.deepEqual(await parseAsync(parser, ["run"]), {
+      success: true,
+      value: [[undefined], { token: undefined }],
+    });
+  });
+
   it("should advance through grouped children", () => {
     const parser = seq(
       group("First", option("--a", string())),
