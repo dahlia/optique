@@ -2987,6 +2987,7 @@ export function nonEmpty<M extends Mode, T, TState>(
   parser: Parser<M, T, TState>,
 ): Parser<M, T, TState> {
   const syncParser = parser as Parser<"sync", T, TState>;
+  const initialState = parser.initialState;
 
   // Helper to process the result of the inner parser
   const processNonEmptyResult = (
@@ -3030,12 +3031,12 @@ export function nonEmpty<M extends Mode, T, TState>(
     usage: parser.usage,
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
-    initialState: parser.initialState,
+    initialState,
     ...(typeof parser.canSkip === "function"
       ? {
         canSkip(state: TState, exec?: ExecutionContext) {
           const unwrappedState = unwrapInjectedAnnotationWrapper(state);
-          if (unwrappedState === parser.initialState) return false;
+          if (unwrappedState === initialState) return false;
           return parser.canSkip?.(state, exec) === true;
         },
       }

@@ -4,6 +4,7 @@ import {
   merge,
   object,
   or,
+  seq,
   tuple,
 } from "@optique/core/constructs";
 import {
@@ -38,7 +39,7 @@ import {
   isInjectedAnnotationWrapper,
   type ParseOptions,
 } from "./internal/annotations.ts";
-import type { Usage } from "@optique/core/usage";
+import { formatUsage, type Usage } from "@optique/core/usage";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { type DocEntry, formatDocPage } from "@optique/core/doc";
 import assert from "node:assert/strict";
@@ -2035,6 +2036,38 @@ describe("getDocPage", () => {
     assert.ok(sourceEntry, "Should have --source option entry");
     assert.deepEqual(targetEntry?.description, targetDesc);
     assert.deepEqual(sourceEntry?.description, sourceDesc);
+  });
+
+  it("should preserve command-specific docs inside seq()", () => {
+    const parser = seq(
+      optional(argument(string({ metavar: "PROFILE" }))),
+      or(
+        command("build", object({ clean: option("--clean") })),
+        command("deploy", object({ force: option("--force") }), {
+          usageLine: [{ type: "literal", value: "deployment-usage" }],
+        }),
+      ),
+    );
+
+    const docPage = getDocPage(parser, ["deploy"]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(
+      formatUsage("tool", docPage.usage),
+      "tool deploy deployment-usage",
+    );
+    const allEntries = docPage.sections.flatMap((s) => s.entries);
+    assert.ok(
+      allEntries.some((e) =>
+        e.term.type === "option" && e.term.names.includes("--force")
+      ),
+    );
+    assert.ok(
+      !allEntries.some((e) =>
+        e.term.type === "option" && e.term.names.includes("--clean")
+      ),
+    );
   });
 
   it("should handle exclusive (or) parsers correctly", () => {

@@ -1429,21 +1429,68 @@ function findCommandInExclusive(
 
   for (const termGroup of term.terms) {
     const firstTerm = termGroup[0];
+    if (firstTerm == null) continue;
+    const found = findCommandInCurrentUsageTerm(
+      firstTerm,
+      commandName,
+      termGroup.slice(1),
+    );
+    if (found) return found;
+  }
 
-    // Direct match: first term is the command we're looking for
-    if (firstTerm?.type === "command" && firstTerm.name === commandName) {
-      return termGroup;
-    }
+  return null;
+}
 
-    // Recursive case: first term is another exclusive (nested structure)
-    if (firstTerm?.type === "exclusive") {
-      const found = findCommandInExclusive(firstTerm, commandName);
-      if (found) {
-        // Replace the nested exclusive with the found terms,
-        // then append the rest of termGroup (e.g., global options)
-        return [...found, ...termGroup.slice(1)];
-      }
-    }
+/**
+ * Searches for a command inside an ordered usage sequence and returns the
+ * usage from the matched command onward.  This lets contextual command
+ * documentation enter sequence terms while dropping sequence prefixes that
+ * were skipped by parsing, such as optional positionals before a subcommand.
+ *
+ * @param usage The usage terms to search.
+ * @param commandName The command name to find.
+ * @returns The contextual usage terms if found, null otherwise.
+ */
+function findCommandInUsageSequence(
+  usage: Usage,
+  commandName: string,
+): Usage | null {
+  for (let index = 0; index < usage.length; index++) {
+    const found = findCommandInCurrentUsageTerm(
+      usage[index],
+      commandName,
+      usage.slice(index + 1),
+    );
+    if (found) return found;
+  }
+
+  return null;
+}
+
+/**
+ * Searches the current usage term for a command and appends the trailing
+ * usage terms that remain valid after that current term.
+ *
+ * @param term The current usage term to search.
+ * @param commandName The command name to find.
+ * @param trailingUsage Usage terms that follow the current term.
+ * @returns The contextual usage terms if found, null otherwise.
+ */
+function findCommandInCurrentUsageTerm(
+  term: UsageTerm,
+  commandName: string,
+  trailingUsage: Usage,
+): Usage | null {
+  if (term.type === "command" && term.name === commandName) {
+    return [term, ...trailingUsage];
+  }
+
+  if (term.type === "exclusive") {
+    const found = findCommandInExclusive(term, commandName);
+    if (found) return [...found, ...trailingUsage];
+  } else if (term.type === "sequence") {
+    const found = findCommandInUsageSequence(term.terms, commandName);
+    if (found) return [...found, ...trailingUsage];
   }
 
   return null;
@@ -1776,12 +1823,14 @@ function buildDocPage(
     const arg = effectiveArgs[argIndex];
     if (i >= usage.length) break;
     let term = usage[i];
-    if (term.type === "exclusive") {
-      const found = findCommandInExclusive(term, arg);
-      if (found) {
-        usage.splice(i, 1, ...found);
-        term = usage[i];
-      }
+    const found = findCommandInCurrentUsageTerm(
+      term,
+      arg,
+      usage.slice(i + 1),
+    );
+    if (found) {
+      usage.splice(i, usage.length - i, ...found);
+      term = usage[i];
     }
     maybeApplyCommandUsageLine(
       term,

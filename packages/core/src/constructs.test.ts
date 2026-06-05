@@ -22217,6 +22217,17 @@ describe("seq", () => {
     assertErrorIncludes(result.error, "consume at least one token");
   });
 
+  it("should not skip nonEmpty() with fresh composite initial state", () => {
+    const parser = seq(
+      nonEmpty(object({ x: optional(option("--x")) })),
+      command("run", object({})),
+    );
+
+    const result = parseSync(parser, ["run"]);
+
+    assert.equal(result.success, false);
+  });
+
   it("should advance after nonEmpty() consumes input", () => {
     const parser = seq(
       nonEmpty(option("--active")),
