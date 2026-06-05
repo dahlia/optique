@@ -6972,6 +6972,33 @@ function sequenceLeadingNames(
   return names.size === 0 ? EMPTY_LEADING_NAMES : names;
 }
 
+function sequenceAcceptingAnyToken(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+): boolean {
+  for (let i = 0; i < parsers.length; i++) {
+    const parser = parsers[i];
+    if (parser.acceptingAnyToken) return true;
+    if (!parserCanSkipAt(parser, parser.initialState, undefined, i)) {
+      break;
+    }
+  }
+  return false;
+}
+
+function sequencePriority(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+): number {
+  let priority = 0;
+  for (let i = 0; i < parsers.length; i++) {
+    const parser = parsers[i];
+    priority = Math.max(priority, parser.priority);
+    if (!parserCanSkipAt(parser, parser.initialState, undefined, i)) {
+      break;
+    }
+  }
+  return priority;
+}
+
 function leadingCandidatesAfter(
   parsers: readonly Parser<Mode, unknown, unknown>[],
   startIndex: number,
@@ -9170,6 +9197,7 @@ export function seq<
     };
   };
 
+  const leadingNames = sequenceLeadingNames(parsers);
   const seqParser = {
     mode: combinedMode,
     $valueType: [],
@@ -9185,21 +9213,9 @@ export function seq<
       type: "sequence" as const,
       terms: parsers.flatMap((parser) => parser.usage),
     }],
-    leadingNames: sequenceLeadingNames(parsers),
-    acceptingAnyToken: parsers.length > 0 &&
-      sequenceLeadingNames(parsers).size < 1 &&
-      parsers.some((parser, index) => {
-        if (!parser.acceptingAnyToken) return false;
-        return parsers.slice(0, index).every((previous, previousIndex) =>
-          parserCanSkipAt(
-            previous,
-            previous.initialState,
-            undefined,
-            previousIndex,
-          )
-        );
-      }),
-    priority: parsers[0]?.priority ?? 0,
+    leadingNames,
+    acceptingAnyToken: sequenceAcceptingAnyToken(parsers),
+    priority: sequencePriority(parsers),
     initialState,
     canSkip(state: SeqState, exec?: ExecutionContext) {
       for (let i = state.index; i < parsers.length; i++) {

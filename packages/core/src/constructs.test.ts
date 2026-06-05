@@ -21866,6 +21866,28 @@ describe("leadingNames", () => {
     );
     assert.deepEqual(parser.leadingNames, new Set(["tool"]));
   });
+
+  it("seq() should hide positional names after a reachable catch-all", () => {
+    const parser = tuple([
+      seq(
+        or(argument(string()), command("foo", object({}))),
+        constant("tail"),
+      ),
+      command("help", object({})),
+    ]);
+
+    assert.ok(parser.leadingNames.has("foo"));
+    assert.ok(!parser.leadingNames.has("help"));
+  });
+
+  it("seq() should expose the highest reachable leading priority", () => {
+    const parser = seq(
+      optional(argument(string())),
+      command("run", object({})),
+    );
+
+    assert.equal(parser.priority, command("run", object({})).priority);
+  });
 });
 
 describe("acceptingAnyToken", () => {
@@ -21924,6 +21946,15 @@ describe("acceptingAnyToken", () => {
       { server: object({}) },
     );
     assert.ok(!withCatchAllDiscriminator.acceptingAnyToken);
+  });
+
+  it("should be true for seq() with a named reachable catch-all child", () => {
+    const parser = seq(
+      or(argument(string()), command("foo", object({}))),
+      constant("tail"),
+    );
+
+    assert.ok(parser.acceptingAnyToken);
   });
 });
 
