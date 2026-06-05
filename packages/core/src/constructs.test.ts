@@ -3680,6 +3680,40 @@ describe("object", () => {
     assert.ok(!texts.includes("dist"));
   });
 
+  it("should suggest only nested seq option values after option token", () => {
+    const parser = object({
+      sequence: seq(
+        option("--mode", choice(["dev", "prod"])),
+        argument(choice(["target"])),
+      ),
+      other: argument(choice(["zzz"])),
+    });
+
+    const suggestions = suggestSync(parser, ["--mode", ""]);
+    const texts = suggestions
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+
+    assert.deepEqual(texts, ["dev", "prod"]);
+  });
+
+  it("should suggest only nested async seq option values after option token", async () => {
+    const parser = toAsyncParser(object({
+      sequence: seq(
+        option("--mode", choice(["dev", "prod"])),
+        argument(choice(["target"])),
+      ),
+      other: argument(choice(["zzz"])),
+    }));
+
+    const suggestions = await suggestAsync(parser, ["--mode", ""]);
+    const texts = suggestions
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+
+    assert.deepEqual(texts, ["dev", "prod"]);
+  });
+
   it("should fall back to initial state in suggest when field state is missing", () => {
     const parser = object({
       mode: option("--mode", choice(["dev", "prod"])),
@@ -22017,6 +22051,30 @@ describe("seq", () => {
     assert.deepEqual(parseSync(parser, ["--secret=abc"]), {
       success: true,
       value: [undefined, "abc"],
+    });
+  });
+
+  it("should advance past a completed required option before parsing duplicates", () => {
+    const parser = seq(
+      option("--x", string()),
+      option("--x", string()),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--x", "a", "--x", "b"]), {
+      success: true,
+      value: ["a", "b"],
+    });
+  });
+
+  it("should advance async past a completed required option before parsing duplicates", async () => {
+    const parser = seq(
+      toAsyncParser(option("--x", string())),
+      option("--x", string()),
+    );
+
+    assert.deepEqual(await parseAsync(parser, ["--x", "a", "--x", "b"]), {
+      success: true,
+      value: ["a", "b"],
     });
   });
 

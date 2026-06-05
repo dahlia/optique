@@ -785,7 +785,10 @@ function isOptionRequiringValue(usage: Usage, token: string): boolean {
         if (term.metavar && term.names.includes(token)) {
           return true;
         }
-      } else if (term.type === "optional" || term.type === "multiple") {
+      } else if (
+        term.type === "optional" || term.type === "multiple" ||
+        term.type === "sequence"
+      ) {
         if (traverse(term.terms)) return true;
       } else if (term.type === "exclusive") {
         for (const exclusiveUsage of term.terms) {
@@ -6984,7 +6987,9 @@ function checkSequentialDuplicateOptionNames(
     const parser = parsers[i];
     const optionNames = new Set<string>();
     collectLeadingCandidates(parser.usage, optionNames, new Set(), true);
-    const retainedOptionNames = collectRetainedOptionNames(parser.usage);
+    const retainedOptionNames = collectRetainedLeadingCandidates(
+      parser.usage,
+    ).optionNames;
     for (const name of optionNames) {
       const sources = active.get(name);
       if (sources != null) {
@@ -7005,58 +7010,104 @@ function checkSequentialDuplicateOptionNames(
   }
 }
 
-function collectRetainedOptionNames(terms: Usage): Set<string> {
+function collectRetainedLeadingCandidates(terms: Usage): SeqLeadingCandidates {
   const optionNames = new Set<string>();
-  collectRetainedOptionNamesInto(terms, optionNames);
-  return optionNames;
+  const joinedOptionNames = new Set<string>();
+  collectRetainedLeadingCandidatesInto(terms, optionNames, joinedOptionNames);
+  return {
+    optionNames,
+    joinedOptionNames,
+    commandNames: EMPTY_LEADING_NAMES,
+  };
 }
 
-function collectRetainedOptionNamesInto(
+function collectRetainedLeadingCandidatesInto(
   terms: Usage,
   optionNames: Set<string>,
+  joinedOptionNames: Set<string>,
 ): void {
   for (const term of terms) {
     if (term.type === "optional") {
-      collectLeadingCandidates(term.terms, optionNames, new Set(), true);
-      collectRetainedOptionNamesInto(term.terms, optionNames);
+      collectLeadingOptionCandidates(
+        term.terms,
+        optionNames,
+        joinedOptionNames,
+      );
+      collectRetainedLeadingCandidatesInto(
+        term.terms,
+        optionNames,
+        joinedOptionNames,
+      );
       continue;
     }
 
     if (term.type === "multiple") {
       if (term.min === 0) {
-        collectLeadingCandidates(term.terms, optionNames, new Set(), true);
+        collectLeadingOptionCandidates(
+          term.terms,
+          optionNames,
+          joinedOptionNames,
+        );
       }
-      collectRetainedOptionNamesInto(term.terms, optionNames);
+      collectRetainedLeadingCandidatesInto(
+        term.terms,
+        optionNames,
+        joinedOptionNames,
+      );
       continue;
     }
 
     if (term.type === "sequence") {
-      collectRetainedOptionNamesInto(term.terms, optionNames);
+      collectRetainedLeadingCandidatesInto(
+        term.terms,
+        optionNames,
+        joinedOptionNames,
+      );
       continue;
     }
 
     if (term.type === "exclusive") {
       let canSkipBranch = false;
       const branchOptionNames: Set<string>[] = [];
+      const branchJoinedOptionNames: Set<string>[] = [];
       for (const branch of term.terms) {
         const branchOptions = new Set<string>();
+        const branchJoinedOptions = new Set<string>();
         const branchCanSkip = collectLeadingCandidates(
           branch,
           branchOptions,
           new Set(),
           true,
         );
+        collectLeadingJoinedOptionNames(branch, branchJoinedOptions);
         canSkipBranch = canSkipBranch || branchCanSkip;
         branchOptionNames.push(branchOptions);
-        collectRetainedOptionNamesInto(branch, optionNames);
+        branchJoinedOptionNames.push(branchJoinedOptions);
+        collectRetainedLeadingCandidatesInto(
+          branch,
+          optionNames,
+          joinedOptionNames,
+        );
       }
       if (canSkipBranch) {
         for (const branchOptions of branchOptionNames) {
           for (const name of branchOptions) optionNames.add(name);
         }
+        for (const branchJoinedOptions of branchJoinedOptionNames) {
+          for (const name of branchJoinedOptions) joinedOptionNames.add(name);
+        }
       }
     }
   }
+}
+
+function collectLeadingOptionCandidates(
+  terms: Usage,
+  optionNames: Set<string>,
+  joinedOptionNames: Set<string>,
+): void {
+  collectLeadingCandidates(terms, optionNames, new Set(), true);
+  collectLeadingJoinedOptionNames(terms, joinedOptionNames);
 }
 
 function createSeqState(
@@ -7110,9 +7161,13 @@ function shouldAdvanceSeqBeforeParse(
   }
   const token = currentContext.buffer[0];
   if (token === "--") return true;
-  if (currentContext.state.states[index] !== parser.initialState) return false;
   const laterLeadingCandidates = leadingCandidatesAfter(parsers, index + 1);
-  return tokenMatchesLeadingName(token, laterLeadingCandidates);
+  if (!tokenMatchesLeadingName(token, laterLeadingCandidates)) return false;
+  if (currentContext.state.states[index] === parser.initialState) return true;
+  return !tokenMatchesLeadingName(
+    token,
+    collectRetainedLeadingCandidates(parser.usage),
+  );
 }
 
 function advanceSeqContext(
