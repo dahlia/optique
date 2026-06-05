@@ -57,6 +57,20 @@ function isTerminalMultipleItemState(state: unknown): boolean {
     typeof (unwrapped as { success?: unknown }).success === "boolean";
 }
 
+function isMatchedCommandParserState(
+  parser: Parser<Mode, unknown, unknown>,
+  state: unknown,
+): boolean {
+  if (Reflect.get(parser, Symbol.for("@optique/core/commandParser")) !== true) {
+    return false;
+  }
+  const unwrapped = unwrapMultipleItemState(state).value;
+  return Array.isArray(unwrapped) &&
+    unwrapped.length === 2 &&
+    unwrapped[0] === "matched" &&
+    typeof unwrapped[1] === "string";
+}
+
 function isUnstartedMultipleItemState(
   state: unknown,
   originalState?: unknown,
@@ -1950,7 +1964,10 @@ export function multiple<M extends Mode, TValue, TState>(
   ): state is TState =>
     state != null &&
     !isTerminalMultipleItemState(state) &&
-    parser.canSkip?.(state, withChildExecPath(exec, itemIndex)) !== true;
+    (
+      isMatchedCommandParserState(parser, state) ||
+      parser.canSkip?.(state, withChildExecPath(exec, itemIndex)) !== true
+    );
 
   // Sync parse implementation
   const parseSync = (

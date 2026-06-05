@@ -12565,6 +12565,11 @@ export function group<M extends Mode, TValue, TState>(
         shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser),
       }
       : {}),
+    ...(typeof parser.canSkip === "function"
+      ? {
+        canSkip: parser.canSkip.bind(parser),
+      }
+      : {}),
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
       return parser.getSuggestRuntimeNodes?.(state, path) ??
         (parser.dependencyMetadata?.source != null

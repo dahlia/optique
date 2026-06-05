@@ -22102,6 +22102,18 @@ describe("seq", () => {
     });
   });
 
+  it("should advance through grouped children", () => {
+    const parser = seq(
+      group("First", option("--a", string())),
+      option("--b", string()),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--a", "x", "--b", "y"]), {
+      success: true,
+      value: ["x", "y"],
+    });
+  });
+
   it("should not skip initial optional duplicates when duplicates are allowed", () => {
     const parser = seq(
       optional(option("--x", string())),
