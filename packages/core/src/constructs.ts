@@ -7042,13 +7042,11 @@ function collectRetainedLeadingCandidatesInto(
     }
 
     if (term.type === "multiple") {
-      if (term.min === 0) {
-        collectLeadingOptionCandidates(
-          term.terms,
-          optionNames,
-          joinedOptionNames,
-        );
-      }
+      collectLeadingOptionCandidates(
+        term.terms,
+        optionNames,
+        joinedOptionNames,
+      );
       collectRetainedLeadingCandidatesInto(
         term.terms,
         optionNames,

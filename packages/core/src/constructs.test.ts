@@ -22297,6 +22297,17 @@ describe("seq", () => {
     );
   });
 
+  it("should reject duplicate required repeated options after minimum", () => {
+    assert.throws(
+      () =>
+        seq(
+          multiple(option("--x", string()), { min: 1 }),
+          option("--x", string()),
+        ),
+      DuplicateOptionError,
+    );
+  });
+
   it("should allow duplicate options across sequential command boundaries", () => {
     const parser = seq(
       object({ path: option("--path") }),
