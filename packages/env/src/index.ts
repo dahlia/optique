@@ -290,6 +290,17 @@ export function bindEnv<
   // parser isolated from those legacy markers prevents optional()/withDefault()
   // wrappers from invoking it without the annotation context it requires.
 
+  function hasEnvFallback(state: TState): boolean {
+    if (options.default !== undefined) return true;
+    const annotations = getAnnotations(state);
+    const sourceData = annotations?.[options.context.id] as
+      | EnvSourceData
+      | undefined;
+    if (sourceData == null) return false;
+    return sourceData.source(`${sourceData.prefix}${options.key}`) !==
+      undefined;
+  }
+
   const boundParser: Parser<M, TValue, TState> = {
     mode: parser.mode,
     $valueType: parser.$valueType,
@@ -301,6 +312,18 @@ export function bindEnv<
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
+    canSkip(state: TState, exec?: ExecutionContext) {
+      if (hasEnvFallback(state)) return true;
+      if (isEnvBindState(state)) {
+        return parser.canSkip?.(
+          state.cliState === undefined
+            ? parser.initialState
+            : state.cliState as TState,
+          exec,
+        ) === true;
+      }
+      return parser.canSkip?.(state, exec) === true;
+    },
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
       const innerState = isEnvBindState(state)
         ? (state.cliState === undefined

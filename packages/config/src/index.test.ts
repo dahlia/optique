@@ -10,6 +10,7 @@ import {
   merge,
   object,
   or,
+  seq,
   tuple,
 } from "@optique/core/constructs";
 import { type Annotations, getAnnotations } from "@optique/core/annotations";
@@ -17,7 +18,14 @@ import type { SourceContextRequest } from "@optique/core/context";
 import { dependency } from "@optique/core/dependency";
 import { injectAnnotations } from "@optique/core/extension";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
-import { constant, fail, flag, option } from "@optique/core/primitives";
+import {
+  argument,
+  command,
+  constant,
+  fail,
+  flag,
+  option,
+} from "@optique/core/primitives";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { formatMessage, message } from "@optique/core/message";
@@ -394,6 +402,53 @@ describe("bindConfig", () => {
     const result = parse(parser, []);
     assert.ok(result.success);
     assert.equal(result.value, "localhost");
+  });
+
+  test("lets seq skip config-bound positional defaults before commands", () => {
+    const schema = z.object({
+      profile: z.string().optional(),
+    });
+    const context = createConfigContext({ schema });
+    const parser = seq(
+      bindConfig(argument(string()), {
+        context,
+        key: "profile",
+        default: "default",
+      }),
+      command("run", object({})),
+    );
+
+    const result = parse(parser, ["run"], {
+      annotations: { [context.id]: { data: {} } },
+    });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: ["default", {}],
+    });
+  });
+
+  test("lets seq skip config-bound positional values before commands", () => {
+    const schema = z.object({
+      profile: z.string().optional(),
+    });
+    const context = createConfigContext({ schema });
+    const parser = seq(
+      bindConfig(argument(string()), {
+        context,
+        key: "profile",
+      }),
+      command("run", object({})),
+    );
+
+    const result = parse(parser, ["run"], {
+      annotations: { [context.id]: { data: { profile: "config-profile" } } },
+    });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: ["config-profile", {}],
+    });
   });
 
   test("should always prefer CLI over config and default values", () => {

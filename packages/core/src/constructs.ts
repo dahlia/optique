@@ -7128,10 +7128,11 @@ function createSeqState(
   index: number,
   states: readonly unknown[],
 ): SeqState {
-  return {
+  const seqState: SeqState = {
     index,
     states: annotateFreshArray(sourceState, states),
   };
+  return inheritAnnotations(sourceState, seqState) as SeqState;
 }
 
 function getSeqChildState(
@@ -7140,7 +7141,7 @@ function getSeqChildState(
   parser: Parser<Mode, unknown, unknown>,
 ): unknown {
   return getAnnotatedChildState(
-    seqState.states,
+    seqState,
     seqState.states[index],
     parser,
   );
@@ -7353,7 +7354,7 @@ function createSeqComplete(
     dispatchByMode(
       combinedMode,
       () => {
-        const stateArray = state.states as unknown[];
+        const stateArray = annotateFreshArray(state, state.states) as unknown[];
         const runtime = exec?.dependencyRuntime ??
           createDependencyRuntimeContext(exec?.dependencyRegistry);
         const childExec: ExecutionContext = {
@@ -7393,7 +7394,14 @@ function createSeqComplete(
             ? unwrapCompleteResult(preCompletedResult)
             : unwrapCompleteResult(
               elementParser.complete(
-                prepareStateForCompletion(resolvedArray[i], elementParser),
+                prepareStateForCompletion(
+                  getAnnotatedChildState(
+                    stateArray,
+                    resolvedArray[i],
+                    elementParser,
+                  ),
+                  elementParser,
+                ),
                 withChildExecPath(phase3Exec, i),
               ),
             );
@@ -7428,7 +7436,7 @@ function createSeqComplete(
         };
       },
       async () => {
-        const stateArray = state.states as unknown[];
+        const stateArray = annotateFreshArray(state, state.states) as unknown[];
         const runtime = exec?.dependencyRuntime ??
           createDependencyRuntimeContext(exec?.dependencyRegistry);
         const childExec: ExecutionContext = {
@@ -7468,7 +7476,14 @@ function createSeqComplete(
             ? unwrapCompleteResult(preCompletedResult)
             : unwrapCompleteResult(
               await elementParser.complete(
-                prepareStateForCompletion(resolvedArray[i], elementParser),
+                prepareStateForCompletion(
+                  getAnnotatedChildState(
+                    stateArray,
+                    resolvedArray[i],
+                    elementParser,
+                  ),
+                  elementParser,
+                ),
                 withChildExecPath(phase3Exec, i),
               ),
             );

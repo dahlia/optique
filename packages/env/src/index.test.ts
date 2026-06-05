@@ -11,6 +11,7 @@ import {
   merge,
   object,
   or,
+  seq,
   tuple,
 } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
@@ -25,7 +26,14 @@ import {
   suggestSync,
 } from "@optique/core/parser";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
-import { constant, fail, flag, option } from "@optique/core/primitives";
+import {
+  argument,
+  command,
+  constant,
+  fail,
+  flag,
+  option,
+} from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { bindConfig, createConfigContext } from "../../config/src/index.ts";
 import {
@@ -689,6 +697,53 @@ describe("bindEnv()", () => {
     const result = parse(parser, []);
     assert.ok(result.success);
     assert.equal(result.value, 3000);
+  });
+
+  it("lets seq skip env-bound positional defaults before commands", () => {
+    const context = createEnvContext({
+      source: () => undefined,
+    });
+    const parser = seq(
+      bindEnv(argument(string()), {
+        context,
+        key: "PROFILE",
+        parser: string(),
+        default: "default",
+      }),
+      command("run", object({})),
+    );
+
+    const result = parse(parser, ["run"], {
+      annotations: getSyncAnnotations(context),
+    });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: ["default", {}],
+    });
+  });
+
+  it("lets seq skip env-bound positional values before commands", () => {
+    const context = createEnvContext({
+      source: (key) => key === "PROFILE" ? "env-profile" : undefined,
+    });
+    const parser = seq(
+      bindEnv(argument(string()), {
+        context,
+        key: "PROFILE",
+        parser: string(),
+      }),
+      command("run", object({})),
+    );
+
+    const result = parse(parser, ["run"], {
+      annotations: getSyncAnnotations(context),
+    });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: ["env-profile", {}],
+    });
   });
 
   it("should always prefer CLI over env and default values", () => {

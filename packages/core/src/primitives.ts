@@ -62,13 +62,13 @@ function hasParsedOptionValue<M extends Mode, T>(
     (state as { value?: boolean }).value === true;
 }
 
-function isSuccessfulValueState<T>(
+function isTerminalValueState<T>(
   state: ValueParserResult<T> | undefined,
 ): boolean {
   return state != null &&
     typeof state === "object" &&
     "success" in state &&
-    state.success === true;
+    typeof state.success === "boolean";
 }
 
 /**
@@ -972,7 +972,7 @@ export function option<M extends Mode, T>(
       ? { success: true, value: false }
       : undefined,
     canSkip(state: ValueParserResult<T | boolean> | undefined) {
-      return valueParser == null || isSuccessfulValueState(state);
+      return valueParser == null || isTerminalValueState(state);
     },
     parse(
       context: ParserContext<
@@ -1655,7 +1655,7 @@ export function flag(
     acceptingAnyToken: false,
     initialState: undefined,
     canSkip(state) {
-      return isSuccessfulValueState(state);
+      return isTerminalValueState(state);
     },
     parse(context) {
       if (context.optionsTerminated) {
@@ -2442,7 +2442,7 @@ export function argument<M extends Mode, T>(
     acceptingAnyToken: true,
     initialState: undefined,
     canSkip(state: ValueParserResult<T> | undefined) {
-      return isSuccessfulValueState(state);
+      return isTerminalValueState(state);
     },
     parse(
       context: ParserContext<

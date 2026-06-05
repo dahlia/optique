@@ -22552,6 +22552,42 @@ describe("seq", () => {
     assertErrorIncludes(result.error, "integer");
   });
 
+  it("should preserve invalid option values before later children", () => {
+    const parser = seq(
+      option("--num", integer()),
+      option("--name", string()),
+    );
+
+    const result = parseSync(parser, ["--num", "bad", "--name", "x"]);
+
+    assert.equal(result.success, false);
+    assertErrorIncludes(result.error, "integer");
+  });
+
+  it("should preserve invalid argument values before later children", () => {
+    const parser = seq(
+      argument(integer()),
+      command("run", object({})),
+    );
+
+    const result = parseSync(parser, ["bad", "run"]);
+
+    assert.equal(result.success, false);
+    assertErrorIncludes(result.error, "integer");
+  });
+
+  it("should preserve async invalid values before later children", async () => {
+    const parser = seq(
+      toAsyncParser(option("--num", integer())),
+      option("--name", string()),
+    );
+
+    const result = await parseAsync(parser, ["--num", "bad", "--name", "x"]);
+
+    assert.equal(result.success, false);
+    assertErrorIncludes(result.error, "integer");
+  });
+
   it("should propagate hidden usage through sequence terms", () => {
     const parser = group("hidden", seq(option("--secret")), { hidden: true });
 

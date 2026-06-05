@@ -716,6 +716,17 @@ export function bindConfig<
         : state.cliState as TState)
       : state;
 
+  function hasConfigFallback(state: TState): boolean {
+    if (options.default !== undefined) return true;
+    if (typeof options.key === "function") return false;
+    const annotations = getAnnotations(state);
+    const annotationValue = annotations?.[options.context.id] as
+      | { readonly data: T; readonly meta?: TConfigMeta | undefined }
+      | undefined;
+    const configData = annotationValue?.data;
+    return configData != null && configData[options.key] !== undefined;
+  }
+
   const boundParser: Parser<M, TValue, TState> = {
     mode: parser.mode,
     $valueType: parser.$valueType,
@@ -727,6 +738,13 @@ export function bindConfig<
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
+    canSkip(state: TState, exec?: ExecutionContext) {
+      if (hasConfigFallback(state)) return true;
+      if (isConfigBindState(state)) {
+        return parser.canSkip?.(getSuggestInnerState(state), exec) === true;
+      }
+      return parser.canSkip?.(state, exec) === true;
+    },
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
       const innerState = getSuggestInnerState(state);
       return delegateSuggestNodes(
