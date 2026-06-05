@@ -7191,6 +7191,7 @@ function updateSeqChildState(
 function shouldAdvanceSeqBeforeParse(
   parser: Parser<Mode, unknown, unknown>,
   parserState: unknown,
+  initialParserState: unknown,
   currentContext: ParserContext<SeqState>,
   index: number,
   parsers: readonly Parser<Mode, unknown, unknown>[],
@@ -7204,7 +7205,7 @@ function shouldAdvanceSeqBeforeParse(
     return false;
   }
   if (token === "--") return true;
-  if (currentContext.state.states[index] === parser.initialState) {
+  if (currentContext.state.states[index] === initialParserState) {
     const currentLeadingCandidates = sequenceLeadingCandidates([parser]);
     return !tokenMatchesLeadingName(token, currentLeadingCandidates);
   }
@@ -7269,6 +7270,7 @@ function updateSeqContextFromChildResult(
 function advanceSeqSuggestContextSync(
   context: ParserContext<SeqState>,
   parsers: readonly Parser<"sync", unknown, unknown>[],
+  initialStates: readonly unknown[],
 ): ParserContext<SeqState> {
   let currentContext = context;
   while (currentContext.state.index < parsers.length) {
@@ -7282,6 +7284,7 @@ function advanceSeqSuggestContextSync(
       shouldAdvanceSeqBeforeParse(
         parser,
         parserState,
+        initialStates[index],
         currentContext,
         index,
         parsers,
@@ -7322,6 +7325,7 @@ function advanceSeqSuggestContextSync(
 async function advanceSeqSuggestContextAsync(
   context: ParserContext<SeqState>,
   parsers: readonly Parser<Mode, unknown, unknown>[],
+  initialStates: readonly unknown[],
 ): Promise<ParserContext<SeqState>> {
   let currentContext = context;
   while (currentContext.state.index < parsers.length) {
@@ -7335,6 +7339,7 @@ async function advanceSeqSuggestContextAsync(
       shouldAdvanceSeqBeforeParse(
         parser,
         parserState,
+        initialStates[index],
         currentContext,
         index,
         parsers,
@@ -9060,6 +9065,7 @@ export function seq<
         shouldAdvanceSeqBeforeParse(
           parser,
           parserState,
+          initialState.states[index],
           currentContext,
           index,
           syncParsers,
@@ -9137,6 +9143,7 @@ export function seq<
         shouldAdvanceSeqBeforeParse(
           parser,
           parserState,
+          initialState.states[index],
           currentContext,
           index,
           parsers,
@@ -9422,6 +9429,7 @@ export function seq<
           const advancedContext = advanceSeqSuggestContextSync(
             context,
             syncParsers,
+            initialState.states,
           );
           const runtime = createDependencyRuntimeContext(
             advancedContext.dependencyRegistry?.clone(),
@@ -9483,6 +9491,7 @@ export function seq<
           const advancedContext = await advanceSeqSuggestContextAsync(
             context,
             parsers,
+            initialState.states,
           );
           const runtime = createDependencyRuntimeContext(
             advancedContext.dependencyRegistry?.clone(),

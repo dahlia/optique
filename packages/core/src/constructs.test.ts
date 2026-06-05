@@ -22441,6 +22441,34 @@ describe("seq", () => {
     });
   });
 
+  it("should not skip fresh composite state with matching commands", () => {
+    const parser = seq(
+      object({
+        sub: optional(command("run", object({ x: option("--x", string()) }))),
+      }),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(parseSync(parser, ["run", "--x", "one", "run"]), {
+      success: true,
+      value: [{ sub: { x: "one" } }, {}],
+    });
+  });
+
+  it("should not skip async fresh composite state with matching commands", async () => {
+    const parser = seq(
+      toAsyncParser(object({
+        sub: optional(command("run", object({ x: option("--x", string()) }))),
+      })),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(await parseAsync(parser, ["run", "--x", "one", "run"]), {
+      success: true,
+      value: [{ sub: { x: "one" } }, {}],
+    });
+  });
+
   it("should keep parsing a matched withDefault command child", () => {
     const parser = seq(
       withDefault(command("add", argument(string())), "default"),
