@@ -3054,7 +3054,7 @@ export function nonEmpty<M extends Mode, T, TState>(
         canSkip(state: TState, exec?: ExecutionContext) {
           const unwrappedState = unwrapInjectedAnnotationWrapper(state);
           if (unwrappedState === initialState) return false;
-          return parser.canSkip?.(state, exec) === true;
+          return parser.canSkip?.(unwrappedState, exec) === true;
         },
       }
       : {}),

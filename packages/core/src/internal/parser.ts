@@ -1509,6 +1509,7 @@ function recordMatchedCommandArgIndices(
 
   let searchEnd = consumed.length;
   for (let index = next.length - 1; index >= previousLength; index--) {
+    if (searchEnd <= 0) break;
     const commandName = next[index];
     const localIndex = consumed.lastIndexOf(commandName, searchEnd - 1);
     if (localIndex < 0) continue;

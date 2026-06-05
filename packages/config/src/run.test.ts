@@ -19,7 +19,10 @@ import type { OptionName } from "@optique/core/usage";
 import { bindConfig, createConfigContext } from "./index.ts";
 import type { ConfigMeta } from "./index.ts";
 
-const TEST_DIR = join(import.meta.dirname ?? ".", "test-configs");
+const TEST_DIR = join(
+  import.meta.dirname ?? ".",
+  `test-configs-${process.pid}`,
+);
 
 function requireValue<T>(value: T | undefined, message: string): T {
   if (value === undefined) {

@@ -21939,9 +21939,9 @@ describe("canSkip", () => {
   });
 
   it("should be false for required primitive parsers", () => {
-    assert.equal(option("--name", string()).canSkip?.(undefined), false);
-    assert.equal(argument(string()).canSkip?.(undefined), false);
-    assert.equal(command("run", object({})).canSkip?.(undefined), false);
+    assert.ok(!option("--name", string()).canSkip?.(undefined));
+    assert.ok(!argument(string()).canSkip?.(undefined));
+    assert.ok(!command("run", object({})).canSkip?.(undefined));
   });
 
   it("should be true for required parsers after successful consumption", () => {
@@ -21965,15 +21965,16 @@ describe("canSkip", () => {
         name: undefined,
       }),
     );
-    assert.equal(
-      object({
-        input: argument(string()),
-        verbose: optional(flag("--verbose")),
-      }).canSkip?.({
-        input: undefined,
-        verbose: undefined,
-      }),
-      false,
+    assert.ok(
+      !(
+        object({
+          input: argument(string()),
+          verbose: optional(flag("--verbose")),
+        }).canSkip?.({
+          input: undefined,
+          verbose: undefined,
+        })
+      ),
     );
     assert.ok(
       tuple([
@@ -22001,10 +22002,7 @@ describe("seq", () => {
       parseSync(parser, ["--first", "a", "--second", "b"]),
       { success: true, value: ["a", "b"] },
     );
-    assert.equal(
-      parseSync(parser, ["--second", "b", "--first", "a"]).success,
-      false,
-    );
+    assert.ok(!parseSync(parser, ["--second", "b", "--first", "a"]).success);
   });
 
   it("should preserve declaration order in usage output", () => {
@@ -22199,7 +22197,7 @@ describe("seq", () => {
       usage: parser.usage,
     });
 
-    assert.equal(result.success, false);
+    assert.ok(!result.success);
     if (!result.success) {
       assert.equal(result.consumed, 4);
     }
@@ -22218,7 +22216,7 @@ describe("seq", () => {
       usage: parser.usage,
     });
 
-    assert.equal(result.success, false);
+    assert.ok(!result.success);
     if (!result.success) {
       assert.equal(result.consumed, 4);
     }
@@ -22335,7 +22333,7 @@ describe("seq", () => {
 
     const result = parseSync(parser, ["run"]);
 
-    assert.equal(result.success, false);
+    assert.ok(!result.success);
     assertErrorIncludes(result.error, "consume at least one token");
   });
 
@@ -22347,7 +22345,7 @@ describe("seq", () => {
 
     const result = parseSync(parser, ["run"]);
 
-    assert.equal(result.success, false);
+    assert.ok(!result.success);
   });
 
   it("should advance after nonEmpty() consumes input", () => {
@@ -22370,7 +22368,7 @@ describe("seq", () => {
 
     const result = await parseAsync(parser, ["run"]);
 
-    assert.equal(result.success, false);
+    assert.ok(!result.success);
     assertErrorIncludes(result.error, "consume at least one token");
   });
 
@@ -22401,7 +22399,7 @@ describe("seq", () => {
 
     const result = parseSync(parser, ["run"]);
 
-    assert.equal(result.success, false);
+    assert.ok(!result.success);
     assertErrorIncludes(result.error, "required input");
   });
 
@@ -22421,7 +22419,7 @@ describe("seq", () => {
 
     const result = await parseAsync(parser, ["run"]);
 
-    assert.equal(result.success, false);
+    assert.ok(!result.success);
     assertErrorIncludes(result.error, "required input");
   });
 
@@ -22602,7 +22600,7 @@ describe("seq", () => {
 
     const result = parseSync(parser, ["--num", "bad"]);
 
-    assert.equal(result.success, false);
+    assert.ok(!result.success);
     assertErrorIncludes(result.error, "integer");
   });
 
@@ -22614,7 +22612,7 @@ describe("seq", () => {
 
     const result = parseSync(parser, ["--num", "bad", "--name", "x"]);
 
-    assert.equal(result.success, false);
+    assert.ok(!result.success);
     assertErrorIncludes(result.error, "integer");
   });
 
@@ -22626,7 +22624,7 @@ describe("seq", () => {
 
     const result = parseSync(parser, ["bad", "run"]);
 
-    assert.equal(result.success, false);
+    assert.ok(!result.success);
     assertErrorIncludes(result.error, "integer");
   });
 
@@ -22638,7 +22636,7 @@ describe("seq", () => {
 
     const result = await parseAsync(parser, ["--num", "bad", "--name", "x"]);
 
-    assert.equal(result.success, false);
+    assert.ok(!result.success);
     assertErrorIncludes(result.error, "integer");
   });
 
