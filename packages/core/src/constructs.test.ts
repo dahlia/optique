@@ -61,6 +61,7 @@ import {
   constant,
   fail,
   flag,
+  negatableFlag,
   option,
   passThrough,
 } from "@optique/core/primitives";
@@ -22373,15 +22374,55 @@ describe("seq", () => {
   });
 
   it("should accept a callable parser object", () => {
-    const fnParser = Object.assign(
+    const baseParser = option("--active");
+    const fnParser: typeof baseParser = Object.assign(
       () => {},
-      option("--active"),
+      baseParser,
     );
-    const parser = seq(fnParser as never);
+    const parser = seq(fnParser);
 
     assert.deepEqual(parseSync(parser, ["--active"]), {
       success: true,
       value: [true],
+    });
+  });
+
+  it("should keep parsing a matched optional command child", () => {
+    const parser = seq(
+      optional(command("add", argument(string()))),
+      argument(string()),
+    );
+
+    assert.deepEqual(parseSync(parser, ["add", "item", "tail"]), {
+      success: true,
+      value: ["item", "tail"],
+    });
+  });
+
+  it("should keep parsing a matched withDefault command child", () => {
+    const parser = seq(
+      withDefault(command("add", argument(string())), "default"),
+      argument(string()),
+    );
+
+    assert.deepEqual(parseSync(parser, ["add", "item", "tail"]), {
+      success: true,
+      value: ["item", "tail"],
+    });
+  });
+
+  it("should advance after negatableFlag() consumes input", () => {
+    const parser = seq(
+      negatableFlag({
+        positive: "--color",
+        negative: "--no-color",
+      }),
+      argument(string()),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--no-color", "file.txt"]), {
+      success: true,
+      value: [false, "file.txt"],
     });
   });
 

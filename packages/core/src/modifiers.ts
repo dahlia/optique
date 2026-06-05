@@ -728,8 +728,14 @@ export function optional<M extends Mode, TValue, TState>(
     // parser's catch-all status does not apply to the wrapper.
     acceptingAnyToken: false,
     initialState: undefined,
-    canSkip() {
-      return true;
+    canSkip(state: [TState] | undefined, exec?: ExecutionContext) {
+      if (!Array.isArray(state)) return true;
+      const innerState = normalizeOptionalLikeInnerState(
+        state,
+        parser.initialState,
+        parser,
+      );
+      return parser.canSkip?.(innerState, exec) === true;
     },
     // Forward completion deferral hook from inner parser, adapting the
     // outer state shape ([TState] | undefined) to the inner TState.
@@ -1149,8 +1155,14 @@ export function withDefault<
     // parser's catch-all status does not apply to the wrapper.
     acceptingAnyToken: false,
     initialState: undefined,
-    canSkip() {
-      return true;
+    canSkip(state: [TState] | undefined, exec?: ExecutionContext) {
+      if (!Array.isArray(state)) return true;
+      const innerState = normalizeOptionalLikeInnerState(
+        state,
+        parser.initialState,
+        parser,
+      );
+      return parser.canSkip?.(innerState, exec) === true;
     },
     // Forward completion deferral hook from inner parser, adapting the
     // outer state shape ([TState] | undefined) to the inner TState.

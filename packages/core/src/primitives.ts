@@ -2144,6 +2144,9 @@ export function negatableFlag(
     leadingNames: new Set<string>(optionNames),
     acceptingAnyToken: false,
     initialState: undefined,
+    canSkip(state) {
+      return state != null;
+    },
     parse(context) {
       if (context.optionsTerminated) {
         return {
