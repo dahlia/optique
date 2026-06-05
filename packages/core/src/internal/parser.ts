@@ -1819,6 +1819,10 @@ function buildDocPage(
     );
   };
   let i = 0;
+  const consumedArgsCount = Math.max(
+    0,
+    effectiveArgs.length - context.buffer.length,
+  );
   for (let argIndex = 0; argIndex < effectiveArgs.length; argIndex++) {
     const arg = effectiveArgs[argIndex];
     if (i >= usage.length) break;
@@ -1838,7 +1842,13 @@ function buildDocPage(
       argIndex === effectiveArgs.length - 1,
       i,
     );
-    i++;
+    if (
+      found != null ||
+      term.type !== "sequence" ||
+      argIndex >= consumedArgsCount
+    ) {
+      i++;
+    }
   }
   // When no args navigate into a command, apply usageLine for the first
   // bare command term (not inside an exclusive) so the page's own usage

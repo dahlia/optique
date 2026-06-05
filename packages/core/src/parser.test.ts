@@ -2070,6 +2070,47 @@ describe("getDocPage", () => {
     );
   });
 
+  it("should preserve seq command docs after positional prefixes", () => {
+    const parser = seq(
+      optional(argument(string({ metavar: "PROFILE" }))),
+      or(
+        command("build", object({ clean: option("--clean") })),
+        command("deploy", object({ force: option("--force") }), {
+          usageLine: [{ type: "literal", value: "deployment-usage" }],
+        }),
+      ),
+    );
+
+    const docPage = getDocPage(parser, ["staging", "deploy"]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(
+      formatUsage("tool", docPage.usage),
+      "tool deploy deployment-usage",
+    );
+  });
+
+  it("should not preserve seq command docs after invalid prefixes", () => {
+    const parser = seq(
+      or(
+        command("build", object({ clean: option("--clean") })),
+        command("deploy", object({ force: option("--force") }), {
+          usageLine: [{ type: "literal", value: "deployment-usage" }],
+        }),
+      ),
+    );
+
+    const docPage = getDocPage(parser, ["staging", "deploy"]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(
+      formatUsage("tool", docPage.usage),
+      "tool (build [--clean] | deploy [--force])",
+    );
+  });
+
   it("should handle exclusive (or) parsers correctly", () => {
     const parser = or(
       option("-v", "--verbose"),
