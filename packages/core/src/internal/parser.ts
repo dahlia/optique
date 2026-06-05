@@ -187,6 +187,21 @@ export interface Parser<
   readonly acceptingAnyToken: boolean;
 
   /**
+   * Returns whether this parser can be skipped at the current state without
+   * consuming more CLI input or evaluating completion-time defaults.
+   *
+   * Sequential combinators use this as a lightweight boundary predicate.  It
+   * must be synchronous and side-effect free.  Custom parsers that omit this
+   * method are treated as not skippable.
+   *
+   * @param state The current parser state.
+   * @param exec Optional shared execution context.
+   * @returns `true` when parsing may advance past this parser.
+   * @since 1.1.0
+   */
+  canSkip?(state: TState, exec?: ExecutionContext): boolean;
+
+  /**
    * The initial state for this parser.  This is used to initialize the
    * state when parsing starts.
    */
@@ -1414,24 +1429,93 @@ function findCommandInExclusive(
 
   for (const termGroup of term.terms) {
     const firstTerm = termGroup[0];
-
-    // Direct match: first term is the command we're looking for
-    if (firstTerm?.type === "command" && firstTerm.name === commandName) {
-      return termGroup;
-    }
-
-    // Recursive case: first term is another exclusive (nested structure)
-    if (firstTerm?.type === "exclusive") {
-      const found = findCommandInExclusive(firstTerm, commandName);
-      if (found) {
-        // Replace the nested exclusive with the found terms,
-        // then append the rest of termGroup (e.g., global options)
-        return [...found, ...termGroup.slice(1)];
-      }
-    }
+    if (firstTerm == null) continue;
+    const found = findCommandInCurrentUsageTerm(
+      firstTerm,
+      commandName,
+      termGroup.slice(1),
+    );
+    if (found) return found;
   }
 
   return null;
+}
+
+/**
+ * Searches for a command inside an ordered usage sequence and returns the
+ * usage from the matched command onward.  This lets contextual command
+ * documentation enter sequence terms while dropping sequence prefixes that
+ * were skipped by parsing, such as optional positionals before a subcommand.
+ *
+ * @param usage The usage terms to search.
+ * @param commandName The command name to find.
+ * @returns The contextual usage terms if found, null otherwise.
+ */
+function findCommandInUsageSequence(
+  usage: Usage,
+  commandName: string,
+): Usage | null {
+  for (let index = 0; index < usage.length; index++) {
+    const found = findCommandInCurrentUsageTerm(
+      usage[index],
+      commandName,
+      usage.slice(index + 1),
+    );
+    if (found) return found;
+  }
+
+  return null;
+}
+
+/**
+ * Searches the current usage term for a command and appends the trailing
+ * usage terms that remain valid after that current term.
+ *
+ * @param term The current usage term to search.
+ * @param commandName The command name to find.
+ * @param trailingUsage Usage terms that follow the current term.
+ * @returns The contextual usage terms if found, null otherwise.
+ */
+function findCommandInCurrentUsageTerm(
+  term: UsageTerm,
+  commandName: string,
+  trailingUsage: Usage,
+): Usage | null {
+  if (term.type === "command" && term.name === commandName) {
+    return [term, ...trailingUsage];
+  }
+
+  if (term.type === "exclusive") {
+    const found = findCommandInExclusive(term, commandName);
+    if (found) return [...found, ...trailingUsage];
+  } else if (term.type === "sequence") {
+    const found = findCommandInUsageSequence(term.terms, commandName);
+    if (found) return [...found, ...trailingUsage];
+  }
+
+  return null;
+}
+
+function recordMatchedCommandArgIndices(
+  consumed: readonly string[],
+  previousCommandPath: readonly string[] | undefined,
+  nextCommandPath: readonly string[] | undefined,
+  consumedOffset: number,
+  indices: Set<number>,
+): void {
+  const previousLength = previousCommandPath?.length ?? 0;
+  const next = nextCommandPath ?? [];
+  if (next.length <= previousLength || consumed.length < 1) return;
+
+  let searchEnd = consumed.length;
+  for (let index = next.length - 1; index >= previousLength; index--) {
+    if (searchEnd <= 0) break;
+    const commandName = next[index];
+    const localIndex = consumed.lastIndexOf(commandName, searchEnd - 1);
+    if (localIndex < 0) continue;
+    indices.add(consumedOffset + localIndex);
+    searchEnd = localIndex;
+  }
 }
 
 /**
@@ -1608,14 +1692,24 @@ function getDocPageSyncImpl(
     { buffer: args, state: initialState, optionsTerminated: false },
     exec,
   );
+  const matchedCommandArgIndices = new Set<number>();
   while (context.buffer.length > 0) {
     const result = parser.parse(context);
     if (!result.success) break;
+    const previousCommandPath = context.exec?.commandPath;
     const previousBuffer = context.buffer;
     context = result.next;
+    const consumedCount = previousBuffer.length - context.buffer.length;
+    recordMatchedCommandArgIndices(
+      previousBuffer.slice(0, consumedCount),
+      previousCommandPath,
+      context.exec?.commandPath,
+      args.length - previousBuffer.length,
+      matchedCommandArgIndices,
+    );
     if (isBufferUnchanged(previousBuffer, context.buffer)) break;
   }
-  return buildDocPage(parser, context, args);
+  return buildDocPage(parser, context, args, matchedCommandArgIndices);
 }
 
 /**
@@ -1637,14 +1731,24 @@ async function getDocPageAsyncImpl(
     { buffer: args, state: initialState, optionsTerminated: false },
     exec,
   );
+  const matchedCommandArgIndices = new Set<number>();
   while (context.buffer.length > 0) {
     const result = await parser.parse(context);
     if (!result.success) break;
+    const previousCommandPath = context.exec?.commandPath;
     const previousBuffer = context.buffer;
     context = result.next;
+    const consumedCount = previousBuffer.length - context.buffer.length;
+    recordMatchedCommandArgIndices(
+      previousBuffer.slice(0, consumedCount),
+      previousCommandPath,
+      context.exec?.commandPath,
+      args.length - previousBuffer.length,
+      matchedCommandArgIndices,
+    );
     if (isBufferUnchanged(previousBuffer, context.buffer)) break;
   }
-  return buildDocPage(parser, context, args);
+  return buildDocPage(parser, context, args, matchedCommandArgIndices);
 }
 
 /**
@@ -1655,6 +1759,7 @@ function buildDocPage(
   parser: Parser<Mode, unknown, unknown>,
   context: ParserContext<unknown>,
   args: readonly string[],
+  matchedCommandArgIndices?: ReadonlySet<number>,
 ): DocPage | undefined {
   let effectiveArgs: readonly string[] = args;
   let { brief, description, fragments, footer } = parser.getDocFragments(
@@ -1757,16 +1862,30 @@ function buildDocPage(
     );
   };
   let i = 0;
+  const consumedArgsCount = Math.max(
+    0,
+    effectiveArgs.length - context.buffer.length,
+  );
+  const commandArgIndices = args.length > 0 ? matchedCommandArgIndices : null;
   for (let argIndex = 0; argIndex < effectiveArgs.length; argIndex++) {
     const arg = effectiveArgs[argIndex];
     if (i >= usage.length) break;
     let term = usage[i];
-    if (term.type === "exclusive") {
-      const found = findCommandInExclusive(term, arg);
-      if (found) {
-        usage.splice(i, 1, ...found);
-        term = usage[i];
-      }
+    const canSearchCommand = commandArgIndices == null ||
+      commandArgIndices.has(argIndex);
+    if (!canSearchCommand) continue;
+    let found: Usage | null = null;
+    for (let searchIndex = i; searchIndex < usage.length; searchIndex++) {
+      found = findCommandInCurrentUsageTerm(
+        usage[searchIndex],
+        arg,
+        usage.slice(searchIndex + 1),
+      );
+      if (found != null) break;
+    }
+    if (found) {
+      usage.splice(i, usage.length - i, ...found);
+      term = usage[i];
     }
     maybeApplyCommandUsageLine(
       term,
@@ -1774,7 +1893,13 @@ function buildDocPage(
       argIndex === effectiveArgs.length - 1,
       i,
     );
-    i++;
+    if (
+      found != null ||
+      term.type !== "sequence" ||
+      argIndex >= consumedArgsCount
+    ) {
+      i++;
+    }
   }
   // When no args navigate into a command, apply usageLine for the first
   // bare command term (not inside an exclusive) so the page's own usage

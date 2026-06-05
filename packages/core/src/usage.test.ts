@@ -2834,6 +2834,24 @@ describe("normalizeUsage", () => {
       ];
       assert.deepEqual(result, expected);
     });
+
+    it("should preserve order inside sequence terms", () => {
+      const usage: Usage = [
+        {
+          type: "sequence",
+          terms: [
+            { type: "argument", metavar: "SOURCE" },
+            { type: "command", name: "copy" },
+            { type: "option", names: ["--force"] },
+          ],
+        },
+      ];
+
+      const result = normalizeUsage(usage);
+
+      assert.deepEqual(result, usage);
+      assert.equal(formatUsage("app", usage), "app SOURCE copy --force");
+    });
   });
 });
 
@@ -3691,6 +3709,19 @@ describe("cloneUsageTerm", () => {
       assert.notEqual(cloned.terms, term.terms);
       assert.notEqual(cloned.terms[0], (term as typeof cloned).terms[0]);
       assert.notEqual(cloned.terms[0][0], inner1);
+    }
+  });
+
+  it("should deep-clone a sequence term", () => {
+    const inner: UsageTerm = { type: "argument", metavar: "X" };
+    const term: UsageTerm = { type: "sequence", terms: [inner] };
+    const cloned = cloneUsageTerm(term);
+
+    assert.deepEqual(cloned, term);
+    assert.notEqual(cloned, term);
+    if (cloned.type === "sequence") {
+      assert.notEqual(cloned.terms, term.terms);
+      assert.notEqual(cloned.terms[0], inner);
     }
   });
 

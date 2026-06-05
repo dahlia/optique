@@ -37,7 +37,6 @@ import { object, or } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
 import { argument, command, constant, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
-import { message } from "@optique/core/message";
 import { run } from "@optique/run";
 // ---cut-before---
 const addCommand = command(
@@ -144,6 +143,81 @@ if (result.action === "add") {
 
 This pattern scales well because adding new subcommands only requires extending
 the `or()` combinator with new command parsers.
+
+### Positional prefixes before subcommands
+
+Some tools accept a small positional prefix before the subcommand itself. For
+example, a deployment tool might accept an optional profile before commands
+such as `build` or `deploy`:
+
+~~~~ bash
+tool build app
+tool staging deploy production --force
+~~~~
+
+Use [`seq()`](./concepts/constructs.md#seq-parser) when the order of parsers is
+part of the grammar. The optional profile is considered first, then the command
+parser is considered after it:
+
+~~~~ typescript twoslash
+import { object, or, seq } from "@optique/core/constructs";
+import { optional } from "@optique/core/modifiers";
+import { argument, command, constant, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+// ---cut-before---
+const parser = seq(
+  optional(argument(string({ metavar: "PROFILE" }))),
+  or(
+    command(
+      "build",
+      object({
+        action: constant("build"),
+        target: argument(string({ metavar: "TARGET" })),
+      }),
+    ),
+    command(
+      "deploy",
+      object({
+        action: constant("deploy"),
+        environment: argument(string({ metavar: "ENV" })),
+        force: option("--force"),
+      }),
+    ),
+  ),
+);
+
+const [profile, commandResult] = run(parser);
+//     ^?
+
+
+
+
+
+
+
+
+
+
+const profileName = profile ?? "default";
+
+if (commandResult.action === "build") {
+  console.log(`Building ${commandResult.target} with ${profileName}.`);
+} else {
+  console.log(`Deploying ${commandResult.environment} with ${profileName}.`);
+}
+~~~~
+
+The important distinction from
+[`tuple()`](./concepts/constructs.md#tuple-parser) is that `seq()` advances
+through child parsers in declaration order. A fixed optional positional parser
+can be skipped when the next token is a later command name, so `tool build app`
+is parsed as “no profile, then the `build` command.”
+
+`seq()` deliberately avoids backtracking. If you put a variadic positional
+parser before a command, it may consume too much input before the command has a
+chance to match. Keep the prefix fixed, or add a clear boundary such as an
+option, command name, or `--`.
 
 ### Mutually exclusive options
 

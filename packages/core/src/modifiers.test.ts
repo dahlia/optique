@@ -2619,6 +2619,38 @@ describe("multiple", () => {
     }
   });
 
+  it("should extend matched command items with optional arguments", () => {
+    const parser = multiple(command(
+      "add",
+      object({
+        x: optional(option("--x")),
+      }),
+    ));
+
+    const result = parse(parser, ["add", "--x"]);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, [{ x: true }]);
+    }
+  });
+
+  it("should extend async matched command items with optional arguments", async () => {
+    const parser = multiple(command(
+      "add",
+      object({
+        x: optional(option("--x", asyncChoice(["yes"] as const))),
+      }),
+    ));
+
+    const result = await parseAsync(parser, ["add", "--x", "yes"]);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, [{ x: "yes" }]);
+    }
+  });
+
   it("should preserve annotations on each item state in complete()", () => {
     const annotation = Symbol.for("@test/multiple-item-annotations");
     const baseParser: Parser<"sync", string, { value: string }> = {

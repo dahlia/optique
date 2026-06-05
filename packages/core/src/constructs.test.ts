@@ -7,6 +7,7 @@ import {
   merge,
   object,
   or,
+  seq,
   tuple,
 } from "@optique/core/constructs";
 import type { DocEntry, DocFragment, DocSection } from "@optique/core/doc";
@@ -32,7 +33,13 @@ import {
   text,
   valueSet,
 } from "@optique/core/message";
-import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
+import {
+  map,
+  multiple,
+  nonEmpty,
+  optional,
+  withDefault,
+} from "@optique/core/modifiers";
 import { defineInheritedAnnotationParser } from "./internal/parser.ts";
 import {
   type ExecutionContext,
@@ -54,6 +61,7 @@ import {
   constant,
   fail,
   flag,
+  negatableFlag,
   option,
   passThrough,
 } from "@optique/core/primitives";
@@ -71,6 +79,7 @@ import {
   type ValueParser,
   type ValueParserResult,
 } from "@optique/core/valueparser";
+import type { NonEmptyString } from "@optique/core/nonempty";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
@@ -80,6 +89,7 @@ import {
   merge as mergeLocal,
   object as objectLocal,
   or as orLocal,
+  seq as seqLocal,
   tuple as tupleLocal,
 } from "./constructs.ts";
 import { dependency as dependencyLocal } from "./internal/dependency.ts";
@@ -3669,6 +3679,40 @@ describe("object", () => {
 
     assert.ok(texts.includes("dev"));
     assert.ok(!texts.includes("dist"));
+  });
+
+  it("should suggest only nested seq option values after option token", () => {
+    const parser = object({
+      sequence: seq(
+        option("--mode", choice(["dev", "prod"])),
+        argument(choice(["target"])),
+      ),
+      other: argument(choice(["zzz"])),
+    });
+
+    const suggestions = suggestSync(parser, ["--mode", ""]);
+    const texts = suggestions
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+
+    assert.deepEqual(texts, ["dev", "prod"]);
+  });
+
+  it("should suggest only nested async seq option values after option token", async () => {
+    const parser = toAsyncParser(object({
+      sequence: seq(
+        option("--mode", choice(["dev", "prod"])),
+        argument(choice(["target"])),
+      ),
+      other: argument(choice(["zzz"])),
+    }));
+
+    const suggestions = await suggestAsync(parser, ["--mode", ""]);
+    const texts = suggestions
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+
+    assert.deepEqual(texts, ["dev", "prod"]);
   });
 
   it("should fall back to initial state in suggest when field state is missing", () => {
@@ -14938,6 +14982,24 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.ok(result.success);
   });
 
+  it("conditional() rewrites discriminator literals inside seq usage", () => {
+    const parser = conditional(
+      map(
+        seq(option("--kind", choice(["a", "b"] as const))),
+        ([kind]) => kind,
+      ),
+      {
+        a: object({ aa: option("--aa") }),
+        b: object({ bb: option("--bb") }),
+      },
+    );
+
+    assert.equal(
+      formatUsage("tool", parser.usage),
+      "tool (--kind a [--aa] | --kind b [--bb])",
+    );
+  });
+
   // ----- conditional() async complete: discriminatorCompleteResult failure (line 7085) -----
   it("conditional() async complete falls back to selectedBranch.key on discriminator failure", async () => {
     // Build an async conditional where discriminator complete is normal
@@ -16056,6 +16118,40 @@ describe("branch coverage: constructs.ts edge cases", () => {
             modeParser,
             toAsyncParser(optionLocal("--required", string())),
           ] as const,
+        );
+
+        const seed = await getLocalPhase2SeedExtractor(parser)(
+          parser.initialState,
+        );
+
+        assert.deepEqual(seed, {
+          value: ["alpha"],
+        });
+        assert.equal(getCallCount(), 1);
+      });
+
+      it("seq() reuses sync pre-completed defaults", () => {
+        const { parser: modeParser, getCallCount } =
+          createCountingSourceParser();
+        const parser = seqLocal(
+          modeParser,
+          optionLocal("--required", string()),
+        );
+
+        const seed = getLocalPhase2SeedExtractor(parser)(parser.initialState);
+
+        assert.deepEqual(seed, {
+          value: ["alpha"],
+        });
+        assert.equal(getCallCount(), 1);
+      });
+
+      it("seq() reuses async pre-completed defaults", async () => {
+        const { parser: modeParser, getCallCount } =
+          createCountingSourceParser();
+        const parser = seqLocal(
+          modeParser,
+          toAsyncParser(optionLocal("--required", string())),
         );
 
         const seed = await getLocalPhase2SeedExtractor(parser)(
@@ -21770,6 +21866,28 @@ describe("leadingNames", () => {
     );
     assert.deepEqual(parser.leadingNames, new Set(["tool"]));
   });
+
+  it("seq() should hide positional names after a reachable catch-all", () => {
+    const parser = tuple([
+      seq(
+        or(argument(string()), command("foo", object({}))),
+        constant("tail"),
+      ),
+      command("help", object({})),
+    ]);
+
+    assert.ok(parser.leadingNames.has("foo"));
+    assert.ok(!parser.leadingNames.has("help"));
+  });
+
+  it("seq() should expose the highest reachable leading priority", () => {
+    const parser = seq(
+      optional(argument(string())),
+      command("run", object({})),
+    );
+
+    assert.equal(parser.priority, command("run", object({})).priority);
+  });
 });
 
 describe("acceptingAnyToken", () => {
@@ -21828,5 +21946,814 @@ describe("acceptingAnyToken", () => {
       { server: object({}) },
     );
     assert.ok(!withCatchAllDiscriminator.acceptingAnyToken);
+  });
+
+  it("should be true for seq() with a named reachable catch-all child", () => {
+    const parser = seq(
+      or(argument(string()), command("foo", object({}))),
+      constant("tail"),
+    );
+
+    assert.ok(parser.acceptingAnyToken);
+  });
+});
+
+describe("canSkip", () => {
+  it("should be true for parsers that can complete without CLI input", () => {
+    assert.ok(constant("value").canSkip?.("value"));
+    assert.ok(optional(option("--name", string())).canSkip?.(undefined));
+    assert.ok(
+      withDefault(option("--name", string()), "default").canSkip?.(
+        undefined,
+      ),
+    );
+    assert.ok(multiple(option("--tag", string())).canSkip?.([]));
+  });
+
+  it("should be false for required primitive parsers", () => {
+    assert.ok(!option("--name", string()).canSkip?.(undefined));
+    assert.ok(!argument(string()).canSkip?.(undefined));
+    assert.ok(!command("run", object({})).canSkip?.(undefined));
+  });
+
+  it("should be true for required parsers after successful consumption", () => {
+    assert.ok(
+      option("--name", string()).canSkip?.({ success: true, value: "alice" }),
+    );
+    assert.ok(flag("--force").canSkip?.({ success: true, value: true }));
+    assert.ok(
+      argument(string()).canSkip?.({ success: true, value: "input.txt" }),
+    );
+    assert.ok(command("run", object({})).canSkip?.(["matched", "run"]));
+  });
+
+  it("should compose through parser combinators", () => {
+    assert.ok(
+      object({
+        verbose: optional(flag("--verbose")),
+        name: withDefault(option("--name", string()), "default"),
+      }).canSkip?.({
+        verbose: undefined,
+        name: undefined,
+      }),
+    );
+    assert.ok(
+      !(
+        object({
+          input: argument(string()),
+          verbose: optional(flag("--verbose")),
+        }).canSkip?.({
+          input: undefined,
+          verbose: undefined,
+        })
+      ),
+    );
+    assert.ok(
+      tuple([
+        optional(flag("--verbose")),
+        constant("ok"),
+      ]).canSkip?.([undefined, "ok"]),
+    );
+    assert.ok(
+      or(
+        argument(string()),
+        constant("fallback"),
+      ).canSkip?.(undefined),
+    );
+  });
+});
+
+describe("seq", () => {
+  it("should parse child parsers in declaration order", () => {
+    const parser = seq(
+      option("--first", string()),
+      option("--second", string()),
+    );
+
+    assert.deepEqual(
+      parseSync(parser, ["--first", "a", "--second", "b"]),
+      { success: true, value: ["a", "b"] },
+    );
+    assert.ok(!parseSync(parser, ["--second", "b", "--first", "a"]).success);
+  });
+
+  it("should preserve declaration order in usage output", () => {
+    const parser = seq(
+      argument(string({ metavar: "SOURCE" })),
+      or(command("local", object({})), command("remote", object({}))),
+      option("--force"),
+    );
+
+    assert.equal(
+      formatUsage("copy", parser.usage),
+      "copy SOURCE (local | remote) [--force]",
+    );
+  });
+
+  it("should skip fixed optional positionals before later commands", () => {
+    const parser = seq(
+      optional(argument(string({ metavar: "ALIAS" }))),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(parseSync(parser, ["run"]), {
+      success: true,
+      value: [undefined, {}],
+    });
+    assert.deepEqual(parseSync(parser, ["main", "run"]), {
+      success: true,
+      value: ["main", {}],
+    });
+  });
+
+  it("should not treat command=value as a later command name", () => {
+    const parser = seq(
+      optional(argument(string({ metavar: "PROFILE" }))),
+      command("build", object({})),
+    );
+
+    assert.deepEqual(parseSync(parser, ["build=prod", "build"]), {
+      success: true,
+      value: ["build=prod", {}],
+    });
+  });
+
+  it("should treat option=value as a later value option", () => {
+    const parser = seq(
+      optional(argument(string({ metavar: "PROFILE" }))),
+      option("--name", string()),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--name=alice"]), {
+      success: true,
+      value: [undefined, "alice"],
+    });
+  });
+
+  it("should treat hidden option=value as a later value option", () => {
+    const parser = seq(
+      optional(argument(string({ metavar: "PROFILE" }))),
+      option("--secret", string(), { hidden: true }),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--secret=abc"]), {
+      success: true,
+      value: [undefined, "abc"],
+    });
+  });
+
+  it("should advance past a completed required option before parsing duplicates", () => {
+    const parser = seq(
+      option("--x", string()),
+      option("--x", string()),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--x", "a", "--x", "b"]), {
+      success: true,
+      value: ["a", "b"],
+    });
+  });
+
+  it("should advance async past a completed required option before parsing duplicates", async () => {
+    const parser = seq(
+      toAsyncParser(option("--x", string())),
+      option("--x", string()),
+    );
+
+    assert.deepEqual(await parseAsync(parser, ["--x", "a", "--x", "b"]), {
+      success: true,
+      value: ["a", "b"],
+    });
+  });
+
+  it("should advance past completed repeated composite items", () => {
+    const parser = seq(
+      multiple(object({ x: option("--x") })),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--x", "run"]), {
+      success: true,
+      value: [[{ x: true }], {}],
+    });
+  });
+
+  it("should advance async past completed repeated composite items", async () => {
+    const parser = seq(
+      multiple(toAsyncParser(object({ x: option("--x") }))),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(await parseAsync(parser, ["--x", "run"]), {
+      success: true,
+      value: [[{ x: true }], {}],
+    });
+  });
+
+  it("should skip skippable merged children before commands", () => {
+    const parser = seq(
+      merge(object({ profile: optional(argument(string())) })),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(parseSync(parser, ["run"]), {
+      success: true,
+      value: [{ profile: undefined }, {}],
+    });
+  });
+
+  it("should skip skippable concatenated children before commands", () => {
+    const parser = seq(
+      concat(tuple([optional(argument(string()))])),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(parseSync(parser, ["run"]), {
+      success: true,
+      value: [[undefined], {}],
+    });
+  });
+
+  it("should skip async skippable merged children before commands", async () => {
+    const parser = seq(
+      merge(object({ profile: optional(argument(string())) })),
+      command(
+        "run",
+        object({ token: optional(option("--token", asyncStringValue())) }),
+      ),
+    );
+
+    assert.deepEqual(await parseAsync(parser, ["run"]), {
+      success: true,
+      value: [{ profile: undefined }, { token: undefined }],
+    });
+  });
+
+  it("should skip async skippable concatenated children before commands", async () => {
+    const parser = seq(
+      concat(tuple([optional(argument(string()))])),
+      command(
+        "run",
+        object({ token: optional(option("--token", asyncStringValue())) }),
+      ),
+    );
+
+    assert.deepEqual(await parseAsync(parser, ["run"]), {
+      success: true,
+      value: [[undefined], { token: undefined }],
+    });
+  });
+
+  it("should advance through grouped children", () => {
+    const parser = seq(
+      group("First", option("--a", string())),
+      option("--b", string()),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--a", "x", "--b", "y"]), {
+      success: true,
+      value: ["x", "y"],
+    });
+  });
+
+  it("should preserve consumed depth on child failures", () => {
+    const parser = seq(
+      argument(string({ metavar: "PROFILE" })),
+      option("--x", string()),
+    );
+
+    const result = parser.parse({
+      buffer: ["a", "--x", "1", "--x", "2"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(result.consumed, 4);
+    }
+  });
+
+  it("should preserve async consumed depth on child failures", async () => {
+    const parser = seq(
+      toAsyncParser(argument(string({ metavar: "PROFILE" }))),
+      option("--x", string()),
+    );
+
+    const result = await parser.parse({
+      buffer: ["a", "--x", "1", "--x", "2"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(result.consumed, 4);
+    }
+  });
+
+  it("should not skip initial optional duplicates when duplicates are allowed", () => {
+    const parser = seq(
+      optional(option("--x", string())),
+      option("--x", string()),
+      { allowDuplicates: true },
+    );
+
+    assert.deepEqual(parseSync(parser, ["--x", "a", "--x", "b"]), {
+      success: true,
+      value: ["a", "b"],
+    });
+  });
+
+  it("should not skip initial async optional duplicates when duplicates are allowed", async () => {
+    const parser = seq(
+      optional(toAsyncParser(option("--x", string()))),
+      option("--x", string()),
+      { allowDuplicates: true },
+    );
+
+    assert.deepEqual(await parseAsync(parser, ["--x", "a", "--x", "b"]), {
+      success: true,
+      value: ["a", "b"],
+    });
+  });
+
+  it("should consume -- when advancing to a later positional parser", () => {
+    const parser = seq(
+      option("--name", string()),
+      argument(string({ metavar: "VALUE" })),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--name", "alice", "--", "--raw"]), {
+      success: true,
+      value: ["alice", "--raw"],
+    });
+  });
+
+  it("should reject duplicate options active at the same position", () => {
+    assert.throws(
+      () =>
+        seq(
+          optional(option("--path", string())),
+          option("--path", string()),
+        ),
+      DuplicateOptionError,
+    );
+  });
+
+  it("should reject hidden duplicate options active at the same position", () => {
+    assert.throws(
+      () =>
+        seq(
+          optional(option("--path", string(), { hidden: true })),
+          option("--path", string()),
+        ),
+      DuplicateOptionError,
+    );
+  });
+
+  it("should reject duplicate options active after required input", () => {
+    assert.throws(
+      () =>
+        seq(
+          object({
+            input: argument(string()),
+            x: option("--x"),
+          }),
+          option("--x"),
+        ),
+      DuplicateOptionError,
+    );
+  });
+
+  it("should reject duplicate required repeated options after minimum", () => {
+    assert.throws(
+      () =>
+        seq(
+          multiple(option("--x", string()), { min: 1 }),
+          option("--x", string()),
+        ),
+      DuplicateOptionError,
+    );
+  });
+
+  it("should allow duplicate options across sequential command boundaries", () => {
+    const parser = seq(
+      object({ path: option("--path") }),
+      command("local", object({ path: option("--path") })),
+    );
+
+    assert.deepEqual(parseSync(parser, ["local", "--path"]), {
+      success: true,
+      value: [{ path: false }, { path: true }],
+    });
+  });
+
+  it("should evaluate lazy defaults once during completion", () => {
+    let calls = 0;
+    const parser = seq(
+      withDefault(option("--name", string()), () => {
+        calls++;
+        return "default";
+      }),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(parseSync(parser, ["run"]), {
+      success: true,
+      value: ["default", {}],
+    });
+    assert.equal(calls, 1);
+  });
+
+  it("should not skip nonEmpty() before it parses input", () => {
+    const parser = seq(
+      nonEmpty(optional(option("--alias", string()))),
+      command("run", object({})),
+    );
+
+    const result = parseSync(parser, ["run"]);
+
+    assert.ok(!result.success);
+    assertErrorIncludes(result.error, "consume at least one token");
+  });
+
+  it("should not skip nonEmpty() with fresh composite initial state", () => {
+    const parser = seq(
+      nonEmpty(object({ x: optional(option("--x")) })),
+      command("run", object({})),
+    );
+
+    const result = parseSync(parser, ["run"]);
+
+    assert.ok(!result.success);
+  });
+
+  it("should advance after nonEmpty() consumes input", () => {
+    const parser = seq(
+      nonEmpty(option("--active")),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--active", "run"]), {
+      success: true,
+      value: [true, {}],
+    });
+  });
+
+  it("should not skip async nonEmpty() before it parses input", async () => {
+    const parser = seq(
+      nonEmpty(toAsyncParser(optional(option("--alias", string())))),
+      command("run", object({})),
+    );
+
+    const result = await parseAsync(parser, ["run"]);
+
+    assert.ok(!result.success);
+    assertErrorIncludes(result.error, "consume at least one token");
+  });
+
+  it("should accept a callable parser object", () => {
+    const baseParser = option("--active");
+    const fnParser: typeof baseParser = Object.assign(
+      () => {},
+      baseParser,
+    );
+    const parser = seq(fnParser);
+
+    assert.deepEqual(parseSync(parser, ["--active"]), {
+      success: true,
+      value: [true],
+    });
+  });
+
+  it("should keep parsing a matched optional command child", () => {
+    const parser = seq(
+      optional(command("add", argument(string()))),
+      argument(string()),
+    );
+
+    assert.deepEqual(parseSync(parser, ["add", "item", "tail"]), {
+      success: true,
+      value: ["item", "tail"],
+    });
+  });
+
+  it("should not skip fresh composite state with matching commands", () => {
+    const parser = seq(
+      object({
+        sub: optional(command("run", object({ x: option("--x", string()) }))),
+      }),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(parseSync(parser, ["run", "--x", "one", "run"]), {
+      success: true,
+      value: [{ sub: { x: "one" } }, {}],
+    });
+  });
+
+  it("should not skip async fresh composite state with matching commands", async () => {
+    const parser = seq(
+      toAsyncParser(object({
+        sub: optional(command("run", object({ x: option("--x", string()) }))),
+      })),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(await parseAsync(parser, ["run", "--x", "one", "run"]), {
+      success: true,
+      value: [{ sub: { x: "one" } }, {}],
+    });
+  });
+
+  it("should keep parsing a matched withDefault command child", () => {
+    const parser = seq(
+      withDefault(command("add", argument(string())), "default"),
+      argument(string()),
+    );
+
+    assert.deepEqual(parseSync(parser, ["add", "item", "tail"]), {
+      success: true,
+      value: ["item", "tail"],
+    });
+  });
+
+  it("should advance after negatableFlag() consumes input", () => {
+    const parser = seq(
+      negatableFlag({
+        positive: "--color",
+        negative: "--no-color",
+      }),
+      argument(string()),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--no-color", "file.txt"]), {
+      success: true,
+      value: [false, "file.txt"],
+    });
+  });
+
+  it("should not skip a non-skippable parser on no-match", () => {
+    const required = createSyncBranchParser(
+      undefined,
+      () => ({
+        success: false,
+        consumed: 0,
+        error: message`Expected required input.`,
+      }),
+      "default",
+    );
+    const parser = seq(required, command("run", object({})));
+
+    const result = parseSync(parser, ["run"]);
+
+    assert.ok(!result.success);
+    assertErrorIncludes(result.error, "required input");
+  });
+
+  it("should not skip an async non-skippable parser on no-match", async () => {
+    const required = toAsyncParser(
+      createSyncBranchParser(
+        undefined,
+        () => ({
+          success: false,
+          consumed: 0,
+          error: message`Expected required input.`,
+        }),
+        "default",
+      ),
+    );
+    const parser = seq(required, command("run", object({})));
+
+    const result = await parseAsync(parser, ["run"]);
+
+    assert.ok(!result.success);
+    assertErrorIncludes(result.error, "required input");
+  });
+
+  it("should keep active child precedence over later options", () => {
+    const parser = seq(
+      command("deploy", object({ inner: option("--force") })),
+      option("--force"),
+      { allowDuplicates: true },
+    );
+
+    assert.deepEqual(parseSync(parser, ["deploy", "--force"]), {
+      success: true,
+      value: [{ inner: true }, false],
+    });
+  });
+
+  it("should keep async active child precedence over later options", async () => {
+    const parser = seq(
+      toAsyncParser(
+        command("deploy", object({ inner: option("--force") })),
+      ),
+      option("--force"),
+      { allowDuplicates: true },
+    );
+
+    assert.deepEqual(await parseAsync(parser, ["deploy", "--force"]), {
+      success: true,
+      value: [{ inner: true }, false],
+    });
+  });
+
+  it("should suggest from the active sequential position", () => {
+    const parser = seq(
+      option("--name", string()),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(suggestSync(parser, ["--name", "alice", ""]), [{
+      kind: "literal",
+      text: "run",
+    }]);
+  });
+
+  it("should preserve suggestions after a consumed command", () => {
+    const parser = seq(
+      optional(argument(string({ metavar: "PROFILE" }))),
+      command("deploy", object({ force: option("--force") })),
+    );
+
+    assert.deepEqual(suggestSync(parser, ["deploy", "--"]), [{
+      kind: "literal",
+      text: "--force",
+    }]);
+  });
+
+  it("should preserve async suggestions after a consumed command", async () => {
+    const parser = seq(
+      optional(argument(string({ metavar: "PROFILE" }))),
+      command("deploy", object({ force: option("--force") })),
+    );
+
+    assert.deepEqual(await suggestAsync(parser, ["deploy", "--"]), [{
+      kind: "literal",
+      text: "--force",
+    }]);
+  });
+
+  it("should preserve skippable child suggestions at the cursor", () => {
+    const parser = seq(
+      optional(option("--name", string())),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(suggestSync(parser, ["--"]), [{
+      kind: "literal",
+      text: "--name",
+    }]);
+  });
+
+  it("should use dependency source values in suggestions", () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value) =>
+        choice(
+          value === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = seq(
+      option("--mode", mode),
+      option("--level", level),
+    );
+
+    assert.deepEqual(
+      suggestSync(parser, ["--mode", "prod", "--level", "s"]),
+      [
+        { kind: "literal", text: "silent" },
+        { kind: "literal", text: "strict" },
+      ],
+    );
+  });
+
+  it("should preserve async skippable child suggestions at the cursor", async () => {
+    const parser = seq(
+      optional(option("--name", string())),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(await suggestAsync(parser, ["--"]), [{
+      kind: "literal",
+      text: "--name",
+    }]);
+  });
+
+  it("should use async dependency source values in suggestions", async () => {
+    function asyncChoice<T extends string>(
+      choices: readonly T[],
+    ): ValueParser<"async", T> {
+      return {
+        mode: "async",
+        metavar: "ASYNC_CHOICE" as NonEmptyString,
+        placeholder: choices[0],
+        parse(input: string): Promise<ValueParserResult<T>> {
+          return Promise.resolve(
+            choices.includes(input as T)
+              ? { success: true, value: input as T }
+              : {
+                success: false,
+                error: message`Must be one of: ${choices.join(", ")}`,
+              },
+          );
+        },
+        format(value: T): string {
+          return value;
+        },
+        async *suggest(prefix: string): AsyncIterable<Suggestion> {
+          for (const choice of choices) {
+            if (choice.startsWith(prefix)) {
+              yield { kind: "literal", text: choice };
+            }
+          }
+        },
+      };
+    }
+
+    const mode = dependency(asyncChoice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "async",
+      factory: (value) =>
+        asyncChoice(
+          value === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = seq(
+      option("--mode", mode),
+      option("--level", level),
+    );
+
+    assert.deepEqual(
+      await suggestAsync(parser, ["--mode", "prod", "--level", "s"]),
+      [
+        { kind: "literal", text: "silent" },
+        { kind: "literal", text: "strict" },
+      ],
+    );
+  });
+
+  it("should preserve invalid value errors during completion", () => {
+    const parser = seq(option("--num", integer()));
+
+    const result = parseSync(parser, ["--num", "bad"]);
+
+    assert.ok(!result.success);
+    assertErrorIncludes(result.error, "integer");
+  });
+
+  it("should preserve invalid option values before later children", () => {
+    const parser = seq(
+      option("--num", integer()),
+      option("--name", string()),
+    );
+
+    const result = parseSync(parser, ["--num", "bad", "--name", "x"]);
+
+    assert.ok(!result.success);
+    assertErrorIncludes(result.error, "integer");
+  });
+
+  it("should preserve invalid argument values before later children", () => {
+    const parser = seq(
+      argument(integer()),
+      command("run", object({})),
+    );
+
+    const result = parseSync(parser, ["bad", "run"]);
+
+    assert.ok(!result.success);
+    assertErrorIncludes(result.error, "integer");
+  });
+
+  it("should preserve async invalid values before later children", async () => {
+    const parser = seq(
+      toAsyncParser(option("--num", integer())),
+      option("--name", string()),
+    );
+
+    const result = await parseAsync(parser, ["--num", "bad", "--name", "x"]);
+
+    assert.ok(!result.success);
+    assertErrorIncludes(result.error, "integer");
+  });
+
+  it("should propagate hidden usage through sequence terms", () => {
+    const parser = group("hidden", seq(option("--secret")), { hidden: true });
+
+    assert.equal(formatUsage("tool", parser.usage), "tool");
   });
 });

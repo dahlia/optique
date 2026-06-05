@@ -2006,6 +2006,7 @@ function collectRootOptionNamesFromTerm(
       return;
     case "optional":
     case "multiple":
+    case "sequence":
       collectRootOptionNames(term.terms, names, rootLeadingNames);
       return;
     case "exclusive":
@@ -2064,7 +2065,10 @@ function collectActiveOptionNames(
           includeDirectAfterCommandOptions,
         );
       }
-    } else if (term.type === "optional" || term.type === "multiple") {
+    } else if (
+      term.type === "optional" || term.type === "multiple" ||
+      term.type === "sequence"
+    ) {
       collectActiveOptionNames(
         term.terms,
         commandPath,
@@ -2121,6 +2125,7 @@ function collectOptionNamesAtCurrentCommandDepthFromTerm(
       return false;
     case "optional":
     case "multiple":
+    case "sequence":
       collectOptionNamesAtCurrentCommandDepth(
         term.terms,
         names,

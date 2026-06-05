@@ -1106,6 +1106,9 @@ function maxVisibleAtomicWidth(usage: Usage): number {
           max = Math.max(max, maxVisibleAtomicWidth(branch));
         }
         break;
+      case "sequence":
+        max = Math.max(max, maxVisibleAtomicWidth(term.terms));
+        break;
       case "literal":
         if (term.value !== "") {
           max = Math.max(max, getDisplayWidth(term.value));

@@ -1,7 +1,7 @@
 ---
 description: >-
   Construct combinators compose multiple parsers into complex structures
-  using object(), tuple(), or(), and merge() to build sophisticated CLI
+  using object(), tuple(), seq(), or(), and merge() to build sophisticated CLI
   interfaces with full type inference.
 ---
 
@@ -190,6 +190,110 @@ if (config.success) {
   console.log(`Processing range ${start} to ${end}.`);
 }
 ~~~~
+
+
+`seq()` parser
+--------------
+
+The `seq()` parser combines multiple parsers into an ordered parser that
+produces a tuple of results. Unlike [`tuple()`](#tuple-parser), which lets
+child parsers compete by priority, `seq()` keeps a cursor and applies child
+parsers in declaration order.
+
+This is useful when the grammar itself is ordered, especially when an
+optional positional value appears before a later command:
+
+~~~~ typescript twoslash
+import { object, or, seq } from "@optique/core/constructs";
+import { optional } from "@optique/core/modifiers";
+import type { InferValue } from "@optique/core/parser";
+import { argument, command, constant, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const parser = seq(
+  optional(argument(string({ metavar: "PROFILE" }))),
+  or(
+    command(
+      "build",
+      object({
+        action: constant("build"),
+        target: argument(string({ metavar: "TARGET" })),
+      }),
+    ),
+    command(
+      "deploy",
+      object({
+        action: constant("deploy"),
+        environment: argument(string({ metavar: "ENV" })),
+        force: option("--force"),
+      }),
+    ),
+  ),
+);
+
+type Parsed = InferValue<typeof parser>;
+//   ^?
+
+
+
+
+
+
+
+
+
+
+// Type automatically inferred as above.
+~~~~
+
+With this parser, both of these forms are valid:
+
+~~~~ bash
+tool build app
+tool staging deploy production --force
+~~~~
+
+The first command leaves the optional profile as `undefined`; the second
+command sets it to `"staging"`. When the current child parser can finish
+without consuming more input, `seq()` can advance to a later command name.
+
+### Ordered usage output
+
+Because `seq()` preserves declaration order, generated usage follows the
+grammar you wrote instead of priority order:
+
+~~~~ typescript twoslash
+import { object, or, seq } from "@optique/core/constructs";
+import { formatUsage } from "@optique/core/usage";
+import { argument, command, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+// ---cut-before---
+const copyParser = seq(
+  argument(string({ metavar: "SOURCE" })),
+  or(command("local", object({})), command("remote", object({}))),
+  option("--force"),
+);
+
+const usage = formatUsage("copy", copyParser.usage);
+//    ^?
+
+
+// "copy SOURCE (local | remote) [--force]"
+~~~~
+
+### Duplicate options
+
+`seq()` rejects duplicate option names only when the same option can be active
+at the same cursor position. Duplicate options separated by a required
+sequential boundary are allowed, but ambiguous duplicates can be enabled
+explicitly with `{ allowDuplicates: true }`.
+
+### No backtracking
+
+`seq()` does not backtrack after a later parser succeeds. It can skip fixed
+optional parsers before a later command name, but ambiguous variadic
+positionals still need an explicit grammar boundary such as a command name,
+an option, or `--`.
 
 
 `or()` parser

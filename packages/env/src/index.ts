@@ -5,6 +5,7 @@ import {
   delegateSuggestNodes,
   dispatchByMode,
   getTraits,
+  inheritAnnotations,
   injectAnnotations,
   isInjectedAnnotationState,
   mapModeValue,
@@ -290,6 +291,24 @@ export function bindEnv<
   // parser isolated from those legacy markers prevents optional()/withDefault()
   // wrappers from invoking it without the annotation context it requires.
 
+  function hasEnvFallback(state: TState): boolean {
+    if (options.default !== undefined) return true;
+    const annotations = getAnnotations(state);
+    const sourceData = annotations?.[options.context.id] as
+      | EnvSourceData
+      | undefined;
+    if (sourceData == null) return false;
+    return sourceData.source(`${sourceData.prefix}${options.key}`) !==
+      undefined;
+  }
+
+  function getInnerState(state: TState): TState {
+    if (!isEnvBindState(state)) return state;
+    return state.cliState === undefined
+      ? inheritAnnotations(state, parser.initialState)
+      : state.cliState as TState;
+  }
+
   const boundParser: Parser<M, TValue, TState> = {
     mode: parser.mode,
     $valueType: parser.$valueType,
@@ -301,12 +320,19 @@ export function bindEnv<
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
+    canSkip(state: TState, exec?: ExecutionContext) {
+      if (isEnvBindState(state)) {
+        if (state.hasCliValue) {
+          return parser.canSkip?.(state.cliState!, exec) === true;
+        }
+        if (hasEnvFallback(state)) return true;
+        return parser.canSkip?.(getInnerState(state), exec) === true;
+      }
+      if (hasEnvFallback(state)) return true;
+      return parser.canSkip?.(state, exec) === true;
+    },
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
-      const innerState = isEnvBindState(state)
-        ? (state.cliState === undefined
-          ? parser.initialState
-          : state.cliState as TState)
-        : state;
+      const innerState = getInnerState(state);
       return delegateSuggestNodes(
         parser,
         boundParser,

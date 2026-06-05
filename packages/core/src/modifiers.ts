@@ -57,6 +57,20 @@ function isTerminalMultipleItemState(state: unknown): boolean {
     typeof (unwrapped as { success?: unknown }).success === "boolean";
 }
 
+function isMatchedCommandParserState(
+  parser: Parser<Mode, unknown, unknown>,
+  state: unknown,
+): boolean {
+  if (Reflect.get(parser, Symbol.for("@optique/core/commandParser")) !== true) {
+    return false;
+  }
+  const unwrapped = unwrapMultipleItemState(state).value;
+  return Array.isArray(unwrapped) &&
+    unwrapped.length === 2 &&
+    unwrapped[0] === "matched" &&
+    typeof unwrapped[1] === "string";
+}
+
 function isUnstartedMultipleItemState(
   state: unknown,
   originalState?: unknown,
@@ -714,6 +728,15 @@ export function optional<M extends Mode, TValue, TState>(
     // parser's catch-all status does not apply to the wrapper.
     acceptingAnyToken: false,
     initialState: undefined,
+    canSkip(state: [TState] | undefined, exec?: ExecutionContext) {
+      if (!Array.isArray(state)) return true;
+      const innerState = normalizeOptionalLikeInnerState(
+        state,
+        parser.initialState,
+        parser,
+      );
+      return parser.canSkip?.(innerState, exec) === true;
+    },
     // Forward completion deferral hook from inner parser, adapting the
     // outer state shape ([TState] | undefined) to the inner TState.
     ...(typeof parser.shouldDeferCompletion === "function"
@@ -1132,6 +1155,15 @@ export function withDefault<
     // parser's catch-all status does not apply to the wrapper.
     acceptingAnyToken: false,
     initialState: undefined,
+    canSkip(state: [TState] | undefined, exec?: ExecutionContext) {
+      if (!Array.isArray(state)) return true;
+      const innerState = normalizeOptionalLikeInnerState(
+        state,
+        parser.initialState,
+        parser,
+      );
+      return parser.canSkip?.(innerState, exec) === true;
+    },
     // Forward completion deferral hook from inner parser, adapting the
     // outer state shape ([TState] | undefined) to the inner TState.
     ...(typeof parser.shouldDeferCompletion === "function"
@@ -1937,14 +1969,29 @@ export function multiple<M extends Mode, TValue, TState>(
       (parser.dependencyMetadata?.source != null
         ? [{ path, parser, state }]
         : []);
+  const canExtendMultipleItem = (
+    state: TState | undefined,
+    itemIndex: number,
+    exec: ExecutionContext | undefined,
+  ): state is TState =>
+    state != null &&
+    !isTerminalMultipleItemState(state) &&
+    (
+      isMatchedCommandParserState(parser, state) ||
+      parser.canSkip?.(state, withChildExecPath(exec, itemIndex)) !== true
+    );
 
   // Sync parse implementation
   const parseSync = (
     context: ParserContext<MultipleState>,
   ): ParseResult => {
     const currentItemState = context.state.at(-1);
-    const canExtendCurrent = currentItemState != null &&
-      !isTerminalMultipleItemState(currentItemState);
+    const currentItemIndex = context.state.length - 1;
+    const canExtendCurrent = canExtendMultipleItem(
+      currentItemState as TState | undefined,
+      currentItemIndex,
+      context.exec,
+    );
     const canOpenFreshItem = context.state.length < max;
     if (!canExtendCurrent && !canOpenFreshItem) {
       return {
@@ -2106,8 +2153,12 @@ export function multiple<M extends Mode, TValue, TState>(
     context: ParserContext<MultipleState>,
   ): Promise<ParseResult> => {
     const currentItemState = context.state.at(-1);
-    const canExtendCurrent = currentItemState != null &&
-      !isTerminalMultipleItemState(currentItemState);
+    const currentItemIndex = context.state.length - 1;
+    const canExtendCurrent = canExtendMultipleItem(
+      currentItemState as TState | undefined,
+      currentItemIndex,
+      context.exec,
+    );
     const canOpenFreshItem = context.state.length < max;
     if (!canExtendCurrent && !canOpenFreshItem) {
       return {
@@ -2275,6 +2326,15 @@ export function multiple<M extends Mode, TValue, TState>(
     // catch-all status when at least one match is required.
     acceptingAnyToken: min > 0 && (parser.acceptingAnyToken ?? false),
     initialState: [] as readonly TState[],
+    canSkip(state: MultipleState, exec?: ExecutionContext) {
+      if (state.length < min) return false;
+      const currentItemState = state.at(-1);
+      return !canExtendMultipleItem(
+        currentItemState as TState | undefined,
+        state.length - 1,
+        exec,
+      );
+    },
     getSuggestRuntimeNodes(state: MultipleState, path: readonly PropertyKey[]) {
       const innerNodes = state.flatMap((item, i) => [
         ...getInnerSuggestRuntimeNodes(item as TState, [...path, i]),
@@ -2445,8 +2505,12 @@ export function multiple<M extends Mode, TValue, TState>(
       // Extract already-selected values from completed states to exclude them
       // from suggestions (fixes https://github.com/dahlia/optique/issues/73)
       const currentItemState = context.state.at(-1);
-      const canExtendCurrent = currentItemState != null &&
-        !isTerminalMultipleItemState(currentItemState);
+      const currentItemIndex = context.state.length - 1;
+      const canExtendCurrent = canExtendMultipleItem(
+        currentItemState as TState | undefined,
+        currentItemIndex,
+        context.exec,
+      );
       const canOpenNew = context.state.length < max;
       if (!canExtendCurrent && !canOpenNew) {
         return dispatchIterableByMode(
@@ -2599,7 +2663,7 @@ export function multiple<M extends Mode, TValue, TState>(
                 withChildContext(
                   context,
                   itemIndex,
-                  suggestInitialState,
+                  suggestInitialState as TState,
                 ),
                 prefix,
               ) as AsyncIterable<Suggestion>,
@@ -2952,6 +3016,7 @@ export function nonEmpty<M extends Mode, T, TState>(
   parser: Parser<M, T, TState>,
 ): Parser<M, T, TState> {
   const syncParser = parser as Parser<"sync", T, TState>;
+  const initialState = parser.initialState;
 
   // Helper to process the result of the inner parser
   const processNonEmptyResult = (
@@ -2995,7 +3060,16 @@ export function nonEmpty<M extends Mode, T, TState>(
     usage: parser.usage,
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
-    initialState: parser.initialState,
+    initialState,
+    ...(typeof parser.canSkip === "function"
+      ? {
+        canSkip(state: TState, exec?: ExecutionContext) {
+          const unwrappedState = unwrapInjectedAnnotationWrapper(state);
+          if (unwrappedState === initialState) return false;
+          return parser.canSkip?.(unwrappedState, exec) === true;
+        },
+      }
+      : {}),
     // Forward shouldDeferCompletion from inner parser so that prompt()
     // can defer through nonEmpty() wrappers.
     ...(typeof parser.shouldDeferCompletion === "function"

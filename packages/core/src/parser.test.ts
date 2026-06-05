@@ -4,6 +4,7 @@ import {
   merge,
   object,
   or,
+  seq,
   tuple,
 } from "@optique/core/constructs";
 import {
@@ -38,7 +39,7 @@ import {
   isInjectedAnnotationWrapper,
   type ParseOptions,
 } from "./internal/annotations.ts";
-import type { Usage } from "@optique/core/usage";
+import { formatUsage, type Usage } from "@optique/core/usage";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { type DocEntry, formatDocPage } from "@optique/core/doc";
 import assert from "node:assert/strict";
@@ -2035,6 +2036,201 @@ describe("getDocPage", () => {
     assert.ok(sourceEntry, "Should have --source option entry");
     assert.deepEqual(targetEntry?.description, targetDesc);
     assert.deepEqual(sourceEntry?.description, sourceDesc);
+  });
+
+  it("should preserve command-specific docs inside seq()", () => {
+    const parser = seq(
+      optional(argument(string({ metavar: "PROFILE" }))),
+      or(
+        command("build", object({ clean: option("--clean") })),
+        command("deploy", object({ force: option("--force") }), {
+          usageLine: [{ type: "literal", value: "deployment-usage" }],
+        }),
+      ),
+    );
+
+    const docPage = getDocPage(parser, ["deploy"]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(
+      formatUsage("tool", docPage.usage),
+      "tool deploy deployment-usage",
+    );
+    const allEntries = docPage.sections.flatMap((s) => s.entries);
+    assert.ok(
+      allEntries.some((e) =>
+        e.term.type === "option" && e.term.names.includes("--force")
+      ),
+    );
+    assert.ok(
+      !allEntries.some((e) =>
+        e.term.type === "option" && e.term.names.includes("--clean")
+      ),
+    );
+  });
+
+  it("should preserve seq command docs after positional prefixes", () => {
+    const parser = seq(
+      optional(argument(string({ metavar: "PROFILE" }))),
+      or(
+        command("build", object({ clean: option("--clean") })),
+        command("deploy", object({ force: option("--force") }), {
+          usageLine: [{ type: "literal", value: "deployment-usage" }],
+        }),
+      ),
+    );
+
+    const docPage = getDocPage(parser, ["staging", "deploy"]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(
+      formatUsage("tool", docPage.usage),
+      "tool deploy deployment-usage",
+    );
+  });
+
+  it("should not preserve seq command docs after invalid prefixes", () => {
+    const parser = seq(
+      or(
+        command("build", object({ clean: option("--clean") })),
+        command("deploy", object({ force: option("--force") }), {
+          usageLine: [{ type: "literal", value: "deployment-usage" }],
+        }),
+      ),
+    );
+
+    const docPage = getDocPage(parser, ["staging", "deploy"]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(
+      formatUsage("tool", docPage.usage),
+      "tool (build [--clean] | deploy [--force])",
+    );
+  });
+
+  it("should not enter seq command docs for positional command names", () => {
+    const parser = seq(
+      argument(string({ metavar: "PROFILE" })),
+      command("deploy", object({ force: option("--force") }), {
+        usageLine: [{ type: "literal", value: "deployment-usage" }],
+      }),
+    );
+
+    const docPage = getDocPage(parser, ["deploy"]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(
+      formatUsage("tool", docPage.usage),
+      "tool PROFILE deploy [--force]",
+    );
+    const allEntries = docPage.sections.flatMap((s) => s.entries);
+    assert.ok(
+      !allEntries.some((e) =>
+        e.term.type === "option" && e.term.names.includes("--force")
+      ),
+    );
+  });
+
+  it("should not enter async seq command docs for positional command names", async () => {
+    const parser = seq(
+      argument(string({ metavar: "PROFILE" })),
+      command("deploy", object({ force: option("--force") }), {
+        usageLine: [{ type: "literal", value: "deployment-usage" }],
+      }),
+    );
+
+    const docPage = await getDocPageAsync(parser, ["deploy"]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(
+      formatUsage("tool", docPage.usage),
+      "tool PROFILE deploy [--force]",
+    );
+    const allEntries = docPage.sections.flatMap((s) => s.entries);
+    assert.ok(
+      !allEntries.some((e) =>
+        e.term.type === "option" && e.term.names.includes("--force")
+      ),
+    );
+  });
+
+  it("should enter seq command docs after repeated positional names", () => {
+    const parser = seq(
+      argument(string({ metavar: "PROFILE" })),
+      command("deploy", object({ force: option("--force") }), {
+        usageLine: [{ type: "literal", value: "deployment-usage" }],
+      }),
+    );
+
+    const docPage = getDocPage(parser, ["deploy", "deploy"]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(
+      formatUsage("tool", docPage.usage),
+      "tool deploy deployment-usage",
+    );
+  });
+
+  it("should use actual buffer advancement for replayed command docs", () => {
+    const parser = or(
+      object({
+        shared: option("--shared", string()),
+        alpha: command("alpha", object({ a: option("--a") }), {
+          usageLine: [{ type: "literal", value: "alpha-usage" }],
+        }),
+      }),
+      object({
+        shared: option("--shared", string()),
+        deploy: command("deploy", object({ force: option("--force") }), {
+          usageLine: [{ type: "literal", value: "deployment-usage" }],
+        }),
+      }),
+    );
+
+    const docPage = getDocPage(parser, ["--shared", "value", "deploy"]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(
+      formatUsage("tool", docPage.usage),
+      "tool deploy deployment-usage",
+    );
+  });
+
+  it("should use actual buffer advancement for async replayed command docs", async () => {
+    const parser = or(
+      object({
+        shared: option("--shared", string()),
+        alpha: command("alpha", object({ a: option("--a") }), {
+          usageLine: [{ type: "literal", value: "alpha-usage" }],
+        }),
+      }),
+      object({
+        shared: option("--shared", string()),
+        deploy: command("deploy", object({ force: option("--force") }), {
+          usageLine: [{ type: "literal", value: "deployment-usage" }],
+        }),
+      }),
+    );
+
+    const docPage = await getDocPageAsync(parser, [
+      "--shared",
+      "value",
+      "deploy",
+    ]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(
+      formatUsage("tool", docPage.usage),
+      "tool deploy deployment-usage",
+    );
   });
 
   it("should handle exclusive (or) parsers correctly", () => {
