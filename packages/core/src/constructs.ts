@@ -644,7 +644,6 @@ import {
   extractOptionNames,
   type HiddenVisibility,
   isDocHidden,
-  isSuggestionHidden,
   mergeHidden,
   type Usage,
   type UsageTerm,
@@ -6875,7 +6874,7 @@ function collectLeadingJoinedOptionNames(
 ): boolean {
   for (const term of terms) {
     if (term.type === "option") {
-      if (!isSuggestionHidden(term.hidden) && term.metavar != null) {
+      if (term.metavar != null) {
         for (const name of term.names) optionNames.add(name);
       }
       return false;

@@ -22008,6 +22008,18 @@ describe("seq", () => {
     });
   });
 
+  it("should treat hidden option=value as a later value option", () => {
+    const parser = seq(
+      optional(argument(string({ metavar: "PROFILE" }))),
+      option("--secret", string(), { hidden: true }),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--secret=abc"]), {
+      success: true,
+      value: [undefined, "abc"],
+    });
+  });
+
   it("should consume -- when advancing to a later positional parser", () => {
     const parser = seq(
       option("--name", string()),
