@@ -22054,6 +22054,20 @@ describe("seq", () => {
     );
   });
 
+  it("should reject duplicate options active after required input", () => {
+    assert.throws(
+      () =>
+        seq(
+          object({
+            input: argument(string()),
+            x: option("--x"),
+          }),
+          option("--x"),
+        ),
+      DuplicateOptionError,
+    );
+  });
+
   it("should allow duplicate options across sequential command boundaries", () => {
     const parser = seq(
       object({ path: option("--path") }),
@@ -22174,6 +22188,7 @@ describe("seq", () => {
     const parser = seq(
       command("deploy", object({ inner: option("--force") })),
       option("--force"),
+      { allowDuplicates: true },
     );
 
     assert.deepEqual(parseSync(parser, ["deploy", "--force"]), {
@@ -22188,6 +22203,7 @@ describe("seq", () => {
         command("deploy", object({ inner: option("--force") })),
       ),
       option("--force"),
+      { allowDuplicates: true },
     );
 
     assert.deepEqual(await parseAsync(parser, ["deploy", "--force"]), {

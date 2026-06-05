@@ -6984,6 +6984,7 @@ function checkSequentialDuplicateOptionNames(
     const parser = parsers[i];
     const optionNames = new Set<string>();
     collectLeadingCandidates(parser.usage, optionNames, new Set(), true);
+    const retainedOptionNames = collectRetainedOptionNames(parser.usage);
     for (const name of optionNames) {
       const sources = active.get(name);
       if (sources != null) {
@@ -6996,6 +6997,64 @@ function checkSequentialDuplicateOptionNames(
     }
     if (!parserCanSkipAt(parser, parser.initialState, undefined, i)) {
       active.clear();
+    }
+    for (const name of retainedOptionNames) {
+      const sources = active.get(name);
+      active.set(name, sources == null ? [String(i)] : [...sources, String(i)]);
+    }
+  }
+}
+
+function collectRetainedOptionNames(terms: Usage): Set<string> {
+  const optionNames = new Set<string>();
+  collectRetainedOptionNamesInto(terms, optionNames);
+  return optionNames;
+}
+
+function collectRetainedOptionNamesInto(
+  terms: Usage,
+  optionNames: Set<string>,
+): void {
+  for (const term of terms) {
+    if (term.type === "optional") {
+      collectLeadingCandidates(term.terms, optionNames, new Set(), true);
+      collectRetainedOptionNamesInto(term.terms, optionNames);
+      continue;
+    }
+
+    if (term.type === "multiple") {
+      if (term.min === 0) {
+        collectLeadingCandidates(term.terms, optionNames, new Set(), true);
+      }
+      collectRetainedOptionNamesInto(term.terms, optionNames);
+      continue;
+    }
+
+    if (term.type === "sequence") {
+      collectRetainedOptionNamesInto(term.terms, optionNames);
+      continue;
+    }
+
+    if (term.type === "exclusive") {
+      let canSkipBranch = false;
+      const branchOptionNames: Set<string>[] = [];
+      for (const branch of term.terms) {
+        const branchOptions = new Set<string>();
+        const branchCanSkip = collectLeadingCandidates(
+          branch,
+          branchOptions,
+          new Set(),
+          true,
+        );
+        canSkipBranch = canSkipBranch || branchCanSkip;
+        branchOptionNames.push(branchOptions);
+        collectRetainedOptionNamesInto(branch, optionNames);
+      }
+      if (canSkipBranch) {
+        for (const branchOptions of branchOptionNames) {
+          for (const name of branchOptions) optionNames.add(name);
+        }
+      }
     }
   }
 }
