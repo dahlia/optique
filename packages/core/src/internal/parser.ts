@@ -1875,13 +1875,17 @@ function buildDocPage(
     let term = usage[i];
     const canSearchCommand = commandArgIndices == null ||
       commandArgIndices.has(argIndex);
-    const found = canSearchCommand
-      ? findCommandInCurrentUsageTerm(
-        term,
-        arg,
-        usage.slice(i + 1),
-      )
-      : null;
+    let found: Usage | null = null;
+    if (canSearchCommand) {
+      for (let searchIndex = i; searchIndex < usage.length; searchIndex++) {
+        found = findCommandInCurrentUsageTerm(
+          usage[searchIndex],
+          arg,
+          usage.slice(searchIndex + 1),
+        );
+        if (found != null) break;
+      }
+    }
     if (found) {
       usage.splice(i, usage.length - i, ...found);
       term = usage[i];
