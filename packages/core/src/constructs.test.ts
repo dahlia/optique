@@ -22078,6 +22078,56 @@ describe("seq", () => {
     });
   });
 
+  it("should advance past completed repeated composite items", () => {
+    const parser = seq(
+      multiple(object({ x: option("--x") })),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--x", "run"]), {
+      success: true,
+      value: [[{ x: true }], {}],
+    });
+  });
+
+  it("should advance async past completed repeated composite items", async () => {
+    const parser = seq(
+      multiple(toAsyncParser(object({ x: option("--x") }))),
+      command("run", object({})),
+    );
+
+    assert.deepEqual(await parseAsync(parser, ["--x", "run"]), {
+      success: true,
+      value: [[{ x: true }], {}],
+    });
+  });
+
+  it("should not skip initial optional duplicates when duplicates are allowed", () => {
+    const parser = seq(
+      optional(option("--x", string())),
+      option("--x", string()),
+      { allowDuplicates: true },
+    );
+
+    assert.deepEqual(parseSync(parser, ["--x", "a", "--x", "b"]), {
+      success: true,
+      value: ["a", "b"],
+    });
+  });
+
+  it("should not skip initial async optional duplicates when duplicates are allowed", async () => {
+    const parser = seq(
+      optional(toAsyncParser(option("--x", string()))),
+      option("--x", string()),
+      { allowDuplicates: true },
+    );
+
+    assert.deepEqual(await parseAsync(parser, ["--x", "a", "--x", "b"]), {
+      success: true,
+      value: ["a", "b"],
+    });
+  });
+
   it("should consume -- when advancing to a later positional parser", () => {
     const parser = seq(
       option("--name", string()),

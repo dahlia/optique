@@ -1943,14 +1943,26 @@ export function multiple<M extends Mode, TValue, TState>(
       (parser.dependencyMetadata?.source != null
         ? [{ path, parser, state }]
         : []);
+  const canExtendMultipleItem = (
+    state: TState | undefined,
+    itemIndex: number,
+    exec: ExecutionContext | undefined,
+  ): state is TState =>
+    state != null &&
+    !isTerminalMultipleItemState(state) &&
+    parser.canSkip?.(state, withChildExecPath(exec, itemIndex)) !== true;
 
   // Sync parse implementation
   const parseSync = (
     context: ParserContext<MultipleState>,
   ): ParseResult => {
     const currentItemState = context.state.at(-1);
-    const canExtendCurrent = currentItemState != null &&
-      !isTerminalMultipleItemState(currentItemState);
+    const currentItemIndex = context.state.length - 1;
+    const canExtendCurrent = canExtendMultipleItem(
+      currentItemState as TState | undefined,
+      currentItemIndex,
+      context.exec,
+    );
     const canOpenFreshItem = context.state.length < max;
     if (!canExtendCurrent && !canOpenFreshItem) {
       return {
@@ -2112,8 +2124,12 @@ export function multiple<M extends Mode, TValue, TState>(
     context: ParserContext<MultipleState>,
   ): Promise<ParseResult> => {
     const currentItemState = context.state.at(-1);
-    const canExtendCurrent = currentItemState != null &&
-      !isTerminalMultipleItemState(currentItemState);
+    const currentItemIndex = context.state.length - 1;
+    const canExtendCurrent = canExtendMultipleItem(
+      currentItemState as TState | undefined,
+      currentItemIndex,
+      context.exec,
+    );
     const canOpenFreshItem = context.state.length < max;
     if (!canExtendCurrent && !canOpenFreshItem) {
       return {
@@ -2281,11 +2297,14 @@ export function multiple<M extends Mode, TValue, TState>(
     // catch-all status when at least one match is required.
     acceptingAnyToken: min > 0 && (parser.acceptingAnyToken ?? false),
     initialState: [] as readonly TState[],
-    canSkip(state: MultipleState) {
+    canSkip(state: MultipleState, exec?: ExecutionContext) {
       if (state.length < min) return false;
       const currentItemState = state.at(-1);
-      return currentItemState == null ||
-        isTerminalMultipleItemState(currentItemState);
+      return !canExtendMultipleItem(
+        currentItemState as TState | undefined,
+        state.length - 1,
+        exec,
+      );
     },
     getSuggestRuntimeNodes(state: MultipleState, path: readonly PropertyKey[]) {
       const innerNodes = state.flatMap((item, i) => [
@@ -2457,8 +2476,12 @@ export function multiple<M extends Mode, TValue, TState>(
       // Extract already-selected values from completed states to exclude them
       // from suggestions (fixes https://github.com/dahlia/optique/issues/73)
       const currentItemState = context.state.at(-1);
-      const canExtendCurrent = currentItemState != null &&
-        !isTerminalMultipleItemState(currentItemState);
+      const currentItemIndex = context.state.length - 1;
+      const canExtendCurrent = canExtendMultipleItem(
+        currentItemState as TState | undefined,
+        currentItemIndex,
+        context.exec,
+      );
       const canOpenNew = context.state.length < max;
       if (!canExtendCurrent && !canOpenNew) {
         return dispatchIterableByMode(
@@ -2611,7 +2634,7 @@ export function multiple<M extends Mode, TValue, TState>(
                 withChildContext(
                   context,
                   itemIndex,
-                  suggestInitialState,
+                  suggestInitialState as TState,
                 ),
                 prefix,
               ) as AsyncIterable<Suggestion>,

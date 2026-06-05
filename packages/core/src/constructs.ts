@@ -7110,6 +7110,19 @@ function collectLeadingOptionCandidates(
   collectLeadingJoinedOptionNames(terms, joinedOptionNames);
 }
 
+function collectRetainedLeadingCandidatesAtState(
+  terms: Usage,
+  state: unknown,
+): SeqLeadingCandidates {
+  if (
+    terms.length === 1 && terms[0].type === "optional" &&
+    Array.isArray(state)
+  ) {
+    return collectRetainedLeadingCandidates(terms[0].terms);
+  }
+  return collectRetainedLeadingCandidates(terms);
+}
+
 function createSeqState(
   sourceState: unknown,
   index: number,
@@ -7163,10 +7176,16 @@ function shouldAdvanceSeqBeforeParse(
   if (token === "--") return true;
   const laterLeadingCandidates = leadingCandidatesAfter(parsers, index + 1);
   if (!tokenMatchesLeadingName(token, laterLeadingCandidates)) return false;
-  if (currentContext.state.states[index] === parser.initialState) return true;
+  if (currentContext.state.states[index] === parser.initialState) {
+    const currentLeadingCandidates = sequenceLeadingCandidates([parser]);
+    return !tokenMatchesLeadingName(token, currentLeadingCandidates);
+  }
   return !tokenMatchesLeadingName(
     token,
-    collectRetainedLeadingCandidates(parser.usage),
+    collectRetainedLeadingCandidatesAtState(
+      parser.usage,
+      currentContext.state.states[index],
+    ),
   );
 }
 
