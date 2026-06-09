@@ -1079,6 +1079,35 @@ function checkDuplicateLeadingCommandNames(
   }
 }
 
+function checkDuplicateReachableLeadingCommandNames(
+  parserSources: ReadonlyArray<
+    readonly [string | symbol, Parser<Mode, unknown, unknown>]
+  >,
+): void {
+  const commandNameSources = new Map<string, (string | symbol)[]>();
+  let positionalBlocked = false;
+
+  for (const [source, parser] of parserSources) {
+    if (!positionalBlocked) {
+      const names = extractParsableLeadingCommandNames(parser.usage);
+      for (const name of names) {
+        const sources = commandNameSources.get(name);
+        commandNameSources.set(
+          name,
+          sources == null ? [source] : [...sources, source],
+        );
+      }
+    }
+    if (parser.acceptingAnyToken) positionalBlocked = true;
+  }
+
+  for (const [name, sources] of commandNameSources) {
+    if (sources.length > 1) {
+      throw new DuplicateCommandNameError(name, sources);
+    }
+  }
+}
+
 /**
  * Extracts option names that participate in CLI syntax.
  *
@@ -5748,9 +5777,9 @@ export function object<
       ),
     );
   }
-  checkDuplicateLeadingCommandNames(
+  checkDuplicateReachableLeadingCommandNames(
     parserPairs.map(([field, parser]) =>
-      [field as string | symbol, parser.usage] as const
+      [field as string | symbol, parser] as const
     ),
   );
 
@@ -9951,9 +9980,9 @@ export function merge(
       ),
     );
   }
-  checkDuplicateLeadingCommandNames(
+  checkDuplicateReachableLeadingCommandNames(
     sorted.map(([parser, originalIndex]) =>
-      [String(originalIndex), parser.usage] as const
+      [String(originalIndex), parser] as const
     ),
   );
 

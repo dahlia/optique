@@ -22439,6 +22439,29 @@ describe("seq", () => {
     );
   });
 
+  it("should allow unreachable command alias collisions in object()", () => {
+    const blocker = createSyncBranchParser(
+      undefined,
+      () => {
+        return {
+          success: false,
+          consumed: 0,
+          error: message`Expected input.`,
+        };
+      },
+      "blocked",
+      { acceptingAnyToken: true, priority: 20 },
+    );
+
+    assert.doesNotThrow(() =>
+      object({
+        blocker,
+        install: command("install", object({}), { aliases: ["i"] }),
+        inspect: command("inspect", object({}), { aliases: ["i"] }),
+      })
+    );
+  });
+
   it("should reject command alias collisions in merge()", () => {
     assert.throws(
       () =>
@@ -22455,6 +22478,33 @@ describe("seq", () => {
         message:
           /Duplicate command name "i".*unique within active parser alternatives\./,
       },
+    );
+  });
+
+  it("should allow unreachable command alias collisions in merge()", () => {
+    const blocker = createSyncBranchParser(
+      undefined,
+      () => {
+        return {
+          success: false,
+          consumed: 0,
+          error: message`Expected input.`,
+        };
+      },
+      "blocked",
+      { acceptingAnyToken: true, priority: 20 },
+    );
+
+    assert.doesNotThrow(() =>
+      merge(
+        object({ blocker }),
+        object({
+          install: command("install", object({}), { aliases: ["i"] }),
+        }),
+        object({
+          inspect: command("inspect", object({}), { aliases: ["i"] }),
+        }),
+      )
     );
   });
 
