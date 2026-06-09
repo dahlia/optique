@@ -2540,6 +2540,48 @@ describe("getDocPage", () => {
     );
   });
 
+  it("should apply command usageLine when navigating by alias", () => {
+    const installCommand = command(
+      "install",
+      object({
+        name: option("--name", string()),
+      }),
+      {
+        aliases: ["i"],
+        usageLine: [{ type: "literal", value: "install-usage" }],
+      },
+    );
+
+    const inspectCommand = command(
+      "inspect",
+      object({
+        verbose: option("--verbose"),
+      }),
+    );
+
+    const parser = longestMatch(or(installCommand, inspectCommand));
+
+    const doc = getDocPage(parser, ["i"]);
+    assert.ok(doc);
+    assert.ok(doc.usage && doc.usage.length > 0);
+
+    assert.ok(
+      doc.usage.some((term) =>
+        term.type === "literal" && term.value === "install-usage"
+      ),
+    );
+    assert.ok(
+      !doc.usage.some((term) =>
+        term.type === "option" && term.names.includes("--name")
+      ),
+    );
+    assert.ok(
+      !doc.usage.some((term) =>
+        term.type === "option" && term.names.includes("--verbose")
+      ),
+    );
+  });
+
   it("should include choices in formatted help for option with choice()", () => {
     const parser = object({
       format: option("--format", choice(["json", "yaml", "xml"]), {

@@ -1896,7 +1896,7 @@ function buildDocPage(
   ): void => {
     if (
       term?.type !== "command" ||
-      term.name !== arg ||
+      !commandTermMatches(term, arg) ||
       !isLastArg ||
       term.usageLine == null
     ) {
