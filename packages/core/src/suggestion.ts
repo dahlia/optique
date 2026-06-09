@@ -271,6 +271,8 @@ export function expandCommandAliasSuggestions(
   usage: Usage,
   suggestions: readonly string[],
 ): readonly string[] {
+  if (suggestions.length === 0) return suggestions;
+
   const commandAliasTargets = collectCommandAliasTargets(usage);
   const expanded: string[] = [];
   const seen = new Set<string>();
