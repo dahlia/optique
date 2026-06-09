@@ -1088,7 +1088,7 @@ function checkDuplicateReachableLeadingCommandNames(
   >,
 ): void {
   const commandNameSources = new Map<string, (string | symbol)[]>();
-  const sortedSources = parserSources.toSorted(([, parserA], [, parserB]) =>
+  const sortedSources = [...parserSources].sort(([, parserA], [, parserB]) =>
     parserB.priority - parserA.priority
   );
   const blockedNames = new Set<string>();
