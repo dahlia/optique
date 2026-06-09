@@ -4317,7 +4317,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(!suggestions.includes("--version"));
     });
 
-    it("should not treat nested command options as current value slots", () => {
+    it("should not treat unmatched nested command options as current value slots", () => {
       const parser = command(
         "outer",
         command("inner", option("--output", string())),
@@ -4446,7 +4446,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(!suggestions.includes("--version"));
     });
 
-    it("should not treat nested command options as current value slots", () => {
+    it("should not treat unselected nested command options as current value slots", () => {
       const parser = command(
         "tool",
         or(

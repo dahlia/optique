@@ -2911,7 +2911,21 @@ function getCommandNames(
   name: string,
   options: CommandOptions,
 ): readonly string[] {
-  return options.aliases == null ? [name] : [name, ...options.aliases];
+  const aliases: unknown = options.aliases;
+  if (aliases == null) return [name];
+  if (!isNonEmptyStringArray(aliases)) {
+    throw new TypeError(
+      "Command aliases must be a non-empty array of strings.",
+    );
+  }
+  return [name, ...aliases];
+}
+
+function isNonEmptyStringArray(
+  value: unknown,
+): value is readonly [string, ...string[]] {
+  return Array.isArray(value) && value.length > 0 &&
+    value.every((item) => typeof item === "string");
 }
 
 function validateUniqueCommandNames(names: readonly string[]): void {

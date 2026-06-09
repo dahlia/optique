@@ -3393,6 +3393,36 @@ describe("command", () => {
     );
   });
 
+  it("should reject an empty command aliases array", () => {
+    assert.throws(
+      () => command("install", object({}), { aliases: [] as never }),
+      {
+        name: "TypeError",
+        message: "Command aliases must be a non-empty array of strings.",
+      },
+    );
+  });
+
+  it("should reject non-array command aliases", () => {
+    assert.throws(
+      () => command("install", object({}), { aliases: "i" as never }),
+      {
+        name: "TypeError",
+        message: "Command aliases must be a non-empty array of strings.",
+      },
+    );
+  });
+
+  it("should reject non-string command aliases", () => {
+    assert.throws(
+      () => command("install", object({}), { aliases: ["i", 1] as never }),
+      {
+        name: "TypeError",
+        message: "Command aliases must be a non-empty array of strings.",
+      },
+    );
+  });
+
   it("should fail when wrong subcommand is provided", () => {
     const showParser = command(
       "show",

@@ -22416,7 +22416,11 @@ describe("seq", () => {
           command("install", object({}), { aliases: ["i"] }),
           command("i", object({})),
         ),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          /Duplicate command name "i".*unique within active parser alternatives\./,
+      },
     );
   });
 
@@ -22427,7 +22431,11 @@ describe("seq", () => {
           install: command("install", object({}), { aliases: ["i"] }),
           inspect: command("inspect", object({}), { aliases: ["i"] }),
         }),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          /Duplicate command name "i".*unique within active parser alternatives\./,
+      },
     );
   });
 
@@ -22442,7 +22450,11 @@ describe("seq", () => {
             inspect: command("inspect", object({}), { aliases: ["i"] }),
           }),
         ),
-      TypeError,
+      {
+        name: "TypeError",
+        message:
+          /Duplicate command name "i".*unique within active parser alternatives\./,
+      },
     );
   });
 
