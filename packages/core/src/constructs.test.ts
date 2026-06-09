@@ -22409,6 +22409,87 @@ describe("seq", () => {
     );
   });
 
+  it("should reject command collisions from parser metadata", () => {
+    const custom = createSyncBranchParser(
+      undefined,
+      () => ({
+        success: false,
+        consumed: 0,
+        error: message`Expected custom command.`,
+      }),
+      "custom",
+      {
+        leadingNames: new Set(["install"]),
+        priority: 15,
+        usage: [],
+      },
+    );
+
+    assert.throws(
+      () => or(custom, command("install", object({}))),
+      {
+        name: "TypeError",
+        message:
+          /Duplicate command name "install".*unique within active parser alternatives\./,
+      },
+    );
+  });
+
+  it("should reject command collisions across or() priorities", () => {
+    const highPriority = createSyncBranchParser(
+      undefined,
+      () => ({
+        success: false,
+        consumed: 0,
+        error: message`Expected high priority command.`,
+      }),
+      "highPriority",
+      {
+        leadingNames: new Set(["install"]),
+        priority: 20,
+        usage: [],
+      },
+    );
+    const lowPriority = createSyncBranchParser(
+      undefined,
+      () => ({
+        success: false,
+        consumed: 0,
+        error: message`Expected low priority command.`,
+      }),
+      "lowPriority",
+      {
+        leadingNames: new Set(["install"]),
+        priority: 10,
+        usage: [],
+      },
+    );
+
+    assert.throws(
+      () => or(highPriority, lowPriority),
+      {
+        name: "TypeError",
+        message:
+          /Duplicate command name "install".*unique within active parser alternatives\./,
+      },
+    );
+  });
+
+  it("should reject option-shaped command collisions", () => {
+    assert.throws(
+      () =>
+        or(
+          command("--help", object({})),
+          command("--help", object({})),
+        ),
+      {
+        name: "TypeError",
+        message:
+          /Duplicate command name "--help".*unique within active parser alternatives\./,
+      },
+    );
+  });
+
   it("should reject command alias collisions in longestMatch()", () => {
     assert.throws(
       () =>
