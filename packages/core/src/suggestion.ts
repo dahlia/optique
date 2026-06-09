@@ -295,7 +295,11 @@ function collectCommandAliasTargets(
   function traverse(terms: Usage): boolean {
     if (!terms || !Array.isArray(terms)) return true;
     for (const term of terms) {
-      if (term.type === "option" || term.type === "argument") {
+      if (term.type === "option") {
+        continue;
+      }
+
+      if (term.type === "argument") {
         return false;
       }
 

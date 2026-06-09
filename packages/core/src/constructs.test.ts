@@ -535,6 +535,22 @@ describe("or", () => {
     }
   });
 
+  it("should expand aliases from later sibling command suggestions", () => {
+    const orParser = or(
+      command("install", object({}), { aliases: ["i"] }),
+      command("remove", object({}), { aliases: ["rm"] }),
+    );
+
+    const result = parseSync(orParser, ["rmm"]);
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Did you mean one of these?");
+      assertErrorIncludes(result.error, "`remove`");
+      assertErrorIncludes(result.error, "`rm`");
+    }
+  });
+
   it("should detect mutually exclusive options", () => {
     const parser1 = option("-a");
     const parser2 = option("-b");

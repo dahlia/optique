@@ -672,8 +672,11 @@ function createUnexpectedInputErrorWithScopedSuggestions(
     candidates,
     DEFAULT_FIND_SIMILAR_OPTIONS,
   );
+  const aliasUsage: Usage = [
+    { type: "exclusive", terms: parsers.map((parser) => parser.usage) },
+  ];
   const displaySuggestions = expandCommandAliasSuggestions(
-    parsers.flatMap((parser) => parser.usage),
+    aliasUsage,
     suggestions,
   );
   const suggestionMsg = customFormatter

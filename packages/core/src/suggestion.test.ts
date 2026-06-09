@@ -426,6 +426,18 @@ describe("expandCommandAliasSuggestions()", () => {
       "i",
     ]);
   });
+
+  it("should continue past leading options before command aliases", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--verbose"] },
+      { type: "command", name: "install", aliases: ["i"] },
+    ];
+
+    assert.deepEqual(expandCommandAliasSuggestions(usage, ["i"]), [
+      "install",
+      "i",
+    ]);
+  });
 });
 
 describe("integration: findSimilar + createSuggestionMessage", () => {
