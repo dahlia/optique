@@ -42,6 +42,8 @@ export type EnvSource = (key: string) => string | undefined;
 /**
  * Function type for command substitution in `.env` file values.
  *
+ * @param command Command text captured from `$(...)` or backtick substitution.
+ * @returns Replacement text, or `undefined` to substitute an empty string.
  * @since 1.1.0
  */
 export type EnvFileSubstitute = (command: string) => string | undefined;
@@ -442,8 +444,9 @@ function parseEnvFile(
   path: string,
   lookup: EnvSource,
   substitute: EnvFileSubstitute | undefined,
-): Record<string, string> {
-  const values: Record<string, string> = {};
+  outerValues: ReadonlyMap<string, string> = new Map(),
+): Map<string, string> {
+  const values = new Map<string, string>();
   let index = input.charCodeAt(0) === 0xfeff ? 1 : 0;
   while (index < input.length) {
     const line = getLineNumber(input, index);
@@ -476,7 +479,8 @@ function parseEnvFile(
     index = skipHorizontalWhitespace(input, index + 1);
     const lineLookup: EnvSource = (lookupKey) =>
       lookup(lookupKey) ??
-        values[lookupKey];
+        values.get(lookupKey) ??
+        outerValues.get(lookupKey);
     const parsed = input[index] === "'" || input[index] === '"'
       ? parseQuotedEnvValue(
         input,
@@ -488,7 +492,7 @@ function parseEnvFile(
         substitute,
       )
       : parseUnquotedEnvValue(input, index, path, line, lineLookup, substitute);
-    values[key] = parsed.value;
+    values.set(key, parsed.value);
     index = skipHorizontalWhitespace(input, parsed.nextIndex);
     if (input[index] === "#") {
       index = skipLine(input, index);
@@ -507,21 +511,20 @@ function parseEnvFile(
 function loadEnvFileValues(
   options: NormalizedEnvFileOptions,
   source: EnvSource,
-): Record<string, string> {
-  const values: Record<string, string> = {};
+): ReadonlyMap<string, string> {
+  const values = new Map<string, string>();
   for (const path of options.paths) {
     const absolutePath = resolvePath(path);
     try {
       const contents = readFileSync(absolutePath, "utf8");
-      Object.assign(
+      const parsedValues = parseEnvFile(
+        contents,
+        absolutePath,
+        source,
+        options.substitute,
         values,
-        parseEnvFile(
-          contents,
-          absolutePath,
-          (key) => source(key) ?? values[key],
-          options.substitute,
-        ),
       );
+      for (const [key, value] of parsedValues) values.set(key, value);
     } catch (error) {
       if (isErrnoException(error) && error.code === "ENOENT") continue;
       throw error;
@@ -551,6 +554,10 @@ function loadEnvFileValues(
  * @returns A context that provides environment source annotations.
  * @throws {TypeError} If `prefix` is not a string.
  * @throws {TypeError} If `source` is not a function.
+ * @throws {TypeError} If `envFile` has an invalid shape.
+ * @throws {SyntaxError} If an `.env` file contains invalid syntax.
+ * @throws {Error} If an `.env` file cannot be read for a reason other than
+ * a missing file.
  * @since 1.0.0
  */
 export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
@@ -573,7 +580,7 @@ export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
   const envFileValues = loadEnvFileValues(envFileOptions, baseSource);
   const source: EnvSource = (key) => {
     const value = baseSource(key) as unknown;
-    return value === undefined ? envFileValues[key] : value as
+    return value === undefined ? envFileValues.get(key) : value as
       | string
       | undefined;
   };

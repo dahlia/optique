@@ -2993,6 +2993,62 @@ describe("createEnvContext defaults", () => {
       assert.equal(context.source("APP_MISSING"), "before--after");
     }));
 
+  it("expands current envFile values before previous envFile values", () =>
+    withTempDir((dir) => {
+      const basePath = join(dir, ".env");
+      const localPath = join(dir, ".env.local");
+      writeFileSync(
+        basePath,
+        [
+          "APP_ROOT=/base",
+          "APP_CACHE=$APP_ROOT/cache",
+        ].join("\n"),
+        "utf8",
+      );
+      writeFileSync(
+        localPath,
+        [
+          "APP_ROOT=/local",
+          "APP_BIN=$APP_ROOT/bin",
+          "APP_LOG=$APP_CACHE/log",
+        ].join("\n"),
+        "utf8",
+      );
+      const context = createEnvContext({
+        envFile: [basePath, localPath],
+        source: () => undefined,
+      });
+
+      assert.equal(context.source("APP_ROOT"), "/local");
+      assert.equal(context.source("APP_CACHE"), "/base/cache");
+      assert.equal(context.source("APP_BIN"), "/local/bin");
+      assert.equal(context.source("APP_LOG"), "/base/cache/log");
+    }));
+
+  it("preserves envFile keys that match Object prototype properties", () =>
+    withTempDir((dir) => {
+      const envPath = join(dir, ".env");
+      writeFileSync(
+        envPath,
+        [
+          "__proto__=literal",
+          "APP_PROTO=$__proto__",
+          "constructor=ctor",
+          "APP_CTOR=$constructor",
+        ].join("\n"),
+        "utf8",
+      );
+      const context = createEnvContext({
+        envFile: envPath,
+        source: () => undefined,
+      });
+
+      assert.equal(context.source("__proto__"), "literal");
+      assert.equal(context.source("APP_PROTO"), "literal");
+      assert.equal(context.source("constructor"), "ctor");
+      assert.equal(context.source("APP_CTOR"), "ctor");
+    }));
+
   it("keeps single-quoted values literal without substitutions", () =>
     withTempDir((dir) => {
       const envPath = join(dir, ".env");
