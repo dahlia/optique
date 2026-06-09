@@ -292,11 +292,15 @@ function collectCommandAliasTargets(
 ): Map<string, readonly string[]> {
   const targets = new Map<string, readonly string[]>();
 
-  function traverse(terms: Usage): void {
-    if (!terms || !Array.isArray(terms)) return;
+  function traverse(terms: Usage): boolean {
+    if (!terms || !Array.isArray(terms)) return true;
     for (const term of terms) {
+      if (term.type === "option" || term.type === "argument") {
+        return false;
+      }
+
       if (term.type === "command") {
-        if (isSuggestionHidden(term.hidden)) continue;
+        if (isSuggestionHidden(term.hidden)) return false;
         if (!targets.has(term.name)) {
           targets.set(term.name, [term.name]);
         }
@@ -305,19 +309,36 @@ function collectCommandAliasTargets(
             targets.set(alias, [term.name, alias]);
           }
         }
-        continue;
+        return false;
       }
-      if (
-        term.type === "optional" || term.type === "multiple" ||
-        term.type === "sequence"
-      ) {
+
+      if (term.type === "optional") {
         traverse(term.terms);
         continue;
       }
+
+      if (term.type === "multiple") {
+        traverse(term.terms);
+        if (term.min === 0) continue;
+        return false;
+      }
+
+      if (term.type === "sequence") {
+        if (traverse(term.terms)) continue;
+        return false;
+      }
+
       if (term.type === "exclusive") {
-        for (const branch of term.terms) traverse(branch);
+        let allSkippable = true;
+        for (const branch of term.terms) {
+          const branchSkippable = traverse(branch);
+          allSkippable = allSkippable && branchSkippable;
+        }
+        if (allSkippable) continue;
+        return false;
       }
     }
+    return true;
   }
 
   traverse(usage);

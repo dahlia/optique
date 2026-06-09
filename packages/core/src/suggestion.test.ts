@@ -4,6 +4,7 @@ import {
   createErrorWithSuggestions,
   createSuggestionMessage,
   deduplicateSuggestions,
+  expandCommandAliasSuggestions,
   findSimilar,
   levenshteinDistance,
 } from "./suggestion.ts";
@@ -362,6 +363,34 @@ describe("createSuggestionMessage()", () => {
     assert.doesNotMatch(formatted, /`/);
     // Should still have the option name
     assert.match(formatted, /--verbose/);
+  });
+});
+
+describe("expandCommandAliasSuggestions()", () => {
+  it("should ignore nested command aliases when expanding suggestions", () => {
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [
+            {
+              type: "sequence",
+              terms: [
+                { type: "command", name: "parent" },
+                { type: "command", name: "nested", aliases: ["run"] },
+              ],
+            },
+          ],
+          [{ type: "command", name: "run", aliases: ["r"] }],
+        ],
+      },
+    ];
+
+    assert.deepEqual(expandCommandAliasSuggestions(usage, ["run"]), ["run"]);
+    assert.deepEqual(expandCommandAliasSuggestions(usage, ["r"]), [
+      "run",
+      "r",
+    ]);
   });
 });
 
