@@ -68,7 +68,7 @@
     "prepublish": "tsdown",
     "test": "node --experimental-transform-types --test",
     "test:bun": "bun test",
-    "test:deno": "deno test",
-    "test-all": "tsdown && node --experimental-transform-types --test && bun test && deno test"
+    "test:deno": "deno test --allow-read --allow-write --allow-env",
+    "test-all": "tsdown && node --experimental-transform-types --test && bun test && deno test --allow-read --allow-write --allow-env"
   }
 }

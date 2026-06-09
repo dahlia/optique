@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
 import { getAnnotations } from "@optique/core/annotations";
 import type { Annotations, SourceContext } from "@optique/core/context";
 import {
@@ -36,6 +38,41 @@ import {
  * @since 1.0.0
  */
 export type EnvSource = (key: string) => string | undefined;
+
+/**
+ * Function type for command substitution in `.env` file values.
+ *
+ * @param command Command text captured from `$(...)` or backtick substitution.
+ * @returns Replacement text, or `undefined` to substitute an empty string.
+ * @since 1.1.0
+ */
+export type EnvFileSubstitute = (command: string) => string | undefined;
+
+/**
+ * Path option for `.env` files loaded by {@link createEnvContext}.
+ *
+ * @since 1.1.0
+ */
+export type EnvFilePaths = boolean | string | readonly string[];
+
+/**
+ * Options for loading `.env` files.
+ *
+ * @since 1.1.0
+ */
+export interface EnvFileOptions {
+  /**
+   * Path or paths to `.env` files.  When `true` or omitted, loads `.env`
+   * from the current working directory.  Missing files are skipped.
+   */
+  readonly paths?: EnvFilePaths;
+
+  /**
+   * Optional command substitution hook for `$(...)` and backtick forms.
+   * Optique never executes commands by itself.
+   */
+  readonly substitute?: EnvFileSubstitute;
+}
 
 interface EnvSourceData {
   readonly prefix: string;
@@ -78,6 +115,27 @@ export interface EnvContextOptions {
    * @default Runtime-specific source (`Deno.env.get` or `process.env`)
    */
   readonly source?: EnvSource;
+
+  /**
+   * Path(s) to `.env` files to load as an internal fallback layer.
+   *
+   * When `true`, searches for `.env` in the current working directory.
+   * When a string or array of strings, loads those explicit files.
+   * Files are loaded in order; later files override earlier files.
+   *
+   * Values loaded from `.env` files do not mutate `process.env` or
+   * `Deno.env`, and the real environment source remains higher priority.
+   *
+   * @default undefined
+   * @since 1.1.0
+   */
+  readonly envFile?: EnvFilePaths | EnvFileOptions;
+}
+
+function getTypeName(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  return typeof value;
 }
 
 function defaultEnvSource(key: string): string | undefined {
@@ -91,6 +149,389 @@ function defaultEnvSource(key: string): string | undefined {
     readonly process?: { readonly env?: Record<string, string | undefined> };
   }).process;
   return processGlobal?.env?.[key];
+}
+
+function isErrnoException(error: unknown): error is { readonly code: string } {
+  return error != null &&
+    typeof error === "object" &&
+    "code" in error &&
+    typeof (error as { readonly code?: unknown }).code === "string";
+}
+
+function normalizeEnvFilePaths(paths: EnvFilePaths): readonly string[] {
+  if (paths === false) return [];
+  if (paths === true) return [".env"];
+  if (typeof paths === "string") return [paths];
+  if (Array.isArray(paths)) {
+    for (const path of paths) {
+      if (typeof path !== "string") {
+        throw new TypeError(
+          `Expected envFile paths to be strings, but got: ${
+            getTypeName(path)
+          }.`,
+        );
+      }
+    }
+    return paths;
+  }
+  throw new TypeError(
+    `Expected envFile.paths to be a boolean, string, array, or undefined, but got: ${
+      getTypeName(paths)
+    }.`,
+  );
+}
+
+interface NormalizedEnvFileOptions {
+  readonly paths: readonly string[];
+  readonly substitute?: EnvFileSubstitute;
+}
+
+function normalizeEnvFileOptions(
+  envFile: EnvContextOptions["envFile"],
+): NormalizedEnvFileOptions {
+  if (envFile === undefined || envFile === false) {
+    return { paths: [] };
+  }
+  if (
+    envFile === true ||
+    typeof envFile === "string" ||
+    Array.isArray(envFile)
+  ) {
+    return { paths: normalizeEnvFilePaths(envFile) };
+  }
+  if (envFile == null || typeof envFile !== "object") {
+    throw new TypeError(
+      `Expected envFile to be a boolean, string, array, or object, but got: ${
+        getTypeName(envFile)
+      }.`,
+    );
+  }
+  const options = envFile as EnvFileOptions;
+  const rawSubstitute = options.substitute;
+  if (rawSubstitute !== undefined && typeof rawSubstitute !== "function") {
+    throw new TypeError(
+      `Expected envFile.substitute to be a function or undefined, but got: ${
+        getTypeName(rawSubstitute)
+      }.`,
+    );
+  }
+  return {
+    paths: normalizeEnvFilePaths(options.paths ?? true),
+    ...(rawSubstitute === undefined ? {} : { substitute: rawSubstitute }),
+  };
+}
+
+function isEnvNameStart(character: string): boolean {
+  return /[A-Za-z_]/u.test(character);
+}
+
+function isEnvNamePart(character: string): boolean {
+  return /[A-Za-z0-9_]/u.test(character);
+}
+
+function getLineNumber(input: string, offset: number): number {
+  let line = 1;
+  for (let index = 0; index < offset; index++) {
+    if (input[index] === "\n") {
+      line++;
+    } else if (input[index] === "\r") {
+      line++;
+      if (input[index + 1] === "\n") index++;
+    }
+  }
+  return line;
+}
+
+function syntaxError(
+  path: string,
+  line: number,
+  messageText: string,
+): SyntaxError {
+  return new SyntaxError(
+    `Invalid .env syntax in ${path} at line ${line}: ${messageText}.`,
+  );
+}
+
+function skipLine(input: string, index: number): number {
+  while (
+    index < input.length &&
+    input[index] !== "\r" &&
+    input[index] !== "\n"
+  ) {
+    index++;
+  }
+  return index;
+}
+
+function readNewline(input: string, index: number): number {
+  if (input[index] === "\r" && input[index + 1] === "\n") return index + 2;
+  if (input[index] === "\r") return index + 1;
+  if (input[index] === "\n") return index + 1;
+  return index;
+}
+
+function skipHorizontalWhitespace(input: string, index: number): number {
+  while (input[index] === " " || input[index] === "\t") index++;
+  return index;
+}
+
+function expandEnvValue(
+  rawValue: string,
+  lookup: EnvSource,
+  substitute: EnvFileSubstitute | undefined,
+  options: {
+    readonly path: string;
+    readonly startLine: number;
+    readonly interpretEscapes: boolean;
+    readonly allowSubstitution: boolean;
+  },
+): string {
+  let output = "";
+  for (let index = 0; index < rawValue.length; index++) {
+    const character = rawValue[index];
+    if (options.interpretEscapes && character === "\\") {
+      const next = rawValue[++index];
+      if (next === undefined) {
+        output += "\\";
+      } else if (next === "n") {
+        output += "\n";
+      } else if (next === "r") {
+        output += "\r";
+      } else if (next === "t") {
+        output += "\t";
+      } else {
+        output += next;
+      }
+      continue;
+    }
+    if (!options.allowSubstitution) {
+      output += character;
+      continue;
+    }
+    if (character === "`") {
+      const end = rawValue.indexOf("`", index + 1);
+      if (end < 0) {
+        throw syntaxError(
+          options.path,
+          options.startLine,
+          "unterminated command substitution",
+        );
+      }
+      const command = rawValue.slice(index + 1, end);
+      output += substitute?.(command) ?? "";
+      index = end;
+      continue;
+    }
+    if (character !== "$") {
+      output += character;
+      continue;
+    }
+    if (rawValue[index + 1] === "(") {
+      const end = rawValue.indexOf(")", index + 2);
+      if (end < 0) {
+        throw syntaxError(
+          options.path,
+          options.startLine,
+          "unterminated command substitution",
+        );
+      }
+      const command = rawValue.slice(index + 2, end);
+      output += substitute?.(command) ?? "";
+      index = end;
+      continue;
+    }
+    if (rawValue[index + 1] === "{") {
+      const end = rawValue.indexOf("}", index + 2);
+      if (end < 0) {
+        throw syntaxError(
+          options.path,
+          options.startLine,
+          "unterminated variable expansion",
+        );
+      }
+      const key = rawValue.slice(index + 2, end);
+      output += lookup(key) ?? "";
+      index = end;
+      continue;
+    }
+    const nameStart = rawValue[index + 1];
+    if (nameStart === undefined || !isEnvNameStart(nameStart)) {
+      output += character;
+      continue;
+    }
+    let end = index + 2;
+    while (end < rawValue.length && isEnvNamePart(rawValue[end])) end++;
+    const key = rawValue.slice(index + 1, end);
+    output += lookup(key) ?? "";
+    index = end - 1;
+  }
+  return output;
+}
+
+function parseQuotedEnvValue(
+  input: string,
+  index: number,
+  quote: "'" | '"',
+  path: string,
+  line: number,
+  lookup: EnvSource,
+  substitute: EnvFileSubstitute | undefined,
+): { readonly value: string; readonly nextIndex: number } {
+  const valueStart = index + 1;
+  let cursor = valueStart;
+  while (cursor < input.length) {
+    const character = input[cursor];
+    if (character === "\\" && quote === '"') {
+      cursor += 2;
+      continue;
+    }
+    if (character === quote) {
+      const rawValue = input.slice(valueStart, cursor);
+      const nextIndex = cursor + 1;
+      return {
+        value: quote === "'"
+          ? rawValue
+          : expandEnvValue(rawValue, lookup, substitute, {
+            path,
+            startLine: line,
+            interpretEscapes: true,
+            allowSubstitution: true,
+          }),
+        nextIndex,
+      };
+    }
+    cursor++;
+  }
+  throw syntaxError(path, line, "unterminated quoted value");
+}
+
+function parseUnquotedEnvValue(
+  input: string,
+  index: number,
+  path: string,
+  line: number,
+  lookup: EnvSource,
+  substitute: EnvFileSubstitute | undefined,
+): { readonly value: string; readonly nextIndex: number } {
+  let cursor = index;
+  while (
+    cursor < input.length &&
+    input[cursor] !== "\r" &&
+    input[cursor] !== "\n"
+  ) {
+    if (
+      input[cursor] === "#" &&
+      (cursor === index || /\s/u.test(input[cursor - 1]))
+    ) {
+      break;
+    }
+    cursor++;
+  }
+  const rawValue = input.slice(index, cursor).trimEnd();
+  return {
+    value: expandEnvValue(rawValue, lookup, substitute, {
+      path,
+      startLine: line,
+      interpretEscapes: false,
+      allowSubstitution: true,
+    }),
+    nextIndex: cursor,
+  };
+}
+
+function parseEnvFile(
+  input: string,
+  path: string,
+  lookup: EnvSource,
+  substitute: EnvFileSubstitute | undefined,
+  outerValues: ReadonlyMap<string, string> = new Map(),
+): Map<string, string> {
+  const values = new Map<string, string>();
+  let index = input.charCodeAt(0) === 0xfeff ? 1 : 0;
+  while (index < input.length) {
+    const line = getLineNumber(input, index);
+    index = skipHorizontalWhitespace(input, index);
+    if (index >= input.length) break;
+    if (input[index] === "\r" || input[index] === "\n") {
+      index = readNewline(input, index);
+      continue;
+    }
+    if (input[index] === "#") {
+      index = readNewline(input, skipLine(input, index));
+      continue;
+    }
+    if (
+      input.startsWith("export", index) &&
+      /\s/u.test(input[index + "export".length] ?? "")
+    ) {
+      index = skipHorizontalWhitespace(input, index + "export".length);
+    }
+    const keyStart = index;
+    if (!isEnvNameStart(input[index] ?? "")) {
+      throw syntaxError(path, line, "expected KEY=VALUE");
+    }
+    index++;
+    while (index < input.length && isEnvNamePart(input[index])) index++;
+    const key = input.slice(keyStart, index);
+    index = skipHorizontalWhitespace(input, index);
+    if (input[index] !== "=") {
+      throw syntaxError(path, line, "expected KEY=VALUE");
+    }
+    index = skipHorizontalWhitespace(input, index + 1);
+    const lineLookup: EnvSource = (lookupKey) =>
+      lookup(lookupKey) ??
+        values.get(lookupKey) ??
+        outerValues.get(lookupKey);
+    const parsed = input[index] === "'" || input[index] === '"'
+      ? parseQuotedEnvValue(
+        input,
+        index,
+        input[index] as "'" | '"',
+        path,
+        line,
+        lineLookup,
+        substitute,
+      )
+      : parseUnquotedEnvValue(input, index, path, line, lineLookup, substitute);
+    values.set(key, parsed.value);
+    index = skipHorizontalWhitespace(input, parsed.nextIndex);
+    if (input[index] === "#") {
+      index = skipLine(input, index);
+    } else if (
+      index < input.length &&
+      input[index] !== "\r" &&
+      input[index] !== "\n"
+    ) {
+      throw syntaxError(path, line, "unexpected content after value");
+    }
+    index = readNewline(input, index);
+  }
+  return values;
+}
+
+function loadEnvFileValues(
+  options: NormalizedEnvFileOptions,
+  source: EnvSource,
+): ReadonlyMap<string, string> {
+  const values = new Map<string, string>();
+  for (const path of options.paths) {
+    const absolutePath = resolvePath(path);
+    try {
+      const contents = readFileSync(absolutePath, "utf8");
+      const parsedValues = parseEnvFile(
+        contents,
+        absolutePath,
+        source,
+        options.substitute,
+        values,
+      );
+      for (const [key, value] of parsedValues) values.set(key, value);
+    } catch (error) {
+      if (isErrnoException(error) && error.code === "ENOENT") continue;
+      throw error;
+    }
+  }
+  return values;
 }
 
 /**
@@ -114,6 +555,10 @@ function defaultEnvSource(key: string): string | undefined {
  * @returns A context that provides environment source annotations.
  * @throws {TypeError} If `prefix` is not a string.
  * @throws {TypeError} If `source` is not a function.
+ * @throws {TypeError} If `envFile` has an invalid shape.
+ * @throws {SyntaxError} If an `.env` file contains invalid syntax.
+ * @throws {Error} If an `.env` file cannot be read for a reason other than
+ * a missing file.
  * @since 1.0.0
  */
 export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
@@ -121,29 +566,25 @@ export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
   const rawSource = options.source;
   if (rawSource !== undefined && typeof rawSource !== "function") {
     throw new TypeError(
-      `Expected source to be a function, but got: ${
-        rawSource === null
-          ? "null"
-          : Array.isArray(rawSource)
-          ? "array"
-          : typeof rawSource
-      }.`,
+      `Expected source to be a function, but got: ${getTypeName(rawSource)}.`,
     );
   }
-  const source = rawSource ?? defaultEnvSource;
+  const baseSource = rawSource ?? defaultEnvSource;
   const rawPrefix = options.prefix;
   if (rawPrefix !== undefined && typeof rawPrefix !== "string") {
     throw new TypeError(
-      `Expected prefix to be a string, but got: ${
-        rawPrefix === null
-          ? "null"
-          : Array.isArray(rawPrefix)
-          ? "array"
-          : typeof rawPrefix
-      }.`,
+      `Expected prefix to be a string, but got: ${getTypeName(rawPrefix)}.`,
     );
   }
   const prefix = rawPrefix ?? "";
+  const envFileOptions = normalizeEnvFileOptions(options.envFile);
+  const envFileValues = loadEnvFileValues(envFileOptions, baseSource);
+  const source: EnvSource = (key) => {
+    const value = baseSource(key) as unknown;
+    return value === undefined ? envFileValues.get(key) : value as
+      | string
+      | undefined;
+  };
 
   return {
     id: contextId,

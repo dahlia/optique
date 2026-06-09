@@ -135,9 +135,22 @@ To be released.
 
 ### @optique/env
 
+ -  Added `EnvContextOptions.envFile` for loading *.env* files as an
+    internal fallback layer.  `envFile: true` loads *.env* from the current
+    working directory, explicit paths are loaded in order with later files
+    overriding earlier file values, and missing files are skipped.  Loaded
+    values never mutate `process.env` or `Deno.env`, and real environment
+    variables remain higher priority than file values.  The built-in parser
+    supports common dotenv syntax, variable expansion, literal single-quoted
+    values, and opt-in command substitution through `envFile.substitute`.
+    [[#822], [#824]]
+
  -  `bindEnv()` now emits a distinct error message when other source contexts
     are registered via `run()`'s `contexts` option but the env context is not
     included, making this misconfiguration easier to diagnose.  [[#803], [#805]]
+
+[#822]: https://github.com/dahlia/optique/issues/822
+[#824]: https://github.com/dahlia/optique/pull/824
 
 ### @optique/config
 

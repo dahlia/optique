@@ -6,7 +6,7 @@ Environment variable support for [Optique].
 This package provides a type-safe way to bind CLI parsers to environment
 variables with clear fallback behavior:
 
-CLI arguments > environment variables > defaults.
+CLI arguments > environment variables > *.env* files > defaults.
 
 [Optique]: https://optique.dev/
 
@@ -33,7 +33,10 @@ import { integer, string } from "@optique/core/valueparser";
 import { runAsync } from "@optique/run";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
 
-const envContext = createEnvContext({ prefix: "MYAPP_" });
+const envContext = createEnvContext({
+  prefix: "MYAPP_",
+  envFile: [".env", ".env.local"],
+});
 
 const parser = object({
   host: bindEnv(option("--host", string()), {
@@ -70,6 +73,7 @@ Features
  -  *Type-safe env parsing* with any Optique `ValueParser`
  -  *Common Boolean parser* via `bool()`
  -  *Prefix support* for namespaced environment variables
+ -  *.env file loading* without mutating `process.env` or `Deno.env`
  -  *Custom env source* for Deno, tests, and custom runtimes
  -  *Composable contexts* with `run()`/`runAsync()`/`runWith()`
 
