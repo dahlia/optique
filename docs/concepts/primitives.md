@@ -610,6 +610,39 @@ const addCommand = command("add", innerParser, {
 > enabling rich descriptions with semantic components for better help text
 > formatting.
 
+### Command aliases
+
+Use `aliases` when a command should accept shorter or legacy names while keeping
+one canonical display name:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { command, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const installCommand = command("install", object({
+  packageName: option("--package", string())
+}), {
+  aliases: ["i"] // [!code highlight]
+});
+~~~~
+
+Aliases parse exactly like the canonical command name.  They are suggested by
+shell completion, but usage and help output continue to show only the canonical
+name.  This keeps the public help text focused on the preferred command name
+without requiring a duplicate hidden command branch.
+
+Command aliases share the command namespace with sibling commands in
+alternative-style compositions.  Optique throws a `TypeError` when a command
+name or alias collides with another command name or alias among active siblings
+in `or()`, `longestMatch()`, `object()`, or `merge()`.
+
+Ordered compositions such as `tuple()` and `seq()` are different: their child
+parsers are positional parts of the same command line, not alternative commands
+at one position.  In those parsers, the same command name or alias can appear in
+more than one child when the grammar intentionally expects the command token
+more than once.
+
 ### Command usage lines
 
 For command help pages, you can override the usage tail with `usageLine`.

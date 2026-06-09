@@ -43,6 +43,9 @@ export function collectLeadingCandidates(
     if (term.type === "command") {
       if (includeHidden || !isSuggestionHidden(term.hidden)) {
         commandNames.add(term.name);
+        for (const alias of term.aliases ?? []) {
+          commandNames.add(alias);
+        }
       }
       return false;
     }

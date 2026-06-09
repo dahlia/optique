@@ -165,6 +165,11 @@ suggest(option("-v", "--verbose"), ["--v"]);
 suggest(command("build", parser), ["bu"]);
 // Returns: [{ kind: "literal", text: "build" }]
 
+// Command aliases are suggested too
+suggest(command("install", parser, { aliases: ["i"] }), [""]);
+// Returns: [{ kind: "literal", text: "install" },
+//           { kind: "literal", text: "i" }]
+
 // Argument parsers delegate to their value parsers
 suggest(argument(choice(["start", "stop"])), ["st"]);
 // Returns: [{ kind: "literal", text: "start" }, { kind: "literal", text: "stop" }]

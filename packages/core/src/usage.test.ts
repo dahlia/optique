@@ -3103,6 +3103,23 @@ describe("extractCommandNames hidden filtering", () => {
       new Set(["usage-only", "doc-only", "help-only"]),
     );
   });
+
+  it("should include command aliases", () => {
+    const usage: Usage = [
+      { type: "command", name: "install", aliases: ["i"] },
+      { type: "command", name: "remove", aliases: ["rm"] },
+    ];
+    const result = extractCommandNames(usage);
+    assert.deepEqual(result, new Set(["install", "i", "remove", "rm"]));
+  });
+
+  it("should skip aliases of fully hidden commands", () => {
+    const usage: Usage = [
+      { type: "command", name: "install", aliases: ["i"], hidden: true },
+    ];
+    const result = extractCommandNames(usage);
+    assert.deepEqual(result, new Set());
+  });
 });
 
 describe("extractOptionNames includeHidden", () => {

@@ -4416,10 +4416,10 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(suggestions.includes("--version"));
     });
 
-    it("should not add meta options while completing an option from a duplicate command branch", () => {
-      const parser = or(
-        command("tool", object({ a: option("--a", string()) })),
-        command("tool", object({ b: option("--b", string()) })),
+    it("should not add meta options while completing a command option value", () => {
+      const parser = command(
+        "tool",
+        object({ b: option("--b", string()) }),
       );
 
       let completionOutput = "";
@@ -4446,10 +4446,13 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(!suggestions.includes("--version"));
     });
 
-    it("should not treat nested duplicate command branch options as current value slots", () => {
-      const parser = or(
-        command("tool", command("deploy", option("--target", string()))),
-        command("tool", command("status", object({}))),
+    it("should not treat nested command options as current value slots", () => {
+      const parser = command(
+        "tool",
+        or(
+          command("deploy", option("--target", string())),
+          command("status", object({})),
+        ),
       );
 
       let completionOutput = "";

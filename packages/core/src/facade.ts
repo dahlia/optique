@@ -78,6 +78,18 @@ import type {
   SourceContextRequest,
 } from "./context.ts";
 
+const allowDuplicateLeadingCommandNamesKey =
+  "__optiqueAllowDuplicateLeadingCommandNames";
+
+function longestMatchForMetaCommands(
+  ...parsers: Parser<Mode, unknown, unknown>[]
+): Parser<Mode, unknown, unknown> {
+  return longestMatch(
+    ...parsers,
+    { [allowDuplicateLeadingCommandNamesKey]: true } as never,
+  );
+}
+
 export type { ParserValuePlaceholder, SourceContext, SourceContextRequest };
 
 type LiteralSuggestion = Extract<Suggestion, { readonly kind: "literal" }>;
@@ -1076,11 +1088,11 @@ function combineWithHelpVersion(
 
   let combined: Parser<Mode, unknown, unknown>;
   if (parsers.length === 2) {
-    combined = longestMatch(parsers[0], parsers[1]);
+    combined = longestMatchForMetaCommands(parsers[0], parsers[1]);
   } else {
     // Use variadic longestMatch for all parsers
     // Our lenient help/version parsers will win because they consume all input
-    combined = longestMatch(...parsers);
+    combined = longestMatchForMetaCommands(...parsers);
   }
 
   // Reorder the usage so that the main parser's usage appears before
@@ -2719,12 +2731,14 @@ export function runParser<
           if (commandParsers.length === 1) {
             helpGeneratorParser = commandParsers[0];
           } else if (commandParsers.length === 2) {
-            helpGeneratorParser = longestMatch(
+            helpGeneratorParser = longestMatchForMetaCommands(
               commandParsers[0],
               commandParsers[1],
             );
           } else {
-            helpGeneratorParser = longestMatch(...commandParsers);
+            helpGeneratorParser = longestMatchForMetaCommands(
+              ...commandParsers,
+            );
           }
         }
 

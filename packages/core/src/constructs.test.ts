@@ -110,6 +110,38 @@ function collectEntries(
   });
 }
 
+function docOnlyCommandEntry(name: string): Parser<"sync", null, undefined> {
+  return {
+    mode: "sync",
+    $valueType: [] as readonly null[],
+    $stateType: [] as readonly undefined[],
+    priority: 0,
+    usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse() {
+      return {
+        success: false as const,
+        consumed: 0,
+        error: message`Documentation-only parser.`,
+      };
+    },
+    complete() {
+      return { success: true as const, value: null };
+    },
+    *suggest() {},
+    getDocFragments() {
+      return {
+        fragments: [{
+          type: "entry" as const,
+          term: { type: "command" as const, name },
+        }],
+      };
+    },
+  };
+}
+
 function assertErrorIncludes(error: Message, text: string): void {
   const formatted = formatMessage(error);
   assert.ok(formatted.includes(text));
@@ -957,8 +989,8 @@ describe("or", () => {
 
     it("should deduplicate entries with same command name", () => {
       const orParser = or(
-        command("dup", object({})),
-        command("dup", argument(string())),
+        docOnlyCommandEntry("dup"),
+        docOnlyCommandEntry("dup"),
       );
 
       const fragments = orParser.getDocFragments({
@@ -3192,8 +3224,8 @@ describe("longestMatch()", () => {
 
   it("should deduplicate entries with same command name", () => {
     const parser = longestMatch(
-      command("build", object({})),
-      command("build", argument(string())),
+      docOnlyCommandEntry("build"),
+      docOnlyCommandEntry("build"),
     );
 
     const fragments = parser.getDocFragments({ kind: "unavailable" });
@@ -21723,6 +21755,17 @@ describe("leadingNames", () => {
     assert.deepEqual(parser.leadingNames, new Set(["help", "build"]));
   });
 
+  it("should include command aliases in or() leading names", () => {
+    const parser = or(
+      command("install", object({}), { aliases: ["i"] }),
+      command("remove", object({}), { aliases: ["rm"] }),
+    );
+    assert.deepEqual(
+      parser.leadingNames,
+      new Set(["install", "i", "remove", "rm"]),
+    );
+  });
+
   it("should be the union of all branches for longestMatch()", () => {
     const parser = longestMatch(
       command("help", object({})),
@@ -22349,6 +22392,58 @@ describe("seq", () => {
       success: true,
       value: [{ path: false }, { path: true }],
     });
+  });
+
+  it("should reject command alias collisions in or()", () => {
+    assert.throws(
+      () =>
+        or(
+          command("install", object({}), { aliases: ["i"] }),
+          command("inspect", object({}), { aliases: ["i"] }),
+        ),
+      {
+        name: "TypeError",
+        message:
+          'Duplicate command name "i" found in parsers: 0, 1. Each command name or alias must be unique within active parser alternatives.',
+      },
+    );
+  });
+
+  it("should reject command alias collisions in longestMatch()", () => {
+    assert.throws(
+      () =>
+        longestMatch(
+          command("install", object({}), { aliases: ["i"] }),
+          command("i", object({})),
+        ),
+      TypeError,
+    );
+  });
+
+  it("should reject command alias collisions in object()", () => {
+    assert.throws(
+      () =>
+        object({
+          install: command("install", object({}), { aliases: ["i"] }),
+          inspect: command("inspect", object({}), { aliases: ["i"] }),
+        }),
+      TypeError,
+    );
+  });
+
+  it("should reject command alias collisions in merge()", () => {
+    assert.throws(
+      () =>
+        merge(
+          object({
+            install: command("install", object({}), { aliases: ["i"] }),
+          }),
+          object({
+            inspect: command("inspect", object({}), { aliases: ["i"] }),
+          }),
+        ),
+      TypeError,
+    );
   });
 
   it("should evaluate lazy defaults once during completion", () => {

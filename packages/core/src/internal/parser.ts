@@ -917,6 +917,7 @@ export function parseSync<T>(
     phase: "complete",
     dependencyRuntime: runtime,
     dependencyRegistry: runtime.registry,
+    commandPath: context.exec?.commandPath ?? exec.commandPath,
     trace: context.exec?.trace ?? context.trace ?? exec.trace,
   };
   const endResult = parser.complete(context.state, completeExec);
@@ -1008,6 +1009,7 @@ export async function parseAsync<T>(
     phase: "complete",
     dependencyRuntime: runtime,
     dependencyRegistry: runtime.registry,
+    commandPath: context.exec?.commandPath ?? exec.commandPath,
     trace: context.exec?.trace ?? context.trace ?? exec.trace,
   };
   const endResult = await parser.complete(context.state, completeExec);

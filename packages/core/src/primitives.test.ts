@@ -26,6 +26,7 @@ import {
   option,
   passThrough,
 } from "@optique/core/primitives";
+import { formatUsage } from "@optique/core/usage";
 import {
   choice,
   integer,
@@ -3303,6 +3304,95 @@ describe("command", () => {
     }
   });
 
+  it("should parse command aliases", () => {
+    const installParser = command(
+      "install",
+      object({
+        type: constant("install" as const),
+        packageName: argument(string({ metavar: "PACKAGE" })),
+      }),
+      { aliases: ["i"] },
+    );
+
+    const result = parseSync(installParser, ["i", "optique"]);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, {
+        type: "install",
+        packageName: "optique",
+      });
+    }
+  });
+
+  it("should suggest command aliases alongside canonical names", () => {
+    const parser = command("install", object({}), { aliases: ["i"] });
+
+    const suggestions = suggest(parser, [""]);
+
+    assert.deepEqual(suggestions, [
+      { kind: "literal", text: "install" },
+      { kind: "literal", text: "i" },
+    ]);
+  });
+
+  it("should keep command aliases out of usage output", () => {
+    const parser = command("install", object({}), { aliases: ["i"] });
+
+    const usage = formatUsage("mytool", parser.usage);
+
+    assert.match(usage, /\binstall\b/);
+    assert.doesNotMatch(usage, /\bi\b/);
+  });
+
+  it("should preserve the canonical command path when an alias matches", () => {
+    const inner: Parser<"sync", readonly string[], undefined> = {
+      mode: "sync",
+      $valueType: [] as readonly (readonly string[])[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return { success: true, next: context, consumed: [] };
+      },
+      complete(_state, exec) {
+        return { success: true, value: exec?.commandPath ?? [] };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = command("install", inner, { aliases: ["i"] });
+
+    const result = parseSync(parser, ["i"]);
+
+    assert.deepEqual(result, { success: true, value: ["install"] });
+  });
+
+  it("should reject duplicate command aliases", () => {
+    assert.throws(
+      () => command("install", object({}), { aliases: ["i", "i"] }),
+      {
+        name: "TypeError",
+        message: 'Command has a duplicate name: "i".',
+      },
+    );
+  });
+
+  it("should reject aliases that duplicate the canonical command name", () => {
+    assert.throws(
+      () => command("install", object({}), { aliases: ["install"] }),
+      {
+        name: "TypeError",
+        message: 'Command has a duplicate name: "install".',
+      },
+    );
+  });
+
   it("should fail when wrong subcommand is provided", () => {
     const showParser = command(
       "show",
@@ -3926,6 +4016,19 @@ describe("command", () => {
       assertErrorIncludes(result.error, "Expected command `child`");
       assertErrorIncludes(result.error, "Did you mean");
       assertErrorIncludes(result.error, "`child`");
+    }
+  });
+
+  it("should suggest canonical command names and aliases for alias typos", () => {
+    const parser = command("install", object({}), { aliases: ["i"] });
+
+    const result = parse(parser, ["ii"]);
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Did you mean one of these?");
+      assertErrorIncludes(result.error, "`install`");
+      assertErrorIncludes(result.error, "`i`");
     }
   });
 
@@ -7948,6 +8051,13 @@ describe("leadingNames", () => {
     assert.deepEqual(
       command("help", object({})).leadingNames,
       new Set(["help"]),
+    );
+  });
+
+  it("should contain command aliases for command()", () => {
+    assert.deepEqual(
+      command("install", object({}), { aliases: ["i", "add"] }).leadingNames,
+      new Set(["install", "i", "add"]),
     );
   });
 

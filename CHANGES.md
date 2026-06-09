@@ -10,6 +10,12 @@ To be released.
 
 ### @optique/core
 
+ -  Added command aliases through `command()`'s `aliases` option.  Aliases
+    parse as the same command, appear in shell completion and typo
+    suggestions, stay hidden from usage and help output, and are rejected at
+    construction time when they collide with sibling command names or aliases.
+    [[#823], [#825]]
+
  -  Fixed shell completion suggestions for configured help and version options.
     Completion requests now include root-level meta options such as `--help`
     and `--version`, including plus-prefixed aliases such as `+h`, without
@@ -120,6 +126,8 @@ To be released.
 [#817]: https://github.com/dahlia/optique/pull/817
 [#819]: https://github.com/dahlia/optique/issues/819
 [#820]: https://github.com/dahlia/optique/pull/820
+[#823]: https://github.com/dahlia/optique/issues/823
+[#825]: https://github.com/dahlia/optique/pull/825
 
 ### @optique/discover
 
