@@ -318,8 +318,8 @@ function collectCommandAliasTargets(
       }
 
       if (term.type === "multiple") {
-        traverse(term.terms);
-        if (term.min === 0) continue;
+        const termsSkippable = traverse(term.terms);
+        if (term.min === 0 || termsSkippable) continue;
         return false;
       }
 
@@ -329,12 +329,12 @@ function collectCommandAliasTargets(
       }
 
       if (term.type === "exclusive") {
-        let allSkippable = true;
+        let anySkippable = false;
         for (const branch of term.terms) {
           const branchSkippable = traverse(branch);
-          allSkippable = allSkippable && branchSkippable;
+          anySkippable = anySkippable || branchSkippable;
         }
-        if (allSkippable) continue;
+        if (anySkippable) continue;
         return false;
       }
     }

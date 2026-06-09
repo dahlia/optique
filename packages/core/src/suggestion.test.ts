@@ -392,6 +392,40 @@ describe("expandCommandAliasSuggestions()", () => {
       "r",
     ]);
   });
+
+  it("should continue after required multiple terms with skippable children", () => {
+    const usage: Usage = [
+      {
+        type: "multiple",
+        min: 1,
+        terms: [{ type: "optional", terms: [] }],
+      },
+      { type: "command", name: "install", aliases: ["i"] },
+    ];
+
+    assert.deepEqual(expandCommandAliasSuggestions(usage, ["i"]), [
+      "install",
+      "i",
+    ]);
+  });
+
+  it("should continue after exclusive terms with a skippable branch", () => {
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "option", names: ["--format"] }],
+          [{ type: "optional", terms: [] }],
+        ],
+      },
+      { type: "command", name: "install", aliases: ["i"] },
+    ];
+
+    assert.deepEqual(expandCommandAliasSuggestions(usage, ["i"]), [
+      "install",
+      "i",
+    ]);
+  });
 });
 
 describe("integration: findSimilar + createSuggestionMessage", () => {

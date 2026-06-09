@@ -22421,7 +22421,7 @@ describe("seq", () => {
       {
         leadingNames: new Set(["install"]),
         priority: 15,
-        usage: [],
+        usage: [{ type: "command", name: "install" }],
       },
     );
 
@@ -22433,6 +22433,37 @@ describe("seq", () => {
           /Duplicate command name "install".*unique within active parser alternatives\./,
       },
     );
+  });
+
+  it("should allow duplicate literal leading names without command terms", () => {
+    const http = createSyncBranchParser(
+      undefined,
+      () => ({
+        success: false,
+        consumed: 0,
+        error: message`Expected serve http.`,
+      }),
+      "http",
+      {
+        leadingNames: new Set(["serve"]),
+        usage: [{ type: "argument", metavar: "MODE" }],
+      },
+    );
+    const grpc = createSyncBranchParser(
+      undefined,
+      () => ({
+        success: false,
+        consumed: 0,
+        error: message`Expected serve grpc.`,
+      }),
+      "grpc",
+      {
+        leadingNames: new Set(["serve"]),
+        usage: [{ type: "argument", metavar: "MODE" }],
+      },
+    );
+
+    assert.doesNotThrow(() => or(http, grpc));
   });
 
   it("should reject command collisions across or() priorities", () => {
@@ -22447,7 +22478,7 @@ describe("seq", () => {
       {
         leadingNames: new Set(["install"]),
         priority: 20,
-        usage: [],
+        usage: [{ type: "command", name: "install" }],
       },
     );
     const lowPriority = createSyncBranchParser(
@@ -22461,7 +22492,7 @@ describe("seq", () => {
       {
         leadingNames: new Set(["install"]),
         priority: 10,
-        usage: [],
+        usage: [{ type: "command", name: "install" }],
       },
     );
 

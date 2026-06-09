@@ -1066,7 +1066,7 @@ function checkDuplicateLeadingCommandNames(
   for (const [source, parser] of parserSources) {
     const commandNames = extractCommandNames(parser.usage, true);
     for (const name of parser.leadingNames) {
-      if (/^(--|[-/+])/.test(name) && !commandNames.has(name)) continue;
+      if (!commandNames.has(name)) continue;
       const sources = commandNameSources.get(name);
       commandNameSources.set(
         name,
@@ -1110,7 +1110,7 @@ function checkDuplicateReachableLeadingCommandNames(
       if (parser.acceptingAnyToken) groupAcceptsAnyToken = true;
       const commandNames = extractCommandNames(parser.usage, true);
       for (const name of parser.leadingNames) {
-        if (/^(--|[-/+])/.test(name) && !commandNames.has(name)) continue;
+        if (!commandNames.has(name)) continue;
         if (positionalBlocked || blockedNames.has(name)) continue;
         groupNames.add(name);
         const sources = commandNameSources.get(name);
