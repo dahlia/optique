@@ -31,6 +31,7 @@ import {
   getAnnotations,
   inheritAnnotations,
 } from "./internal/annotations.ts";
+import { allowDuplicateLeadingCommandNamesKey } from "./internal/command-alias.ts";
 import {
   mergeChildExec,
   withChildContext as withSharedChildContext,
@@ -4046,9 +4047,6 @@ export interface LongestMatchOptions {
    */
   errors?: LongestMatchErrorOptions;
 }
-
-const allowDuplicateLeadingCommandNamesKey =
-  "__optiqueAllowDuplicateLeadingCommandNames";
 
 type InternalLongestMatchOptions = LongestMatchOptions & {
   readonly [allowDuplicateLeadingCommandNamesKey]?: true;

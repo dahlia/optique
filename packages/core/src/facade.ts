@@ -64,6 +64,7 @@ import {
   isInjectedAnnotationWrapper,
   unwrapInjectedAnnotationWrapper,
 } from "./internal/annotations.ts";
+import { allowDuplicateLeadingCommandNamesKey } from "./internal/command-alias.ts";
 import {
   type MetaEntry,
   validateCommandNames,
@@ -77,9 +78,6 @@ import type {
   SourceContext,
   SourceContextRequest,
 } from "./context.ts";
-
-const allowDuplicateLeadingCommandNamesKey =
-  "__optiqueAllowDuplicateLeadingCommandNames";
 
 function longestMatchForMetaCommands(
   ...parsers: Parser<Mode, unknown, unknown>[]
