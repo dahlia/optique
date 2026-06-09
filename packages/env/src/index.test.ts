@@ -2950,6 +2950,18 @@ describe("createEnvContext defaults", () => {
       assert.equal(context.source("APP_TWO"), "2");
     }));
 
+  it("accepts trailing whitespace-only envFile lines without a newline", () =>
+    withTempDir((dir) => {
+      const envPath = join(dir, ".env");
+      writeFileSync(envPath, "APP_ONE=1\n\t  ", "utf8");
+      const context = createEnvContext({
+        envFile: envPath,
+        source: () => undefined,
+      });
+
+      assert.equal(context.source("APP_ONE"), "1");
+    }));
+
   it("reports line numbers for carriage-return-only envFile syntax errors", () =>
     withTempDir((dir) => {
       const envPath = join(dir, ".env");

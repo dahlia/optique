@@ -451,6 +451,7 @@ function parseEnvFile(
   while (index < input.length) {
     const line = getLineNumber(input, index);
     index = skipHorizontalWhitespace(input, index);
+    if (index >= input.length) break;
     if (input[index] === "\r" || input[index] === "\n") {
       index = readNewline(input, index);
       continue;
