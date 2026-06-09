@@ -1500,7 +1500,9 @@ function findCommandInCurrentUsageTerm(
 
 function commandTermMatches(term: UsageTerm, commandName: string): boolean {
   return term.type === "command" &&
-    (term.name === commandName || term.aliases?.includes(commandName) === true);
+    (term.name === commandName ||
+      term.aliases?.includes(commandName) === true ||
+      term.hiddenAliases?.includes(commandName) === true);
 }
 
 function collectCommandInputNames(
@@ -1513,6 +1515,7 @@ function collectCommandInputNames(
       if (commandTermMatches(term, commandName)) {
         names.add(term.name);
         for (const alias of term.aliases ?? []) names.add(alias);
+        for (const alias of term.hiddenAliases ?? []) names.add(alias);
       }
     } else if (term.type === "exclusive") {
       for (const branch of term.terms) {

@@ -46,6 +46,9 @@ export function collectLeadingCandidates(
         for (const alias of term.aliases ?? []) {
           commandNames.add(alias);
         }
+        for (const alias of term.hiddenAliases ?? []) {
+          commandNames.add(alias);
+        }
       }
       return false;
     }

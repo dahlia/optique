@@ -69,7 +69,10 @@ import {
   isInjectedAnnotationWrapper,
   unwrapInjectedAnnotationWrapper,
 } from "./internal/annotations.ts";
-import { allowDuplicateLeadingCommandNamesKey } from "./internal/command-alias.ts";
+import {
+  allowDuplicateLeadingCommandNamesKey,
+  hiddenCommandAliasesKey,
+} from "./internal/command-alias.ts";
 import {
   type MetaEntry,
   validateCommandNames,
@@ -656,7 +659,7 @@ function createHelpParser(
     const aliases = getMetaCommandAliases(names);
     helpCommand = command(names[0], innerParser, {
       description: message`Show help information.`,
-      ...(aliases != null ? { aliases } : {}),
+      ...(aliases != null ? { [hiddenCommandAliasesKey]: aliases } : {}),
       hidden: commandConfig.hidden,
     });
   }
@@ -689,7 +692,7 @@ function createVersionParser(
     const aliases = getMetaCommandAliases(names);
     versionCommand = command(names[0], innerParser, {
       description: message`Show version information.`,
-      ...(aliases != null ? { aliases } : {}),
+      ...(aliases != null ? { [hiddenCommandAliasesKey]: aliases } : {}),
       hidden: commandConfig.hidden,
     });
   }
@@ -859,7 +862,7 @@ function createCompletionParser(
     const aliases = getMetaCommandAliases(names);
     completionCommand = command(names[0], completionInner, {
       ...completionCommandConfig,
-      ...(aliases != null ? { aliases } : {}),
+      ...(aliases != null ? { [hiddenCommandAliasesKey]: aliases } : {}),
       hidden: commandConfig.hidden,
     });
   }

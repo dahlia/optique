@@ -14342,6 +14342,31 @@ describe("branch coverage: facade.ts edge cases", () => {
     );
   });
 
+  it("keeps meta-command aliases out of typo suggestions", () => {
+    const parser = object({ verbose: option("--verbose") });
+
+    let stderrOutput = "";
+    const result = runParser(parser, "myapp", ["asist", "--help"], {
+      help: {
+        command: { names: ["help", "assist"] },
+        option: true,
+        onShow: () => "help-shown",
+      },
+      stdout: () => {},
+      stderr: (text) => {
+        stderrOutput += text + "\n";
+      },
+      onError: (code) => `error-${code}` as never,
+    });
+
+    assert.equal(result, "error-1");
+    assert.ok(stderrOutput.includes("help"));
+    assert.ok(
+      !/\bassist\b/.test(stderrOutput),
+      `hidden help alias should stay out of suggestions, got:\n${stderrOutput}`,
+    );
+  });
+
   it("uses canonical names for meta-command alias help", () => {
     const parser = object({ verbose: option("--verbose") });
 

@@ -33,6 +33,10 @@ import {
   completeOrExtractPhase2Seed,
   extractPhase2SeedKey,
 } from "./phase2-seed.ts";
+import {
+  hiddenCommandAliasesKey,
+  type HiddenCommandAliasOptions,
+} from "./internal/command-alias.ts";
 import type { TraceEntry } from "./input-trace.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import { validateCommandNames, validateOptionNames } from "./validate.ts";
@@ -2911,14 +2915,40 @@ function getCommandNames(
   name: string,
   options: CommandOptions,
 ): readonly string[] {
+  return [
+    name,
+    ...getVisibleCommandAliases(options),
+    ...getHiddenCommandAliases(options),
+  ];
+}
+
+function getVisibleCommandAliases(
+  options: CommandOptions,
+): readonly string[] {
   const aliases: unknown = options.aliases;
-  if (aliases == null) return [name];
+  if (aliases == null) return [];
   if (!isNonEmptyStringArray(aliases)) {
     throw new TypeError(
       "Command aliases must be a non-empty array of strings.",
     );
   }
-  return [name, ...aliases];
+  return aliases;
+}
+
+function getHiddenCommandAliases(
+  options: CommandOptions,
+): readonly string[] {
+  const hiddenAliases: unknown =
+    (options as CommandOptions & HiddenCommandAliasOptions)[
+      hiddenCommandAliasesKey
+    ];
+  if (hiddenAliases == null) return [];
+  if (!isNonEmptyStringArray(hiddenAliases)) {
+    throw new TypeError(
+      "Hidden command aliases must be a non-empty array of strings.",
+    );
+  }
+  return hiddenAliases;
 }
 
 function isNonEmptyStringArray(
@@ -3071,7 +3101,8 @@ export function command<M extends Mode, T, TState>(
   options: CommandOptions = {},
 ): Parser<M, T, CommandState<TState>> {
   const commandNames = getCommandNames(name, options);
-  const aliases = commandNames.slice(1);
+  const aliases = getVisibleCommandAliases(options);
+  const hiddenAliases = getHiddenCommandAliases(options);
   validateCommandNames(commandNames, "Command");
   validateUniqueCommandNames(commandNames);
   const isAsync = parser.mode === "async";
@@ -3090,6 +3121,7 @@ export function command<M extends Mode, T, TState>(
         type: "command",
         name,
         ...(aliases.length > 0 && { aliases }),
+        ...(hiddenAliases.length > 0 && { hiddenAliases }),
         ...(options.usageLine != null && { usageLine: options.usageLine }),
         ...(options.hidden != null && { hidden: options.hidden }),
       },

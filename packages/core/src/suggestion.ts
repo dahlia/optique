@@ -313,6 +313,11 @@ function collectCommandAliasTargets(
             targets.set(alias, [term.name, alias]);
           }
         }
+        for (const alias of term.hiddenAliases ?? []) {
+          if (!targets.has(alias)) {
+            targets.set(alias, [term.name]);
+          }
+        }
         return false;
       }
 

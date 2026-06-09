@@ -148,6 +148,13 @@ export type UsageTerm =
      */
     readonly aliases?: readonly string[];
     /**
+     * Additional command names that invoke the same parser but are not
+     * rendered or suggested.  They are still available to parsers and
+     * suggestion matchers so alias typos can resolve to the canonical command.
+     * @since 1.1.0
+     */
+    readonly hiddenAliases?: readonly string[];
+    /**
      * Optional usage line override for this command's own help page.
      * This affects help/documentation rendering only.
      * @since 1.0.0
@@ -380,6 +387,11 @@ export function extractCommandNames(
         names.add(term.name);
         for (const alias of term.aliases ?? []) {
           names.add(alias);
+        }
+        if (includeHidden) {
+          for (const alias of term.hiddenAliases ?? []) {
+            names.add(alias);
+          }
         }
       } else if (
         term.type === "optional" || term.type === "multiple" ||
@@ -779,11 +791,17 @@ export function cloneUsageTerm(term: UsageTerm): UsageTerm {
         return {
           ...term,
           ...(term.aliases != null ? { aliases: [...term.aliases] } : {}),
+          ...(term.hiddenAliases != null
+            ? { hiddenAliases: [...term.hiddenAliases] }
+            : {}),
         };
       }
       return {
         ...term,
         ...(term.aliases != null ? { aliases: [...term.aliases] } : {}),
+        ...(term.hiddenAliases != null
+          ? { hiddenAliases: [...term.hiddenAliases] }
+          : {}),
         usageLine: term.usageLine.map(cloneUsageTerm),
       };
     }

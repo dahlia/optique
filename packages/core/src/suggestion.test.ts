@@ -438,6 +438,16 @@ describe("expandCommandAliasSuggestions()", () => {
       "i",
     ]);
   });
+
+  it("should collapse hidden command aliases to canonical suggestions", () => {
+    const usage: Usage = [
+      { type: "command", name: "help", hiddenAliases: ["assist"] },
+    ];
+
+    assert.deepEqual(expandCommandAliasSuggestions(usage, ["assist"]), [
+      "help",
+    ]);
+  });
 });
 
 describe("integration: findSimilar + createSuggestionMessage", () => {
