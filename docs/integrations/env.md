@@ -14,10 +14,11 @@ variables while preserving Optique's type safety and parser composition model.
 
 The fallback priority is:
 
-1.  *CLI argument*
-2.  *Environment variable*
-3.  *Default value*
-4.  *Error*
+1.  CLI argument
+2.  Environment variable
+3.  *.env* file value
+4.  Default value
+5.  Error
 
 ::: code-group
 
@@ -71,6 +72,21 @@ const envContext = createEnvContext({
   source: (key) => mockEnv[key],
 });
 ~~~~
+
+To load *.env* files as an internal fallback layer, pass `envFile`:
+
+~~~~ typescript twoslash
+import { createEnvContext } from "@optique/env";
+
+const envContext = createEnvContext({
+  prefix: "MYAPP_",
+  envFile: [".env", ".env.local"],
+});
+~~~~
+
+Values from *.env* files are read by `bindEnv()` but are not written to
+`process.env` or `Deno.env`.  Real environment variables still take
+priority over file values.
 
 ### 2. Bind parsers to environment keys
 
@@ -163,6 +179,58 @@ import { bool } from "@optique/env";
 
 const parser = bool();
 ~~~~
+
+
+*.env* files
+------------
+
+`envFile` accepts `true`, a path string, an array of paths, or an options
+object:
+
+~~~~ typescript twoslash
+import { createEnvContext } from "@optique/env";
+
+const envContext = createEnvContext({
+  prefix: "MYAPP_",
+  envFile: {
+    paths: [".env", ".env.local"],
+    substitute: (command) =>
+      command === "whoami" ? "developer" : undefined,
+  },
+});
+~~~~
+
+Passing `true` loads only *.env* from the current working directory.
+When several paths are provided, files are loaded in order and later
+files override earlier file values.  Missing files are skipped.
+
+The parser supports common dotenv syntax:
+
+ -  blank lines and comments
+ -  optional `export` prefixes
+ -  `KEY=VALUE` assignments
+ -  single-quoted, double-quoted, and unquoted values
+ -  multiline quoted values
+ -  inline comments after unquoted values
+ -  `$VAR` and `${VAR}` expansion
+
+Single-quoted values are literal.  Optique does not expand variables,
+perform command substitution, or interpret escape sequences inside
+single quotes.
+
+Double-quoted and unquoted values expand variables in a single
+left-to-right pass.  Expansion reads from the configured `source` first,
+then from values already loaded from *.env* files.  Missing variables
+expand to the empty string.
+
+Optique recognizes `$(...)` and backtick command-substitution forms, but
+it never executes commands by itself.  If `substitute` is provided, Optique
+passes the command text to that hook and inserts the returned string.  If
+the hook is absent or returns `undefined`, the substitution becomes the
+empty string.
+
+Encrypted dotenvx values are not decrypted; they are treated as ordinary
+string values.
 
 
 Env-only values
@@ -467,6 +535,9 @@ Parameters
      -  `options.source`: Custom function `(key: string) => string | undefined`
         for reading environment values.  Defaults to `Deno.env.get` on Deno
         and `process.env` on Node.js/Bun.
+     -  `options.envFile`: Optional *.env* file fallback layer.  Pass `true`
+        to load *.env*, a path string, an array of paths, or an object with
+        `paths` and `substitute`.
 
 Returns
 :   `EnvContext` implementing `SourceContext` and `Disposable`.
@@ -538,10 +609,17 @@ Limitations
  -  *No schema validation* — Unlike *@optique/config*, there is no schema that
     validates the set of environment variables as a whole.  Each binding is
     validated independently.
+ -  *No automatic dotenv conventions* — `envFile: true` loads only *.env*.
+    Optique does not automatically load *.env.local*, *.env.development*,
+    or framework-specific file sets.
+ -  *No built-in command execution* — Command-substitution syntax is
+    recognized only so applications can opt in with `envFile.substitute`.
+    Without that hook, command substitutions become empty strings.
+ -  *No dotenvx decryption* — Encrypted values remain ordinary strings.
  -  *Synchronous reads*: `createEnvContext()` reads environment variables
-    synchronously via `Deno.env.get` or `process.env`.  The context itself
-    does not add async overhead, but if the `parser` used in `bindEnv()` is
-    async, the overall parsing becomes async.
+    and *.env* files synchronously.  The context itself does not add async
+    overhead, but if the `parser` used in `bindEnv()` is async, the overall
+    parsing becomes async.
 
 > [!TIP]
 > See the [cookbook](../cookbook.md#environment-variable-fallbacks) for

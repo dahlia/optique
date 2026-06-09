@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import * as fc from "fast-check";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { getAnnotations } from "@optique/core/annotations";
@@ -97,6 +100,15 @@ function getSyncAnnotations(context: {
     throw new TypeError("Expected synchronous annotations.");
   }
   return annotations;
+}
+
+function withTempDir<T>(callback: (dir: string) => T): T {
+  const dir = mkdtempSync(join(tmpdir(), "optique-env-"));
+  try {
+    return callback(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 describe("bool()", () => {
@@ -2792,6 +2804,307 @@ describe("createEnvContext defaults", () => {
         Object.defineProperty(globalThis, "process", originalProcess);
       }
     }
+  });
+
+  it("uses envFile values when source is missing", () =>
+    withTempDir((dir) => {
+      const envPath = join(dir, ".env");
+      writeFileSync(envPath, "APP_PORT=8080\n", "utf8");
+      const context = createEnvContext({
+        envFile: envPath,
+        prefix: "APP_",
+        source: () => undefined,
+      });
+      const parser = bindEnv(option("--port", integer()), {
+        context,
+        key: "PORT",
+        parser: integer(),
+        default: 3000,
+      });
+
+      const result = parse(parser, [], {
+        annotations: getSyncAnnotations(context),
+      });
+
+      assert.deepEqual(result, { success: true, value: 8080 });
+    }));
+
+  it("loads .env from the current working directory when envFile is true", () =>
+    withTempDir((dir) => {
+      const originalCwd = process.cwd();
+      writeFileSync(join(dir, ".env"), "APP_HOST=local.example\n", "utf8");
+      try {
+        process.chdir(dir);
+        const context = createEnvContext({
+          envFile: true,
+          prefix: "APP_",
+          source: () => undefined,
+        });
+        assert.equal(context.source("APP_HOST"), "local.example");
+      } finally {
+        process.chdir(originalCwd);
+      }
+    }));
+
+  it("loads envFile paths in order with later files overriding earlier ones", () =>
+    withTempDir((dir) => {
+      const basePath = join(dir, ".env");
+      const localPath = join(dir, ".env.local");
+      writeFileSync(basePath, "APP_HOST=base\nAPP_PORT=3000\n", "utf8");
+      writeFileSync(localPath, "APP_PORT=8080\n", "utf8");
+      const context = createEnvContext({
+        envFile: [basePath, localPath],
+        prefix: "APP_",
+        source: () => undefined,
+      });
+
+      assert.equal(context.source("APP_HOST"), "base");
+      assert.equal(context.source("APP_PORT"), "8080");
+    }));
+
+  it("prefers source values over envFile values", () =>
+    withTempDir((dir) => {
+      const envPath = join(dir, ".env");
+      writeFileSync(envPath, "APP_HOST=file\n", "utf8");
+      const context = createEnvContext({
+        envFile: envPath,
+        prefix: "APP_",
+        source: (key) => key === "APP_HOST" ? "source" : undefined,
+      });
+
+      assert.equal(context.source("APP_HOST"), "source");
+    }));
+
+  it("skips missing envFile paths silently", () =>
+    withTempDir((dir) => {
+      const context = createEnvContext({
+        envFile: join(dir, ".env"),
+        source: () => undefined,
+      });
+
+      assert.equal(context.source("PORT"), undefined);
+    }));
+
+  it("does not mutate process.env when loading envFile values", () =>
+    withTempDir((dir) => {
+      const envPath = join(dir, ".env");
+      const previousValue = process.env.APP_ENV_FILE_ONLY;
+      delete process.env.APP_ENV_FILE_ONLY;
+      writeFileSync(envPath, "APP_ENV_FILE_ONLY=secret\n", "utf8");
+      try {
+        const context = createEnvContext({
+          envFile: envPath,
+          source: () => undefined,
+        });
+
+        assert.equal(context.source("APP_ENV_FILE_ONLY"), "secret");
+        assert.equal(process.env.APP_ENV_FILE_ONLY, undefined);
+      } finally {
+        if (previousValue === undefined) {
+          delete process.env.APP_ENV_FILE_ONLY;
+        } else {
+          process.env.APP_ENV_FILE_ONLY = previousValue;
+        }
+      }
+    }));
+
+  it("parses dotenv comments, export prefixes, quotes, escapes, and multiline values", () =>
+    withTempDir((dir) => {
+      const envPath = join(dir, ".env");
+      writeFileSync(
+        envPath,
+        [
+          "# full-line comment",
+          "export APP_HOST=example.com # inline comment",
+          "APP_SINGLE='literal # value'",
+          'APP_DOUBLE="line\\nwith \\"quotes\\""',
+          'APP_MULTI="first',
+          'second"',
+          "APP_EMPTY=",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+      const context = createEnvContext({
+        envFile: envPath,
+        source: () => undefined,
+      });
+
+      assert.equal(context.source("APP_HOST"), "example.com");
+      assert.equal(context.source("APP_SINGLE"), "literal # value");
+      assert.equal(context.source("APP_DOUBLE"), 'line\nwith "quotes"');
+      assert.equal(context.source("APP_MULTI"), "first\nsecond");
+      assert.equal(context.source("APP_EMPTY"), "");
+    }));
+
+  it("accepts carriage-return-only envFile line endings", () =>
+    withTempDir((dir) => {
+      const envPath = join(dir, ".env");
+      writeFileSync(envPath, "APP_ONE=1\rAPP_TWO=2\r", "utf8");
+      const context = createEnvContext({
+        envFile: envPath,
+        source: () => undefined,
+      });
+
+      assert.equal(context.source("APP_ONE"), "1");
+      assert.equal(context.source("APP_TWO"), "2");
+    }));
+
+  it("reports line numbers for carriage-return-only envFile syntax errors", () =>
+    withTempDir((dir) => {
+      const envPath = join(dir, ".env");
+      writeFileSync(envPath, "APP_ONE=1\rnot valid\r", "utf8");
+
+      assert.throws(
+        () => createEnvContext({ envFile: envPath }),
+        {
+          name: "SyntaxError",
+          message:
+            `Invalid .env syntax in ${envPath} at line 2: expected KEY=VALUE.`,
+        },
+      );
+    }));
+
+  it("expands variables from source first and envFile values second", () =>
+    withTempDir((dir) => {
+      const envPath = join(dir, ".env");
+      writeFileSync(
+        envPath,
+        [
+          "APP_ROOT=/file",
+          "APP_BIN=$APP_ROOT/bin",
+          "APP_URL=${APP_SCHEME}://example.com",
+          "APP_MISSING=before-${APP_UNKNOWN}-after",
+        ].join("\n"),
+        "utf8",
+      );
+      const context = createEnvContext({
+        envFile: envPath,
+        source: (key) =>
+          key === "APP_ROOT"
+            ? "/source"
+            : key === "APP_SCHEME"
+            ? "https"
+            : undefined,
+      });
+
+      assert.equal(context.source("APP_BIN"), "/source/bin");
+      assert.equal(context.source("APP_URL"), "https://example.com");
+      assert.equal(context.source("APP_MISSING"), "before--after");
+    }));
+
+  it("keeps single-quoted values literal without substitutions", () =>
+    withTempDir((dir) => {
+      const envPath = join(dir, ".env");
+      writeFileSync(
+        envPath,
+        [
+          "APP_NAME=real",
+          "APP_LITERAL='$APP_NAME ${APP_NAME} $(whoami) `date` \\n'",
+        ].join("\n"),
+        "utf8",
+      );
+      const context = createEnvContext({
+        envFile: {
+          paths: envPath,
+          substitute: () => "substituted",
+        },
+        source: (key) => key === "APP_NAME" ? "source" : undefined,
+      });
+
+      assert.equal(
+        context.source("APP_LITERAL"),
+        "$APP_NAME ${APP_NAME} $(whoami) `date` \\n",
+      );
+    }));
+
+  it("substitutes commands in a single left-to-right pass", () =>
+    withTempDir((dir) => {
+      const envPath = join(dir, ".env");
+      writeFileSync(
+        envPath,
+        "APP_VALUE=pre-$(user)-$APP_SUFFIX-`date`-$APP_AFTER\n",
+        "utf8",
+      );
+      const context = createEnvContext({
+        envFile: {
+          paths: envPath,
+          substitute: (command) => command.toUpperCase(),
+        },
+        source: (key) => {
+          const values: Record<string, string> = {
+            APP_SUFFIX: "suffix",
+            APP_AFTER: "$APP_SUFFIX",
+          };
+          return values[key];
+        },
+      });
+
+      assert.equal(
+        context.source("APP_VALUE"),
+        "pre-USER-suffix-DATE-$APP_SUFFIX",
+      );
+    }));
+
+  it("uses an empty string for command substitutions without a hook result", () =>
+    withTempDir((dir) => {
+      const envPath = join(dir, ".env");
+      writeFileSync(envPath, "APP_ONE=$(whoami)\nAPP_TWO=`date`\n", "utf8");
+      const context = createEnvContext({
+        envFile: {
+          paths: envPath,
+          substitute: () => undefined,
+        },
+        source: () => undefined,
+      });
+
+      assert.equal(context.source("APP_ONE"), "");
+      assert.equal(context.source("APP_TWO"), "");
+    }));
+
+  it("throws SyntaxError for invalid envFile lines", () =>
+    withTempDir((dir) => {
+      const envPath = join(dir, ".env");
+      writeFileSync(envPath, "APP_OK=1\nnot valid\n", "utf8");
+
+      assert.throws(
+        () => createEnvContext({ envFile: envPath }),
+        {
+          name: "SyntaxError",
+          message:
+            `Invalid .env syntax in ${envPath} at line 2: expected KEY=VALUE.`,
+        },
+      );
+    }));
+
+  it("throws TypeError for invalid envFile options", () => {
+    assert.throws(
+      () => createEnvContext({ envFile: 123 as never }),
+      {
+        name: "TypeError",
+        message:
+          "Expected envFile to be a boolean, string, array, or object, but got: number.",
+      },
+    );
+    assert.throws(
+      () => createEnvContext({ envFile: { paths: 123 } as never }),
+      {
+        name: "TypeError",
+        message:
+          "Expected envFile.paths to be a boolean, string, array, or undefined, but got: number.",
+      },
+    );
+    assert.throws(
+      () =>
+        createEnvContext({
+          envFile: { paths: ".env", substitute: "nope" } as never,
+        }),
+      {
+        name: "TypeError",
+        message:
+          "Expected envFile.substitute to be a function or undefined, but got: string.",
+      },
+    );
   });
 });
 
