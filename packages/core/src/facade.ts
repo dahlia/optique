@@ -6,7 +6,12 @@ import {
   type ShellCompletion,
   zsh,
 } from "./completion.ts";
-import { group, longestMatch, object } from "./constructs.ts";
+import {
+  group,
+  longestMatch,
+  type LongestMatchOptions,
+  object,
+} from "./constructs.ts";
 import {
   type DocPage,
   type DocSection,
@@ -79,13 +84,21 @@ import type {
   SourceContextRequest,
 } from "./context.ts";
 
+type MetaCommandLongestMatchOptions = LongestMatchOptions & {
+  readonly [allowDuplicateLeadingCommandNamesKey]: true;
+};
+
+/**
+ * Combines built-in meta commands while intentionally bypassing duplicate
+ * leading command name validation in `createLongestMatch()`.
+ */
 function longestMatchForMetaCommands(
   ...parsers: Parser<Mode, unknown, unknown>[]
 ): Parser<Mode, unknown, unknown> {
-  return longestMatch(
-    ...parsers,
-    { [allowDuplicateLeadingCommandNamesKey]: true } as never,
-  );
+  const options: MetaCommandLongestMatchOptions = {
+    [allowDuplicateLeadingCommandNamesKey]: true,
+  };
+  return longestMatch(...parsers, options);
 }
 
 export type { ParserValuePlaceholder, SourceContext, SourceContextRequest };
@@ -1084,14 +1097,10 @@ function combineWithHelpVersion(
     return parsers[0];
   }
 
-  let combined: Parser<Mode, unknown, unknown>;
-  if (parsers.length === 2) {
-    combined = longestMatchForMetaCommands(parsers[0], parsers[1]);
-  } else {
-    // Use variadic longestMatch for all parsers
-    // Our lenient help/version parsers will win because they consume all input
-    combined = longestMatchForMetaCommands(...parsers);
-  }
+  // Our lenient help/version parsers will win because they consume all input.
+  let combined: Parser<Mode, unknown, unknown> = longestMatchForMetaCommands(
+    ...parsers,
+  );
 
   // Reorder the usage so that the main parser's usage appears before
   // meta-command (version/completion/help) usage.  The parsing order
@@ -2728,11 +2737,6 @@ export function runParser<
           // Use longestMatch to combine all parsers
           if (commandParsers.length === 1) {
             helpGeneratorParser = commandParsers[0];
-          } else if (commandParsers.length === 2) {
-            helpGeneratorParser = longestMatchForMetaCommands(
-              commandParsers[0],
-              commandParsers[1],
-            );
           } else {
             helpGeneratorParser = longestMatchForMetaCommands(
               ...commandParsers,
