@@ -1510,7 +1510,7 @@ function collectCommandInputNames(
 ): void {
   for (const term of usage) {
     if (term.type === "command") {
-      if (term.name === commandName) {
+      if (commandTermMatches(term, commandName)) {
         names.add(term.name);
         for (const alias of term.aliases ?? []) names.add(alias);
       }
