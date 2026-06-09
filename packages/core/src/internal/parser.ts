@@ -1498,8 +1498,11 @@ function findCommandInCurrentUsageTerm(
   return null;
 }
 
-function commandTermMatches(term: UsageTerm, commandName: string): boolean {
-  return term.type === "command" &&
+function commandTermMatches(
+  term: UsageTerm | null | undefined,
+  commandName: string,
+): boolean {
+  return term?.type === "command" &&
     (term.name === commandName ||
       term.aliases?.includes(commandName) === true ||
       term.hiddenAliases?.includes(commandName) === true);
