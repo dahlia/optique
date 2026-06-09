@@ -628,6 +628,13 @@ interface VersionParsers {
   readonly versionOption: Parser<"sync", boolean, unknown> | null;
 }
 
+function getMetaCommandAliases(
+  names: readonly [string, ...string[]],
+): readonly [string, ...string[]] | undefined {
+  const [, firstAlias, ...restAliases] = names;
+  return firstAlias == null ? undefined : [firstAlias, ...restAliases];
+}
+
 /**
  * Creates help parsers based on the sub-config.
  */
@@ -639,28 +646,19 @@ function createHelpParser(
   let helpOption: HelpParsers["helpOption"] = null;
 
   if (commandConfig) {
-    const names = commandConfig.names ?? ["help"];
+    const names: readonly [string, ...string[]] = commandConfig.names ??
+      ["help"];
     const innerParser = multiple(
       argument(string({ metavar: "COMMAND" }), {
         description: message`Command name to show help for.`,
       }),
     );
-    const commandParsers: Parser<
-      "sync",
-      readonly string[],
-      unknown
-    >[] = [];
-    for (let i = 0; i < names.length; i++) {
-      commandParsers.push(
-        command(names[i], innerParser, {
-          description: message`Show help information.`,
-          hidden: i === 0 ? commandConfig.hidden : true,
-        }),
-      );
-    }
-    helpCommand = commandParsers.length === 1
-      ? commandParsers[0]
-      : longestMatch(...commandParsers);
+    const aliases = getMetaCommandAliases(names);
+    helpCommand = command(names[0], innerParser, {
+      description: message`Show help information.`,
+      ...(aliases != null ? { aliases } : {}),
+      hidden: commandConfig.hidden,
+    });
   }
 
   if (optionConfig) {
@@ -685,24 +683,15 @@ function createVersionParser(
   let versionOption: VersionParsers["versionOption"] = null;
 
   if (commandConfig) {
-    const names = commandConfig.names ?? ["version"];
+    const names: readonly [string, ...string[]] = commandConfig.names ??
+      ["version"];
     const innerParser = object({});
-    const commandParsers: Parser<
-      "sync",
-      Record<PropertyKey, never>,
-      unknown
-    >[] = [];
-    for (let i = 0; i < names.length; i++) {
-      commandParsers.push(
-        command(names[i], innerParser, {
-          description: message`Show version information.`,
-          hidden: i === 0 ? commandConfig.hidden : true,
-        }),
-      );
-    }
-    versionCommand = commandParsers.length === 1
-      ? commandParsers[0]
-      : longestMatch(...commandParsers);
+    const aliases = getMetaCommandAliases(names);
+    versionCommand = command(names[0], innerParser, {
+      description: message`Show version information.`,
+      ...(aliases != null ? { aliases } : {}),
+      hidden: commandConfig.hidden,
+    });
   }
 
   if (optionConfig) {
@@ -842,7 +831,8 @@ function createCompletionParser(
   });
 
   if (commandConfig) {
-    const names = commandConfig.names ?? ["completion"];
+    const names: readonly [string, ...string[]] = commandConfig.names ??
+      ["completion"];
     const displayName = names[0];
 
     const completionCommandConfig = {
@@ -866,23 +856,12 @@ function createCompletionParser(
       }`,
     };
 
-    const commandParsers: Parser<
-      "sync",
-      { shell: string | undefined; args: readonly string[] },
-      unknown
-    >[] = [];
-    for (let i = 0; i < names.length; i++) {
-      commandParsers.push(
-        command(names[i], completionInner, {
-          ...completionCommandConfig,
-          hidden: i === 0 ? commandConfig.hidden : true,
-        }),
-      );
-    }
-
-    completionCommand = commandParsers.length === 1
-      ? commandParsers[0]
-      : longestMatch(...commandParsers);
+    const aliases = getMetaCommandAliases(names);
+    completionCommand = command(names[0], completionInner, {
+      ...completionCommandConfig,
+      ...(aliases != null ? { aliases } : {}),
+      hidden: commandConfig.hidden,
+    });
   }
 
   if (optionConfig) {
