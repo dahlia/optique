@@ -448,6 +448,15 @@ describe("expandCommandAliasSuggestions()", () => {
       "help",
     ]);
   });
+
+  it("should stop before aliases behind non-skippable literal terms", () => {
+    const usage: Usage = [
+      { type: "literal", value: "deploy" },
+      { type: "command", name: "install", aliases: ["i"] },
+    ];
+
+    assert.deepEqual(expandCommandAliasSuggestions(usage, ["i"]), ["i"]);
+  });
 });
 
 describe("integration: findSimilar + createSuggestionMessage", () => {

@@ -346,6 +346,8 @@ function collectCommandAliasTargets(
         if (anySkippable) continue;
         return false;
       }
+
+      return false;
     }
     return true;
   }
