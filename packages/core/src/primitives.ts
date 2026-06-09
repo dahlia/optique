@@ -2924,8 +2924,11 @@ function getCommandNames(
 function isNonEmptyStringArray(
   value: unknown,
 ): value is readonly [string, ...string[]] {
-  return Array.isArray(value) && value.length > 0 &&
-    value.every((item) => typeof item === "string");
+  if (!Array.isArray(value) || value.length === 0) return false;
+  for (let i = 0; i < value.length; i++) {
+    if (typeof value[i] !== "string") return false;
+  }
+  return true;
 }
 
 function validateUniqueCommandNames(names: readonly string[]): void {

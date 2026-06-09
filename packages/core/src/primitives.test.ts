@@ -3423,6 +3423,16 @@ describe("command", () => {
     );
   });
 
+  it("should reject sparse command aliases arrays", () => {
+    assert.throws(
+      () => command("install", object({}), { aliases: new Array(1) as never }),
+      {
+        name: "TypeError",
+        message: "Command aliases must be a non-empty array of strings.",
+      },
+    );
+  });
+
   it("should fail when wrong subcommand is provided", () => {
     const showParser = command(
       "show",
