@@ -2495,6 +2495,51 @@ describe("getDocPage", () => {
     }
   });
 
+  it("should resolve command-specific usage when navigating by alias", () => {
+    const installCommand = command(
+      "install",
+      object({
+        name: option("--name", string()),
+      }),
+      { aliases: ["i"] },
+    );
+
+    const inspectCommand = command(
+      "inspect",
+      object({
+        verbose: option("--verbose"),
+      }),
+    );
+
+    const parser = longestMatch(or(installCommand, inspectCommand));
+
+    const doc = getDocPage(parser, ["i"]);
+    assert.ok(doc);
+    assert.ok(doc.usage && doc.usage.length > 0);
+
+    if (doc.usage) {
+      const firstTerm = doc.usage[0];
+      assert.equal(
+        firstTerm.type,
+        "command",
+        `Expected first usage term to be 'command', got '${firstTerm.type}'`,
+      );
+      if (firstTerm.type === "command") {
+        assert.equal(firstTerm.name, "install");
+      }
+    }
+    assert.ok(
+      doc.usage.some((term) =>
+        term.type === "option" && term.names.includes("--name")
+      ),
+    );
+    assert.ok(
+      !doc.usage.some((term) =>
+        term.type === "option" && term.names.includes("--verbose")
+      ),
+    );
+  });
+
   it("should include choices in formatted help for option with choice()", () => {
     const parser = object({
       format: option("--format", choice(["json", "yaml", "xml"]), {

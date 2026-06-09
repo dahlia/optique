@@ -1483,7 +1483,7 @@ function findCommandInCurrentUsageTerm(
   commandName: string,
   trailingUsage: Usage,
 ): Usage | null {
-  if (term.type === "command" && term.name === commandName) {
+  if (term.type === "command" && commandTermMatches(term, commandName)) {
     return [term, ...trailingUsage];
   }
 
@@ -1498,7 +1498,50 @@ function findCommandInCurrentUsageTerm(
   return null;
 }
 
+function commandTermMatches(term: UsageTerm, commandName: string): boolean {
+  return term.type === "command" &&
+    (term.name === commandName || term.aliases?.includes(commandName) === true);
+}
+
+function collectCommandInputNames(
+  usage: Usage,
+  commandName: string,
+  names: Set<string>,
+): void {
+  for (const term of usage) {
+    if (term.type === "command") {
+      if (term.name === commandName) {
+        names.add(term.name);
+        for (const alias of term.aliases ?? []) names.add(alias);
+      }
+    } else if (term.type === "exclusive") {
+      for (const branch of term.terms) {
+        collectCommandInputNames(branch, commandName, names);
+      }
+    } else if (term.type === "sequence") {
+      collectCommandInputNames(term.terms, commandName, names);
+    } else if (term.type === "optional" || term.type === "multiple") {
+      collectCommandInputNames(term.terms, commandName, names);
+    }
+  }
+}
+
+function findLastCommandInputIndex(
+  consumed: readonly string[],
+  commandName: string,
+  usage: Usage,
+  searchEnd: number,
+): number {
+  const names = new Set([commandName]);
+  collectCommandInputNames(usage, commandName, names);
+  for (let index = searchEnd - 1; index >= 0; index--) {
+    if (names.has(consumed[index])) return index;
+  }
+  return -1;
+}
+
 function recordMatchedCommandArgIndices(
+  usage: Usage,
   consumed: readonly string[],
   previousCommandPath: readonly string[] | undefined,
   nextCommandPath: readonly string[] | undefined,
@@ -1513,7 +1556,12 @@ function recordMatchedCommandArgIndices(
   for (let index = next.length - 1; index >= previousLength; index--) {
     if (searchEnd <= 0) break;
     const commandName = next[index];
-    const localIndex = consumed.lastIndexOf(commandName, searchEnd - 1);
+    const localIndex = findLastCommandInputIndex(
+      consumed,
+      commandName,
+      usage,
+      searchEnd,
+    );
     if (localIndex < 0) continue;
     indices.add(consumedOffset + localIndex);
     searchEnd = localIndex;
@@ -1703,6 +1751,7 @@ function getDocPageSyncImpl(
     context = result.next;
     const consumedCount = previousBuffer.length - context.buffer.length;
     recordMatchedCommandArgIndices(
+      parser.usage,
       previousBuffer.slice(0, consumedCount),
       previousCommandPath,
       context.exec?.commandPath,
@@ -1742,6 +1791,7 @@ async function getDocPageAsyncImpl(
     context = result.next;
     const consumedCount = previousBuffer.length - context.buffer.length;
     recordMatchedCommandArgIndices(
+      parser.usage,
       previousBuffer.slice(0, consumedCount),
       previousCommandPath,
       context.exec?.commandPath,
