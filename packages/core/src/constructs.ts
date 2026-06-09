@@ -31,6 +31,7 @@ import {
   getAnnotations,
   inheritAnnotations,
 } from "./internal/annotations.ts";
+import { allowDuplicateLeadingCommandNamesKey } from "./internal/command-alias.ts";
 import {
   mergeChildExec,
   withChildContext as withSharedChildContext,
@@ -636,6 +637,7 @@ import {
   createSuggestionMessage,
   deduplicateSuggestions,
   DEFAULT_FIND_SIMILAR_OPTIONS,
+  expandCommandAliasSuggestions,
   findSimilar,
 } from "./suggestion.ts";
 import {
@@ -670,9 +672,16 @@ function createUnexpectedInputErrorWithScopedSuggestions(
     candidates,
     DEFAULT_FIND_SIMILAR_OPTIONS,
   );
+  const aliasUsage: Usage = [
+    { type: "exclusive", terms: parsers.map((parser) => parser.usage) },
+  ];
+  const displaySuggestions = expandCommandAliasSuggestions(
+    aliasUsage,
+    suggestions,
+  );
   const suggestionMsg = customFormatter
-    ? customFormatter(suggestions)
-    : createSuggestionMessage(suggestions);
+    ? customFormatter(displaySuggestions)
+    : createSuggestionMessage(displaySuggestions);
 
   return suggestionMsg.length > 0
     ? [...baseError, text("\n\n"), ...suggestionMsg]
@@ -1002,6 +1011,26 @@ export class DuplicateOptionError extends Error {
 }
 
 /**
+ * Error class thrown when duplicate command names or aliases are detected
+ * during parser construction. This is a programmer error, not a user error.
+ */
+class DuplicateCommandNameError extends TypeError {
+  constructor(
+    public readonly commandName: string,
+    public readonly sources: readonly (string | symbol)[],
+  ) {
+    const sourceNames = sources.map((s) =>
+      typeof s === "symbol" ? s.description ?? s.toString() : s
+    );
+    super(
+      `Duplicate command name "${commandName}" found in parsers: ` +
+        `${sourceNames.join(", ")}. Each command name or alias must be ` +
+        `unique within active parser alternatives.`,
+    );
+  }
+}
+
+/**
  * Checks for duplicate option names across parser sources and throws an error
  * if duplicates are found. This should be called at construction time.
  * @param parserSources Array of [source, usage] tuples
@@ -1026,6 +1055,81 @@ function checkDuplicateOptionNames(
   for (const [name, sources] of optionNameSources) {
     if (sources.length > 1) {
       throw new DuplicateOptionError(name, sources);
+    }
+  }
+}
+
+function checkDuplicateLeadingCommandNames(
+  parserSources: ReadonlyArray<
+    readonly [string | symbol, Parser<Mode, unknown, unknown>]
+  >,
+): void {
+  const commandNameSources = new Map<string, (string | symbol)[]>();
+
+  for (const [source, parser] of parserSources) {
+    const commandNames = extractCommandNames(parser.usage, true);
+    for (const name of parser.leadingNames) {
+      if (!commandNames.has(name)) continue;
+      const sources = commandNameSources.get(name);
+      commandNameSources.set(
+        name,
+        sources == null ? [source] : [...sources, source],
+      );
+    }
+  }
+
+  for (const [name, sources] of commandNameSources) {
+    if (sources.length > 1) {
+      throw new DuplicateCommandNameError(name, sources);
+    }
+  }
+}
+
+function checkDuplicateReachableLeadingCommandNames(
+  parserSources: ReadonlyArray<
+    readonly [string | symbol, Parser<Mode, unknown, unknown>]
+  >,
+): void {
+  const commandNameSources = new Map<string, (string | symbol)[]>();
+  const sortedSources = [...parserSources].sort(([, parserA], [, parserB]) =>
+    parserB.priority - parserA.priority
+  );
+  const blockedNames = new Set<string>();
+  let positionalBlocked = false;
+
+  for (let i = 0; i < sortedSources.length;) {
+    const priority = sortedSources[i][1].priority;
+    const priorityGroup: typeof sortedSources = [];
+    while (
+      i < sortedSources.length && sortedSources[i][1].priority === priority
+    ) {
+      priorityGroup.push(sortedSources[i]);
+      i++;
+    }
+
+    const groupNames = new Set<string>();
+    let groupAcceptsAnyToken = false;
+    for (const [source, parser] of priorityGroup) {
+      if (parser.acceptingAnyToken) groupAcceptsAnyToken = true;
+      const commandNames = extractCommandNames(parser.usage, true);
+      for (const name of parser.leadingNames) {
+        if (!commandNames.has(name)) continue;
+        if (positionalBlocked || blockedNames.has(name)) continue;
+        groupNames.add(name);
+        const sources = commandNameSources.get(name);
+        commandNameSources.set(
+          name,
+          sources == null ? [source] : [...sources, source],
+        );
+      }
+    }
+    for (const name of groupNames) blockedNames.add(name);
+    if (groupAcceptsAnyToken) positionalBlocked = true;
+  }
+
+  for (const [name, sources] of commandNameSources) {
+    if (sources.length > 1) {
+      throw new DuplicateCommandNameError(name, sources);
     }
   }
 }
@@ -3066,6 +3170,9 @@ export function or(
     throw new TypeError("or() requires at least one parser argument.");
   }
   assertParsers(parsers, "or()");
+  checkDuplicateLeadingCommandNames(
+    parsers.map((parser, index) => [String(index), parser] as const),
+  );
 
   // Analyze context once for error message generation
   const noMatchContext = analyzeNoMatchContext(parsers);
@@ -3989,6 +4096,10 @@ export interface LongestMatchOptions {
   errors?: LongestMatchErrorOptions;
 }
 
+type InternalLongestMatchOptions = LongestMatchOptions & {
+  readonly [allowDuplicateLeadingCommandNamesKey]?: true;
+};
+
 /**
  * Options for customizing error messages in the {@link longestMatch} parser.
  * @since 0.5.0
@@ -4224,9 +4335,15 @@ export function longestMatch<
 export function longestMatch(
   ...args: Array<Parser<Mode, unknown, unknown> | LongestMatchOptions>
 ): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]> {
+  return createLongestMatch(...args);
+}
+
+function createLongestMatch(
+  ...args: Array<Parser<Mode, unknown, unknown> | LongestMatchOptions>
+): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]> {
   // Extract parsers and options from arguments
   let parsers: Parser<Mode, unknown, unknown>[];
-  let options: LongestMatchOptions | undefined;
+  let options: InternalLongestMatchOptions | undefined;
 
   if (
     args.length > 0 && args[args.length - 1] &&
@@ -4234,7 +4351,7 @@ export function longestMatch(
     !("$valueType" in args[args.length - 1])
   ) {
     // Last argument is options
-    options = args[args.length - 1] as LongestMatchOptions;
+    options = args[args.length - 1] as InternalLongestMatchOptions;
     parsers = args.slice(0, -1) as Parser<Mode, unknown, unknown>[];
   } else {
     // No options provided
@@ -4248,6 +4365,13 @@ export function longestMatch(
     );
   }
   assertParsers(parsers, "longestMatch()");
+  const allowDuplicateLeadingCommandNames =
+    options?.[allowDuplicateLeadingCommandNamesKey] === true;
+  if (!allowDuplicateLeadingCommandNames) {
+    checkDuplicateLeadingCommandNames(
+      parsers.map((parser, index) => [String(index), parser] as const),
+    );
+  }
 
   // Analyze context once for error message generation
   const noMatchContext = analyzeNoMatchContext(parsers);
@@ -5672,6 +5796,11 @@ export function object<
       ),
     );
   }
+  checkDuplicateReachableLeadingCommandNames(
+    parserPairs.map(([field, parser]) =>
+      [field as string | symbol, parser] as const
+    ),
+  );
 
   // Analyze context once for error message generation
   const noMatchContext = analyzeNoMatchContext(
@@ -9870,6 +9999,11 @@ export function merge(
       ),
     );
   }
+  checkDuplicateReachableLeadingCommandNames(
+    sorted.map(([parser, originalIndex]) =>
+      [String(originalIndex), parser] as const
+    ),
+  );
 
   // Collect field parser pairs from all children so that nested merge()
   // can pre-complete dependency source fields at the outer level.

@@ -4,6 +4,7 @@ import {
   createErrorWithSuggestions,
   createSuggestionMessage,
   deduplicateSuggestions,
+  expandCommandAliasSuggestions,
   findSimilar,
   levenshteinDistance,
 } from "./suggestion.ts";
@@ -362,6 +363,99 @@ describe("createSuggestionMessage()", () => {
     assert.doesNotMatch(formatted, /`/);
     // Should still have the option name
     assert.match(formatted, /--verbose/);
+  });
+});
+
+describe("expandCommandAliasSuggestions()", () => {
+  it("should ignore nested command aliases when expanding suggestions", () => {
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [
+            {
+              type: "sequence",
+              terms: [
+                { type: "command", name: "parent" },
+                { type: "command", name: "nested", aliases: ["run"] },
+              ],
+            },
+          ],
+          [{ type: "command", name: "run", aliases: ["r"] }],
+        ],
+      },
+    ];
+
+    assert.deepEqual(expandCommandAliasSuggestions(usage, ["run"]), ["run"]);
+    assert.deepEqual(expandCommandAliasSuggestions(usage, ["r"]), [
+      "run",
+      "r",
+    ]);
+  });
+
+  it("should continue after required multiple terms with skippable children", () => {
+    const usage: Usage = [
+      {
+        type: "multiple",
+        min: 1,
+        terms: [{ type: "optional", terms: [] }],
+      },
+      { type: "command", name: "install", aliases: ["i"] },
+    ];
+
+    assert.deepEqual(expandCommandAliasSuggestions(usage, ["i"]), [
+      "install",
+      "i",
+    ]);
+  });
+
+  it("should continue after exclusive terms with a skippable branch", () => {
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "option", names: ["--format"] }],
+          [{ type: "optional", terms: [] }],
+        ],
+      },
+      { type: "command", name: "install", aliases: ["i"] },
+    ];
+
+    assert.deepEqual(expandCommandAliasSuggestions(usage, ["i"]), [
+      "install",
+      "i",
+    ]);
+  });
+
+  it("should continue past leading options before command aliases", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--verbose"] },
+      { type: "command", name: "install", aliases: ["i"] },
+    ];
+
+    assert.deepEqual(expandCommandAliasSuggestions(usage, ["i"]), [
+      "install",
+      "i",
+    ]);
+  });
+
+  it("should collapse hidden command aliases to canonical suggestions", () => {
+    const usage: Usage = [
+      { type: "command", name: "help", hiddenAliases: ["assist"] },
+    ];
+
+    assert.deepEqual(expandCommandAliasSuggestions(usage, ["assist"]), [
+      "help",
+    ]);
+  });
+
+  it("should stop before aliases behind non-skippable literal terms", () => {
+    const usage: Usage = [
+      { type: "literal", value: "deploy" },
+      { type: "command", name: "install", aliases: ["i"] },
+    ];
+
+    assert.deepEqual(expandCommandAliasSuggestions(usage, ["i"]), ["i"]);
   });
 });
 

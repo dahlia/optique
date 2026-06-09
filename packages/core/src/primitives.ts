@@ -33,6 +33,10 @@ import {
   completeOrExtractPhase2Seed,
   extractPhase2SeedKey,
 } from "./phase2-seed.ts";
+import {
+  hiddenCommandAliasesKey,
+  type HiddenCommandAliasOptions,
+} from "./internal/command-alias.ts";
 import type { TraceEntry } from "./input-trace.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import { validateCommandNames, validateOptionNames } from "./validate.ts";
@@ -231,6 +235,7 @@ import {
   createErrorWithSuggestions,
   createSuggestionMessage,
   DEFAULT_FIND_SIMILAR_OPTIONS,
+  expandCommandAliasSuggestions,
   findSimilar,
 } from "./suggestion.ts";
 import type {
@@ -2803,6 +2808,17 @@ export interface CommandOptions {
   readonly hidden?: HiddenVisibility;
 
   /**
+   * Additional names that invoke this command.
+   *
+   * Aliases are functional at runtime and are suggested by shell completion,
+   * but are hidden from usage and documentation output.  The `name` parameter
+   * passed to {@link command} remains the canonical display name.
+   *
+   * @since 1.1.0
+   */
+  readonly aliases?: readonly [string, ...string[]];
+
+  /**
    * Error messages customization.
    * @since 0.5.0
    */
@@ -2895,10 +2911,71 @@ function appendCommandPath(
   };
 }
 
+function getCommandNames(
+  name: string,
+  options: CommandOptions,
+): readonly string[] {
+  return [
+    name,
+    ...getVisibleCommandAliases(options),
+    ...getHiddenCommandAliases(options),
+  ];
+}
+
+function getVisibleCommandAliases(
+  options: CommandOptions,
+): readonly string[] {
+  const aliases: unknown = options.aliases;
+  if (aliases == null) return [];
+  if (!isNonEmptyStringArray(aliases)) {
+    throw new TypeError(
+      "Command aliases must be a non-empty array of strings.",
+    );
+  }
+  return aliases;
+}
+
+function getHiddenCommandAliases(
+  options: CommandOptions,
+): readonly string[] {
+  const hiddenAliases: unknown =
+    (options as CommandOptions & HiddenCommandAliasOptions)[
+      hiddenCommandAliasesKey
+    ];
+  if (hiddenAliases == null) return [];
+  if (!isNonEmptyStringArray(hiddenAliases)) {
+    throw new TypeError(
+      "Hidden command aliases must be a non-empty array of strings.",
+    );
+  }
+  return hiddenAliases;
+}
+
+function isNonEmptyStringArray(
+  value: unknown,
+): value is readonly [string, ...string[]] {
+  if (!Array.isArray(value) || value.length === 0) return false;
+  for (let i = 0; i < value.length; i++) {
+    if (typeof value[i] !== "string") return false;
+  }
+  return true;
+}
+
+function validateUniqueCommandNames(names: readonly string[]): void {
+  const seen = new Set<string>();
+  for (const name of names) {
+    if (seen.has(name)) {
+      throw new TypeError(`Command has a duplicate name: "${name}".`);
+    }
+    seen.add(name);
+  }
+}
+
 function* suggestCommandSync<T, TState>(
   context: ParserContext<CommandState<TState>>,
   prefix: string,
   name: string,
+  aliases: readonly string[],
   parser: Parser<"sync", T, TState>,
   options: CommandOptions,
 ): Generator<Suggestion> {
@@ -2911,12 +2988,14 @@ function* suggestCommandSync<T, TState>(
   // Handle different command states
   if (state === undefined) {
     // Command not yet matched - suggest command name if it matches prefix
-    if (name.startsWith(prefix)) {
-      yield {
-        kind: "literal",
-        text: name,
-        ...(options.description && { description: options.description }),
-      };
+    for (const commandName of [name, ...aliases]) {
+      if (commandName.startsWith(prefix)) {
+        yield {
+          kind: "literal",
+          text: commandName,
+          ...(options.description && { description: options.description }),
+        };
+      }
     }
   } else if (state[0] === "matched") {
     // Command matched but inner parser not started - delegate to inner parser
@@ -2947,6 +3026,7 @@ async function* suggestCommandAsync<T, TState>(
   context: ParserContext<CommandState<TState>>,
   prefix: string,
   name: string,
+  aliases: readonly string[],
   parser: Parser<Mode, T, TState>,
   options: CommandOptions,
 ): AsyncGenerator<Suggestion> {
@@ -2959,12 +3039,14 @@ async function* suggestCommandAsync<T, TState>(
   // Handle different command states
   if (state === undefined) {
     // Command not yet matched - suggest command name if it matches prefix
-    if (name.startsWith(prefix)) {
-      yield {
-        kind: "literal",
-        text: name,
-        ...(options.description && { description: options.description }),
-      };
+    for (const commandName of [name, ...aliases]) {
+      if (commandName.startsWith(prefix)) {
+        yield {
+          kind: "literal",
+          text: commandName,
+          ...(options.description && { description: options.description }),
+        };
+      }
     }
   } else if (state[0] === "matched") {
     // Command matched but inner parser not started - delegate to inner parser
@@ -3018,7 +3100,11 @@ export function command<M extends Mode, T, TState>(
   parser: Parser<M, T, TState>,
   options: CommandOptions = {},
 ): Parser<M, T, CommandState<TState>> {
-  validateCommandNames([name], "Command");
+  const commandNames = getCommandNames(name, options);
+  const aliases = getVisibleCommandAliases(options);
+  const hiddenAliases = getHiddenCommandAliases(options);
+  validateCommandNames(commandNames, "Command");
+  validateUniqueCommandNames(commandNames);
   const isAsync = parser.mode === "async";
   const syncInnerParser = parser as Parser<"sync", T, TState>;
   const asyncInnerParser = parser as Parser<"async", T, TState>;
@@ -3034,12 +3120,14 @@ export function command<M extends Mode, T, TState>(
       {
         type: "command",
         name,
+        ...(aliases.length > 0 && { aliases }),
+        ...(hiddenAliases.length > 0 && { hiddenAliases }),
         ...(options.usageLine != null && { usageLine: options.usageLine }),
         ...(options.hidden != null && { hidden: options.hidden }),
       },
       ...parser.usage,
     ],
-    leadingNames: new Set([name]),
+    leadingNames: new Set(commandNames),
     acceptingAnyToken: false,
     initialState: undefined,
     canSkip(state: CommandState<TState>, exec?: ExecutionContext) {
@@ -3078,7 +3166,10 @@ export function command<M extends Mode, T, TState>(
       // Handle different states
       if (state === undefined) {
         // Check if buffer starts with our command name
-        if (context.buffer.length < 1 || context.buffer[0] !== name) {
+        if (
+          context.buffer.length < 1 ||
+          !commandNames.includes(context.buffer[0])
+        ) {
           const actual = context.buffer.length > 0 ? context.buffer[0] : null;
 
           // Only suggest commands that are valid at the current parse position
@@ -3086,9 +3177,13 @@ export function command<M extends Mode, T, TState>(
           // commands that the user has not yet entered.
           // See: https://github.com/dahlia/optique/issues/117
           const leadingCmds = extractLeadingCommandNames(context.usage);
-          const suggestions = actual
+          const rawSuggestions = actual
             ? findSimilar(actual, leadingCmds, DEFAULT_FIND_SIMILAR_OPTIONS)
             : [];
+          const suggestions = expandCommandAliasSuggestions(
+            context.usage,
+            rawSuggestions,
+          );
 
           // If custom error is provided, use it
           if (options.errors?.notMatched) {
@@ -3370,6 +3465,7 @@ export function command<M extends Mode, T, TState>(
           context,
           prefix,
           name,
+          aliases,
           parser,
           options,
         );
@@ -3378,6 +3474,7 @@ export function command<M extends Mode, T, TState>(
         context,
         prefix,
         name,
+        aliases,
         parser as Parser<"sync", T, TState>,
         options,
       );

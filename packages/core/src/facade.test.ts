@@ -4317,7 +4317,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(!suggestions.includes("--version"));
     });
 
-    it("should not treat nested command options as current value slots", () => {
+    it("should not treat unmatched nested command options as current value slots", () => {
       const parser = command(
         "outer",
         command("inner", option("--output", string())),
@@ -4416,10 +4416,10 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(suggestions.includes("--version"));
     });
 
-    it("should not add meta options while completing an option from a duplicate command branch", () => {
-      const parser = or(
-        command("tool", object({ a: option("--a", string()) })),
-        command("tool", object({ b: option("--b", string()) })),
+    it("should not add meta options while completing a command option value", () => {
+      const parser = command(
+        "tool",
+        object({ b: option("--b", string()) }),
       );
 
       let completionOutput = "";
@@ -4446,10 +4446,13 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(!suggestions.includes("--version"));
     });
 
-    it("should not treat nested duplicate command branch options as current value slots", () => {
-      const parser = or(
-        command("tool", command("deploy", option("--target", string()))),
-        command("tool", command("status", object({}))),
+    it("should not treat unselected nested command options as current value slots", () => {
+      const parser = command(
+        "tool",
+        or(
+          command("deploy", option("--target", string())),
+          command("status", object({})),
+        ),
       );
 
       let completionOutput = "";
@@ -11345,8 +11348,7 @@ describe("runWithAsync", () => {
 });
 
 describe("branch coverage: facade.ts edge cases", () => {
-  // Lines 101/149: multi-name help/version commands (i > 0 hidden branch)
-  it("multi-name help command uses hidden:true for i>0 names", () => {
+  it("multi-name help command accepts hidden aliases", () => {
     const parser = object({ verbose: option("--verbose") });
     let helpOutput = "";
     runParser(parser, "test", ["help"], {
@@ -11358,7 +11360,7 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.ok(helpOutput.length > 0, "help should be shown via 'help' command");
   });
 
-  it("multi-name version command uses hidden:true for i>0 names", () => {
+  it("multi-name version command accepts hidden aliases", () => {
     const parser = object({ verbose: option("--verbose") });
     let versionOutput = "";
     runParser(parser, "test", ["version"], {
@@ -14337,6 +14339,82 @@ describe("branch coverage: facade.ts edge cases", () => {
       !/(?:^|\n)\s+completions\b/m.test(completionOutput) &&
         !/\bmyapp completions\b/.test(completionOutput),
       `hidden completion alias should stay out of help output, got:\n${completionOutput}`,
+    );
+  });
+
+  it("keeps meta-command aliases out of typo suggestions", () => {
+    const parser = object({ verbose: option("--verbose") });
+
+    let stderrOutput = "";
+    const result = runParser(parser, "myapp", ["asist", "--help"], {
+      help: {
+        command: { names: ["help", "assist"] },
+        option: true,
+        onShow: () => "help-shown",
+      },
+      stdout: () => {},
+      stderr: (text) => {
+        stderrOutput += text + "\n";
+      },
+      onError: (code) => `error-${code}` as never,
+    });
+
+    assert.equal(result, "error-1");
+    assert.ok(stderrOutput.includes("help"));
+    assert.ok(
+      !/\bassist\b/.test(stderrOutput),
+      `hidden help alias should stay out of suggestions, got:\n${stderrOutput}`,
+    );
+  });
+
+  it("uses canonical names for meta-command alias help", () => {
+    const parser = object({ verbose: option("--verbose") });
+
+    let helpOutput = "";
+    runParser(parser, "myapp", ["h", "--help"], {
+      help: {
+        command: { names: ["help", "h"] },
+        option: true,
+        onShow: () => "help-shown",
+      },
+      stdout: (text) => {
+        helpOutput += text + "\n";
+      },
+    });
+    assert.ok(helpOutput.includes("Usage: myapp help [COMMAND...]"));
+    assert.ok(!helpOutput.includes("Usage: myapp h [COMMAND...]"));
+
+    let versionOutput = "";
+    runParser(parser, "myapp", ["ver", "--help"], {
+      help: { option: true, onShow: () => "help-shown" },
+      version: {
+        command: { names: ["version", "ver"] },
+        value: "1.2.3",
+        onShow: () => "version-shown",
+      },
+      stdout: (text) => {
+        versionOutput += text + "\n";
+      },
+    });
+    assert.ok(versionOutput.includes("Usage: myapp version"));
+    assert.ok(!/^Usage: myapp ver$/m.test(versionOutput));
+
+    let completionOutput = "";
+    runParser(parser, "myapp", ["completions", "--help"], {
+      help: { option: true, onShow: () => "help-shown" },
+      completion: {
+        command: { names: ["completion", "completions"] },
+        onShow: () => "completion-shown",
+      },
+      stdout: (text) => {
+        completionOutput += text + "\n";
+      },
+    });
+    assert.ok(
+      completionOutput.includes("Usage: myapp completion [SHELL] [ARG...]"),
+    );
+    assert.ok(
+      !completionOutput.includes("Usage: myapp completions [SHELL] [ARG...]"),
     );
   });
 

@@ -110,6 +110,38 @@ function collectEntries(
   });
 }
 
+function docOnlyCommandEntry(name: string): Parser<"sync", null, undefined> {
+  return {
+    mode: "sync",
+    $valueType: [] as readonly null[],
+    $stateType: [] as readonly undefined[],
+    priority: 0,
+    usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse() {
+      return {
+        success: false as const,
+        consumed: 0,
+        error: message`Documentation-only parser.`,
+      };
+    },
+    complete() {
+      return { success: true as const, value: null };
+    },
+    *suggest() {},
+    getDocFragments() {
+      return {
+        fragments: [{
+          type: "entry" as const,
+          term: { type: "command" as const, name },
+        }],
+      };
+    },
+  };
+}
+
 function assertErrorIncludes(error: Message, text: string): void {
   const formatted = formatMessage(error);
   assert.ok(formatted.includes(text));
@@ -500,6 +532,22 @@ describe("or", () => {
     assert.ok(!result.success);
     if (!result.success) {
       assertErrorIncludes(result.error, "Unexpected option or subcommand");
+    }
+  });
+
+  it("should expand aliases from later sibling command suggestions", () => {
+    const orParser = or(
+      command("install", object({}), { aliases: ["i"] }),
+      command("remove", object({}), { aliases: ["rm"] }),
+    );
+
+    const result = parseSync(orParser, ["rmm"]);
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Did you mean one of these?");
+      assertErrorIncludes(result.error, "`remove`");
+      assertErrorIncludes(result.error, "`rm`");
     }
   });
 
@@ -957,8 +1005,8 @@ describe("or", () => {
 
     it("should deduplicate entries with same command name", () => {
       const orParser = or(
-        command("dup", object({})),
-        command("dup", argument(string())),
+        docOnlyCommandEntry("dup"),
+        docOnlyCommandEntry("dup"),
       );
 
       const fragments = orParser.getDocFragments({
@@ -3192,8 +3240,8 @@ describe("longestMatch()", () => {
 
   it("should deduplicate entries with same command name", () => {
     const parser = longestMatch(
-      command("build", object({})),
-      command("build", argument(string())),
+      docOnlyCommandEntry("build"),
+      docOnlyCommandEntry("build"),
     );
 
     const fragments = parser.getDocFragments({ kind: "unavailable" });
@@ -21723,6 +21771,17 @@ describe("leadingNames", () => {
     assert.deepEqual(parser.leadingNames, new Set(["help", "build"]));
   });
 
+  it("should include command aliases in or() leading names", () => {
+    const parser = or(
+      command("install", object({}), { aliases: ["i"] }),
+      command("remove", object({}), { aliases: ["rm"] }),
+    );
+    assert.deepEqual(
+      parser.leadingNames,
+      new Set(["install", "i", "remove", "rm"]),
+    );
+  });
+
   it("should be the union of all branches for longestMatch()", () => {
     const parser = longestMatch(
       command("help", object({})),
@@ -22349,6 +22408,232 @@ describe("seq", () => {
       success: true,
       value: [{ path: false }, { path: true }],
     });
+  });
+
+  it("should reject command alias collisions in or()", () => {
+    assert.throws(
+      () =>
+        or(
+          command("install", object({}), { aliases: ["i"] }),
+          command("inspect", object({}), { aliases: ["i"] }),
+        ),
+      {
+        name: "TypeError",
+        message:
+          'Duplicate command name "i" found in parsers: 0, 1. Each command name or alias must be unique within active parser alternatives.',
+      },
+    );
+  });
+
+  it("should reject command collisions from parser metadata", () => {
+    const custom = createSyncBranchParser(
+      undefined,
+      () => ({
+        success: false,
+        consumed: 0,
+        error: message`Expected custom command.`,
+      }),
+      "custom",
+      {
+        leadingNames: new Set(["install"]),
+        priority: 15,
+        usage: [{ type: "command", name: "install" }],
+      },
+    );
+
+    assert.throws(
+      () => or(custom, command("install", object({}))),
+      {
+        name: "TypeError",
+        message:
+          /Duplicate command name "install".*unique within active parser alternatives\./,
+      },
+    );
+  });
+
+  it("should allow duplicate literal leading names without command terms", () => {
+    const http = createSyncBranchParser(
+      undefined,
+      () => ({
+        success: false,
+        consumed: 0,
+        error: message`Expected serve http.`,
+      }),
+      "http",
+      {
+        leadingNames: new Set(["serve"]),
+        usage: [{ type: "argument", metavar: "MODE" }],
+      },
+    );
+    const grpc = createSyncBranchParser(
+      undefined,
+      () => ({
+        success: false,
+        consumed: 0,
+        error: message`Expected serve grpc.`,
+      }),
+      "grpc",
+      {
+        leadingNames: new Set(["serve"]),
+        usage: [{ type: "argument", metavar: "MODE" }],
+      },
+    );
+
+    assert.doesNotThrow(() => or(http, grpc));
+  });
+
+  it("should reject command collisions across or() priorities", () => {
+    const highPriority = createSyncBranchParser(
+      undefined,
+      () => ({
+        success: false,
+        consumed: 0,
+        error: message`Expected high priority command.`,
+      }),
+      "highPriority",
+      {
+        leadingNames: new Set(["install"]),
+        priority: 20,
+        usage: [{ type: "command", name: "install" }],
+      },
+    );
+    const lowPriority = createSyncBranchParser(
+      undefined,
+      () => ({
+        success: false,
+        consumed: 0,
+        error: message`Expected low priority command.`,
+      }),
+      "lowPriority",
+      {
+        leadingNames: new Set(["install"]),
+        priority: 10,
+        usage: [{ type: "command", name: "install" }],
+      },
+    );
+
+    assert.throws(
+      () => or(highPriority, lowPriority),
+      {
+        name: "TypeError",
+        message:
+          /Duplicate command name "install".*unique within active parser alternatives\./,
+      },
+    );
+  });
+
+  it("should reject option-shaped command collisions", () => {
+    assert.throws(
+      () =>
+        or(
+          command("--help", object({})),
+          command("--help", object({})),
+        ),
+      {
+        name: "TypeError",
+        message:
+          /Duplicate command name "--help".*unique within active parser alternatives\./,
+      },
+    );
+  });
+
+  it("should reject command alias collisions in longestMatch()", () => {
+    assert.throws(
+      () =>
+        longestMatch(
+          command("install", object({}), { aliases: ["i"] }),
+          command("i", object({})),
+        ),
+      {
+        name: "TypeError",
+        message:
+          /Duplicate command name "i".*unique within active parser alternatives\./,
+      },
+    );
+  });
+
+  it("should reject command alias collisions in object()", () => {
+    assert.throws(
+      () =>
+        object({
+          install: command("install", object({}), { aliases: ["i"] }),
+          inspect: command("inspect", object({}), { aliases: ["i"] }),
+        }),
+      {
+        name: "TypeError",
+        message:
+          /Duplicate command name "i".*unique within active parser alternatives\./,
+      },
+    );
+  });
+
+  it("should allow unreachable command alias collisions in object()", () => {
+    const blocker = createSyncBranchParser(
+      undefined,
+      () => {
+        return {
+          success: false,
+          consumed: 0,
+          error: message`Expected input.`,
+        };
+      },
+      "blocked",
+      { acceptingAnyToken: true, priority: 20 },
+    );
+
+    assert.doesNotThrow(() =>
+      object({
+        blocker,
+        install: command("install", object({}), { aliases: ["i"] }),
+        inspect: command("inspect", object({}), { aliases: ["i"] }),
+      })
+    );
+  });
+
+  it("should reject command alias collisions in merge()", () => {
+    assert.throws(
+      () =>
+        merge(
+          object({
+            install: command("install", object({}), { aliases: ["i"] }),
+          }),
+          object({
+            inspect: command("inspect", object({}), { aliases: ["i"] }),
+          }),
+        ),
+      {
+        name: "TypeError",
+        message:
+          /Duplicate command name "i".*unique within active parser alternatives\./,
+      },
+    );
+  });
+
+  it("should allow unreachable command alias collisions in merge()", () => {
+    const blocker = createSyncBranchParser(
+      undefined,
+      () => {
+        return {
+          success: false,
+          consumed: 0,
+          error: message`Expected input.`,
+        };
+      },
+      "blocked",
+      { acceptingAnyToken: true, priority: 20 },
+    );
+
+    assert.doesNotThrow(() =>
+      merge(
+        object({ blocker }),
+        object({
+          install: command("install", object({}), { aliases: ["i"] }),
+        }),
+        object({
+          inspect: command("inspect", object({}), { aliases: ["i"] }),
+        }),
+      )
+    );
   });
 
   it("should evaluate lazy defaults once during completion", () => {

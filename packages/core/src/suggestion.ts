@@ -2,7 +2,11 @@ import type { Message, MessageTerm } from "./message.ts";
 import { message, optionName, text } from "./message.ts";
 import type { Suggestion } from "./parser.ts";
 import type { Usage } from "./usage.ts";
-import { extractCommandNames, extractOptionNames } from "./usage.ts";
+import {
+  extractCommandNames,
+  extractOptionNames,
+  isSuggestionHidden,
+} from "./usage.ts";
 
 /**
  * Calculates the Levenshtein distance between two strings.
@@ -255,6 +259,104 @@ export function createSuggestionMessage(
 }
 
 /**
+ * Expands command alias suggestions so an alias typo can point at both the
+ * canonical command and the alias that matched.
+ *
+ * @param usage Usage terms that define command aliases.
+ * @param suggestions Candidate suggestions returned by {@link findSimilar}.
+ * @returns Suggestions with alias hits expanded to canonical name + alias.
+ * @internal
+ */
+export function expandCommandAliasSuggestions(
+  usage: Usage,
+  suggestions: readonly string[],
+): readonly string[] {
+  if (suggestions.length === 0) return suggestions;
+
+  const commandAliasTargets = collectCommandAliasTargets(usage);
+  const expanded: string[] = [];
+  const seen = new Set<string>();
+  for (const suggestion of suggestions) {
+    const targets = commandAliasTargets.get(suggestion) ?? [suggestion];
+    for (const target of targets) {
+      if (seen.has(target)) continue;
+      seen.add(target);
+      expanded.push(target);
+    }
+  }
+  return expanded;
+}
+
+function collectCommandAliasTargets(
+  usage: Usage,
+): Map<string, readonly string[]> {
+  const targets = new Map<string, readonly string[]>();
+
+  function traverse(terms: Usage): boolean {
+    if (!terms || !Array.isArray(terms)) return true;
+    for (const term of terms) {
+      if (term.type === "option") {
+        continue;
+      }
+
+      if (term.type === "argument") {
+        return false;
+      }
+
+      if (term.type === "command") {
+        if (isSuggestionHidden(term.hidden)) return false;
+        if (!targets.has(term.name)) {
+          targets.set(term.name, [term.name]);
+        }
+        for (const alias of term.aliases ?? []) {
+          if (!targets.has(alias)) {
+            targets.set(alias, [term.name, alias]);
+          }
+        }
+        for (const alias of term.hiddenAliases ?? []) {
+          if (!targets.has(alias)) {
+            targets.set(alias, [term.name]);
+          }
+        }
+        return false;
+      }
+
+      if (term.type === "optional") {
+        traverse(term.terms);
+        continue;
+      }
+
+      if (term.type === "multiple") {
+        const termsSkippable = traverse(term.terms);
+        if (term.min === 0 || termsSkippable) continue;
+        return false;
+      }
+
+      if (term.type === "sequence") {
+        if (traverse(term.terms)) continue;
+        return false;
+      }
+
+      if (term.type === "exclusive") {
+        let anySkippable = false;
+        for (const branch of term.terms) {
+          const branchSkippable = traverse(branch);
+          anySkippable = anySkippable || branchSkippable;
+        }
+        if (anySkippable) continue;
+        return false;
+      }
+
+      return false;
+    }
+    return true;
+  }
+
+  traverse(usage);
+  return targets;
+}
+
+/**
  * Creates an error message with suggestions for similar options or commands.
  *
  * This is a convenience function that combines the functionality of
@@ -310,10 +412,13 @@ export function createErrorWithSuggestions(
     candidates,
     DEFAULT_FIND_SIMILAR_OPTIONS,
   );
+  const displaySuggestions = type === "option"
+    ? suggestions
+    : expandCommandAliasSuggestions(usage, suggestions);
 
   const suggestionMsg = customFormatter
-    ? customFormatter(suggestions)
-    : createSuggestionMessage(suggestions);
+    ? customFormatter(displaySuggestions)
+    : createSuggestionMessage(displaySuggestions);
 
   return suggestionMsg.length > 0
     ? [...baseError, text("\n\n"), ...suggestionMsg]
