@@ -1064,8 +1064,9 @@ function checkDuplicateLeadingCommandNames(
   const commandNameSources = new Map<string, (string | symbol)[]>();
 
   for (const [source, parser] of parserSources) {
+    const commandNames = extractCommandNames(parser.usage, true);
     for (const name of parser.leadingNames) {
-      if (isNonCommandOptionLeadingName(parser, name)) continue;
+      if (/^(--|[-/+])/.test(name) && !commandNames.has(name)) continue;
       const sources = commandNameSources.get(name);
       commandNameSources.set(
         name,
@@ -1107,8 +1108,9 @@ function checkDuplicateReachableLeadingCommandNames(
     let groupAcceptsAnyToken = false;
     for (const [source, parser] of priorityGroup) {
       if (parser.acceptingAnyToken) groupAcceptsAnyToken = true;
+      const commandNames = extractCommandNames(parser.usage, true);
       for (const name of parser.leadingNames) {
-        if (isNonCommandOptionLeadingName(parser, name)) continue;
+        if (/^(--|[-/+])/.test(name) && !commandNames.has(name)) continue;
         if (positionalBlocked || blockedNames.has(name)) continue;
         groupNames.add(name);
         const sources = commandNameSources.get(name);
@@ -1127,14 +1129,6 @@ function checkDuplicateReachableLeadingCommandNames(
       throw new DuplicateCommandNameError(name, sources);
     }
   }
-}
-
-function isNonCommandOptionLeadingName(
-  parser: Parser<Mode, unknown, unknown>,
-  name: string,
-): boolean {
-  if (!/^(--|[-/+])/.test(name)) return false;
-  return !extractCommandNames(parser.usage, true).has(name);
 }
 
 /**
