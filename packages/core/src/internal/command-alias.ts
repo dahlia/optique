@@ -1,2 +1,3 @@
-export const allowDuplicateLeadingCommandNamesKey =
-  "__optiqueAllowDuplicateLeadingCommandNames";
+export const allowDuplicateLeadingCommandNamesKey = Symbol(
+  "allowDuplicateLeadingCommandNames",
+);
