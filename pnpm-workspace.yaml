@@ -19,3 +19,6 @@ catalog:
 
 engineStrict: true
 nodeVersion: 20.19.0
+
+allowBuilds:
+  esbuild: true
