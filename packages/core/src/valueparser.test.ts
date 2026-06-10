@@ -9,6 +9,7 @@ import {
   email,
   fileSize,
   type FileSizeOptionsBigInt,
+  firstOf,
   float,
   hostname,
   integer,
@@ -31,6 +32,7 @@ import {
   string,
   url,
   uuid,
+  type ValueParser,
 } from "@optique/core/valueparser";
 import {
   formatMessage,
@@ -39,6 +41,7 @@ import {
   text,
   values,
 } from "@optique/core/message";
+import { argument } from "#src/primitives.ts";
 import assert from "node:assert/strict";
 import * as fc from "fast-check";
 import { describe, it } from "node:test";
@@ -18459,6 +18462,363 @@ describe("json()", () => {
 
     it("custom placeholder is respected", () => {
       assert.equal(json({ placeholder: 123 }).placeholder, 123);
+    });
+  });
+});
+
+describe("firstOf", () => {
+  describe("parsing", () => {
+    it("should return the first successful constituent's value", () => {
+      const parser = firstOf(choice(["auto"]), integer({ min: 1 }));
+
+      const autoResult = parser.parse("auto");
+      assert.ok(autoResult.success);
+      assert.equal(autoResult.value, "auto");
+
+      const intResult = parser.parse("5");
+      assert.ok(intResult.success);
+      assert.equal(intResult.value, 5);
+    });
+
+    it("should respect declaration order on overlapping inputs", () => {
+      const parser = firstOf(choice(["1"]), integer());
+      const result = parser.parse("1");
+      assert.ok(result.success);
+      assert.equal(result.value, "1");
+
+      const reversed = firstOf(integer(), choice(["1"]));
+      const reversedResult = reversed.parse("1");
+      assert.ok(reversedResult.success);
+      assert.equal(reversedResult.value, 1);
+    });
+
+    it("should combine all constituent errors when every parser fails", () => {
+      const parser = firstOf(choice(["auto"]), integer({ min: 1 }));
+      const result = parser.parse("abc");
+      assert.ok(!result.success);
+
+      const [header] = result.error;
+      assert.ok(header.type === "text");
+      assert.ok(header.text.includes("Expected one of the following"));
+
+      const lineBreaks = result.error.filter(
+        (term: MessageTerm) => term.type === "lineBreak",
+      );
+      assert.equal(lineBreaks.length, 2);
+
+      const formatted = formatMessage(result.error);
+      assert.ok(formatted.includes("auto"));
+      assert.ok(formatted.includes("integer"));
+      assert.equal(formatted.split("\n").length, 3);
+    });
+
+    it("should propagate the deferred flag from custom constituents", () => {
+      const deferredParser: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "DEFERRED",
+        placeholder: "",
+        parse: (input) => ({ success: true, value: input, deferred: true }),
+        format: (value) => value,
+      };
+      const parser = firstOf(integer(), deferredParser);
+      const result = parser.parse("abc");
+      assert.ok(result.success);
+      assert.equal(result.value, "abc");
+      assert.ok(result.deferred);
+    });
+  });
+
+  describe("metadata", () => {
+    it("should be a sync value parser", () => {
+      const parser = firstOf(choice(["auto"]), integer());
+      assert.equal(parser.mode, "sync");
+      assert.ok(isValueParser(parser));
+    });
+
+    it("should join constituent metavars with | by default", () => {
+      const parser = firstOf(choice(["auto"]), integer());
+      assert.equal(parser.metavar, "TYPE|INTEGER");
+    });
+
+    it("should respect a custom metavar option", () => {
+      const parser = firstOf(choice(["auto"]), integer(), {
+        metavar: "COUNT",
+      });
+      assert.equal(parser.metavar, "COUNT");
+    });
+
+    it("should use the first constituent's placeholder", () => {
+      const parser = firstOf(choice(["auto", "manual"]), integer());
+      assert.equal(parser.placeholder, "auto");
+
+      const reversed = firstOf(integer(), choice(["auto", "manual"]));
+      assert.equal(reversed.placeholder, 0);
+    });
+  });
+
+  describe("choices", () => {
+    it("should merge choices when every constituent defines them", () => {
+      const parser = firstOf(choice(["a", "b"]), choice(["c"]));
+      assert.deepEqual(parser.choices, ["a", "b", "c"]);
+    });
+
+    it("should omit choices when any constituent is open-ended", () => {
+      const parser = firstOf(choice(["auto"]), integer());
+      assert.equal(parser.choices, undefined);
+    });
+  });
+
+  describe("format", () => {
+    it("should format with the constituent that accepts the value", () => {
+      const parser = firstOf(choice(["auto"]), integer({ min: 1 }));
+      assert.equal(parser.format("auto"), "auto");
+      assert.equal(parser.format(5), "5");
+    });
+
+    it("should skip constituents whose format() throws", () => {
+      const throwing: ValueParser<"sync", number> = {
+        mode: "sync",
+        metavar: "ONE",
+        placeholder: 1,
+        parse: (input) =>
+          input === "1"
+            ? { success: true, value: 1 }
+            : { success: false, error: message`Expected ${text("1")}.` },
+        format: (value) => {
+          if (value !== 1) throw new RangeError("Not one.");
+          return "1";
+        },
+      };
+      const parser = firstOf(throwing, integer());
+      assert.equal(parser.format(42), "42");
+      assert.equal(parser.format(1), "1");
+    });
+
+    it("should rethrow when every constituent's format() throws", () => {
+      const throwing: ValueParser<"sync", number> = {
+        mode: "sync",
+        metavar: "ONE",
+        placeholder: 1,
+        parse: () => ({ success: false, error: message`Nope.` }),
+        format: () => {
+          throw new RangeError("Cannot format.");
+        },
+      };
+      const parser = firstOf(throwing, throwing);
+      assert.throws(() => parser.format(42), RangeError);
+    });
+
+    it("should fall back to a well-formed string for unclaimed values", () => {
+      const parser = firstOf(choice(["auto"]), integer({ min: 1 }));
+      assert.equal(parser.format(0), "0");
+    });
+
+    it("should not validate out-of-union values through another branch", () => {
+      // Regression: a format()+parse() round-trip (as performed by
+      // validateValue() for bindEnv()/bindConfig() fallbacks) must not
+      // accept values that no constituent accepts.
+      const parser = firstOf(string({ pattern: /^a$/ }), integer({ min: 1 }));
+      const roundTrip = parser.parse(parser.format(0));
+      assert.ok(!roundTrip.success);
+    });
+
+    it("should not let a lossy earlier constituent claim a later one's value", () => {
+      // Regression: color().format() accepts any { r, g, b, a } shape and
+      // color().parse() accepts the result, so a naive success-based
+      // ownership test would drop extra object fields owned by json().
+      const parser = firstOf(color(), json({ rootType: "object" }));
+      const value = { r: 1, g: 2, b: 3, a: 1, extra: "keep" };
+      const roundTrip = parser.parse(parser.format(value));
+      assert.ok(roundTrip.success);
+      assert.deepEqual(roundTrip.value, value);
+    });
+
+    it("should format overlapping values for display", () => {
+      // format() is a display-oriented best effort; precise fallback
+      // validation goes through validate() instead.
+      const parser = firstOf(choice(["1"]), integer());
+      assert.equal(parser.format("1"), "1");
+      assert.equal(parser.format(1), "1");
+    });
+
+    it("should format through a constituent that normalizes the value", () => {
+      const mac = macAddress({ outputSeparator: ":" });
+      const parser = firstOf(mac, choice(["none"]));
+      assert.equal(
+        parser.format("AA-BB-CC-DD-EE-FF"),
+        mac.format("AA-BB-CC-DD-EE-FF"),
+      );
+    });
+  });
+
+  describe("validate", () => {
+    it("should accept values owned by a constituent", () => {
+      const parser = firstOf(choice(["auto"]), integer({ min: 1 }));
+      const autoResult = parser.validate?.("auto");
+      assert.ok(autoResult?.success);
+      assert.equal(autoResult.value, "auto");
+      const intResult = parser.validate?.(5);
+      assert.ok(intResult?.success);
+      assert.equal(intResult.value, 5);
+    });
+
+    it("should accept values shadowed by an earlier overlapping branch", () => {
+      // The integer 1 cannot be produced by parsing (its string form "1"
+      // always goes to the choice() branch), but it is still a valid
+      // integer() value, so fallback validation must accept it unchanged.
+      const parser = firstOf(choice(["1"]), integer());
+      const result = parser.validate?.(1);
+      assert.ok(result?.success);
+      assert.equal(result.value, 1);
+    });
+
+    it("should reject values that no constituent accepts", () => {
+      // The number 0 violates integer({ min: 1 }), and the choice() branch
+      // only accepts the *string* "0".  A format()+parse() round-trip
+      // cannot express this failure ("0" parses fine into the choice
+      // branch), which is exactly what validate() is for.
+      const parser = firstOf(choice(["0"]), integer({ min: 1 }));
+      const result = parser.validate?.(0);
+      assert.ok(result);
+      assert.ok(!result.success);
+      const stringResult = parser.validate?.("0");
+      assert.ok(stringResult?.success);
+      assert.equal(stringResult.value, "0");
+    });
+
+    it("should canonicalize values through the owning constituent", () => {
+      const mac = macAddress({ outputSeparator: ":" });
+      const parser = firstOf(mac, choice(["none"]));
+      const result = parser.validate?.("AA-BB-CC-DD-EE-FF");
+      assert.ok(result?.success);
+      assert.equal(result.value, mac.format("AA-BB-CC-DD-EE-FF"));
+    });
+
+    it("should delegate to a constituent's own validate()", () => {
+      const inner = firstOf(choice(["0"]), integer({ min: 1 }));
+      const parser = firstOf(choice(["x"]), inner);
+      const invalid = parser.validate?.(0);
+      assert.ok(invalid);
+      assert.ok(!invalid.success);
+      const valid = parser.validate?.(5);
+      assert.ok(valid?.success);
+      assert.equal(valid.value, 5);
+    });
+
+    it("should consult a constituent's validate() for shadowed values", () => {
+      // The inner firstOf() cannot round-trip the shadowed integer 1
+      // through format()+parse() (the string "1" goes to its choice()
+      // branch), but its own validate() hook accepts it; the outer
+      // firstOf() must consult that hook instead of only round-tripping.
+      const parser = firstOf(choice(["x"]), firstOf(choice(["1"]), integer()));
+      const result = parser.validate?.(1);
+      assert.ok(result?.success);
+      assert.equal(result.value, 1);
+    });
+
+    it("should be used by option()/argument() fallback validation", () => {
+      const overlapping = argument(firstOf(choice(["1"]), integer()));
+      const shadowed = overlapping.validateValue?.(1);
+      assert.ok(shadowed);
+      assert.ok(shadowed.success);
+      assert.equal(shadowed.value, 1);
+
+      const strict = argument(firstOf(choice(["0"]), integer({ min: 1 })));
+      const rejected = strict.validateValue?.(0);
+      assert.ok(rejected);
+      assert.ok(!rejected.success);
+    });
+  });
+
+  describe("normalize", () => {
+    it("should be undefined when no constituent normalizes", () => {
+      const parser = firstOf(choice(["auto"]), integer());
+      assert.equal(parser.normalize, undefined);
+    });
+
+    it("should dispatch to the constituent that accepts the value", () => {
+      const mac = macAddress({ outputSeparator: ":" });
+      const parser = firstOf(mac, choice(["none"]));
+      assert.equal(
+        parser.normalize?.("AA-BB-CC-DD-EE-FF"),
+        mac.normalize?.("AA-BB-CC-DD-EE-FF"),
+      );
+    });
+
+    it("should return values unchanged for constituents without normalize", () => {
+      const parser = firstOf(macAddress(), choice(["none"]));
+      assert.equal(parser.normalize?.("none"), "none");
+    });
+
+    it("should return unclaimed values unchanged", () => {
+      const parser = firstOf(macAddress(), choice(["none"]));
+      assert.equal(parser.normalize?.("not-a-mac"), "not-a-mac");
+    });
+  });
+
+  describe("suggest", () => {
+    it("should be undefined when no constituent suggests", () => {
+      const parser = firstOf(string(), integer());
+      assert.equal(parser.suggest, undefined);
+    });
+
+    it("should merge suggestions from all constituents in order", () => {
+      const parser = firstOf(
+        choice(["auto", "always"]),
+        choice(["all", "never"]),
+      );
+      const suggestions = [...parser.suggest?.("a") ?? []];
+      assert.deepEqual(
+        suggestions.map((s) => s.kind === "literal" ? s.text : s.kind),
+        ["auto", "always", "all"],
+      );
+    });
+
+    it("should deduplicate identical suggestions across constituents", () => {
+      const parser = firstOf(choice(["auto", "max"]), choice(["auto", "min"]));
+      const suggestions = [...parser.suggest?.("") ?? []];
+      assert.deepEqual(
+        suggestions.map((s) => s.kind === "literal" ? s.text : s.kind),
+        ["auto", "max", "min"],
+      );
+    });
+  });
+
+  describe("construction errors", () => {
+    it("should throw TypeError when fewer than two parsers are given", () => {
+      assert.throws(
+        // @ts-expect-error: firstOf() requires at least two parsers.
+        () => firstOf(integer()),
+        TypeError,
+      );
+      assert.throws(
+        // @ts-expect-error: firstOf() requires at least two parsers.
+        () => firstOf(integer(), { metavar: "COUNT" }),
+        TypeError,
+      );
+    });
+
+    it("should throw TypeError for non-parser arguments", () => {
+      assert.throws(
+        // @ts-expect-error: 42 is not a value parser.
+        () => firstOf(integer(), 42),
+        TypeError,
+      );
+    });
+
+    it("should throw TypeError for async constituents", () => {
+      const asyncParser: ValueParser<"async", string> = {
+        mode: "async",
+        metavar: "ASYNC",
+        placeholder: "",
+        parse: (input) => Promise.resolve({ success: true, value: input }),
+        format: (value) => value,
+      };
+      assert.throws(
+        // @ts-expect-error: firstOf() only accepts sync value parsers.
+        () => firstOf(string(), asyncParser),
+        TypeError,
+      );
     });
   });
 });

@@ -111,6 +111,25 @@ To be released.
     determine whether a child can finish without more CLI input.
     [[#819], [#820]]
 
+ -  Added an optional `validate()` method to the `ValueParser` interface.
+    When present, `option()` and `argument()` use it to validate fallback
+    values (e.g. from `bindEnv()`/`bindConfig()`) instead of the generic
+    `format()`+`parse()` round-trip, which cannot express validation
+    failures for value parsers whose constituents produce overlapping
+    string representations.  [[#821]]
+
+ -  Added `firstOf()` value parser combinator that tries multiple sync value
+    parsers in declaration order and returns the first successful result,
+    with the result type inferred as the union of the constituent types
+    (e.g., `firstOf(choice(["auto"]), integer({ min: 1 }))` produces
+    `"auto" | number`).  The default metavar joins the constituent metavars
+    with `|` and can be overridden via the `metavar` option.  Choices are
+    merged when every constituent enumerates them, completion suggestions
+    are merged and deduplicated across constituents, and `format()`,
+    `normalize()`, and `validate()` dispatch to the constituent that owns
+    the value.  When every constituent fails, the error lists each
+    constituent's error on its own line.  [[#821]]
+
 [Semantic Versioning 2.0.0]: https://semver.org/
 [#801]: https://github.com/dahlia/optique/issues/801
 [#802]: https://github.com/dahlia/optique/pull/802
@@ -126,6 +145,7 @@ To be released.
 [#817]: https://github.com/dahlia/optique/pull/817
 [#819]: https://github.com/dahlia/optique/issues/819
 [#820]: https://github.com/dahlia/optique/pull/820
+[#821]: https://github.com/dahlia/optique/issues/821
 [#823]: https://github.com/dahlia/optique/issues/823
 [#825]: https://github.com/dahlia/optique/pull/825
 
