@@ -6,7 +6,7 @@ Optique changelog
 Version 1.0.3
 -------------
 
-To be released.
+Released on June 10, 2026.
 
 ### @optique/temporal
 
