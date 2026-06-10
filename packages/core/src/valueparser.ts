@@ -9154,10 +9154,11 @@ function ownsRoundTrippedValue(
  * Structural equality for parsed CLI values: primitives compare with
  * `Object.is` (so `NaN` equals itself and `0` differs from `-0`, matching
  * the distinction `choice()` makes), `Date` and `URL` instances compare by
- * time value and href respectively, and arrays and plain objects compare
- * recursively.  Recursion is bounded by the structure of the second
- * argument, which in {@link firstOf} is always a freshly parsed (acyclic)
- * value.
+ * time value and href respectively, arrays and plain objects compare
+ * recursively, and other class instances compare by their overridden
+ * `toString()` serialization.  Recursion is bounded by the structure of
+ * the second argument, which in {@link firstOf} is always a freshly
+ * parsed (acyclic) value.
  */
 function valuesEqual(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
@@ -9176,6 +9177,40 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   }
   if (a instanceof URL || b instanceof URL) {
     return a instanceof URL && b instanceof URL && a.href === b.href;
+  }
+  const prototypeA = Object.getPrototypeOf(a);
+  const prototypeB = Object.getPrototypeOf(b);
+  // Object.prototype and null are the same "plain object" category:
+  // a null-prototype object (e.g. built with Object.create(null)) holds
+  // the same JSON-style data as an ordinary object literal.
+  const plainA = prototypeA === Object.prototype || prototypeA === null;
+  const plainB = prototypeB === Object.prototype || prototypeB === null;
+  if (plainA !== plainB) return false;
+  if (!plainA) {
+    if (prototypeA !== prototypeB) return false;
+    // Opaque (non-plain) objects such as Temporal instances can hold
+    // their state in private fields or internal slots that enumerable-key
+    // comparison cannot see, so two key-less objects of the same type are
+    // not necessarily equal.  Compare via their overridden toString()
+    // serialization, and treat objects without one as unequal.  Both
+    // sides must override it: an instance-level toString() on one side
+    // alone (e.g. on a freshly parsed value) must not equate it with an
+    // object that stringifies generically.
+    const toStringA = (a as { toString?: unknown }).toString;
+    const toStringB = (b as { toString?: unknown }).toString;
+    if (
+      typeof toStringA !== "function" ||
+      typeof toStringB !== "function" ||
+      toStringA === Object.prototype.toString ||
+      toStringB === Object.prototype.toString
+    ) {
+      return false;
+    }
+    try {
+      return String(a) === String(b);
+    } catch {
+      return false;
+    }
   }
   const aKeys = Object.keys(a);
   const bKeys = Object.keys(b);

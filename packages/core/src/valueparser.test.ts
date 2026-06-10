@@ -18709,6 +18709,106 @@ describe("firstOf", () => {
       assert.equal(valid.value, 5);
     });
 
+    it("should not let an opaque-object branch claim another's value", () => {
+      // Mimics firstOf(instant(), zonedDateTime()): both value types are
+      // class instances without enumerable own keys, and the instant-like
+      // parser lossily accepts the zoned string form by stripping the
+      // time zone annotation.  Ownership comparison must not treat two
+      // key-less objects of different types as equal.
+      class FakeInstant {
+        readonly #iso: string;
+        constructor(iso: string) {
+          this.#iso = iso;
+        }
+        toString(): string {
+          return this.#iso;
+        }
+      }
+      class FakeZonedDateTime {
+        readonly #iso: string;
+        readonly #zone: string;
+        constructor(iso: string, zone: string) {
+          this.#iso = iso;
+          this.#zone = zone;
+        }
+        toString(): string {
+          return `${this.#iso}[${this.#zone}]`;
+        }
+      }
+      const instant: ValueParser<"sync", FakeInstant> = {
+        mode: "sync",
+        metavar: "INSTANT",
+        placeholder: new FakeInstant("1970-01-01T00:00:00Z"),
+        parse: (input) => ({
+          success: true,
+          value: new FakeInstant(input.replace(/\[[^\]]*\]$/, "")),
+        }),
+        format: (value) => value.toString(),
+      };
+      const zoned: ValueParser<"sync", FakeZonedDateTime> = {
+        mode: "sync",
+        metavar: "ZONED",
+        placeholder: new FakeZonedDateTime("1970-01-01T00:00:00Z", "UTC"),
+        parse: (input) => {
+          const match = /^(.+)\[([^\]]+)\]$/.exec(input);
+          return match == null
+            ? {
+              success: false,
+              error: message`Expected a time zone annotation.`,
+            }
+            : {
+              success: true,
+              value: new FakeZonedDateTime(match[1], match[2]),
+            };
+        },
+        format: (value) => value.toString(),
+      };
+      const parser = firstOf(instant, zoned);
+      const value = new FakeZonedDateTime("2024-01-01T00:00:00Z", "Asia/Seoul");
+      const result = parser.validate?.(value);
+      assert.ok(result?.success);
+      assert.ok(result.value instanceof FakeZonedDateTime);
+      assert.equal(String(result.value), "2024-01-01T00:00:00Z[Asia/Seoul]");
+    });
+
+    it("should not equate objects when only one side overrides toString()", () => {
+      // Same-prototype opaque objects compare by their toString()
+      // serialization, but only when *both* sides override it: an
+      // instance-level override on the round-tripped value alone must
+      // not make it equal to a value that stringifies generically.
+      class Opaque {}
+      const claiming: ValueParser<"sync", Opaque> = {
+        mode: "sync",
+        metavar: "OPAQUE",
+        placeholder: new Opaque(),
+        parse: (input) => {
+          const value = new Opaque();
+          Object.defineProperty(value, "toString", { value: () => input });
+          return { success: true, value };
+        },
+        format: (value) => String(value),
+      };
+      const parser = firstOf(claiming, choice(["none"]));
+      const result = parser.validate?.(new Opaque());
+      assert.ok(result);
+      assert.ok(!result.success);
+    });
+
+    it("should accept null-prototype objects as plain objects", () => {
+      // JSON values built with Object.create(null) format to the same
+      // JSON text as ordinary object literals and parse back as ordinary
+      // objects; ownership comparison must not distinguish the two
+      // prototypes.
+      const parser = firstOf(json({ rootType: "object" }), choice(["none"]));
+      const value: Record<string, number> = Object.assign(
+        Object.create(null),
+        { a: 1 },
+      );
+      const result = parser.validate?.(value);
+      assert.ok(result?.success);
+      assert.deepEqual(result.value, { a: 1 });
+    });
+
     it("should consult a constituent's validate() for shadowed values", () => {
       // The inner firstOf() cannot round-trip the shadowed integer 1
       // through format()+parse() (the string "1" goes to its choice()
