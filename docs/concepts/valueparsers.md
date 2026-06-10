@@ -647,7 +647,10 @@ const count = firstOf(choice(["auto"]), integer({ min: 1 }), {
 > [!NOTE]
 > `firstOf()` only supports synchronous value parsers.  Passing an async
 > value parser (such as the Git parsers from *@optique/git*) throws a
-> `TypeError` at construction time.
+> `TypeError` at construction time.  Dependency-derived value parsers
+> (created via `deriveFrom()` or `dependency().derive()`) are rejected the
+> same way: invoked through `firstOf()` they would parse with default
+> dependency values instead of the ones resolved during the current parse.
 
 
 `json()` parser

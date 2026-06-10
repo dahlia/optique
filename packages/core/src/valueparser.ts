@@ -8,6 +8,7 @@ import {
   text,
   valueSet,
 } from "./message.ts";
+import { isDerivedValueParser } from "./internal/dependency.ts";
 import { ensureNonEmptyString, type NonEmptyString } from "./nonempty.ts";
 import type { Mode, ModeIterable, ModeValue, Suggestion } from "./parser.ts";
 import { deduplicateSuggestions } from "./suggestion.ts";
@@ -8762,6 +8763,8 @@ type ValueParserValue<P> = P extends ValueParser<"sync", infer T> ? T : never;
  * @returns A {@link ValueParser} that accepts values matching any of the
  *          constituent parsers.
  * @throws {TypeError} If any constituent is not a sync value parser.
+ * @throws {TypeError} If any constituent is a dependency-derived value
+ *         parser (created via `deriveFrom()` or `dependency().derive()`).
  * @since 1.1.0
  */
 export function firstOf<TA, TB>(
@@ -8783,6 +8786,8 @@ export function firstOf<TA, TB>(
  * @returns A {@link ValueParser} that accepts values matching any of the
  *          constituent parsers.
  * @throws {TypeError} If any constituent is not a sync value parser.
+ * @throws {TypeError} If any constituent is a dependency-derived value
+ *         parser (created via `deriveFrom()` or `dependency().derive()`).
  * @since 1.1.0
  */
 export function firstOf<TA, TB, TC>(
@@ -8807,6 +8812,8 @@ export function firstOf<TA, TB, TC>(
  * @returns A {@link ValueParser} that accepts values matching any of the
  *          constituent parsers.
  * @throws {TypeError} If any constituent is not a sync value parser.
+ * @throws {TypeError} If any constituent is a dependency-derived value
+ *         parser (created via `deriveFrom()` or `dependency().derive()`).
  * @since 1.1.0
  */
 export function firstOf<TA, TB, TC, TD>(
@@ -8834,6 +8841,8 @@ export function firstOf<TA, TB, TC, TD>(
  * @returns A {@link ValueParser} that accepts values matching any of the
  *          constituent parsers.
  * @throws {TypeError} If any constituent is not a sync value parser.
+ * @throws {TypeError} If any constituent is a dependency-derived value
+ *         parser (created via `deriveFrom()` or `dependency().derive()`).
  * @since 1.1.0
  */
 export function firstOf<TA, TB, TC, TD, TE>(
@@ -8853,6 +8862,8 @@ export function firstOf<TA, TB, TC, TD, TE>(
  * @returns A {@link ValueParser} that accepts values matching any of the
  *          constituent parsers.
  * @throws {TypeError} If any constituent is not a sync value parser.
+ * @throws {TypeError} If any constituent is a dependency-derived value
+ *         parser (created via `deriveFrom()` or `dependency().derive()`).
  * @since 1.1.0
  */
 export function firstOf<
@@ -8873,6 +8884,8 @@ export function firstOf<
  * @returns A {@link ValueParser} that accepts values matching any of the
  *          constituent parsers.
  * @throws {TypeError} If any constituent is not a sync value parser.
+ * @throws {TypeError} If any constituent is a dependency-derived value
+ *         parser (created via `deriveFrom()` or `dependency().derive()`).
  * @since 1.1.0
  */
 export function firstOf<
@@ -8926,6 +8939,18 @@ export function firstOf(
       throw new TypeError(
         "firstOf() only supports sync value parsers, " +
           "but an async one was given.",
+      );
+    }
+    // A dependency-derived value parser parses with *default* dependency
+    // values when invoked directly, and firstOf() cannot forward the
+    // derived metadata that option()/argument() use to re-run it with the
+    // dependency values resolved during the current parse.  Accepting one
+    // would silently validate against the wrong branch.
+    if (isDerivedValueParser(parser)) {
+      throw new TypeError(
+        "firstOf() does not support dependency-derived value parsers " +
+          "(created via deriveFrom() or dependency().derive()); pass the " +
+          "derived parser directly to option() or argument() instead.",
       );
     }
   }

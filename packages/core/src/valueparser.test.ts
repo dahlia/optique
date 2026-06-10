@@ -42,6 +42,7 @@ import {
   text,
   values,
 } from "@optique/core/message";
+import { dependency } from "#src/dependency.ts";
 import { argument, option } from "#src/primitives.ts";
 import { withDefault } from "#src/modifiers.ts";
 import { parse } from "#src/parser.ts";
@@ -19006,6 +19007,23 @@ describe("firstOf", () => {
         () => firstOf(integer(), 42),
         TypeError,
       );
+    });
+
+    it("should throw TypeError for dependency-derived constituents", () => {
+      // A derived value parser parses with *default* dependency values when
+      // called directly, and firstOf() cannot forward the derived metadata
+      // that option()/argument() use to re-run it with live values, so
+      // accepting one would silently validate against the wrong branch.
+      const mode = dependency(choice(["dev", "prod"]));
+      const derived = mode.derive({
+        metavar: "LEVEL",
+        mode: "sync",
+        factory: (m) =>
+          choice(m === "dev" ? ["debug", "info"] : ["warn", "error"]),
+        defaultValue: () => "dev",
+      });
+      assert.throws(() => firstOf(derived, choice(["auto"])), TypeError);
+      assert.throws(() => firstOf(choice(["auto"]), derived), TypeError);
     });
 
     it("should throw TypeError for async constituents", () => {
