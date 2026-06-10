@@ -22,7 +22,7 @@
       "dependencies": [
         "build"
       ],
-      "command": "node --experimental-transform-types --test"
+      "command": "node --test"
     },
     "test:bun": {
       "dependencies": [

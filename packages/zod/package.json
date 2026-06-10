@@ -69,12 +69,12 @@
     "build": "tsdown",
     "prepack": "tsdown",
     "prepublish": "tsdown",
-    "test": "node --experimental-transform-types --test",
+    "test": "node --test",
     "test:bun": "bun test",
     "test:deno": "deno test",
     "test:zod3": "cp package.json .package.json.bak && pnpm add -D zod@^3.25.0 && pnpm test && mv .package.json.bak package.json && pnpm install",
     "test:zod4": "cp package.json .package.json.bak && pnpm add -D zod@^4.0.0 && pnpm test && mv .package.json.bak package.json && pnpm install",
     "test:all-versions": "pnpm run test:zod3 && pnpm run test:zod4",
-    "test-all": "tsdown && node --experimental-transform-types --test && bun test && deno test"
+    "test-all": "tsdown && node --test && bun test && deno test"
   }
 }

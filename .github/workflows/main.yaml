@@ -23,7 +23,10 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - uses: jdx/mise-action@v4
-    - run: mise run install
+      with:
+        experimental: true
+        install: true
+        log_level: ${{ runner.debug == '1' && 'debug' || 'info' }}
     - run: mise run check
 
   test-deno:
@@ -31,16 +34,12 @@ jobs:
     timeout-minutes: 10
     steps:
     - uses: actions/checkout@v6
-    - run: |
-        wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
-        sudo dpkg -i packages-microsoft-prod.deb
-        sudo mkdir -p /etc/apt/keyrings
-        curl -fsSL https://apt.fury.io/nushell/gpg.key | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/fury-nushell.gpg
-        echo "deb https://apt.fury.io/nushell/ /" | sudo tee /etc/apt/sources.list.d/fury.list
-        sudo apt-get update
-        sudo apt-get install -y fish nushell powershell zsh
+    - run: sudo apt-get install -y zsh
     - uses: jdx/mise-action@v4
-    - run: mise run install
+      with:
+        experimental: true
+        install: true
+        log_level: ${{ runner.debug == '1' && 'debug' || 'info' }}
     - run: deno task test --coverage --junit-path=junit.xml
     - if: ${{ !cancelled() }}
       uses: codecov/codecov-action@v6
@@ -58,16 +57,12 @@ jobs:
     timeout-minutes: 10
     steps:
     - uses: actions/checkout@v6
-    - run: |
-        wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
-        sudo dpkg -i packages-microsoft-prod.deb
-        sudo mkdir -p /etc/apt/keyrings
-        curl -fsSL https://apt.fury.io/nushell/gpg.key | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/fury-nushell.gpg
-        echo "deb https://apt.fury.io/nushell/ /" | sudo tee /etc/apt/sources.list.d/fury.list
-        sudo apt-get update
-        sudo apt-get install -y fish nushell powershell zsh
+    - run: sudo apt-get install -y zsh
     - uses: jdx/mise-action@v4
-    - run: mise run install
+      with:
+        experimental: true
+        install: true
+        log_level: ${{ runner.debug == '1' && 'debug' || 'info' }}
     - run: mise run test:node
 
   test-bun:
@@ -75,16 +70,12 @@ jobs:
     timeout-minutes: 10
     steps:
     - uses: actions/checkout@v6
-    - run: |
-        wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
-        sudo dpkg -i packages-microsoft-prod.deb
-        sudo mkdir -p /etc/apt/keyrings
-        curl -fsSL https://apt.fury.io/nushell/gpg.key | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/fury-nushell.gpg
-        echo "deb https://apt.fury.io/nushell/ /" | sudo tee /etc/apt/sources.list.d/fury.list
-        sudo apt-get update
-        sudo apt-get install -y fish nushell powershell zsh
+    - run: sudo apt-get install -y zsh
     - uses: jdx/mise-action@v4
-    - run: mise run install
+      with:
+        experimental: true
+        install: true
+        log_level: ${{ runner.debug == '1' && 'debug' || 'info' }}
     - run: mise run test:bun
 
   publish:
@@ -97,11 +88,14 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - uses: jdx/mise-action@v4
-    - run: mise run install
+      with:
+        experimental: true
+        install: true
+        log_level: ${{ runner.debug == '1' && 'debug' || 'info' }}
     - run: |
         set -ex
         if [[ "$GITHUB_REF_TYPE" == tag ]]; then
-          mise run check-versions
+        mise run check:versions
           [[ "$(jq -r '.version' packages/core/deno.json)" == "$GITHUB_REF_NAME" ]]
         else
           jq \
@@ -110,7 +104,7 @@ jobs:
             '.version = .version + "-dev." + $build + "+" + $commit' \
             packages/core/deno.json > /tmp/deno.json
           mv /tmp/deno.json packages/core/deno.json
-          mise run check-versions --fix
+          mise run check:versions --fix
         fi
     - run: |
         set -ex
@@ -146,7 +140,10 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - uses: jdx/mise-action@v4
-    - run: mise run install
+      with:
+        experimental: true
+        install: true
+        log_level: ${{ runner.debug == '1' && 'debug' || 'info' }}
     - run: |
         set -ex
         if [[ "$GITHUB_REF_TYPE" = "tag" ]]; then

@@ -1,30 +1,63 @@
 [tools]
+"aqua:fish-shell/fish-shell" = "latest"
 bun = "1.3"
 deno = "2.8"
-node = "24"
-"npm:pnpm" = "^11.0.9"
+"github:PowerShell/PowerShell" = "latest"
+"github:nushell/nushell" = "latest"
+"github:pnpm/pnpm" = "11"
+node = "26"
 
-[tasks.deps]
-alias = "install"
-description = "Install all dependencies and update the lockfiles"
-run = "deno task install"
+[tools."github:dahlia/hongdown"]
+version = "0.4"
+
+[tools."github:dahlia/hongdown".platforms]
+linux-x64 = "hongdown-*-x86_64-unknown-linux-musl.tar.bz2"
+linux-arm64 = "hongdown-*-aarch64-unknown-linux-musl.tar.bz2"
+
+[hooks]
+postinstall = "deno install && pnpm install && mise generate git-pre-commit --task check --write"
 
 [tasks.check]
 description = "Check code formatting, linting, and type checking"
-run = "deno task check"
+depends = ["check:*"]
 
-[tasks.check-versions]
+[tasks."check:versions"]
 description = "Check that all subpackages have matching versions"
 usage = '''
 flag "--fix" help="Automatically fix version mismatches"
 '''
+shell = "nu -c"
 run = '''
-if [ "${usage_fix}" = "true" ]; then
+if $env.usage_fix? == "true" {
   deno task check-versions --fix
-else
+} else {
   deno task check-versions
-fi
+}
 '''
+
+[tasks."check:type"]
+description = "Check TypeScript code"
+run = "deno check"
+
+[tasks."check:lint"]
+description = "Check lint"
+run = "deno lint"
+
+[tasks."check:fmt"]
+description = "Check source format (except for Markdown docs)"
+run = "deno fmt --check"
+
+[tasks."check:fmt-md"]
+description = "Check Markdown docs format"
+run = "hongdown --check"
+
+[tasks."check:publish"]
+description = "Check if publishing is ready"
+run = "deno publish --dry-run --allow-dirty"
+
+[tasks.fmt]
+description = "Format source files"
+run = ["deno fmt", "hongdown --write", "mise fmt"]
 
 [tasks."test:deno"]
 description = "Run the test suite using Deno"
@@ -33,12 +66,12 @@ run = "deno task test"
 [tasks."test:node"]
 description = "Run the test suite using Node.js"
 depends = ["build"]
-run = "deno task test:node"
+run = "pnpm run -r test"
 
 [tasks."test:bun"]
 description = "Run the test suite using Bun"
 depends = ["build"]
-run = "deno task test:bun"
+run = "pnpm run -r test:bun"
 
 [tasks.test]
 description = "Run the test suite across all environments"
@@ -50,8 +83,8 @@ run = "pnpm run --filter '!{docs}' -r build"
 
 [tasks.coverage]
 description = "Measure test coverage"
-run = """
-deno test --allow-read --allow-write --allow-run --allow-env --allow-net --allow-sys --allow-ffi --env-file=.env.test --coverage=coverage/raw
-deno coverage coverage/raw --lcov --include="packages/" > coverage/lcov.info
-deno coverage coverage/raw --include="packages/"
-"""
+run = [
+  "deno test --allow-read --allow-write --allow-run --allow-env --allow-net --allow-sys --allow-ffi --env-file=.env.test --coverage=coverage/raw",
+  'deno coverage coverage/raw --lcov --include="packages/" --output=coverage/lcov.info',
+  'deno coverage coverage/raw --include="packages/"',
+]
