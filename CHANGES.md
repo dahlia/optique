@@ -8,6 +8,14 @@ Version 1.0.3
 
 To be released.
 
+### @optique/temporal
+
+ -  Fixed `timeZone()` accepting single-segment timezone aliases that are not
+    actually available across all supported runtimes.  The `TimeZone` type and
+    parser now reject `CET`, `MET`, `WET`, `EET`, `EST5EDT`, `CST6CDT`,
+    `MST7MDT`, and `PST8PDT`, matching Linux Bun's `Intl` and Temporal
+    behavior.
+
 
 Version 1.0.2
 -------------

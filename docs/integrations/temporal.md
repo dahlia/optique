@@ -315,6 +315,13 @@ Single-segment identifiers are matched case-insensitively and normalized to
 their canonical casing, so inputs like `utc`, `gmt`, and `japan` parse as
 `"UTC"`, `"GMT"`, and `"Japan"`.
 
+Some timezone database aliases are not accepted by every supported runtime.
+For example, Bun on Linux rejects aliases such as `CET`, `MET`, `WET`, `EET`,
+`EST5EDT`, `CST6CDT`, `MST7MDT`, and `PST8PDT`, so `timeZone()` rejects them
+for consistent cross-runtime behavior.  Prefer canonical IANA identifiers
+such as `Europe/Paris` or `America/New_York` when you need regional timezone
+rules.
+
 
 Error messages
 --------------

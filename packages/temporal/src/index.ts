@@ -26,7 +26,7 @@ function ensureTemporal(): void {
  * - Three-level: `"America/Argentina/Buenos_Aires"`,
  *   `"America/Kentucky/Louisville"`
  * - Standard single-segment: `"UTC"`, `"GMT"`, `"Universal"`
- * - POSIX abbreviations: `"EST"`, `"CET"`, `"EST5EDT"`
+ * - Fixed-offset abbreviations: `"EST"`, `"MST"`, `"HST"`
  * - Deprecated aliases: `"Japan"`, `"Singapore"`, `"Cuba"`
  *
  * @example
@@ -784,14 +784,6 @@ const singleSegmentTimeZoneList = [
   "EST",
   "MST",
   "HST",
-  "CET",
-  "MET",
-  "WET",
-  "EET",
-  "EST5EDT",
-  "CST6CDT",
-  "MST7MDT",
-  "PST8PDT",
   "Cuba",
   "Egypt",
   "Eire",
