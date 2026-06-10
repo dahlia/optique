@@ -68,11 +68,19 @@
       "require": "./dist/valueparser.cjs"
     }
   },
+  "imports": {
+    "#src/*.ts": {
+      "node": "./dist/*.js",
+      "default": "./src/*.ts"
+    }
+  },
   "sideEffects": false,
   "dependencies": {
     "@optique/core": "workspace:*"
   },
   "devDependencies": {
+    "@optique/config": "workspace:*",
+    "@optique/env": "workspace:*",
     "@types/node": "catalog:",
     "fast-check": "catalog:",
     "tsdown": "catalog:",

@@ -19,9 +19,9 @@ import {
   pwsh,
   type ShellCompletion,
   zsh,
-} from "./completion.ts";
-import type { Suggestion } from "./parser.ts";
-import { lineBreak, message, text } from "./message.ts";
+} from "#src/completion.ts";
+import type { Suggestion } from "#src/parser.ts";
+import { lineBreak, message, text } from "#src/message.ts";
 
 // Helper functions for shell availability and testing
 function getStdoutFromExecError(error: unknown): string | undefined {

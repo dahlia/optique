@@ -6,9 +6,9 @@ import {
   getTraits,
   mapSourceMetadata,
   type ParserSourceMetadata,
-} from "./extension.ts";
-import { message } from "./message.ts";
-import type { Parser } from "./parser.ts";
+} from "#src/extension.ts";
+import { message } from "#src/message.ts";
+import type { Parser } from "#src/parser.ts";
 
 function createTestParser(
   dependencyMetadata?: Parser<"sync", unknown, unknown>["dependencyMetadata"],

@@ -54,6 +54,12 @@
       "require": "./dist/index.cjs"
     }
   },
+  "imports": {
+    "#src/*.ts": {
+      "node": "./dist/*.js",
+      "default": "./src/*.ts"
+    }
+  },
   "sideEffects": false,
   "peerDependencies": {
     "@standard-schema/spec": "catalog:"

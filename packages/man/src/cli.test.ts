@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import process from "node:process";
-import { formatDateForMan } from "./man.ts";
+import { formatDateForMan } from "#src/man.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = join(__dirname, "..", "test", "fixtures");

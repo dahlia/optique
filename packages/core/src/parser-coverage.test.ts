@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { getAnnotations } from "./annotations.ts";
-import { message } from "./message.ts";
+import { getAnnotations } from "#src/annotations.ts";
+import { message } from "#src/message.ts";
 import {
   getDocPage,
   getDocPageAsync,
@@ -15,9 +15,9 @@ import {
   suggestAsync,
   type Suggestion,
   suggestSync,
-} from "./parser.ts";
-import { command, constant } from "./primitives.ts";
-import { or } from "./constructs.ts";
+} from "#src/parser.ts";
+import { command, constant } from "#src/primitives.ts";
+import { or } from "#src/constructs.ts";
 
 describe("parser.ts coverage branches", () => {
   it("dispatches parse() and suggest() by parser mode", async () => {

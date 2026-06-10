@@ -15,17 +15,17 @@ import {
   type Suggestion,
   suggestSync,
   withDefault,
-} from "./index.ts";
+} from "#src/index.ts";
 import {
   choice,
   integer,
   string,
   type ValueParser,
   type ValueParserResult,
-} from "./valueparser.ts";
-import { message } from "./message.ts";
-import type { NonEmptyString } from "./nonempty.ts";
-import { suggestAsync } from "./parser.ts";
+} from "#src/valueparser.ts";
+import { message } from "#src/message.ts";
+import type { NonEmptyString } from "#src/nonempty.ts";
+import { suggestAsync } from "#src/parser.ts";
 
 // Helper function to extract text from suggestions
 function extractText(suggestion: Suggestion): string {

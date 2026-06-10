@@ -528,7 +528,12 @@ describe("valibot()", () => {
       // Non-plain object whose String() is not "[object Object]" uses the
       // toString() result directly (line 746 branch).
       class NamedValue {
-        constructor(private name: string) {}
+        private readonly name: string;
+
+        constructor(name: string) {
+          this.name = name;
+        }
+
         toString() {
           return this.name;
         }

@@ -15,11 +15,11 @@ import {
   object,
   or,
   tuple,
-} from "./constructs.ts";
-import { map, multiple, optional, withDefault } from "./modifiers.ts";
-import { formatDocPage } from "./doc.ts";
-import { runParser, runParserAsync, runParserSync } from "./facade.ts";
-import { message } from "./message.ts";
+} from "#src/constructs.ts";
+import { map, multiple, optional, withDefault } from "#src/modifiers.ts";
+import { formatDocPage } from "#src/doc.ts";
+import { runParser, runParserAsync, runParserSync } from "#src/facade.ts";
+import { message } from "#src/message.ts";
 import {
   getDocPage,
   getDocPageAsync,
@@ -29,16 +29,16 @@ import {
   suggestAsync,
   type Suggestion,
   suggestSync,
-} from "./parser.ts";
-import { argument, command, constant, flag, option } from "./primitives.ts";
-import { formatUsage } from "./usage.ts";
+} from "#src/parser.ts";
+import { argument, command, constant, flag, option } from "#src/primitives.ts";
+import { formatUsage } from "#src/usage.ts";
 import {
   choice,
   integer,
   string,
   type ValueParser,
   type ValueParserResult,
-} from "./valueparser.ts";
+} from "#src/valueparser.ts";
 
 // =============================================================================
 // Test Helpers - Async ValueParsers
@@ -2251,7 +2251,7 @@ describe("Error propagation in complex async structures", () => {
 // passThrough() with async combinations
 // =============================================================================
 
-import { passThrough } from "./primitives.ts";
+import { passThrough } from "#src/primitives.ts";
 
 describe("passThrough() with async combinations", () => {
   it("should propagate async mode when combined with async parsers", () => {

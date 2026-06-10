@@ -8,7 +8,7 @@ import {
   validateMetaNameCollisions,
   validateOptionNames,
   validateProgramName,
-} from "./validate.ts";
+} from "#src/validate.ts";
 
 describe("escapeControlChars", () => {
   it("should escape ASCII control characters", () => {

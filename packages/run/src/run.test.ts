@@ -26,8 +26,8 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";
 import { describe, it } from "node:test";
-import { bindConfig, createConfigContext } from "../../config/src/index.ts";
-import { bindEnv, createEnvContext } from "../../env/src/index.ts";
+import { bindConfig, createConfigContext } from "@optique/config";
+import { bindEnv, createEnvContext } from "@optique/env";
 
 const TEST_DIR = join(import.meta.dirname ?? ".", "test-configs");
 const propertyParameters = { numRuns: 200 } as const;

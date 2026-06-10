@@ -19,7 +19,7 @@ import {
   gitRemote,
   gitRemoteBranch,
   gitTag,
-} from "./index.ts";
+} from "#src/index.ts";
 
 async function createTestRepo(): Promise<string> {
   const testRepoDir = await fs.mkdtemp(join(tmpdir(), "optique-git-test-"));

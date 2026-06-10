@@ -4,20 +4,20 @@
  */
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
-import { dependency, deriveFrom } from "./internal/dependency.ts";
+import { dependency, deriveFrom } from "#src/internal/dependency.ts";
 import {
   getDocPage,
   parseAsync,
   parseSync,
   suggestAsync,
   type Suggestion,
-} from "./parser.ts";
+} from "#src/parser.ts";
 import {
   choice,
   string,
   type ValueParser,
   type ValueParserResult,
-} from "./valueparser.ts";
+} from "#src/valueparser.ts";
 import {
   concat,
   conditional,
@@ -27,7 +27,7 @@ import {
   object,
   or,
   tuple,
-} from "./constructs.ts";
+} from "#src/constructs.ts";
 import {
   argument,
   command,
@@ -35,13 +35,13 @@ import {
   flag,
   option,
   passThrough,
-} from "./primitives.ts";
-import { integer } from "./valueparser.ts";
-import { map, multiple, optional, withDefault } from "./modifiers.ts";
-import { formatUsage } from "./usage.ts";
-import { bash, fish, zsh } from "./completion.ts";
-import type { NonEmptyString } from "./nonempty.ts";
-import { message } from "./message.ts";
+} from "#src/primitives.ts";
+import { integer } from "#src/valueparser.ts";
+import { map, multiple, optional, withDefault } from "#src/modifiers.ts";
+import { formatUsage } from "#src/usage.ts";
+import { bash, fish, zsh } from "#src/completion.ts";
+import type { NonEmptyString } from "#src/nonempty.ts";
+import { message } from "#src/message.ts";
 
 // =============================================================================
 // Test Helpers: Async Value Parsers
@@ -4190,7 +4190,7 @@ import {
   transformsDependencyValue,
   transformsDependencyValueMarker,
   wrappedDependencySourceMarker,
-} from "./internal/dependency.ts";
+} from "#src/internal/dependency.ts";
 
 describe("Internal type guards and factory functions", () => {
   describe("isDependencySourceState()", () => {

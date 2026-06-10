@@ -6,6 +6,9 @@
     ".": "./src/index.ts",
     "./command": "./src/command.ts"
   },
+  "imports": {
+    "#src/": "./src/"
+  },
   "exclude": [
     "dist/",
     "node_modules",

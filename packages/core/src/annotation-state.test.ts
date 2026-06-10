@@ -2,12 +2,12 @@ import {
   type Annotations,
   getAnnotations,
   injectAnnotations,
-} from "./internal/annotations.ts";
-import { message } from "./message.ts";
+} from "#src/internal/annotations.ts";
+import { message } from "#src/message.ts";
 import {
   defineInheritedAnnotationParser,
   type Parser,
-} from "./internal/parser.ts";
+} from "#src/internal/parser.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
@@ -18,7 +18,7 @@ import {
   normalizeDelegatedAnnotationState,
   normalizeInjectedAnnotationState,
   normalizeNestedDelegatedAnnotationState,
-} from "./annotation-state.ts";
+} from "#src/annotation-state.ts";
 
 function createInheritedTestParser(): Parser<"sync", unknown, unknown> {
   const parser: Parser<"sync", unknown, unknown> = {

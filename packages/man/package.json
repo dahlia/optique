@@ -79,6 +79,12 @@
       "require": "./dist/cli.cjs"
     }
   },
+  "imports": {
+    "#src/*.ts": {
+      "node": "./dist/*.js",
+      "default": "./src/*.ts"
+    }
+  },
   "sideEffects": false,
   "bin": {
     "optique-man": "./dist/cli.js"

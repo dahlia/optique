@@ -13,11 +13,11 @@ import {
   isInjectedAnnotationWrapper,
   unwrapInjectedAnnotationState,
   unwrapInjectedAnnotationWrapper,
-} from "./internal/annotations.ts";
+} from "#src/internal/annotations.ts";
 
 describe("getAnnotations", () => {
   it("should not expose internal wrapper key set", async () => {
-    const annotationsModule = await import("./internal/annotations.ts");
+    const annotationsModule = await import("#src/internal/annotations.ts");
 
     assert.ok(!Object.hasOwn(annotationsModule, "annotationWrapperKeys"));
   });

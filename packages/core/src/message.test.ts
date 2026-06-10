@@ -17,11 +17,11 @@ import {
   value,
   values,
   valueSet,
-} from "./message.ts";
+} from "#src/message.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as fc from "fast-check";
-import { getDisplayWidth } from "./displaywidth.ts";
+import { getDisplayWidth } from "#src/displaywidth.ts";
 
 describe("message template function", () => {
   it("should create message with text only", () => {

@@ -12,7 +12,7 @@ import {
 import { message, valueSet } from "@optique/core/message";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { getDisplayWidth } from "./displaywidth.ts";
+import { getDisplayWidth } from "#src/displaywidth.ts";
 
 describe("formatDocPage", () => {
   it("should format a minimal page with only sections", () => {

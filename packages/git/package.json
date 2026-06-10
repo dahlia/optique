@@ -55,6 +55,12 @@
       "require": "./dist/index.cjs"
     }
   },
+  "imports": {
+    "#src/*.ts": {
+      "node": "./dist/*.js",
+      "default": "./src/*.ts"
+    }
+  },
   "sideEffects": false,
   "dependencies": {
     "@logtape/logtape": "catalog:",

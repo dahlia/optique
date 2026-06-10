@@ -16,8 +16,8 @@ import { integer, string } from "@optique/core/valueparser";
 import { optional, withDefault } from "@optique/core/modifiers";
 import { runWith, runWithSync } from "@optique/core/facade";
 import type { OptionName } from "@optique/core/usage";
-import { bindConfig, createConfigContext } from "./index.ts";
-import type { ConfigMeta } from "./index.ts";
+import { bindConfig, createConfigContext } from "#src/index.ts";
+import type { ConfigMeta } from "#src/index.ts";
 
 const TEST_DIR = join(
   import.meta.dirname ?? ".",

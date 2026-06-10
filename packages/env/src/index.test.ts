@@ -39,12 +39,12 @@ import {
   option,
 } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
-import { bindConfig, createConfigContext } from "../../config/src/index.ts";
+import { bindConfig, createConfigContext } from "@optique/config";
 import {
   collectExplicitSourceValues,
   createDependencyRuntimeContext,
-} from "../../core/src/dependency-runtime.ts";
-import { bindEnv, bool, createEnvContext } from "./index.ts";
+} from "@optique/core/dependency-runtime";
+import { bindEnv, bool, createEnvContext } from "#src/index.ts";
 
 const sourcePath = fileURLToPath(new URL("./index.ts", import.meta.url));
 const propertyParameters = { numRuns: 200 } as const;

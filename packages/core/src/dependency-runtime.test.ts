@@ -23,8 +23,8 @@ import {
   resolveStateWithRuntime,
   resolveStateWithRuntimeAsync,
   type RuntimeNode,
-} from "./dependency-runtime.ts";
-import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
+} from "#src/dependency-runtime.ts";
+import type { ParserDependencyMetadata } from "#src/dependency-metadata.ts";
 import {
   createDeferredParseState,
   createDependencySourceState,
@@ -37,11 +37,11 @@ import {
   derivedValueParserMarker,
   isDependencySourceState,
   parseWithDependency,
-} from "./internal/dependency.ts";
-import { formatMessage, message } from "./message.ts";
-import { unmatchedNonCliDependencySourceStateMarker } from "./internal/parser.ts";
-import type { DependencyRegistryLike } from "./registry-types.ts";
-import type { ValueParserResult } from "./valueparser.ts";
+} from "#src/internal/dependency.ts";
+import { formatMessage, message } from "#src/message.ts";
+import { unmatchedNonCliDependencySourceStateMarker } from "#src/internal/parser.ts";
+import type { DependencyRegistryLike } from "#src/registry-types.ts";
+import type { ValueParserResult } from "#src/valueparser.ts";
 
 // =============================================================================
 // DependencyRuntimeContext

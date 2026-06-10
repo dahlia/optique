@@ -15,16 +15,16 @@ import {
   isDependencySourceState,
   parseWithDependency,
   suggestWithDependency,
-} from "./internal/dependency.ts";
-import { choice } from "./valueparser.ts";
-import type { NonEmptyString } from "./nonempty.ts";
+} from "#src/internal/dependency.ts";
+import { choice } from "#src/valueparser.ts";
+import type { NonEmptyString } from "#src/nonempty.ts";
 import {
   composeDependencyMetadata,
   extractDependencyMetadata,
   type ParserDependencyMetadata,
-} from "./dependency-metadata.ts";
-import { message } from "./message.ts";
-import type { Suggestion } from "./parser.ts";
+} from "#src/dependency-metadata.ts";
+import { message } from "#src/message.ts";
+import type { Suggestion } from "#src/parser.ts";
 
 // =============================================================================
 // Shared test fixtures

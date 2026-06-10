@@ -21,7 +21,7 @@ import {
   logLevel,
   logOutput,
   verbosity,
-} from "./index.ts";
+} from "#src/index.ts";
 
 describe("logLevel()", () => {
   describe("parsing", () => {

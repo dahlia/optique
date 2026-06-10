@@ -5,7 +5,7 @@ import {
   formatDocPageAsMan,
   formatUsageTermAsRoff,
   type ManPageOptions,
-} from "./man.ts";
+} from "#src/man.ts";
 import type { DocPage, DocSection } from "@optique/core/doc";
 import type { Usage, UsageTerm } from "@optique/core/usage";
 import { message, valueSet } from "@optique/core/message";

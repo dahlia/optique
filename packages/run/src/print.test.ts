@@ -1,6 +1,6 @@
 import { message, metavar, optionName, values } from "@optique/core/message";
-import { createPrinter, print, printError } from "./print.ts";
-import type { PrintErrorOptions, PrintOptions } from "./print.ts";
+import { createPrinter, print, printError } from "#src/print.ts";
+import type { PrintErrorOptions, PrintOptions } from "#src/print.ts";
 import assert from "node:assert/strict";
 import process from "node:process";
 import { describe, it } from "node:test";

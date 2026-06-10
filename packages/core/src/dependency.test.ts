@@ -19,26 +19,26 @@ import {
   parseWithDependency,
   snapshotDefaultDependencyValues,
   suggestWithDependency,
-} from "./internal/dependency.ts";
-import { message } from "./message.ts";
-import type { NonEmptyString } from "./nonempty.ts";
+} from "#src/internal/dependency.ts";
+import { message } from "#src/message.ts";
+import type { NonEmptyString } from "#src/nonempty.ts";
 import {
   parseAsync,
   parseSync,
   suggestAsync,
   type Suggestion,
   suggestSync,
-} from "./internal/parser.ts";
+} from "#src/internal/parser.ts";
 import {
   choice,
   integer,
   string,
   type ValueParser,
   type ValueParserResult,
-} from "./valueparser.ts";
-import { conditional, merge, object, or, tuple } from "./constructs.ts";
-import { argument, command, constant, option } from "./primitives.ts";
-import { map, multiple, optional, withDefault } from "./modifiers.ts";
+} from "#src/valueparser.ts";
+import { conditional, merge, object, or, tuple } from "#src/constructs.ts";
+import { argument, command, constant, option } from "#src/primitives.ts";
+import { map, multiple, optional, withDefault } from "#src/modifiers.ts";
 import * as fc from "fast-check";
 
 // =============================================================================

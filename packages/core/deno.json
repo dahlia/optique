@@ -9,6 +9,7 @@
     "./context": "./src/context.ts",
     "./constructs": "./src/constructs.ts",
     "./dependency": "./src/dependency.ts",
+    "./dependency-runtime": "./src/dependency-runtime.ts",
     "./doc": "./src/doc.ts",
     "./extension": "./src/extension.ts",
     "./facade": "./src/facade.ts",
@@ -20,6 +21,9 @@
     "./program": "./src/program.ts",
     "./usage": "./src/usage.ts",
     "./valueparser": "./src/valueparser.ts"
+  },
+  "imports": {
+    "#src/": "./src/"
   },
   "exclude": [
     "dist/",

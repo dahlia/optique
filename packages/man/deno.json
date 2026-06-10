@@ -9,6 +9,7 @@
     "./cli": "./src/cli.ts"
   },
   "imports": {
+    "#src/": "./src/",
     "tsx/esm/api": "npm:tsx@^4.21.0/esm/api"
   },
   "exclude": [

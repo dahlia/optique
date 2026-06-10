@@ -22,8 +22,21 @@ import type {
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-// Conditionally import Temporal polyfill only if not natively available
-const usingPolyfill = !globalThis.Temporal;
+const runtime = globalThis as {
+  readonly Bun?: unknown;
+  readonly Deno?: unknown;
+  readonly process?: {
+    readonly release?: {
+      readonly name?: string;
+    };
+  };
+};
+const isBun = runtime.Bun !== undefined;
+const isNode = runtime.process?.release?.name === "node" &&
+  runtime.Deno === undefined &&
+  !isBun;
+const usesBuiltOutput = isNode || isBun;
+const usingPolyfill = usesBuiltOutput || !globalThis.Temporal;
 if (usingPolyfill) {
   const polyfill = await import("@js-temporal/polyfill");
   Object.assign(globalThis, { Temporal: polyfill.Temporal });

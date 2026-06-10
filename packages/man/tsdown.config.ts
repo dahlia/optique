@@ -7,6 +7,7 @@ export default defineConfig({
     "src/index.ts",
     "src/roff.ts",
     "src/man.ts",
+    "src/generator.ts",
     "src/cli.ts",
   ],
   dts: true,

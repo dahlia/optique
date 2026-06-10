@@ -10,20 +10,20 @@
  */
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
-import { dependency, deriveFrom } from "./internal/dependency.ts";
+import { dependency, deriveFrom } from "#src/internal/dependency.ts";
 import {
   parseAsync,
   parseSync,
   suggestAsync,
   type Suggestion,
   suggestSync,
-} from "./parser.ts";
-import { choice } from "./valueparser.ts";
-import { concat, merge, object, or, tuple } from "./constructs.ts";
-import { argument, option } from "./primitives.ts";
-import { map, multiple, optional, withDefault } from "./modifiers.ts";
-import { message } from "./message.ts";
-import type { NonEmptyString } from "./nonempty.ts";
+} from "#src/parser.ts";
+import { choice } from "#src/valueparser.ts";
+import { concat, merge, object, or, tuple } from "#src/constructs.ts";
+import { argument, option } from "#src/primitives.ts";
+import { map, multiple, optional, withDefault } from "#src/modifiers.ts";
+import { message } from "#src/message.ts";
+import type { NonEmptyString } from "#src/nonempty.ts";
 // =============================================================================
 // Shared test fixtures
 // =============================================================================

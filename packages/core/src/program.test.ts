@@ -1,12 +1,12 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { object } from "./constructs.ts";
-import { option } from "./primitives.ts";
-import { string } from "./valueparser.ts";
-import { message } from "./message.ts";
-import { withDefault } from "./modifiers.ts";
-import type { Program, ProgramMetadata } from "./program.ts";
-import { defineProgram } from "./program.ts";
+import { object } from "#src/constructs.ts";
+import { option } from "#src/primitives.ts";
+import { string } from "#src/valueparser.ts";
+import { message } from "#src/message.ts";
+import { withDefault } from "#src/modifiers.ts";
+import type { Program, ProgramMetadata } from "#src/program.ts";
+import { defineProgram } from "#src/program.ts";
 
 describe("ProgramMetadata", () => {
   test("should accept minimal metadata", () => {

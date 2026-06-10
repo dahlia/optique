@@ -7,10 +7,10 @@ import {
   expandCommandAliasSuggestions,
   findSimilar,
   levenshteinDistance,
-} from "./suggestion.ts";
-import { formatMessage, message, optionName } from "./message.ts";
-import type { Usage } from "./usage.ts";
-import type { Suggestion } from "./parser.ts";
+} from "#src/suggestion.ts";
+import { formatMessage, message, optionName } from "#src/message.ts";
+import type { Usage } from "#src/usage.ts";
+import type { Suggestion } from "#src/parser.ts";
 import * as fc from "fast-check";
 
 const propertyParameters = { numRuns: 200 } as const;

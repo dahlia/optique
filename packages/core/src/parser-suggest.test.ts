@@ -14,9 +14,9 @@ import {
   type ParserContext,
   type Suggestion,
   withDefault,
-} from "./index.ts";
-import { choice, integer, string, type ValueParser } from "./valueparser.ts";
-import { message } from "./message.ts";
+} from "#src/index.ts";
+import { choice, integer, string, type ValueParser } from "#src/valueparser.ts";
+import { message } from "#src/message.ts";
 
 describe("Parser suggest() methods", () => {
   describe("constant parser", () => {

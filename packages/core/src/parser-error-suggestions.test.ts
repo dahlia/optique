@@ -1,6 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { type Annotations, injectAnnotations } from "./internal/annotations.ts";
+import {
+  type Annotations,
+  injectAnnotations,
+} from "#src/internal/annotations.ts";
 import {
   command,
   constant,
@@ -10,9 +13,9 @@ import {
   option,
   or,
   type ParserContext,
-} from "./index.ts";
-import { formatMessage } from "./message.ts";
-import { string } from "./valueparser.ts";
+} from "#src/index.ts";
+import { formatMessage } from "#src/message.ts";
+import { string } from "#src/valueparser.ts";
 
 const issue184Annotations = {
   [Symbol.for("@test/issue-184/error-suggestions")]: true,

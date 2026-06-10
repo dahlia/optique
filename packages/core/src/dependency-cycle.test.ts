@@ -1,15 +1,15 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
-import { dependency } from "./internal/dependency.ts";
-import { parseSync } from "./internal/parser.ts";
+import { dependency } from "#src/internal/dependency.ts";
+import { parseSync } from "#src/internal/parser.ts";
 import {
   choice,
   type ValueParser,
   type ValueParserResult,
-} from "./valueparser.ts";
-import { object } from "./constructs.ts";
-import { option } from "./primitives.ts";
-import type { NonEmptyString } from "./nonempty.ts";
+} from "#src/valueparser.ts";
+import { object } from "#src/constructs.ts";
+import { option } from "#src/primitives.ts";
+import type { NonEmptyString } from "#src/nonempty.ts";
 
 test("dependency resolution handles cyclic plain objects", () => {
   type CyclicValue = {

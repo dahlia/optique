@@ -25,8 +25,8 @@ import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
 import { prompt, Separator } from "@optique/inquirer";
-import { bindConfig, createConfigContext } from "../../config/src/index.ts";
-import { runAsync } from "../../run/src/run.ts";
+import { bindConfig, createConfigContext } from "@optique/config";
+import { runAsync } from "@optique/run/run";
 
 const promptFunctionsOverrideSymbol = Symbol.for(
   "@optique/inquirer/prompt-functions",
@@ -2027,7 +2027,11 @@ describe("prompt()", () => {
         });
 
         class ConfigInput {
-          constructor(readonly apiKey: string | undefined) {}
+          readonly apiKey: string | undefined;
+
+          constructor(apiKey: string | undefined) {
+            this.apiKey = apiKey;
+          }
         }
 
         let phase2Parsed: ConfigInput | undefined;
@@ -2431,7 +2435,11 @@ describe("prompt()", () => {
         });
 
         class InnerInput {
-          constructor(readonly apiKey: string | undefined) {}
+          readonly apiKey: string | undefined;
+
+          constructor(apiKey: string | undefined) {
+            this.apiKey = apiKey;
+          }
         }
 
         let phase2ApiKey: string | undefined;

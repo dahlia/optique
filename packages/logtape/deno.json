@@ -6,6 +6,7 @@
     ".": "./src/index.ts"
   },
   "imports": {
+    "#src/": "./src/",
     "@logtape/file": "jsr:@logtape/file@^2.0.4"
   },
   "exclude": [

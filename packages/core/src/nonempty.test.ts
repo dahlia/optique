@@ -2,7 +2,7 @@ import {
   ensureNonEmptyString,
   isNonEmptyString,
   type NonEmptyString,
-} from "./nonempty.ts";
+} from "#src/nonempty.ts";
 import * as fc from "fast-check";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";

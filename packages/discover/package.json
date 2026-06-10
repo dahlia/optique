@@ -60,6 +60,12 @@
       "require": "./dist/command.cjs"
     }
   },
+  "imports": {
+    "#src/*.ts": {
+      "node": "./dist/*.js",
+      "default": "./src/*.ts"
+    }
+  },
   "sideEffects": false,
   "dependencies": {
     "@optique/core": "workspace:*",

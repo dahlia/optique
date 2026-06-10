@@ -15,7 +15,7 @@ import type {
   SourceContextRequest,
 } from "@optique/core/context";
 import type { DocSection } from "@optique/core/doc";
-import { defineInheritedAnnotationParser } from "./internal/parser.ts";
+import { defineInheritedAnnotationParser } from "#src/internal/parser.ts";
 import {
   createParserContext,
   type ExecutionContext,
@@ -52,8 +52,8 @@ import type { DeferredMap, ValueParser } from "@optique/core/valueparser";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { extractPhase2SeedKey } from "./phase2-seed.ts";
-import { bindEnv, createEnvContext } from "../../env/src/index.ts";
+import { extractPhase2SeedKey } from "#src/phase2-seed.ts";
+import { bindEnv, createEnvContext } from "@optique/env";
 
 type AssertNever<T extends never> = T;
 
@@ -5319,7 +5319,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       });
 
       // Create a custom shell completion
-      const customShell: import("./completion.ts").ShellCompletion = {
+      const customShell: import("#src/completion.ts").ShellCompletion = {
         name: "custom",
         generateScript(programName: string) {
           return `# Custom shell completion for ${programName}`;
@@ -5356,7 +5356,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       });
 
       // Create a custom bash shell that overrides the default
-      const customBash: import("./completion.ts").ShellCompletion = {
+      const customBash: import("#src/completion.ts").ShellCompletion = {
         name: "bash",
         generateScript(programName: string) {
           return `# Custom bash completion for ${programName}`;
@@ -5392,7 +5392,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         verbose: option("--verbose"),
       });
 
-      const customShell: import("./completion.ts").ShellCompletion = {
+      const customShell: import("#src/completion.ts").ShellCompletion = {
         name: "custom",
         generateScript(programName: string) {
           return `# Custom shell completion for ${programName}`;
@@ -7049,7 +7049,11 @@ describe("runWith", () => {
 
     it("should hide deferred class instance seed values from contexts", async () => {
       class DeferredSecret {
-        constructor(readonly token: string) {}
+        readonly token: string;
+
+        constructor(token: string) {
+          this.token = token;
+        }
       }
 
       const tokenKey = Symbol.for("@test/phase-two-hide-class-leaf");

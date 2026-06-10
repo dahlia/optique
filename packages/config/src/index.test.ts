@@ -34,9 +34,9 @@ import { bindEnv, createEnvContext } from "@optique/env";
 import {
   collectExplicitSourceValues,
   createDependencyRuntimeContext,
-} from "../../core/src/dependency-runtime.ts";
-import { bindConfig, createConfigContext } from "./index.ts";
-import type { ConfigLoadResult, ConfigMeta } from "./index.ts";
+} from "@optique/core/dependency-runtime";
+import { bindConfig, createConfigContext } from "#src/index.ts";
+import type { ConfigLoadResult, ConfigMeta } from "#src/index.ts";
 
 type IsExact<T, U> = (<V>() => V extends T ? 1 : 2) extends
   (<V>() => V extends U ? 1 : 2)

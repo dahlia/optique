@@ -1,14 +1,14 @@
-import { DependencyRegistry } from "./internal/dependency.ts";
+import { DependencyRegistry } from "#src/internal/dependency.ts";
 import type { ExecutionContext, ParserContext } from "@optique/core/parser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createDependencyRuntimeContext } from "./dependency-runtime.ts";
+import { createDependencyRuntimeContext } from "#src/dependency-runtime.ts";
 import {
   mergeChildExec,
   withChildContext,
   withChildExecPath,
-} from "./execution-context.ts";
-import { createInputTrace } from "./input-trace.ts";
+} from "#src/execution-context.ts";
+import { createInputTrace } from "#src/input-trace.ts";
 
 describe("execution-context helpers", () => {
   it("withChildExecPath() appends the child segment", () => {

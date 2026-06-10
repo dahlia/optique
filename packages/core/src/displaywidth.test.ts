@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import * as fc from "fast-check";
 import { describe, it } from "node:test";
-import { getDisplayWidth } from "./displaywidth.ts";
+import { getDisplayWidth } from "#src/displaywidth.ts";
 
 const propertyParameters = { numRuns: 200 } as const;
 const printableAsciiArbitrary = fc.string({

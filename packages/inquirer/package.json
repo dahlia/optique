@@ -53,13 +53,21 @@
       "require": "./dist/index.cjs"
     }
   },
+  "imports": {
+    "#src/*.ts": {
+      "node": "./dist/*.js",
+      "default": "./src/*.ts"
+    }
+  },
   "sideEffects": false,
   "dependencies": {
     "@inquirer/prompts": "catalog:",
     "@optique/core": "workspace:*"
   },
   "devDependencies": {
+    "@optique/config": "workspace:*",
     "@optique/env": "workspace:*",
+    "@optique/run": "workspace:*",
     "@types/node": "catalog:",
     "fast-check": "catalog:",
     "tsdown": "catalog:",

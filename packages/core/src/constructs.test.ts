@@ -16,7 +16,7 @@ import {
   type Annotations,
   getAnnotations,
   injectAnnotations,
-} from "./internal/annotations.ts";
+} from "#src/internal/annotations.ts";
 import {
   createDependencySourceState,
   createPendingDependencySourceState,
@@ -25,7 +25,7 @@ import {
   DependencyRegistry,
   isPendingDependencySourceState,
   wrappedDependencySourceMarker,
-} from "./internal/dependency.ts";
+} from "#src/internal/dependency.ts";
 import {
   formatMessage,
   type Message,
@@ -40,7 +40,7 @@ import {
   optional,
   withDefault,
 } from "@optique/core/modifiers";
-import { defineInheritedAnnotationParser } from "./internal/parser.ts";
+import { defineInheritedAnnotationParser } from "#src/internal/parser.ts";
 import {
   type ExecutionContext,
   getDocPage,
@@ -91,14 +91,14 @@ import {
   or as orLocal,
   seq as seqLocal,
   tuple as tupleLocal,
-} from "./constructs.ts";
-import { dependency as dependencyLocal } from "./internal/dependency.ts";
-import { withDefault as withDefaultLocal } from "./modifiers.ts";
+} from "#src/constructs.ts";
+import { dependency as dependencyLocal } from "#src/internal/dependency.ts";
+import { withDefault as withDefaultLocal } from "#src/modifiers.ts";
 import {
   extractPhase2SeedKey,
   type Phase2SeedExtractor,
-} from "./phase2-seed.ts";
-import { option as optionLocal } from "./primitives.ts";
+} from "#src/phase2-seed.ts";
+import { option as optionLocal } from "#src/primitives.ts";
 
 function collectEntries(
   fragments: readonly DocFragment[],
@@ -173,7 +173,7 @@ function toAsyncParser<TValue, TState>(
     & {
       readonly validateValue?: (
         value: TValue,
-      ) => import("./valueparser.ts").ValueParserResult<TValue>;
+      ) => import("#src/valueparser.ts").ValueParserResult<TValue>;
     };
   const asyncParser: Parser<"async", TValue, TState> = {
     ...rest,

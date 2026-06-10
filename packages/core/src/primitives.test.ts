@@ -40,9 +40,9 @@ import {
   DependencyRegistry,
   deriveFromAsync,
   deriveFromSync,
-} from "./internal/dependency.ts";
-import { annotationKey } from "./internal/annotations.ts";
-import { extractDependencyMetadata } from "./dependency-metadata.ts";
+} from "#src/internal/dependency.ts";
+import { annotationKey } from "#src/internal/annotations.ts";
+import { extractDependencyMetadata } from "#src/dependency-metadata.ts";
 import {
   type InferValue,
   parse,
@@ -3213,7 +3213,7 @@ describe("argument() error customization", () => {
 describe("command", () => {
   function createRegistry(
     entries: readonly (readonly [symbol, unknown])[] = [],
-  ): import("./registry-types.ts").DependencyRegistryLike {
+  ): import("#src/registry-types.ts").DependencyRegistryLike {
     const map = new Map<symbol, unknown>(entries);
     return {
       set<T>(id: symbol, value: T): void {

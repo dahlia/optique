@@ -11,14 +11,14 @@ import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
-import { defineCommand } from "./command.ts";
+import { defineCommand } from "#src/command.ts";
 import {
   type CommandPath,
   createProgramParser,
   discoverCommands,
   getDefaultExtensions,
   runProgram,
-} from "./index.ts";
+} from "#src/index.ts";
 
 describe("defineCommand()", () => {
   it("preserves handler value inference", () => {
@@ -269,8 +269,15 @@ describe("discoverCommands()", () => {
         ["build.ts"],
         "build",
         `
-          import { defineCommand } from "${moduleUrl("command.ts")}";
-          import { object } from "${moduleUrl("../../core/src/constructs.ts")}";
+          import { defineCommand } from "${
+          runtimeModuleUrl("command.ts", "../dist/command.js")
+        }";
+          import { object } from "${
+          runtimeModuleUrl(
+            "../../core/src/constructs.ts",
+            "../../core/dist/constructs.js",
+          )
+        }";
 
           export default defineCommand({
             path: ["deploy"],
@@ -297,8 +304,15 @@ describe("discoverCommands()", () => {
         ["user", "add.ts"],
         "add",
         `
-          import { defineCommand } from "${moduleUrl("command.ts")}";
-          import { object } from "${moduleUrl("../../core/src/constructs.ts")}";
+          import { defineCommand } from "${
+          runtimeModuleUrl("command.ts", "../dist/command.js")
+        }";
+          import { object } from "${
+          runtimeModuleUrl(
+            "../../core/src/constructs.ts",
+            "../../core/dist/constructs.js",
+          )
+        }";
 
           export default defineCommand({
             path: ["user", "add"],
@@ -660,11 +674,26 @@ describe("runProgram()", () => {
         "write",
         `
           import { writeFile } from "node:fs/promises";
-          import { defineCommand } from "${moduleUrl("command.ts")}";
-          import { object } from "${moduleUrl("../../core/src/constructs.ts")}";
-          import { option } from "${moduleUrl("../../core/src/primitives.ts")}";
+          import { defineCommand } from "${
+          runtimeModuleUrl("command.ts", "../dist/command.js")
+        }";
+          import { object } from "${
+          runtimeModuleUrl(
+            "../../core/src/constructs.ts",
+            "../../core/dist/constructs.js",
+          )
+        }";
+          import { option } from "${
+          runtimeModuleUrl(
+            "../../core/src/primitives.ts",
+            "../../core/dist/primitives.js",
+          )
+        }";
           import { string } from "${
-          moduleUrl("../../core/src/valueparser.ts")
+          runtimeModuleUrl(
+            "../../core/src/valueparser.ts",
+            "../../core/dist/valueparser.js",
+          )
         }";
 
           export default defineCommand({
@@ -777,14 +806,32 @@ describe("runProgram()", () => {
         ["show.ts"],
         "show",
         `
-          import { defineCommand } from "${moduleUrl("command.ts")}";
-          import { object } from "${moduleUrl("../../core/src/constructs.ts")}";
-          import { withDefault } from "${
-          moduleUrl("../../core/src/modifiers.ts")
+          import { defineCommand } from "${
+          runtimeModuleUrl("command.ts", "../dist/command.js")
         }";
-          import { option } from "${moduleUrl("../../core/src/primitives.ts")}";
+          import { object } from "${
+          runtimeModuleUrl(
+            "../../core/src/constructs.ts",
+            "../../core/dist/constructs.js",
+          )
+        }";
+          import { withDefault } from "${
+          runtimeModuleUrl(
+            "../../core/src/modifiers.ts",
+            "../../core/dist/modifiers.js",
+          )
+        }";
+          import { option } from "${
+          runtimeModuleUrl(
+            "../../core/src/primitives.ts",
+            "../../core/dist/primitives.js",
+          )
+        }";
           import { string } from "${
-          moduleUrl("../../core/src/valueparser.ts")
+          runtimeModuleUrl(
+            "../../core/src/valueparser.ts",
+            "../../core/dist/valueparser.js",
+          )
         }";
 
           export default defineCommand({
@@ -817,8 +864,11 @@ describe("runProgram()", () => {
 });
 
 class ExitSignal extends Error {
-  constructor(readonly exitCode: number) {
+  readonly exitCode: number;
+
+  constructor(exitCode: number) {
     super(`Exited with ${exitCode}.`);
+    this.exitCode = exitCode;
   }
 }
 
@@ -832,9 +882,18 @@ async function writeCommand(
   path: readonly string[],
   label: string,
   body = `
-    import { defineCommand } from "${moduleUrl("command.ts")}";
-    import { object } from "${moduleUrl("../../core/src/constructs.ts")}";
-    import { message } from "${moduleUrl("../../core/src/message.ts")}";
+    import { defineCommand } from "${
+    runtimeModuleUrl("command.ts", "../dist/command.js")
+  }";
+    import { object } from "${
+    runtimeModuleUrl(
+      "../../core/src/constructs.ts",
+      "../../core/dist/constructs.js",
+    )
+  }";
+    import { message } from "${
+    runtimeModuleUrl("../../core/src/message.ts", "../../core/dist/message.js")
+  }";
 
     export default defineCommand({
       parser: object({}),
@@ -852,6 +911,21 @@ async function writeCommand(
 
 function moduleUrl(relative: string): string {
   return new URL(relative, import.meta.url).href;
+}
+
+function runtimeModuleUrl(
+  sourceRelative: string,
+  nodeRelative: string,
+): string {
+  const runtime = globalThis as {
+    readonly Bun?: unknown;
+    readonly Deno?: unknown;
+    readonly process?: { readonly release?: { readonly name?: string } };
+  };
+  const isNode = runtime.process?.release?.name === "node" &&
+    runtime.Bun === undefined &&
+    runtime.Deno === undefined;
+  return moduleUrl(isNode ? nodeRelative : sourceRelative);
 }
 
 async function parseAll(

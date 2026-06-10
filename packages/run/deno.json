@@ -7,6 +7,9 @@
     "./run": "./src/run.ts",
     "./valueparser": "./src/valueparser.ts"
   },
+  "imports": {
+    "#src/": "./src/"
+  },
   "exclude": [
     "dist/",
     "tsdown.config.ts"

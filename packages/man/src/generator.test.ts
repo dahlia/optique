@@ -4,7 +4,7 @@ import {
   generateManPage,
   generateManPageAsync,
   generateManPageSync,
-} from "./generator.ts";
+} from "#src/generator.ts";
 import { object } from "@optique/core/constructs";
 import {
   argument,

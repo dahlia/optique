@@ -5,7 +5,7 @@
  */
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
-import { createInputTrace, type TraceEntry } from "./input-trace.ts";
+import { createInputTrace, type TraceEntry } from "#src/input-trace.ts";
 
 // =============================================================================
 // Helpers

@@ -6,7 +6,7 @@ import {
   escapeRequestArg,
   escapeRoff,
   formatMessageAsRoff,
-} from "./roff.ts";
+} from "#src/roff.ts";
 import {
   commandLine,
   envVar,

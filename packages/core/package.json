@@ -91,6 +91,14 @@
       "import": "./dist/dependency.js",
       "require": "./dist/dependency.cjs"
     },
+    "./dependency-runtime": {
+      "types": {
+        "import": "./dist/dependency-runtime.d.ts",
+        "require": "./dist/dependency-runtime.d.cts"
+      },
+      "import": "./dist/dependency-runtime.js",
+      "require": "./dist/dependency-runtime.cjs"
+    },
     "./doc": {
       "types": {
         "import": "./dist/doc.d.ts",
@@ -180,8 +188,15 @@
       "require": "./dist/valueparser.cjs"
     }
   },
+  "imports": {
+    "#src/*.ts": {
+      "node": "./dist/*.js",
+      "default": "./src/*.ts"
+    }
+  },
   "sideEffects": false,
   "devDependencies": {
+    "@optique/env": "workspace:*",
     "@types/node": "catalog:",
     "fast-check": "catalog:",
     "tsdown": "catalog:",

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
-import type { ExtractRequiredOptions } from "./facade.ts";
+import type { ParserValuePlaceholder, SourceContext } from "#src/context.ts";
+import type { ExtractRequiredOptions } from "#src/facade.ts";
 
 interface NoOptionsContext extends SourceContext {}
 

@@ -3,7 +3,7 @@ import {
   annotationStateValueKey,
   getAnnotations,
   injectAnnotations,
-} from "./internal/annotations.ts";
+} from "#src/internal/annotations.ts";
 import {
   createDependencySourceState,
   createPendingDependencySourceState,
@@ -11,7 +11,7 @@ import {
   isDependencySourceState,
   transformsDependencyValueMarker,
   wrappedDependencySourceMarker,
-} from "./internal/dependency.ts";
+} from "#src/internal/dependency.ts";
 import {
   envVar,
   formatMessage,
@@ -33,13 +33,13 @@ import {
   multiple as multipleLocal,
   optional as optionalLocal,
   withDefault as withDefaultLocal,
-} from "./modifiers.ts";
+} from "#src/modifiers.ts";
 import {
   completeOrExtractPhase2Seed,
   extractPhase2Seed,
   extractPhase2SeedKey,
-} from "./phase2-seed.ts";
-import { createDependencyRuntimeContext } from "./dependency-runtime.ts";
+} from "#src/phase2-seed.ts";
+import { createDependencyRuntimeContext } from "#src/dependency-runtime.ts";
 import {
   parse,
   parseAsync,
