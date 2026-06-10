@@ -16,6 +16,10 @@ To be released.
     `MST7MDT`, and `PST8PDT`, matching Linux Bun's `Intl` and Temporal
     behavior.
 
+ -  Fixed temporal tests failing to type-check on Deno 2.8 with TypeScript 6.0.
+    The test polyfill fallback now installs `Temporal` without directly
+    assigning the polyfill namespace to the runtime's built-in Temporal type.
+
 
 Version 1.0.2
 -------------

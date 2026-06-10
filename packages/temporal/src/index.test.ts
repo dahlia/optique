@@ -26,7 +26,7 @@ import { describe, it } from "node:test";
 const usingPolyfill = !globalThis.Temporal;
 if (usingPolyfill) {
   const polyfill = await import("@js-temporal/polyfill");
-  globalThis.Temporal = polyfill.Temporal;
+  Object.assign(globalThis, { Temporal: polyfill.Temporal });
 }
 
 describe("instant", () => {
