@@ -218,9 +218,7 @@ printf '${directive}'
     const startMarker = "\x1eOPTIQUE_ZSH_COMPLETION_START\x1e";
     const endMarker = "\x1eOPTIQUE_ZSH_COMPLETION_END\x1e";
     const initReadyMarker = "__OPTIQUE_ZSH_INIT_READY__";
-    const actionDoneMarker = "__OPTIQUE_ZSH_ACTION_DONE__";
     const initPath = join(binDir, ".session.init");
-    const actionPath = join(binDir, ".session.action");
     const insecureFpathDir = join(tempDir, "insecure-fpath");
     if (options.withInsecureFpath === true) {
       mkdirSync(insecureFpathDir);
@@ -245,34 +243,25 @@ cd ${JSON.stringify(workDir)}
 print -r -- ${JSON.stringify(initReadyMarker)}
 print -rn -- $'\\x1eOPTIQUE_ZSH_COMPLETION_START\\x1e\\n'
 `;
-    const action = `extapp \t\t
-print -rn -- $'\\x1eOPTIQUE_ZSH_COMPLETION_END\\x1e\\n'
-print -r -- ${JSON.stringify(actionDoneMarker)}
-exit
-`;
     writeFileSync(initPath, init);
-    writeFileSync(actionPath, action);
 
     const driver = `
 zmodload zsh/zpty
 
 function __optique_drain_zpty() {
   local sentinel="$1"
+  local max_idle="\${2:-80}"
   local buffer=""
   local chunk=""
   local idle=0
 
-  while (( idle < 80 )); do
-    if zpty -r -t child; then
-      if zpty -r child chunk; then
-        buffer+="\${chunk}"
-        if [[ -n "\${sentinel}" && "\${buffer}" == *"\${sentinel}"* ]]; then
-          break
-        fi
-        idle=0
-      else
+  while (( idle < max_idle )); do
+    if zpty -r -t child chunk; then
+      buffer+="\${chunk}"$'\\n'
+      if [[ -n "\${sentinel}" && "\${buffer}" == *"\${sentinel}"* ]]; then
         break
       fi
+      idle=0
     else
       sleep 0.05
       (( idle++ ))
@@ -282,13 +271,18 @@ function __optique_drain_zpty() {
   print -rn -- "\${buffer}"
 }
 
-zpty -b child env TERM=xterm-256color ZDOTDIR=/nonexistent zsh -fi
-zpty -w child "$(<${JSON.stringify(initPath)})"
+zpty child env TERM=xterm-256color ZDOTDIR=/nonexistent zsh -fi
+zpty -w child ${JSON.stringify(`source ${JSON.stringify(initPath)}`)}
 sleep 0.5
 local __output="$(__optique_drain_zpty ${JSON.stringify(initReadyMarker)})"
-zpty -w child "$(<${JSON.stringify(actionPath)})"
+zpty -w -n child "extapp "
+sleep 0.1
+zpty -w -n child $'\\t'
+sleep 0.1
+zpty -w -n child $'\\t'
 sleep 0.8
-__output+="$(__optique_drain_zpty ${JSON.stringify(actionDoneMarker)})"
+__output+="$(__optique_drain_zpty "" 20)"
+__output+=$'\\x1eOPTIQUE_ZSH_COMPLETION_END\\x1e\\n'
 print -rn -- "$__output"
 zpty -d child 2>/dev/null || true
 `;

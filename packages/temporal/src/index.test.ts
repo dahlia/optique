@@ -26,7 +26,7 @@ import { describe, it } from "node:test";
 const usingPolyfill = !globalThis.Temporal;
 if (usingPolyfill) {
   const polyfill = await import("@js-temporal/polyfill");
-  globalThis.Temporal = polyfill.Temporal;
+  Object.assign(globalThis, { Temporal: polyfill.Temporal });
 }
 
 function throwingTemporalType<
@@ -622,14 +622,6 @@ describe("timeZone", () => {
       "EST",
       "MST",
       "HST",
-      "CET",
-      "MET",
-      "WET",
-      "EET",
-      "EST5EDT",
-      "CST6CDT",
-      "MST7MDT",
-      "PST8PDT",
       "Cuba",
       "Egypt",
       "Eire",
@@ -690,6 +682,14 @@ describe("timeZone", () => {
       "PST",
       "AST",
       "SST",
+      "CET",
+      "MET",
+      "WET",
+      "EET",
+      "EST5EDT",
+      "CST6CDT",
+      "MST7MDT",
+      "PST8PDT",
     ];
 
     for (const input of nonAllowlisted) {

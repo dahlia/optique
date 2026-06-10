@@ -174,6 +174,24 @@ To be released.
     for single-segment identifiers.  [[#818]]
 
 
+Version 1.0.3
+-------------
+
+Released on June 10, 2026.
+
+### @optique/temporal
+
+ -  Fixed `timeZone()` accepting single-segment timezone aliases that are not
+    actually available across all supported runtimes.  The `TimeZone` type and
+    parser now reject `CET`, `MET`, `WET`, `EET`, `EST5EDT`, `CST6CDT`,
+    `MST7MDT`, and `PST8PDT`, matching Linux Bun's `Intl` and Temporal
+    behavior.
+
+ -  Fixed temporal tests failing to type-check on Deno 2.8 with TypeScript 6.0.
+    The test polyfill fallback now installs `Temporal` without directly
+    assigning the polyfill namespace to the runtime's built-in Temporal type.
+
+
 Version 1.0.2
 -------------
 
