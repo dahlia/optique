@@ -128,7 +128,8 @@ To be released.
     are merged and deduplicated across constituents, and `format()`,
     `normalize()`, and `validate()` dispatch to the constituent that owns
     the value.  When every constituent fails, the error lists each
-    constituent's error on its own line.  [[#821]]
+    constituent's error on its own line; the `errors.noMatch` option
+    customizes this message.  [[#821]]
 
 [Semantic Versioning 2.0.0]: https://semver.org/
 [#801]: https://github.com/dahlia/optique/issues/801

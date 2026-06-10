@@ -36,12 +36,15 @@ import {
 } from "@optique/core/valueparser";
 import {
   formatMessage,
+  type Message,
   message,
   type MessageTerm,
   text,
   values,
 } from "@optique/core/message";
-import { argument } from "#src/primitives.ts";
+import { argument, option } from "#src/primitives.ts";
+import { withDefault } from "#src/modifiers.ts";
+import { parse } from "#src/parser.ts";
 import assert from "node:assert/strict";
 import * as fc from "fast-check";
 import { describe, it } from "node:test";
@@ -18781,6 +18784,158 @@ describe("firstOf", () => {
         suggestions.map((s) => s.kind === "literal" ? s.text : s.kind),
         ["auto", "max", "min"],
       );
+    });
+  });
+
+  describe("custom errors", () => {
+    it("should use a static noMatch message", () => {
+      const parser = firstOf(choice(["auto"]), integer({ min: 1 }), {
+        errors: { noMatch: message`Custom error.` },
+      });
+      const result = parser.parse("abc");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, message`Custom error.`);
+    });
+
+    it("should pass input and constituent errors to a noMatch function", () => {
+      let seenInput: string | undefined;
+      let seenErrors: readonly Message[] | undefined;
+      const parser = firstOf(choice(["auto"]), integer({ min: 1 }), {
+        errors: {
+          noMatch: (input, errors) => {
+            seenInput = input;
+            seenErrors = errors;
+            return message`No match for ${input}.`;
+          },
+        },
+      });
+      const result = parser.parse("abc");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, message`No match for ${"abc"}.`);
+      assert.equal(seenInput, "abc");
+      assert.equal(seenErrors?.length, 2);
+      assert.ok(formatMessage(seenErrors[0]).includes("auto"));
+      assert.ok(formatMessage(seenErrors[1]).includes("integer"));
+    });
+  });
+
+  describe("types", () => {
+    it("should infer the union of constituent types", () => {
+      const pair = firstOf(choice(["auto"]), integer({ min: 1 }));
+      pair satisfies ValueParser<"sync", "auto" | number>;
+
+      const withOptions = firstOf(choice(["auto"]), integer(), {
+        metavar: "COUNT",
+      });
+      withOptions satisfies ValueParser<"sync", "auto" | number>;
+
+      const variadic = firstOf(
+        choice(["a"]),
+        choice(["b"]),
+        choice(["c"]),
+        choice(["d"]),
+        choice(["e"]),
+        integer(),
+      );
+      variadic satisfies ValueParser<
+        "sync",
+        "a" | "b" | "c" | "d" | "e" | number
+      >;
+
+      const result = pair.parse("auto");
+      assert.ok(result.success);
+      const value: "auto" | number = result.value;
+      assert.equal(value, "auto");
+    });
+  });
+
+  describe("properties", () => {
+    it("property: every constituent's values parse to themselves", () => {
+      fc.assert(
+        fc.property(
+          fc.uniqueArray(lowercaseWordArbitrary, { minLength: 1 }),
+          safeIntegerArbitrary,
+          (words, num) => {
+            const parser = firstOf(choice(words), integer());
+            for (const word of words) {
+              const result = parser.parse(word);
+              assert.ok(result.success);
+              assert.equal(result.value, word);
+            }
+            const numResult = parser.parse(String(num));
+            assert.ok(numResult.success);
+            assert.equal(numResult.value, num);
+          },
+        ),
+        propertyParameters,
+      );
+    });
+
+    it("property: parse(format(v)) round-trips union values", () => {
+      fc.assert(
+        fc.property(
+          fc.uniqueArray(lowercaseWordArbitrary, { minLength: 1 }),
+          safeIntegerArbitrary,
+          (words, num) => {
+            const parser = firstOf(choice(words), integer());
+            for (const value of [...words, num]) {
+              const result = parser.parse(parser.format(value));
+              assert.ok(result.success);
+              assert.equal(result.value, value);
+            }
+          },
+        ),
+        propertyParameters,
+      );
+    });
+
+    it("property: declaration order determines the winning branch", () => {
+      fc.assert(
+        fc.property(safeIntegerArbitrary, (num) => {
+          const numText = String(num);
+          const stringFirst = firstOf(choice([numText]), integer());
+          const stringResult = stringFirst.parse(numText);
+          assert.ok(stringResult.success);
+          assert.equal(stringResult.value, numText);
+
+          const integerFirst = firstOf(integer(), choice([numText]));
+          const integerResult = integerFirst.parse(numText);
+          assert.ok(integerResult.success);
+          assert.equal(integerResult.value, num);
+        }),
+        propertyParameters,
+      );
+    });
+  });
+
+  describe("integration", () => {
+    it("should parse option values through option()", () => {
+      const parser = option(
+        "--count",
+        firstOf(choice(["auto"]), integer({ min: 1 })),
+      );
+
+      const auto = parse(parser, ["--count", "auto"]);
+      assert.ok(auto.success);
+      assert.equal(auto.value, "auto");
+
+      const five = parse(parser, ["--count", "5"]);
+      assert.ok(five.success);
+      assert.equal(five.value, 5);
+
+      const invalid = parse(parser, ["--count", "0"]);
+      assert.ok(!invalid.success);
+    });
+
+    it("should normalize withDefault() defaults via the owning constituent", () => {
+      const mac = macAddress({ outputSeparator: ":" });
+      const parser = withDefault(
+        option("--mac", firstOf(mac, choice(["none"]))),
+        "AA-BB-CC-DD-EE-FF",
+      );
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, mac.normalize?.("AA-BB-CC-DD-EE-FF"));
     });
   });
 

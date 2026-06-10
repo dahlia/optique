@@ -8710,6 +8710,22 @@ export interface FirstOfOptions {
    * @default The constituent metavars joined with `|`, e.g. `"auto|INTEGER"`.
    */
   readonly metavar?: NonEmptyString;
+
+  /**
+   * Custom error messages for firstOf parsing failures.
+   * @since 1.1.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when every constituent parser fails.  Can be a
+     * static message or a function that receives the input and the
+     * constituent errors in declaration order.
+     * @since 1.1.0
+     */
+    noMatch?:
+      | Message
+      | ((input: string, errors: readonly Message[]) => Message);
+  };
 }
 
 /**
@@ -8970,7 +8986,15 @@ export function firstOf(
         if (result.success) return result;
         errors.push(result.error);
       }
-      return { success: false, error: firstOfNoMatchError(errors) };
+      const noMatch = options.errors?.noMatch;
+      return {
+        success: false,
+        error: noMatch == null
+          ? firstOfNoMatchError(errors)
+          : typeof noMatch === "function"
+          ? noMatch(input, errors)
+          : noMatch,
+      };
     },
     format(value: unknown): string {
       // format() is a display-oriented best effort: precise fallback
