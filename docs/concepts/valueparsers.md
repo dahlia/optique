@@ -36,6 +36,7 @@ with Optique's type system.
 | `fileSize()`                     | *@optique/core*     | `number` or `bigint`           | Human-readable data size (bytes)                    |
 | `color()`                        | *@optique/core*     | `Color`                        | CSS color (hex, rgb, hsl, or named)                 |
 | `choice()`                       | *@optique/core*     | string or number literal union | Enumerated values                                   |
+| `firstOf()`                      | *@optique/core*     | union of constituent types     | First-match union of value parsers                  |
 | `json()`                         | *@optique/core*     | `Json`                         | Any JSON value, with optional root type restriction |
 | `url()`                          | *@optique/core*     | `URL`                          | URL with protocol filtering                         |
 | `locale()`                       | *@optique/core*     | `Intl.Locale`                  | BCP 47 locale identifier                            |
@@ -554,6 +555,99 @@ const depth = choice([8, 10, 12]);
 > option in your runner configuration.  See the
 > [choice display](./runners.md#choice-display) section in the runners guide
 > for details.
+
+
+`firstOf()` combinator
+----------------------
+
+*This combinator is available since Optique 1.1.0.*
+
+Some options accept values of multiple incompatible types: a `--count` that
+takes either a number or the literal `auto`, an `--output` that is either a
+file path or `-` for standard output, a `--log-level` that accepts both named
+levels and numeric verbosity.  The `firstOf()` combinator composes existing
+value parsers into such a union.  It tries each constituent parser in
+declaration order and returns the result of the first one that succeeds:
+
+~~~~ typescript twoslash
+import { choice, firstOf, integer } from "@optique/core/valueparser";
+
+const count = firstOf(choice(["auto"]), integer({ min: 1 }));
+//    ^?
+~~~~
+
+The result type is inferred as the union of the constituent types, so the
+example above produces `"auto" | number` without manual type annotations or
+hand-written parsing logic.  Each constituent keeps its own validation and
+error messages, which is the main advantage over parsing with `string()` and
+converting the result in a `map()`.
+
+### Declaration order
+
+The first constituent that accepts the input wins.  When inputs overlap (for
+example, `choice(["1"])` and `integer()` both accept the input `1`), the
+earlier constituent claims them, so put more specific parsers first:
+
+~~~~ typescript twoslash
+import { choice, firstOf, string } from "@optique/core/valueparser";
+// ---cut-before---
+// Correct: the specific alias list comes before the catch-all string()
+const target = firstOf(choice(["production", "staging"]), string());
+
+// Wrong: string() accepts everything, so choice() never gets a chance
+const broken = firstOf(string(), choice(["production", "staging"]));
+~~~~
+
+### Help text
+
+The default metavar joins the constituent metavars with `|` (for the example
+above, `TYPE|INTEGER`), and the `metavar` option overrides it:
+
+~~~~ typescript twoslash
+import { choice, firstOf, integer } from "@optique/core/valueparser";
+// ---cut-before---
+const count = firstOf(choice(["auto"]), integer({ min: 1 }), {
+  metavar: "COUNT",
+});
+~~~~
+
+Completion suggestions are merged across all constituents that provide them.
+When every constituent enumerates its valid values (e.g. a `firstOf()` of
+multiple `choice()` parsers), the merged list is also exposed for the
+`showChoices` display option; if any constituent is open-ended, no choice
+list is shown.
+
+### Error messages
+
+When every constituent fails, the error lists each constituent's error on
+its own line:
+
+~~~~ bash
+$ myapp --count abc
+Error: `--count`: Expected one of the following:
+- Expected one of "auto", but got "abc".
+- Expected a valid integer, but got "abc".
+~~~~
+
+The `errors.noMatch` option replaces this combined message with a static
+message or one computed from the input and the constituent errors:
+
+~~~~ typescript twoslash
+import { message } from "@optique/core/message";
+import { choice, firstOf, integer } from "@optique/core/valueparser";
+// ---cut-before---
+const count = firstOf(choice(["auto"]), integer({ min: 1 }), {
+  errors: {
+    noMatch: (input) =>
+      message`Expected ${"auto"} or a positive integer, but got ${input}.`,
+  },
+});
+~~~~
+
+> [!NOTE]
+> `firstOf()` only supports synchronous value parsers.  Passing an async
+> value parser (such as the Git parsers from *@optique/git*) throws a
+> `TypeError` at construction time.
 
 
 `json()` parser
