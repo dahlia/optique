@@ -8941,15 +8941,30 @@ export function firstOf(
     ? Object.freeze(parsers.flatMap((parser) => [...parser.choices!]))
     : undefined;
 
-  // Finds the constituent that produced the given value by round-tripping
-  // each constituent's format() through its own parse().  Constituents whose
-  // format() throws or returns a non-string for a foreign value are skipped,
-  // as are lossy claims where the round-tripped value no longer equals the
-  // original (or the constituent's own normalization of it).
+  // Finds the constituent that produced the given value, along with its
+  // canonical validation result.  A constituent's own validate() hook
+  // decides membership authoritatively: it can accept values that its
+  // format()+parse() round-trip cannot express, such as a nested firstOf()
+  // whose valid value is shadowed by an earlier overlapping branch.
+  // Hookless constituents are checked by round-tripping their format()
+  // through their own parse(); those whose format() throws or returns a
+  // non-string for a foreign value are skipped, as are lossy claims where
+  // the round-tripped value no longer equals the original (or the
+  // constituent's own normalization of it).
   function findOwner(
     value: unknown,
-  ): ValueParser<"sync", unknown> | undefined {
+  ):
+    | {
+      readonly parser: ValueParser<"sync", unknown>;
+      readonly result: ValueParserResult<unknown>;
+    }
+    | undefined {
     for (const parser of parsers) {
+      if (typeof parser.validate === "function") {
+        const result = parser.validate(value);
+        if (result.success) return { parser, result };
+        continue;
+      }
       let formatted: string;
       try {
         formatted = parser.format(value);
@@ -8961,7 +8976,7 @@ export function firstOf(
       if (
         result.success && ownsRoundTrippedValue(parser, result.value, value)
       ) {
-        return parser;
+        return { parser, result };
       }
     }
     return undefined;
@@ -9033,43 +9048,23 @@ export function firstOf(
       );
     },
     validate(value: unknown): ValueParserResult<unknown> {
-      for (const parser of parsers) {
-        // A constituent's own validate() hook decides membership
-        // authoritatively: it can accept values that its format()+parse()
-        // round-trip cannot express, such as a nested firstOf() whose
-        // valid value is shadowed by an earlier overlapping branch.
-        if (typeof parser.validate === "function") {
-          const result = parser.validate(value);
-          if (result.success) return result;
-          continue;
-        }
-        let formatted: string;
-        try {
-          formatted = parser.format(value);
-        } catch {
-          continue;
-        }
-        if (typeof formatted !== "string") continue;
-        const result = parser.parse(formatted);
-        if (
-          result.success && ownsRoundTrippedValue(parser, result.value, value)
-        ) {
-          return { success: true, value: result.value };
-        }
+      const owner = findOwner(value);
+      if (owner == null) {
+        return {
+          success: false,
+          error: message`Expected a value matching ${metavarTerm(metavar)}.`,
+        };
       }
-      return {
-        success: false,
-        error: message`Expected a value matching ${metavarTerm(metavar)}.`,
-      };
+      return owner.result;
     },
     ...(hasNormalize
       ? {
         normalize(value: unknown): unknown {
           const owner = findOwner(value);
-          if (owner == null || typeof owner.normalize !== "function") {
+          if (owner == null || typeof owner.parser.normalize !== "function") {
             return value;
           }
-          return owner.normalize(value);
+          return owner.parser.normalize(value);
         },
       }
       : {}),

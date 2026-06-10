@@ -18757,6 +18757,30 @@ describe("firstOf", () => {
       const parser = firstOf(macAddress(), choice(["none"]));
       assert.equal(parser.normalize?.("not-a-mac"), "not-a-mac");
     });
+
+    it("should normalize through a constituent's validate() ownership", () => {
+      // The outer firstOf() cannot round-trip 7 through the inner one
+      // (the string "7" goes to the inner choice() branch), but the
+      // inner validate() hook accepts it; normalization ownership must
+      // honor that hook just like validate() does.
+      const evenizer: ValueParser<"sync", number> = {
+        mode: "sync",
+        metavar: "EVEN",
+        placeholder: 0,
+        parse: (input) => {
+          const n = Number(input);
+          return Number.isInteger(n)
+            ? { success: true, value: n - (n % 2) }
+            : { success: false, error: message`Expected a number.` };
+        },
+        format: (value) => String(value),
+        normalize: (value) => value - (value % 2),
+      };
+      const inner = firstOf(choice(["7"]), evenizer);
+      const outer = firstOf(choice(["x"]), inner);
+      assert.equal(inner.normalize?.(7), 6);
+      assert.equal(outer.normalize?.(7), 6);
+    });
   });
 
   describe("suggest", () => {
@@ -18936,6 +18960,29 @@ describe("firstOf", () => {
       const result = parse(parser, []);
       assert.ok(result.success);
       assert.equal(result.value, mac.normalize?.("AA-BB-CC-DD-EE-FF"));
+    });
+
+    it("should normalize withDefault() defaults through nested firstOf()", () => {
+      const evenizer: ValueParser<"sync", number> = {
+        mode: "sync",
+        metavar: "EVEN",
+        placeholder: 0,
+        parse: (input) => {
+          const n = Number(input);
+          return Number.isInteger(n)
+            ? { success: true, value: n - (n % 2) }
+            : { success: false, error: message`Expected a number.` };
+        },
+        format: (value) => String(value),
+        normalize: (value) => value - (value % 2),
+      };
+      const parser = withDefault(
+        option("--n", firstOf(choice(["x"]), firstOf(choice(["7"]), evenizer))),
+        7,
+      );
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, 6);
     });
   });
 
