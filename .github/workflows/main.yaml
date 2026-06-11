@@ -82,6 +82,7 @@ jobs:
     if: github.event_name == 'push'
     needs: [test-node, test-deno, test-bun, check]
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
       id-token: write
@@ -108,7 +109,19 @@ jobs:
         fi
     - run: |
         set -ex
-        deno publish --allow-dirty
+        # jsr.io is flaky these days; deno publish often hangs until it
+        # times out, but eventually succeeds after enough retries.
+        for attempt in $(seq 1 30); do
+          if timeout 60 deno publish --allow-dirty; then
+            break
+          elif [[ "$attempt" -eq 30 ]]; then
+            echo "deno publish failed after $attempt attempts." >&2
+            exit 1
+          else
+            echo "deno publish failed (attempt $attempt); retrying..." >&2
+            sleep 10
+          fi
+        done
         if [[ "$GITHUB_REF_TYPE" == tag ]]; then
           pnpm publish \
             --recursive \
