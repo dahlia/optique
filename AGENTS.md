@@ -293,6 +293,29 @@ in a single, well-documented location.
 
  -  Test files are co-located with source files using `.test.ts` suffix.
 
+ -  Node.js executes TypeScript directly in type-stripping mode, which
+    rejects TypeScript syntax that requires transformation: parameter
+    properties (`constructor(readonly id: string)`), `enum`, `namespace`,
+    and the like.  Deno and Bun accept such syntax, so the breakage only
+    shows up in `mise test:node` as `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`.
+    Declare class fields explicitly and assign them in the constructor
+    instead:
+
+    ~~~~ typescript
+    // Wrong: parameter property fails under Node.js type stripping
+    class UserId {
+      constructor(readonly id: string) {}
+    }
+
+    // Correct: explicit field declaration and assignment
+    class UserId {
+      readonly id: string;
+      constructor(id: string) {
+        this.id = id;
+      }
+    }
+    ~~~~
+
  -  Avoid the `assert.equal(..., true)` or `assert.equal(..., false)` patterns.
     Use `assert.ok(...)` and `assert.ok(!...)` instead.
 
