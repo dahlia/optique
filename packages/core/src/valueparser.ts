@@ -110,12 +110,15 @@ export interface ValueParser<M extends Mode = "sync", T = unknown> {
    * with combinators like `firstOf()` whose constituents may produce
    * overlapping string representations.
    *
+   * Like {@link normalize}, this method is synchronous regardless of the
+   * parser's mode, so wrappers that spread a sync parser into an async
+   * one inherit it unchanged.
+   *
    * @param value The value to validate.
    * @returns A {@link ValueParserResult} indicating success or failure.
-   *          In async mode, returns a Promise that resolves to the result.
    * @since 1.1.0
    */
-  validate?(value: T): ModeValue<M, ValueParserResult<T>>;
+  validate?(value: T): ValueParserResult<T>;
 
   /**
    * Provides completion suggestions for values of this type.

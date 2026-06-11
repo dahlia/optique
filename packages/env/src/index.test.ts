@@ -62,9 +62,6 @@ function asyncChoice<const T extends readonly string[]>(
   return {
     ...parser,
     mode: "async",
-    // choice() does not define the sync validate() hook at runtime, but the
-    // spread type carries it over; clear it so the async signature matches.
-    validate: undefined,
     async parse(input: string) {
       return await parser.parse(input);
     },

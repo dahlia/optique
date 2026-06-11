@@ -1456,14 +1456,7 @@ export function option<M extends Mode, T>(
         // that a generic format()+parse() round-trip cannot (e.g. values
         // whose string form an earlier overlapping constituent claims).
         if (typeof vp.validate === "function") {
-          return dispatchByMode(
-            mode,
-            () =>
-              wrapParseResult(
-                (vp as ValueParser<"sync", T>).validate!(v as T),
-              ),
-            async () => wrapParseResult(await vp.validate!(v as T)),
-          );
+          return wrapForMode(mode, wrapParseResult(vp.validate(v as T)));
         }
         let stringified: string;
         try {
@@ -2718,13 +2711,9 @@ export function argument<M extends Mode, T>(
         // that a generic format()+parse() round-trip cannot (e.g. values
         // whose string form an earlier overlapping constituent claims).
         if (typeof vp.validate === "function") {
-          return dispatchByMode<M, ValueParserResult<T>>(
+          return wrapForMode<M, ValueParserResult<T>>(
             vpMode,
-            () =>
-              wrapParseResult(
-                (vp as ValueParser<"sync", T>).validate!(v),
-              ),
-            async () => wrapParseResult(await vp.validate!(v)),
+            wrapParseResult(vp.validate(v)),
           );
         }
         let stringified: string;
