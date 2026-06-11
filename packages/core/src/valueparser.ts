@@ -8726,7 +8726,7 @@ export interface FirstOfOptions {
      * constituent errors in declaration order.
      * @since 1.1.0
      */
-    noMatch?:
+    readonly noMatch?:
       | Message
       | ((input: string, errors: readonly Message[]) => Message);
   };
