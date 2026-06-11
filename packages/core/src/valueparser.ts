@@ -8711,7 +8711,7 @@ export interface FirstOfOptions {
   /**
    * The metavariable name for the combined parser.  This is used in help
    * messages to indicate what kind of value this parser expects.
-   * @default The constituent metavars joined with `|`, e.g. `"auto|INTEGER"`.
+   * @default The constituent metavars joined with `|`, e.g. `"TYPE|INTEGER"`.
    */
   readonly metavar?: NonEmptyString;
 
