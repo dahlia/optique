@@ -18953,6 +18953,33 @@ describe("firstOf", () => {
       assert.ok(!result.success);
     });
 
+    it("should not crash on values with throwing toString getters", () => {
+      // Accessing toString on a hostile or exotic object (Proxy, throwing
+      // getter) must not crash ownership resolution; such objects still
+      // compare through their enumerable own fields.
+      class Weird {
+        readonly id: string;
+        constructor(id: string) {
+          this.id = id;
+        }
+        get toString(): never {
+          throw new Error("boom");
+        }
+      }
+      const weird: ValueParser<"sync", Weird> = {
+        mode: "sync",
+        metavar: "WEIRD",
+        placeholder: new Weird(""),
+        parse: (input) => ({ success: true, value: new Weird(input) }),
+        format: (value) => value.id,
+      };
+      const parser = firstOf(weird, integer());
+      const result = parser.validate?.(new Weird("x"));
+      assert.ok(result?.success);
+      assert.ok(result.value instanceof Weird);
+      assert.equal(result.value.id, "x");
+    });
+
     it("should treat a throwing constituent validate() as non-ownership", () => {
       // A custom parser's validate() hook is typed for its own T, so it
       // may reasonably use string-only operations that throw when handed

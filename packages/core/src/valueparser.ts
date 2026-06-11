@@ -9317,9 +9317,15 @@ function valuesEqual(a: unknown, b: unknown): boolean {
  * than the generic `Object.prototype.toString`.
  */
 function hasCustomToString(value: object): boolean {
-  const toString = (value as { toString?: unknown }).toString;
-  return typeof toString === "function" &&
-    toString !== Object.prototype.toString;
+  // Reading the property can throw for exotic objects (a Proxy or a
+  // throwing getter); treat those as having no usable toString().
+  try {
+    const toString = (value as { toString?: unknown }).toString;
+    return typeof toString === "function" &&
+      toString !== Object.prototype.toString;
+  } catch {
+    return false;
+  }
 }
 
 /**
