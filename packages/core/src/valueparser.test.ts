@@ -18566,6 +18566,19 @@ describe("firstOf", () => {
       assert.deepEqual(parser.choices, ["a", "b", "c"]);
     });
 
+    it("should deduplicate overlapping choices", () => {
+      const parser = firstOf(choice(["a", "b"]), choice(["b", "c"]));
+      assert.deepEqual(parser.choices, ["a", "b", "c"]);
+    });
+
+    it("should keep 0 and -0 distinct when deduplicating", () => {
+      const parser = firstOf(choice([0]), choice([-0, 1]));
+      assert.equal(parser.choices?.length, 3);
+      assert.ok(Object.is(parser.choices?.[0], 0));
+      assert.ok(Object.is(parser.choices?.[1], -0));
+      assert.equal(parser.choices?.[2], 1);
+    });
+
     it("should omit choices when any constituent is open-ended", () => {
       const parser = firstOf(choice(["auto"]), integer());
       assert.equal(parser.choices, undefined);

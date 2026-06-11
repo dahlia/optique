@@ -9003,11 +9003,19 @@ export function firstOf(
   ensureNonEmptyString(metavar);
 
   // A merged choices list is only meaningful when it is exhaustive, i.e.,
-  // when every constituent enumerates its valid values.  Concatenation
-  // (rather than Set-based deduplication) preserves values like 0 and -0
-  // that choice() deliberately distinguishes.
+  // when every constituent enumerates its valid values.  Overlapping
+  // choices are deduplicated with Object.is rather than a Set, which
+  // would conflate values like 0 and -0 that choice() deliberately
+  // distinguishes.
   const mergedChoices = parsers.every((parser) => parser.choices != null)
-    ? Object.freeze(parsers.flatMap((parser) => [...parser.choices!]))
+    ? Object.freeze(
+      parsers
+        .flatMap((parser) => [...parser.choices!])
+        .filter(
+          (value, index, all) =>
+            all.findIndex((other) => Object.is(other, value)) === index,
+        ),
+    )
     : undefined;
 
   // Finds the constituent that produced the given value, along with its
