@@ -3458,8 +3458,8 @@ handling and help text generation as built-in parsers.
 
 ### ValueParser interface
 
-The `ValueParser<M, T>` interface defines three required properties plus a mode
-marker:
+The `ValueParser<M, T>` interface defines four required properties plus a mode
+marker, and two optional methods:
 
 ~~~~ typescript twoslash
 import type { Mode, ModeValue, NonEmptyString, ValueParserResult } from "@optique/core/valueparser";
@@ -3471,6 +3471,7 @@ interface ValueParser<M extends Mode, T> {
   parse(input: string): ModeValue<M, ValueParserResult<T>>;
   format(value: T): string;
   normalize?(value: T): T;
+  validate?(value: T): ValueParserResult<T>;
 }
 ~~~~
 
@@ -3518,6 +3519,19 @@ interface ValueParser<M extends Mode, T> {
     > Exclusive combinators (`or()`, `longestMatch()`) and multi-source
     > combinators (`merge()`) intentionally do not forward normalization
     > because the active branch or key ownership is unknown at default time.
+
+`validate()`
+:   Optional.  *Available since Optique 1.1.0.*  Validates a value of type
+    `T` as if it had been parsed from CLI input, returning a success result
+    with the possibly canonicalized value or a failure with an error
+    message.  When present, `option()` and `argument()` use this method to
+    validate fallback values (e.g. from `bindEnv()`/`bindConfig()`) instead
+    of the generic `format()`+`parse()` round-trip.  Most parsers do not
+    need it: implement it only when the round-trip cannot faithfully
+    express validation for some values, as with `firstOf()` whose
+    constituents may produce overlapping string representations.  Like
+    `normalize()`, this method is synchronous regardless of the parser's
+    mode.
 
 ### Basic custom parser
 
