@@ -9061,11 +9061,20 @@ export function firstOf(
         // value from another branch of the union; such results are not
         // usable as CLI input and must not be returned.
         if (typeof formatted !== "string") continue;
-        const result = parser.parse(formatted);
-        if (
-          result.success && ownsRoundTrippedValue(parser, result.value, value)
-        ) {
-          return formatted;
+        // Ownership mirrors findOwner(): a constituent's own validate()
+        // hook decides authoritatively (a nested firstOf() may accept a
+        // value whose string form its round-trip cannot express), and
+        // only hookless constituents use the round-trip test.
+        if (typeof parser.validate === "function") {
+          if (parser.validate(value).success) return formatted;
+        } else {
+          const result = parser.parse(formatted);
+          if (
+            result.success &&
+            ownsRoundTrippedValue(parser, result.value, value)
+          ) {
+            return formatted;
+          }
         }
         fallback ??= formatted;
       }

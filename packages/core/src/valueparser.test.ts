@@ -18637,6 +18637,18 @@ describe("firstOf", () => {
       assert.deepEqual(roundTrip.value, value);
     });
 
+    it("should format values owned via a constituent's validate()", () => {
+      // The inner firstOf() accepts { a: 1 } through its validate() hook,
+      // but the outer round-trip cannot see that ownership: the JSON text
+      // is shadowed by the inner choice() branch, so the combined parse
+      // yields the string instead of the object.  The format path must
+      // consult the hook rather than fall back to an earlier branch's
+      // generic stringification ("[object Object]").
+      const inner = firstOf(choice(['{"a":1}']), json({ rootType: "object" }));
+      const outer = firstOf(choice(["x"]), inner);
+      assert.equal(outer.format({ a: 1 }), '{"a":1}');
+    });
+
     it("should format overlapping values for display", () => {
       // format() is a display-oriented best effort; precise fallback
       // validation goes through validate() instead.
