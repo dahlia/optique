@@ -116,7 +116,7 @@ To be released.
     values (e.g. from `bindEnv()`/`bindConfig()`) instead of the generic
     `format()`+`parse()` round-trip, which cannot express validation
     failures for value parsers whose constituents produce overlapping
-    string representations.  [[#821]]
+    string representations.  [[#821], [#826]]
 
  -  Added `firstOf()` value parser combinator that tries multiple sync value
     parsers in declaration order and returns the first successful result,
@@ -132,7 +132,7 @@ To be released.
     customizes this message.  Dynamically built parser lists can be passed
     as a single array (`firstOf(parsers, options?)`).  Async and
     dependency-derived value parsers are rejected at construction time.
-    [[#821]]
+    [[#821], [#826]]
 
 [Semantic Versioning 2.0.0]: https://semver.org/
 [#801]: https://github.com/dahlia/optique/issues/801
@@ -152,6 +152,7 @@ To be released.
 [#821]: https://github.com/dahlia/optique/issues/821
 [#823]: https://github.com/dahlia/optique/issues/823
 [#825]: https://github.com/dahlia/optique/pull/825
+[#826]: https://github.com/dahlia/optique/pull/826
 
 ### @optique/discover
 
