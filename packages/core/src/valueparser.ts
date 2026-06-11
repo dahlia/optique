@@ -9030,7 +9030,16 @@ export function firstOf(
     | undefined {
     for (const parser of parsers) {
       if (typeof parser.validate === "function") {
-        const result = parser.validate(value);
+        // A constituent's validate() hook is typed for its own value
+        // type, so it may throw when handed a foreign value from another
+        // branch of the union; treat that as non-ownership, like a
+        // throwing format().
+        let result: ValueParserResult<unknown>;
+        try {
+          result = parser.validate(value);
+        } catch {
+          continue;
+        }
         if (result.success) return { parser, result };
         continue;
       }
@@ -9105,9 +9114,16 @@ export function firstOf(
         // Ownership mirrors findOwner(): a constituent's own validate()
         // hook decides authoritatively (a nested firstOf() may accept a
         // value whose string form its round-trip cannot express), and
-        // only hookless constituents use the round-trip test.
+        // only hookless constituents use the round-trip test.  A hook
+        // that throws on a foreign value counts as non-ownership.
         if (typeof parser.validate === "function") {
-          if (parser.validate(value).success) return formatted;
+          let owned = false;
+          try {
+            owned = parser.validate(value).success;
+          } catch {
+            // Not this constituent's value.
+          }
+          if (owned) return formatted;
         } else {
           const result = parser.parse(formatted);
           if (

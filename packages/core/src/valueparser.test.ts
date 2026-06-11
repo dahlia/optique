@@ -18855,6 +18855,35 @@ describe("firstOf", () => {
       assert.deepEqual(result.value, { a: 1 });
     });
 
+    it("should treat a throwing constituent validate() as non-ownership", () => {
+      // A custom parser's validate() hook is typed for its own T, so it
+      // may reasonably use string-only operations that throw when handed
+      // a foreign value from another branch of the union.  Such throws
+      // must count as "not this constituent's value", letting later
+      // branches claim it, just like throwing format() does.
+      const word: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "WORD",
+        placeholder: "",
+        parse: (input) =>
+          /^[a-z]+$/.test(input)
+            ? { success: true, value: input }
+            : { success: false, error: message`Expected a lowercase word.` },
+        format: (value) => String(value),
+        validate(value) {
+          const lower = value.toLowerCase();
+          return /^[a-z]+$/.test(lower)
+            ? { success: true, value: lower }
+            : { success: false, error: message`Expected a lowercase word.` };
+        },
+      };
+      const parser = firstOf(word, integer());
+      const result = parser.validate?.(1);
+      assert.ok(result?.success);
+      assert.equal(result.value, 1);
+      assert.equal(parser.format(1), "1");
+    });
+
     it("should consult a constituent's validate() for shadowed values", () => {
       // The inner firstOf() cannot round-trip the shadowed integer 1
       // through format()+parse() (the string "1" goes to its choice()
