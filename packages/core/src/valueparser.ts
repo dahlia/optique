@@ -9276,8 +9276,9 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   if (!plainA) {
     if (prototypeA !== prototypeB) return false;
     // Class instances may expose state through enumerable own fields
-    // (e.g. `class UserId { constructor(readonly id: string) {} }`),
-    // through private fields or internal slots that only an overridden
+    // (e.g. a `UserId` wrapper class assigning `this.id` in its
+    // constructor), through private fields or internal slots that only an
+    // overridden
     // toString() serializes (e.g. Temporal instances), or both.  Compare
     // whatever channels the objects provide: enumerable fields must match
     // structurally, and when toString() is overridden, both sides must

@@ -18875,7 +18875,10 @@ describe("firstOf", () => {
       // equal, or the parser could never own its own round-tripped
       // values and fallback validation would reject them.
       class UserId {
-        constructor(readonly id: string) {}
+        readonly id: string;
+        constructor(id: string) {
+          this.id = id;
+        }
       }
       const userId: ValueParser<"sync", UserId> = {
         mode: "sync",
@@ -18900,8 +18903,10 @@ describe("firstOf", () => {
       // Structural key equality alone must not let a lossy parser claim
       // such a value when the serializations disagree.
       class Token {
+        readonly id: string;
         readonly #scope: string;
-        constructor(readonly id: string, scope: string) {
+        constructor(id: string, scope: string) {
+          this.id = id;
           this.#scope = scope;
         }
         toString(): string {
