@@ -18924,6 +18924,47 @@ describe("firstOf", () => {
     });
   });
 
+  describe("array form", () => {
+    it("should accept a dynamically built array of parsers", () => {
+      const parsers: ValueParser<"sync", "auto" | number>[] = [
+        choice(["auto"]),
+        integer({ min: 1 }),
+      ];
+      const parser = firstOf(parsers);
+      const autoResult = parser.parse("auto");
+      assert.ok(autoResult.success);
+      assert.equal(autoResult.value, "auto");
+      const intResult = parser.parse("5");
+      assert.ok(intResult.success);
+      assert.equal(intResult.value, 5);
+      assert.equal(parser.metavar, "TYPE|INTEGER");
+    });
+
+    it("should accept options with the array form", () => {
+      const parser = firstOf([choice(["auto"]), integer()], {
+        metavar: "COUNT",
+      });
+      assert.equal(parser.metavar, "COUNT");
+    });
+
+    it("should snapshot the parser array at construction time", () => {
+      const parsers: ValueParser<"sync", "auto" | number>[] = [
+        choice(["auto"]),
+        integer(),
+      ];
+      const parser = firstOf(parsers);
+      parsers.length = 0;
+      const result = parser.parse("5");
+      assert.ok(result.success);
+      assert.equal(result.value, 5);
+    });
+
+    it("should throw TypeError for arrays with fewer than two parsers", () => {
+      assert.throws(() => firstOf([integer()]), TypeError);
+      assert.throws(() => firstOf([]), TypeError);
+    });
+  });
+
   describe("custom errors", () => {
     it("should use a static noMatch message", () => {
       const parser = firstOf(choice(["auto"]), integer({ min: 1 }), {
@@ -18978,6 +19019,9 @@ describe("firstOf", () => {
         "sync",
         "a" | "b" | "c" | "d" | "e" | number
       >;
+
+      const fromArray = firstOf([choice(["auto"]), integer({ min: 1 })]);
+      fromArray satisfies ValueParser<"sync", "auto" | number>;
 
       const result = pair.parse("auto");
       assert.ok(result.success);

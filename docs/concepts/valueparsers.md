@@ -617,6 +617,30 @@ multiple `choice()` parsers), the merged list is also exposed for the
 `showChoices` display option; if any constituent is open-ended, no choice
 list is shown.
 
+### Dynamic parser lists
+
+The variadic form requires at least two statically known arguments.  When
+the constituents are built dynamically, pass them as a single array
+instead:
+
+~~~~ typescript twoslash
+import {
+  choice,
+  firstOf,
+  integer,
+  type ValueParser,
+} from "@optique/core/valueparser";
+// ---cut-before---
+const parsers: ValueParser<"sync", "auto" | number>[] = [
+  choice(["auto"]),
+  integer({ min: 1 }),
+];
+const count = firstOf(parsers, { metavar: "COUNT" });
+~~~~
+
+The array must still contain at least two parsers; shorter arrays are
+rejected with a `TypeError` at construction time.
+
 ### Error messages
 
 When every constituent fails, the error lists each constituent's error on

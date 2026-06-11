@@ -8902,32 +8902,73 @@ export function firstOf<
 ): ValueParser<"sync", ValueParserValue<TParsers[number]>>;
 
 /**
+ * Creates a {@link ValueParser} that tries the value parsers in the given
+ * array in declaration order and returns the result of the first one that
+ * succeeds.
+ *
+ * Unlike the variadic overloads, which require at least two statically
+ * known arguments, this form accepts a dynamically built array:
+ *
+ * ```typescript
+ * const parsers: ValueParser<"sync", string | number>[] = buildParsers();
+ * const combined = firstOf(parsers);
+ * ```
+ * @template TParsers The array of constituent value parsers.
+ * @param parsers The value parsers to try.  Must contain at least two
+ *                parsers.
+ * @param options Configuration options for the combined parser.
+ * @returns A {@link ValueParser} that accepts values matching any of the
+ *          constituent parsers.
+ * @throws {TypeError} If the array contains fewer than two value parsers.
+ * @throws {TypeError} If any constituent is not a sync value parser.
+ * @throws {TypeError} If any constituent is a dependency-derived value
+ *         parser (created via `deriveFrom()` or `dependency().derive()`).
+ * @since 1.1.0
+ */
+export function firstOf<
+  const TParsers extends readonly ValueParser<"sync", unknown>[],
+>(
+  parsers: TParsers,
+  options?: FirstOfOptions,
+): ValueParser<"sync", ValueParserValue<TParsers[number]>>;
+
+/**
  * Implementation of the {@link firstOf} combinator.
  */
 export function firstOf(
   ...rawArgs: readonly (
     | ValueParser<"sync", unknown>
     | FirstOfTailOptions
+    | FirstOfOptions
+    | readonly ValueParser<"sync", unknown>[]
     | undefined
   )[]
 ): ValueParser<"sync", unknown> {
-  // The fixed-arity overloads declare the trailing options as optional,
-  // so an explicit `undefined` may arrive as the last argument:
+  // The fixed-arity and array overloads declare the trailing options as
+  // optional, so an explicit `undefined` may arrive as the last argument:
   const args = rawArgs.length > 0 && rawArgs.at(-1) === undefined
     ? rawArgs.slice(0, -1)
     : rawArgs;
   let parsers: readonly ValueParser<"sync", unknown>[];
   let options: FirstOfOptions;
-  const last = args.at(-1);
-  if (
-    args.length > 0 && typeof last === "object" && last != null &&
-    !isValueParser(last)
-  ) {
-    options = last as FirstOfOptions;
-    parsers = args.slice(0, -1) as readonly ValueParser<"sync", unknown>[];
+  if (args.length > 0 && Array.isArray(args[0])) {
+    // Snapshot the caller-provided array so later mutations cannot make
+    // the parsing behavior diverge from the construction-time metadata
+    // (metavar, choices, normalize/suggest presence).
+    parsers = [...args[0]] as readonly ValueParser<"sync", unknown>[];
+    options = (args[1] ?? {}) as FirstOfOptions;
   } else {
-    options = {};
-    parsers = args as readonly ValueParser<"sync", unknown>[];
+    const last = args.at(-1);
+    if (
+      args.length > 0 && typeof last === "object" && last != null &&
+      !isValueParser(last)
+    ) {
+      options = last as FirstOfOptions;
+      parsers = args.slice(0, -1) as readonly ValueParser<"sync", unknown>[];
+    } else {
+      options = {};
+      parsers = args as readonly ValueParser<"sync", unknown>[];
+    }
   }
   if (parsers.length < 2) {
     throw new TypeError("firstOf() requires at least two value parsers.");
