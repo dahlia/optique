@@ -9180,12 +9180,19 @@ function firstOfNoMatchError(errors: readonly Message[]): Message {
  * Determines whether a {@link firstOf} constituent owns a value, given the
  * result of round-tripping the value through the constituent's `format()`
  * and `parse()`.  The constituent owns the value when the round-trip
- * preserves it exactly, or when it yields the constituent's own
- * normalization of it (e.g. a MAC address parser canonicalizing separators
- * and case).  A merely *successful* round-trip is not enough: a constituent
- * with a lossy `format()` (such as `color()` reducing any `{ r, g, b, a }`
- * shape to a hex string) must not claim values that belong to a later,
- * more faithful constituent.
+ * preserves it exactly, when it yields the constituent's own normalization
+ * of it (e.g. a MAC address parser canonicalizing separators and case), or
+ * when a primitive value is canonicalized within its own primitive type
+ * (e.g. a case-insensitive `choice()` folding `"INFO"` to `"info"`, or a
+ * number parser folding `-0` to `0`)—the same acceptance the constituent
+ * alone would grant a fallback value through round-trip validation.
+ * A merely *successful* round-trip is not enough otherwise: a round-trip
+ * that changes the primitive type means the string form belongs to a
+ * different branch of the union (e.g. `choice(["1"])` capturing the
+ * integer 1), and for object values structural equality is the only way
+ * to tell canonicalization from data loss (e.g. a lossy `color()`
+ * `format()` dropping fields that belong to a later, more faithful
+ * constituent).
  */
 function ownsRoundTrippedValue(
   parser: ValueParser<"sync", unknown>,
@@ -9193,14 +9200,17 @@ function ownsRoundTrippedValue(
   value: unknown,
 ): boolean {
   if (valuesEqual(roundTripped, value)) return true;
-  if (typeof parser.normalize !== "function") return false;
-  let normalized: unknown;
-  try {
-    normalized = parser.normalize(value);
-  } catch {
-    return false;
+  if (typeof parser.normalize === "function") {
+    let normalized: unknown;
+    try {
+      normalized = parser.normalize(value);
+    } catch {
+      return false;
+    }
+    if (valuesEqual(roundTripped, normalized)) return true;
   }
-  return valuesEqual(roundTripped, normalized);
+  return value !== null && typeof value !== "object" &&
+    typeof roundTripped === typeof value;
 }
 
 /**

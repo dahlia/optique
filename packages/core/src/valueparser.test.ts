@@ -18702,6 +18702,40 @@ describe("firstOf", () => {
       assert.equal(stringResult.value, "0");
     });
 
+    it("should accept fallback values canonicalized by parse()", () => {
+      // choice() with caseInsensitive canonicalizes during parse() but
+      // does not expose normalize(), so the round trip yields "info" for
+      // the fallback "INFO".  A same-type primitive canonicalization is
+      // still ownership: the constituent alone would accept the same
+      // fallback through its format()+parse() round-trip validation.
+      const parser = firstOf(
+        choice(["info", "warn"], { caseInsensitive: true }),
+        integer(),
+      );
+      // Config/env fallback values are runtime-typed, so they can carry
+      // representations outside the inferred literal union:
+      const result = parser.validate?.("INFO" as never);
+      assert.ok(result?.success);
+      assert.equal(result.value, "info");
+
+      // Same for number canonicalization: choice([0]) parses "-0" as 0.
+      const zero = firstOf(choice([0]), string());
+      const zeroResult = zero.validate?.(-0);
+      assert.ok(zeroResult?.success);
+      assert.ok(Object.is(zeroResult.value, 0));
+    });
+
+    it("should canonicalize parse-normalized fallbacks through option()", () => {
+      const parser = option(
+        "--level",
+        firstOf(choice(["info"], { caseInsensitive: true }), integer()),
+      );
+      const result = parser.validateValue?.("INFO" as never);
+      assert.ok(result);
+      assert.ok(result.success);
+      assert.equal(result.value, "info");
+    });
+
     it("should canonicalize values through the owning constituent", () => {
       const mac = macAddress({ outputSeparator: ":" });
       const parser = firstOf(mac, choice(["none"]));
