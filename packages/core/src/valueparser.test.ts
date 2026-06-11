@@ -18868,6 +18868,63 @@ describe("firstOf", () => {
       assert.deepEqual(result.value, { a: 1 });
     });
 
+    it("should let class instances with public fields own their values", () => {
+      // A hookless custom parser may round-trip a class instance through
+      // its enumerable own fields without overriding toString().  Two
+      // structurally equal instances of the same class must compare as
+      // equal, or the parser could never own its own round-tripped
+      // values and fallback validation would reject them.
+      class UserId {
+        constructor(readonly id: string) {}
+      }
+      const userId: ValueParser<"sync", UserId> = {
+        mode: "sync",
+        metavar: "USER",
+        placeholder: new UserId(""),
+        parse: (input) =>
+          /^[a-z]+$/.test(input)
+            ? { success: true, value: new UserId(input) }
+            : { success: false, error: message`Expected a user ID.` },
+        format: (value) => value.id,
+      };
+      const parser = firstOf(integer(), userId);
+      const result = parser.validate?.(new UserId("alice"));
+      assert.ok(result?.success);
+      assert.ok(result.value instanceof UserId);
+      assert.equal(result.value.id, "alice");
+    });
+
+    it("should require matching serialization when toString() is overridden", () => {
+      // A class may expose some state through enumerable fields and keep
+      // the rest in private fields that only its toString() serializes.
+      // Structural key equality alone must not let a lossy parser claim
+      // such a value when the serializations disagree.
+      class Token {
+        readonly #scope: string;
+        constructor(readonly id: string, scope: string) {
+          this.#scope = scope;
+        }
+        toString(): string {
+          return `${this.id}:${this.#scope}`;
+        }
+      }
+      const token: ValueParser<"sync", Token> = {
+        mode: "sync",
+        metavar: "TOKEN",
+        placeholder: new Token("", ""),
+        parse: (input) => ({
+          success: true,
+          value: new Token(input, "parsed"),
+        }),
+        // Lossy: drops the private scope.
+        format: (value) => value.id,
+      };
+      const parser = firstOf(token, choice(["none"]));
+      const result = parser.validate?.(new Token("alice", "original"));
+      assert.ok(result);
+      assert.ok(!result.success);
+    });
+
     it("should treat a throwing constituent validate() as non-ownership", () => {
       // A custom parser's validate() hook is typed for its own T, so it
       // may reasonably use string-only operations that throw when handed

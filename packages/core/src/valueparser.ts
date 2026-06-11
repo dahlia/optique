@@ -9275,30 +9275,47 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   if (plainA !== plainB) return false;
   if (!plainA) {
     if (prototypeA !== prototypeB) return false;
-    // Opaque (non-plain) objects such as Temporal instances can hold
-    // their state in private fields or internal slots that enumerable-key
-    // comparison cannot see, so two key-less objects of the same type are
-    // not necessarily equal.  Compare via their overridden toString()
-    // serialization, and treat objects without one as unequal.  Both
-    // sides must override it: an instance-level toString() on one side
-    // alone (e.g. on a freshly parsed value) must not equate it with an
-    // object that stringifies generically.
-    const toStringA = (a as { toString?: unknown }).toString;
-    const toStringB = (b as { toString?: unknown }).toString;
-    if (
-      typeof toStringA !== "function" ||
-      typeof toStringB !== "function" ||
-      toStringA === Object.prototype.toString ||
-      toStringB === Object.prototype.toString
-    ) {
-      return false;
-    }
+    // Class instances may expose state through enumerable own fields
+    // (e.g. `class UserId { constructor(readonly id: string) {} }`),
+    // through private fields or internal slots that only an overridden
+    // toString() serializes (e.g. Temporal instances), or both.  Compare
+    // whatever channels the objects provide: enumerable fields must match
+    // structurally, and when toString() is overridden, both sides must
+    // override it (an instance-level override on one side alone, e.g. on
+    // a freshly parsed value, must not equate it with an object that
+    // stringifies generically) and the serializations must agree.
+    // Key-less objects without an overridden toString() expose no channel
+    // to compare, so they are conservatively unequal.
+    const overridesA = hasCustomToString(a);
+    const overridesB = hasCustomToString(b);
+    if (overridesA !== overridesB) return false;
+    const hasKeys = Object.keys(a).length > 0 || Object.keys(b).length > 0;
+    if (hasKeys && !plainObjectsEqual(a, b)) return false;
+    if (!overridesA) return hasKeys;
     try {
       return String(a) === String(b);
     } catch {
       return false;
     }
   }
+  return plainObjectsEqual(a, b);
+}
+
+/**
+ * Checks whether an object provides a `toString()` implementation other
+ * than the generic `Object.prototype.toString`.
+ */
+function hasCustomToString(value: object): boolean {
+  const toString = (value as { toString?: unknown }).toString;
+  return typeof toString === "function" &&
+    toString !== Object.prototype.toString;
+}
+
+/**
+ * Compares two objects by their enumerable own keys, recursing into the
+ * values with {@link valuesEqual}.
+ */
+function plainObjectsEqual(a: object, b: object): boolean {
   const aKeys = Object.keys(a);
   const bKeys = Object.keys(b);
   if (aKeys.length !== bKeys.length) return false;
