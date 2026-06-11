@@ -18738,6 +18738,29 @@ describe("firstOf", () => {
       assert.ok(Object.is(zeroResult.value, 0));
     });
 
+    it("should not treat arbitrary same-type round trips as ownership", () => {
+      // A parser whose format() clamps values to its range round-trips
+      // 15 into 10.  That is data loss, not canonicalization: it must
+      // not claim the value ahead of a later constituent that preserves
+      // it exactly.
+      const clamping: ValueParser<"sync", number> = {
+        mode: "sync",
+        metavar: "CLAMPED",
+        placeholder: 1,
+        parse: (input) => {
+          const n = Number(input);
+          return Number.isInteger(n) && n >= 1 && n <= 10
+            ? { success: true, value: n }
+            : { success: false, error: message`Expected 1-10.` };
+        },
+        format: (value) => String(Math.max(1, Math.min(10, value))),
+      };
+      const parser = firstOf(clamping, float());
+      const result = parser.validate?.(15);
+      assert.ok(result?.success);
+      assert.equal(result.value, 15);
+    });
+
     it("should canonicalize parse-normalized fallbacks through option()", () => {
       const parser = option(
         "--level",

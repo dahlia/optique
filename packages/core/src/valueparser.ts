@@ -9206,17 +9206,20 @@ function firstOfNoMatchError(errors: readonly Message[]): Message {
  * and `parse()`.  The constituent owns the value when the round-trip
  * preserves it exactly, when it yields the constituent's own normalization
  * of it (e.g. a MAC address parser canonicalizing separators and case), or
- * when a primitive value is canonicalized within its own primitive type
- * (e.g. a case-insensitive `choice()` folding `"INFO"` to `"info"`, or a
- * number parser folding `-0` to `0`)—the same acceptance the constituent
- * alone would grant a fallback value through round-trip validation.
- * A merely *successful* round-trip is not enough otherwise: a round-trip
- * that changes the primitive type means the string form belongs to a
- * different branch of the union (e.g. `choice(["1"])` capturing the
- * integer 1), and for object values structural equality is the only way
- * to tell canonicalization from data loss (e.g. a lossy `color()`
- * `format()` dropping fields that belong to a later, more faithful
- * constituent).
+ * when the round-trip is a recognized parse-level canonicalization: a
+ * case-insensitive string match (e.g. a case-insensitive `choice()`
+ * folding `"INFO"` to `"info"`) or numeric equality (a number parser
+ * folding `-0` to `0`)—the same acceptance the constituent alone would
+ * grant a fallback value through round-trip validation.  Parsers with
+ * richer parse-level canonicalization should expose it via `normalize()`.
+ * A merely *successful* round-trip is not enough otherwise: an arbitrary
+ * same-type change means data loss rather than canonicalization (e.g. a
+ * clamping `format()` folding 15 into 10), a round-trip that changes the
+ * primitive type means the string form belongs to a different branch of
+ * the union (e.g. `choice(["1"])` capturing the integer 1), and for
+ * object values structural equality is the only way to tell
+ * canonicalization from data loss (e.g. a lossy `color()` `format()`
+ * dropping fields that belong to a later, more faithful constituent).
  */
 function ownsRoundTrippedValue(
   parser: ValueParser<"sync", unknown>,
@@ -9233,8 +9236,15 @@ function ownsRoundTrippedValue(
     }
     if (valuesEqual(roundTripped, normalized)) return true;
   }
-  return value !== null && typeof value !== "object" &&
-    typeof roundTripped === typeof value;
+  if (typeof value === "string" && typeof roundTripped === "string") {
+    return value.toLowerCase() === roundTripped.toLowerCase();
+  }
+  if (typeof value === "number" && typeof roundTripped === "number") {
+    // Object.is above already handled identical numbers; this only
+    // accepts the remaining ±0 fold.
+    return value === roundTripped;
+  }
+  return false;
 }
 
 /**
