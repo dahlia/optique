@@ -1,6 +1,17 @@
-import { type Message, message, text, valueSet } from "./message.ts";
+import {
+  cloneMessage,
+  lineBreak,
+  type Message,
+  message,
+  type MessageTerm,
+  metavar as metavarTerm,
+  text,
+  valueSet,
+} from "./message.ts";
+import { isDerivedValueParser } from "./internal/dependency.ts";
 import { ensureNonEmptyString, type NonEmptyString } from "./nonempty.ts";
 import type { Mode, ModeIterable, ModeValue, Suggestion } from "./parser.ts";
+import { deduplicateSuggestions } from "./suggestion.ts";
 
 export {
   ensureNonEmptyString,
@@ -86,6 +97,28 @@ export interface ValueParser<M extends Mode = "sync", T = unknown> {
    * @since 1.0.0
    */
   normalize?(value: T): T;
+
+  /**
+   * Validates a value of type {@link T} as if it had been parsed from CLI
+   * input, returning either a success result (with the possibly
+   * canonicalized value) or a failure with an error message.
+   *
+   * When present, `option()` and `argument()` use this method to validate
+   * fallback values (e.g. from `bindEnv()`/`bindConfig()`) instead of the
+   * generic `format()`+`parse()` round-trip.  Implement it when the
+   * round-trip cannot faithfully express validation for some values, as
+   * with combinators like `firstOf()` whose constituents may produce
+   * overlapping string representations.
+   *
+   * Like {@link normalize}, this method is synchronous regardless of the
+   * parser's mode, so wrappers that spread a sync parser into an async
+   * one inherit it unchanged.
+   *
+   * @param value The value to validate.
+   * @returns A {@link ValueParserResult} indicating success or failure.
+   * @since 1.1.0
+   */
+  validate?(value: T): ValueParserResult<T>;
 
   /**
    * Provides completion suggestions for values of this type.
@@ -8668,4 +8701,676 @@ function findNonFiniteNumber(root: Json): number | undefined {
     }
   }
   return undefined;
+}
+
+/**
+ * Options for the {@link firstOf} combinator.
+ * @since 1.1.0
+ */
+export interface FirstOfOptions {
+  /**
+   * The metavariable name for the combined parser.  This is used in help
+   * messages to indicate what kind of value this parser expects.
+   * @default The constituent metavars joined with `|`, e.g. `"TYPE|INTEGER"`.
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * Custom error messages for firstOf parsing failures.
+   * @since 1.1.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when every constituent parser fails.  Can be a
+     * static message or a function that receives the input and the
+     * constituent errors in declaration order.
+     * @since 1.1.0
+     */
+    readonly noMatch?:
+      | Message
+      | ((input: string, errors: readonly Message[]) => Message);
+  };
+}
+
+/**
+ * The trailing options argument of {@link firstOf}.  A {@link ValueParser}
+ * structurally satisfies {@link FirstOfOptions} (its `metavar` field matches
+ * the optional one), so the required `parse` method is excluded to keep
+ * the overloads unambiguous.
+ */
+type FirstOfTailOptions = FirstOfOptions & { readonly parse?: never };
+
+/**
+ * Extracts the result type of a sync {@link ValueParser}.
+ */
+type ValueParserValue<P> = P extends ValueParser<"sync", infer T> ? T : never;
+
+/**
+ * Creates a {@link ValueParser} that tries two value parsers in declaration
+ * order and returns the result of the first one that succeeds.
+ *
+ * The result type is the union of the constituent result types:
+ *
+ * ```typescript
+ * const count = firstOf(choice(["auto"]), integer({ min: 1 }));
+ * // Inferred type: ValueParser<"sync", "auto" | number>
+ * ```
+ *
+ * When every constituent fails, the combined error lists each constituent's
+ * error on its own line.
+ * @template TA The result type of the first parser.
+ * @template TB The result type of the second parser.
+ * @param a The first value parser to try.
+ * @param b The second value parser to try.
+ * @param options Configuration options for the combined parser.
+ * @returns A {@link ValueParser} that accepts values matching any of the
+ *          constituent parsers.
+ * @throws {TypeError} If any constituent is not a sync value parser.
+ * @throws {TypeError} If any constituent is a dependency-derived value
+ *         parser (created via `deriveFrom()` or `dependency().derive()`).
+ * @since 1.1.0
+ */
+export function firstOf<TA, TB>(
+  a: ValueParser<"sync", TA>,
+  b: ValueParser<"sync", TB>,
+  options?: FirstOfTailOptions,
+): ValueParser<"sync", TA | TB>;
+
+/**
+ * Creates a {@link ValueParser} that tries three value parsers in declaration
+ * order and returns the result of the first one that succeeds.
+ * @template TA The result type of the first parser.
+ * @template TB The result type of the second parser.
+ * @template TC The result type of the third parser.
+ * @param a The first value parser to try.
+ * @param b The second value parser to try.
+ * @param c The third value parser to try.
+ * @param options Configuration options for the combined parser.
+ * @returns A {@link ValueParser} that accepts values matching any of the
+ *          constituent parsers.
+ * @throws {TypeError} If any constituent is not a sync value parser.
+ * @throws {TypeError} If any constituent is a dependency-derived value
+ *         parser (created via `deriveFrom()` or `dependency().derive()`).
+ * @since 1.1.0
+ */
+export function firstOf<TA, TB, TC>(
+  a: ValueParser<"sync", TA>,
+  b: ValueParser<"sync", TB>,
+  c: ValueParser<"sync", TC>,
+  options?: FirstOfTailOptions,
+): ValueParser<"sync", TA | TB | TC>;
+
+/**
+ * Creates a {@link ValueParser} that tries four value parsers in declaration
+ * order and returns the result of the first one that succeeds.
+ * @template TA The result type of the first parser.
+ * @template TB The result type of the second parser.
+ * @template TC The result type of the third parser.
+ * @template TD The result type of the fourth parser.
+ * @param a The first value parser to try.
+ * @param b The second value parser to try.
+ * @param c The third value parser to try.
+ * @param d The fourth value parser to try.
+ * @param options Configuration options for the combined parser.
+ * @returns A {@link ValueParser} that accepts values matching any of the
+ *          constituent parsers.
+ * @throws {TypeError} If any constituent is not a sync value parser.
+ * @throws {TypeError} If any constituent is a dependency-derived value
+ *         parser (created via `deriveFrom()` or `dependency().derive()`).
+ * @since 1.1.0
+ */
+export function firstOf<TA, TB, TC, TD>(
+  a: ValueParser<"sync", TA>,
+  b: ValueParser<"sync", TB>,
+  c: ValueParser<"sync", TC>,
+  d: ValueParser<"sync", TD>,
+  options?: FirstOfTailOptions,
+): ValueParser<"sync", TA | TB | TC | TD>;
+
+/**
+ * Creates a {@link ValueParser} that tries five value parsers in declaration
+ * order and returns the result of the first one that succeeds.
+ * @template TA The result type of the first parser.
+ * @template TB The result type of the second parser.
+ * @template TC The result type of the third parser.
+ * @template TD The result type of the fourth parser.
+ * @template TE The result type of the fifth parser.
+ * @param a The first value parser to try.
+ * @param b The second value parser to try.
+ * @param c The third value parser to try.
+ * @param d The fourth value parser to try.
+ * @param e The fifth value parser to try.
+ * @param options Configuration options for the combined parser.
+ * @returns A {@link ValueParser} that accepts values matching any of the
+ *          constituent parsers.
+ * @throws {TypeError} If any constituent is not a sync value parser.
+ * @throws {TypeError} If any constituent is a dependency-derived value
+ *         parser (created via `deriveFrom()` or `dependency().derive()`).
+ * @since 1.1.0
+ */
+export function firstOf<TA, TB, TC, TD, TE>(
+  a: ValueParser<"sync", TA>,
+  b: ValueParser<"sync", TB>,
+  c: ValueParser<"sync", TC>,
+  d: ValueParser<"sync", TD>,
+  e: ValueParser<"sync", TE>,
+  options?: FirstOfTailOptions,
+): ValueParser<"sync", TA | TB | TC | TD | TE>;
+
+/**
+ * Creates a {@link ValueParser} that tries any number of value parsers in
+ * declaration order and returns the result of the first one that succeeds.
+ * @template TParsers The tuple of constituent value parsers.
+ * @param args The value parsers to try, followed by configuration options.
+ * @returns A {@link ValueParser} that accepts values matching any of the
+ *          constituent parsers.
+ * @throws {TypeError} If any constituent is not a sync value parser.
+ * @throws {TypeError} If any constituent is a dependency-derived value
+ *         parser (created via `deriveFrom()` or `dependency().derive()`).
+ * @since 1.1.0
+ */
+export function firstOf<
+  const TParsers extends readonly [
+    ValueParser<"sync", unknown>,
+    ValueParser<"sync", unknown>,
+    ...ValueParser<"sync", unknown>[],
+  ],
+>(
+  ...args: [...parsers: TParsers, options: FirstOfTailOptions]
+): ValueParser<"sync", ValueParserValue<TParsers[number]>>;
+
+/**
+ * Creates a {@link ValueParser} that tries any number of value parsers in
+ * declaration order and returns the result of the first one that succeeds.
+ * @template TParsers The tuple of constituent value parsers.
+ * @param parsers The value parsers to try.
+ * @returns A {@link ValueParser} that accepts values matching any of the
+ *          constituent parsers.
+ * @throws {TypeError} If any constituent is not a sync value parser.
+ * @throws {TypeError} If any constituent is a dependency-derived value
+ *         parser (created via `deriveFrom()` or `dependency().derive()`).
+ * @since 1.1.0
+ */
+export function firstOf<
+  const TParsers extends readonly [
+    ValueParser<"sync", unknown>,
+    ValueParser<"sync", unknown>,
+    ...ValueParser<"sync", unknown>[],
+  ],
+>(
+  ...parsers: TParsers
+): ValueParser<"sync", ValueParserValue<TParsers[number]>>;
+
+/**
+ * Creates a {@link ValueParser} that tries the value parsers in the given
+ * array in declaration order and returns the result of the first one that
+ * succeeds.
+ *
+ * Unlike the variadic overloads, which require at least two statically
+ * known arguments, this form accepts a dynamically built array:
+ *
+ * ```typescript
+ * const parsers: ValueParser<"sync", string | number>[] = buildParsers();
+ * const combined = firstOf(parsers);
+ * ```
+ * @template TParsers The array of constituent value parsers.
+ * @param parsers The value parsers to try.  Must contain at least two
+ *                parsers.
+ * @param options Configuration options for the combined parser.
+ * @returns A {@link ValueParser} that accepts values matching any of the
+ *          constituent parsers.
+ * @throws {TypeError} If the array contains fewer than two value parsers.
+ * @throws {TypeError} If any constituent is not a sync value parser.
+ * @throws {TypeError} If any constituent is a dependency-derived value
+ *         parser (created via `deriveFrom()` or `dependency().derive()`).
+ * @since 1.1.0
+ */
+export function firstOf<
+  const TParsers extends readonly ValueParser<"sync", unknown>[],
+>(
+  parsers: TParsers,
+  options?: FirstOfOptions,
+): ValueParser<"sync", ValueParserValue<TParsers[number]>>;
+
+/**
+ * Implementation of the {@link firstOf} combinator.
+ */
+export function firstOf(
+  ...rawArgs: readonly (
+    | ValueParser<"sync", unknown>
+    | FirstOfTailOptions
+    | FirstOfOptions
+    | readonly ValueParser<"sync", unknown>[]
+    | undefined
+  )[]
+): ValueParser<"sync", unknown> {
+  // The fixed-arity and array overloads declare the trailing options as
+  // optional, so an explicit `undefined` may arrive as the last argument:
+  const args = rawArgs.length > 0 && rawArgs.at(-1) === undefined
+    ? rawArgs.slice(0, -1)
+    : rawArgs;
+  let parsers: readonly ValueParser<"sync", unknown>[];
+  let options: FirstOfOptions;
+  if (args.length > 0 && Array.isArray(args[0])) {
+    // Snapshot the caller-provided array so later mutations cannot make
+    // the parsing behavior diverge from the construction-time metadata
+    // (metavar, choices, normalize/suggest presence).
+    parsers = [...args[0]] as readonly ValueParser<"sync", unknown>[];
+    options = (args[1] ?? {}) as FirstOfOptions;
+  } else {
+    const last = args.at(-1);
+    if (
+      args.length > 0 && typeof last === "object" && last != null &&
+      !isValueParser(last)
+    ) {
+      options = last as FirstOfOptions;
+      parsers = args.slice(0, -1) as readonly ValueParser<"sync", unknown>[];
+    } else {
+      options = {};
+      parsers = args as readonly ValueParser<"sync", unknown>[];
+    }
+  }
+  if (parsers.length < 2) {
+    throw new TypeError("firstOf() requires at least two value parsers.");
+  }
+  for (const parser of parsers) {
+    if (!isValueParser(parser)) {
+      throw new TypeError(
+        "Every firstOf() constituent must be a value parser.",
+      );
+    }
+    if (parser.mode !== "sync") {
+      throw new TypeError(
+        "firstOf() only supports sync value parsers, " +
+          "but an async one was given.",
+      );
+    }
+    // A dependency-derived value parser parses with *default* dependency
+    // values when invoked directly, and firstOf() cannot forward the
+    // derived metadata that option()/argument() use to re-run it with the
+    // dependency values resolved during the current parse.  Accepting one
+    // would silently validate against the wrong branch.
+    if (isDerivedValueParser(parser)) {
+      throw new TypeError(
+        "firstOf() does not support dependency-derived value parsers " +
+          "(created via deriveFrom() or dependency().derive()); pass the " +
+          "derived parser directly to option() or argument() instead.",
+      );
+    }
+  }
+  const metavar = options.metavar ??
+    parsers.map((parser) => parser.metavar).join("|");
+  ensureNonEmptyString(metavar);
+
+  // A merged choices list is only meaningful when it is exhaustive, i.e.,
+  // when every constituent enumerates its valid values.  Overlapping
+  // choices are deduplicated with Object.is rather than a Set, which
+  // would conflate values like 0 and -0 that choice() deliberately
+  // distinguishes.
+  const mergedChoices = parsers.every((parser) => parser.choices != null)
+    ? Object.freeze(
+      parsers
+        .flatMap((parser) => [...parser.choices!])
+        .filter(
+          (value, index, all) =>
+            all.findIndex((other) => Object.is(other, value)) === index,
+        ),
+    )
+    : undefined;
+
+  // Finds the constituent that produced the given value, along with its
+  // canonical validation result.  A constituent's own validate() hook
+  // decides membership authoritatively: it can accept values that its
+  // format()+parse() round-trip cannot express, such as a nested firstOf()
+  // whose valid value is shadowed by an earlier overlapping branch.
+  // Hookless constituents are checked by round-tripping their format()
+  // through their own parse(); those whose format() throws or returns a
+  // non-string for a foreign value are skipped.
+  //
+  // Ownership resolves in two passes.  The first pass requires the
+  // round-tripped value to faithfully preserve the original (exact
+  // equality, the constituent's own normalize() result, or a recognized
+  // canonicalization; see ownsRoundTrippedValue), so a constituent that
+  // preserves the value always beats an earlier lossy one.  Only when no
+  // constituent preserves the value does the second pass accept the first
+  // same-primitive-type round trip as a parse-level canonicalization
+  // (e.g. email({ allowDisplayName: true }) stripping a display name)—
+  // the same acceptance the constituent alone would grant a fallback
+  // value.  Object values are exempt from the second pass: structural
+  // equality is the only way to tell canonicalization from data loss
+  // there, and the first pass already covers it.
+  function findOwner(
+    value: unknown,
+  ):
+    | {
+      readonly parser: ValueParser<"sync", unknown>;
+      readonly result: ValueParserResult<unknown>;
+    }
+    | undefined {
+    let canonicalizing:
+      | {
+        readonly parser: ValueParser<"sync", unknown>;
+        readonly result: ValueParserResult<unknown>;
+      }
+      | undefined;
+    for (const parser of parsers) {
+      if (typeof parser.validate === "function") {
+        // A constituent's validate() hook is typed for its own value
+        // type, so it may throw when handed a foreign value from another
+        // branch of the union; treat that as non-ownership, like a
+        // throwing format().
+        let result: ValueParserResult<unknown>;
+        try {
+          result = parser.validate(value);
+        } catch {
+          continue;
+        }
+        if (result.success) return { parser, result };
+        continue;
+      }
+      let formatted: string;
+      try {
+        formatted = parser.format(value);
+      } catch {
+        continue;
+      }
+      if (typeof formatted !== "string") continue;
+      const result = parser.parse(formatted);
+      if (!result.success) continue;
+      if (ownsRoundTrippedValue(parser, result.value, value)) {
+        return { parser, result };
+      }
+      if (
+        canonicalizing == null &&
+        value !== null && typeof value !== "object" &&
+        typeof result.value === typeof value
+      ) {
+        canonicalizing = { parser, result };
+      }
+    }
+    return canonicalizing;
+  }
+
+  const hasNormalize = parsers.some(
+    (parser) => typeof parser.normalize === "function",
+  );
+  const hasSuggest = parsers.some(
+    (parser) => typeof parser.suggest === "function",
+  );
+
+  return {
+    mode: "sync",
+    metavar,
+    placeholder: parsers[0].placeholder,
+    ...(mergedChoices != null ? { choices: mergedChoices } : {}),
+    parse(input: string): ValueParserResult<unknown> {
+      const errors: Message[] = [];
+      for (const parser of parsers) {
+        const result = parser.parse(input);
+        if (result.success) return result;
+        errors.push(result.error);
+      }
+      const noMatch = options.errors?.noMatch;
+      return {
+        success: false,
+        error: noMatch == null
+          ? firstOfNoMatchError(errors)
+          : typeof noMatch === "function"
+          ? noMatch(input, errors)
+          : noMatch,
+      };
+    },
+    format(value: unknown): string {
+      // format() is a display-oriented best effort: precise fallback
+      // validation goes through validate() below, so this method only
+      // needs to pick the most faithful string representation available.
+      // Ownership mirrors findOwner(): a constituent's own validate()
+      // hook decides authoritatively, faithful round trips win over
+      // same-primitive-type canonicalizing ones, and unclaimed values
+      // fall back to the first well-formed string.
+      let canonicalizing: string | undefined;
+      let fallback: string | undefined;
+      let firstError: unknown;
+      let hasError = false;
+      for (const parser of parsers) {
+        let formatted: string;
+        try {
+          formatted = parser.format(value);
+        } catch (e) {
+          if (!hasError) {
+            firstError = e;
+            hasError = true;
+          }
+          continue;
+        }
+        // A constituent's format() may return a non-string when handed a
+        // value from another branch of the union; such results are not
+        // usable as CLI input and must not be returned.
+        if (typeof formatted !== "string") continue;
+        if (typeof parser.validate === "function") {
+          // A hook that throws on a foreign value counts as
+          // non-ownership.
+          let owned = false;
+          try {
+            owned = parser.validate(value).success;
+          } catch {
+            // Not this constituent's value.
+          }
+          if (owned) return formatted;
+        } else {
+          const result = parser.parse(formatted);
+          if (result.success) {
+            if (ownsRoundTrippedValue(parser, result.value, value)) {
+              return formatted;
+            }
+            if (
+              canonicalizing == null &&
+              value !== null && typeof value !== "object" &&
+              typeof result.value === typeof value
+            ) {
+              canonicalizing = formatted;
+            }
+          }
+        }
+        fallback ??= formatted;
+      }
+      if (canonicalizing !== undefined) return canonicalizing;
+      if (fallback !== undefined) return fallback;
+      if (hasError) throw firstError;
+      throw new TypeError(
+        "No constituent parser could format the given value.",
+      );
+    },
+    validate(value: unknown): ValueParserResult<unknown> {
+      const owner = findOwner(value);
+      if (owner == null) {
+        return {
+          success: false,
+          error: message`Expected a value matching ${metavarTerm(metavar)}.`,
+        };
+      }
+      return owner.result;
+    },
+    ...(hasNormalize
+      ? {
+        normalize(value: unknown): unknown {
+          const owner = findOwner(value);
+          if (owner == null || typeof owner.parser.normalize !== "function") {
+            return value;
+          }
+          return owner.parser.normalize(value);
+        },
+      }
+      : {}),
+    ...(hasSuggest
+      ? {
+        *suggest(prefix: string): Iterable<Suggestion> {
+          const collected: Suggestion[] = [];
+          for (const parser of parsers) {
+            if (typeof parser.suggest !== "function") continue;
+            for (const suggestion of parser.suggest(prefix)) {
+              collected.push(suggestion);
+            }
+          }
+          yield* deduplicateSuggestions(collected);
+        },
+      }
+      : {}),
+  };
+}
+
+/**
+ * Builds the default error message for {@link firstOf} when every
+ * constituent parser fails: a header followed by each constituent's error
+ * on its own line.
+ */
+function firstOfNoMatchError(errors: readonly Message[]): Message {
+  const terms: MessageTerm[] = [text("Expected one of the following:")];
+  for (const error of errors) {
+    terms.push(lineBreak(), text("- "), ...cloneMessage(error));
+  }
+  return terms;
+}
+
+/**
+ * Determines whether a {@link firstOf} constituent owns a value, given the
+ * result of round-tripping the value through the constituent's `format()`
+ * and `parse()`.  The constituent owns the value when the round-trip
+ * preserves it exactly, when it yields the constituent's own normalization
+ * of it (e.g. a MAC address parser canonicalizing separators and case), or
+ * when the round-trip is a recognized parse-level canonicalization: a
+ * case-insensitive string match (e.g. a case-insensitive `choice()`
+ * folding `"INFO"` to `"info"`) or numeric equality (a number parser
+ * folding `-0` to `0`)—the same acceptance the constituent alone would
+ * grant a fallback value through round-trip validation.  Parsers with
+ * richer parse-level canonicalization should expose it via `normalize()`.
+ * A merely *successful* round-trip is not enough otherwise: an arbitrary
+ * same-type change means data loss rather than canonicalization (e.g. a
+ * clamping `format()` folding 15 into 10), a round-trip that changes the
+ * primitive type means the string form belongs to a different branch of
+ * the union (e.g. `choice(["1"])` capturing the integer 1), and for
+ * object values structural equality is the only way to tell
+ * canonicalization from data loss (e.g. a lossy `color()` `format()`
+ * dropping fields that belong to a later, more faithful constituent).
+ */
+function ownsRoundTrippedValue(
+  parser: ValueParser<"sync", unknown>,
+  roundTripped: unknown,
+  value: unknown,
+): boolean {
+  if (valuesEqual(roundTripped, value)) return true;
+  if (typeof parser.normalize === "function") {
+    let normalized: unknown;
+    try {
+      normalized = parser.normalize(value);
+    } catch {
+      return false;
+    }
+    if (valuesEqual(roundTripped, normalized)) return true;
+  }
+  if (typeof value === "string" && typeof roundTripped === "string") {
+    return value.toLowerCase() === roundTripped.toLowerCase();
+  }
+  if (typeof value === "number" && typeof roundTripped === "number") {
+    // Object.is above already handled identical numbers; this only
+    // accepts the remaining ±0 fold.
+    return value === roundTripped;
+  }
+  return false;
+}
+
+/**
+ * Structural equality for parsed CLI values: primitives compare with
+ * `Object.is` (so `NaN` equals itself and `0` differs from `-0`, matching
+ * the distinction `choice()` makes), `Date` and `URL` instances compare by
+ * time value and href respectively, arrays and plain objects compare
+ * recursively, and other class instances compare by their overridden
+ * `toString()` serialization.  Recursion is bounded by the structure of
+ * the second argument, which in {@link firstOf} is always a freshly
+ * parsed (acyclic) value.
+ */
+function valuesEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (
+    typeof a !== "object" || typeof b !== "object" || a == null || b == null
+  ) {
+    return false;
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) && a.length === b.length &&
+      a.every((item, i) => valuesEqual(item, b[i]));
+  }
+  if (a instanceof Date || b instanceof Date) {
+    return a instanceof Date && b instanceof Date &&
+      a.getTime() === b.getTime();
+  }
+  if (a instanceof URL || b instanceof URL) {
+    return a instanceof URL && b instanceof URL && a.href === b.href;
+  }
+  const prototypeA = Object.getPrototypeOf(a);
+  const prototypeB = Object.getPrototypeOf(b);
+  // Object.prototype and null are the same "plain object" category:
+  // a null-prototype object (e.g. built with Object.create(null)) holds
+  // the same JSON-style data as an ordinary object literal.
+  const plainA = prototypeA === Object.prototype || prototypeA === null;
+  const plainB = prototypeB === Object.prototype || prototypeB === null;
+  if (plainA !== plainB) return false;
+  if (!plainA) {
+    if (prototypeA !== prototypeB) return false;
+    // Class instances may expose state through enumerable own fields
+    // (e.g. a `UserId` wrapper class assigning `this.id` in its
+    // constructor), through private fields or internal slots that only an
+    // overridden
+    // toString() serializes (e.g. Temporal instances), or both.  Compare
+    // whatever channels the objects provide: enumerable fields must match
+    // structurally, and when toString() is overridden, both sides must
+    // override it (an instance-level override on one side alone, e.g. on
+    // a freshly parsed value, must not equate it with an object that
+    // stringifies generically) and the serializations must agree.
+    // Key-less objects without an overridden toString() expose no channel
+    // to compare, so they are conservatively unequal.
+    const overridesA = hasCustomToString(a);
+    const overridesB = hasCustomToString(b);
+    if (overridesA !== overridesB) return false;
+    const hasKeys = Object.keys(a).length > 0 || Object.keys(b).length > 0;
+    if (hasKeys && !plainObjectsEqual(a, b)) return false;
+    if (!overridesA) return hasKeys;
+    try {
+      return String(a) === String(b);
+    } catch {
+      return false;
+    }
+  }
+  return plainObjectsEqual(a, b);
+}
+
+/**
+ * Checks whether an object provides a `toString()` implementation other
+ * than the generic `Object.prototype.toString`.
+ */
+function hasCustomToString(value: object): boolean {
+  // Reading the property can throw for exotic objects (a Proxy or a
+  // throwing getter); treat those as having no usable toString().
+  try {
+    const toString = (value as { toString?: unknown }).toString;
+    return typeof toString === "function" &&
+      toString !== Object.prototype.toString;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Compares two objects by their enumerable own keys, recursing into the
+ * values with {@link valuesEqual}.
+ */
+function plainObjectsEqual(a: object, b: object): boolean {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  const bRecord = b as Record<string, unknown>;
+  return aKeys.every((key) =>
+    Object.hasOwn(b, key) &&
+    valuesEqual((a as Record<string, unknown>)[key], bRecord[key])
+  );
 }

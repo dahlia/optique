@@ -9,6 +9,7 @@ import {
   email,
   fileSize,
   type FileSizeOptionsBigInt,
+  firstOf,
   float,
   hostname,
   integer,
@@ -31,14 +32,20 @@ import {
   string,
   url,
   uuid,
+  type ValueParser,
 } from "@optique/core/valueparser";
 import {
   formatMessage,
+  type Message,
   message,
   type MessageTerm,
   text,
   values,
 } from "@optique/core/message";
+import { dependency } from "#src/dependency.ts";
+import { argument, option } from "#src/primitives.ts";
+import { withDefault } from "#src/modifiers.ts";
+import { parse } from "#src/parser.ts";
 import assert from "node:assert/strict";
 import * as fc from "fast-check";
 import { describe, it } from "node:test";
@@ -18459,6 +18466,942 @@ describe("json()", () => {
 
     it("custom placeholder is respected", () => {
       assert.equal(json({ placeholder: 123 }).placeholder, 123);
+    });
+  });
+});
+
+describe("firstOf", () => {
+  describe("parsing", () => {
+    it("should return the first successful constituent's value", () => {
+      const parser = firstOf(choice(["auto"]), integer({ min: 1 }));
+
+      const autoResult = parser.parse("auto");
+      assert.ok(autoResult.success);
+      assert.equal(autoResult.value, "auto");
+
+      const intResult = parser.parse("5");
+      assert.ok(intResult.success);
+      assert.equal(intResult.value, 5);
+    });
+
+    it("should respect declaration order on overlapping inputs", () => {
+      const parser = firstOf(choice(["1"]), integer());
+      const result = parser.parse("1");
+      assert.ok(result.success);
+      assert.equal(result.value, "1");
+
+      const reversed = firstOf(integer(), choice(["1"]));
+      const reversedResult = reversed.parse("1");
+      assert.ok(reversedResult.success);
+      assert.equal(reversedResult.value, 1);
+    });
+
+    it("should combine all constituent errors when every parser fails", () => {
+      const parser = firstOf(choice(["auto"]), integer({ min: 1 }));
+      const result = parser.parse("abc");
+      assert.ok(!result.success);
+
+      const [header] = result.error;
+      assert.ok(header.type === "text");
+      assert.ok(header.text.includes("Expected one of the following"));
+
+      const lineBreaks = result.error.filter(
+        (term: MessageTerm) => term.type === "lineBreak",
+      );
+      assert.equal(lineBreaks.length, 2);
+
+      const formatted = formatMessage(result.error);
+      assert.ok(formatted.includes("auto"));
+      assert.ok(formatted.includes("integer"));
+      assert.equal(formatted.split("\n").length, 3);
+    });
+
+    it("should propagate the deferred flag from custom constituents", () => {
+      const deferredParser: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "DEFERRED",
+        placeholder: "",
+        parse: (input) => ({ success: true, value: input, deferred: true }),
+        format: (value) => value,
+      };
+      const parser = firstOf(integer(), deferredParser);
+      const result = parser.parse("abc");
+      assert.ok(result.success);
+      assert.equal(result.value, "abc");
+      assert.ok(result.deferred);
+    });
+  });
+
+  describe("metadata", () => {
+    it("should be a sync value parser", () => {
+      const parser = firstOf(choice(["auto"]), integer());
+      assert.equal(parser.mode, "sync");
+      assert.ok(isValueParser(parser));
+    });
+
+    it("should join constituent metavars with | by default", () => {
+      const parser = firstOf(choice(["auto"]), integer());
+      assert.equal(parser.metavar, "TYPE|INTEGER");
+    });
+
+    it("should respect a custom metavar option", () => {
+      const parser = firstOf(choice(["auto"]), integer(), {
+        metavar: "COUNT",
+      });
+      assert.equal(parser.metavar, "COUNT");
+    });
+
+    it("should use the first constituent's placeholder", () => {
+      const parser = firstOf(choice(["auto", "manual"]), integer());
+      assert.equal(parser.placeholder, "auto");
+
+      const reversed = firstOf(integer(), choice(["auto", "manual"]));
+      assert.equal(reversed.placeholder, 0);
+    });
+  });
+
+  describe("choices", () => {
+    it("should merge choices when every constituent defines them", () => {
+      const parser = firstOf(choice(["a", "b"]), choice(["c"]));
+      assert.deepEqual(parser.choices, ["a", "b", "c"]);
+    });
+
+    it("should deduplicate overlapping choices", () => {
+      const parser = firstOf(choice(["a", "b"]), choice(["b", "c"]));
+      assert.deepEqual(parser.choices, ["a", "b", "c"]);
+    });
+
+    it("should keep 0 and -0 distinct when deduplicating", () => {
+      const parser = firstOf(choice([0]), choice([-0, 1]));
+      assert.equal(parser.choices?.length, 3);
+      assert.ok(Object.is(parser.choices?.[0], 0));
+      assert.ok(Object.is(parser.choices?.[1], -0));
+      assert.equal(parser.choices?.[2], 1);
+    });
+
+    it("should omit choices when any constituent is open-ended", () => {
+      const parser = firstOf(choice(["auto"]), integer());
+      assert.equal(parser.choices, undefined);
+    });
+  });
+
+  describe("format", () => {
+    it("should format with the constituent that accepts the value", () => {
+      const parser = firstOf(choice(["auto"]), integer({ min: 1 }));
+      assert.equal(parser.format("auto"), "auto");
+      assert.equal(parser.format(5), "5");
+    });
+
+    it("should skip constituents whose format() throws", () => {
+      const throwing: ValueParser<"sync", number> = {
+        mode: "sync",
+        metavar: "ONE",
+        placeholder: 1,
+        parse: (input) =>
+          input === "1"
+            ? { success: true, value: 1 }
+            : { success: false, error: message`Expected ${text("1")}.` },
+        format: (value) => {
+          if (value !== 1) throw new RangeError("Not one.");
+          return "1";
+        },
+      };
+      const parser = firstOf(throwing, integer());
+      assert.equal(parser.format(42), "42");
+      assert.equal(parser.format(1), "1");
+    });
+
+    it("should rethrow when every constituent's format() throws", () => {
+      const throwing: ValueParser<"sync", number> = {
+        mode: "sync",
+        metavar: "ONE",
+        placeholder: 1,
+        parse: () => ({ success: false, error: message`Nope.` }),
+        format: () => {
+          throw new RangeError("Cannot format.");
+        },
+      };
+      const parser = firstOf(throwing, throwing);
+      assert.throws(() => parser.format(42), RangeError);
+    });
+
+    it("should fall back to a well-formed string for unclaimed values", () => {
+      const parser = firstOf(choice(["auto"]), integer({ min: 1 }));
+      assert.equal(parser.format(0), "0");
+    });
+
+    it("should not validate out-of-union values through another branch", () => {
+      // Regression: a format()+parse() round-trip (as performed by
+      // validateValue() for bindEnv()/bindConfig() fallbacks) must not
+      // accept values that no constituent accepts.
+      const parser = firstOf(string({ pattern: /^a$/ }), integer({ min: 1 }));
+      const roundTrip = parser.parse(parser.format(0));
+      assert.ok(!roundTrip.success);
+    });
+
+    it("should not let a lossy earlier constituent claim a later one's value", () => {
+      // Regression: color().format() accepts any { r, g, b, a } shape and
+      // color().parse() accepts the result, so a naive success-based
+      // ownership test would drop extra object fields owned by json().
+      const parser = firstOf(color(), json({ rootType: "object" }));
+      const value = { r: 1, g: 2, b: 3, a: 1, extra: "keep" };
+      const roundTrip = parser.parse(parser.format(value));
+      assert.ok(roundTrip.success);
+      assert.deepEqual(roundTrip.value, value);
+    });
+
+    it("should format values owned via a constituent's validate()", () => {
+      // The inner firstOf() accepts { a: 1 } through its validate() hook,
+      // but the outer round-trip cannot see that ownership: the JSON text
+      // is shadowed by the inner choice() branch, so the combined parse
+      // yields the string instead of the object.  The format path must
+      // consult the hook rather than fall back to an earlier branch's
+      // generic stringification ("[object Object]").
+      const inner = firstOf(choice(['{"a":1}']), json({ rootType: "object" }));
+      const outer = firstOf(choice(["x"]), inner);
+      assert.equal(outer.format({ a: 1 }), '{"a":1}');
+    });
+
+    it("should format overlapping values for display", () => {
+      // format() is a display-oriented best effort; precise fallback
+      // validation goes through validate() instead.
+      const parser = firstOf(choice(["1"]), integer());
+      assert.equal(parser.format("1"), "1");
+      assert.equal(parser.format(1), "1");
+    });
+
+    it("should format through a constituent that normalizes the value", () => {
+      const mac = macAddress({ outputSeparator: ":" });
+      const parser = firstOf(mac, choice(["none"]));
+      assert.equal(
+        parser.format("AA-BB-CC-DD-EE-FF"),
+        mac.format("AA-BB-CC-DD-EE-FF"),
+      );
+    });
+  });
+
+  describe("validate", () => {
+    it("should accept values owned by a constituent", () => {
+      const parser = firstOf(choice(["auto"]), integer({ min: 1 }));
+      const autoResult = parser.validate?.("auto");
+      assert.ok(autoResult?.success);
+      assert.equal(autoResult.value, "auto");
+      const intResult = parser.validate?.(5);
+      assert.ok(intResult?.success);
+      assert.equal(intResult.value, 5);
+    });
+
+    it("should accept values shadowed by an earlier overlapping branch", () => {
+      // The integer 1 cannot be produced by parsing (its string form "1"
+      // always goes to the choice() branch), but it is still a valid
+      // integer() value, so fallback validation must accept it unchanged.
+      const parser = firstOf(choice(["1"]), integer());
+      const result = parser.validate?.(1);
+      assert.ok(result?.success);
+      assert.equal(result.value, 1);
+    });
+
+    it("should reject values that no constituent accepts", () => {
+      // The number 0 violates integer({ min: 1 }), and the choice() branch
+      // only accepts the *string* "0".  A format()+parse() round-trip
+      // cannot express this failure ("0" parses fine into the choice
+      // branch), which is exactly what validate() is for.
+      const parser = firstOf(choice(["0"]), integer({ min: 1 }));
+      const result = parser.validate?.(0);
+      assert.ok(result);
+      assert.ok(!result.success);
+      const stringResult = parser.validate?.("0");
+      assert.ok(stringResult?.success);
+      assert.equal(stringResult.value, "0");
+    });
+
+    it("should accept fallback values canonicalized by parse()", () => {
+      // choice() with caseInsensitive canonicalizes during parse() but
+      // does not expose normalize(), so the round trip yields "info" for
+      // the fallback "INFO".  A same-type primitive canonicalization is
+      // still ownership: the constituent alone would accept the same
+      // fallback through its format()+parse() round-trip validation.
+      const parser = firstOf(
+        choice(["info", "warn"], { caseInsensitive: true }),
+        integer(),
+      );
+      // Config/env fallback values are runtime-typed, so they can carry
+      // representations outside the inferred literal union:
+      const result = parser.validate?.("INFO" as never);
+      assert.ok(result?.success);
+      assert.equal(result.value, "info");
+
+      // Same for number canonicalization: choice([0]) parses "-0" as 0.
+      const zero = firstOf(choice([0]), string());
+      const zeroResult = zero.validate?.(-0);
+      assert.ok(zeroResult?.success);
+      assert.ok(Object.is(zeroResult.value, 0));
+    });
+
+    it("should accept fallbacks canonicalized beyond case folding", () => {
+      // Built-in parsers like email({ allowDisplayName: true }) and
+      // semVer({ allowPrefix: true }) canonicalize during parse() without
+      // exposing normalize().  When no constituent owns the value more
+      // faithfully, a same-primitive-type round trip is the same
+      // canonicalization the constituent alone would apply to a fallback.
+      const mail = firstOf(email({ allowDisplayName: true }), integer());
+      const mailResult = mail.validate?.("John Doe <john@example.com>");
+      assert.ok(mailResult?.success);
+      assert.equal(mailResult.value, "john@example.com");
+
+      const version = firstOf(semVer({ allowPrefix: true }), integer());
+      // The v-prefixed form is outside the SemVerString literal type but
+      // arrives at runtime from config/env fallbacks:
+      const versionResult = version.validate?.("v1.2.3" as never);
+      assert.ok(versionResult?.success);
+      assert.equal(versionResult.value, "1.2.3");
+    });
+
+    it("should not treat arbitrary same-type round trips as ownership", () => {
+      // A parser whose format() clamps values to its range round-trips
+      // 15 into 10.  That is data loss, not canonicalization: it must
+      // not claim the value ahead of a later constituent that preserves
+      // it exactly.
+      const clamping: ValueParser<"sync", number> = {
+        mode: "sync",
+        metavar: "CLAMPED",
+        placeholder: 1,
+        parse: (input) => {
+          const n = Number(input);
+          return Number.isInteger(n) && n >= 1 && n <= 10
+            ? { success: true, value: n }
+            : { success: false, error: message`Expected 1-10.` };
+        },
+        format: (value) => String(Math.max(1, Math.min(10, value))),
+      };
+      const parser = firstOf(clamping, float());
+      const result = parser.validate?.(15);
+      assert.ok(result?.success);
+      assert.equal(result.value, 15);
+    });
+
+    it("should canonicalize parse-normalized fallbacks through option()", () => {
+      const parser = option(
+        "--level",
+        firstOf(choice(["info"], { caseInsensitive: true }), integer()),
+      );
+      const result = parser.validateValue?.("INFO" as never);
+      assert.ok(result);
+      assert.ok(result.success);
+      assert.equal(result.value, "info");
+    });
+
+    it("should canonicalize values through the owning constituent", () => {
+      const mac = macAddress({ outputSeparator: ":" });
+      const parser = firstOf(mac, choice(["none"]));
+      const result = parser.validate?.("AA-BB-CC-DD-EE-FF");
+      assert.ok(result?.success);
+      assert.equal(result.value, mac.format("AA-BB-CC-DD-EE-FF"));
+    });
+
+    it("should delegate to a constituent's own validate()", () => {
+      const inner = firstOf(choice(["0"]), integer({ min: 1 }));
+      const parser = firstOf(choice(["x"]), inner);
+      const invalid = parser.validate?.(0);
+      assert.ok(invalid);
+      assert.ok(!invalid.success);
+      const valid = parser.validate?.(5);
+      assert.ok(valid?.success);
+      assert.equal(valid.value, 5);
+    });
+
+    it("should not let an opaque-object branch claim another's value", () => {
+      // Mimics firstOf(instant(), zonedDateTime()): both value types are
+      // class instances without enumerable own keys, and the instant-like
+      // parser lossily accepts the zoned string form by stripping the
+      // time zone annotation.  Ownership comparison must not treat two
+      // key-less objects of different types as equal.
+      class FakeInstant {
+        readonly #iso: string;
+        constructor(iso: string) {
+          this.#iso = iso;
+        }
+        toString(): string {
+          return this.#iso;
+        }
+      }
+      class FakeZonedDateTime {
+        readonly #iso: string;
+        readonly #zone: string;
+        constructor(iso: string, zone: string) {
+          this.#iso = iso;
+          this.#zone = zone;
+        }
+        toString(): string {
+          return `${this.#iso}[${this.#zone}]`;
+        }
+      }
+      const instant: ValueParser<"sync", FakeInstant> = {
+        mode: "sync",
+        metavar: "INSTANT",
+        placeholder: new FakeInstant("1970-01-01T00:00:00Z"),
+        parse: (input) => ({
+          success: true,
+          value: new FakeInstant(input.replace(/\[[^\]]*\]$/, "")),
+        }),
+        format: (value) => value.toString(),
+      };
+      const zoned: ValueParser<"sync", FakeZonedDateTime> = {
+        mode: "sync",
+        metavar: "ZONED",
+        placeholder: new FakeZonedDateTime("1970-01-01T00:00:00Z", "UTC"),
+        parse: (input) => {
+          const match = /^(.+)\[([^\]]+)\]$/.exec(input);
+          return match == null
+            ? {
+              success: false,
+              error: message`Expected a time zone annotation.`,
+            }
+            : {
+              success: true,
+              value: new FakeZonedDateTime(match[1], match[2]),
+            };
+        },
+        format: (value) => value.toString(),
+      };
+      const parser = firstOf(instant, zoned);
+      const value = new FakeZonedDateTime("2024-01-01T00:00:00Z", "Asia/Seoul");
+      const result = parser.validate?.(value);
+      assert.ok(result?.success);
+      assert.ok(result.value instanceof FakeZonedDateTime);
+      assert.equal(String(result.value), "2024-01-01T00:00:00Z[Asia/Seoul]");
+    });
+
+    it("should not equate objects when only one side overrides toString()", () => {
+      // Same-prototype opaque objects compare by their toString()
+      // serialization, but only when *both* sides override it: an
+      // instance-level override on the round-tripped value alone must
+      // not make it equal to a value that stringifies generically.
+      class Opaque {}
+      const claiming: ValueParser<"sync", Opaque> = {
+        mode: "sync",
+        metavar: "OPAQUE",
+        placeholder: new Opaque(),
+        parse: (input) => {
+          const value = new Opaque();
+          Object.defineProperty(value, "toString", { value: () => input });
+          return { success: true, value };
+        },
+        format: (value) => String(value),
+      };
+      const parser = firstOf(claiming, choice(["none"]));
+      const result = parser.validate?.(new Opaque());
+      assert.ok(result);
+      assert.ok(!result.success);
+    });
+
+    it("should accept null-prototype objects as plain objects", () => {
+      // JSON values built with Object.create(null) format to the same
+      // JSON text as ordinary object literals and parse back as ordinary
+      // objects; ownership comparison must not distinguish the two
+      // prototypes.
+      const parser = firstOf(json({ rootType: "object" }), choice(["none"]));
+      const value: Record<string, number> = Object.assign(
+        Object.create(null),
+        { a: 1 },
+      );
+      const result = parser.validate?.(value);
+      assert.ok(result?.success);
+      assert.deepEqual(result.value, { a: 1 });
+    });
+
+    it("should let class instances with public fields own their values", () => {
+      // A hookless custom parser may round-trip a class instance through
+      // its enumerable own fields without overriding toString().  Two
+      // structurally equal instances of the same class must compare as
+      // equal, or the parser could never own its own round-tripped
+      // values and fallback validation would reject them.
+      class UserId {
+        readonly id: string;
+        constructor(id: string) {
+          this.id = id;
+        }
+      }
+      const userId: ValueParser<"sync", UserId> = {
+        mode: "sync",
+        metavar: "USER",
+        placeholder: new UserId(""),
+        parse: (input) =>
+          /^[a-z]+$/.test(input)
+            ? { success: true, value: new UserId(input) }
+            : { success: false, error: message`Expected a user ID.` },
+        format: (value) => value.id,
+      };
+      const parser = firstOf(integer(), userId);
+      const result = parser.validate?.(new UserId("alice"));
+      assert.ok(result?.success);
+      assert.ok(result.value instanceof UserId);
+      assert.equal(result.value.id, "alice");
+    });
+
+    it("should require matching serialization when toString() is overridden", () => {
+      // A class may expose some state through enumerable fields and keep
+      // the rest in private fields that only its toString() serializes.
+      // Structural key equality alone must not let a lossy parser claim
+      // such a value when the serializations disagree.
+      class Token {
+        readonly id: string;
+        readonly #scope: string;
+        constructor(id: string, scope: string) {
+          this.id = id;
+          this.#scope = scope;
+        }
+        toString(): string {
+          return `${this.id}:${this.#scope}`;
+        }
+      }
+      const token: ValueParser<"sync", Token> = {
+        mode: "sync",
+        metavar: "TOKEN",
+        placeholder: new Token("", ""),
+        parse: (input) => ({
+          success: true,
+          value: new Token(input, "parsed"),
+        }),
+        // Lossy: drops the private scope.
+        format: (value) => value.id,
+      };
+      const parser = firstOf(token, choice(["none"]));
+      const result = parser.validate?.(new Token("alice", "original"));
+      assert.ok(result);
+      assert.ok(!result.success);
+    });
+
+    it("should not crash on values with throwing toString getters", () => {
+      // Accessing toString on a hostile or exotic object (Proxy, throwing
+      // getter) must not crash ownership resolution; such objects still
+      // compare through their enumerable own fields.
+      class Weird {
+        readonly id: string;
+        constructor(id: string) {
+          this.id = id;
+        }
+        get toString(): never {
+          throw new Error("boom");
+        }
+      }
+      const weird: ValueParser<"sync", Weird> = {
+        mode: "sync",
+        metavar: "WEIRD",
+        placeholder: new Weird(""),
+        parse: (input) => ({ success: true, value: new Weird(input) }),
+        format: (value) => value.id,
+      };
+      const parser = firstOf(weird, integer());
+      const result = parser.validate?.(new Weird("x"));
+      assert.ok(result?.success);
+      assert.ok(result.value instanceof Weird);
+      assert.equal(result.value.id, "x");
+    });
+
+    it("should treat a throwing constituent validate() as non-ownership", () => {
+      // A custom parser's validate() hook is typed for its own T, so it
+      // may reasonably use string-only operations that throw when handed
+      // a foreign value from another branch of the union.  Such throws
+      // must count as "not this constituent's value", letting later
+      // branches claim it, just like throwing format() does.
+      const word: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "WORD",
+        placeholder: "",
+        parse: (input) =>
+          /^[a-z]+$/.test(input)
+            ? { success: true, value: input }
+            : { success: false, error: message`Expected a lowercase word.` },
+        format: (value) => String(value),
+        validate(value) {
+          const lower = value.toLowerCase();
+          return /^[a-z]+$/.test(lower)
+            ? { success: true, value: lower }
+            : { success: false, error: message`Expected a lowercase word.` };
+        },
+      };
+      const parser = firstOf(word, integer());
+      const result = parser.validate?.(1);
+      assert.ok(result?.success);
+      assert.equal(result.value, 1);
+      assert.equal(parser.format(1), "1");
+    });
+
+    it("should consult a constituent's validate() for shadowed values", () => {
+      // The inner firstOf() cannot round-trip the shadowed integer 1
+      // through format()+parse() (the string "1" goes to its choice()
+      // branch), but its own validate() hook accepts it; the outer
+      // firstOf() must consult that hook instead of only round-tripping.
+      const parser = firstOf(choice(["x"]), firstOf(choice(["1"]), integer()));
+      const result = parser.validate?.(1);
+      assert.ok(result?.success);
+      assert.equal(result.value, 1);
+    });
+
+    it("should be used by option()/argument() fallback validation", () => {
+      const overlapping = argument(firstOf(choice(["1"]), integer()));
+      const shadowed = overlapping.validateValue?.(1);
+      assert.ok(shadowed);
+      assert.ok(shadowed.success);
+      assert.equal(shadowed.value, 1);
+
+      const strict = argument(firstOf(choice(["0"]), integer({ min: 1 })));
+      const rejected = strict.validateValue?.(0);
+      assert.ok(rejected);
+      assert.ok(!rejected.success);
+    });
+  });
+
+  describe("normalize", () => {
+    it("should be undefined when no constituent normalizes", () => {
+      const parser = firstOf(choice(["auto"]), integer());
+      assert.equal(parser.normalize, undefined);
+    });
+
+    it("should dispatch to the constituent that accepts the value", () => {
+      const mac = macAddress({ outputSeparator: ":" });
+      const parser = firstOf(mac, choice(["none"]));
+      assert.equal(
+        parser.normalize?.("AA-BB-CC-DD-EE-FF"),
+        mac.normalize?.("AA-BB-CC-DD-EE-FF"),
+      );
+    });
+
+    it("should return values unchanged for constituents without normalize", () => {
+      const parser = firstOf(macAddress(), choice(["none"]));
+      assert.equal(parser.normalize?.("none"), "none");
+    });
+
+    it("should return unclaimed values unchanged", () => {
+      const parser = firstOf(macAddress(), choice(["none"]));
+      assert.equal(parser.normalize?.("not-a-mac"), "not-a-mac");
+    });
+
+    it("should normalize through a constituent's validate() ownership", () => {
+      // The outer firstOf() cannot round-trip 7 through the inner one
+      // (the string "7" goes to the inner choice() branch), but the
+      // inner validate() hook accepts it; normalization ownership must
+      // honor that hook just like validate() does.
+      const evenizer: ValueParser<"sync", number> = {
+        mode: "sync",
+        metavar: "EVEN",
+        placeholder: 0,
+        parse: (input) => {
+          const n = Number(input);
+          return Number.isInteger(n)
+            ? { success: true, value: n - (n % 2) }
+            : { success: false, error: message`Expected a number.` };
+        },
+        format: (value) => String(value),
+        normalize: (value) => value - (value % 2),
+      };
+      const inner = firstOf(choice(["7"]), evenizer);
+      const outer = firstOf(choice(["x"]), inner);
+      assert.equal(inner.normalize?.(7), 6);
+      assert.equal(outer.normalize?.(7), 6);
+    });
+  });
+
+  describe("suggest", () => {
+    it("should be undefined when no constituent suggests", () => {
+      const parser = firstOf(string(), integer());
+      assert.equal(parser.suggest, undefined);
+    });
+
+    it("should merge suggestions from all constituents in order", () => {
+      const parser = firstOf(
+        choice(["auto", "always"]),
+        choice(["all", "never"]),
+      );
+      const suggestions = [...parser.suggest?.("a") ?? []];
+      assert.deepEqual(
+        suggestions.map((s) => s.kind === "literal" ? s.text : s.kind),
+        ["auto", "always", "all"],
+      );
+    });
+
+    it("should deduplicate identical suggestions across constituents", () => {
+      const parser = firstOf(choice(["auto", "max"]), choice(["auto", "min"]));
+      const suggestions = [...parser.suggest?.("") ?? []];
+      assert.deepEqual(
+        suggestions.map((s) => s.kind === "literal" ? s.text : s.kind),
+        ["auto", "max", "min"],
+      );
+    });
+  });
+
+  describe("array form", () => {
+    it("should accept a dynamically built array of parsers", () => {
+      const parsers: ValueParser<"sync", "auto" | number>[] = [
+        choice(["auto"]),
+        integer({ min: 1 }),
+      ];
+      const parser = firstOf(parsers);
+      const autoResult = parser.parse("auto");
+      assert.ok(autoResult.success);
+      assert.equal(autoResult.value, "auto");
+      const intResult = parser.parse("5");
+      assert.ok(intResult.success);
+      assert.equal(intResult.value, 5);
+      assert.equal(parser.metavar, "TYPE|INTEGER");
+    });
+
+    it("should accept options with the array form", () => {
+      const parser = firstOf([choice(["auto"]), integer()], {
+        metavar: "COUNT",
+      });
+      assert.equal(parser.metavar, "COUNT");
+    });
+
+    it("should snapshot the parser array at construction time", () => {
+      const parsers: ValueParser<"sync", "auto" | number>[] = [
+        choice(["auto"]),
+        integer(),
+      ];
+      const parser = firstOf(parsers);
+      parsers.length = 0;
+      const result = parser.parse("5");
+      assert.ok(result.success);
+      assert.equal(result.value, 5);
+    });
+
+    it("should throw TypeError for arrays with fewer than two parsers", () => {
+      assert.throws(() => firstOf([integer()]), TypeError);
+      assert.throws(() => firstOf([]), TypeError);
+    });
+  });
+
+  describe("custom errors", () => {
+    it("should use a static noMatch message", () => {
+      const parser = firstOf(choice(["auto"]), integer({ min: 1 }), {
+        errors: { noMatch: message`Custom error.` },
+      });
+      const result = parser.parse("abc");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, message`Custom error.`);
+    });
+
+    it("should pass input and constituent errors to a noMatch function", () => {
+      let seenInput: string | undefined;
+      let seenErrors: readonly Message[] | undefined;
+      const parser = firstOf(choice(["auto"]), integer({ min: 1 }), {
+        errors: {
+          noMatch: (input, errors) => {
+            seenInput = input;
+            seenErrors = errors;
+            return message`No match for ${input}.`;
+          },
+        },
+      });
+      const result = parser.parse("abc");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, message`No match for ${"abc"}.`);
+      assert.equal(seenInput, "abc");
+      assert.equal(seenErrors?.length, 2);
+      assert.ok(formatMessage(seenErrors[0]).includes("auto"));
+      assert.ok(formatMessage(seenErrors[1]).includes("integer"));
+    });
+  });
+
+  describe("types", () => {
+    it("should infer the union of constituent types", () => {
+      const pair = firstOf(choice(["auto"]), integer({ min: 1 }));
+      pair satisfies ValueParser<"sync", "auto" | number>;
+
+      const withOptions = firstOf(choice(["auto"]), integer(), {
+        metavar: "COUNT",
+      });
+      withOptions satisfies ValueParser<"sync", "auto" | number>;
+
+      const variadic = firstOf(
+        choice(["a"]),
+        choice(["b"]),
+        choice(["c"]),
+        choice(["d"]),
+        choice(["e"]),
+        integer(),
+      );
+      variadic satisfies ValueParser<
+        "sync",
+        "a" | "b" | "c" | "d" | "e" | number
+      >;
+
+      const fromArray = firstOf([choice(["auto"]), integer({ min: 1 })]);
+      fromArray satisfies ValueParser<"sync", "auto" | number>;
+
+      const result = pair.parse("auto");
+      assert.ok(result.success);
+      const value: "auto" | number = result.value;
+      assert.equal(value, "auto");
+    });
+  });
+
+  describe("properties", () => {
+    it("property: every constituent's values parse to themselves", () => {
+      fc.assert(
+        fc.property(
+          fc.uniqueArray(lowercaseWordArbitrary, { minLength: 1 }),
+          safeIntegerArbitrary,
+          (words, num) => {
+            const parser = firstOf(choice(words), integer());
+            for (const word of words) {
+              const result = parser.parse(word);
+              assert.ok(result.success);
+              assert.equal(result.value, word);
+            }
+            const numResult = parser.parse(String(num));
+            assert.ok(numResult.success);
+            assert.equal(numResult.value, num);
+          },
+        ),
+        propertyParameters,
+      );
+    });
+
+    it("property: parse(format(v)) round-trips union values", () => {
+      fc.assert(
+        fc.property(
+          fc.uniqueArray(lowercaseWordArbitrary, { minLength: 1 }),
+          safeIntegerArbitrary,
+          (words, num) => {
+            const parser = firstOf(choice(words), integer());
+            for (const value of [...words, num]) {
+              const result = parser.parse(parser.format(value));
+              assert.ok(result.success);
+              assert.equal(result.value, value);
+            }
+          },
+        ),
+        propertyParameters,
+      );
+    });
+
+    it("property: declaration order determines the winning branch", () => {
+      fc.assert(
+        fc.property(safeIntegerArbitrary, (num) => {
+          const numText = String(num);
+          const stringFirst = firstOf(choice([numText]), integer());
+          const stringResult = stringFirst.parse(numText);
+          assert.ok(stringResult.success);
+          assert.equal(stringResult.value, numText);
+
+          const integerFirst = firstOf(integer(), choice([numText]));
+          const integerResult = integerFirst.parse(numText);
+          assert.ok(integerResult.success);
+          assert.equal(integerResult.value, num);
+        }),
+        propertyParameters,
+      );
+    });
+  });
+
+  describe("integration", () => {
+    it("should parse option values through option()", () => {
+      const parser = option(
+        "--count",
+        firstOf(choice(["auto"]), integer({ min: 1 })),
+      );
+
+      const auto = parse(parser, ["--count", "auto"]);
+      assert.ok(auto.success);
+      assert.equal(auto.value, "auto");
+
+      const five = parse(parser, ["--count", "5"]);
+      assert.ok(five.success);
+      assert.equal(five.value, 5);
+
+      const invalid = parse(parser, ["--count", "0"]);
+      assert.ok(!invalid.success);
+    });
+
+    it("should normalize withDefault() defaults via the owning constituent", () => {
+      const mac = macAddress({ outputSeparator: ":" });
+      const parser = withDefault(
+        option("--mac", firstOf(mac, choice(["none"]))),
+        "AA-BB-CC-DD-EE-FF",
+      );
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, mac.normalize?.("AA-BB-CC-DD-EE-FF"));
+    });
+
+    it("should normalize withDefault() defaults through nested firstOf()", () => {
+      const evenizer: ValueParser<"sync", number> = {
+        mode: "sync",
+        metavar: "EVEN",
+        placeholder: 0,
+        parse: (input) => {
+          const n = Number(input);
+          return Number.isInteger(n)
+            ? { success: true, value: n - (n % 2) }
+            : { success: false, error: message`Expected a number.` };
+        },
+        format: (value) => String(value),
+        normalize: (value) => value - (value % 2),
+      };
+      const parser = withDefault(
+        option("--n", firstOf(choice(["x"]), firstOf(choice(["7"]), evenizer))),
+        7,
+      );
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, 6);
+    });
+  });
+
+  describe("construction errors", () => {
+    it("should throw TypeError when fewer than two parsers are given", () => {
+      assert.throws(
+        // @ts-expect-error: firstOf() requires at least two parsers.
+        () => firstOf(integer()),
+        TypeError,
+      );
+      assert.throws(
+        // @ts-expect-error: firstOf() requires at least two parsers.
+        () => firstOf(integer(), { metavar: "COUNT" }),
+        TypeError,
+      );
+    });
+
+    it("should throw TypeError for non-parser arguments", () => {
+      assert.throws(
+        // @ts-expect-error: 42 is not a value parser.
+        () => firstOf(integer(), 42),
+        TypeError,
+      );
+    });
+
+    it("should throw TypeError for dependency-derived constituents", () => {
+      // A derived value parser parses with *default* dependency values when
+      // called directly, and firstOf() cannot forward the derived metadata
+      // that option()/argument() use to re-run it with live values, so
+      // accepting one would silently validate against the wrong branch.
+      const mode = dependency(choice(["dev", "prod"]));
+      const derived = mode.derive({
+        metavar: "LEVEL",
+        mode: "sync",
+        factory: (m) =>
+          choice(m === "dev" ? ["debug", "info"] : ["warn", "error"]),
+        defaultValue: () => "dev",
+      });
+      assert.throws(() => firstOf(derived, choice(["auto"])), TypeError);
+      assert.throws(() => firstOf(choice(["auto"]), derived), TypeError);
+    });
+
+    it("should throw TypeError for async constituents", () => {
+      const asyncParser: ValueParser<"async", string> = {
+        mode: "async",
+        metavar: "ASYNC",
+        placeholder: "",
+        parse: (input) => Promise.resolve({ success: true, value: input }),
+        format: (value) => value,
+      };
+      assert.throws(
+        // @ts-expect-error: firstOf() only accepts sync value parsers.
+        () => firstOf(string(), asyncParser),
+        TypeError,
+      );
     });
   });
 });

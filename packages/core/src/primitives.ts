@@ -1451,6 +1451,13 @@ export function option<M extends Mode, T>(
       value(
         v: T | boolean,
       ): ModeValue<M, ValueParserResult<T | boolean>> {
+        // Prefer the value parser's own validate() hook when present:
+        // combinators like firstOf() can express validation failures
+        // that a generic format()+parse() round-trip cannot (e.g. values
+        // whose string form an earlier overlapping constituent claims).
+        if (typeof vp.validate === "function") {
+          return wrapForMode(mode, wrapParseResult(vp.validate(v as T)));
+        }
         let stringified: string;
         try {
           stringified = vp.format(v as T);
@@ -2699,6 +2706,16 @@ export function argument<M extends Mode, T>(
         : { success: false, error: formatInvalidValueError(parsed.error) };
     Object.defineProperty(result, "validateValue", {
       value(v: T): ModeValue<M, ValueParserResult<T>> {
+        // Prefer the value parser's own validate() hook when present:
+        // combinators like firstOf() can express validation failures
+        // that a generic format()+parse() round-trip cannot (e.g. values
+        // whose string form an earlier overlapping constituent claims).
+        if (typeof vp.validate === "function") {
+          return wrapForMode<M, ValueParserResult<T>>(
+            vpMode,
+            wrapParseResult(vp.validate(v)),
+          );
+        }
         let stringified: string;
         try {
           stringified = vp.format(v);
