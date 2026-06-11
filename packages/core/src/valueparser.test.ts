@@ -18738,6 +18738,25 @@ describe("firstOf", () => {
       assert.ok(Object.is(zeroResult.value, 0));
     });
 
+    it("should accept fallbacks canonicalized beyond case folding", () => {
+      // Built-in parsers like email({ allowDisplayName: true }) and
+      // semVer({ allowPrefix: true }) canonicalize during parse() without
+      // exposing normalize().  When no constituent owns the value more
+      // faithfully, a same-primitive-type round trip is the same
+      // canonicalization the constituent alone would apply to a fallback.
+      const mail = firstOf(email({ allowDisplayName: true }), integer());
+      const mailResult = mail.validate?.("John Doe <john@example.com>");
+      assert.ok(mailResult?.success);
+      assert.equal(mailResult.value, "john@example.com");
+
+      const version = firstOf(semVer({ allowPrefix: true }), integer());
+      // The v-prefixed form is outside the SemVerString literal type but
+      // arrives at runtime from config/env fallbacks:
+      const versionResult = version.validate?.("v1.2.3" as never);
+      assert.ok(versionResult?.success);
+      assert.equal(versionResult.value, "1.2.3");
+    });
+
     it("should not treat arbitrary same-type round trips as ownership", () => {
       // A parser whose format() clamps values to its range round-trips
       // 15 into 10.  That is data loss, not canonicalization: it must

@@ -9025,9 +9025,20 @@ export function firstOf(
   // whose valid value is shadowed by an earlier overlapping branch.
   // Hookless constituents are checked by round-tripping their format()
   // through their own parse(); those whose format() throws or returns a
-  // non-string for a foreign value are skipped, as are lossy claims where
-  // the round-tripped value no longer equals the original (or the
-  // constituent's own normalization of it).
+  // non-string for a foreign value are skipped.
+  //
+  // Ownership resolves in two passes.  The first pass requires the
+  // round-tripped value to faithfully preserve the original (exact
+  // equality, the constituent's own normalize() result, or a recognized
+  // canonicalization; see ownsRoundTrippedValue), so a constituent that
+  // preserves the value always beats an earlier lossy one.  Only when no
+  // constituent preserves the value does the second pass accept the first
+  // same-primitive-type round trip as a parse-level canonicalization
+  // (e.g. email({ allowDisplayName: true }) stripping a display name)—
+  // the same acceptance the constituent alone would grant a fallback
+  // value.  Object values are exempt from the second pass: structural
+  // equality is the only way to tell canonicalization from data loss
+  // there, and the first pass already covers it.
   function findOwner(
     value: unknown,
   ):
@@ -9036,6 +9047,12 @@ export function firstOf(
       readonly result: ValueParserResult<unknown>;
     }
     | undefined {
+    let canonicalizing:
+      | {
+        readonly parser: ValueParser<"sync", unknown>;
+        readonly result: ValueParserResult<unknown>;
+      }
+      | undefined;
     for (const parser of parsers) {
       if (typeof parser.validate === "function") {
         // A constituent's validate() hook is typed for its own value
@@ -9059,13 +9076,19 @@ export function firstOf(
       }
       if (typeof formatted !== "string") continue;
       const result = parser.parse(formatted);
-      if (
-        result.success && ownsRoundTrippedValue(parser, result.value, value)
-      ) {
+      if (!result.success) continue;
+      if (ownsRoundTrippedValue(parser, result.value, value)) {
         return { parser, result };
       }
+      if (
+        canonicalizing == null &&
+        value !== null && typeof value !== "object" &&
+        typeof result.value === typeof value
+      ) {
+        canonicalizing = { parser, result };
+      }
     }
-    return undefined;
+    return canonicalizing;
   }
 
   const hasNormalize = parsers.some(
@@ -9101,6 +9124,11 @@ export function firstOf(
       // format() is a display-oriented best effort: precise fallback
       // validation goes through validate() below, so this method only
       // needs to pick the most faithful string representation available.
+      // Ownership mirrors findOwner(): a constituent's own validate()
+      // hook decides authoritatively, faithful round trips win over
+      // same-primitive-type canonicalizing ones, and unclaimed values
+      // fall back to the first well-formed string.
+      let canonicalizing: string | undefined;
       let fallback: string | undefined;
       let firstError: unknown;
       let hasError = false;
@@ -9119,12 +9147,9 @@ export function firstOf(
         // value from another branch of the union; such results are not
         // usable as CLI input and must not be returned.
         if (typeof formatted !== "string") continue;
-        // Ownership mirrors findOwner(): a constituent's own validate()
-        // hook decides authoritatively (a nested firstOf() may accept a
-        // value whose string form its round-trip cannot express), and
-        // only hookless constituents use the round-trip test.  A hook
-        // that throws on a foreign value counts as non-ownership.
         if (typeof parser.validate === "function") {
+          // A hook that throws on a foreign value counts as
+          // non-ownership.
           let owned = false;
           try {
             owned = parser.validate(value).success;
@@ -9134,15 +9159,22 @@ export function firstOf(
           if (owned) return formatted;
         } else {
           const result = parser.parse(formatted);
-          if (
-            result.success &&
-            ownsRoundTrippedValue(parser, result.value, value)
-          ) {
-            return formatted;
+          if (result.success) {
+            if (ownsRoundTrippedValue(parser, result.value, value)) {
+              return formatted;
+            }
+            if (
+              canonicalizing == null &&
+              value !== null && typeof value !== "object" &&
+              typeof result.value === typeof value
+            ) {
+              canonicalizing = formatted;
+            }
           }
         }
         fallback ??= formatted;
       }
+      if (canonicalizing !== undefined) return canonicalizing;
       if (fallback !== undefined) return fallback;
       if (hasError) throw firstError;
       throw new TypeError(
