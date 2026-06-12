@@ -134,6 +134,14 @@ To be released.
     dependency-derived value parsers are rejected at construction time.
     [[#821], [#826]]
 
+ -  Added `keyValue()` for parsing `KEY=VALUE` option values into readonly
+    key-value tuples.  The parser supports custom separators, first-or-last
+    split policy, empty-key and empty-value controls, child key and value
+    parsers with preserved type inference, custom error messages,
+    `format()`, fallback `validate()`, and best-effort composed completion
+    suggestions.  The key-value cookbook pattern now uses the built-in
+    parser instead of a custom implementation.  [[#828], [#833]]
+
  -  Added IPv6 support to `socketAddress()`.  It now accepts bracketed IPv6
     endpoints such as `[::1]:8080`, host-only IPv6 literals when a
     `defaultPort` is configured, IP version filtering through `host.version`,
@@ -161,8 +169,10 @@ To be released.
 [#823]: https://github.com/dahlia/optique/issues/823
 [#825]: https://github.com/dahlia/optique/pull/825
 [#826]: https://github.com/dahlia/optique/pull/826
+[#828]: https://github.com/dahlia/optique/issues/828
 [#829]: https://github.com/dahlia/optique/issues/829
 [#832]: https://github.com/dahlia/optique/pull/832
+[#833]: https://github.com/dahlia/optique/pull/833
 
 ### @optique/zod
 

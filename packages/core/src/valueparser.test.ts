@@ -20,6 +20,7 @@ import {
   type Json,
   json,
   type JsonOptions,
+  keyValue,
   locale,
   macAddress,
   type NonEmptyString,
@@ -18683,6 +18684,510 @@ describe("json()", () => {
 
     it("custom placeholder is respected", () => {
       assert.equal(json({ placeholder: 123 }).placeholder, 123);
+    });
+  });
+});
+
+describe("keyValue", () => {
+  describe("parsing", () => {
+    it("should parse KEY=VALUE as a readonly tuple", () => {
+      const parser = keyValue();
+
+      const result = parser.parse("DATABASE_URL=postgres://localhost/app");
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value, [
+        "DATABASE_URL",
+        "postgres://localhost/app",
+      ]);
+    });
+
+    it("should allow an empty value by default", () => {
+      const parser = keyValue();
+
+      const result = parser.parse("DEBUG=");
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value, ["DEBUG", ""]);
+    });
+
+    it("should reject an empty key by default", () => {
+      const parser = keyValue();
+
+      const result = parser.parse("=enabled");
+
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a non-empty key in " },
+        { type: "value", value: "=enabled" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should reject input without the separator", () => {
+      const parser = keyValue();
+
+      const result = parser.parse("DEBUG");
+
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected " },
+        { type: "value", value: "=" },
+        { type: "text", text: " in " },
+        { type: "value", value: "DEBUG" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should support custom separators", () => {
+      const parser = keyValue({ separator: ":" });
+
+      const result = parser.parse("app:web");
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value, ["app", "web"]);
+      assert.equal(parser.metavar, "KEY:VALUE");
+    });
+
+    it("should split repeated separators at the first separator by default", () => {
+      const parser = keyValue();
+
+      const result = parser.parse("A=B=C");
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value, ["A", "B=C"]);
+    });
+
+    it("should split repeated separators at the last separator when configured", () => {
+      const parser = keyValue({ split: "last" });
+
+      const result = parser.parse("A=B=C");
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value, ["A=B", "C"]);
+    });
+
+    it("should preserve whitespace instead of trimming input", () => {
+      const parser = keyValue();
+
+      const result = parser.parse(" KEY = VALUE ");
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value, [" KEY ", " VALUE "]);
+    });
+
+    it("should validate keys and values with child parsers", () => {
+      const parser = keyValue({
+        key: choice(["host", "port"] as const),
+        value: integer({ min: 1 }),
+      });
+
+      const result = parser.parse("port=5432");
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value, ["port", 5432]);
+    });
+
+    it("should wrap key parser failures as invalid-key errors", () => {
+      const parser = keyValue({
+        key: choice(["host", "port"] as const),
+        value: integer(),
+      });
+
+      const result = parser.parse("user=100");
+
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Invalid key: " },
+        { type: "text", text: "Expected one of " },
+        { type: "value", value: "host" },
+        { type: "text", text: " and " },
+        { type: "value", value: "port" },
+        { type: "text", text: ", but got " },
+        { type: "value", value: "user" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should wrap value parser failures as invalid-value errors", () => {
+      const parser = keyValue({
+        key: choice(["port"] as const),
+        value: integer({ min: 1 }),
+      });
+
+      const result = parser.parse("port=0");
+
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Invalid value: " },
+        {
+          type: "text",
+          text: "Expected a value greater than or equal to ",
+        },
+        { type: "text", text: "1" },
+        { type: "text", text: ", but got " },
+        { type: "value", value: "0" },
+        { type: "text", text: "." },
+      ]);
+    });
+  });
+
+  describe("empty fields", () => {
+    it("should allow an empty key when configured", () => {
+      const parser = keyValue({ allowEmptyKey: true });
+
+      const result = parser.parse("=default");
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value, ["", "default"]);
+    });
+
+    it("should reject an empty value when configured", () => {
+      const parser = keyValue({ allowEmptyValue: false });
+
+      const result = parser.parse("DEBUG=");
+
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a non-empty value in " },
+        { type: "value", value: "DEBUG=" },
+        { type: "text", text: "." },
+      ]);
+    });
+  });
+
+  describe("format", () => {
+    it("should format through the key and value parsers", () => {
+      const parser = keyValue({
+        key: choice(["port"] as const),
+        value: integer(),
+      });
+
+      assert.equal(parser.format(["port", 5432]), "port=5432");
+    });
+
+    it("should use a custom separator when formatting", () => {
+      const parser = keyValue({ separator: ":" });
+
+      assert.equal(parser.format(["app", "web"]), "app:web");
+    });
+  });
+
+  describe("validate", () => {
+    it("should validate fallback tuples through child parsers", () => {
+      const parser = keyValue({
+        key: choice(["host", "port"] as const),
+        value: integer({ min: 1 }),
+      });
+
+      const result = parser.validate?.(["port", 5432]);
+
+      assert.ok(result?.success);
+      assert.deepEqual(result.value, ["port", 5432]);
+    });
+
+    it("should reject fallback tuples that violate child parsers", () => {
+      const parser = keyValue({
+        key: choice(["port"] as const),
+        value: integer({ min: 1 }),
+      });
+
+      const result = parser.validate?.(["port", 0]);
+
+      assert.ok(result);
+      assert.ok(!result.success);
+      assert.equal(
+        formatMessage(result.error),
+        "Invalid value: " +
+          'Expected a value greater than or equal to 1, but got "0".',
+      );
+    });
+
+    it("should reject fallback keys that cannot round-trip with first split", () => {
+      const parser = keyValue();
+
+      const result = parser.validate?.(["A=B", "C"]);
+
+      assert.ok(result);
+      assert.ok(!result.success);
+      assert.equal(
+        formatMessage(result.error),
+        'Invalid key: Expected a key without "=", but got "A=B".',
+      );
+    });
+
+    it("should reject fallback values that cannot round-trip with last split", () => {
+      const parser = keyValue({ split: "last" });
+
+      const result = parser.validate?.(["A", "B=C"]);
+
+      assert.ok(result);
+      assert.ok(!result.success);
+      assert.equal(
+        formatMessage(result.error),
+        'Invalid value: Expected a value without "=", but got "B=C".',
+      );
+    });
+
+    it("should not throw when a child parser cannot format a fallback", () => {
+      const value: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: "",
+        parse: (input) => ({ success: true, value: input }),
+        format: (input) => {
+          if (input === "sentinel") {
+            throw new TypeError("Sentinel values cannot be formatted.");
+          }
+          return input;
+        },
+      };
+      const parser = keyValue({ value });
+
+      const result = parser.validate?.(["key", "sentinel"]);
+
+      assert.ok(result?.success);
+      assert.deepEqual(result.value, ["key", "sentinel"]);
+    });
+
+    it("should be used by option() fallback validation", () => {
+      const parser = option(
+        "--define",
+        keyValue({
+          key: choice(["port"] as const),
+          value: integer({ min: 1 }),
+        }),
+      );
+
+      const result = parser.validateValue?.(["port", 0]);
+
+      assert.ok(result);
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("suggest", () => {
+    it("should suggest keys with the separator appended before the separator", () => {
+      const parser = keyValue({ key: choice(["host", "port"] as const) });
+
+      const suggestions = [...parser.suggest?.("h") ?? []];
+
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "host=" }]);
+    });
+
+    it("should suggest values with the key and separator prepended", () => {
+      const parser = keyValue({
+        key: choice(["mode"] as const),
+        value: choice(["debug", "info"] as const),
+      });
+
+      const suggestions = [...parser.suggest?.("mode=d") ?? []];
+
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "mode=debug" }]);
+    });
+  });
+
+  describe("deferred metadata", () => {
+    it("should mark the tuple as deferred when a child parser is deferred", () => {
+      const key: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "KEY",
+        placeholder: "",
+        parse: (input) => ({
+          success: true,
+          value: input,
+          deferred: true,
+        }),
+        format: (value) => value,
+      };
+      const parser = keyValue({ key });
+
+      const result = parser.parse("USER=alice");
+
+      assert.ok(result.success);
+      assert.equal(result.deferred, true);
+      assert.deepEqual(result.deferredKeys, new Map([[0, null]]));
+    });
+
+    it("should preserve nested deferred keys from child parsers", () => {
+      const nestedDeferredKeys = new Map<PropertyKey, null>([
+        ["name", null],
+      ]);
+      const value: ValueParser<"sync", { readonly name: string }> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: { name: "" },
+        parse: (input) => ({
+          success: true,
+          value: { name: input },
+          deferred: true,
+          deferredKeys: nestedDeferredKeys,
+        }),
+        format: (value) => value.name,
+      };
+      const parser = keyValue({ value });
+
+      const result = parser.parse("user=alice");
+
+      assert.ok(result.success);
+      assert.equal(result.deferred, true);
+      assert.deepEqual(
+        result.deferredKeys,
+        new Map<PropertyKey, ReadonlyMap<PropertyKey, null> | null>([
+          [1, nestedDeferredKeys],
+        ]),
+      );
+    });
+  });
+
+  describe("custom errors", () => {
+    it("should use static custom errors", () => {
+      const custom = message`Use KEY=VALUE.`;
+      const parser = keyValue({
+        allowEmptyValue: false,
+        errors: {
+          missingSeparator: custom,
+          emptyKey: custom,
+          emptyValue: custom,
+          invalidKey: custom,
+          invalidValue: custom,
+        },
+        key: choice(["host"] as const),
+        value: integer(),
+      });
+
+      for (const input of ["host", "=value", "host=", "port=1", "host=x"]) {
+        const result = parser.parse(input);
+        assert.ok(!result.success);
+        assert.deepEqual(result.error, custom);
+      }
+    });
+
+    it("should pass context to custom error callbacks", () => {
+      const parser = keyValue({
+        allowEmptyValue: false,
+        errors: {
+          missingSeparator: (input, separator) =>
+            message`Missing ${separator} in ${text(input)}.`,
+          emptyKey: (input) => message`Empty key in ${text(input)}.`,
+          emptyValue: (input) => message`Empty value in ${text(input)}.`,
+          invalidKey: (error) => [text("Bad key: "), ...error],
+          invalidValue: (error) => [text("Bad value: "), ...error],
+        },
+        key: choice(["host"] as const),
+        value: integer(),
+      });
+
+      const missing = parser.parse("host");
+      assert.ok(!missing.success);
+      assert.equal(formatMessage(missing.error), 'Missing "=" in host.');
+
+      const emptyKey = parser.parse("=localhost");
+      assert.ok(!emptyKey.success);
+      assert.equal(formatMessage(emptyKey.error), "Empty key in =localhost.");
+
+      const emptyValue = parser.parse("host=");
+      assert.ok(!emptyValue.success);
+      assert.equal(formatMessage(emptyValue.error), "Empty value in host=.");
+
+      const invalidKey = parser.parse("port=80");
+      assert.ok(!invalidKey.success);
+      assert.equal(
+        formatMessage(invalidKey.error),
+        'Bad key: Expected one of "host", but got "port".',
+      );
+
+      const invalidValue = parser.parse("host=http");
+      assert.ok(!invalidValue.success);
+      assert.equal(
+        formatMessage(invalidValue.error),
+        'Bad value: Expected a valid integer, but got "http".',
+      );
+    });
+  });
+
+  describe("types", () => {
+    it("should infer key and value parser result types", () => {
+      const parser = keyValue({
+        key: choice(["host", "port"] as const),
+        value: integer(),
+      });
+      parser satisfies ValueParser<
+        "sync",
+        readonly ["host" | "port", number]
+      >;
+
+      const result = parser.parse("port=5432");
+      assert.ok(result.success);
+      const value: readonly ["host" | "port", number] = result.value;
+      assert.deepEqual(value, ["port", 5432]);
+    });
+  });
+
+  describe("properties", () => {
+    it("property: strings with one separator parse into original sides", () => {
+      fc.assert(
+        fc.property(
+          fc.string().map((value) => value.replaceAll("=", "_") || "KEY"),
+          fc.string().map((value) => value.replaceAll("=", "_")),
+          (key, value) => {
+            const parser = keyValue();
+
+            const result = parser.parse(`${key}=${value}`);
+
+            assert.ok(result.success);
+            assert.deepEqual(result.value, [key, value]);
+          },
+        ),
+        propertyParameters,
+      );
+    });
+  });
+
+  describe("construction errors", () => {
+    it("should reject an empty separator", () => {
+      assert.throws(
+        () => keyValue({ separator: "" }),
+        {
+          name: "TypeError",
+          message: "Expected a non-empty string.",
+        },
+      );
+    });
+
+    it("should reject async child parsers", () => {
+      const asyncParser: ValueParser<"async", string> = {
+        mode: "async",
+        metavar: "ASYNC",
+        placeholder: "",
+        parse: (input) => Promise.resolve({ success: true, value: input }),
+        format: (value) => value,
+      };
+
+      assert.throws(
+        // @ts-expect-error: keyValue() only accepts sync key parsers.
+        () => keyValue({ key: asyncParser }),
+        TypeError,
+      );
+      assert.throws(
+        // @ts-expect-error: keyValue() only accepts sync value parsers.
+        () => keyValue({ value: asyncParser }),
+        TypeError,
+      );
+    });
+
+    it("should reject dependency-derived child parsers", () => {
+      const mode = dependency(choice(["dev", "prod"]));
+      const derived = mode.derive({
+        metavar: "LEVEL",
+        mode: "sync",
+        factory: (m) =>
+          choice(m === "dev" ? ["debug", "info"] : ["warn", "error"]),
+        defaultValue: () => "dev",
+      });
+
+      assert.throws(() => keyValue({ key: derived }), TypeError);
+      assert.throws(() => keyValue({ value: derived }), TypeError);
     });
   });
 });

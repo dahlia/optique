@@ -903,6 +903,415 @@ export function string(
 }
 
 /**
+ * Options for creating a {@link keyValue} parser.
+ * @template K The parsed key type.
+ * @template V The parsed value type.
+ * @since 1.1.0
+ */
+export interface KeyValueOptions<K = string, V = string> {
+  /**
+   * The metavariable name for this parser.  Used in help messages to
+   * indicate the expected key-value shape.
+   * @default `"KEY=VALUE"` with the configured separator.
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * The separator between key and value.
+   * @default `"="`
+   */
+  readonly separator?: string;
+
+  /**
+   * Parser used to validate and transform the key side.
+   * @default `string({ placeholder: "KEY" })`
+   */
+  readonly key?: ValueParser<"sync", K>;
+
+  /**
+   * Parser used to validate and transform the value side.
+   * @default `string()`
+   */
+  readonly value?: ValueParser<"sync", V>;
+
+  /**
+   * If `true`, accepts an empty key before the separator.
+   * @default `false`
+   */
+  readonly allowEmptyKey?: boolean;
+
+  /**
+   * If `true`, accepts an empty value after the separator.
+   * @default `true`
+   */
+  readonly allowEmptyValue?: boolean;
+
+  /**
+   * Chooses which separator occurrence is used when input contains the
+   * separator more than once.
+   * @default `"first"`
+   */
+  readonly split?: "first" | "last";
+
+  /**
+   * Custom error messages for key-value parsing failures.
+   * @since 1.1.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error when the input does not contain the separator.
+     */
+    readonly missingSeparator?:
+      | Message
+      | ((input: string, separator: string) => Message);
+
+    /**
+     * Custom error when the key side is empty and empty keys are disabled.
+     */
+    readonly emptyKey?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error when the value side is empty and empty values are disabled.
+     */
+    readonly emptyValue?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error wrapper for key parser failures.
+     */
+    readonly invalidKey?: Message | ((error: Message) => Message);
+
+    /**
+     * Custom error wrapper for value parser failures.
+     */
+    readonly invalidValue?: Message | ((error: Message) => Message);
+  };
+}
+
+/**
+ * Creates a value parser for strings shaped like `KEY=VALUE`.
+ *
+ * The default parser splits on the first `=`, rejects empty keys, allows
+ * empty values, and returns a readonly `[key, value]` tuple.  Custom key and
+ * value parsers can narrow or transform either side while preserving the
+ * inferred tuple type.
+ *
+ * @template K The parsed key type.
+ * @template V The parsed value type.
+ * @param options Configuration options for the key-value parser.
+ * @returns A sync value parser producing readonly key-value tuples.
+ * @throws {TypeError} If `separator` or `metavar` is empty, if
+ *   `allowEmptyKey` or `allowEmptyValue` is not a boolean, if `split` is not
+ *   `"first"` or `"last"`, or if `key` or `value` is not a sync value parser.
+ * @since 1.1.0
+ */
+export function keyValue<K = string, V = string>(
+  options: KeyValueOptions<K, V> = {},
+): ValueParser<"sync", readonly [K, V]> {
+  const separator = options.separator ?? "=";
+  if (typeof separator !== "string") {
+    throw new TypeError(
+      `Expected separator to be a string, but got ${typeof separator}: ${
+        String(separator)
+      }.`,
+    );
+  }
+  ensureNonEmptyString(separator);
+
+  checkBooleanOption(options, "allowEmptyKey");
+  checkBooleanOption(options, "allowEmptyValue");
+  checkEnumOption(options, "split", ["first", "last"]);
+
+  const split = options.split ?? "first";
+  const allowEmptyKey = options.allowEmptyKey ?? false;
+  const allowEmptyValue = options.allowEmptyValue ?? true;
+  const metavar = options.metavar ?? `KEY${separator}VALUE`;
+  ensureNonEmptyString(metavar);
+
+  const rawKeyParser = options.key ?? string({ placeholder: "KEY" });
+  const rawValueParser = options.value ??
+    string({ placeholder: allowEmptyValue ? "" : "VALUE" });
+  checkKeyValueChildParser("key", rawKeyParser);
+  checkKeyValueChildParser("value", rawValueParser);
+  const keyParser = rawKeyParser as ValueParser<"sync", K>;
+  const valueParser = rawValueParser as ValueParser<"sync", V>;
+  const hasNormalize = typeof keyParser.normalize === "function" ||
+    typeof valueParser.normalize === "function";
+  const hasSuggest = typeof keyParser.suggest === "function" ||
+    typeof valueParser.suggest === "function";
+
+  function findSeparator(input: string): number {
+    return split === "last"
+      ? input.lastIndexOf(separator)
+      : input.indexOf(separator);
+  }
+
+  function emptyKeyError(input: string): Message {
+    const custom = options.errors?.emptyKey;
+    if (custom != null) {
+      return typeof custom === "function" ? custom(input) : custom;
+    }
+    return message`Expected a non-empty key in ${input}.`;
+  }
+
+  function emptyValueError(input: string): Message {
+    const custom = options.errors?.emptyValue;
+    if (custom != null) {
+      return typeof custom === "function" ? custom(input) : custom;
+    }
+    return message`Expected a non-empty value in ${input}.`;
+  }
+
+  function missingSeparatorError(input: string): Message {
+    const custom = options.errors?.missingSeparator;
+    if (custom != null) {
+      return typeof custom === "function" ? custom(input, separator) : custom;
+    }
+    return message`Expected ${separator} in ${input}.`;
+  }
+
+  function invalidKeyError(error: Message): Message {
+    const custom = options.errors?.invalidKey;
+    if (custom != null) {
+      return typeof custom === "function" ? custom(error) : custom;
+    }
+    return [text("Invalid key: "), ...cloneMessage(error)];
+  }
+
+  function invalidValueError(error: Message): Message {
+    const custom = options.errors?.invalidValue;
+    if (custom != null) {
+      return typeof custom === "function" ? custom(error) : custom;
+    }
+    return [text("Invalid value: "), ...cloneMessage(error)];
+  }
+
+  function validateParts(
+    input: string,
+    key: string,
+    value: string,
+  ): ValueParserResult<readonly [K, V]> {
+    if (!allowEmptyKey && key === "") {
+      return { success: false, error: emptyKeyError(input) };
+    }
+    if (!allowEmptyValue && value === "") {
+      return { success: false, error: emptyValueError(input) };
+    }
+
+    const keyResult = keyParser.parse(key);
+    if (!keyResult.success) {
+      return { success: false, error: invalidKeyError(keyResult.error) };
+    }
+    const valueResult = valueParser.parse(value);
+    if (!valueResult.success) {
+      return { success: false, error: invalidValueError(valueResult.error) };
+    }
+    return makeKeyValueSuccess(keyResult, valueResult);
+  }
+
+  return {
+    mode: "sync",
+    metavar,
+    placeholder: [
+      keyParser.placeholder,
+      valueParser.placeholder,
+    ] as const,
+    parse(input: string): ValueParserResult<readonly [K, V]> {
+      const index = findSeparator(input);
+      if (index < 0) {
+        return { success: false, error: missingSeparatorError(input) };
+      }
+      const key = input.slice(0, index);
+      const value = input.slice(index + separator.length);
+      return validateParts(input, key, value);
+    },
+    format(value: readonly [K, V]): string {
+      return `${keyParser.format(value[0])}${separator}${
+        valueParser.format(value[1])
+      }`;
+    },
+    validate(value: readonly [K, V]): ValueParserResult<readonly [K, V]> {
+      const keyResult = validateValueParserValue(keyParser, value[0]);
+      if (!keyResult.success) {
+        return { success: false, error: invalidKeyError(keyResult.error) };
+      }
+      const valueResult = validateValueParserValue(valueParser, value[1]);
+      if (!valueResult.success) {
+        return { success: false, error: invalidValueError(valueResult.error) };
+      }
+
+      let formattedKey: string;
+      let formattedValue: string;
+      try {
+        formattedKey = keyParser.format(keyResult.value);
+        formattedValue = valueParser.format(valueResult.value);
+      } catch {
+        return makeKeyValueSuccess(keyResult, valueResult);
+      }
+      if (
+        typeof formattedKey !== "string" ||
+        typeof formattedValue !== "string"
+      ) {
+        return makeKeyValueSuccess(keyResult, valueResult);
+      }
+      const input = `${formattedKey}${separator}${formattedValue}`;
+      if (!allowEmptyKey && formattedKey === "") {
+        return { success: false, error: emptyKeyError(input) };
+      }
+      if (!allowEmptyValue && formattedValue === "") {
+        return { success: false, error: emptyValueError(input) };
+      }
+      if (split === "first" && formattedKey.includes(separator)) {
+        return {
+          success: false,
+          error: invalidKeyError(
+            message`Expected a key without ${separator}, but got ${formattedKey}.`,
+          ),
+        };
+      }
+      if (split === "last" && formattedValue.includes(separator)) {
+        return {
+          success: false,
+          error: invalidValueError(
+            message`Expected a value without ${separator}, but got ${formattedValue}.`,
+          ),
+        };
+      }
+      return makeKeyValueSuccess(keyResult, valueResult);
+    },
+    ...(hasNormalize
+      ? {
+        normalize(value: readonly [K, V]): readonly [K, V] {
+          return [
+            keyParser.normalize?.(value[0]) ?? value[0],
+            valueParser.normalize?.(value[1]) ?? value[1],
+          ] as const;
+        },
+      }
+      : {}),
+    ...(hasSuggest
+      ? {
+        *suggest(prefix: string): Iterable<Suggestion> {
+          const index = findSeparator(prefix);
+          if (index < 0) {
+            if (typeof keyParser.suggest !== "function") return;
+            const suggestions: Suggestion[] = [];
+            for (const suggestion of keyParser.suggest(prefix)) {
+              if (suggestion.kind === "literal") {
+                suggestions.push({
+                  ...suggestion,
+                  text: `${suggestion.text}${separator}`,
+                });
+              }
+            }
+            yield* deduplicateSuggestions(suggestions);
+            return;
+          }
+
+          if (typeof valueParser.suggest !== "function") return;
+          const key = prefix.slice(0, index);
+          const valuePrefix = prefix.slice(index + separator.length);
+          const suggestions: Suggestion[] = [];
+          for (const suggestion of valueParser.suggest(valuePrefix)) {
+            if (suggestion.kind === "literal") {
+              suggestions.push({
+                ...suggestion,
+                text: `${key}${separator}${suggestion.text}`,
+              });
+            }
+          }
+          yield* deduplicateSuggestions(suggestions);
+        },
+      }
+      : {}),
+  };
+}
+
+function checkKeyValueChildParser(
+  role: "key" | "value",
+  parser: unknown,
+): asserts parser is ValueParser<"sync", unknown> {
+  if (!isValueParser(parser)) {
+    throw new TypeError(
+      `The ${role} option for keyValue() must be a value parser.`,
+    );
+  }
+  if (parser.mode !== "sync") {
+    throw new TypeError(
+      `keyValue() only supports sync ${role} parsers, ` +
+        "but an async one was given.",
+    );
+  }
+  if (isDerivedValueParser(parser)) {
+    throw new TypeError(
+      `keyValue() does not support dependency-derived ${role} parsers ` +
+        "(created via deriveFrom() or dependency().derive()); pass the " +
+        "derived parser directly to option() or argument() instead.",
+    );
+  }
+}
+
+function validateValueParserValue<T>(
+  parser: ValueParser<"sync", T>,
+  value: T,
+): ValueParserResult<T> {
+  if (typeof parser.validate === "function") {
+    return parser.validate(value);
+  }
+  let formatted: string;
+  try {
+    formatted = parser.format(value);
+  } catch {
+    return { success: true, value };
+  }
+  if (typeof formatted !== "string") {
+    return { success: true, value };
+  }
+  return parser.parse(formatted);
+}
+
+function makeKeyValueSuccess<K, V>(
+  keyResult: Extract<ValueParserResult<K>, { readonly success: true }>,
+  valueResult: Extract<ValueParserResult<V>, { readonly success: true }>,
+): ValueParserResult<readonly [K, V]> {
+  const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
+  let hasDeferred = false;
+  collectKeyValueDeferredKeys(deferredKeys, 0, keyResult, () => {
+    hasDeferred = true;
+  });
+  collectKeyValueDeferredKeys(deferredKeys, 1, valueResult, () => {
+    hasDeferred = true;
+  });
+  return {
+    success: true,
+    value: [keyResult.value, valueResult.value] as const,
+    ...(hasDeferred
+      ? {
+        deferred: true as const,
+        ...(deferredKeys.size > 0 ? { deferredKeys } : {}),
+      }
+      : {}),
+  };
+}
+
+function collectKeyValueDeferredKeys<T>(
+  deferredKeys: Map<PropertyKey, DeferredMap | null>,
+  index: 0 | 1,
+  result: Extract<ValueParserResult<T>, { readonly success: true }>,
+  markDeferred: () => void,
+): void {
+  if (result.deferredKeys != null) {
+    markDeferred();
+    deferredKeys.set(index, result.deferredKeys);
+    return;
+  }
+  if (result.deferred !== true) return;
+  markDeferred();
+  if (result.value == null || typeof result.value !== "object") {
+    deferredKeys.set(index, null);
+  }
+}
+
+/**
  * Options for creating an integer parser that returns a JavaScript `number`.
  *
  * This interface is used when you want to parse integers as regular JavaScript
