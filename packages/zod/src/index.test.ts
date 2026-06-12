@@ -1,5 +1,7 @@
 import { formatMessage, message } from "@optique/core/message";
-import { zod } from "@optique/zod";
+import { option } from "@optique/core/primitives";
+import { parseAsync } from "@optique/core/parser";
+import { zod, zodAsync } from "@optique/zod";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { z } from "zod";
@@ -1372,6 +1374,152 @@ describe("zod()", () => {
   });
 });
 
+describe("zodAsync()", () => {
+  describe("missing placeholder", () => {
+    it("should throw TypeError when options are omitted", () => {
+      assert.throws(
+        // @ts-expect-error: intentionally omitting required options
+        () => zodAsync(z.string()),
+        {
+          name: "TypeError",
+          message:
+            "zodAsync() requires an options object with a placeholder property.",
+        },
+      );
+    });
+
+    it("should throw TypeError when placeholder is missing from options", () => {
+      assert.throws(
+        // @ts-expect-error: intentionally omitting placeholder
+        () => zodAsync(z.string(), {}),
+        {
+          name: "TypeError",
+          message: "zodAsync() options must include a placeholder property.",
+        },
+      );
+    });
+  });
+
+  describe("async parsing", () => {
+    it("should parse async refinements", async () => {
+      const parser = zodAsync(
+        z.string().refine(
+          async (value) => await Promise.resolve(value === "valid-api-key"),
+          "API key is not valid.",
+        ),
+        { placeholder: "" },
+      );
+
+      const validResult = await parser.parse("valid-api-key");
+      const invalidResult = await parser.parse("invalid-api-key");
+
+      assert.equal(parser.mode, "async");
+      assert.ok(validResult.success);
+      assert.equal(validResult.value, "valid-api-key");
+      assert.ok(!invalidResult.success);
+      assert.match(formatMessage(invalidResult.error), /API key is not valid/);
+    });
+
+    it("should parse synchronous schemas through the async helper", async () => {
+      const parser = zodAsync(z.coerce.number().int().min(1024), {
+        placeholder: 1024,
+      });
+
+      const result = await parser.parse("8080");
+
+      assert.ok(result.success);
+      assert.equal(result.value, 8080);
+    });
+
+    it("should parse async transforms", async () => {
+      const parser = zodAsync(
+        z.string().transform(async (value) =>
+          await Promise.resolve(
+            Number(value),
+          )
+        ),
+        { placeholder: 0 },
+      );
+
+      const result = await parser.parse("42");
+
+      assert.ok(result.success);
+      assert.equal(result.value, 42);
+    });
+
+    it("should work with parseAsync()", async () => {
+      const schema = z.string().refine(
+        async (value) => await Promise.resolve(value.startsWith("live_")),
+        "API key must be live.",
+      );
+      const parser = option("--api-key", zodAsync(schema, { placeholder: "" }));
+
+      const result = await parseAsync(parser, ["--api-key", "live_secret"]);
+
+      assert.ok(result.success);
+      assert.equal(result.value, "live_secret");
+    });
+
+    it("should validate fallback values through validateValue()", async () => {
+      const schema = z.string().refine(
+        async (value) => await Promise.resolve(value.startsWith("live_")),
+        "API key must be live.",
+      );
+      const parser = option("--api-key", zodAsync(schema, { placeholder: "" }));
+
+      const validation = await parser.validateValue?.("test_secret");
+
+      assert.ok(validation != null);
+      assert.ok(!validation.success);
+      assert.match(formatMessage(validation.error), /API key must be live/);
+    });
+  });
+
+  describe("choices and suggest", () => {
+    it("should expose choices and suggestions for enum schemas", async () => {
+      const parser = zodAsync(z.enum(["debug", "info", "warn", "error"]), {
+        placeholder: "debug",
+      });
+
+      const suggestions = await collectAsync(parser.suggest!("i"));
+
+      assert.deepEqual(parser.choices, ["debug", "info", "warn", "error"]);
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "info" }]);
+    });
+
+    it("should preserve CLI-friendly boolean conversion", async () => {
+      const parser = zodAsync(z.boolean(), { placeholder: false });
+
+      const result = await parser.parse("yes");
+
+      assert.deepEqual(parser.choices, [true, false]);
+      assert.ok(result.success);
+      assert.ok(result.value);
+    });
+  });
+
+  describe("error customization", () => {
+    it("should use custom async schema error callbacks", async () => {
+      const parser = zodAsync(z.string().email(), {
+        placeholder: "",
+        errors: {
+          zodError: (_error, input) =>
+            message`Please provide a valid email address, got ${input}.`,
+        },
+      });
+
+      const result = await parser.parse("not-an-email");
+
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Please provide a valid email address, got " },
+        { type: "value", value: "not-an-email" },
+        { type: "text", text: "." },
+      ]);
+    });
+  });
+});
+
 describe("inferMetavar()—non-coerce schemas", () => {
   it("should infer BOOLEAN for z.boolean() (non-coerce)", () => {
     // z.boolean() has typeName/type "ZodBoolean"/"boolean"—same branch as coerce
@@ -1754,6 +1902,14 @@ describe("Zod internal compatibility branches", () => {
 });
 
 // Helpers
+
+async function collectAsync<T>(iterable: AsyncIterable<T>): Promise<T[]> {
+  const result: T[] = [];
+  for await (const value of iterable) {
+    result.push(value);
+  }
+  return result;
+}
 
 type FakeZodResult<T> =
   | { readonly success: true; readonly data: T }

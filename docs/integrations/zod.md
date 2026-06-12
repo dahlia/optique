@@ -107,6 +107,54 @@ const name = zod(z.string().transform((s) => s.toUpperCase()), { placeholder: ""
 ~~~~
 
 
+Async schemas
+-------------
+
+*This API is available since Optique 1.1.0.*
+
+Use `zodAsync()` when a schema depends on async refinements or transforms.  The
+returned value parser is async, so run the containing parser with
+`runAsync()` or `await run()`:
+
+~~~~ typescript twoslash
+async function isKnownApiKey(value: string): Promise<boolean> {
+  return await Promise.resolve(value.startsWith("live_"));
+}
+// ---cut-before---
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { runAsync } from "@optique/run";
+import { zodAsync } from "@optique/zod";
+import { z } from "zod";
+
+const parser = object({
+  apiKey: option(
+    "--api-key",
+    zodAsync(
+      z.string().refine(isKnownApiKey, "Unknown API key."),
+      { placeholder: "" },
+    ),
+  ),
+});
+
+const config = await runAsync(parser, {
+  args: ["--api-key", "live_secret"],
+});
+~~~~
+
+The synchronous `zod()` helper remains synchronous and still rejects schemas
+that require Zod's async parse path.  `zodAsync()` preserves the same metavar
+inference, choices, suggestions, Boolean literal conversion, formatting, and
+custom error handling as `zod()`.  Fallback values supplied through
+`bindEnv()` or `bindConfig()` are validated by the same schema before they are
+accepted.
+
+Async validation may run during fallback resolution and other repeated parser
+paths, including shell completion requests.  Keep remote checks bounded and
+cached when possible, and prefer enum or literal schemas for completion choices
+so suggestions stay metadata-driven.
+
+
 Custom error messages
 ---------------------
 
@@ -161,12 +209,10 @@ The `@optique/zod` package supports both Zod v3 (3.25.0+) and Zod v4 (4.0.0+):
 Limitations
 -----------
 
- -  *Async refinements not supported*: Since Optique's parsing is synchronous,
-    async Zod features like `refine(async ...)` cannot be used.  Async boolean
-    schemas are detected when a valid boolean literal is parsed (`"true"`,
-    `"false"`, etc.) and throw a `TypeError`; unrecognized inputs like
-    `"maybe"` return a normal validation error instead.  Perform async
-    validation after parsing if needed.
+ -  *`zod()` remains synchronous*: Async Zod features like
+    `refine(async ...)` and async transforms require `zodAsync()`.  The sync
+    helper detects schemas that need async parsing when possible and throws a
+    `TypeError` instead of silently skipping validation.
 
  -  *Boolean parsing in unions*: The CLI-friendly boolean parsing (accepting
     `true`/`false`, `1`/`0`, `yes`/`no`, `on`/`off`) applies only when the

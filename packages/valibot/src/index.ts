@@ -6,7 +6,7 @@ import type {
 import { type Message, message } from "@optique/core/message";
 import { ensureNonEmptyString } from "@optique/core/nonempty";
 import type * as v from "valibot";
-import { safeParse } from "valibot";
+import { safeParse, safeParseAsync } from "valibot";
 
 /**
  * Options for creating a Valibot value parser.
@@ -560,6 +560,42 @@ function inferChoices(
   return undefined;
 }
 
+function validateOptions<T>(
+  functionName: string,
+  options: ValibotParserOptions<T>,
+): void {
+  if (options == null || typeof options !== "object") {
+    throw new TypeError(
+      `${functionName}() requires an options object with a placeholder property.`,
+    );
+  }
+  if (!("placeholder" in options)) {
+    throw new TypeError(
+      `${functionName}() options must include a placeholder property.`,
+    );
+  }
+}
+
+function formatValue<T>(value: T, format?: (value: T) => string): string {
+  if (format) return format(value);
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? String(value) : value.toISOString();
+  }
+  if (typeof value !== "object" || value === null) return String(value);
+  if (Array.isArray(value)) return String(value);
+  const str = String(value);
+  if (str !== "[object Object]") return str;
+  const proto = Object.getPrototypeOf(value);
+  if (proto === Object.prototype || proto === null) {
+    try {
+      return JSON.stringify(value) ?? str;
+    } catch {
+      // Falls through to str below
+    }
+  }
+  return str;
+}
+
 /**
  * Creates a value parser from a Valibot schema.
  *
@@ -654,16 +690,7 @@ export function valibot<T>(
   schema: v.BaseSchema<unknown, T, v.BaseIssue<unknown>>,
   options: ValibotParserOptions<T>,
 ): ValueParser<"sync", T> {
-  if (options == null || typeof options !== "object") {
-    throw new TypeError(
-      "valibot() requires an options object with a placeholder property.",
-    );
-  }
-  if (!("placeholder" in options)) {
-    throw new TypeError(
-      "valibot() options must include a placeholder property.",
-    );
-  }
+  validateOptions("valibot", options);
   if (containsAsyncSchema(schema)) {
     throw new TypeError(
       "Async Valibot schemas (e.g., async validations) are not " +
@@ -734,25 +761,94 @@ export function valibot<T>(
     },
 
     format(value: T): string {
-      if (options.format) return options.format(value);
-      if (value instanceof Date) {
-        return Number.isNaN(value.getTime())
-          ? String(value)
-          : value.toISOString();
+      return formatValue(value, options.format);
+    },
+  };
+  return parser;
+}
+
+type AnyValibotSchema<T> =
+  | v.BaseSchema<unknown, T, v.BaseIssue<unknown>>
+  | v.BaseSchemaAsync<unknown, T, v.BaseIssue<unknown>>;
+
+/**
+ * Creates an async value parser from a Valibot schema.
+ *
+ * This parser validates CLI argument strings with Valibot's async safe-parse
+ * path, so schemas using `pipeAsync()`, `checkAsync()`, or other async actions
+ * can be reused directly in asynchronous Optique parsers.
+ *
+ * The metavar, choices, suggestions, formatting, and error customization
+ * follow the same rules as {@link valibot}.  Because the returned parser runs
+ * asynchronously, use it with `parseAsync()`, `run()`, or `runAsync()`.
+ *
+ * @template T The output type of the Valibot schema.
+ * @param schema A Valibot schema to validate input against.
+ * @param options Configuration for the parser, including a required
+ *   `placeholder` value used during deferred prompt resolution.
+ * @returns An async value parser that validates inputs using the provided
+ *   schema.
+ *
+ * @throws {TypeError} If `options` is missing, not an object, or does not
+ *   include `placeholder`.
+ * @throws {TypeError} If the resolved `metavar` is an empty string.
+ * @since 1.1.0
+ */
+export function valibotAsync<T>(
+  schema: AnyValibotSchema<T>,
+  options: ValibotParserOptions<T>,
+): ValueParser<"async", T> {
+  validateOptions("valibotAsync", options);
+  const syncSchema = schema as v.BaseSchema<
+    unknown,
+    unknown,
+    v.BaseIssue<unknown>
+  >;
+  const choices = inferChoices(syncSchema);
+  const metavar = options.metavar ?? inferMetavar(syncSchema);
+  ensureNonEmptyString(metavar);
+  const parser: ValueParser<"async", T> = {
+    mode: "async",
+    metavar,
+    placeholder: options.placeholder,
+    ...(choices != null && choices.length > 0
+      ? {
+        choices: Object.freeze(choices) as readonly T[],
+        async *suggest(prefix: string) {
+          for (const c of choices) {
+            if (c.startsWith(prefix)) {
+              yield { kind: "literal" as const, text: c };
+            }
+          }
+        },
       }
-      if (typeof value !== "object" || value === null) return String(value);
-      if (Array.isArray(value)) return String(value);
-      const str = String(value);
-      if (str !== "[object Object]") return str;
-      const proto = Object.getPrototypeOf(value);
-      if (proto === Object.prototype || proto === null) {
-        try {
-          return JSON.stringify(value) ?? str;
-        } catch {
-          // Falls through to str below
-        }
+      : {}),
+
+    async parse(input: string): Promise<ValueParserResult<T>> {
+      const result = await safeParseAsync(schema, input);
+
+      if (result.success) {
+        return { success: true, value: result.output };
       }
-      return str;
+
+      if (options.errors?.valibotError) {
+        return {
+          success: false,
+          error: typeof options.errors.valibotError === "function"
+            ? options.errors.valibotError(result.issues, input)
+            : options.errors.valibotError,
+        };
+      }
+
+      const firstIssue = result.issues[0];
+      return {
+        success: false,
+        error: message`${firstIssue?.message ?? "Validation failed"}`,
+      };
+    },
+
+    format(value: T): string {
+      return formatValue(value, options.format);
     },
   };
   return parser;

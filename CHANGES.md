@@ -154,6 +154,29 @@ To be released.
 [#825]: https://github.com/dahlia/optique/pull/825
 [#826]: https://github.com/dahlia/optique/pull/826
 
+### @optique/zod
+
+ -  Added `zodAsync()` for Zod schemas that require async parsing, including
+    async refinements and transforms.  The existing `zod()` helper remains
+    synchronous and continues to reject async-only schemas.  The async helper
+    preserves metavar inference, choices, suggestions, Boolean literal
+    conversion, formatting, custom error handling, and fallback validation for
+    values supplied through source contexts such as `bindEnv()` and
+    `bindConfig()`.  [[#827], [#831]]
+
+[#827]: https://github.com/dahlia/optique/issues/827
+[#831]: https://github.com/dahlia/optique/pull/831
+
+### @optique/valibot
+
+ -  Added `valibotAsync()` for Valibot schemas that require async parsing,
+    including `pipeAsync()` and `checkAsync()`.  The existing `valibot()`
+    helper remains synchronous and continues to reject async-only schemas.
+    The async helper preserves metavar inference, choices, suggestions,
+    formatting, custom error handling, and fallback validation for values
+    supplied through source contexts such as `bindEnv()` and `bindConfig()`.
+    [[#827], [#831]]
+
 ### @optique/discover
 
  -  Added the new *@optique/discover* package for runtime-aware command module

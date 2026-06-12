@@ -566,6 +566,42 @@ function inferChoices(
   return undefined;
 }
 
+function validateOptions<T>(
+  functionName: string,
+  options: ZodParserOptions<T>,
+): void {
+  if (options == null || typeof options !== "object") {
+    throw new TypeError(
+      `${functionName}() requires an options object with a placeholder property.`,
+    );
+  }
+  if (!("placeholder" in options)) {
+    throw new TypeError(
+      `${functionName}() options must include a placeholder property.`,
+    );
+  }
+}
+
+function formatValue<T>(value: T, format?: (value: T) => string): string {
+  if (format) return format(value);
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? String(value) : value.toISOString();
+  }
+  if (typeof value !== "object" || value === null) return String(value);
+  if (Array.isArray(value)) return String(value);
+  const str = String(value);
+  if (str !== "[object Object]") return str;
+  const proto = Object.getPrototypeOf(value);
+  if (proto === Object.prototype || proto === null) {
+    try {
+      return JSON.stringify(value) ?? str;
+    } catch {
+      // Falls through to str below
+    }
+  }
+  return str;
+}
+
 /**
  * Creates a value parser from a Zod schema.
  *
@@ -651,16 +687,7 @@ export function zod<T>(
   schema: z.Schema<T>,
   options: ZodParserOptions<T>,
 ): ValueParser<"sync", T> {
-  if (options == null || typeof options !== "object") {
-    throw new TypeError(
-      "zod() requires an options object with a placeholder property.",
-    );
-  }
-  if (!("placeholder" in options)) {
-    throw new TypeError(
-      "zod() options must include a placeholder property.",
-    );
-  }
+  validateOptions("zod", options);
   const choices = inferChoices(schema);
   const boolInfo = analyzeBooleanSchema(schema);
   const metavar = options.metavar ??
@@ -806,25 +833,155 @@ export function zod<T>(
     },
 
     format(value: T): string {
-      if (options.format) return options.format(value);
-      if (value instanceof Date) {
-        return Number.isNaN(value.getTime())
-          ? String(value)
-          : value.toISOString();
+      return formatValue(value, options.format);
+    },
+  };
+  return parser;
+}
+
+/**
+ * Creates an async value parser from a Zod schema.
+ *
+ * This parser validates CLI argument strings with Zod's async parse path, so
+ * schemas using async refinements or transforms can be reused directly in
+ * asynchronous Optique parsers.
+ *
+ * The metavar, choices, suggestions, Boolean input conversion, formatting,
+ * and error customization follow the same rules as {@link zod}.  Because the
+ * returned parser runs asynchronously, use it with `parseAsync()`, `run()`, or
+ * `runAsync()`.
+ *
+ * @template T The output type of the Zod schema.
+ * @param schema A Zod schema to validate input against.
+ * @param options Configuration for the parser, including a required
+ *   `placeholder` value used during deferred prompt resolution.
+ * @returns An async value parser that validates inputs using the provided
+ *   schema.
+ *
+ * @throws {TypeError} If `options` is missing, not an object, or does not
+ *   include `placeholder`.
+ * @throws {TypeError} If the resolved `metavar` is an empty string.
+ * @since 1.1.0
+ */
+export function zodAsync<T>(
+  schema: z.Schema<T>,
+  options: ZodParserOptions<T>,
+): ValueParser<"async", T> {
+  validateOptions("zodAsync", options);
+  const choices = inferChoices(schema);
+  const boolInfo = analyzeBooleanSchema(schema);
+  const metavar = options.metavar ??
+    (boolInfo.isBoolean ? "BOOLEAN" : inferMetavar(schema));
+  ensureNonEmptyString(metavar);
+
+  async function doSafeParse(
+    input: unknown,
+    rawInput: string,
+  ): Promise<ValueParserResult<T>> {
+    const result = await schema.safeParseAsync(input);
+
+    if (result.success) {
+      return { success: true, value: result.data };
+    }
+
+    if (options.errors?.zodError) {
+      return {
+        success: false,
+        error: typeof options.errors.zodError === "function"
+          ? options.errors.zodError(result.error, rawInput)
+          : options.errors.zodError,
+      };
+    }
+
+    const zodModule = schema as ZodSchemaInternal;
+    if (typeof zodModule.constructor?.prettifyError === "function") {
+      try {
+        const pretty = zodModule.constructor.prettifyError(result.error);
+        return { success: false, error: message`${pretty}` };
+      } catch {
+        // Fall through to default error handling
       }
-      if (typeof value !== "object" || value === null) return String(value);
-      if (Array.isArray(value)) return String(value);
-      const str = String(value);
-      if (str !== "[object Object]") return str;
-      const proto = Object.getPrototypeOf(value);
-      if (proto === Object.prototype || proto === null) {
-        try {
-          return JSON.stringify(value) ?? str;
-        } catch {
-          // Falls through to str below
+    }
+
+    const firstError = result.error.issues[0];
+    return {
+      success: false,
+      error: message`${firstError?.message ?? "Validation failed"}`,
+    };
+  }
+
+  async function handleBooleanLiteralError(
+    boolResult: ValueParserResult<boolean>,
+    rawInput: string,
+  ): Promise<ValueParserResult<T>> {
+    if (!boolInfo.isCoerced) {
+      return await doSafeParse(rawInput, rawInput);
+    }
+
+    if (options.errors?.zodError) {
+      if (typeof options.errors.zodError !== "function") {
+        return { success: false, error: options.errors.zodError };
+      }
+      const zodError = new ZodError([{
+        code: "invalid_type",
+        expected: "boolean",
+        message: `Invalid Boolean value: ${rawInput}`,
+        path: [],
+      }]);
+      return {
+        success: false,
+        error: options.errors.zodError(zodError, rawInput),
+      };
+    }
+    return boolResult as ValueParserResult<T>;
+  }
+
+  const parser: ValueParser<"async", T> = {
+    mode: "async",
+    metavar,
+    placeholder: options.placeholder,
+    ...(boolInfo.exposeChoices
+      ? {
+        choices: Object.freeze([true, false]) as readonly T[],
+        async *suggest(prefix: string) {
+          const allLiterals = [
+            ...BOOL_TRUE_LITERALS,
+            ...BOOL_FALSE_LITERALS,
+          ];
+          const normalizedPrefix = prefix.toLowerCase();
+          for (const lit of allLiterals) {
+            if (lit.startsWith(normalizedPrefix)) {
+              yield { kind: "literal" as const, text: lit };
+            }
+          }
+        },
+      }
+      : choices != null && choices.length > 0
+      ? {
+        choices: Object.freeze(choices) as readonly T[],
+        async *suggest(prefix: string) {
+          for (const c of choices) {
+            if (c.startsWith(prefix)) {
+              yield { kind: "literal" as const, text: c };
+            }
+          }
+        },
+      }
+      : {}),
+
+    async parse(input: string): Promise<ValueParserResult<T>> {
+      if (boolInfo.isBoolean) {
+        const boolResult = preConvertBoolean(input);
+        if (!boolResult.success) {
+          return await handleBooleanLiteralError(boolResult, input);
         }
+        return await doSafeParse(boolResult.value, input);
       }
-      return str;
+      return await doSafeParse(input, input);
+    },
+
+    format(value: T): string {
+      return formatValue(value, options.format);
     },
   };
   return parser;
