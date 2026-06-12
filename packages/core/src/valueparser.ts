@@ -5289,7 +5289,21 @@ export function socketAddress(
     return makeInvalidFormatError(input);
   }
 
-  return {
+  function isSocketAddressValue(value: unknown): value is SocketAddressValue {
+    return typeof value === "object" && value !== null &&
+      "host" in value && typeof value.host === "string" &&
+      "port" in value && typeof value.port === "number";
+  }
+
+  function formatSocketAddressValue(value: SocketAddressValue): string {
+    const ipv6Host = parseAndNormalizeIpv6(value.host);
+    if (separator === ":" && ipv6Host !== null) {
+      return `[${ipv6Host}]${separator}${value.port}`;
+    }
+    return `${value.host}${separator}${value.port}`;
+  }
+
+  const parser: ValueParser<"sync", SocketAddressValue> = {
     mode: "sync",
     metavar,
     get placeholder() {
@@ -5721,13 +5735,19 @@ export function socketAddress(
       };
     },
     format(value: SocketAddressValue): string {
-      const ipv6Host = parseAndNormalizeIpv6(value.host);
-      if (separator === ":" && ipv6Host !== null) {
-        return `[${ipv6Host}]${separator}${value.port}`;
+      return formatSocketAddressValue(value);
+    },
+    normalize(value: SocketAddressValue): SocketAddressValue {
+      if (!isSocketAddressValue(value)) return value;
+      try {
+        const result = parser.parse(formatSocketAddressValue(value));
+        return result.success ? result.value : value;
+      } catch {
+        return value;
       }
-      return `${value.host}${separator}${value.port}`;
     },
   };
+  return parser;
 }
 
 /**

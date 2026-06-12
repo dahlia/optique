@@ -63,6 +63,7 @@ import {
   domain,
   integer,
   macAddress,
+  socketAddress,
   string,
   type ValueParser,
   type ValueParserResult,
@@ -2034,6 +2035,25 @@ describe("withDefault", () => {
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value, "example.com");
+    }
+  });
+
+  it("should normalize socketAddress IPv6 default hosts", () => {
+    const parser = withDefault(
+      option("--endpoint", socketAddress()),
+      { host: "2001:0db8:0:0:0:0:0:1", port: 443 },
+    );
+
+    const omitted = parse(parser, []);
+    assert.ok(omitted.success);
+    const provided = parse(parser, [
+      "--endpoint",
+      "[2001:0db8:0:0:0:0:0:1]:443",
+    ]);
+    assert.ok(provided.success);
+    if (omitted.success && provided.success) {
+      assert.deepEqual(omitted.value, { host: "2001:db8::1", port: 443 });
+      assert.deepEqual(omitted.value, provided.value);
     }
   });
 

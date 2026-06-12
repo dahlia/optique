@@ -9381,6 +9381,21 @@ describe("socketAddress()", () => {
       assert.ok(!parser.parse("[::1]:80").success);
       assert.ok(parser.parse("[2001:db8::1]:80").success);
     });
+
+    it("should normalize IPv6 hosts in socket values", () => {
+      const parser = socketAddress();
+
+      assert.deepStrictEqual(
+        parser.normalize!({
+          host: "2001:0db8:0:0:0:0:0:1",
+          port: 443,
+        }),
+        {
+          host: "2001:db8::1",
+          port: 443,
+        },
+      );
+    });
   });
 
   describe("host options propagation", () => {
