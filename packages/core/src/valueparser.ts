@@ -4961,6 +4961,8 @@ export interface SocketAddressOptions {
  * @throws {TypeError} If `separator` is an empty string.
  * @throws {TypeError} If `separator` contains digit characters, since digits
  *   in the separator would cause ambiguous splitting of port input.
+ * @throws {TypeError} If `host.version` is provided but is not `4`, `6`, or
+ *   `"both"`.
  * @since 0.10.0
  *
  * @example
