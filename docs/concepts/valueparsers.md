@@ -1898,6 +1898,10 @@ For IP hosts, `host.version` controls which IP versions are accepted:
  -  `6`: Accept IPv6 only
  -  `"both"`: Accept IPv4 and IPv6 (default)
 
+For compatibility with earlier versions, configurations that use only the
+legacy `host.ip` field keep the previous IPv4-only behavior unless
+`host.version` or the new `host.ipv4`/`host.ipv6` fields are also set.
+
 ~~~~ typescript twoslash
 import { socketAddress } from "@optique/core/valueparser";
 import { option } from "@optique/core";

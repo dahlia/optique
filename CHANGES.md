@@ -139,7 +139,8 @@ To be released.
     `defaultPort` is configured, IP version filtering through `host.version`,
     separate `host.ipv4`/`host.ipv6` restrictions, and bracketed formatting
     for IPv6 hosts.  Existing `host.ip` options remain as an IPv4
-    compatibility alias.  [[#829], [#832]]
+    compatibility alias and keep IPv4-only behavior unless callers opt into
+    the new IP version options.  [[#829], [#832]]
 
 [Semantic Versioning 2.0.0]: https://semver.org/
 [#801]: https://github.com/dahlia/optique/issues/801

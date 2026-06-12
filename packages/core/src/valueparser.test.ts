@@ -9331,6 +9331,23 @@ describe("socketAddress()", () => {
       assert.ok(!ipv6Only.parse("192.0.2.1:80").success);
     });
 
+    it("should keep legacy host.ip configs IPv4-only by default", () => {
+      for (const type of ["ip", "both"] as const) {
+        const parser = socketAddress({
+          defaultPort: 80,
+          host: {
+            type,
+            ip: { allowLoopback: false, allowPrivate: false },
+          },
+        });
+
+        assert.ok(parser.parse("192.0.2.1:80").success);
+        assert.ok(!parser.parse("127.0.0.1:80").success);
+        assert.ok(!parser.parse("[::1]:80").success);
+        assert.ok(!parser.parse("[2001:db8::1]:80").success);
+      }
+    });
+
     it("should reject IPv6 addresses in hostname mode", () => {
       const parser = socketAddress({
         defaultPort: 80,

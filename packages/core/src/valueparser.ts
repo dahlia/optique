@@ -4895,7 +4895,8 @@ export interface SocketAddressOptions {
      * - `6`: IPv6 only
      * - `"both"`: Accept both IPv4 and IPv6
      *
-     * @default `"both"`
+     * @default `"both"` unless only the legacy {@link ip} field is set, in
+     * which case the default is `4` to preserve IPv4-only compatibility.
      * @since 1.1.0
      */
     readonly version?: 4 | 6 | "both";
@@ -4999,7 +5000,12 @@ export function socketAddress(
   const defaultPort = options?.defaultPort;
   const requirePort = options?.requirePort ?? false;
   const hostType = options?.host?.type ?? "both";
-  const hostVersion = options?.host?.version ?? "both";
+  const hasLegacyIpOptions = options?.host?.ip !== undefined;
+  const hasNewIpOptions = options?.host?.version !== undefined ||
+    options?.host?.ipv4 !== undefined ||
+    options?.host?.ipv6 !== undefined;
+  const hostVersion = options?.host?.version ??
+    (hasLegacyIpOptions && !hasNewIpOptions ? 4 : "both");
 
   // Create host parser based on type
   const hostnameParser = hostname({
