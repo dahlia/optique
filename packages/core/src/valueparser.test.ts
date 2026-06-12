@@ -9331,6 +9331,53 @@ describe("socketAddress()", () => {
       assert.ok(!ipv6Only.parse("192.0.2.1:80").success);
     });
 
+    it("should throw TypeError for invalid host.version", () => {
+      assert.throws(
+        () =>
+          socketAddress({
+            host: { type: "ip", version: "ipv46" as never },
+          }),
+        {
+          name: "TypeError",
+          message:
+            'Expected host.version to be 4, 6, or "both", but got string: ipv46.',
+        },
+      );
+      assert.throws(
+        () =>
+          socketAddress({
+            host: { type: "ip", version: "4x" as never },
+          }),
+        {
+          name: "TypeError",
+          message:
+            'Expected host.version to be 4, 6, or "both", but got string: 4x.',
+        },
+      );
+      assert.throws(
+        () =>
+          socketAddress({
+            host: { type: "ip", version: "ipv6" as never },
+          }),
+        {
+          name: "TypeError",
+          message:
+            'Expected host.version to be 4, 6, or "both", but got string: ipv6.',
+        },
+      );
+      assert.throws(
+        () =>
+          socketAddress({
+            host: { type: "ip", version: 5 as never },
+          }),
+        {
+          name: "TypeError",
+          message:
+            'Expected host.version to be 4, 6, or "both", but got number: 5.',
+        },
+      );
+    });
+
     it("should keep legacy host.ip configs IPv4-only by default", () => {
       for (const type of ["ip", "both"] as const) {
         const parser = socketAddress({

@@ -1838,7 +1838,9 @@ The parser accepts addresses in the following format:
 When the separator is the default `":"`, IPv6 host-and-port values use bracket
 notation so the parser can distinguish colons inside the address from the port
 separator.  Bare IPv6 literals such as `"::1"` and `"2001:db8::1"` are accepted
-only when `defaultPort` supplies the port.
+only when `defaultPort` supplies the port.  Unbracketed forms such as
+`"::1:8080"` are treated as bare IPv6 hosts, not as host-and-port pairs; use
+`"[::1]:8080"` when the port is explicit.
 
 The separator between host and port can be customized using the `separator`
 option.  Custom separators keep the ordinary split behavior; bracket notation
@@ -2075,9 +2077,9 @@ if (result.success) {
 }
 ~~~~
 
-IPv6 hosts are normalized with the same canonicalization behavior as
-`ipv6()`.  Formatting a socket address with an IPv6 host and the default
-separator emits bracket notation:
+Parsed IPv6 hosts are normalized with the same canonicalization behavior as
+`ipv6()`.  When formatting, the default `":"` separator emits bracket notation
+for IPv6 hosts:
 
 ~~~~ typescript twoslash
 import { socketAddress } from "@optique/core/valueparser";

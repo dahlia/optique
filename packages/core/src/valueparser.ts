@@ -5000,11 +5000,24 @@ export function socketAddress(
   const defaultPort = options?.defaultPort;
   const requirePort = options?.requirePort ?? false;
   const hostType = options?.host?.type ?? "both";
+  const rawHostVersion: unknown = options?.host?.version;
+  if (
+    rawHostVersion !== undefined &&
+    rawHostVersion !== 4 &&
+    rawHostVersion !== 6 &&
+    rawHostVersion !== "both"
+  ) {
+    throw new TypeError(
+      `Expected host.version to be 4, 6, or "both", but got ${
+        Array.isArray(rawHostVersion) ? "array" : typeof rawHostVersion
+      }: ${String(rawHostVersion)}.`,
+    );
+  }
   const hasLegacyIpOptions = options?.host?.ip !== undefined;
-  const hasNewIpOptions = options?.host?.version !== undefined ||
+  const hasNewIpOptions = rawHostVersion !== undefined ||
     options?.host?.ipv4 !== undefined ||
     options?.host?.ipv6 !== undefined;
-  const hostVersion = options?.host?.version ??
+  const hostVersion = rawHostVersion ??
     (hasLegacyIpOptions && !hasNewIpOptions ? 4 : "both");
 
   // Create host parser based on type
