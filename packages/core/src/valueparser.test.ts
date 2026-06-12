@@ -9365,6 +9365,12 @@ describe("socketAddress()", () => {
       assert.ok(!parser.parse("[192.0.2.1]:80").success);
     });
 
+    it("should reject bracketed IPv6 with zero-width compression", () => {
+      const parser = socketAddress({ requirePort: true });
+
+      assert.ok(!parser.parse("[1:2:3:4:5:6:7::8]:80").success);
+    });
+
     it("should apply IPv4 and IPv6 host restrictions separately", () => {
       const parser = socketAddress({
         defaultPort: 80,
@@ -13124,6 +13130,12 @@ describe("ipv6()", () => {
     it("should reject multiple :: compressions", () => {
       const parser = ipv6();
       const result = parser.parse("2001::db8::1");
+      assert.ok(!result.success);
+    });
+
+    it("should reject zero-width :: compression", () => {
+      const parser = ipv6();
+      const result = parser.parse("1:2:3:4:5:6:7::8");
       assert.ok(!result.success);
     });
 

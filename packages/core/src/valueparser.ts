@@ -7167,7 +7167,7 @@ function parseAndNormalizeIpv6(input: string): string | null {
 
     // Calculate how many zero groups are compressed
     const totalGroups = leftGroups.length + rightGroups.length;
-    if (totalGroups > 8) return null;
+    if (totalGroups >= 8) return null;
 
     const zeroCount = 8 - totalGroups;
     const zeros = Array(zeroCount).fill("0");
@@ -7206,7 +7206,7 @@ function expandIpv6(input: string): string[] | null {
     const rightGroups = parts[1] ? parts[1].split(":").filter((g) => g) : [];
 
     const totalGroups = leftGroups.length + rightGroups.length;
-    if (totalGroups > 8) return null;
+    if (totalGroups >= 8) return null;
 
     const zeroCount = 8 - totalGroups;
     const zeros = Array(zeroCount).fill("0");
