@@ -1,7 +1,7 @@
 ---
 description: >-
   Practical recipes for common command-line interface patterns using Optique:
-  subcommands, dependent options, mutually exclusive flags, key-value pairs,
+  subcommands, dependent options, mutually exclusive flags, key–value pairs,
   and more complex CLI designs with detailed explanations.
 ---
 
@@ -15,7 +15,7 @@ you understand how to adapt these techniques to your own applications.
 
 The examples focus on real-world CLI patterns you'll encounter when building
 command-line tools: handling mutually exclusive options, implementing dependent
-flags, parsing key-value pairs, and organizing complex subcommand structures.
+flags, parsing key–value pairs, and organizing complex subcommand structures.
 
 
 Core patterns
@@ -779,7 +779,7 @@ if ("env" in config) {
 
 This pattern demonstrates several advanced techniques:
 
-### Built-in key-value parser
+### Built-in key–value parser
 
 The built-in `keyValue()` parser:
 
@@ -1613,7 +1613,7 @@ function keyValue(separator = "="): ValueParser<"sync", [string, string]> {
   };
 }
 // ---cut-before---
-// Combining subcommands with dependent options and key-value pairs
+// Combining subcommands with dependent options and key–value pairs
 const deployCommand = command("deploy", merge(
   object({
     action: constant("deploy"),
@@ -1633,7 +1633,7 @@ const deployCommand = command("deploy", merge(
 This creates a deploy command that:
 
  -  Requires an environment argument
- -  Supports key-value variables
+ -  Supports key–value variables
  -  Has optional dry-run mode
  -  Uses dependent confirmation when not in dry-run mode
 

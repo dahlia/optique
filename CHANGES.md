@@ -135,11 +135,11 @@ To be released.
     [[#821], [#826]]
 
  -  Added `keyValue()` for parsing `KEY=VALUE` option values into readonly
-    key-value tuples.  The parser supports custom separators, first-or-last
+    key–value tuples.  The parser supports custom separators, first-or-last
     split policy, empty-key and empty-value controls, child key and value
     parsers with preserved type inference, custom error messages,
     `format()`, fallback `validate()`, and best-effort composed completion
-    suggestions.  The key-value cookbook pattern now uses the built-in
+    suggestions.  The key–value cookbook pattern now uses the built-in
     parser instead of a custom implementation.  [[#828], [#833]]
 
  -  Added IPv6 support to `socketAddress()`.  It now accepts bracketed IPv6

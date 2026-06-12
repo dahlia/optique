@@ -31,7 +31,7 @@ with Optique's type system.
 | Parser                           | Module              | Return type                    | Description                                         |
 | -------------------------------- | ------------------- | ------------------------------ | --------------------------------------------------- |
 | `string()`                       | *@optique/core*     | `string`                       | Any string, with optional pattern validation        |
-| `keyValue()`                     | *@optique/core*     | readonly `[key, value]`        | Key-value pair such as `KEY=VALUE`                  |
+| `keyValue()`                     | *@optique/core*     | readonly `[key, value]`        | Key–value pair such as `KEY=VALUE`                  |
 | `integer()`                      | *@optique/core*     | `number` or `bigint`           | Integer with range validation                       |
 | `float()`                        | *@optique/core*     | `number`                       | Floating-point number                               |
 | `fileSize()`                     | *@optique/core*     | `number` or `bigint`           | Human-readable data size (bytes)                    |
@@ -154,7 +154,7 @@ By default, `keyValue()`:
     `["A", "B=C"]`;
  -  does not trim whitespace.
 
-Use `separator` for other key-value styles and `split: "last"` when the last
+Use `separator` for other key–value styles and `split: "last"` when the last
 separator should divide the key from the value:
 
 ~~~~ typescript twoslash
