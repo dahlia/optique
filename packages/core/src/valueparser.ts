@@ -1130,6 +1130,12 @@ export function keyValue<K = string, V = string>(
       }`;
     },
     validate(value: readonly [K, V]): ValueParserResult<readonly [K, V]> {
+      if (!isKeyValueTuple(value)) {
+        return {
+          success: false,
+          error: message`Expected a key-value tuple.`,
+        };
+      }
       const keyResult = validateValueParserValue(keyParser, value[0]);
       if (!keyResult.success) {
         return { success: false, error: invalidKeyError(keyResult.error) };
@@ -1175,6 +1181,24 @@ export function keyValue<K = string, V = string>(
             message`Expected a value without ${separator}, but got ${formattedValue}.`,
           ),
         };
+      }
+      const index = findSeparator(input);
+      const roundTripKey = input.slice(0, index);
+      const roundTripValue = input.slice(index + separator.length);
+      if (roundTripKey !== formattedKey || roundTripValue !== formattedValue) {
+        return split === "first"
+          ? {
+            success: false,
+            error: invalidKeyError(
+              message`Expected a key that round-trips with ${separator}, but got ${formattedKey}.`,
+            ),
+          }
+          : {
+            success: false,
+            error: invalidValueError(
+              message`Expected a value that round-trips with ${separator}, but got ${formattedValue}.`,
+            ),
+          };
       }
       return makeKeyValueSuccess(keyResult, valueResult);
     },
@@ -1267,6 +1291,13 @@ function validateValueParserValue<T>(
     return { success: true, value };
   }
   return parser.parse(formatted);
+}
+
+function isKeyValueTuple(value: unknown): value is readonly [unknown, unknown] {
+  return Array.isArray(value) &&
+    value.length === 2 &&
+    0 in value &&
+    1 in value;
 }
 
 function makeKeyValueSuccess<K, V>(

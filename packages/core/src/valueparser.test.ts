@@ -18903,6 +18903,27 @@ describe("keyValue", () => {
       );
     });
 
+    it("should reject fallback values that are not key-value tuples", () => {
+      const parser = keyValue();
+
+      for (
+        const value of [
+          "admin",
+          ["key"],
+          ["key", "value", "extra"],
+        ]
+      ) {
+        const result = parser.validate?.(value as never);
+
+        assert.ok(result);
+        assert.ok(!result.success);
+        assert.equal(
+          formatMessage(result.error),
+          "Expected a key-value tuple.",
+        );
+      }
+    });
+
     it("should reject fallback keys that cannot round-trip with first split", () => {
       const parser = keyValue();
 
@@ -18916,6 +18937,19 @@ describe("keyValue", () => {
       );
     });
 
+    it("should reject fallback keys that overlap a multi-character separator", () => {
+      const parser = keyValue({ separator: "==" });
+
+      const result = parser.validate?.(["A=", "B"]);
+
+      assert.ok(result);
+      assert.ok(!result.success);
+      assert.equal(
+        formatMessage(result.error),
+        'Invalid key: Expected a key that round-trips with "==", but got "A=".',
+      );
+    });
+
     it("should reject fallback values that cannot round-trip with last split", () => {
       const parser = keyValue({ split: "last" });
 
@@ -18926,6 +18960,19 @@ describe("keyValue", () => {
       assert.equal(
         formatMessage(result.error),
         'Invalid value: Expected a value without "=", but got "B=C".',
+      );
+    });
+
+    it("should reject fallback values that overlap a multi-character separator", () => {
+      const parser = keyValue({ separator: "==", split: "last" });
+
+      const result = parser.validate?.(["A", "=B"]);
+
+      assert.ok(result);
+      assert.ok(!result.success);
+      assert.equal(
+        formatMessage(result.error),
+        'Invalid value: Expected a value that round-trips with "==", but got "=B".',
       );
     });
 
