@@ -1,5 +1,7 @@
-import { message } from "@optique/core/message";
-import { valibot } from "@optique/valibot";
+import { formatMessage, message } from "@optique/core/message";
+import { option } from "@optique/core/primitives";
+import { parseAsync } from "@optique/core/parser";
+import { valibot, valibotAsync } from "@optique/valibot";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as v from "valibot";
@@ -1624,3 +1626,165 @@ describe("valibot()", () => {
     });
   });
 });
+
+describe("valibotAsync()", () => {
+  describe("missing placeholder", () => {
+    it("should throw TypeError when options are omitted", () => {
+      assert.throws(
+        // @ts-expect-error: intentionally omitting required options
+        () => valibotAsync(v.string()),
+        {
+          name: "TypeError",
+          message:
+            "valibotAsync() requires an options object with a placeholder property.",
+        },
+      );
+    });
+
+    it("should throw TypeError when placeholder is missing from options", () => {
+      assert.throws(
+        // @ts-expect-error: intentionally omitting placeholder
+        () => valibotAsync(v.string(), {}),
+        {
+          name: "TypeError",
+          message:
+            "valibotAsync() options must include a placeholder property.",
+        },
+      );
+    });
+  });
+
+  describe("async parsing", () => {
+    it("should parse async validations", async () => {
+      const parser = valibotAsync(
+        v.pipeAsync(
+          v.string(),
+          v.checkAsync(
+            async (value) =>
+              await Promise.resolve(value === "existing-project"),
+            "Project does not exist.",
+          ),
+        ),
+        { placeholder: "" },
+      );
+
+      const validResult = await parser.parse("existing-project");
+      const invalidResult = await parser.parse("missing-project");
+
+      assert.equal(parser.mode, "async");
+      assert.ok(validResult.success);
+      assert.equal(validResult.value, "existing-project");
+      assert.ok(!invalidResult.success);
+      assert.match(
+        formatMessage(invalidResult.error),
+        /Project does not exist/,
+      );
+    });
+
+    it("should parse synchronous schemas through the async helper", async () => {
+      const parser = valibotAsync(
+        v.pipe(
+          v.string(),
+          v.transform(Number),
+          v.number(),
+          v.integer(),
+          v.minValue(1024),
+        ),
+        { placeholder: 1024 },
+      );
+
+      const result = await parser.parse("8080");
+
+      assert.ok(result.success);
+      assert.equal(result.value, 8080);
+    });
+
+    it("should work with parseAsync()", async () => {
+      const schema = v.pipeAsync(
+        v.string(),
+        v.checkAsync(
+          async (value) => await Promise.resolve(value.startsWith("project-")),
+          "Project does not exist.",
+        ),
+      );
+      const parser = option(
+        "--project",
+        valibotAsync(schema, {
+          placeholder: "",
+        }),
+      );
+
+      const result = await parseAsync(parser, ["--project", "project-api"]);
+
+      assert.ok(result.success);
+      assert.equal(result.value, "project-api");
+    });
+
+    it("should validate fallback values through validateValue()", async () => {
+      const schema = v.pipeAsync(
+        v.string(),
+        v.checkAsync(
+          async (value) => await Promise.resolve(value.startsWith("project-")),
+          "Project does not exist.",
+        ),
+      );
+      const parser = option(
+        "--project",
+        valibotAsync(schema, {
+          placeholder: "",
+        }),
+      );
+
+      const validation = await parser.validateValue?.("unknown");
+
+      assert.ok(validation != null);
+      assert.ok(!validation.success);
+      assert.match(formatMessage(validation.error), /Project does not exist/);
+    });
+  });
+
+  describe("choices and suggest", () => {
+    it("should expose choices and suggestions for picklist schemas", async () => {
+      const parser = valibotAsync(
+        v.picklist(["debug", "info", "warn", "error"]),
+        { placeholder: "debug" },
+      );
+
+      const suggestions = await collectAsync(parser.suggest!("i"));
+
+      assert.deepEqual(parser.choices, ["debug", "info", "warn", "error"]);
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "info" }]);
+    });
+  });
+
+  describe("error customization", () => {
+    it("should use custom async schema error callbacks", async () => {
+      const parser = valibotAsync(v.pipe(v.string(), v.email()), {
+        placeholder: "",
+        errors: {
+          valibotError: (_issues, input) =>
+            message`Please provide a valid email address, got ${input}.`,
+        },
+      });
+
+      const result = await parser.parse("not-an-email");
+
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Please provide a valid email address, got " },
+        { type: "value", value: "not-an-email" },
+        { type: "text", text: "." },
+      ]);
+    });
+  });
+});
+
+// Helpers
+
+async function collectAsync<T>(iterable: AsyncIterable<T>): Promise<T[]> {
+  const result: T[] = [];
+  for await (const value of iterable) {
+    result.push(value);
+  }
+  return result;
+}
