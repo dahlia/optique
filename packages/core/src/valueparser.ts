@@ -987,6 +987,20 @@ export interface KeyValueOptions<K = string, V = string> {
   };
 }
 
+type KeyValueKeyType<Options> = Options extends {
+  readonly key: ValueParser<"sync", infer K>;
+} ? K
+  : string;
+
+type KeyValueValueType<Options> = Options extends {
+  readonly value: ValueParser<"sync", infer V>;
+} ? V
+  : string;
+
+type KeyValueResultType<
+  Options extends KeyValueOptions<unknown, unknown>,
+> = readonly [KeyValueKeyType<Options>, KeyValueValueType<Options>];
+
 /**
  * Creates a value parser for strings shaped like `KEY=VALUE`.
  *
@@ -995,8 +1009,7 @@ export interface KeyValueOptions<K = string, V = string> {
  * value parsers can narrow or transform either side while preserving the
  * inferred tuple type.
  *
- * @template K The parsed key type.
- * @template V The parsed value type.
+ * @template Options The option object type used to infer child parser results.
  * @param options Configuration options for the key-value parser.
  * @returns A sync value parser producing readonly key-value tuples.
  * @throws {TypeError} If `separator` or `metavar` is empty, if
@@ -1004,9 +1017,15 @@ export interface KeyValueOptions<K = string, V = string> {
  *   `"first"` or `"last"`, or if `key` or `value` is not a sync value parser.
  * @since 1.1.0
  */
-export function keyValue<K = string, V = string>(
-  options: KeyValueOptions<K, V> = {},
-): ValueParser<"sync", readonly [K, V]> {
+export function keyValue(): ValueParser<"sync", readonly [string, string]>;
+export function keyValue<
+  const Options extends KeyValueOptions<unknown, unknown>,
+>(
+  options: Options,
+): ValueParser<"sync", KeyValueResultType<Options>>;
+export function keyValue(
+  options: KeyValueOptions<unknown, unknown> = {},
+): ValueParser<"sync", readonly [unknown, unknown]> {
   const separator = options.separator ?? "=";
   if (typeof separator !== "string") {
     throw new TypeError(
@@ -1032,8 +1051,8 @@ export function keyValue<K = string, V = string>(
     string({ placeholder: allowEmptyValue ? "" : "VALUE" });
   checkKeyValueChildParser("key", rawKeyParser);
   checkKeyValueChildParser("value", rawValueParser);
-  const keyParser = rawKeyParser as ValueParser<"sync", K>;
-  const valueParser = rawValueParser as ValueParser<"sync", V>;
+  const keyParser = rawKeyParser as ValueParser<"sync", unknown>;
+  const valueParser = rawValueParser as ValueParser<"sync", unknown>;
   const hasNormalize = typeof keyParser.normalize === "function" ||
     typeof valueParser.normalize === "function";
   const hasSuggest = typeof keyParser.suggest === "function" ||
@@ -1089,7 +1108,7 @@ export function keyValue<K = string, V = string>(
     input: string,
     key: string,
     value: string,
-  ): ValueParserResult<readonly [K, V]> {
+  ): ValueParserResult<readonly [unknown, unknown]> {
     if (!allowEmptyKey && key === "") {
       return { success: false, error: emptyKeyError(input) };
     }
@@ -1115,7 +1134,7 @@ export function keyValue<K = string, V = string>(
       keyParser.placeholder,
       valueParser.placeholder,
     ] as const,
-    parse(input: string): ValueParserResult<readonly [K, V]> {
+    parse(input: string): ValueParserResult<readonly [unknown, unknown]> {
       const index = findSeparator(input);
       if (index < 0) {
         return { success: false, error: missingSeparatorError(input) };
@@ -1124,12 +1143,14 @@ export function keyValue<K = string, V = string>(
       const value = input.slice(index + separator.length);
       return validateParts(input, key, value);
     },
-    format(value: readonly [K, V]): string {
+    format(value: readonly [unknown, unknown]): string {
       return `${keyParser.format(value[0])}${separator}${
         valueParser.format(value[1])
       }`;
     },
-    validate(value: readonly [K, V]): ValueParserResult<readonly [K, V]> {
+    validate(
+      value: readonly [unknown, unknown],
+    ): ValueParserResult<readonly [unknown, unknown]> {
       if (!isKeyValueTuple(value)) {
         return {
           success: false,
@@ -1204,7 +1225,9 @@ export function keyValue<K = string, V = string>(
     },
     ...(hasNormalize
       ? {
-        normalize(value: readonly [K, V]): readonly [K, V] {
+        normalize(
+          value: readonly [unknown, unknown],
+        ): readonly [unknown, unknown] {
           return [
             keyParser.normalize?.(value[0]) ?? value[0],
             valueParser.normalize?.(value[1]) ?? value[1],

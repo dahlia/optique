@@ -21,6 +21,7 @@ import {
   json,
   type JsonOptions,
   keyValue,
+  type KeyValueOptions,
   locale,
   macAddress,
   type NonEmptyString,
@@ -19168,6 +19169,25 @@ describe("keyValue", () => {
       assert.ok(result.success);
       const value: readonly ["host" | "port", number] = result.value;
       assert.deepEqual(value, ["port", 5432]);
+    });
+
+    it("should default omitted child parser result types to string", () => {
+      const explicitTypeArguments =
+        // @ts-expect-error: keyValue() derives types from child parsers.
+        keyValue<string, number>();
+      explicitTypeArguments satisfies ValueParser<
+        "sync",
+        readonly [string, string]
+      >;
+
+      const typedOptions: KeyValueOptions<string, number> = {};
+      const parser = keyValue(typedOptions);
+      parser satisfies ValueParser<"sync", readonly [string, string]>;
+
+      const result = parser.parse("port=5432");
+      assert.ok(result.success);
+      const value: readonly [string, string] = result.value;
+      assert.deepEqual(value, ["port", "5432"]);
     });
   });
 
