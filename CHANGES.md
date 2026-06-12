@@ -134,6 +134,14 @@ To be released.
     dependency-derived value parsers are rejected at construction time.
     [[#821], [#826]]
 
+ -  Added IPv6 support to `socketAddress()`.  It now accepts bracketed IPv6
+    endpoints such as `[::1]:8080`, host-only IPv6 literals when a
+    `defaultPort` is configured, IP version filtering through `host.version`,
+    separate `host.ipv4`/`host.ipv6` restrictions, and bracketed formatting
+    and normalization for IPv6 hosts.  Existing `host.ip` options remain as
+    an IPv4 compatibility alias and keep IPv4-only behavior unless callers
+    opt into the new IP version options.  [[#829], [#832]]
+
 [Semantic Versioning 2.0.0]: https://semver.org/
 [#801]: https://github.com/dahlia/optique/issues/801
 [#802]: https://github.com/dahlia/optique/pull/802
@@ -153,6 +161,8 @@ To be released.
 [#823]: https://github.com/dahlia/optique/issues/823
 [#825]: https://github.com/dahlia/optique/pull/825
 [#826]: https://github.com/dahlia/optique/pull/826
+[#829]: https://github.com/dahlia/optique/issues/829
+[#832]: https://github.com/dahlia/optique/pull/832
 
 ### @optique/zod
 
