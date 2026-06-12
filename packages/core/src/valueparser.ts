@@ -4890,10 +4890,36 @@ export interface SocketAddressOptions {
     readonly hostname?: Omit<HostnameOptions, "metavar" | "errors">;
 
     /**
-     * Options for IP validation (when type is "ip" or "both").
-     * Currently only supports IPv4.
+     * IP version to accept when `type` is `"ip"` or `"both"`.
+     * - `4`: IPv4 only
+     * - `6`: IPv6 only
+     * - `"both"`: Accept both IPv4 and IPv6
+     *
+     * @default `"both"`
+     * @since 1.1.0
+     */
+    readonly version?: 4 | 6 | "both";
+
+    /**
+     * Options for IPv4 validation (when type is "ip" or "both").
+     * This is kept for backwards compatibility; prefer {@link ipv4} for
+     * new code.
      */
     readonly ip?: Omit<Ipv4Options, "metavar" | "errors">;
+
+    /**
+     * Options for IPv4 validation (when type is "ip" or "both").
+     *
+     * @since 1.1.0
+     */
+    readonly ipv4?: Omit<Ipv4Options, "metavar" | "errors">;
+
+    /**
+     * Options for IPv6 validation (when type is "ip" or "both").
+     *
+     * @since 1.1.0
+     */
+    readonly ipv6?: Omit<Ipv6Options, "metavar" | "errors">;
   };
 
   /**
@@ -4923,7 +4949,7 @@ export interface SocketAddressOptions {
  * Creates a value parser for socket addresses in "host:port" format.
  *
  * Validates socket addresses with support for:
- * - Hostnames and IPv4 addresses (IPv6 support coming in future versions)
+ * - Hostnames, IPv4 addresses, and IPv6 addresses
  * - Configurable host:port separator
  * - Optional default port
  * - Host type filtering (hostname only, IP only, or both)
@@ -4973,14 +4999,23 @@ export function socketAddress(
   const defaultPort = options?.defaultPort;
   const requirePort = options?.requirePort ?? false;
   const hostType = options?.host?.type ?? "both";
+  const hostVersion = options?.host?.version ?? "both";
 
   // Create host parser based on type
   const hostnameParser = hostname({
     ...options?.host?.hostname,
     metavar: "HOST",
   });
-  const ipParser = ipv4({
+  const ipv4Options = {
     ...options?.host?.ip,
+    ...options?.host?.ipv4,
+  };
+  const ipv4Parser = ipv4({
+    ...ipv4Options,
+    metavar: "HOST",
+  });
+  const ipv6Parser = ipv6({
+    ...options?.host?.ipv6,
     metavar: "HOST",
   });
 
@@ -5024,6 +5059,18 @@ export function socketAddress(
 
   function looksLikeIpv4(input: string): boolean {
     return /^\d+\.\d+\.\d+\.\d+$/.test(input);
+  }
+
+  function looksLikeIpv6(input: string): boolean {
+    const colonCount = input.match(/:/g)?.length ?? 0;
+    return colonCount >= 2 &&
+      (input.includes("::") || /^[0-9a-fA-F:.]+$/.test(input));
+  }
+
+  function looksLikeBareIpv6(input: string): boolean {
+    if (!looksLikeIpv6(input)) return false;
+    if (parseAndNormalizeIpv6(input) !== null) return true;
+    return input.includes("::") || !input.includes(".");
   }
 
   function looksLikeAltIpv4Literal(input: string): boolean {
@@ -5080,6 +5127,31 @@ export function socketAddress(
     return false;
   }
 
+  function parseIpHost(hostInput: string): ValueParserResult<string> {
+    if (hostVersion === 4) return ipv4Parser.parse(hostInput);
+
+    if (hostVersion === 6) return ipv6Parser.parse(hostInput);
+
+    if (looksLikeIpv6(hostInput)) {
+      const result = ipv6Parser.parse(hostInput);
+      if (result.success) {
+        const mappedOctets = extractIpv4FromMapped(result.value);
+        if (mappedOctets !== null) {
+          const restrictionError = checkIpv4MappedRestrictions(
+            mappedOctets,
+            result.value,
+            ipv4Options,
+            undefined,
+          );
+          if (restrictionError !== null) return restrictionError;
+        }
+      }
+      return result;
+    }
+
+    return ipv4Parser.parse(hostInput);
+  }
+
   function parseHost(hostInput: string): ValueParserResult<string> {
     if (hostType === "hostname") {
       // Reject IP-shaped input when type is "hostname".
@@ -5101,7 +5173,7 @@ export function socketAddress(
       }
       return hostnameParser.parse(hostInput);
     } else if (hostType === "ip") {
-      return ipParser.parse(hostInput);
+      return parseIpHost(hostInput);
     } else {
       // "both" mode: route by lexical form, no fallback.
       // Check alternate forms first so that octal-dotted inputs get
@@ -5115,11 +5187,100 @@ export function socketAddress(
       }
       if (looksLikeIpv4(hostInput)) {
         // IP-shaped input: validate as IP only (enforces restrictions)
-        return ipParser.parse(hostInput);
+        return parseIpHost(hostInput);
+      }
+      if (looksLikeIpv6(hostInput)) {
+        return parseIpHost(hostInput);
       }
       // Non-IP-shaped: validate as hostname only
       return hostnameParser.parse(hostInput);
     }
+  }
+
+  function makeInvalidFormatError(
+    input: string,
+  ): ValueParserResult<SocketAddressValue> {
+    const errorMsg = options?.errors?.invalidFormat;
+    const msg = typeof errorMsg === "function" ? errorMsg(input) : errorMsg ??
+      message`Expected a socket address in format ${
+        text(formatExample)
+      }, but got ${input}.`;
+    return { success: false, error: msg };
+  }
+
+  function makeMissingPortError(
+    input: string,
+  ): ValueParserResult<SocketAddressValue> {
+    const errorMsg = options?.errors?.missingPort;
+    const msg = typeof errorMsg === "function"
+      ? errorMsg(input)
+      : errorMsg ?? message`Port number is required but was not specified.`;
+    return { success: false, error: msg };
+  }
+
+  function parseBracketedHost(
+    input: string,
+    trimmed: string,
+    canOmitPort: boolean,
+  ): ValueParserResult<SocketAddressValue> | undefined {
+    if (!trimmed.startsWith("[")) return undefined;
+
+    const closingBracket = trimmed.indexOf("]");
+    if (closingBracket === -1) return makeInvalidFormatError(input);
+
+    const hostInput = trimmed.slice(1, closingBracket);
+    if (!looksLikeBareIpv6(hostInput)) return makeInvalidFormatError(input);
+
+    const rest = trimmed.slice(closingBracket + 1).trimStart();
+    const hostResult = parseHost(hostInput);
+
+    if (rest === "") {
+      if (!hostResult.success) {
+        if (options?.errors?.invalidFormat) {
+          return makeInvalidFormatError(input);
+        }
+        return { success: false, error: hostResult.error };
+      }
+      if (canOmitPort) {
+        return {
+          success: true,
+          value: { host: hostResult.value, port: defaultPort! },
+        };
+      }
+      return makeMissingPortError(input);
+    }
+
+    if (!rest.startsWith(separator)) return makeInvalidFormatError(input);
+
+    const portPart = rest.slice(separator.length).trim();
+    if (portPart === "") {
+      if (!hostResult.success) {
+        if (options?.errors?.invalidFormat) {
+          return makeInvalidFormatError(input);
+        }
+        return { success: false, error: hostResult.error };
+      }
+      return makeMissingPortError(input);
+    }
+
+    const portResult = portParser.parse(portPart);
+    if (!hostResult.success) {
+      if (options?.errors?.invalidFormat) {
+        return makeInvalidFormatError(input);
+      }
+      return { success: false, error: hostResult.error };
+    }
+    if (portResult.success) {
+      return {
+        success: true,
+        value: { host: hostResult.value, port: portResult.value },
+      };
+    }
+    if (options?.errors?.invalidFormat) return makeInvalidFormatError(input);
+    if (/^[0-9]+$/.test(portPart)) {
+      return { success: false, error: portResult.error };
+    }
+    return makeInvalidFormatError(input);
   }
 
   return {
@@ -5128,7 +5289,7 @@ export function socketAddress(
     get placeholder() {
       return {
         host: hostType === "ip"
-          ? ipParser.placeholder
+          ? hostVersion === 6 ? ipv6Parser.placeholder : ipv4Parser.placeholder
           : hostnameParser.placeholder,
         port: defaultPort ?? portParser.placeholder,
       };
@@ -5140,6 +5301,32 @@ export function socketAddress(
       // before the separator search.
       const searchInput = input.trimStart();
       const canOmitPort = defaultPort !== undefined && !requirePort;
+
+      if (separator === ":") {
+        const bracketedResult = parseBracketedHost(
+          input,
+          trimmed,
+          canOmitPort,
+        );
+        if (bracketedResult !== undefined) return bracketedResult;
+
+        if (looksLikeBareIpv6(trimmed)) {
+          const hostResult = parseHost(trimmed);
+          if (hostResult.success) {
+            if (canOmitPort) {
+              return {
+                success: true,
+                value: { host: hostResult.value, port: defaultPort! },
+              };
+            }
+            return makeMissingPortError(input);
+          }
+          if (options?.errors?.invalidFormat) {
+            return makeInvalidFormatError(input);
+          }
+          return { success: false, error: hostResult.error };
+        }
+      }
 
       // Step 1: Try splitting at separator occurrences, rightmost first.
       // Accept the first split where both host and port are valid.
@@ -5528,6 +5715,10 @@ export function socketAddress(
       };
     },
     format(value: SocketAddressValue): string {
+      const ipv6Host = parseAndNormalizeIpv6(value.host);
+      if (separator === ":" && ipv6Host !== null) {
+        return `[${ipv6Host}]${separator}${value.port}`;
+      }
       return `${value.host}${separator}${value.port}`;
     },
   };

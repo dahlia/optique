@@ -9252,6 +9252,120 @@ describe("socketAddress()", () => {
     });
   });
 
+  describe("IPv6 support", () => {
+    it("should parse bracketed IPv6 addresses with explicit ports", () => {
+      const parser = socketAddress({ requirePort: true });
+
+      const result1 = parser.parse("[::1]:8080");
+      assert.ok(result1.success);
+      assert.deepStrictEqual(result1.value, { host: "::1", port: 8080 });
+
+      const result2 = parser.parse("[2001:0db8:0:0:0:0:0:1]:443");
+      assert.ok(result2.success);
+      assert.deepStrictEqual(result2.value, {
+        host: "2001:db8::1",
+        port: 443,
+      });
+    });
+
+    it("should accept bare IPv6 addresses with a default port", () => {
+      const parser = socketAddress({ defaultPort: 8080 });
+
+      const result1 = parser.parse("[::1]");
+      assert.ok(result1.success);
+      assert.deepStrictEqual(result1.value, { host: "::1", port: 8080 });
+
+      const result2 = parser.parse("::1");
+      assert.ok(result2.success);
+      assert.deepStrictEqual(result2.value, { host: "::1", port: 8080 });
+
+      const result3 = parser.parse("::1:8080");
+      assert.ok(result3.success);
+      assert.deepStrictEqual(result3.value, {
+        host: "::1:8080",
+        port: 8080,
+      });
+    });
+
+    it("should reject bare IPv6 addresses when a port is required", () => {
+      const parser = socketAddress({ requirePort: true });
+
+      const result1 = parser.parse("[::1]");
+      assert.ok(!result1.success);
+      assert.deepStrictEqual(result1.error, [
+        {
+          type: "text",
+          text: "Port number is required but was not specified.",
+        },
+      ]);
+
+      const result2 = parser.parse("::1");
+      assert.ok(!result2.success);
+      assert.deepStrictEqual(result2.error, result1.error);
+
+      const result3 = parser.parse("::1:8080");
+      assert.ok(!result3.success);
+      assert.deepStrictEqual(result3.error, result1.error);
+    });
+
+    it("should apply IP version filters", () => {
+      const dualStack = socketAddress({
+        defaultPort: 80,
+        host: { type: "ip", version: "both" },
+      });
+      assert.ok(dualStack.parse("192.0.2.1:80").success);
+      assert.ok(dualStack.parse("[2001:db8::1]:80").success);
+
+      const ipv4Only = socketAddress({
+        defaultPort: 80,
+        host: { type: "ip", version: 4 },
+      });
+      assert.ok(ipv4Only.parse("192.0.2.1:80").success);
+      assert.ok(!ipv4Only.parse("[2001:db8::1]:80").success);
+
+      const ipv6Only = socketAddress({
+        defaultPort: 80,
+        host: { type: "ip", version: 6 },
+      });
+      assert.ok(ipv6Only.parse("[2001:db8::1]:80").success);
+      assert.ok(!ipv6Only.parse("192.0.2.1:80").success);
+    });
+
+    it("should reject IPv6 addresses in hostname mode", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "hostname" },
+      });
+
+      assert.ok(!parser.parse("[::1]:8080").success);
+      assert.ok(!parser.parse("::1").success);
+    });
+
+    it("should reject bracketed non-IPv6 hosts", () => {
+      const parser = socketAddress({ defaultPort: 80 });
+
+      assert.ok(!parser.parse("[example.com]:80").success);
+      assert.ok(!parser.parse("[192.0.2.1]:80").success);
+    });
+
+    it("should apply IPv4 and IPv6 host restrictions separately", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: {
+          type: "ip",
+          version: "both",
+          ipv4: { allowPrivate: false },
+          ipv6: { allowLoopback: false },
+        },
+      });
+
+      assert.ok(!parser.parse("192.168.1.1:80").success);
+      assert.ok(parser.parse("192.0.2.1:80").success);
+      assert.ok(!parser.parse("[::1]:80").success);
+      assert.ok(parser.parse("[2001:db8::1]:80").success);
+    });
+  });
+
   describe("host options propagation", () => {
     it("should pass hostname options to hostname parser", () => {
       const parser = socketAddress({
@@ -9384,6 +9498,19 @@ describe("socketAddress()", () => {
 
       const formatted = parser.format({ host: "localhost", port: 3000 });
       assert.strictEqual(formatted, "localhost 3000");
+    });
+
+    it("should wrap IPv6 hosts in brackets with the default separator", () => {
+      const parser = socketAddress({ defaultPort: 80 });
+
+      assert.strictEqual(
+        parser.format({ host: "::1", port: 8080 }),
+        "[::1]:8080",
+      );
+      assert.strictEqual(
+        parser.format({ host: "2001:0db8:0:0:0:0:0:1", port: 443 }),
+        "[2001:db8::1]:443",
+      );
     });
   });
 
@@ -11109,19 +11236,18 @@ describe("socketAddress()", () => {
       }
     });
 
-    it("should use generic format error for repeated default separator", () => {
-      // "::80" splits as host ":" + port 80, but ":" is just a
-      // separator artifact.  The generic format error is correct.
+    it("should treat repeated default separator input as bare IPv6", () => {
+      // "::80" is a valid bare IPv6 literal, not host ":" + port 80.
+      // With requirePort it should therefore fail as a missing port.
       const parser = socketAddress({ requirePort: true });
 
       const result = parser.parse("::80");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
-        { type: "text", text: "Expected a socket address in format " },
-        { type: "text", text: "host:port" },
-        { type: "text", text: ", but got " },
-        { type: "value", value: "::80" },
-        { type: "text", text: "." },
+        {
+          type: "text",
+          text: "Port number is required but was not specified.",
+        },
       ]);
     });
 

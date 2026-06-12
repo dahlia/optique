@@ -1797,9 +1797,10 @@ The parser uses `"EMAIL"` as its default metavar.
 ------------------------
 
 The `socketAddress()` parser validates socket addresses in “host:port” format.
-It supports both hostnames and IPv4 addresses, configurable separators, default
-ports, and comprehensive host/port validation options. The parser returns a
-`SocketAddressValue` object containing both the host and port components.
+It supports hostnames, IPv4 addresses, and IPv6 literals, configurable
+separators, default ports, and comprehensive host/port validation options. The
+parser returns a `SocketAddressValue` object containing both the host and port
+components.
 
 ~~~~ typescript twoslash
 import { socketAddress } from "@optique/core/valueparser";
@@ -1813,7 +1814,7 @@ const server = socketAddress({ defaultPort: 80 });
 // IP addresses only
 const bind = socketAddress({
   defaultPort: 8080,
-  host: { type: "ip" },
+  host: { type: "ip", version: "both" },
 });
 
 // Non-privileged ports only
@@ -1828,10 +1829,20 @@ const listen = socketAddress({
 The parser accepts addresses in the following format:
 
  -  With port: `host:port` (e.g., `"localhost:3000"`, `"192.168.1.1:80"`)
+ -  With an IPv6 literal and port: `[host]:port` (e.g., `"[::1]:8080"`,
+    `"[2001:db8::1]:443"`)
  -  Without port: `host` (only when `defaultPort` is set, e.g., `"example.com"`)
+ -  Without port for IPv6: `host` or `[host]` (only when `defaultPort` is set,
+    e.g., `"::1"` or `"[::1]"`)
+
+When the separator is the default `":"`, IPv6 host-and-port values use bracket
+notation so the parser can distinguish colons inside the address from the port
+separator.  Bare IPv6 literals such as `"::1"` and `"2001:db8::1"` are accepted
+only when `defaultPort` supplies the port.
 
 The separator between host and port can be customized using the `separator`
-option.
+option.  Custom separators keep the ordinary split behavior; bracket notation
+is intended for the default `":"` separator.
 
 ### Port requirements
 
@@ -1878,8 +1889,14 @@ $ example --server "example.com"      # Uses default port 80
 The `host.type` option controls what types of hosts are accepted:
 
  -  `"hostname"`: Accept only valid hostnames
- -  `"ip"`: Accept only IP addresses (currently IPv4 only)
+ -  `"ip"`: Accept only IP addresses
  -  `"both"`: Accept both hostnames and IP addresses (default)
+
+For IP hosts, `host.version` controls which IP versions are accepted:
+
+ -  `4`: Accept IPv4 only
+ -  `6`: Accept IPv6 only
+ -  `"both"`: Accept IPv4 and IPv6 (default)
 
 ~~~~ typescript twoslash
 import { socketAddress } from "@optique/core/valueparser";
@@ -1890,20 +1907,21 @@ const bind = option(
   "--bind",
   socketAddress({
     defaultPort: 8080,
-    host: { type: "ip" },
+    host: { type: "ip", version: "both" },
   })
 );
 ~~~~
 
 ~~~~ bash
-$ example --bind "0.0.0.0:8080"     # Valid
+$ example --bind "0.0.0.0:8080"     # Valid IPv4
+$ example --bind "[::1]:8080"       # Valid IPv6
 $ example --bind "localhost:8080"   # Error: hostname not allowed
 ~~~~
 
 ### Host validation options
 
-Pass options to the underlying hostname or IP parser using `host.hostname` or
-`host.ip`:
+Pass options to the underlying hostname or IP parser using `host.hostname`,
+`host.ipv4`, or `host.ipv6`:
 
 ~~~~ typescript twoslash
 import { socketAddress } from "@optique/core/valueparser";
@@ -1927,7 +1945,9 @@ $ example --remote "localhost:80"     # Error: localhost not allowed
 $ example --remote "example.com:80"   # Valid
 ~~~~
 
-For IP addresses, use `host.ip` to pass options like `allowPrivate`:
+For IPv4 addresses, use `host.ipv4` to pass options like `allowPrivate`.
+The older `host.ip` field is still accepted as a compatibility alias for IPv4
+options:
 
 ~~~~ typescript twoslash
 import { socketAddress } from "@optique/core/valueparser";
@@ -1940,7 +1960,28 @@ const publicServer = option(
     defaultPort: 443,
     host: {
       type: "ip",
-      ip: { allowPrivate: false },
+      version: 4,
+      ipv4: { allowPrivate: false },
+    },
+  })
+);
+~~~~
+
+For IPv6 addresses, use `host.ipv6`:
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+// IPv6 addresses only, excluding loopback
+const publicV6 = option(
+  "--listen-v6",
+  socketAddress({
+    defaultPort: 443,
+    host: {
+      type: "ip",
+      version: 6,
+      ipv6: { allowLoopback: false },
     },
   })
 );
@@ -2030,6 +2071,22 @@ if (result.success) {
 }
 ~~~~
 
+IPv6 hosts are normalized with the same canonicalization behavior as
+`ipv6()`.  Formatting a socket address with an IPv6 host and the default
+separator emits bracket notation:
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = socketAddress();
+
+parser.format({ host: "::1", port: 8080 });  // "[::1]:8080"
+parser.format({
+  host: "2001:0db8:0:0:0:0:0:1",
+  port: 443,
+});  // "[2001:db8::1]:443"
+~~~~
+
 ### Custom error messages
 
 Customize error messages for validation failures:
@@ -2091,7 +2148,7 @@ import { socketAddress } from "@optique/core/valueparser";
 // Bind to IP addresses only, non-privileged ports
 const bind = socketAddress({
   defaultPort: 8080,
-  host: { type: "ip" },
+  host: { type: "ip", version: "both" },
   port: { min: 1024 },
 });
 ~~~~
