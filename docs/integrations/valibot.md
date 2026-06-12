@@ -141,6 +141,54 @@ const name = valibot(
 ~~~~
 
 
+Async schemas
+-------------
+
+Use `valibotAsync()` when a schema depends on async validations.  The returned
+value parser is async, so run the containing parser with `runAsync()` or
+`await run()`:
+
+~~~~ typescript twoslash
+async function isKnownProject(value: string): Promise<boolean> {
+  return await Promise.resolve(value.startsWith("project-"));
+}
+// ---cut-before---
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { runAsync } from "@optique/run";
+import { valibotAsync } from "@optique/valibot";
+import * as v from "valibot";
+
+const parser = object({
+  project: option(
+    "--project",
+    valibotAsync(
+      v.pipeAsync(
+        v.string(),
+        v.checkAsync(isKnownProject, "Unknown project."),
+      ),
+      { placeholder: "" },
+    ),
+  ),
+});
+
+const config = await runAsync(parser, {
+  args: ["--project", "project-api"],
+});
+~~~~
+
+The synchronous `valibot()` helper remains synchronous and still rejects
+schemas that require Valibot's async parse path.  `valibotAsync()` preserves
+the same metavar inference, choices, suggestions, formatting, and custom error
+handling as `valibot()`.  Fallback values supplied through `bindEnv()` or
+`bindConfig()` are validated by the same schema before they are accepted.
+
+Async validation may run during fallback resolution and other repeated parser
+paths, including shell completion requests.  Keep remote checks bounded and
+cached when possible, and prefer picklist or literal schemas for completion
+choices so suggestions stay metadata-driven.
+
+
 Custom error messages
 ---------------------
 
@@ -210,9 +258,10 @@ The `@optique/valibot` package currently targets Valibot 1.x.
 Limitations
 -----------
 
- -  *Async validations not supported*: Since Optique's parsing is synchronous,
-    async Valibot features like `pipeAsync()` cannot be used. Perform async
-    validation after parsing if needed.
+ -  *`valibot()` remains synchronous*: Async Valibot features like
+    `pipeAsync()` require `valibotAsync()`.  The sync helper detects schemas
+    that need async parsing when possible and throws a `TypeError` instead of
+    silently skipping validation.
 
 The Valibot integration provides a lightweight yet powerful way to reuse
 validation logic across your entire application while maintaining full type

@@ -125,6 +125,45 @@ const startDate = argument(
 ~~~~
 
 
+Async schemas
+-------------
+
+Use `zodAsync()` when a schema depends on async refinements or transforms, and
+run the containing parser with `runAsync()` or `await run()`:
+
+~~~~ typescript
+import { runAsync } from "@optique/run";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { zodAsync } from "@optique/zod";
+import { z } from "zod";
+
+async function checkApiKey(value: string): Promise<boolean> {
+  return await Promise.resolve(value.startsWith("live_"));
+}
+
+const parser = object({
+  apiKey: option("--api-key",
+    zodAsync(z.string().refine(checkApiKey, "Unknown API key."), {
+      placeholder: "",
+    }),
+  ),
+});
+
+const cli = await runAsync(parser);
+~~~~
+
+The `zod()` helper remains synchronous and rejects schemas that require Zod's
+async parse path.  `zodAsync()` preserves metavar inference, choices,
+suggestions, Boolean literal conversion, formatting, and custom errors.
+Fallback values from `bindEnv()` or `bindConfig()` are validated by the same
+schema before they are accepted.
+
+Async validation can run during fallback resolution and other repeated parser
+paths, including shell completion requests.  Keep remote checks bounded and
+cached when possible.
+
+
 Custom error messages
 ---------------------
 
@@ -167,24 +206,28 @@ const port = option("-p", zod(z.coerce.number(), { placeholder: 0 }));
 // const port = option("-p", zod(z.number()));
 ~~~~
 
-### Async refinements are not supported
+### `zod()` is synchronous
 
-Optique's `ValueParser.parse()` is synchronous, so async Zod features like
-async refinements cannot be supported:
+The `zod()` helper returns a sync value parser, so async Zod features like
+async refinements and transforms require `zodAsync()`:
 
 ~~~~ typescript
 import { option } from "@optique/core/primitives";
-import { zod } from "@optique/zod";
+import { zod, zodAsync } from "@optique/zod";
 import { z } from "zod";
 
-// ❌ Not supported
-const email = option("--email",
+// ❌ Not supported by zod()
+const syncEmail = option("--email",
   zod(z.string().refine(async (val) => await checkDB(val)),
     { placeholder: "" }),
 );
-~~~~
 
-If you need async validation, perform it after parsing the CLI arguments.
+// ✅ Use zodAsync() and runAsync()
+const asyncEmail = option("--email",
+  zodAsync(z.string().refine(async (val) => await checkDB(val)),
+    { placeholder: "" }),
+);
+~~~~
 
 
 Zod version compatibility

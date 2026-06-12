@@ -142,6 +142,46 @@ const startDate = argument(
 ~~~~
 
 
+Async schemas
+-------------
+
+Use `valibotAsync()` when a schema depends on async validations, and run the
+containing parser with `runAsync()` or `await run()`:
+
+~~~~ typescript
+import { runAsync } from "@optique/run";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { valibotAsync } from "@optique/valibot";
+import * as v from "valibot";
+
+async function checkProject(value: string): Promise<boolean> {
+  return await Promise.resolve(value.startsWith("project-"));
+}
+
+const parser = object({
+  project: option("--project",
+    valibotAsync(
+      v.pipeAsync(v.string(), v.checkAsync(checkProject, "Unknown project.")),
+      { placeholder: "" },
+    ),
+  ),
+});
+
+const cli = await runAsync(parser);
+~~~~
+
+The `valibot()` helper remains synchronous and rejects schemas that require
+Valibot's async parse path.  `valibotAsync()` preserves metavar inference,
+choices, suggestions, formatting, and custom errors.  Fallback values from
+`bindEnv()` or `bindConfig()` are validated by the same schema before they are
+accepted.
+
+Async validation can run during fallback resolution and other repeated parser
+paths, including shell completion requests.  Keep remote checks bounded and
+cached when possible.
+
+
 Custom error messages
 ---------------------
 
@@ -186,25 +226,30 @@ const port = option("-p",
 // const port = option("-p", valibot(v.number()));
 ~~~~
 
-### Async validations are not supported
+### `valibot()` is synchronous
 
-Optique's `ValueParser.parse()` is synchronous, so async Valibot features like
-async validations cannot be supported:
+The `valibot()` helper returns a sync value parser, so async Valibot features
+like `pipeAsync()` require `valibotAsync()`:
 
 ~~~~ typescript
 import { option } from "@optique/core/primitives";
-import { valibot } from "@optique/valibot";
+import { valibot, valibotAsync } from "@optique/valibot";
 import * as v from "valibot";
 
-// ❌ Not supported
-const email = option("--email",
+// ❌ Not supported by valibot()
+const syncEmail = option("--email",
   valibot(v.pipeAsync(v.string(),
     v.checkAsync(async (val) => await checkDB(val))),
     { placeholder: "" }),
 );
-~~~~
 
-If you need async validation, perform it after parsing the CLI arguments.
+// ✅ Use valibotAsync() and runAsync()
+const asyncEmail = option("--email",
+  valibotAsync(v.pipeAsync(v.string(),
+    v.checkAsync(async (val) => await checkDB(val))),
+    { placeholder: "" }),
+);
+~~~~
 
 
 For more resources
