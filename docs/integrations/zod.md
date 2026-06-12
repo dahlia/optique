@@ -110,6 +110,8 @@ const name = zod(z.string().transform((s) => s.toUpperCase()), { placeholder: ""
 Async schemas
 -------------
 
+*This API is available since Optique 1.1.0.*
+
 Use `zodAsync()` when a schema depends on async refinements or transforms.  The
 returned value parser is async, so run the containing parser with
 `runAsync()` or `await run()`:

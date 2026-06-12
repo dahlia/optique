@@ -144,6 +144,8 @@ const name = valibot(
 Async schemas
 -------------
 
+*This API is available since Optique 1.1.0.*
+
 Use `valibotAsync()` when a schema depends on async validations.  The returned
 value parser is async, so run the containing parser with `runAsync()` or
 `await run()`:
