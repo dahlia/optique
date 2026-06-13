@@ -121,6 +121,8 @@ help text to indicate what kind of input is expected.
 `keyValue()` parser
 -------------------
 
+*This API is available since Optique 1.1.0.*
+
 The `keyValue()` parser accepts a single command-line value shaped like
 `KEY=VALUE` and returns a readonly tuple.  It is useful for Docker-style
 environment variables, Kubernetes or Helm `--set` values, build-time defines,
