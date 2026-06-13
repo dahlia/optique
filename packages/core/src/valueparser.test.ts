@@ -18904,6 +18904,43 @@ describe("keyValue", () => {
       );
     });
 
+    it("should reject fallback tuple parts that cannot format as strings", () => {
+      const parser = keyValue();
+
+      const result = parser.validate?.(["PORT", 5432] as never);
+
+      assert.ok(result);
+      assert.ok(!result.success);
+      assert.match(
+        formatMessage(result.error),
+        /^Invalid value: Expected a value formatted as a string/u,
+      );
+    });
+
+    it("should reject validated tuple parts that cannot format as strings", () => {
+      const value: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: "",
+        parse: (input) => ({ success: true, value: input }),
+        format: (input) => input,
+        validate: (input) => ({ success: true, value: input }),
+      };
+      Object.defineProperty(value, "format", {
+        value: () => 5432,
+      });
+      const parser = keyValue({ value });
+
+      const result = parser.validate?.(["PORT", "5432"]);
+
+      assert.ok(result);
+      assert.ok(!result.success);
+      assert.equal(
+        formatMessage(result.error),
+        "Invalid value: Expected a value formatted as a string.",
+      );
+    });
+
     it("should reject fallback values that are not key-value tuples", () => {
       const parser = keyValue();
 
@@ -19008,6 +19045,15 @@ describe("keyValue", () => {
       );
 
       const result = parser.validateValue?.(["port", 0]);
+
+      assert.ok(result);
+      assert.ok(!result.success);
+    });
+
+    it("should reject non-string tuple parts through option fallback validation", () => {
+      const parser = option("--define", keyValue());
+
+      const result = parser.validateValue?.(["PORT", 5432] as never);
 
       assert.ok(result);
       assert.ok(!result.success);

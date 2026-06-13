@@ -1166,19 +1166,25 @@ export function keyValue(
         return { success: false, error: invalidValueError(valueResult.error) };
       }
 
-      let formattedKey: string;
-      let formattedValue: string;
+      let formattedKey: unknown;
+      let formattedValue: unknown;
       try {
         formattedKey = keyParser.format(keyResult.value);
         formattedValue = valueParser.format(valueResult.value);
       } catch {
         return makeKeyValueSuccess(keyResult, valueResult);
       }
-      if (
-        typeof formattedKey !== "string" ||
-        typeof formattedValue !== "string"
-      ) {
-        return makeKeyValueSuccess(keyResult, valueResult);
+      if (typeof formattedKey !== "string") {
+        return {
+          success: false,
+          error: invalidKeyError(stringFormatError()),
+        };
+      }
+      if (typeof formattedValue !== "string") {
+        return {
+          success: false,
+          error: invalidValueError(stringFormatError()),
+        };
       }
       const input = `${formattedKey}${separator}${formattedValue}`;
       if (!allowEmptyKey && formattedKey === "") {
@@ -1304,16 +1310,23 @@ function validateValueParserValue<T>(
   if (typeof parser.validate === "function") {
     return parser.validate(value);
   }
-  let formatted: string;
+  let formatted: unknown;
   try {
     formatted = parser.format(value);
   } catch {
     return { success: true, value };
   }
   if (typeof formatted !== "string") {
-    return { success: true, value };
+    return {
+      success: false,
+      error: stringFormatError(),
+    };
   }
   return parser.parse(formatted);
+}
+
+function stringFormatError(): Message {
+  return message`Expected a value formatted as a string.`;
 }
 
 function isKeyValueTuple(value: unknown): value is readonly [unknown, unknown] {
