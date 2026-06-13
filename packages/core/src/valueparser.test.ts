@@ -19314,6 +19314,94 @@ describe("keyValue", () => {
       assert.deepEqual(suggestions, []);
     });
 
+    it("should not suggest keys that cannot round-trip", () => {
+      const parser = keyValue({ key: choice(["A=B"] as const) });
+
+      const suggestions = [...parser.suggest?.("A") ?? []];
+
+      assert.deepEqual(suggestions, []);
+    });
+
+    it("should not suggest keys that overlap a multi-character separator", () => {
+      const parser = keyValue({
+        separator: "==",
+        key: choice(["A="] as const),
+      });
+
+      const suggestions = [...parser.suggest?.("A") ?? []];
+
+      assert.deepEqual(suggestions, []);
+    });
+
+    it("should not suggest raw keys that canonicalize away separators", () => {
+      const key: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "KEY",
+        placeholder: "KEY",
+        parse: (input) => ({
+          success: true,
+          value: input === "A=B" ? "AB" : input,
+        }),
+        format: (input) => input,
+        *suggest(prefix) {
+          if ("A=B".startsWith(prefix)) {
+            yield { kind: "literal", text: "A=B" };
+          }
+        },
+      };
+      const parser = keyValue({ key });
+
+      const suggestions = [...parser.suggest?.("A") ?? []];
+
+      assert.deepEqual(suggestions, []);
+    });
+
+    it("should not suggest values that cannot round-trip", () => {
+      const parser = keyValue({
+        split: "last",
+        value: choice(["B=C"] as const),
+      });
+
+      const suggestions = [...parser.suggest?.("A=B") ?? []];
+
+      assert.deepEqual(suggestions, []);
+    });
+
+    it("should not suggest values that overlap a multi-character separator", () => {
+      const parser = keyValue({
+        separator: "==",
+        split: "last",
+        value: choice(["=B"] as const),
+      });
+
+      const suggestions = [...parser.suggest?.("A==") ?? []];
+
+      assert.deepEqual(suggestions, []);
+    });
+
+    it("should not suggest raw values that canonicalize away separators", () => {
+      const value: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: "VALUE",
+        parse: (input) => ({
+          success: true,
+          value: input === "B=C" ? "BC" : input,
+        }),
+        format: (input) => input,
+        *suggest(prefix) {
+          if ("B=C".startsWith(prefix)) {
+            yield { kind: "literal", text: "B=C" };
+          }
+        },
+      };
+      const parser = keyValue({ split: "last", value });
+
+      const suggestions = [...parser.suggest?.("A=B") ?? []];
+
+      assert.deepEqual(suggestions, []);
+    });
+
     it("should preserve file suggestions after the separator", () => {
       const value: ValueParser<"sync", string> = {
         mode: "sync",
@@ -19507,6 +19595,25 @@ describe("keyValue", () => {
       assert.ok(result.success);
       const value: readonly [string, string] = result.value;
       assert.deepEqual(value, ["port", "5432"]);
+    });
+
+    it("should include default string types when optional options are undefined", () => {
+      const options = Math.random() > 0.5 ? { value: integer() } : undefined;
+      const parser = keyValue(options);
+      parser satisfies ValueParser<
+        "sync",
+        readonly [string, number] | readonly [string, string]
+      >;
+
+      const result = parser.parse("port=5432");
+      assert.ok(result.success);
+      const value:
+        | readonly [string, number]
+        | readonly [string, string] = result.value;
+      assert.equal(value[0], "port");
+      // @ts-expect-error: optional undefined options use default string parsers.
+      const numericOnly: readonly [string, number] = result.value;
+      assert.deepEqual(numericOnly[0], "port");
     });
   });
 

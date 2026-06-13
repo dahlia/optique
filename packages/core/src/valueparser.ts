@@ -997,9 +997,10 @@ type KeyValueValueType<Options> = Options extends {
 } ? V
   : string;
 
-type KeyValueResultType<
-  Options extends KeyValueOptions<unknown, unknown>,
-> = readonly [KeyValueKeyType<Options>, KeyValueValueType<Options>];
+type KeyValueResultType<Options> = Options extends
+  KeyValueOptions<unknown, unknown>
+  ? readonly [KeyValueKeyType<Options>, KeyValueValueType<Options>]
+  : readonly [string, string];
 
 /**
  * Creates a value parser for strings shaped like `KEY=VALUE`.
@@ -1019,9 +1020,9 @@ type KeyValueResultType<
  */
 export function keyValue(): ValueParser<"sync", readonly [string, string]>;
 export function keyValue<
-  const Options extends KeyValueOptions<unknown, unknown>,
+  const Options extends KeyValueOptions<unknown, unknown> | undefined,
 >(
-  options: Options | undefined,
+  options: Options,
 ): ValueParser<"sync", KeyValueResultType<Options>>;
 export function keyValue(
   options: KeyValueOptions<unknown, unknown> = {},
@@ -1131,6 +1132,9 @@ export function keyValue(
     if (!allowEmptyKey && key === "") {
       return false;
     }
+    if (!partsRoundTrip(key, "")) {
+      return false;
+    }
     const keyResult = keyParser.parse(key);
     if (!keyResult.success) {
       return false;
@@ -1146,15 +1150,23 @@ export function keyValue(
       return false;
     }
     const formattedKey = formattedKeyResult.value;
-    return split !== "first" ||
-      formattedKey == null ||
-      !formattedKey.includes(separator);
+    return formattedKey == null || partsRoundTrip(formattedKey, "");
   }
 
   function fallbackInput(key: unknown, value: unknown): string {
     return `${typeof key === "string" ? key : ""}${separator}${
       typeof value === "string" ? value : ""
     }`;
+  }
+
+  function partsRoundTrip(key: string, value: string): boolean {
+    const input = `${key}${separator}${value}`;
+    const index = findSeparator(input);
+    if (index < 0) {
+      return false;
+    }
+    return input.slice(0, index) === key &&
+      input.slice(index + separator.length) === value;
   }
 
   function validateResultParts(
@@ -1197,9 +1209,6 @@ export function keyValue(
     }
     const formattedKey = formattedKeyResult.value;
     const formattedValue = formattedValueResult.value;
-    const formattedInput = `${formattedKey ?? ""}${separator}${
-      formattedValue ?? ""
-    }`;
     if (!allowEmptyKey && formattedKey === "") {
       return { success: false, error: emptyKeyError(input) };
     }
@@ -1231,13 +1240,7 @@ export function keyValue(
       };
     }
     if (formattedKey != null && formattedValue != null) {
-      const index = findSeparator(formattedInput);
-      const roundTripKey = formattedInput.slice(0, index);
-      const roundTripValue = formattedInput.slice(index + separator.length);
-      if (
-        roundTripKey !== formattedKey ||
-        roundTripValue !== formattedValue
-      ) {
+      if (!partsRoundTrip(formattedKey, formattedValue)) {
         return split === "first"
           ? {
             success: false,
@@ -1340,6 +1343,8 @@ export function keyValue(
             if (typeof keyParser.suggest !== "function") return;
             const suggestions: Suggestion[] = [];
             for (const suggestion of keyParser.suggest(prefix)) {
+              const key = suggestionTextValue(suggestion);
+              if (!validateKeyForSuggestion(key)) continue;
               suggestions.push(
                 prefixKeyValueSuggestion(suggestion, "", separator),
               );
@@ -1354,6 +1359,15 @@ export function keyValue(
           const valuePrefix = prefix.slice(index + separator.length);
           const suggestions: Suggestion[] = [];
           for (const suggestion of valueParser.suggest(valuePrefix)) {
+            const value = suggestionTextValue(suggestion);
+            if (!partsRoundTrip(key, value)) {
+              continue;
+            }
+            if (
+              !validateParts(`${key}${separator}${value}`, key, value).success
+            ) {
+              continue;
+            }
             suggestions.push(
               prefixKeyValueSuggestion(suggestion, `${key}${separator}`),
             );
@@ -1434,14 +1448,18 @@ function stringFormatError(): Message {
   return message`Expected a value formatted as a string.`;
 }
 
+function suggestionTextValue(suggestion: Suggestion): string {
+  return suggestion.kind === "literal"
+    ? suggestion.text
+    : suggestion.pattern ?? "";
+}
+
 function prefixKeyValueSuggestion(
   suggestion: Suggestion,
   prefix: string,
   suffix = "",
 ): Suggestion {
-  const textValue = suggestion.kind === "literal"
-    ? suggestion.text
-    : suggestion.pattern ?? "";
+  const textValue = suggestionTextValue(suggestion);
   const text = `${prefix}${textValue}${suffix}`;
   return suggestion.description == null
     ? { kind: "literal", text }
