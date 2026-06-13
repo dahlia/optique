@@ -1267,9 +1267,16 @@ export function keyValue(
         normalize(
           value: readonly [unknown, unknown],
         ): readonly [unknown, unknown] {
+          if (!isKeyValueTuple(value)) {
+            return value;
+          }
           return [
-            keyParser.normalize?.(value[0]) ?? value[0],
-            valueParser.normalize?.(value[1]) ?? value[1],
+            typeof keyParser.normalize === "function"
+              ? keyParser.normalize(value[0])
+              : value[0],
+            typeof valueParser.normalize === "function"
+              ? valueParser.normalize(value[1])
+              : value[1],
           ] as const;
         },
       }

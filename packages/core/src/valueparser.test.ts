@@ -19119,6 +19119,49 @@ describe("keyValue", () => {
     });
   });
 
+  describe("normalize", () => {
+    it("should preserve non-tuple sentinel values", () => {
+      const value: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: "",
+        parse: (input) => ({ success: true, value: input }),
+        format: (input) => input,
+        normalize: (input) => input,
+      };
+      const parser = keyValue({ value });
+      const sentinel = { kind: "default" } as const;
+
+      const normalized = parser.normalize?.(sentinel as never);
+
+      assert.equal(normalized, sentinel);
+    });
+
+    it("should preserve nullish child-normalized tuple parts", () => {
+      const key: ValueParser<"sync", string | null> = {
+        mode: "sync",
+        metavar: "KEY",
+        placeholder: "",
+        parse: (input) => ({ success: true, value: input }),
+        format: (input) => input ?? "",
+        normalize: () => null,
+      };
+      const value: ValueParser<"sync", string | undefined> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: "",
+        parse: (input) => ({ success: true, value: input }),
+        format: (input) => input ?? "",
+        normalize: () => undefined,
+      };
+      const parser = keyValue({ key, value });
+
+      const normalized = parser.normalize?.(["host", "localhost"]);
+
+      assert.deepEqual(normalized, [null, undefined]);
+    });
+  });
+
   describe("suggest", () => {
     it("should suggest keys with the separator appended before the separator", () => {
       const parser = keyValue({ key: choice(["host", "port"] as const) });
