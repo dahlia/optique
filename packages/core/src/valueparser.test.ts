@@ -19279,7 +19279,7 @@ describe("keyValue", () => {
 
       const normalized = parser.normalize?.(tuple);
 
-      assert.equal(normalized, tuple);
+      assert.strictEqual(normalized, tuple);
     });
   });
 
