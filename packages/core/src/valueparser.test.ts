@@ -19648,7 +19648,7 @@ describe("keyValue", () => {
         readonly [string, string]
       >;
 
-      const typedOptions: KeyValueOptions<string, number> = {};
+      const typedOptions: KeyValueOptions = {};
       const parser = keyValue(typedOptions);
       parser satisfies ValueParser<"sync", readonly [string, string]>;
 
@@ -19656,6 +19656,25 @@ describe("keyValue", () => {
       assert.ok(result.success);
       const value: readonly [string, string] = result.value;
       assert.deepEqual(value, ["port", "5432"]);
+
+      const missingValueParser =
+        // @ts-expect-error: non-string value types require a value parser.
+        {} satisfies KeyValueOptions<string, number>;
+      assert.deepEqual(missingValueParser, {});
+    });
+
+    it("should preserve result types from typed options objects", () => {
+      const options: KeyValueOptions<"port", number> = {
+        key: choice(["port"] as const),
+        value: integer(),
+      };
+      const parser = keyValue(options);
+      parser satisfies ValueParser<"sync", readonly ["port", number]>;
+
+      const result = parser.parse("port=5432");
+      assert.ok(result.success);
+      const value: readonly ["port", number] = result.value;
+      assert.deepEqual(value, ["port", 5432]);
     });
 
     it("should accept optional options objects", () => {

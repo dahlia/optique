@@ -902,13 +902,7 @@ export function string(
   };
 }
 
-/**
- * Options for creating a {@link keyValue} parser.
- * @template K The parsed key type.
- * @template V The parsed value type.
- * @since 1.1.0
- */
-export interface KeyValueOptions<K = string, V = string> {
+interface KeyValueOptionsBase {
   /**
    * The metavariable name for this parser.  Used in help messages to
    * indicate the expected key–value shape.
@@ -921,18 +915,6 @@ export interface KeyValueOptions<K = string, V = string> {
    * @default `"="`
    */
   readonly separator?: string;
-
-  /**
-   * Parser used to validate and transform the key side.
-   * @default `string({ placeholder: "KEY" })`
-   */
-  readonly key?: ValueParser<"sync", K>;
-
-  /**
-   * Parser used to validate and transform the value side.
-   * @default `string()`
-   */
-  readonly value?: ValueParser<"sync", V>;
 
   /**
    * If `true`, accepts an empty key before the separator.
@@ -987,6 +969,62 @@ export interface KeyValueOptions<K = string, V = string> {
   };
 }
 
+type IsDefaultString<T> = [T] extends [string] ? [string] extends [T] ? true
+  : false
+  : false;
+
+type KeyValueKeyOption<K> = IsDefaultString<K> extends true ? {
+    /**
+     * Parser used to validate and transform the key side.
+     * @default `string({ placeholder: "KEY" })`
+     */
+    readonly key?: ValueParser<"sync", K>;
+  }
+  : {
+    /**
+     * Parser used to validate and transform the key side.
+     * @default `string({ placeholder: "KEY" })`
+     */
+    readonly key: ValueParser<"sync", K>;
+  };
+
+type KeyValueValueOption<V> = IsDefaultString<V> extends true ? {
+    /**
+     * Parser used to validate and transform the value side.
+     * @default `string()`
+     */
+    readonly value?: ValueParser<"sync", V>;
+  }
+  : {
+    /**
+     * Parser used to validate and transform the value side.
+     * @default `string()`
+     */
+    readonly value: ValueParser<"sync", V>;
+  };
+
+/**
+ * Options for creating a {@link keyValue} parser.
+ *
+ * The default key and value parsers produce strings.  If {@link K} or
+ * {@link V} is anything other than the default `string` type, the
+ * corresponding child parser is required so the option object cannot promise
+ * a type that the default parser would not produce.
+ *
+ * @template K The parsed key type.
+ * @template V The parsed value type.
+ * @since 1.1.0
+ */
+export type KeyValueOptions<K = string, V = string> =
+  & KeyValueOptionsBase
+  & KeyValueKeyOption<K>
+  & KeyValueValueOption<V>;
+
+type KeyValueOptionsInput = KeyValueOptionsBase & {
+  readonly key?: ValueParser<"sync", unknown>;
+  readonly value?: ValueParser<"sync", unknown>;
+};
+
 type KeyValueKeyType<Options> = Options extends {
   readonly key: ValueParser<"sync", infer K>;
 } ? K
@@ -997,8 +1035,7 @@ type KeyValueValueType<Options> = Options extends {
 } ? V
   : string;
 
-type KeyValueResultType<Options> = Options extends
-  KeyValueOptions<unknown, unknown>
+type KeyValueResultType<Options> = Options extends KeyValueOptionsInput
   ? readonly [KeyValueKeyType<Options>, KeyValueValueType<Options>]
   : readonly [string, string];
 
@@ -1020,12 +1057,12 @@ type KeyValueResultType<Options> = Options extends
  */
 export function keyValue(): ValueParser<"sync", readonly [string, string]>;
 export function keyValue<
-  const Options extends KeyValueOptions<unknown, unknown> | undefined,
+  const Options extends KeyValueOptionsInput | undefined,
 >(
   options: Options,
 ): ValueParser<"sync", KeyValueResultType<Options>>;
 export function keyValue(
-  options: KeyValueOptions<unknown, unknown> = {},
+  options: KeyValueOptionsInput = {},
 ): ValueParser<"sync", readonly [unknown, unknown]> {
   const separator = options.separator ?? "=";
   if (typeof separator !== "string") {
