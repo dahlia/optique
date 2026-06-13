@@ -19314,6 +19314,25 @@ describe("keyValue", () => {
       const value: readonly [string, string] = result.value;
       assert.deepEqual(value, ["port", "5432"]);
     });
+
+    it("should accept optional options objects", () => {
+      const explicitUndefinedParser = keyValue(undefined);
+      explicitUndefinedParser satisfies ValueParser<
+        "sync",
+        readonly [string, string]
+      >;
+
+      const makeParser = (options: KeyValueOptions | undefined) =>
+        keyValue(options);
+
+      const parser = makeParser(undefined);
+      parser satisfies ValueParser<"sync", readonly [string, string]>;
+
+      const result = parser.parse("port=5432");
+      assert.ok(result.success);
+      const value: readonly [string, string] = result.value;
+      assert.deepEqual(value, ["port", "5432"]);
+    });
   });
 
   describe("properties", () => {

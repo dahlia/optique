@@ -1021,7 +1021,7 @@ export function keyValue(): ValueParser<"sync", readonly [string, string]>;
 export function keyValue<
   const Options extends KeyValueOptions<unknown, unknown>,
 >(
-  options: Options,
+  options: Options | undefined,
 ): ValueParser<"sync", KeyValueResultType<Options>>;
 export function keyValue(
   options: KeyValueOptions<unknown, unknown> = {},
