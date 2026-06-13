@@ -19433,6 +19433,24 @@ describe("keyValue", () => {
       assert.deepEqual(suggestions, []);
     });
 
+    it("should keep suggesting split-last keys after a separator", () => {
+      const parser = keyValue({
+        split: "last",
+        key: choice(["A=B"] as const),
+        value: choice(["C"] as const),
+      });
+
+      const partialSuggestions = [...parser.suggest?.("A=") ?? []];
+      const completeKeySuggestions = [...parser.suggest?.("A=B") ?? []];
+
+      assert.deepEqual(partialSuggestions, [
+        { kind: "literal", text: "A=B=" },
+      ]);
+      assert.deepEqual(completeKeySuggestions, [
+        { kind: "literal", text: "A=B=" },
+      ]);
+    });
+
     it("should preserve file suggestions after the separator", () => {
       const value: ValueParser<"sync", string> = {
         mode: "sync",

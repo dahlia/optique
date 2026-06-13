@@ -1390,45 +1390,55 @@ export function keyValue(
       ? {
         *suggest(prefix: string): Iterable<Suggestion> {
           const index = findSeparator(prefix);
-          if (index < 0) {
-            if (typeof keyParser.suggest !== "function") return;
-            const suggestions: Suggestion[] = [];
-            for (const suggestion of keyParser.suggest(prefix)) {
-              const key = suggestionTextValue(suggestion);
-              if (
-                suggestion.kind === "literal"
-                  ? !validateKeyForSuggestion(key)
-                  : !validateKeyPatternForSuggestion(key)
-              ) {
-                continue;
+          const suggestions: Suggestion[] = [];
+          if (index < 0 || split === "last") {
+            if (typeof keyParser.suggest === "function") {
+              for (const suggestion of keyParser.suggest(prefix)) {
+                const key = suggestionTextValue(suggestion);
+                if (
+                  suggestion.kind === "literal"
+                    ? !validateKeyForSuggestion(key)
+                    : !validateKeyPatternForSuggestion(key)
+                ) {
+                  continue;
+                }
+                suggestions.push(
+                  prefixKeyValueSuggestion(suggestion, "", separator),
+                );
               }
-              suggestions.push(
-                prefixKeyValueSuggestion(suggestion, "", separator),
-              );
             }
+          }
+          if (index < 0) {
             yield* deduplicateSuggestions(suggestions);
             return;
           }
 
-          if (typeof valueParser.suggest !== "function") return;
-          const key = prefix.slice(0, index);
-          if (!validateKeyForSuggestion(key)) return;
-          const valuePrefix = prefix.slice(index + separator.length);
-          const suggestions: Suggestion[] = [];
-          for (const suggestion of valueParser.suggest(valuePrefix)) {
-            const value = suggestionTextValue(suggestion);
-            if (!partsRoundTrip(key, value)) {
-              continue;
+          if (typeof valueParser.suggest === "function") {
+            const key = prefix.slice(0, index);
+            if (!validateKeyForSuggestion(key)) {
+              yield* deduplicateSuggestions(suggestions);
+              return;
             }
-            if (
-              suggestion.kind === "literal" &&
-              !validateParts(`${key}${separator}${value}`, key, value).success
-            ) {
-              continue;
+            const valuePrefix = prefix.slice(index + separator.length);
+            for (const suggestion of valueParser.suggest(valuePrefix)) {
+              const value = suggestionTextValue(suggestion);
+              if (!partsRoundTrip(key, value)) {
+                continue;
+              }
+              if (
+                suggestion.kind === "literal" &&
+                !validateParts(
+                  `${key}${separator}${value}`,
+                  key,
+                  value,
+                ).success
+              ) {
+                continue;
+              }
+              suggestions.push(
+                prefixKeyValueSuggestion(suggestion, `${key}${separator}`),
+              );
             }
-            suggestions.push(
-              prefixKeyValueSuggestion(suggestion, `${key}${separator}`),
-            );
           }
           yield* deduplicateSuggestions(suggestions);
         },
