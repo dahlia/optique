@@ -19467,7 +19467,7 @@ describe("keyValue", () => {
       const suggestions = [...parser.suggest?.("out=src/") ?? []];
 
       assert.deepEqual(suggestions, [
-        { kind: "literal", text: "out=src/" },
+        { kind: "file", type: "file", pattern: "out=src/" },
       ]);
     });
 
@@ -19495,7 +19495,12 @@ describe("keyValue", () => {
       const suggestions = [...parser.suggest?.("out=src/") ?? []];
 
       assert.deepEqual(suggestions, [
-        { kind: "literal", text: "out=src/" },
+        {
+          kind: "file",
+          type: "file",
+          extensions: [".json"],
+          pattern: "out=src/",
+        },
       ]);
     });
   });
