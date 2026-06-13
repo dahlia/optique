@@ -1,7 +1,7 @@
 ---
 description: >-
   Practical recipes for common command-line interface patterns using Optique:
-  subcommands, dependent options, mutually exclusive flags, key-value pairs,
+  subcommands, dependent options, mutually exclusive flags, key–value pairs,
   and more complex CLI designs with detailed explanations.
 ---
 
@@ -15,7 +15,7 @@ you understand how to adapt these techniques to your own applications.
 
 The examples focus on real-world CLI patterns you'll encounter when building
 command-line tools: handling mutually exclusive options, implementing dependent
-flags, parsing key-value pairs, and organizing complex subcommand structures.
+flags, parsing key–value pairs, and organizing complex subcommand structures.
 
 
 Core patterns
@@ -717,41 +717,10 @@ tools and configuration management systems.
 import { object, or } from "@optique/core/constructs";
 import { map, multiple } from "@optique/core/modifiers";
 import { option } from "@optique/core/primitives";
-import { message, text } from "@optique/core/message";
-import {
-  type ValueParser,
-  type ValueParserResult,
-} from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+import { keyValue } from "@optique/core/valueparser";
 import { print, run } from "@optique/run";
 // ---cut-before---
-/**
- * Custom value parser for key-value pairs with configurable separator
- */
-function keyValue(separator = "="): ValueParser<"sync", [string, string]> {
-  return {
-    mode: "sync",
-    metavar: `KEY${separator}VALUE`,
-    placeholder: ["", ""] as [string, string],
-    parse(input: string): ValueParserResult<[string, string]> {
-      const index = input.indexOf(separator);
-      if (index === -1 || index === 0) {
-        return {
-          success: false,
-          error: message`Invalid format. Expected KEY${
-            text(separator)
-          }VALUE, got ${input}`,
-        };
-      }
-      const key = input.slice(0, index);
-      const value = input.slice(index + separator.length);
-      return { success: true, value: [key, value] };
-    },
-    format([key, value]: [string, string]): string {
-      return `${key}${separator}${value}`;
-    },
-  };
-}
-
 // Docker-style environment variables
 const dockerParser = object({
   env: map(
@@ -759,7 +728,7 @@ const dockerParser = object({
     (pairs) => Object.fromEntries(pairs),
   ),
   labels: map(
-    multiple(option("-l", "--label", keyValue(":"))),
+    multiple(option("-l", "--label", keyValue({ separator: ":" }))),
     (pairs) => Object.fromEntries(pairs),
   ),
 });
@@ -771,7 +740,7 @@ const k8sParser = object({
     (pairs) => Object.fromEntries(pairs),
   ),
   values: map(
-    multiple(option("--values", keyValue(":"))),
+    multiple(option("--values", keyValue({ separator: ":" }))),
     (pairs) => Object.fromEntries(pairs),
   ),
 });
@@ -810,14 +779,17 @@ if ("env" in config) {
 
 This pattern demonstrates several advanced techniques:
 
-### Custom value parser
+### Built-in key–value parser
 
-The `keyValue()` function creates a reusable value parser that:
+The built-in `keyValue()` parser:
 
  -  *Validates format*: Ensures the input contains the separator
  -  *Splits correctly*: Handles the separator appearing in values
- -  *Provides meaningful errors*: Shows expected format when parsing fails
+ -  *Allows empty values*: Accepts values such as `KEY=` by default, which is
+    useful for environment variables and build defines
  -  *Supports different separators*: Configurable for different use cases
+ -  *Narrows either side*: Accepts child `key` and `value` parsers for stricter
+    validation and type inference
 
 ### Multiple collection
 
@@ -831,7 +803,8 @@ myapp -e DATABASE_URL=postgres://... -e DEBUG=true -l app:web -l version:1.0
 ### Type transformation with `map()`
 
 The example uses [`map()`](./concepts/modifiers.md#map-parser) to transform
-the parsed `[string, string][]` array directly into a `Record<string, string>`.
+the parsed `readonly [string, string][]` array directly into a
+`Record<string, string>`.
 
 This transformation happens at parse time, so your application receives
 structured objects rather than arrays of tuples. The type system correctly
@@ -840,6 +813,24 @@ and type safety.
 
 This pattern is powerful because it bridges the gap between command-line
 interfaces and structured configuration data.
+
+For stricter domains, pass child value parsers to `keyValue()`:
+
+~~~~ typescript twoslash
+import { choice, integer, keyValue } from "@optique/core/valueparser";
+
+const portSetting = keyValue({
+  key: choice(["port"] as const),
+  value: integer({ min: 1, max: 65535 }),
+});
+
+const result = portSetting.parse("port=5432");
+//    ^?
+~~~~
+
+Shell escaping and quotes are handled before Optique receives an argv token.
+For example, `--set name="hello world"` normally arrives as the single value
+`name=hello world`, and `keyValue()` splits only that final token.
 
 ### Verbosity levels
 
@@ -1606,23 +1597,9 @@ The cookbook patterns can be combined to create sophisticated CLI interfaces:
 import { merge, object } from "@optique/core/constructs";
 import { multiple, withDefault } from "@optique/core/modifiers";
 import { argument, command, constant, flag, option } from "@optique/core/primitives";
-import { string, type ValueParser,
-         type ValueParserResult } from "@optique/core/valueparser";
-function keyValue(separator = "="): ValueParser<"sync", [string, string]> {
-  return {
-    mode: "sync",
-    metavar: `KEY${separator}VALUE`,
-    placeholder: ["", ""] as [string, string],
-    parse(input: string): ValueParserResult<[string, string]> {
-      return { success: true, value: ["", ""] };
-    },
-    format([key, value]: [string, string]): string {
-      return "";
-    },
-  };
-}
+import { keyValue, string } from "@optique/core/valueparser";
 // ---cut-before---
-// Combining subcommands with dependent options and key-value pairs
+// Combining subcommands with dependent options and key–value pairs
 const deployCommand = command("deploy", merge(
   object({
     action: constant("deploy"),
@@ -1642,7 +1619,7 @@ const deployCommand = command("deploy", merge(
 This creates a deploy command that:
 
  -  Requires an environment argument
- -  Supports key-value variables
+ -  Supports key–value variables
  -  Has optional dry-run mode
  -  Uses dependent confirmation when not in dry-run mode
 

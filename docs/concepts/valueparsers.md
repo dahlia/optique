@@ -31,6 +31,7 @@ with Optique's type system.
 | Parser                           | Module              | Return type                    | Description                                         |
 | -------------------------------- | ------------------- | ------------------------------ | --------------------------------------------------- |
 | `string()`                       | *@optique/core*     | `string`                       | Any string, with optional pattern validation        |
+| `keyValue()`                     | *@optique/core*     | readonly `[key, value]`        | Key–value pair such as `KEY=VALUE`                  |
 | `integer()`                      | *@optique/core*     | `number` or `bigint`           | Integer with range validation                       |
 | `float()`                        | *@optique/core*     | `number`                       | Floating-point number                               |
 | `fileSize()`                     | *@optique/core*     | `number` or `bigint`           | Human-readable data size (bytes)                    |
@@ -115,6 +116,106 @@ Error: Expected a string matching pattern ^\d+\.\d+\.\d+$, but got 1.2.
 
 The `string()` parser uses `"STRING"` as its default metavar, which appears in
 help text to indicate what kind of input is expected.
+
+
+`keyValue()` parser
+-------------------
+
+The `keyValue()` parser accepts a single command-line value shaped like
+`KEY=VALUE` and returns a readonly tuple.  It is useful for Docker-style
+environment variables, Kubernetes or Helm `--set` values, build-time defines,
+labels, and other repeated configuration overrides.
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { map, multiple } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { keyValue } from "@optique/core/valueparser";
+
+const parser = object({
+  env: map(
+    multiple(option("-e", "--env", keyValue())),
+    (pairs) => Object.fromEntries(pairs),
+  ),
+  set: map(
+    multiple(option("--set", keyValue())),
+    (pairs) => Object.fromEntries(pairs),
+  ),
+});
+~~~~
+
+By default, `keyValue()`:
+
+ -  uses `=` as the separator;
+ -  rejects input without the separator;
+ -  rejects an empty key such as `=VALUE`;
+ -  allows an empty value such as `KEY=`;
+ -  splits repeated separators at the first separator, so `A=B=C` becomes
+    `["A", "B=C"]`;
+ -  does not trim whitespace.
+
+Use `separator` for other key–value styles and `split: "last"` when the last
+separator should divide the key from the value:
+
+~~~~ typescript twoslash
+import { keyValue } from "@optique/core/valueparser";
+
+const label = keyValue({ separator: ":" });
+const override = keyValue({ split: "last" });
+
+const labelResult = label.parse("app:web");
+labelResult;
+// ^?
+
+const overrideResult = override.parse("image.repository=ghcr.io=example/app");
+// Parsed as ["image.repository=ghcr.io", "example/app"].
+overrideResult;
+// ^?
+~~~~
+
+The `key` and `value` options accept normal value parsers.  Their result types
+are preserved in the tuple, so a constrained key or numeric value remains
+visible to TypeScript:
+
+~~~~ typescript twoslash
+import { choice, integer, keyValue } from "@optique/core/valueparser";
+
+const portSetting = keyValue({
+  key: choice(["port"] as const),
+  value: integer({ min: 1, max: 65535 }),
+});
+
+const parsed = portSetting.parse("port=5432");
+if (parsed.success) {
+  parsed.value;
+  //     ^?
+}
+~~~~
+
+For string policies, use child `string()` parsers:
+
+~~~~ typescript twoslash
+import { keyValue, string } from "@optique/core/valueparser";
+
+const label = keyValue({
+  key: string({
+    metavar: "KEY",
+    pattern: /^[a-z][a-z0-9_.-]*$/,
+  }),
+  value: string({ metavar: "VALUE" }),
+});
+~~~~
+
+`format([key, value])` formats both sides through their child parsers before
+joining them with the separator.  Completion suggestions are composed when
+the child parsers provide suggestions: key suggestions get the separator
+appended, and value suggestions are prefixed with the already typed key and
+separator.
+
+Shell escaping and quote handling happen before Optique receives arguments.
+For example, a shell may pass `--set name="hello world"` to Optique as one
+token whose value is `name=hello world`; `keyValue()` then splits that token.
+It does not parse dotenv files, nested paths, or shell syntax.
 
 
 `integer()` parser

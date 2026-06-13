@@ -47,7 +47,7 @@ Optique solves this with two systems:
 
 ### Which system to use
 
-If you are building a new data source (for example, a remote key-value store
+If you are building a new data source (for example, a remote key–value store
 or a secrets manager), start with *source contexts*. They handle two-phase
 parsing, priority ordering, and cleanup automatically. Use *annotations*
 directly only if you need to inject runtime data into a parser without the
