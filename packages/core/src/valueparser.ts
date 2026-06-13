@@ -1153,6 +1153,13 @@ export function keyValue(
     return formattedKey == null || partsRoundTrip(formattedKey, "");
   }
 
+  function validateKeyPatternForSuggestion(key: string): boolean {
+    if (!allowEmptyKey && key === "") {
+      return false;
+    }
+    return partsRoundTrip(key, "");
+  }
+
   function fallbackInput(key: unknown, value: unknown): string {
     return `${typeof key === "string" ? key : ""}${separator}${
       typeof value === "string" ? value : ""
@@ -1259,6 +1266,37 @@ export function keyValue(
     return makeKeyValueSuccess(keyResult, valueResult);
   }
 
+  function validateTuple(
+    value: readonly [unknown, unknown],
+  ): ValueParserResult<readonly [unknown, unknown]> {
+    if (!allowEmptyKey && value[0] === "") {
+      return {
+        success: false,
+        error: emptyKeyError(fallbackInput(value[0], value[1])),
+      };
+    }
+    if (!allowEmptyValue && value[1] === "") {
+      return {
+        success: false,
+        error: emptyValueError(fallbackInput(value[0], value[1])),
+      };
+    }
+    const keyResult = validateValueParserValue(keyParser, value[0]);
+    if (!keyResult.success) {
+      return { success: false, error: invalidKeyError(keyResult.error) };
+    }
+    const valueResult = validateValueParserValue(valueParser, value[1]);
+    if (!valueResult.success) {
+      return { success: false, error: invalidValueError(valueResult.error) };
+    }
+
+    return validateResultParts(
+      fallbackInput(value[0], value[1]),
+      keyResult,
+      valueResult,
+    );
+  }
+
   return {
     mode: "sync",
     metavar,
@@ -1289,32 +1327,7 @@ export function keyValue(
           error: message`Expected a key-value tuple.`,
         };
       }
-      if (!allowEmptyKey && value[0] === "") {
-        return {
-          success: false,
-          error: emptyKeyError(fallbackInput(value[0], value[1])),
-        };
-      }
-      if (!allowEmptyValue && value[1] === "") {
-        return {
-          success: false,
-          error: emptyValueError(fallbackInput(value[0], value[1])),
-        };
-      }
-      const keyResult = validateValueParserValue(keyParser, value[0]);
-      if (!keyResult.success) {
-        return { success: false, error: invalidKeyError(keyResult.error) };
-      }
-      const valueResult = validateValueParserValue(valueParser, value[1]);
-      if (!valueResult.success) {
-        return { success: false, error: invalidValueError(valueResult.error) };
-      }
-
-      return validateResultParts(
-        fallbackInput(value[0], value[1]),
-        keyResult,
-        valueResult,
-      );
+      return validateTuple(value);
     },
     ...(hasNormalize
       ? {
@@ -1324,7 +1337,7 @@ export function keyValue(
           if (!isKeyValueTuple(value)) {
             return value;
           }
-          return [
+          const normalized = [
             typeof keyParser.normalize === "function"
               ? keyParser.normalize(value[0])
               : value[0],
@@ -1332,6 +1345,7 @@ export function keyValue(
               ? valueParser.normalize(value[1])
               : value[1],
           ] as const;
+          return validateTuple(normalized).success ? normalized : value;
         },
       }
       : {}),
@@ -1344,7 +1358,13 @@ export function keyValue(
             const suggestions: Suggestion[] = [];
             for (const suggestion of keyParser.suggest(prefix)) {
               const key = suggestionTextValue(suggestion);
-              if (!validateKeyForSuggestion(key)) continue;
+              if (
+                suggestion.kind === "literal"
+                  ? !validateKeyForSuggestion(key)
+                  : !validateKeyPatternForSuggestion(key)
+              ) {
+                continue;
+              }
               suggestions.push(
                 prefixKeyValueSuggestion(suggestion, "", separator),
               );
@@ -1364,6 +1384,7 @@ export function keyValue(
               continue;
             }
             if (
+              suggestion.kind === "literal" &&
               !validateParts(`${key}${separator}${value}`, key, value).success
             ) {
               continue;
@@ -1510,9 +1531,7 @@ function collectKeyValueDeferredKeys<T>(
   }
   if (result.deferred !== true) return;
   markDeferred();
-  if (result.value == null || typeof result.value !== "object") {
-    deferredKeys.set(index, null);
-  }
+  deferredKeys.set(index, null);
 }
 
 /**

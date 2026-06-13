@@ -19232,7 +19232,10 @@ describe("keyValue", () => {
         mode: "sync",
         metavar: "KEY",
         placeholder: "",
-        parse: (input) => ({ success: true, value: input }),
+        parse: (input) => ({
+          success: true,
+          value: input === "" ? null : input,
+        }),
         format: (input) => input ?? "",
         normalize: () => null,
       };
@@ -19240,15 +19243,43 @@ describe("keyValue", () => {
         mode: "sync",
         metavar: "VALUE",
         placeholder: "",
-        parse: (input) => ({ success: true, value: input }),
+        parse: (input) => ({
+          success: true,
+          value: input === "" ? undefined : input,
+        }),
         format: (input) => input ?? "",
         normalize: () => undefined,
       };
-      const parser = keyValue({ key, value });
+      const parser = keyValue({ allowEmptyKey: true, key, value });
 
       const normalized = parser.normalize?.(["host", "localhost"]);
 
       assert.deepEqual(normalized, [null, undefined]);
+    });
+
+    it("should preserve tuples when normalized parts fail validation", () => {
+      const key: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "KEY",
+        placeholder: "KEY",
+        parse: (input) => ({ success: true, value: input }),
+        format: (input) => input,
+        normalize: () => "",
+      };
+      const value: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: "VALUE",
+        parse: (input) => ({ success: true, value: input }),
+        format: (input) => input,
+        normalize: (input) => input.trim(),
+      };
+      const parser = keyValue({ key, value });
+      const tuple = ["host", " localhost "] as const;
+
+      const normalized = parser.normalize?.(tuple);
+
+      assert.equal(normalized, tuple);
     });
   });
 
@@ -19421,6 +19452,34 @@ describe("keyValue", () => {
         { kind: "literal", text: "out=src/" },
       ]);
     });
+
+    it("should preserve file suggestions with non-parseable patterns", () => {
+      const value: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "PATH",
+        placeholder: "",
+        parse: (input) =>
+          input.endsWith(".json")
+            ? { success: true, value: input }
+            : { success: false, error: message`Expected a JSON file.` },
+        format: (input) => input,
+        *suggest(prefix) {
+          yield {
+            kind: "file",
+            type: "file",
+            extensions: [".json"],
+            pattern: prefix,
+          };
+        },
+      };
+      const parser = keyValue({ value });
+
+      const suggestions = [...parser.suggest?.("out=src/") ?? []];
+
+      assert.deepEqual(suggestions, [
+        { kind: "literal", text: "out=src/" },
+      ]);
+    });
   });
 
   describe("deferred metadata", () => {
@@ -19441,7 +19500,7 @@ describe("keyValue", () => {
       const result = parser.parse("USER=alice");
 
       assert.ok(result.success);
-      assert.equal(result.deferred, true);
+      assert.ok(result.deferred);
       assert.deepEqual(result.deferredKeys, new Map([[0, null]]));
     });
 
@@ -19466,13 +19525,34 @@ describe("keyValue", () => {
       const result = parser.parse("user=alice");
 
       assert.ok(result.success);
-      assert.equal(result.deferred, true);
+      assert.ok(result.deferred);
       assert.deepEqual(
         result.deferredKeys,
         new Map<PropertyKey, ReadonlyMap<PropertyKey, null> | null>([
           [1, nestedDeferredKeys],
         ]),
       );
+    });
+
+    it("should mark fully deferred object children in deferredKeys", () => {
+      const value: ValueParser<"sync", { readonly name: string }> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: { name: "" },
+        parse: (input) => ({
+          success: true,
+          value: { name: input },
+          deferred: true,
+        }),
+        format: (value) => value.name,
+      };
+      const parser = keyValue({ value });
+
+      const result = parser.parse("user=alice");
+
+      assert.ok(result.success);
+      assert.ok(result.deferred);
+      assert.deepEqual(result.deferredKeys, new Map([[1, null]]));
     });
   });
 
@@ -19660,12 +19740,18 @@ describe("keyValue", () => {
       assert.throws(
         // @ts-expect-error: keyValue() only accepts sync key parsers.
         () => keyValue({ key: asyncParser }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /only supports sync key parsers/u,
+        },
       );
       assert.throws(
         // @ts-expect-error: keyValue() only accepts sync value parsers.
         () => keyValue({ value: asyncParser }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /only supports sync value parsers/u,
+        },
       );
     });
 
@@ -19679,8 +19765,20 @@ describe("keyValue", () => {
         defaultValue: () => "dev",
       });
 
-      assert.throws(() => keyValue({ key: derived }), TypeError);
-      assert.throws(() => keyValue({ value: derived }), TypeError);
+      assert.throws(
+        () => keyValue({ key: derived }),
+        {
+          name: "TypeError",
+          message: /dependency-derived key parsers/u,
+        },
+      );
+      assert.throws(
+        () => keyValue({ value: derived }),
+        {
+          name: "TypeError",
+          message: /dependency-derived value parsers/u,
+        },
+      );
     });
   });
 });
