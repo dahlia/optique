@@ -1,5 +1,5 @@
 /**
- * Key-Value Options Pattern
+ * Key–value options pattern
  *
  * Demonstrates how to parse key=value pairs commonly used in CLI tools
  * like Docker (-e KEY=VALUE) or Kubernetes (--set key=value).
@@ -7,40 +7,8 @@
 import { object, or } from "@optique/core/constructs";
 import { map, multiple } from "@optique/core/modifiers";
 import { option } from "@optique/core/primitives";
-import { message, text } from "@optique/core/message";
-import {
-  type ValueParser,
-  type ValueParserResult,
-} from "@optique/core/valueparser";
+import { keyValue } from "@optique/core/valueparser";
 import { run } from "@optique/run";
-
-/**
- * Custom value parser for key-value pairs with configurable separator
- */
-function keyValue(separator = "="): ValueParser<"sync", [string, string]> {
-  return {
-    mode: "sync",
-    metavar: `KEY${separator}VALUE`,
-    placeholder: ["", ""] as [string, string],
-    parse(input: string): ValueParserResult<[string, string]> {
-      const index = input.indexOf(separator);
-      if (index === -1 || index === 0) {
-        return {
-          success: false,
-          error: message`Invalid format. Expected KEY${
-            text(separator)
-          }VALUE, got ${input}`,
-        };
-      }
-      const key = input.slice(0, index);
-      const value = input.slice(index + separator.length);
-      return { success: true, value: [key, value] };
-    },
-    format([key, value]: [string, string]): string {
-      return `${key}${separator}${value}`;
-    },
-  };
-}
 
 // Docker-style environment variables
 const dockerParser = object({
@@ -49,7 +17,7 @@ const dockerParser = object({
     (pairs) => Object.fromEntries(pairs),
   ),
   labels: map(
-    multiple(option("-l", "--label", keyValue(":"))),
+    multiple(option("-l", "--label", keyValue({ separator: ":" }))),
     (pairs) => Object.fromEntries(pairs),
   ),
 });
@@ -61,7 +29,7 @@ const k8sParser = object({
     (pairs) => Object.fromEntries(pairs),
   ),
   values: map(
-    multiple(option("--values", keyValue(":"))),
+    multiple(option("--values", keyValue({ separator: ":" }))),
     (pairs) => Object.fromEntries(pairs),
   ),
 });

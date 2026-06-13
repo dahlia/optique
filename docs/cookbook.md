@@ -1597,21 +1597,7 @@ The cookbook patterns can be combined to create sophisticated CLI interfaces:
 import { merge, object } from "@optique/core/constructs";
 import { multiple, withDefault } from "@optique/core/modifiers";
 import { argument, command, constant, flag, option } from "@optique/core/primitives";
-import { string, type ValueParser,
-         type ValueParserResult } from "@optique/core/valueparser";
-function keyValue(separator = "="): ValueParser<"sync", [string, string]> {
-  return {
-    mode: "sync",
-    metavar: `KEY${separator}VALUE`,
-    placeholder: ["", ""] as [string, string],
-    parse(input: string): ValueParserResult<[string, string]> {
-      return { success: true, value: ["", ""] };
-    },
-    format([key, value]: [string, string]): string {
-      return "";
-    },
-  };
-}
+import { keyValue, string } from "@optique/core/valueparser";
 // ---cut-before---
 // Combining subcommands with dependent options and key–value pairs
 const deployCommand = command("deploy", merge(
