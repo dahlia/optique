@@ -167,7 +167,8 @@ const labelResult = label.parse("app:web");
 labelResult;
 // ^?
 
-const overrideResult = override.parse("image.repository=ghcr.io/example/app");
+const overrideResult = override.parse("image.repository=ghcr.io=example/app");
+// Parsed as ["image.repository=ghcr.io", "example/app"].
 overrideResult;
 // ^?
 ~~~~
