@@ -18904,6 +18904,52 @@ describe("keyValue", () => {
       );
     });
 
+    it("should reject raw empty fallback keys before child validation", () => {
+      const key: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "KEY",
+        placeholder: "KEY",
+        parse: (input) => ({
+          success: true,
+          value: input === "" ? "default" : input,
+        }),
+        format: (input) => input,
+      };
+      const parser = keyValue({ key });
+
+      const result = parser.validate?.(["", "value"]);
+
+      assert.ok(result);
+      assert.ok(!result.success);
+      assert.equal(
+        formatMessage(result.error),
+        'Expected a non-empty key in "=value".',
+      );
+    });
+
+    it("should reject raw empty fallback values before child validation", () => {
+      const value: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: "VALUE",
+        parse: (input) => ({
+          success: true,
+          value: input === "" ? "default" : input,
+        }),
+        format: (input) => input,
+      };
+      const parser = keyValue({ allowEmptyValue: false, value });
+
+      const result = parser.validate?.(["key", ""]);
+
+      assert.ok(result);
+      assert.ok(!result.success);
+      assert.equal(
+        formatMessage(result.error),
+        'Expected a non-empty value in "key=".',
+      );
+    });
+
     it("should reject fallback tuple parts that cannot format as strings", () => {
       const parser = keyValue();
 

@@ -1127,6 +1127,12 @@ export function keyValue(
     return makeKeyValueSuccess(keyResult, valueResult);
   }
 
+  function fallbackInput(key: unknown, value: unknown): string {
+    return `${typeof key === "string" ? key : ""}${separator}${
+      typeof value === "string" ? value : ""
+    }`;
+  }
+
   return {
     mode: "sync",
     metavar,
@@ -1155,6 +1161,18 @@ export function keyValue(
         return {
           success: false,
           error: message`Expected a key-value tuple.`,
+        };
+      }
+      if (!allowEmptyKey && value[0] === "") {
+        return {
+          success: false,
+          error: emptyKeyError(fallbackInput(value[0], value[1])),
+        };
+      }
+      if (!allowEmptyValue && value[1] === "") {
+        return {
+          success: false,
+          error: emptyValueError(fallbackInput(value[0], value[1])),
         };
       }
       const keyResult = validateValueParserValue(keyParser, value[0]);
