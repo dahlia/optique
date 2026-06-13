@@ -19182,6 +19182,27 @@ describe("keyValue", () => {
       assert.deepEqual(suggestions, [{ kind: "literal", text: "mode=debug" }]);
     });
 
+    it("should not suggest values when the key parser rejects the key", () => {
+      const parser = keyValue({
+        key: choice(["mode"] as const),
+        value: choice(["debug"] as const),
+      });
+
+      const suggestions = [...parser.suggest?.("moed=d") ?? []];
+
+      assert.deepEqual(suggestions, []);
+    });
+
+    it("should not suggest values for an empty key by default", () => {
+      const parser = keyValue({
+        value: choice(["debug"] as const),
+      });
+
+      const suggestions = [...parser.suggest?.("=d") ?? []];
+
+      assert.deepEqual(suggestions, []);
+    });
+
     it("should preserve file suggestions after the separator", () => {
       const value: ValueParser<"sync", string> = {
         mode: "sync",

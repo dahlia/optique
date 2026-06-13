@@ -1127,6 +1127,13 @@ export function keyValue(
     return makeKeyValueSuccess(keyResult, valueResult);
   }
 
+  function validateKeyForSuggestion(key: string): boolean {
+    if (!allowEmptyKey && key === "") {
+      return false;
+    }
+    return keyParser.parse(key).success;
+  }
+
   function fallbackInput(key: unknown, value: unknown): string {
     return `${typeof key === "string" ? key : ""}${separator}${
       typeof value === "string" ? value : ""
@@ -1299,6 +1306,7 @@ export function keyValue(
 
           if (typeof valueParser.suggest !== "function") return;
           const key = prefix.slice(0, index);
+          if (!validateKeyForSuggestion(key)) return;
           const valuePrefix = prefix.slice(index + separator.length);
           const suggestions: Suggestion[] = [];
           for (const suggestion of valueParser.suggest(valuePrefix)) {
