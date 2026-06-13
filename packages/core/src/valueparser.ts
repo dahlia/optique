@@ -1166,34 +1166,40 @@ export function keyValue(
         return { success: false, error: invalidValueError(valueResult.error) };
       }
 
-      let formattedKey: unknown;
-      let formattedValue: unknown;
-      try {
-        formattedKey = keyParser.format(keyResult.value);
-        formattedValue = valueParser.format(valueResult.value);
-      } catch {
-        return makeKeyValueSuccess(keyResult, valueResult);
-      }
-      if (typeof formattedKey !== "string") {
+      const formattedKeyResult = formatValueParserValue(
+        keyParser,
+        keyResult.value,
+      );
+      if (!formattedKeyResult.success) {
         return {
           success: false,
-          error: invalidKeyError(stringFormatError()),
+          error: invalidKeyError(formattedKeyResult.error),
         };
       }
-      if (typeof formattedValue !== "string") {
+      const formattedValueResult = formatValueParserValue(
+        valueParser,
+        valueResult.value,
+      );
+      if (!formattedValueResult.success) {
         return {
           success: false,
-          error: invalidValueError(stringFormatError()),
+          error: invalidValueError(formattedValueResult.error),
         };
       }
-      const input = `${formattedKey}${separator}${formattedValue}`;
+      const formattedKey = formattedKeyResult.value;
+      const formattedValue = formattedValueResult.value;
+      const input = `${formattedKey ?? ""}${separator}${formattedValue ?? ""}`;
       if (!allowEmptyKey && formattedKey === "") {
         return { success: false, error: emptyKeyError(input) };
       }
       if (!allowEmptyValue && formattedValue === "") {
         return { success: false, error: emptyValueError(input) };
       }
-      if (split === "first" && formattedKey.includes(separator)) {
+      if (
+        split === "first" &&
+        formattedKey != null &&
+        formattedKey.includes(separator)
+      ) {
         return {
           success: false,
           error: invalidKeyError(
@@ -1201,7 +1207,11 @@ export function keyValue(
           ),
         };
       }
-      if (split === "last" && formattedValue.includes(separator)) {
+      if (
+        split === "last" &&
+        formattedValue != null &&
+        formattedValue.includes(separator)
+      ) {
         return {
           success: false,
           error: invalidValueError(
@@ -1209,23 +1219,28 @@ export function keyValue(
           ),
         };
       }
-      const index = findSeparator(input);
-      const roundTripKey = input.slice(0, index);
-      const roundTripValue = input.slice(index + separator.length);
-      if (roundTripKey !== formattedKey || roundTripValue !== formattedValue) {
-        return split === "first"
-          ? {
-            success: false,
-            error: invalidKeyError(
-              message`Expected a key that round-trips with ${separator}, but got ${formattedKey}.`,
-            ),
-          }
-          : {
-            success: false,
-            error: invalidValueError(
-              message`Expected a value that round-trips with ${separator}, but got ${formattedValue}.`,
-            ),
-          };
+      if (formattedKey != null && formattedValue != null) {
+        const index = findSeparator(input);
+        const roundTripKey = input.slice(0, index);
+        const roundTripValue = input.slice(index + separator.length);
+        if (
+          roundTripKey !== formattedKey ||
+          roundTripValue !== formattedValue
+        ) {
+          return split === "first"
+            ? {
+              success: false,
+              error: invalidKeyError(
+                message`Expected a key that round-trips with ${separator}, but got ${formattedKey}.`,
+              ),
+            }
+            : {
+              success: false,
+              error: invalidValueError(
+                message`Expected a value that round-trips with ${separator}, but got ${formattedValue}.`,
+              ),
+            };
+        }
       }
       return makeKeyValueSuccess(keyResult, valueResult);
     },
@@ -1249,12 +1264,9 @@ export function keyValue(
             if (typeof keyParser.suggest !== "function") return;
             const suggestions: Suggestion[] = [];
             for (const suggestion of keyParser.suggest(prefix)) {
-              if (suggestion.kind === "literal") {
-                suggestions.push({
-                  ...suggestion,
-                  text: `${suggestion.text}${separator}`,
-                });
-              }
+              suggestions.push(
+                prefixKeyValueSuggestion(suggestion, "", separator),
+              );
             }
             yield* deduplicateSuggestions(suggestions);
             return;
@@ -1265,12 +1277,9 @@ export function keyValue(
           const valuePrefix = prefix.slice(index + separator.length);
           const suggestions: Suggestion[] = [];
           for (const suggestion of valueParser.suggest(valuePrefix)) {
-            if (suggestion.kind === "literal") {
-              suggestions.push({
-                ...suggestion,
-                text: `${key}${separator}${suggestion.text}`,
-              });
-            }
+            suggestions.push(
+              prefixKeyValueSuggestion(suggestion, `${key}${separator}`),
+            );
           }
           yield* deduplicateSuggestions(suggestions);
         },
@@ -1325,8 +1334,41 @@ function validateValueParserValue<T>(
   return parser.parse(formatted);
 }
 
+function formatValueParserValue<T>(
+  parser: ValueParser<"sync", T>,
+  value: T,
+): ValueParserResult<string | undefined> {
+  let formatted: unknown;
+  try {
+    formatted = parser.format(value);
+  } catch {
+    return { success: true, value: undefined };
+  }
+  if (typeof formatted !== "string") {
+    return {
+      success: false,
+      error: stringFormatError(),
+    };
+  }
+  return { success: true, value: formatted };
+}
+
 function stringFormatError(): Message {
   return message`Expected a value formatted as a string.`;
+}
+
+function prefixKeyValueSuggestion(
+  suggestion: Suggestion,
+  prefix: string,
+  suffix = "",
+): Suggestion {
+  const textValue = suggestion.kind === "literal"
+    ? suggestion.text
+    : suggestion.pattern ?? "";
+  const text = `${prefix}${textValue}${suffix}`;
+  return suggestion.description == null
+    ? { kind: "literal", text }
+    : { kind: "literal", text, description: suggestion.description };
 }
 
 function isKeyValueTuple(value: unknown): value is readonly [unknown, unknown] {

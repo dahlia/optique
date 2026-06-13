@@ -19001,6 +19001,19 @@ describe("keyValue", () => {
       );
     });
 
+    it("should reject invalid fallback keys when values cannot format", () => {
+      const parser = keyValue({ value: integer() });
+
+      const result = parser.validate?.(["A=B", undefined] as never);
+
+      assert.ok(result);
+      assert.ok(!result.success);
+      assert.equal(
+        formatMessage(result.error),
+        'Invalid key: Expected a key without "=", but got "A=B".',
+      );
+    });
+
     it("should reject fallback values that overlap a multi-character separator", () => {
       const parser = keyValue({ separator: "==", split: "last" });
 
@@ -19078,6 +19091,26 @@ describe("keyValue", () => {
       const suggestions = [...parser.suggest?.("mode=d") ?? []];
 
       assert.deepEqual(suggestions, [{ kind: "literal", text: "mode=debug" }]);
+    });
+
+    it("should preserve file suggestions after the separator", () => {
+      const value: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "PATH",
+        placeholder: "",
+        parse: (input) => ({ success: true, value: input }),
+        format: (input) => input,
+        *suggest(prefix) {
+          yield { kind: "file", type: "file", pattern: prefix };
+        },
+      };
+      const parser = keyValue({ value });
+
+      const suggestions = [...parser.suggest?.("out=src/") ?? []];
+
+      assert.deepEqual(suggestions, [
+        { kind: "literal", text: "out=src/" },
+      ]);
     });
   });
 
